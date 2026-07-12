@@ -200,7 +200,7 @@ describe('agent-driven brand extraction engine', () => {
   let projectsRoot: string;
   let userDesignSystemsRoot: string;
 
-  it('keeps the generated default theme light even when the source canvas is dark', () => {
+  it('adopts the brand canvas for the default theme when the brand is explicitly dark-first', () => {
     const darkCanvasBrand: Brand = {
       ...VALID_BRAND,
       name: 'Open Design',
@@ -214,14 +214,36 @@ describe('agent-driven brand extraction engine', () => {
 
     const system = buildBrandSystem(darkCanvasBrand);
 
+    // A brand that explicitly carries a dark background role plus a light
+    // foreground role is dark-first: the default theme keeps its canvas
+    // instead of clamping to the light Ant baseline.
+    expect(system.themes.default.colorBgContainer).toBe('#050505');
+    expect(system.themes.dark.colorBgContainer).toBe('#050505');
+    // Neutral text derives from the brand foreground over the dark canvas —
+    // it must read light, not the light-theme #1f1f1f.
+    expect(parseInt(system.themes.default.colorText.slice(1, 3), 16)).toBeGreaterThan(180);
+    expect(system.files['kit.html']).toContain('--brand-color-bg-container: #050505;');
+    expect(system.files['kit.html']).not.toContain('--brand-color-bg-container: #ffffff;');
+    expect(system.files['kit.dark.html']).toContain('--brand-color-bg-container: #050505;');
+  });
+
+  it('still falls back to the light default theme when brand neutrals are ambiguous', () => {
+    const midGrayBrand: Brand = {
+      ...VALID_BRAND,
+      name: 'Open Design',
+      colors: [
+        { role: 'background', hex: '#808080', oklch: 'oklch(60% 0 0)', name: 'Gray', usage: 'source background' },
+        { role: 'foreground', hex: '#f4f4f4', oklch: 'oklch(96% 0 0)', name: 'White', usage: 'source text' },
+        { role: 'accent', hex: '#56fe13', oklch: 'oklch(86% 0.29 142)', name: 'Signal Green', usage: 'primary actions' },
+      ],
+    };
+
+    const system = buildBrandSystem(midGrayBrand);
+
+    // A mid-gray canvas is not a confident dark-first signal; keep the light
+    // baseline exactly as before.
     expect(system.themes.default.colorBgContainer).toBe('#ffffff');
-    expect(system.themes.default.colorText).toBe('#1f1f1f');
     expect(system.themes.dark.colorBgContainer).toBe('#141414');
-    expect(system.themes.dark.colorText).toBe('#dcdcdc');
-    expect(system.files['kit.html']).toContain('--brand-color-bg-container: #ffffff;');
-    expect(system.files['kit.html']).toContain('--brand-color-text: #1f1f1f;');
-    expect(system.files['kit.html']).not.toContain('--brand-color-bg-container: #141414;');
-    expect(system.files['kit.dark.html']).toContain('--brand-color-bg-container: #141414;');
   });
 
   it('keeps programmatic dark-site material on a light default seed', () => {
