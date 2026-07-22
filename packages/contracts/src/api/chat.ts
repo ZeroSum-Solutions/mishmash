@@ -46,6 +46,13 @@ export interface ByokChatProviderConfig {
   apiVersion?: string;
   /** Explicit run-scoped provider policy for presets that do not require bearer credentials. */
   requiresApiKey?: boolean;
+  /**
+   * Run-scoped chat model id selected in the chat UI. Forwarded to the daemon
+   * so BYOK-backed utilities (e.g. memory extraction) can honor the user's
+   * model picker instead of falling back to a hardcoded default. Optional
+   * because some presets (e.g. Ollama) infer the model from baseUrl/protocol.
+   */
+  model?: string;
 }
 
 export interface ByokMediaDefaults {
@@ -309,6 +316,9 @@ export const CHAT_RUN_STATUSES = [
 
 export type ChatRunStatus = (typeof CHAT_RUN_STATUSES)[number];
 
+/** User-facing result delivery, kept separate from agent-process runStatus. */
+export type ResultDeliveryState = 'delivered' | 'no_result' | 'delivery_failed';
+
 export type ChatMessageFeedbackRating = 'positive' | 'negative';
 
 export type ChatMessageFeedbackReasonCode =
@@ -478,6 +488,18 @@ export interface ChatRunStatusResponse {
    *  conversation resumes the persisted session. Absent/false on success,
    *  non-resumable failures, and runtimes without CLI session resume. */
   resumable?: boolean;
+  /** True when a terminal `succeeded` run ended with its declared work
+   *  unfinished — the agent left a TodoWrite task in a non-`completed` state
+   *  (pending / in_progress / stopped) or the turn was truncated mid-generation
+   *  (max_tokens). Lets every status surface (Pet task center, project pill, CLI
+   *  --json) avoid reading an incomplete run as "Completed" (#1247 / #1060).
+   *  Absent/false = finished, so older daemons stay "Completed" (backward-compat).
+   *  Judged by the canonical `todoSnapshotHasUnfinishedWork` predicate so it can
+   *  never diverge from the chat footer's `unfinishedTodosFromEvents`. */
+  endedWithUnfinishedWork?: boolean;
+  /** Authoritative artifact files created or modified by this run. Mirrors
+   *  ChatSseEndPayload.artifactCount and run_finished.artifact_count. */
+  artifactCount?: number;
   /** Absolute path to the per-run JSONL event log the daemon mirrors
    *  the SSE stream to (see runs.ts `runsLogDir`). Null when the
    *  daemon was launched without event persistence configured. */
@@ -612,7 +634,16 @@ export type PersistedAgentEvent =
       confidence?: number;
       draftPath?: string | null;
     }
-  | { kind: 'usage'; inputTokens?: number; outputTokens?: number; costUsd?: number; durationMs?: number }
+  | {
+      kind: 'usage';
+      inputTokens?: number;
+      outputTokens?: number;
+      costUsd?: number;
+      durationMs?: number;
+      /** Terminal turn stop reason (e.g. `max_tokens`). Persisted so the project
+       *  projection can read a truncation as incomplete after reload (#1247). */
+      stopReason?: string;
+    }
   | { kind: 'raw'; line: string };
 
 export interface ChatMessage {
@@ -625,6 +656,7 @@ export interface ChatMessage {
   createdAt?: number;
   runId?: string;
   runStatus?: ChatRunStatus;
+  resultDeliveryState?: ResultDeliveryState;
   /** True when this message's failed run can be recovered by resuming the
    *  agent's CLI session (transient upstream drop / inactivity on a
    *  session-resuming runtime). Drives the chat's Continue affordance; mirrors

@@ -97,11 +97,53 @@ describe('resolveRunFailureUi', () => {
     expect(ui.primaryAction).toBe('launch-terminal-switch-model');
   });
 
+  // #895 long tail: lower-frequency failure_detail values the daemon already
+  // classifies (timeout, empty output, stale resumed session, missing Git Bash)
+  // now map to a named type + actionable copy with a plain Retry, for any agent —
+  // the AGENT_EXECUTION_FAILED code alone would only show the raw stderr.
+  it('maps long-tail failure_detail values to a named type + retry guidance for any agent', () => {
+    const cases: Array<[string, string, string]> = [
+      ['timeout', 'chat.runError.title.timedOut', 'chat.runError.timedOutMessage'],
+      ['inactivity_timeout', 'chat.runError.title.timedOut', 'chat.runError.inactivityTimeoutMessage'],
+      ['empty_output', 'chat.runError.title.emptyOutput', 'chat.runError.emptyOutputMessage'],
+      ['session_resume_expired', 'chat.runError.title.sessionExpired', 'chat.runError.sessionExpiredMessage'],
+      ['git_bash_missing', 'chat.runError.title.gitBashMissing', 'chat.runError.gitBashMissingMessage'],
+    ];
+    for (const [detail, titleKey, messageKey] of cases) {
+      for (const agent of ['claude', 'codex', 'amr', null]) {
+        expect(resolveRunFailureUi('AGENT_EXECUTION_FAILED', detail, agent)).toMatchObject({
+          primaryAction: 'retry',
+          titleKey,
+          messageKey,
+          secondaryRetry: false,
+          showSwitchCard: false,
+        });
+      }
+    }
+  });
+
+  // A cpu_unsupported crash (bundled agent binary requires AVX2, this CPU has
+  // none) is deterministic: retry re-runs the same binary on the same CPU, and
+  // switching hosted models doesn't replace the runtime binary. So: guidance
+  // copy only — no Retry button, no AMR promotion — for every agent.
+  it('maps cpu_unsupported to update guidance without retry or switch card', () => {
+    for (const agent of ['claude', 'codex', 'amr', null]) {
+      expect(resolveRunFailureUi('AGENT_EXECUTION_FAILED', 'cpu_unsupported', agent)).toMatchObject({
+        primaryAction: 'none',
+        titleKey: 'chat.runError.title.cpuUnsupported',
+        messageKey: 'chat.runError.cpuUnsupportedMessage',
+        secondaryRetry: false,
+        showSwitchCard: false,
+      });
+    }
+  });
+
   // Agent-agnostic root-cause codes (#895): each carries a named failure type +
   // actionable fix, resolved the same way for any agent, with a plain Retry and
   // no AMR promotion (these aren't "switch to hosted model" cases).
   it('maps agent-agnostic root-cause codes to a named type + guidance for any agent', () => {
-    const cases: Array<[string, string, string]> = [
+    const cases: Array<[string, string, string | null]> = [
+      ['ARTIFACT_NOT_FOUND', 'chat.runError.title.artifactMissing', null],
       ['AGENT_UNAVAILABLE', 'chat.runError.title.cliMissing', 'chat.runError.cliMissingMessage'],
       ['AGENT_PROMPT_TOO_LARGE', 'chat.runError.title.promptTooLarge', 'chat.runError.promptTooLargeMessage'],
       ['AMR_MODEL_UNAVAILABLE', 'chat.runError.title.modelUnavailable', 'chat.runError.modelUnavailableMessage'],
