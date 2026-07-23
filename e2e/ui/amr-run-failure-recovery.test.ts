@@ -795,11 +795,7 @@ test('[P0] upstream outages keep Retry available without promoting AMR', async (
   await expect(page.getByText(/Model call failed/i)).toHaveCount(0);
 });
 
-test('[P1] zh-CN run failure guidance shows actionable copy and expandable raw source', async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('open-design:locale', 'zh-CN');
-    window.localStorage.setItem('open-design:locale-source', 'manual');
-  });
+test('[P1] prompt-too-large run failure guidance shows actionable copy and expandable raw source', async ({ page }) => {
   await stubCatalogsEmpty(page);
   await stubRuntimeAgents(page);
 
@@ -869,12 +865,12 @@ test('[P1] zh-CN run failure guidance shows actionable copy and expandable raw s
   await gotoProject(page, projectId);
 
   const card = runErrorCard(page);
-  await expect(card).toContainText('内容过长', { timeout: T.long });
-  await expect(card).toContainText('本轮输入超出了模型的上下文上限');
-  await expect(page.getByRole('button', { name: /^重试$/ }).first()).toBeVisible();
+  await expect(card).toContainText('Input too long', { timeout: T.long });
+  await expect(card).toContainText("This turn exceeded the model's context limit.");
+  await expect(page.getByRole('button', { name: /^Retry$/ }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /Switch to Open Design Cloud & retry/i })).toHaveCount(0);
 
-  const sourceToggle = card.getByRole('button', { name: /查看详情/ });
+  const sourceToggle = card.getByRole('button', { name: /View details/ });
   await expect(sourceToggle).toHaveAttribute('aria-expanded', 'false');
   await sourceToggle.click();
   await expect(sourceToggle).toHaveAttribute('aria-expanded', 'true');

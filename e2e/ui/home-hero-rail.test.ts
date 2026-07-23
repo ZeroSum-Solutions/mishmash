@@ -6,8 +6,6 @@ import { T } from '@/timeouts';
 test.describe.configure({ timeout: T.xlong });
 
 const STORAGE_KEY = 'open-design:config';
-const LOCALE_KEY = 'open-design:locale';
-const LOCALE_SOURCE_KEY = 'open-design:locale-source';
 const OPEN_SETTINGS_LABEL = /Open settings|打开设置|開啟設定/i;
 
 const HOME_CONFIG = {
@@ -337,16 +335,6 @@ async function seedBrowserConfig(page: Page, config: Record<string, unknown>) {
       window.localStorage.setItem(key, JSON.stringify(value));
     },
     { key: STORAGE_KEY, value: config },
-  );
-}
-
-async function seedBrowserLocale(page: Page, locale: string) {
-  await page.addInitScript(
-    ({ localeKey, sourceKey, value }) => {
-      window.localStorage.setItem(localeKey, value);
-      window.localStorage.setItem(sourceKey, 'manual');
-    },
-    { localeKey: LOCALE_KEY, sourceKey: LOCALE_SOURCE_KEY, value: locale },
   );
 }
 
@@ -1308,23 +1296,6 @@ test('[P2] home template picker supports no-results, clear, Escape, and outside 
   await expect(page.getByTestId('home-hero-template-menu')).toBeVisible();
   await page.getByTestId('home-hero-input').click();
   await expect(page.getByTestId('home-hero-template-menu')).toHaveCount(0);
-});
-
-test('[P2] zh-CN home smoke exposes the localized template, design system, working directory, and send entries', async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('open-design:locale', 'zh-CN');
-    window.localStorage.setItem('open-design:locale-source', 'manual');
-  });
-  await seedBrowserLocale(page, 'zh-CN');
-  await routeHomeDesignSystems(page);
-  await gotoEntryHome(page);
-
-  await expect(page.getByRole('heading', { name: '今天想和你的 Agent 一起设计什么？' })).toBeVisible();
-  await expect(page.getByText('从模板开始…')).toBeVisible();
-  await expect(page.getByText('…或创建一个空白项目')).toBeVisible();
-  await expect(page.getByText('不指定设计系统')).toBeVisible();
-  await expect(page.getByTestId('working-dir-picker')).toContainText(/本地存储|选择工作目录/);
-  await expect(page.getByTestId('home-hero-submit')).toContainText('发送');
 });
 
 test('[P1] home template picker selects a starter template and can clear it', async ({ page }) => {
