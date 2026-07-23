@@ -440,7 +440,7 @@ describe('DesignBrowserPanel <webview> navigation', () => {
     const onRequestBrowserUsePrompt = vi.fn();
 
     render(
-      <I18nProvider initial="zh-CN">
+      <I18nProvider initial="en">
         <DesignBrowserPanel
           projectId="proj-webview-browser-use"
           initialTitle="Example"
@@ -452,9 +452,9 @@ describe('DesignBrowserPanel <webview> navigation', () => {
       </I18nProvider>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '灵感' }));
-    fireEvent.change(screen.getByRole('searchbox', { name: '搜索灵感' }), {
-      target: { value: '字体' },
+    fireEvent.click(screen.getByRole('button', { name: 'Inspiration' }));
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search inspiration' }), {
+      target: { value: 'font' },
     });
     expect(screen.queryByRole('menuitem', { name: /validate_view/ })).toBeNull();
     fireEvent.click(screen.getByRole('menuitem', { name: /extract_fonts/ }));
@@ -751,7 +751,7 @@ describe('DesignBrowserPanel <webview> navigation', () => {
 
   it('does not expose page annotation controls in the external browser', () => {
     const { container } = render(
-      <I18nProvider initial="zh-CN">
+      <I18nProvider initial="en">
         <DesignBrowserPanel
           initialUrl="https://example.com"
           projectId="proj-webview-mark-i18n"
@@ -761,8 +761,6 @@ describe('DesignBrowserPanel <webview> navigation', () => {
       </I18nProvider>,
     );
 
-    expect(screen.queryByRole('button', { name: '标记' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '评论' })).toBeNull();
     expect(container.querySelector('.ri-pencil-line')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Annotate page' })).toBeNull();
   });

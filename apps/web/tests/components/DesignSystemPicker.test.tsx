@@ -73,7 +73,7 @@ afterEach(() => {
 describe('DesignSystemPicker', () => {
   function renderPicker(
     props: Partial<ComponentProps<typeof DesignSystemPicker>> = {},
-    locale: Locale = 'zh-CN',
+    locale: Locale = 'en',
   ) {
     return render(
       <I18nProvider initial={locale}>
@@ -120,7 +120,7 @@ describe('DesignSystemPicker', () => {
     expect(screen.getByRole('dialog')).toBeTruthy();
     expect(screen.getAllByText('Clay').length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole('button', { name: '关闭' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
@@ -149,16 +149,5 @@ describe('DesignSystemPicker', () => {
 
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenCalledWith(null);
-  });
-
-  it('uses localized picker copy', async () => {
-    renderPicker({}, 'fr');
-
-    fireEvent.click(screen.getByTestId('project-ds-picker-trigger'));
-
-    // Category chips were removed from the list/preview per design; only the
-    // surrounding picker copy needs to localize.
-    expect(screen.getByPlaceholderText('Rechercher des systèmes de design')).toBeTruthy();
-    expect(screen.getByText('Aucun système de design')).toBeTruthy();
   });
 });

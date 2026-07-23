@@ -112,7 +112,7 @@ vi.mock('@excalidraw/excalidraw', async () => {
 
 vi.mock('../../src/i18n', () => ({
   useI18n: () => ({
-    locale: 'zh-CN',
+    locale: 'en',
     t: (key: string) => key,
   }),
 }));
@@ -169,7 +169,7 @@ function saveButton(): HTMLButtonElement {
 describe('SketchEditor save', () => {
   it('renders Excalidraw with the current Open Design locale', () => {
     renderEditor({ dirty: true });
-    expect(document.querySelector('[data-testid="excalidraw"]')?.getAttribute('data-lang')).toBe('zh-CN');
+    expect(document.querySelector('[data-testid="excalidraw"]')?.getAttribute('data-lang')).toBe('en');
   });
 
   it('drives one shared tooltip per Excalidraw control without the duplicate native/black bubbles', async () => {
@@ -207,7 +207,7 @@ describe('SketchEditor save', () => {
     expect(library.classList.contains('od-tooltip')).toBe(false);
   });
 
-  it('adds close controls and localizes Excalidraw portal dialogs', async () => {
+  it('adds close controls to Excalidraw portal dialogs', async () => {
     renderEditor({ dirty: true });
 
     const portal = document.createElement('div');
@@ -230,12 +230,15 @@ describe('SketchEditor save', () => {
       return button!;
     });
 
-    expect(portal.textContent).toContain('将选区包裹为画框');
-    expect(portal.textContent).toContain('生成');
-    expect(portal.querySelector('button[title="将选区包裹为画框"]')).toBeTruthy();
-    expect(portal.querySelector('button[aria-label="生成"]')).toBeTruthy();
-    expect(portal.querySelector('textarea')?.getAttribute('placeholder')).toBe('在这里输入 Mermaid 图表定义...');
-    expect(close.getAttribute('aria-label')).toBe('关闭');
+    // Open Design ships English-only; the zh-CN/zh-TW DOM text-override
+    // tables were removed, so Excalidraw's own English strings pass through
+    // unchanged (see the de-bloat pass).
+    expect(portal.textContent).toContain('Wrap selection in frame');
+    expect(portal.textContent).toContain('Generate');
+    expect(portal.querySelector('button[title="Wrap selection in frame"]')).toBeTruthy();
+    expect(portal.querySelector('button[aria-label="Generate"]')).toBeTruthy();
+    expect(portal.querySelector('textarea')?.getAttribute('placeholder')).toBe('Write Mermaid diagram definition here...');
+    expect(close.getAttribute('aria-label')).toBe('Close');
     expect(portal.classList.contains('od-sketch-help-modal')).toBe(true);
 
     fireEvent.click(close);

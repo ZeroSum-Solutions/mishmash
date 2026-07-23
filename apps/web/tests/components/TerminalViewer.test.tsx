@@ -72,15 +72,15 @@ afterEach(() => {
 });
 
 describe('TerminalViewer', () => {
-  it('shows localized loading copy while the initial terminal connection is pending', () => {
+  it('shows loading copy while the initial terminal connection is pending', () => {
     render(
-      <I18nProvider initial="zh-CN">
+      <I18nProvider initial="en">
         <TerminalViewer terminalId="term-1" projectId="project-1" onClose={vi.fn()} />
       </I18nProvider>,
     );
 
     const loading = screen.getByTestId('terminal-loading');
-    expect(loading.textContent).toContain('正在启动项目终端…');
-    expect(loading.textContent).toContain('正在连接项目目录，通常只需几秒。');
+    expect(loading.textContent).toContain('Starting terminal…');
+    expect(loading.textContent).toContain('Preparing the project shell. This usually takes a few seconds.');
   });
 });

@@ -218,31 +218,6 @@ describe('PluginShareMenu', () => {
     expect(labels.some((label) => label.includes('Copy README badge'))).toBe(false);
   });
 
-  it('localizes the plugin action menu labels', () => {
-    renderMenu(
-      make({
-        id: 'zh-plugin',
-        sourceKind: 'github',
-        source: 'github:owner/repo',
-        marketplaceId: 'official',
-        marketplaceEntryName: 'open-design/zh-plugin',
-        homepage: 'https://example.test/plugin-home',
-      }),
-      'zh-CN',
-    );
-    openPopover('更多');
-    const labels = Array.from(
-      container.querySelectorAll('.plugin-share-item'),
-    ).map((item) => item.textContent ?? '');
-    expect(labels).toContain('复制安装命令');
-    expect(labels).toContain('复制插件 ID');
-    expect(labels).toContain('复制 README 徽章');
-    expect(labels).toContain('在 GitHub 打开源码');
-    expect(labels).toContain('打开项目主页');
-    expect(labels).toContain('在插件市场打开');
-    expect(labels.some((label) => label.includes('Copy install command'))).toBe(false);
-  });
-
   it('points Open in marketplace at the public open-design.ai page for bundled plugins', () => {
     renderMenu(make({ id: 'plain' }));
     openPopover();

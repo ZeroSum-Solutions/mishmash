@@ -56,32 +56,6 @@ describe('DesignKitView iframe sandboxing', () => {
     expect(container.innerHTML).not.toContain('allow-same-origin');
   });
 
-  it('renders new kit actions with the active non-English locale', () => {
-    const kit = { ...previewKit(), canUpload: true };
-    render(
-      <I18nProvider initial="zh-CN">
-        <DesignKitView
-          kit={kit}
-          designMd={{
-            body: '# Preview Kit',
-            onSave: async () => {},
-            saving: false,
-          }}
-          onUploadModule={() => {}}
-          onRefresh={() => {}}
-        />
-      </I18nProvider>,
-    );
-
-    expect(screen.getAllByTitle('复制 DESIGN.md').length).toBeGreaterThan(0);
-    expect(screen.getByTitle('添加字体文件')).toBeTruthy();
-    expect(screen.getByTitle('复制字体排版段落')).toBeTruthy();
-    expect(screen.getByTitle('刷新')).toBeTruthy();
-    expect(screen.queryByText('Add font file')).toBeNull();
-    expect(screen.queryByText('Copy Typography section')).toBeNull();
-    expect(screen.queryByText('Copy DESIGN.md')).toBeNull();
-  });
-
   it('edits only the selected DESIGN.md module section', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(

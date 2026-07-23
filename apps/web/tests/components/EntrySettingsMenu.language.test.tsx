@@ -80,7 +80,9 @@ describe('EntrySettingsMenu language picker a11y', () => {
     ) as HTMLElement;
     expect(panel.getAttribute('role')).toBe('menu');
     const radios = panel.querySelectorAll('[role="menuitemradio"]');
-    expect(radios.length).toBeGreaterThan(1);
+    // Open Design ships English-only, so there is exactly one locale radio
+    // now (see the de-bloat pass that removed every non-English locale).
+    expect(radios.length).toBe(1);
     expect(
       Array.from(radios).filter((r) => r.getAttribute('aria-checked') === 'true'),
     ).toHaveLength(1);

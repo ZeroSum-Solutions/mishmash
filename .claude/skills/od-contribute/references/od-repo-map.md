@@ -9,18 +9,11 @@ Mirrors `nexu-io/open-design` `CONTRIBUTING.md` so the skill doesn't need to re-
 | Make OD render a new kind of artifact | a **Skill** | `skills/<your-skill>/` | one folder, ~2 files |
 | Make OD speak a new brand's visual language | a **Design System** | `design-systems/<brand>/DESIGN.md` | one Markdown file |
 | Hook up a new coding-agent CLI | an **Agent adapter** | `apps/daemon/src/agents.ts` | ~10 lines (code — out of scope for this skill) |
-| Improve docs, port a section to fr / de / zh-CN, fix typos | docs | `README.md`, `docs/i18n/README.fr.md`, `docs/i18n/README.de.md`, `docs/i18n/README.zh-CN.md`, `docs/`, `QUICKSTART.md` | one PR |
+| Improve docs, fix typos | docs | `README.md`, `docs/`, `QUICKSTART.md` | one PR |
 
-## Localized doc files we know about
+## Localization (removed)
 
-| Doc family | English source | Translations seen on disk (as of plan time) |
-|---|---|---|
-| README | `README.md` | ar, de, es, fr, ja-JP, ko, pt-BR, ru, tr, uk, zh-CN, zh-TW |
-| QUICKSTART | `QUICKSTART.md` | de, fr, ja-JP, pt-BR, zh-CN, zh-TW |
-| CONTRIBUTING | `CONTRIBUTING.md` | de, fr, ja-JP, pt-BR, zh-CN |
-| MAINTAINERS | `MAINTAINERS.md` | de, fr, ja-JP, pt-BR, zh-CN |
-
-The skill `discover-i18n-gaps.sh` does NOT trust this table — it scans the workspace at runtime. Use this list only when you need to seed an `AskUserQuestion` card without a workspace.
+OD ships English-only as of the English-only de-bloat pass: `docs/i18n/`, `TRANSLATIONS.md`, and every non-English locale dictionary/content bundle were deleted. There are no localized doc files left to track. `discover-i18n-gaps.sh` is now vestigial — do not route contributors toward translation work.
 
 ## Issue templates
 

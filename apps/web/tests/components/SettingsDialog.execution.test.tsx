@@ -4177,49 +4177,43 @@ describe('SettingsDialog language interactions', () => {
     document.documentElement.removeAttribute('dir');
   });
 
-  it('shows every locale as a tile and marks the current locale as selected', async () => {
+  // Open Design ships English-only, so there is exactly one locale tile now
+  // (see the de-bloat pass that removed every non-English locale). These
+  // tests lock the single-tile picker's remaining plumbing: it still renders
+  // one selected radio, and clicking it still drives localStorage + the
+  // <html> lang/dir attributes.
+  it('shows the single English tile as selected', async () => {
     renderLanguageSettingsDialog('en');
 
     const tiles = await screen.findAllByRole('radio');
     expect(tiles).toHaveLength(LOCALES.length);
     expect(screen.getByRole('radio', { name: /English/i }).getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByRole('radio', { name: /简体中文/i }).getAttribute('aria-checked')).toBe('false');
   });
 
-  it('switches locale immediately and updates localStorage', async () => {
+  it('updates localStorage and the document attributes when the locale tile is clicked', async () => {
     renderLanguageSettingsDialog('en');
 
-    fireEvent.click(screen.getByRole('radio', { name: /简体中文/i }));
+    fireEvent.click(screen.getByRole('radio', { name: /English/i }));
 
-    expect(screen.getByRole('radio', { name: /简体中文/i }).getAttribute('aria-checked')).toBe('true');
-    expect(window.localStorage.getItem('open-design:locale')).toBe('zh-CN');
-    expect(document.documentElement.getAttribute('lang')).toBe('zh-CN');
+    expect(screen.getByRole('radio', { name: /English/i }).getAttribute('aria-checked')).toBe('true');
+    expect(window.localStorage.getItem('open-design:locale')).toBe('en');
+    expect(document.documentElement.getAttribute('lang')).toBe('en');
     expect(document.documentElement.getAttribute('dir')).toBe('ltr');
   });
 
-  it('sets rtl direction for rtl locales', async () => {
-    renderLanguageSettingsDialog('en');
-
-    fireEvent.click(screen.getByRole('radio', { name: /فارسی/i }));
-
-    expect(window.localStorage.getItem('open-design:locale')).toBe('fa');
-    expect(document.documentElement.getAttribute('lang')).toBe('fa');
-    expect(document.documentElement.getAttribute('dir')).toBe('rtl');
-  });
-
-  it('does not route language changes through autosave and closing does not revert an applied locale', async () => {
+  it('does not route language changes through autosave and closing does not revert the applied locale', async () => {
     const { onPersist, onClose } = renderLanguageSettingsDialog('en');
 
-    fireEvent.click(screen.getByRole('radio', { name: /Deutsch/i }));
+    fireEvent.click(screen.getByRole('radio', { name: /English/i }));
 
-    expect(window.localStorage.getItem('open-design:locale')).toBe('de');
-    expect(document.documentElement.getAttribute('lang')).toBe('de');
+    expect(window.localStorage.getItem('open-design:locale')).toBe('en');
+    expect(document.documentElement.getAttribute('lang')).toBe('en');
 
-    fireEvent.click(screen.getByTitle(/close|schließen/i));
+    fireEvent.click(screen.getByTitle(/close/i));
     expect(onPersist).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(window.localStorage.getItem('open-design:locale')).toBe('de');
-    expect(document.documentElement.getAttribute('lang')).toBe('de');
+    expect(window.localStorage.getItem('open-design:locale')).toBe('en');
+    expect(document.documentElement.getAttribute('lang')).toBe('en');
     expect(document.documentElement.getAttribute('dir')).toBe('ltr');
   });
 });
@@ -4633,29 +4627,6 @@ describe('SettingsDialog appearance interactions', () => {
       }),
       {},
     );
-  });
-
-  it('localizes the accent color controls in Chinese', () => {
-    render(
-      <I18nProvider initial="zh-CN">
-        <SettingsDialog
-          initial={{ ...baseConfig, theme: 'light' }}
-          agents={availableAgents}
-          daemonLive={true}
-          appVersionInfo={null}
-          initialSection="appearance"
-          onPersist={vi.fn()}
-          onPersistComposioKey={vi.fn()}
-          onClose={vi.fn()}
-          onRefreshAgents={vi.fn()}
-        />
-      </I18nProvider>,
-    );
-
-    expect(screen.getByText('主题色')).toBeTruthy();
-    expect(screen.getByRole('radiogroup', { name: '主题色' })).toBeTruthy();
-    expect(screen.getByRole('radio', { name: '默认主题色' })).toBeTruthy();
-    expect(screen.getByLabelText('自定义颜色')).toBeTruthy();
   });
 });
 

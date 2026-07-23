@@ -99,12 +99,11 @@ test('[P1] RTL: chat scrollbar gutter is not covered by the resize handle', asyn
   await gotoEntryHome(page);
   await createProject(page, 'Scrollbar hitbox RTL');
   await expectWorkspaceReady(page);
-  // Switch to Arabic through the in-project settings UI. Seeding the locale
-  // via localStorage before navigation is unreliable here: the initial-locale
-  // detection can transiently lose a persisted manual locale during the hard
-  // navigation that project creation performs (adjacent issue, not part of
-  // this fix). setLocale from the settings dialog applies synchronously.
-  await switchLocaleToArabic(page);
+  // Open Design ships English-only, so there is no in-app language picker
+  // that can reach an RTL locale (Arabic/Persian) anymore — force `dir` on
+  // <html> directly instead. This still exercises the logical-property CSS
+  // fix under test; only the entry point into RTL changed.
+  await forceRtl(page);
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
 
   const chatLog = page.locator('.chat-log');
@@ -158,22 +157,11 @@ async function readChatPanelWidth(handle: Locator): Promise<number> {
   return parsed;
 }
 
-// Switch the app language to Arabic from inside the project view: avatar
-// menu → full settings → Language section → the tile whose code is "ar".
-// All selectors are class/testid based so they survive the locale change.
-async function switchLocaleToArabic(page: Page) {
-  await page.locator('.avatar-agent-trigger').click();
-  await page.locator('.avatar-item--execution-settings').click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog).toBeVisible();
-  await dialog.locator('.settings-nav-item', { hasText: 'Language' }).click();
-  await dialog
-    .locator('.settings-language-tile')
-    .filter({ has: page.locator('.settings-language-tile-code:text-is("ar")') })
-    .click();
-  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeHidden();
+// Force RTL directly on <html>. English-only Open Design has no locale that
+// resolves to an RTL direction anymore, so this bypasses the (removed)
+// language picker entirely and just exercises the RTL CSS path under test.
+async function forceRtl(page: Page) {
+  await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
 }
 
 async function gotoEntryHome(page: Page) {

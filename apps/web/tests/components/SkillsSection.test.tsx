@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SkillsSection } from '../../src/components/SkillsSection';
 import { I18nProvider } from '../../src/i18n';
 import { en } from '../../src/i18n/locales/en';
-import { zhCN } from '../../src/i18n/locales/zh-CN';
 import type { AppConfig } from '../../src/types';
 import type { SkillSummary } from '@open-design/contracts';
 
@@ -45,7 +44,7 @@ function makeSkill(overrides: Partial<SkillSummary>): SkillSummary {
 function renderSkillsSection(
   skills: SkillSummary[],
   options?: {
-    locale?: 'en' | 'zh-CN';
+    locale?: 'en';
     onSkillsRefresh?: () => void | Promise<void>;
     onSkillsChanged?: (id?: string) => void;
   },
@@ -227,15 +226,13 @@ describe('SkillsSection', () => {
   });
 
   // Regression for the nettee / lefarcen follow-up on PR #4793: editing a
-  // built-in skill must read as an explicit "user override" flow in every
-  // locale, never a hardcoded-English or plain "Edit" / "Save" affordance.
-  // Lock the override wording end to end — edit tooltip → confirmation →
-  // form heading → submit — in the default English locale and one translated
-  // zh-CN path, so a regression to the old wording (or to a missing locale
-  // key) goes red.
+  // built-in skill must read as an explicit "user override" flow, never a
+  // hardcoded-English or plain "Edit" / "Save" affordance. Lock the override
+  // wording end to end — edit tooltip → confirmation → form heading → submit
+  // — in the English locale, so a regression to the old wording (or a
+  // missing key) goes red.
   describe.each([
     { locale: 'en' as const, dict: en },
-    { locale: 'zh-CN' as const, dict: zhCN },
   ])('built-in skill override wording ($locale)', ({ locale, dict }) => {
     it('frames the edit affordance, confirmation, form, and submit as a user override', async () => {
       renderSkillsSection(
@@ -310,46 +307,6 @@ describe('SkillsSection', () => {
     expect(within(form).getByTestId('skills-save').textContent).toBe(
       en['settings.skillsSave'],
     );
-  });
-
-  it('matches localized built-in skill names and descriptions in search', async () => {
-    renderSkillsSection(
-      [
-        makeSkill({
-          id: 'localized-skill',
-          name: 'localized-skill',
-          displayName: {
-            en: 'Localized Skill',
-            'zh-CN': '本地化技能',
-          },
-          description: 'English description',
-          descriptionI18n: {
-            en: 'English description',
-            'zh-CN': '中文能力描述',
-          },
-          source: 'built-in',
-        }),
-        makeSkill({
-          id: 'other-skill',
-          name: 'other-skill',
-          displayName: {
-            en: 'Other Skill',
-            'zh-CN': '其他技能',
-          },
-          description: 'Other description',
-          source: 'built-in',
-        }),
-      ],
-      { locale: 'zh-CN' },
-    );
-
-    expect(await screen.findByText('本地化技能')).toBeTruthy();
-    fireEvent.change(screen.getByPlaceholderText('搜索...'), {
-      target: { value: '中文能力' },
-    });
-
-    expect(screen.getByTestId('skill-row-localized-skill')).toBeTruthy();
-    expect(screen.queryByTestId('skill-row-other-skill')).toBeNull();
   });
 
   it('refreshes app-level skills after creating a skill', async () => {

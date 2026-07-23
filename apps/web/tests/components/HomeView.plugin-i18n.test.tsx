@@ -94,7 +94,7 @@ describe('HomeView plugin i18n', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const view = render(
-      <I18nProvider initial="zh-CN">
+      <I18nProvider initial="en">
         <div className="entry-main--scroll">
           <HomeView
             projects={[]}

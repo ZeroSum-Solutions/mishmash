@@ -4,8 +4,8 @@ This file is the single source of truth for agents entering this repository. Rea
 
 ## Core documentation index
 
-- Product and onboarding: `README.md`, `docs/i18n/README.zh-CN.md`, `QUICKSTART.md`.
-- Contribution and environment: `CONTRIBUTING.md`, `docs/i18n/CONTRIBUTING.zh-CN.md`.
+- Product and onboarding: `README.md`, `QUICKSTART.md`.
+- Contribution and environment: `CONTRIBUTING.md`.
 - Architecture and protocols: `docs/architecture.md`, `docs/skills-protocol.md`, `docs/agent-adapters.md`, `docs/modes.md`.
 - Historical product baseline: `docs/spec.md`, `docs/roadmap.md` (both explicitly archived; do not treat their dated decisions as current behavior).
 - References and current plans: `docs/references.md`, `docs/code-review-guidelines.md`, `specs/current/maintainability-roadmap.md`.
@@ -256,7 +256,7 @@ root `pnpm tools-pr` script without a new explicit maintainer decision.
 
 ## i18n keys
 
-- `apps/web/src/i18n/types.ts` is the typed `Dict`; every key must be defined in all 19 locale files under `apps/web/src/i18n/locales/*.ts` (`ar`, `de`, `en`, `es-ES`, `fa`, `fr`, `hu`, `id`, `it`, `ja`, `ko`, `pl`, `pt-BR`, `ru`, `th`, `tr`, `uk`, `zh-CN`, `zh-TW`). Add the key to `types.ts` first; missing translations produce a typecheck error.
+- Open Design ships English-only. `apps/web/src/i18n/types.ts` is the typed `Dict`; every key must be defined in `apps/web/src/i18n/locales/en.ts`, the only locale file. Add the key to `types.ts` first; a missing translation produces a typecheck error. Do not reintroduce non-English locale dictionaries, `content.<locale>.ts` bundles, `docs/i18n/`, or `TRANSLATIONS.md` — they were removed in the English-only de-bloat pass.
 
 ## UI animation philosophy
 
