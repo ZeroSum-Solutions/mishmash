@@ -4,8 +4,8 @@ import { routeAgents } from '@/playwright/mock-factory';
 import type { Page } from '@playwright/test';
 
 const STORAGE_KEY = 'open-design:config';
-const OPEN_SETTINGS_LABEL = /Open settings|打开设置|開啟設定/i;
-const AUTOMATIONS_TITLE = /Automations|自动化/i;
+const OPEN_SETTINGS_LABEL = /Open settings/i;
+const AUTOMATIONS_TITLE = /Automations/i;
 
 test.describe.configure({ timeout: 30_000 });
 

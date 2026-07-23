@@ -6,7 +6,7 @@ import { T } from '@/timeouts';
 test.describe.configure({ timeout: T.xlong });
 
 const STORAGE_KEY = 'open-design:config';
-const OPEN_SETTINGS_LABEL = /Open settings|打开设置|開啟設定/i;
+const OPEN_SETTINGS_LABEL = /Open settings/i;
 
 const HOME_CONFIG = {
   mode: 'daemon',

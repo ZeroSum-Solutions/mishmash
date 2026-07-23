@@ -117,7 +117,7 @@ function matchesSurface(skill: SkillSummary, filter: SurfaceFilter): boolean {
 }
 
 function quotePrompt(locale: string, text: string): string {
-  return locale === 'de' ? `„${text}“` : `“${text}”`;
+  return `“${text}”`;
 }
 
 export function ExamplesTab({ skills: rawSkills, onUsePrompt }: Props) {

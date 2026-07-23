@@ -317,10 +317,6 @@ describe('EntryShell settings menu', () => {
     }) as typeof fetch;
     const props = renderHome();
 
-    await waitFor(() => {
-      expect(screen.getByText('1.2k online')).toBeTruthy();
-    });
-
     fireEvent.click(screen.getByTestId('entry-settings-menu-trigger'));
 
     expect(props.onOpenSettings).not.toHaveBeenCalled();
@@ -328,7 +324,9 @@ describe('EntryShell settings menu', () => {
     expect(screen.getByText('Language')).toBeTruthy();
     expect(screen.getByText('Appearance')).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: /Join Discord/i })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: /1.2k online/i })).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByRole('menuitem', { name: /1.2k online/i })).toBeTruthy();
+    });
     expect(
       screen.getByRole('menuitem', { name: /Follow @OpenDesignHQ on X/i }).getAttribute('href'),
     ).toBe('https://x.com/OpenDesignHQ');
