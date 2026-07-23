@@ -773,7 +773,7 @@
   pointer-events: none;
   background: var(--bg);
 }
-/* Chip group — the GitHub star, inline model switcher, and Use
+/* Chip group — the inline model switcher and Use
    everywhere chip live inside this wrapper so the responsive
    media query can flip the whole row's visibility in one place. */
 .entry-main__topbar-chips {
