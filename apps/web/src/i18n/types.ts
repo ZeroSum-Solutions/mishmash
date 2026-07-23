@@ -1006,8 +1006,6 @@ export interface Dict {
   'entry.openSettingsTitle': string;
   'entry.openSettingsAria': string;
   'entry.discordLabel': string;
-  'entry.discordAria': string;
-  'entry.discordAriaWithOnline': string;
   'entry.discordOnlineLabel': string;
   'entry.followXLabel': string;
   'entry.followThreadsLabel': string;
@@ -1020,8 +1018,6 @@ export interface Dict {
   'entry.useEverywhereTitle': string;
   'entry.useEverywhereAria': string;
   'entry.workspaceTeamsLabel': string;
-  'entry.workspaceTeamsTitle': string;
-  'entry.workspaceTeamsAria': string;
   // Left nav rail (icon-only) — surface labels also serve as tooltips
   'entry.navExpand': string;
   'entry.navCollapse': string;
@@ -1869,10 +1865,6 @@ export interface Dict {
   'entry.helpSubmitFeature': string;
   'entry.helpWhatsNew': string;
   'entry.helpDownloadDesktop': string;
-  // GitHub star pill in the top bar
-  'entry.githubStarLabel': string;
-  'entry.githubStarTitle': string;
-  'entry.githubStarAria': string;
 
   // Connectors tab
   'connectors.title': string;

@@ -69,7 +69,7 @@ import type {
   TrackingCliProviderId,
 } from '@open-design/contracts/analytics';
 import { agentIdToTracking } from '@open-design/contracts/analytics';
-import { useT, useI18n } from '../i18n';
+import { useT } from '../i18n';
 import { navigate, useRoute } from '../router';
 import { setPendingDesignSystemCreateEntry } from '../analytics/ds-create-entry';
 import type {
@@ -101,11 +101,6 @@ import { AmrBalanceDialog } from './AmrBalanceDialog';
 import { AmrLowBalanceDialog, type AmrLowBalanceDecision } from './AmrLowBalanceDialog';
 import { checkAmrBalanceGate } from '../runtime/amr-balance-gate';
 import { isPaidAmrPlan, resolveAmrPlan } from '../runtime/amr-low-balance-plan';
-import { GithubStarBadge } from './GithubStarBadge';
-import {
-  formatDiscordPresenceCount,
-  useDiscordPresence,
-} from './useDiscordPresence';
 import { HomeView } from './HomeView';
 import {
   createPluginAuthoringHandoff,
@@ -133,7 +128,6 @@ import {
 import { LanguageMenu } from './LanguageMenu';
 import { IntegrationsView, type IntegrationTab } from './IntegrationsView';
 import { InlineModelSwitcher } from './InlineModelSwitcher';
-import { enterpriseUrl } from './enterpriseUrl';
 import {
   EntrySettingsMenu,
   type EntrySettingsSection,
@@ -207,7 +201,6 @@ function writeStoredRailOpen(open: boolean): void {
   }
 }
 
-const DISCORD_URL = 'https://discord.gg/mHAjSMV6gz';
 const X_URL = 'https://x.com/OpenDesignHQ';
 const ONBOARDING_DROPDOWN_OPEN_EVENT = 'open-design:onboarding-dropdown-open';
 
@@ -216,12 +209,12 @@ type OnboardingAgentTestState =
   | { status: 'running'; inputKey: string }
   | { status: 'done'; inputKey: string; result: ConnectionTestResponse };
 
-// The topbar chips (GitHub star, model switcher, Use everywhere)
-// collapse into the settings dropdown when the viewport gets
-// narrow. The transition is driven entirely by CSS @media queries
-// in `entry-layout.css` so server and client render identical
-// markup — both surfaces are always present, and CSS toggles
-// `display` based on `--compact-topbar` breakpoint (900px).
+// The topbar chips (model switcher, Use everywhere) collapse into
+// the settings dropdown when the viewport gets narrow. The
+// transition is driven entirely by CSS @media queries in
+// `entry-layout.css` so server and client render identical markup —
+// both surfaces are always present, and CSS toggles `display` based
+// on `--compact-topbar` breakpoint (900px).
 
 // Default scenario plugin for each project kind/intent. The mapping
 // lives in `@open-design/contracts` so the daemon's `/api/projects`
@@ -540,8 +533,6 @@ export function EntryShell({
   artifactUpgradeSlot,
 }: Props) {
   const t = useT();
-  const { locale: uiLocale } = useI18n();
-  const discordPresence = useDiscordPresence();
   // Each entry sub-view (home / projects / design-systems) is its own
   // URL now, so the browser back/forward buttons work and a deep link
   // to /design-systems lands on that section. We derive the active
@@ -615,14 +606,6 @@ export function EntryShell({
     scrollContainer.scrollTop = 0;
   }, [view]);
   const analytics = useAnalytics();
-  const discordOnlineLabel = discordPresence
-    ? t('entry.discordOnlineLabel', {
-        count: formatDiscordPresenceCount(discordPresence.onlineCount),
-      })
-    : null;
-  const discordAriaLabel = discordOnlineLabel
-    ? t('entry.discordAriaWithOnline', { online: discordOnlineLabel })
-    : t('entry.discordAria');
   function changeView(next: EntryViewKind) {
     const navElement = navElementForView(next);
     if (navElement) {
@@ -1006,54 +989,6 @@ export function EntryShell({
               <Icon name="panel-left" size={20} />
             </button>
             <div className="entry-main__topbar-chips entry-main__topbar-chips--icon-only">
-              <GithubStarBadge />
-              <a
-                className="entry-workspace-chip od-tooltip"
-                href={enterpriseUrl(uiLocale)}
-                target="_blank"
-                rel="noreferrer noopener"
-                onClick={() => {
-                  trackHomeToolbarClick(analytics.track, {
-                    page_name: 'home',
-                    area: 'toolbar',
-                    element: 'workspace_teams',
-                  });
-                }}
-                data-tooltip={t('entry.workspaceTeamsTitle')}
-                data-tooltip-placement="bottom"
-                aria-label={t('entry.workspaceTeamsAria')}
-                data-testid="entry-workspace-teams"
-              >
-                <Icon
-                  name="sparkles"
-                  size={14}
-                  className="entry-workspace-chip__icon"
-                />
-                <span className="entry-workspace-chip__label">
-                  {t('entry.workspaceTeamsLabel')}
-                </span>
-              </a>
-              <a
-                className="entry-discord-badge od-tooltip"
-                href={DISCORD_URL}
-                aria-label={discordAriaLabel}
-                data-tooltip={discordAriaLabel}
-                data-tooltip-placement="bottom"
-                data-testid="entry-discord-badge"
-              >
-                <Icon name="discord" size={14} className="entry-discord-badge__icon" />
-                <span className="entry-discord-badge__label">{t('entry.discordLabel')}</span>
-                {discordOnlineLabel ? (
-                  <>
-                    <span className="entry-discord-badge__sep" aria-hidden>
-                      ·
-                    </span>
-                    <span className="entry-discord-badge__online">
-                      {discordOnlineLabel}
-                    </span>
-                  </>
-                ) : null}
-              </a>
               {view === 'home' ? null : executionSwitcher}
               <button
                 type="button"

@@ -784,11 +784,10 @@
 
 /* ============================================================
    Icon-only topbar chips
-   Collapse the Star / Discord / model-switcher / Use-everywhere
-   chips to square icon buttons; the full label surfaces as a
-   downward hover tooltip. Keeps the entry topbar quiet and tidy.
+   Collapse the model-switcher / Use-everywhere chips to square
+   icon buttons; the full label surfaces as a downward hover
+   tooltip. Keeps the entry topbar quiet and tidy.
    ============================================================ */
-.entry-main__topbar-chips--icon-only .entry-discord-badge,
 .entry-main__topbar-chips--icon-only .use-everywhere-chip,
 .entry-main__topbar-chips--icon-only .inline-switcher__chip {
   width: 32px;
@@ -803,13 +802,8 @@
      collapsed there's no text, so let the downward tooltip escape. */
   overflow: visible;
 }
-/* Hide every text fragment; keep only the leading icon glyph. The Discord
-   badge also carries a "· {n} online" suffix; collapsed it must hide too,
-   otherwise the separator + count leak out of the 32px square and render as
-   clipped text (e.g. "212 在s"). The full label lives in the hover tooltip. */
-.entry-main__topbar-chips--icon-only .entry-discord-badge__label,
-.entry-main__topbar-chips--icon-only .entry-discord-badge__sep,
-.entry-main__topbar-chips--icon-only .entry-discord-badge__online,
+/* Hide every text fragment; keep only the leading icon glyph. The full
+   label lives in the hover tooltip. */
 .entry-main__topbar-chips--icon-only .use-everywhere-chip__label,
 .entry-main__topbar-chips--icon-only .inline-switcher__chip-text,
 .entry-main__topbar-chips--icon-only .inline-switcher__chip-chevron {
@@ -4218,193 +4212,6 @@
 
 
 
-/* ============================================================
-   GitHub star pill — sticky top-bar CTA.
-
-   Mirrors the marketing landing-page "Star · <count>" affordance:
-   small chrome, low-emphasis, sits next to the model switcher and
-   settings cog. Hover swaps to the panel-strong palette so the call-
-   to-action still reads as clickable when the topbar is otherwise
-   sparse. The count slot animates in via `data-loading` so the
-   pill never visibly jumps when the API response arrives.
-   ============================================================ */
-.entry-star-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--bg-panel);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
-  text-decoration: none;
-  cursor: pointer;
-  box-shadow: var(--shadow-xs);
-  transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out),
-    color 120ms var(--ease-out), transform 120ms var(--ease-out);
-  white-space: nowrap;
-}
-.entry-star-badge:hover {
-  background: var(--bg-subtle);
-  border-color: var(--border-strong);
-  color: var(--text-strong);
-}
-.entry-star-badge:active {
-  transform: scale(0.98);
-}
-.entry-star-badge:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.entry-star-badge__icon {
-  color: var(--text-strong);
-  flex: 0 0 auto;
-}
-.entry-star-badge:hover .entry-star-badge__icon {
-  color: var(--text-strong);
-}
-.entry-star-badge__label {
-  color: var(--text-strong);
-  font-weight: 600;
-}
-.entry-star-badge__sep {
-  color: var(--text-faint);
-}
-.entry-star-badge__count {
-  display: inline-block;
-  min-width: 5ch;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-  transition: opacity 160ms var(--ease-out);
-}
-.entry-star-badge__count[data-loading='true'] {
-  opacity: 0.55;
-}
-
-.entry-discord-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--bg-panel);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-  text-decoration: none;
-  cursor: pointer;
-  box-shadow: var(--shadow-xs);
-  transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out),
-    color 120ms var(--ease-out), transform 120ms var(--ease-out);
-  white-space: nowrap;
-}
-.entry-discord-badge:hover {
-  background: var(--bg-subtle);
-  border-color: var(--border-strong);
-  color: var(--text-strong);
-}
-.entry-discord-badge:active {
-  transform: scale(0.98);
-}
-.entry-discord-badge:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.entry-discord-badge__icon {
-  color: #5865f2;
-  flex: 0 0 auto;
-}
-.entry-discord-badge:hover .entry-discord-badge__icon {
-  color: #5865f2;
-}
-.entry-discord-badge__label {
-  white-space: nowrap;
-}
-.entry-discord-badge__sep {
-  color: var(--text-faint);
-}
-.entry-discord-badge__online {
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-/* Workspace / team-edition entry. Neutral white-panel chip matching the
-   GitHub-star / Discord pills next to it; keeps its label visible (unlike the
-   icon-only discord/use-everywhere chips) because guiding the click is the
-   whole point. Tokens resolve in both light and dark themes. */
-.entry-workspace-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--bg-panel);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-  text-decoration: none;
-  cursor: pointer;
-  box-shadow: var(--shadow-xs);
-  transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out),
-    color 120ms var(--ease-out), transform 120ms var(--ease-out);
-  white-space: nowrap;
-}
-.entry-workspace-chip:hover {
-  background: var(--bg-subtle);
-  border-color: var(--border-strong);
-  color: var(--text-strong);
-}
-.entry-workspace-chip:active {
-  transform: scale(0.98);
-}
-.entry-workspace-chip:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.entry-workspace-chip__icon {
-  color: var(--text-strong);
-  flex: 0 0 auto;
-}
-.entry-workspace-chip__label {
-  color: var(--text-strong);
-  white-space: nowrap;
-}
-
-@media (max-width: 700px) {
-  .entry-workspace-chip__label {
-    display: none;
-  }
-  .entry-workspace-chip {
-    padding: 0 9px;
-  }
-  .entry-star-badge__label {
-    display: none;
-  }
-  .entry-star-badge__sep {
-    display: none;
-  }
-  .entry-discord-badge {
-    padding: 0 9px;
-  }
-  .entry-discord-badge__label {
-    display: none;
-  }
-  .entry-discord-badge__sep {
-    display: none;
-  }
-}
-
 @media (max-width: 900px) {
   .entry-nav-rail {
     width: 56px;
@@ -4415,7 +4222,7 @@
   .entry-main__inner--wide {
     max-width: 100%;
   }
-  /* Collapse the three topbar chips into the settings dropdown.
+  /* Collapse the topbar chips into the settings dropdown.
      The chips' container disappears and the matching menu rows
      inside `.avatar-popover` are unhidden so every action stays
      one click away from the lone settings cog. */
