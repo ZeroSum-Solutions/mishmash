@@ -208,13 +208,13 @@ describe('kimiAgentDef model wiring', () => {
   it('lists kimi-k3 as a fallback model, right after the synthetic default option', () => {
     const ids = kimiAgentDef.fallbackModels.map((m) => m.id);
     expect(ids[0]).toBe('default');
-    expect(ids[1]).toBe('kimi-k3');
+    expect(ids[1]).toBe('moonshotai/kimi-k3');
   });
 
   it('honors KIMI_DEFAULT_MODEL as an operator pin, mirroring AMR/vela (defaultModelEnvVar)', () => {
     expect(kimiAgentDef.defaultModelEnvVar).toBe('KIMI_DEFAULT_MODEL');
     expect(
-      resolveModelForAgent(kimiAgentDef, null, { KIMI_DEFAULT_MODEL: 'kimi-k3' }),
-    ).toBe('kimi-k3');
+      resolveModelForAgent(kimiAgentDef, null, { KIMI_DEFAULT_MODEL: 'moonshotai/kimi-k3' }),
+    ).toBe('moonshotai/kimi-k3');
   });
 });
