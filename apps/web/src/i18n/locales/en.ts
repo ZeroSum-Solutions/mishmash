@@ -879,7 +879,7 @@ export const en: Dict = {
   'designSystemPicker.empty': 'No matching design systems',
   'designSystemPicker.openPreview': 'Open preview',
   'designSystemPicker.loadingPreview': 'Loading preview…',
-  'designSystemPicker.noPreview': 'No preview page. MishMash Systems to view the full preview.',
+  'designSystemPicker.noPreview': 'No preview page. Go to Design Systems to view the full preview.',
   'designSystemPicker.previewHint': 'Hover a design system to preview it',
   'designSystemPicker.fullscreenAria': '{title} full-screen preview',
   'designSystemPicker.closeFullscreen': 'Close full-screen preview',
