@@ -23,17 +23,28 @@ cheaply and crisply.
 
 ## Canonical commands
 
-Create and wait for a job, then download the result into the project's
-assets directory (paths below are relative to the agent's cwd):
+Create and wait for a job, capture the result as JSON, validate the URL,
+then download into the project's `assets/` directory (paths below are
+relative to the agent's cwd). Never paste a printed URL straight into a
+shell command — extract and validate it first:
 
 ```bash
+JOB_JSON="$(mktemp)"
 higgsfield generate create gpt_image_2 \
   --prompt "studio product photo of a ceramic mug, soft daylight" \
   --aspect-ratio 1:1 --quality low --resolution 1k \
-  --wait --wait-timeout 5m
+  --wait --wait-timeout 5m --json > "$JOB_JSON"
 
-# create/wait prints a hosted CDN URL, not a local file — fetch it:
-curl -sS -o public/assets/mug-hero.png "<printed-url>"
+URL="$(python3 -c "
+import json
+job = json.load(open('$JOB_JSON'))
+job = job[0] if isinstance(job, list) else job
+url = job['result_url']
+assert url.startswith('https://'), f'unexpected result_url: {url!r}'
+print(url)
+")"
+
+curl -fsSL -o assets/mug-hero.png "$URL"
 ```
 
 `higgsfield model get <job_type>` lists accepted params per model before you
