@@ -1,10 +1,8 @@
 ---
 name: deck-swiss-international
-zh_name: "瑞士国际主义 Deck"
 en_name: "Swiss International Deck"
 emoji: "🟦"
 description: "16-column grid, one saturated accent, and 22 locked layouts (Klein Blue, Lemon, Mint, Safety Orange)."
-zh_description: "16 列网格 + 单一饱和 accent + 22 个锁死版面 (Klein Blue / Lemon / Mint / Safety Orange)"
 en_description: "16-column grid, one saturated accent, and 22 locked layouts (Klein Blue, Lemon, Mint, Safety Orange)."
 category: slides
 scenario: marketing
@@ -32,20 +30,18 @@ od:
   design_system:
     requires: false
   example_prompt: "Use the Swiss International Deck template to turn my content into a 16-column-grid deck with one saturated accent and 22 locked layouts. Preserve the template's visual signature, use real content and data, and avoid lorem ipsum or placeholder images."
-  example_prompt_i18n:
-    zh-CN: "用「瑞士国际主义 Deck」模板把我的内容做成一套「16 列网格 + 单一饱和 accent + 22 个锁死版面 (Klein Blue / Lemon / Mint / Safety Orange)」。保持模板的视觉签名，使用真实内容和数据，避免 lorem ipsum 和占位图片。"
 ---
 
-【Template: Swiss International Deck】
-【Intent】Fact, product, analysis, and methodology writing. Extremely cool, rational, academic — no hand-drawn elements / noise / decoration whatsoever. Inspired by op7418/guizang-ppt-skill Style B.
+[Template: Swiss International Deck]
+[Intent]Fact, product, analysis, and methodology writing. Extremely cool, rational, academic — no hand-drawn elements / noise / decoration whatsoever. Inspired by op7418/guizang-ppt-skill Style B.
 
-【Theme】**Pick exactly 1 of the 4 sets below, never mix them, never change the hex values**:
+[Theme]**Pick exactly 1 of the 4 sets below, never mix them, never change the hex values**:
 - 🔵 **Klein Blue (IKB)** — accent `#002FA7`, paper `#fafaf8`, ink `#0a0a0a`. Business / AI / design scenarios.
 - 🟡 **Lemon Yellow** — accent `#FFD500`, paper `#f7f5ee` (pale cream), ink `#0a0a0a`. Youth / retail / sports. Text must be black (never white).
 - 🟢 **Lemon Green / Neon** — accent `#C5E803`, paper `#f7f5ee`, ink `#0a0a0a`. Sustainability / tech startups / Gen-Z brands. Text must be black.
 - 🟠 **Safety Orange** — accent `#FF6B35`, paper `#f7f5ee`, ink `#0a0a0a`. Industrial / automotive / urgent messaging. Text in white + bold ≥ 600.
 
-【Layouts — a reusable pool of 22 layouts; do not invent new layouts or reshape existing ones; **the count is set by the content** — cover 【user content】in full (short content starts at 6-10 slides, longer content should run well beyond that; the same layout can repeat across chapters)】
+[Layouts — a reusable pool of 22 layouts; do not invent new layouts or reshape existing ones; **the count is set by the content** — cover [user content] in full (short content starts at 6-10 slides, longer content should run well beyond that; the same layout can repeat across chapters)]
 - **S01 Cover** — full-bleed accent + breathing ASCII dot matrix + reversed-white title + metadata chrome (date / № / topic).
 - **S02 Vertical Timeline** — a dashed axis with dots on the left; nodes on the right = year + KPI + description.
 - **S03 Statement** — a centered 9.6vw giant statement + generous whitespace on the left + a hairline at the bottom + a caption.
@@ -69,7 +65,7 @@ od:
 - **S21 Tech Spec Sheet** — a title block on the left / 3 KPI hairlines in the middle / bars of varying height on the right / data at the bottom.
 - **S22 Image Hero** — a full-width image covering the top 60% + a white title block overlaid; explanation + a 3-column KPI row in the bottom 40%.
 
-【Design details — absolute hard rules】
+[Design details — absolute hard rules]
 - **Right angles only**: `border-radius: 0` throughout. Any rounded corner is an immediate violation.
 - **1px hairline borders**, black or accent color; shadows / gradients / blur are strictly forbidden.
 - **16-column grid**: `grid-template-columns: repeat(16, 1fr); gap: 0`.

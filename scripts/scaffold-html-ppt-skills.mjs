@@ -69,18 +69,6 @@ const TEMPLATES = [
       '用 html-ppt-weekly-report 模板生成一份周报（7 页）。先问我四件事：本周时间范围、3-5 个核心 KPI 数字、本周已发布 / 已完成的事项、下周计划与风险。然后用模板填好 8 周柱状图和下周表格。',
   },
   {
-    slug: 'xhs-post',
-    name: 'html-ppt-xhs-post',
-    title: 'HTML PPT · 小红书 图文',
-    scenario: 'marketing',
-    featured: 24,
-    description:
-      '小红书 / Instagram 风 9 页 3:4 竖版图文（810×1080）— 暖色 pastel、虚线 sticker 卡片、底部页码点点。用于发小红书图文、Instagram carousel、品牌种草内容。',
-    triggers: ['小红书', 'xhs', 'xhs post', 'xiaohongshu', '图文', 'instagram carousel', '种草'],
-    examplePrompt:
-      '帮我用 html-ppt-xhs-post 模板做一组 9 张小红书图文（3:4 竖版，810×1080）。先告诉我主题，然后帮我把封面 + 7 页内容 + 结尾 CTA 排好，每页一句标题 + 一段正文 + 关键词 sticker。',
-  },
-  {
     slug: 'course-module',
     name: 'html-ppt-course-module',
     title: 'HTML PPT · Course Module',

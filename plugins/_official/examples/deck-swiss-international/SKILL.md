@@ -1,13 +1,10 @@
 ---
 name: deck-swiss-international
 en_name: "Write a Board Pre-Read like a Fortune-500 Board Chair"
-zh_name: "像财富 500 强董事长一样写董事会预读"
 description: |
   Open Design's FY26 board pre-read: the open-core bet, growth vs burn, and the one decision the board must approve. Built as a decision-grade corporate strategy deck for board, CEO, CFO.
 en_description: |
   Open Design's FY26 board pre-read: the open-core bet, growth vs burn, and the one decision the board must approve. Built as a decision-grade corporate strategy deck for board, CEO, CFO.
-zh_description: |
-  像财富 500 强董事长一样写董事会预读——一份可商业交付的企业战略 Deck，围绕真实主题、证据链与决策目标组织。
 tags:
   - "corporate-strategy"
   - "board-pre-read-deck"
@@ -21,7 +18,6 @@ triggers:
   - "board-pre-read-deck"
   - "corporate-strategy"
   - "Write a Board Pre-Read like a Fortune-500 Board Chair"
-  - "像财富 500 强董事长一样写董事会预读"
   - "board"
   - "strategy"
   - "business-review"
@@ -51,23 +47,21 @@ od:
     reload: debounce-100
   design_system:
     requires: false
-  example_prompt_i18n:
-    zh-CN: "用「瑞士国际主义 Deck」模板把我的内容做成一套「16 列网格 + 单一饱和 accent + 22 个锁死版面 (Klein Blue / Lemon / Mint / Safety Orange)」。保持模板的视觉签名，使用真实内容和数据，避免 lorem ipsum 和占位图片。"
   category: "corporate-strategy"
   scenario: "strategy"
   example_prompt: "Create \"Write a Board Pre-Read like a Fortune-500 Board Chair\" as a decision-grade Corporate strategy deck in this template's own visual system. Subject: Open Design's FY26 board pre-read: the open-core bet, growth vs burn, and the one decision the board must approve. Audience: board, CEO, CFO. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would a board member know what to approve and why before page five."
 ---
 
-【Template: Swiss International Deck】
-【Intent】Fact, product, analysis, and methodology writing. Extremely cool, rational, academic — no hand-drawn elements / noise / decoration whatsoever. Inspired by op7418/guizang-ppt-skill Style B.
+[Template: Swiss International Deck]
+[Intent]Fact, product, analysis, and methodology writing. Extremely cool, rational, academic — no hand-drawn elements / noise / decoration whatsoever. Inspired by op7418/guizang-ppt-skill Style B.
 
-【Theme】**Pick exactly 1 of the 4 sets below, never mix them, never change the hex values**:
+[Theme]**Pick exactly 1 of the 4 sets below, never mix them, never change the hex values**:
 - 🔵 **Klein Blue (IKB)** — accent `#002FA7`, paper `#fafaf8`, ink `#0a0a0a`. Business / AI / design scenarios.
 - 🟡 **Lemon Yellow** — accent `#FFD500`, paper `#f7f5ee` (pale cream), ink `#0a0a0a`. Youth / retail / sports. Text must be black (never white).
 - 🟢 **Lemon Green / Neon** — accent `#C5E803`, paper `#f7f5ee`, ink `#0a0a0a`. Sustainability / tech startups / Gen-Z brands. Text must be black.
 - 🟠 **Safety Orange** — accent `#FF6B35`, paper `#f7f5ee`, ink `#0a0a0a`. Industrial / automotive / urgent messaging. Text in white + bold ≥ 600.
 
-【Layouts — a reusable pool of 22 layouts; do not invent new layouts or reshape existing ones; **the count is set by the content** — cover 【user content】in full (short content starts at 6-10 slides, longer content should run well beyond that; the same layout can repeat across chapters)】
+[Layouts — a reusable pool of 22 layouts; do not invent new layouts or reshape existing ones; **the count is set by the content** — cover [user content] in full (short content starts at 6-10 slides, longer content should run well beyond that; the same layout can repeat across chapters)]
 - **S01 Cover** — full-bleed accent + breathing ASCII dot matrix + reversed-white title + metadata chrome (date / № / topic).
 - **S02 Vertical Timeline** — a dashed axis with dots on the left; nodes on the right = year + KPI + description.
 - **S03 Statement** — a centered 9.6vw giant statement + generous whitespace on the left + a hairline at the bottom + a caption.
@@ -91,7 +85,7 @@ od:
 - **S21 Tech Spec Sheet** — a title block on the left / 3 KPI hairlines in the middle / bars of varying height on the right / data at the bottom.
 - **S22 Image Hero** — a full-width image covering the top 60% + a white title block overlaid; explanation + a 3-column KPI row in the bottom 40%.
 
-【Design details — absolute hard rules】
+[Design details — absolute hard rules]
 - **Right angles only**: `border-radius: 0` throughout. Any rounded corner is an immediate violation.
 - **1px hairline borders**, black or accent color; shadows / gradients / blur are strictly forbidden.
 - **16-column grid**: `grid-template-columns: repeat(16, 1fr); gap: 0`.
