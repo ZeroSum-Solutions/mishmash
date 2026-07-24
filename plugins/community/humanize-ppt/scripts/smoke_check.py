@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE = ROOT / "examples" / "01-ai-tool-update" / "source.md"
 DEFAULT_OUT = Path("/tmp/humanize-ppt-smoke")
-DEFAULT_TITLE = "AI 工具更新，不只是功能清单"
+DEFAULT_TITLE = "AI tool updates are more than a feature list"
 REQUIRED_FILES = [
     "deck_brief.md",
     "ast_outline.md",
@@ -41,21 +41,21 @@ ENTRYPOINTS = [
 # v1.1.1: marketplace packages ship without examples/. If DEFAULT_SOURCE is
 # missing, fall back to this minimal inline fixture instead of failing with
 # file-not-found — the smoke check should still exercise the brief-only path.
-INLINE_FIXTURE_MARKDOWN = """# AI 工具更新，不只是功能清单
+INLINE_FIXTURE_MARKDOWN = """# AI tool updates are more than a feature list
 
-## 更新不是罗列功能
+## An update is not a feature dump
 
-新版本发布时,大多数团队做的是穷举 changelog。但用户真正想知道的是:这个更新
-改变了我的工作方式吗?
+When a new version ships, most teams exhaustively enumerate the changelog. But
+what users really want to know is: does this update change how I work?
 
-## 从功能到叙事
+## From features to narrative
 
-把每条更新翻译成"它解决了什么问题""它替代了哪个旧流程"，比一份功能列表更
-容易被记住,也更容易被转发。
+Translating each update into "what problem it solves" and "which old workflow
+it replaces" is easier to remember, and easier to share, than a feature list.
 
-## 收束
+## Takeaway
 
-一次好的更新说明,最后要留下一句用户能复述给同事听的话。
+A good update note ends with one line a user can repeat to a colleague.
 """
 
 

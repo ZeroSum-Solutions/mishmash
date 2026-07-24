@@ -9,9 +9,9 @@ v1.1 renderer exception: PPT Master already owns a mandatory three-stage Confirm
 
 Humanize PPT is *for the presentation* and *compatible with downstream HTML PPT renderers* — and it **never renders**. By v0.8 the flow was: AST slice → (optional `--preview-outline` review) → production brief → downstream renders. The human picks the renderer and (for guizang) a single style/theme up front, blind. They commit to one look before seeing a single pixel.
 
-The 9-style showcase on "10 分钟入门 Agent 7 概念" showed the cost: people want to *see covers side by side* before committing. One static thumbnail per style is the cheapest possible preview — a cover is the highest-signal page, and rendering one page is cheap for the downstream skill.
+The 9-style showcase on "A 10-minute intro to the 7 core Agent concepts" showed the cost: people want to *see covers side by side* before committing. One static thumbnail per style is the cheapest possible preview — a cover is the highest-signal page, and rendering one page is cheap for the downstream skill.
 
-The architecture decision (拍板): **the gallery shows ≥4 covers that the downstream skill really renders.** Humanize stays in its lane — it emits the spec and the commands; it does not render the covers itself.
+The architecture decision: **the gallery shows ≥4 covers that the downstream skill really renders.** Humanize stays in its lane — it emits the spec and the commands; it does not render the covers itself.
 
 ## Design
 
@@ -36,7 +36,7 @@ For the resolved primary renderer (`choose_routes`), Humanize takes the first
    the candidate covers (relative-path `<iframe>`s) with each candidate's label,
    description, and the exact re-injection command. Honest about pending state:
    a not-yet-rendered cover shows the frame backdrop plus an always-visible
-   caption — no faked thumbnail (宁空不摆拍).
+   caption — no faked thumbnail (leave it empty before staging a fake).
 3. `style_gallery_plan.json` — machine-readable: per-candidate `id`, `label`,
    `description`, `cli`, `command_file`, `cover_html`, `cover_png`,
    `reinjection_command`.
@@ -71,7 +71,7 @@ chosen style. (Append `--preview-outline` for the review checkpoint.)
 ### WebGL static-screenshot trap (ties to QA failure modes)
 
 Guizang Style A covers use a WebGL hero canvas. A static PNG screenshot
-captures the canvas **before it paints → blank cover** (实证: a Style A
+captures the canvas **before it paints → blank cover** (observed: a Style A
 `ink-classic` cover PNG came back 14KB, an empty page). So each Style A
 candidate command warns:
 

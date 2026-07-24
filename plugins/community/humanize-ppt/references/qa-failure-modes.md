@@ -1,214 +1,217 @@
-# 演讲体检失败模式目录（v0.9）
+# Presentation Checkup — Failure Mode Catalog (v0.9)
 
-演讲体检（即此前的 QA 循环，CLI 仍是 `--qa-from`）是 Humanize PPT 在签收前对渲染后 HTML 或原生 PPTX 做的逐页核对。体检对的不是美观，是大纲：逐页核对渲染结果和大纲页的差异，把「只能看、不能讲」的页揪出来，直到每一页都拿得出口去讲。
+> The code-side source of truth is the `FAILURE_MODES` dict in
+> `scripts/humanize_ppt_v2.py`, matched one-to-one by id.
 
-先用完整的句子说清楚什么叫失败的页。一页只有几个字，没把这页该说的意思说完；或者这页没有完成它承诺的观众状态转移，听众看完这页，状态没有从 A 到 B。这样的页不应该存在。演讲体检就是把它揪出来，并生成修复指令（`fix_prompt.md`）让下游 skill 重渲。
+The presentation checkup (the former "QA loop"; the CLI is still `--qa-from`) is the per-page review Humanize PPT runs over rendered HTML or a native PPTX before sign-off. The checkup is **not** about how pretty the deck is — it is about the **outline**: it diffs each rendered page against its outline page and catches the pages that can be *looked at* but not *presented*, until every page is one you could stand up and deliver.
 
-本文件是体检扫描的失败模式人读目录。代码侧的唯一事实来源是 `scripts/humanize_ppt_v2.py` 里的 `FAILURE_MODES` 字典，两边按 id 一一对应。
+Say plainly what a failed page is. A page with only a few words that never finishes the point it owes; or a page that does not complete the audience state transfer it promised — the listener walks away from it in the same state they arrived. Such pages should not exist. The checkup finds them and emits a fix instruction (`fix_prompt.md`) for the downstream skill to re-render.
 
-**目录纪律：只列代码里真实存在的规则。** 不写愿望清单，不发明检查。某类失败真实存在但脚本还测不出来的，会写进[静态扫描还测不出的失败类](#静态扫描还测不出的失败类)，不会被包装成模式。
+This file is the human-readable catalog the checkup scans against. The single code-side source of truth is the `FAILURE_MODES` dict in `scripts/humanize_ppt_v2.py`; the two sides correspond by id.
 
-## 范围
+**Catalog discipline: list only rules that actually exist in code.** No wishlist, no invented checks. A failure class that is real but the scanner cannot yet detect goes under [Failure classes the static scan can't catch yet](#failure-classes-the-static-scan-cant-catch-yet) — it is never dressed up as a mode.
 
-失败模式分两层：
+## Scope
 
-- **第一层：渲染器无关的失败类。** 症状在任何渲染器的产物上都可能出现。v0.8.0 起，`placeholder-residue` 这条规则本身也是渲染器无关的（scope 为 `any`），对任何下游渲染的 HTML 都会跑。
-- **第二层：渲染器专属模式。** 按渲染器 id 划定范围：
-  - **guizang**：Style A 和 Style B 都适用，特别注明的除外
-  - **guizang-style-a**：仅 Style A
-  - **guizang-style-b**：仅 Style B（Swiss 锁定）
-  - **frontend-slides**：英文渲染器专属规则，覆盖溢出、对比度、断词、字体契约、图片 alt
-  - **beautiful-html-templates**：同一组英文渲染器专属规则，作用于它的原生 HTML deck
-  - **ppt-master**：原生 PPTX/OOXML 规则，覆盖包完整性、页数、可编辑对象、notes、AST 漂移、关系、转场和 native objects
+Failure modes come in two layers:
 
-## 第一层：渲染器无关的失败类
+- **Layer 1: renderer-agnostic failure classes.** The symptom can show up on any renderer's output. As of v0.8.0, `placeholder-residue` is itself renderer-agnostic (scope `any`) and runs on every downstream-rendered HTML.
+- **Layer 2: renderer-specific modes.** Scoped by renderer id:
+  - **guizang**: applies to both Style A and Style B unless noted otherwise
+  - **guizang-style-a**: Style A only
+  - **guizang-style-b**: Style B only (Swiss-locked)
+  - **frontend-slides**: English-renderer rules for overflow, contrast, hyphenation, font contracts, and image alt text
+  - **beautiful-html-templates**: the same English-renderer rules, scoped to its native HTML decks
+  - **ppt-master**: native PPTX/OOXML rules for package integrity, page count, editable objects, notes, AST drift, relationships, transitions, and native objects
 
-下表是体检今天覆盖的失败类，以及实现它们的具体规则。
+## Layer 1: renderer-agnostic failure classes
 
-| 失败类 | 观众视角会看到什么 | 已实现的规则 |
+| Failure class | What the audience sees | Implemented rules |
 | --- | --- | --- |
-| 模板占位残留 | 正式页面上出现 `[必填]`、`SLIDES_HERE`、lorem ipsum、TODO、TBD 这样的半成品字样 | `placeholder-residue`（scope `any`，对所有渲染器生效） |
-| 动画降级 | 整个 deck 一动不动，讲述节奏塌掉 | `low-power-default`、`data-anim-thin` |
-| 布局契约违约 | 页数或布局和大纲对不上，有的页该有的内容没出现 | `swiss-sxx-count-mismatch`、`swiss-sxx-invented-id`、`swiss-low-diversity` |
-| 背景层缺失 | Hero 页背景一片空白，页面像没做完 | `webgl-canvas-missing` |
-| 英文渲染器契约违约 | 英文 deck 出现横向滚动、低对比、英文单词被噪声式断开、字体退回系统默认、图片不可访问 | `english-horizontal-overflow`、`english-low-contrast`、`english-hyphenation-noise`、`english-font-contract-missing`、`english-image-alt-missing` |
-| 原生 PPTX 契约违约 | PowerPoint 打不开、页数不对、整页被拍平、没有备注、转场或关系丢失 | `pptx-package-invalid`、`pptx-slide-count-mismatch`、`pptx-placeholder-residue`、`pptx-slide-empty`、`pptx-flattened-slide`、`pptx-missing-speaker-notes`、`pptx-speaker-intent-drift`、`pptx-ast-content-drift`、`pptx-broken-relationship`、`pptx-transition-missing`、`pptx-native-object-missing` |
-| AI 草稿残留 | 页面上出现「作为AI」「首先我需要」这类模型脚手架文字 | brief 模式检查 `visible_slide_text_has_no_ai_draft_markers`（`write_qa` 里的 `BANNED_VISIBLE_PATTERNS`），在渲染之前就跑在 slide plan 上 |
+| Template placeholder residue | Half-finished tokens like `[必填]`, `SLIDES_HERE`, lorem ipsum, TODO, TBD on a live slide | `placeholder-residue` (scope `any`, runs on every renderer) |
+| Animation downgrade | The whole deck sits motionless; the delivery rhythm collapses | `low-power-default`, `data-anim-thin` |
+| Layout contract breach | Page count or layout doesn't match the outline; content that should appear is missing | `swiss-sxx-count-mismatch`, `swiss-sxx-invented-id`, `swiss-low-diversity` |
+| Missing background layer | The hero page background is blank; the page looks unfinished | `webgl-canvas-missing` |
+| English renderer contract breach | English-native decks show horizontal scroll, weak contrast, noisy broken words, generic font fallback, or inaccessible images | `english-horizontal-overflow`, `english-low-contrast`, `english-hyphenation-noise`, `english-font-contract-missing`, `english-image-alt-missing` |
+| Native PPTX contract breach | PowerPoint cannot open the deck, page count drifts, slides are flattened, notes/transitions/relationships are missing | `pptx-package-invalid`, `pptx-slide-count-mismatch`, `pptx-placeholder-residue`, `pptx-slide-empty`, `pptx-flattened-slide`, `pptx-missing-speaker-notes`, `pptx-speaker-intent-drift`, `pptx-ast-content-drift`, `pptx-broken-relationship`, `pptx-transition-missing`, `pptx-native-object-missing` |
+| AI draft residue | Model scaffolding text like "As an AI" / "First I need to" leaks onto the slide | brief-mode check `visible_slide_text_has_no_ai_draft_markers` (`BANNED_VISIBLE_PATTERNS` in `write_qa`), run on the slide plan *before* rendering |
 
-### 静态扫描还测不出的失败类
+### Failure classes the static scan can't catch yet
 
-字重降级、真实浏览器布局导致的视口截断、图文错位、徽章或装饰元素遮挡正文，这些都是真实的渲染失败类，但它们需要真实渲染才能检测，HTML 静态扫描和 PPTX OOXML 扫描今天都测不出来。按目录纪律，它们不被列为模式。HTML 路线靠下游视觉清单和截图复核；PPT Master 路线靠它自己的 `svg_quality_checker`，用户显式要求时再跑 `visual-review`。
+Font-weight downgrade, viewport clipping caused by real browser layout, image/text misalignment, badges or decorative elements covering body copy — these are real rendering failures, but they need a real render to detect. Neither the HTML static scan nor PPTX OOXML inspection can see them today. HTML routes use downstream visual checklists and screenshot review; PPT Master uses its own `svg_quality_checker` and runs `visual-review` only when the user explicitly opts in.
 
-v0.9.1 新增的英文渲染器规则只覆盖静态扫描能可靠判断的子集：显式横向溢出设置、明显低对比十六进制配色、强制断词/噪声换行 CSS、字体契约缺失、图片 alt 缺失。它们不替代截图复核。
+The v0.9.1 English-renderer rules below intentionally cover the static subset Humanize can detect reliably: explicit horizontal overflow settings, obvious low-contrast hex pairs, forced hyphenation/noisy wrapping CSS, missing font contracts, and missing image alt text. They do not claim to replace screenshot review.
 
-真实案例：2026-06-13 英文 deck（`docs/showcase/hermes-agent-mastery/en/ppt/`）的体检中，静态扫描通过，而截图逐页复核发现页码徽章遮挡 9 页正文，观众会看到「uires confirmation.」这样的断句。修复与复检记录见 `docs/showcase/hermes-agent-mastery/en/qa/presentation-checkup-2026-06-13.md`。截图复核是体检方法论的一半，今天还没自动化。
+Real case: in the 2026-06-13 checkup of the English deck (`docs/showcase/hermes-agent-mastery/en/ppt/`), the static scan passed, while a per-page screenshot review found a page-number badge covering body text on 9 pages — the audience would read a broken fragment like "uires confirmation." Fix and re-check record: `docs/showcase/hermes-agent-mastery/en/qa/presentation-checkup-2026-06-13.md`. Screenshot review is half the checkup methodology and is not automated yet.
 
-还有一类失败，连「页本身」都是对的，错的是**怎么截它**——
+There is also a class where even the *page itself* is correct — what's wrong is **how you capture it**:
 
-**WebGL hero 封面静态截图捕获不到 → 封面空白。** Guizang Style A 的封面用 WebGL hero canvas 画背景。HTML 完全正确（`canvas#bg-dark`/`canvas#bg-light` 都在、`data-anim` 充足、`low-power` 没激活，所有静态检查全过），但对它截的那张 PNG 是空白的——因为 canvas 在页面加载后才异步绘制首帧，截图发生在绘制之前，截到的是还没上色的画布。`webgl-canvas-missing` 这类静态规则查的是「画布在不在 HTML 里」，查不出「画布画出来没、截图截到没」。这是一个**正确的页 + 错误的截图 = 空白产物**的失败类，和文字溢出那种「页本身有问题」的失败类不同，但同样要靠真实渲染/截图复核才能发现。
+**WebGL hero cover not captured by a static screenshot → blank cover.** Guizang Style A covers paint their background with a WebGL hero canvas. The HTML is fully correct (`canvas#bg-dark`/`canvas#bg-light` both present, ample `data-anim`, `low-power` not active — every static check passes), but a PNG shot of it comes back blank: the canvas paints its first frame asynchronously *after* load, and the screenshot fires before that, capturing an uncolored canvas. The static rule `webgl-canvas-missing` checks "is the canvas in the HTML"; it cannot check "did the canvas paint, did the screenshot catch it." This is a **correct page + wrong capture = blank artifact** class, distinct from the "the page itself is broken" classes like text overflow, but it likewise needs a real render / screenshot review to surface.
 
-实证：2026-06 的 9 风格 agent 封面试验里，Style A `ink-classic` 封面的静态截图只有 14KB，肉眼看是一张空白页（同批 Style B 瑞士静态封面截图正常）。这批截图因此撤回不入库（宁空不摆拍）。
+Evidence: in the 2026-06 nine-style agent-cover experiment, the static screenshot of the Style A `ink-classic` cover was only 14KB and read as a blank page by eye (the Style B Swiss static cover screenshot in the same batch was fine). That batch of screenshots was therefore pulled rather than shipped (leave it empty before staging a fake).
 
-兜底规则（写进了 v0.9 风格画廊的封面渲染命令，见 `references/style-gallery-spec.md`）：截 WebGL hero 页时，以活页 `cover.html` 为准、`cover.png` 仅作缩略；截图前等 canvas 完成首帧（延迟 ≥1.5s）；`cover.png` 小于 20KB 一律判为截图失败而非空封面，重截或只交活页。这条今天还测不出来（Humanize 不读 PNG 字节），所以列在这里，不包装成 `FAILURE_MODES` 模式。
+Backstop rule (baked into the v0.9 style-gallery cover render commands; see `references/style-gallery-spec.md`): when capturing a WebGL hero page, treat the live `cover.html` as the source of truth and `cover.png` as a thumbnail only; wait for the canvas's first frame before screenshotting (delay ≥1.5s); a `cover.png` under 20KB is always a failed capture, not an empty cover — re-shoot or ship the live page only. This is not detectable today (Humanize does not read PNG bytes), so it is listed here, not packaged as a `FAILURE_MODES` mode.
 
-## 模式目录
+## Mode catalog
 
-每条模式给四样东西：症状、观众视角会看到什么、检测方式（`scripts/humanize_ppt_v2.py` 里的规则函数名）、修复指令方向（`fix_prompt.md` 会让下游 skill 做什么）。
+Each mode gives four things: symptom, what the audience sees, detection (the rule function name in `scripts/humanize_ppt_v2.py`), and fix direction (what `fix_prompt.md` asks the downstream skill to do).
 
-### `placeholder-residue`（所有渲染器）
+### `placeholder-residue` (all renderers)
 
-**症状：** 模板占位符泄漏进了渲染后的 HTML。下游 skill 自己的替换流程没有跑完，或者填充内容时留下了占位文本。v0.8.0 起此规则渲染器无关。
+**Symptom:** Template placeholders leaked into the rendered HTML. The downstream skill's own substitution pass didn't finish, or filler text was left in. As of v0.8.0 this rule is renderer-agnostic.
 
-**观众视角会看到什么：** 正式页面上出现 `[必填]`、`<!-- SLIDES_HERE -->`、lorem ipsum、TODO、TBD 这样的字样。观众立刻知道这页没做完。
+**What the audience sees:** Tokens like `[必填]`, `<!-- SLIDES_HERE -->`, lorem ipsum, TODO, TBD on a live slide. The audience knows instantly the page is unfinished.
 
-**检测：** `check_placeholder_residue`。渲染 HTML 里出现 `[必填]` 或 `SLIDES_HERE` 即 fail；出现 lorem ipsum（不区分大小写）、独立单词 TODO 或 TBD 也 fail。
+**Detection:** `check_placeholder_residue`. `[必填]` or `SLIDES_HERE` in the rendered HTML → fail; lorem ipsum (case-insensitive), a standalone TODO, or TBD → fail.
 
-**修复指令方向：** 替换所有 `[必填]` 占位符，删掉 `<!-- SLIDES_HERE -->` 标记，把 lorem / TODO / TBD 填充文本换成成品内容；下游 skill 自己的替换流程必须完整跑一遍。
+**Fix direction:** Replace every `[必填]`, delete the `<!-- SLIDES_HERE -->` marker, swap lorem / TODO / TBD filler for finished content; the downstream skill must run its substitution pass to completion.
 
-### `low-power-default`（guizang）
+### `low-power-default` (guizang)
 
-**症状：** 渲染后的 HTML 里 `body.low-power` 处于激活状态。它会压制动画，本意是运行时手动开启的省电选项，不该是默认值。
+**Symptom:** `body.low-power` is active in the rendered HTML. It suppresses animation; it is meant to be a runtime opt-in power saver, not the default.
 
-**观众视角会看到什么：** deck 打开就是全静态的，本该有的入场动画和节奏全部消失。
+**What the audience sees:** The deck opens fully static — the intended entrance animations and rhythm are gone.
 
-**检测：** `check_low_power_default`。`<body>` 的 class 列表里含 `low-power` 即 fail。
+**Detection:** `check_low_power_default`. `low-power` in the `<body>` class list → fail.
 
-**修复指令方向：** 把 `low-power` 从 body class 里去掉，动画必须在首次加载时就播放。
+**Fix direction:** Remove `low-power` from the body class; animation must play on first load.
 
-### `webgl-canvas-missing`（guizang-style-a）
+### `webgl-canvas-missing` (guizang-style-a)
 
-**症状：** 双 WebGL 画布（`canvas#bg-dark` 和 `canvas#bg-light`）缺失或只有一半。没有它们，Hero 背景渲染不出来。
+**Symptom:** The dual WebGL canvas (`canvas#bg-dark` and `canvas#bg-light`) is missing or only half present. Without it the hero background cannot render.
 
-**观众视角会看到什么：** Hero 页背景一片空白或一块死色，开场页像半成品。
+**What the audience sees:** The hero page background is blank or a dead block of color; the opening page looks half-built.
 
-**检测：** `check_webgl_canvas_missing`。`canvas#bg-dark` 和 `canvas#bg-light` 两个都在才算过。
+**Detection:** `check_webgl_canvas_missing`. Passes only if both `canvas#bg-dark` and `canvas#bg-light` are present.
 
-**修复指令方向：** 把两块画布都加回去，让 Style A 的 WebGL Hero 背景能渲染。
+**Fix direction:** Add both canvases back so the Style A WebGL hero background can render.
 
-### `data-anim-thin`（guizang-style-a）
+> Related but distinct: a present-and-correct canvas can still produce a *blank screenshot* if captured before it paints. That is a capture-time failure, not a static one — see [Failure classes the static scan can't catch yet](#failure-classes-the-static-scan-cant-catch-yet).
 
-**症状：** `data-anim` / `data-animate` 标记太少，撑不起一份能看的 deck。已验证的 Ink Classic 基准里有 86 处。
+### `data-anim-thin` (guizang-style-a)
 
-**观众视角会看到什么：** 翻页之间几乎没有任何元素入场动画，整份 deck 像一摞静态海报。
+**Symptom:** `data-anim` / `data-animate` markers are too few to carry a watchable deck. The verified Ink Classic baseline has 86.
 
-**检测：** `check_data_anim_thin`。少于 3 个硬性 fail，少于 10 个软性 warn。
+**What the audience sees:** Almost no element entrance animation between slides; the whole deck reads like a stack of static posters.
 
-**修复指令方向：** 在非封面页补充 `data-anim` / `data-animate` 标记，目标 10 个以上（Ink Classic 是 86 个）。
+**Detection:** `check_data_anim_thin`. Fewer than 3 → hard fail; fewer than 10 → soft warn.
 
-### `swiss-sxx-count-mismatch`（guizang-style-b）
+**Fix direction:** Add `data-anim` / `data-animate` markers on non-cover pages, targeting more than 10 (Ink Classic has 86).
 
-**症状：** 渲染 HTML 里 `data-layout="Sxx"` 标记的数量和 `slide_plan.json` 的页数对不上。
+### `swiss-sxx-count-mismatch` (guizang-style-b)
 
-**观众视角会看到什么：** 有的大纲页根本没渲染出来，或者多出了大纲里没有的页；讲到那页时投影上没有对应内容。
+**Symptom:** The count of `data-layout="Sxx"` markers in the rendered HTML doesn't match the page count in `slide_plan.json`.
 
-**检测：** `check_swiss_sxx_count_mismatch`。Sxx 数量不等于页数即 fail。
+**What the audience sees:** Some outline pages didn't render, or pages appear that aren't in the outline; when you get to that page there's nothing on the projector to match.
 
-**修复指令方向：** 让 `data-layout="Sxx"` 标记数量等于 `slide_plan.json` 的页数，由下游 skill 重新产出。
+**Detection:** `check_swiss_sxx_count_mismatch`. Sxx count ≠ page count → fail.
 
-### `swiss-sxx-invented-id`（guizang-style-b）
+**Fix direction:** Make the `data-layout="Sxx"` count equal the page count in `slide_plan.json`, re-produced by the downstream skill.
 
-**症状：** 某个 `data-layout="Sxx"` 的值不在注册集（`S01` 到 `S22`）里。下游 skill 没有从 `references/layouts-swiss.md` 的注册集里选，而是自己编了一个布局 ID。
+### `swiss-sxx-invented-id` (guizang-style-b)
 
-**观众视角会看到什么：** 那一页的版式不在 Swiss 体系里，和全 deck 的视觉语言脱节，观众能感觉到这页「画风不对」。
+**Symptom:** A `data-layout="Sxx"` value is not in the registered set (`S01` through `S22`). The downstream skill invented a layout id instead of picking from the registered set in `references/layouts-swiss.md`.
 
-**检测：** `check_swiss_sxx_invented_id`。任何 Sxx 值不属于 S01 到 S22 即 fail。
+**What the audience sees:** That page's layout isn't in the Swiss system and breaks from the deck's visual language; the audience can feel that the page is "off."
 
-**修复指令方向：** 把自编的 Sxx 值换成 S01 到 S22 里的注册布局 ID。
+**Detection:** `check_swiss_sxx_invented_id`. Any Sxx value outside S01–S22 → fail.
 
-### `swiss-low-diversity`（guizang-style-b，软性警告）
+**Fix direction:** Replace invented Sxx values with registered layout ids from S01 through S22.
 
-**症状：** 8 页的 deck 里不到 6 种不同的 `Sxx` 值（其他长度按页数的 60% 向上取整算下限）。整份 deck 读起来像同一个版式盖了 n 遍章。
+### `swiss-low-diversity` (guizang-style-b, soft warn)
 
-**观众视角会看到什么：** 每一页长得几乎一样，翻了三页之后观众开始走神，因为版面没有给出任何「这页和上页不同」的信号。
+**Symptom:** Fewer than 6 distinct `Sxx` values in an 8-page deck (other lengths use 60% of the page count, rounded up, as the floor). The whole deck reads like one layout stamped n times.
 
-**检测：** `check_swiss_low_diversity`。不到 3 种硬性 fail，低于 60% 下限软性 warn。
+**What the audience sees:** Every page looks nearly identical; after three pages the audience drifts, because the layout gives no signal that "this page differs from the last."
 
-**修复指令方向：** 让 Swiss 布局多样化，尽量每页换一个注册 Sxx，下限是 60% 的不重复率。
+**Detection:** `check_swiss_low_diversity`. Fewer than 3 → hard fail; below the 60% floor → soft warn.
 
-### `english-horizontal-overflow`（frontend-slides、beautiful-html-templates）
+**Fix direction:** Diversify the Swiss layouts, ideally a different registered Sxx per page, with a 60% uniqueness floor.
 
-**症状：** 渲染 HTML 允许横向滚动（`overflow-x:auto/scroll/visible`），或设置超过 `100vw` 的宽度。
+### `english-horizontal-overflow` (frontend-slides, beautiful-html-templates)
 
-**观众视角会看到什么：** 英文长词或页面本身可能横向漂移、裁切，presenter 或截图时尤其明显。
+**Symptom:** The rendered HTML opts into horizontal scrolling (`overflow-x:auto`, `scroll`, or `visible`) or sets viewport widths above `100vw`.
 
-**检测：** `check_english_horizontal_overflow`。命中上述 CSS 即 fail。
+**What the audience sees:** A slide can drift sideways or clip long English technical terms, especially in browser presenter mode or during screenshot capture.
 
-**修复指令方向：** 锁住横向溢出，用布局、字号或安全换行解决长词，而不是扩大画布。
+**Detection:** `check_english_horizontal_overflow`. CSS with `overflow-x:auto/scroll/visible` or `width` / `min-width` above `100vw` -> fail.
 
-### `english-low-contrast`（frontend-slides、beautiful-html-templates）
+**Fix direction:** Keep horizontal overflow locked (`overflow-x:hidden`) and fit long terms through layout, font sizing, or safe wrapping rather than a wider canvas.
 
-**症状：** 同一 CSS 规则里出现前景/背景十六进制颜色，且对比度低于 3.0:1。
+### `english-low-contrast` (frontend-slides, beautiful-html-templates)
 
-**观众视角会看到什么：** 英文正文在投影或录屏里发灰，看不清。
+**Symptom:** A CSS rule sets explicit foreground and background hex colors whose contrast ratio is below 3.0:1.
 
-**检测：** `check_english_low_contrast`。
+**What the audience sees:** English copy fades into the panel, especially on projectors or in recordings.
 
-**修复指令方向：** 提高文字和背景对比度。
+**Detection:** `check_english_low_contrast`. Static hex pairs in the same CSS rule are measured; ratio below 3.0:1 -> fail.
 
-### `english-hyphenation-noise`（frontend-slides、beautiful-html-templates，软性警告）
+**Fix direction:** Increase text/background contrast, usually by darkening the background or using a stronger text token.
 
-**症状：** CSS 使用 `hyphens:auto`、`word-break:break-all` 或 `overflow-wrap:anywhere`。
+### `english-hyphenation-noise` (frontend-slides, beautiful-html-templates, soft warn)
 
-**观众视角会看到什么：** 英文技术词被切成噪声片段，页面像被机器强行压缩。
+**Symptom:** CSS enables forced visual breaking such as `hyphens:auto`, `word-break:break-all`, or `overflow-wrap:anywhere`.
 
-**检测：** `check_english_hyphenation_noise`。
+**What the audience sees:** Technical English words split into noisy fragments and the slide looks machine-compressed.
 
-**修复指令方向：** 优先手工换行、压缩文案或用 `overflow-wrap:break-word` 兜底。
+**Detection:** `check_english_hyphenation_noise`. The noisy CSS declarations above -> warn.
 
-### `english-font-contract-missing`（frontend-slides、beautiful-html-templates）
+**Fix direction:** Prefer manual line breaks, shorter copy, or `overflow-wrap:break-word` for rare long tokens.
 
-**症状：** 没有 web font / `@font-face`，也没有明确的特色字体栈。
+### `english-font-contract-missing` (frontend-slides, beautiful-html-templates)
 
-**观众视角会看到什么：** deck 退回系统默认 serif/sans，失去原生渲染器风格。
+**Symptom:** The deck has no web font / `@font-face` source and no distinctive font-family contract.
 
-**检测：** `check_english_font_contract_missing`。
+**What the audience sees:** The deck falls back to generic system serif/sans, losing the native renderer's intended identity.
 
-**修复指令方向：** 补回渲染器预期的字体加载或明确的本地字体契约。
+**Detection:** `check_english_font_contract_missing`. No `fonts.googleapis.com` / `@font-face` and no recognizable named deck font -> fail.
 
-### `english-image-alt-missing`（frontend-slides、beautiful-html-templates）
+**Fix direction:** Add the renderer's intended web font or a documented local font stack with a distinctive primary family.
 
-**症状：** `<img>` 缺少非空 `alt`。
+### `english-image-alt-missing` (frontend-slides, beautiful-html-templates)
 
-**观众视角会看到什么：** 视觉素材不可访问，也更难审计。
+**Symptom:** `<img>` tags are missing `alt` or have an empty `alt`.
 
-**检测：** `check_english_image_alt_missing`。
+**What the audience sees:** Visual assets become inaccessible to assistive tooling and harder to audit in generated decks.
 
-**修复指令方向：** 给每张图片补简短、准确的 alt 文本。
+**Detection:** `check_english_image_alt_missing`. Any image tag with missing or empty `alt` -> fail.
 
-## PPT Master 原生 PPTX 模式
+**Fix direction:** Add short, meaningful alt text for every image.
 
-这些规则由 `scripts/pptx_qa.py` 读取 OOXML；`FAILURE_MODES` 仍负责 id、scope 和默认严重度。Humanize 只出报告与 fix prompt，不直接改 zip。
+## PPT Master native PPTX modes
 
-| ID | 观众/交付会看到什么 | 检测 | 修复方向 |
+`scripts/pptx_qa.py` reads OOXML for these rules; `FAILURE_MODES` remains the authority for ids, scope, and default severity. Humanize writes reports and fix prompts but never edits the PPTX zip.
+
+| ID | Audience/delivery symptom | Detection | Fix direction |
 |---|---|---|---|
-| `pptx-package-invalid` | PowerPoint 无法打开或提示修复文件 | ZIP CRC、`[Content_Types].xml`、`ppt/presentation.xml` 和关系解析 | 回 PPT Master owning project 重新导出，不手改 OOXML |
-| `pptx-slide-count-mismatch` | 讲到某页时 deck 缺页或多页 | PPTX 有序 slide 列表 vs `slide_plan.json` | 让 SVG roster/fill plan 对齐 Humanize 页数后重导 |
-| `pptx-placeholder-residue` | 正式页仍有 TODO/TBD/`[必填]` | 扫描所有 slide `a:t` 文本 | 在 `svg_output/` 或 `fill_plan.json` 清除残留后重导 |
-| `pptx-slide-empty` | 投影上出现没有可讲文字的空页 | slide XML 无可见 `a:t` 文本 | 恢复 Humanize 本页 message 的可编辑文字 |
-| `pptx-flattened-slide` | 整页只能当图片点选，无法逐元素编辑 | 页面没有 `p:sp`、`p:grpSp` 或 `p:graphicFrame` | 重新走 PPT Master native DrawingML/template-fill 路由 |
-| `pptx-missing-speaker-notes` | Presenter View 没有逐页讲稿 | notesSlide 缺失或只有无意义短文本 | 把 `speaker_intent.md` 映射进 `notes/total.md`/`slides[].notes` |
-| `pptx-speaker-intent-drift` | 备注存在但不再支持本页讲述意图 | notes 文本与 `speaker_intent` 词面重合度过低，warn | 在 PPT Master notes source 恢复讲述意图 |
-| `pptx-ast-content-drift` | 页面说的事和 AST 本页不一致 | slide 文本与 title/message/visible content 重合度过低，warn | 对照 `slide_plan.json` 恢复状态转移 |
-| `pptx-broken-relationship` | 图片、notes、chart 等在 PowerPoint 中丢失 | slide 内部关系 target 不存在或 XML 无法解析 | 由 PPT Master exporter 重新打包所有关系 |
-| `pptx-transition-missing` | 要求的页间转场没有进入原生 deck | slide XML 缺 `p:transition` | 用请求的 `-t` 参数重新导出 |
-| `pptx-native-object-missing` | 要求可编辑的数据表/图表仍被拍平 | 计划中的 `html-table` 页没有 table/chart `graphicData` | 加 native marker 并用 `--native-objects` 重导 |
+| `pptx-package-invalid` | PowerPoint cannot open the file or asks to repair it | ZIP CRC, required package parts, relationship parsing | Re-export from the owning PPT Master project; do not hand-patch OOXML |
+| `pptx-slide-count-mismatch` | The talk has missing or extra pages | Ordered PPTX slide list vs `slide_plan.json` | Align the SVG roster/fill plan with Humanize and re-export |
+| `pptx-placeholder-residue` | TODO/TBD/`[必填]` remains on a live slide | All slide `a:t` text | Remove residue in `svg_output/` or `fill_plan.json`, then re-export |
+| `pptx-slide-empty` | The projector shows a page with no presentable text | No visible `a:t` text | Restore the page message as editable text |
+| `pptx-flattened-slide` | The page is one flat picture instead of editable elements | No `p:sp`, `p:grpSp`, or `p:graphicFrame` | Re-run PPT Master's native DrawingML/template-fill route |
+| `pptx-missing-speaker-notes` | Presenter View has no per-page script | Missing/meaningless notesSlide content | Map `speaker_intent.md` to `notes/total.md` or `slides[].notes` |
+| `pptx-speaker-intent-drift` | Notes exist but no longer support the page intent | Weak lexical overlap with `speaker_intent`, warn | Restore the Humanize intent in PPT Master's note source |
+| `pptx-ast-content-drift` | The page says something different from its AST contract | Weak overlap with title/message/visible content, warn | Restore the state transfer from `slide_plan.json` |
+| `pptx-broken-relationship` | Images, notes, or charts disappear in PowerPoint | Internal slide relationship target missing/invalid | Let the PPT Master exporter rebuild the package |
+| `pptx-transition-missing` | Requested native page transitions are absent | Missing `p:transition` | Re-export with the requested `-t` flag |
+| `pptx-native-object-missing` | A requested editable table/chart is flattened or absent | Planned table page lacks table/chart `graphicData` | Add native markers and re-export with `--native-objects` |
 
-真实验证见 `docs/showcase/ppt-master-native/verification-2026-07-10.md`：PPT Master `b0beba5b` 导出的 10 页 native deck 首轮体检 0 fail / 1 warn，10 页 notes，399 个可编辑容器。
+Real verification: `docs/showcase/ppt-master-native/verification-2026-07-10.md`. A 10-slide native deck exported by PPT Master `b0beba5b` passed on round 1 with 0 failures / 1 warning, 10 notes slides, and 399 editable containers.
 
-## 英文渲染器：full 支持状态
+## English renderers: full support status
 
-v0.9.1 实测状态（对应 `registry/renderer_registry.json`）：
+v0.9.1 verified state (matches `registry/renderer_registry.json`):
 
-- `beautiful-html-templates` 标为 `"support_level": "full"`：brief 出口可用，2026-06-13 在真实 Neo-Grid deck 上完整跑通演讲体检，并已补 5 条英文渲染器专属静态规则。
-- `frontend-slides` 标为 `"support_level": "full"`：brief 出口可用，2026-06-17 在真实 frontend-slides deck 上完整跑通演讲体检，负向对照证明体检不是空转，并已补同一组 5 条英文渲染器专属静态规则。
+- `beautiful-html-templates` is marked `"support_level": "full"`: the brief exit works, the presentation checkup ran end to end on its real Neo-Grid deck (scan, screenshot finding, fix, re-check — per-round record in `docs/showcase/hermes-agent-mastery/en/qa/presentation-checkup-2026-06-13.md`), and it now has 5 English-renderer-specific static rules.
+- `frontend-slides` is marked `"support_level": "full"`: the brief exit works, the presentation checkup ran end to end on the first real frontend-slides deck (`docs/showcase/v0.9-frontend-slides/ppt/index.html`), the negative-control scan proved the checkup is not a no-op, and it now has the same 5 English-renderer-specific static rules.
 
-这些规则仍然保守：只编码 Humanize 能静态、确定性扫描的部分；遮挡、裁切、视觉错位仍然需要截图复核。
+The renderer-specific rules stay conservative: they encode static checks Humanize can run deterministically, while screenshot review remains required for overlap, clipping, and presenter-view bugs that static HTML cannot prove.
 
-## 体检怎么用这份目录
+## How the checkup uses this catalog
 
-1. HTML 走 `run_checks(html, plan, modes)`；PPTX 走 `inspect_pptx(path, plan, ...)`，都返回 `[{id, severity, pages, evidence}]`。
-2. `_write_qa_report` 产出人读的 `qa_report.md`。
-3. `_write_fix_prompt` 产出下游 skill 可执行的 `fix_prompt.md`（比如「把 S04 的 `data-layout="S99"` 换成注册的 Sxx 布局」）。
-4. 迭代跟踪器 `qa_iteration.json` 记录轮次、上一轮哪些发现已解决、哪些还开着。
+1. HTML uses `run_checks(html, plan, modes)`; PPTX uses `inspect_pptx(path, plan, ...)`. Both return `[{id, severity, pages, evidence}]`.
+2. `_write_qa_report` produces the human-readable `qa_report.md`.
+3. `_write_fix_prompt` produces the downstream-executable `fix_prompt.md` (e.g. "replace S04's `data-layout="S99"` with a registered Sxx layout").
+4. The iteration tracker `qa_iteration.json` records the round, which findings the last round resolved, and which are still open.
 
-体检上限是 `--max-qa-iterations`（默认 3）。到达上限仍有未解决发现时，`qa_status` 变为 `needs-human`，交回给下一个 Agent 或人来决定。
+The checkup is capped at `--max-qa-iterations` (default 3). If unresolved findings remain at the cap, `qa_status` becomes `needs-human` and is handed back to the next agent or a human to decide.

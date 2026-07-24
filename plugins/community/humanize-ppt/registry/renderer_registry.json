@@ -1,10 +1,10 @@
 {
   "version": "1.1.0",
-  "positioning_note": "热插拔：Humanize 的 brief 是普通 markdown+JSON，既能交给 HTML PPT skill，也能交给原生 PPTX workflow。本表只标记真实跑通且输出稳定的路线；support_level 必须由真实产物验证推动。",
+  "positioning_note": "Hot-pluggable: the Humanize brief is plain markdown+JSON, consumable by HTML PPT skills or a native PPTX workflow. This table only marks routes that really ran end-to-end with stable output; support_level moves only on real-artifact verification.",
   "support_levels": {
-    "full": "brief 出口 + 渲染后演讲体检（--qa-from）+ 渲染器专属失败模式都已在真实 HTML/PPTX 产物上验证过",
-    "brief+qa-verified": "brief 出口可用，且演讲体检（--qa-from）已在该渲染器的真实渲染产物上完整跑通（扫描→发现→修复→复检）；渲染器专属失败模式规则尚未沉淀",
-    "brief-only": "brief 出口可用；演讲体检（--qa-from）这条腿尚未在该渲染器的真实产物上验证，不承诺"
+    "full": "Brief exit + post-render presentation checkup (--qa-from) + renderer-specific failure modes all verified on real HTML/PPTX artifacts",
+    "brief+qa-verified": "Brief exit works, and the presentation checkup (--qa-from) has run end-to-end (scan -> finding -> fix -> re-check) on this renderer's real rendered artifact; renderer-specific failure-mode rules not yet distilled",
+    "brief-only": "Brief exit works; the presentation checkup (--qa-from) leg is not yet verified on this renderer's real artifacts — no promises"
   },
   "renderers": [
     {
@@ -14,12 +14,12 @@
       "role": "primary-renderer-100pct-native",
       "support_level": "full",
       "best_for": [
-        "中文分享",
-        "稳定成稿",
-        "中文默认生产路径",
-        "杂志风",
-        "瑞士风",
-        "v0.6.4 由 Humanize 发 brief，guizang-ppt-skill 原生渲染"
+        "Chinese-language talks",
+        "stable final decks",
+        "default production path for Chinese sources",
+        "editorial-magazine look",
+        "Swiss look",
+        "v0.6.4: Humanize writes the brief; guizang-ppt-skill renders natively"
       ],
       "inputs": [
         "deck_brief.md",
@@ -50,14 +50,14 @@
       "skill_name": "ppt-master",
       "role": "native-editable-pptx-renderer",
       "support_level": "full",
-      "support_note": "2026-07-10: production brief、main SVG pipeline、raw .pptx template-fill 与 11 个 PPTX 专属失败模式已实现；main route 真实导出 10 页/399 个可编辑容器，template-fill 真实导出 5 页/199 个可编辑容器并通过 LibreOffice 打开渲染，两条均包含 notes、Fade transition 与 Humanize OOXML presentation checkup。记录见 docs/showcase/ppt-master-native/verification-2026-07-10.md。",
+      "support_note": "2026-07-10: production brief, main SVG pipeline, raw .pptx template-fill, and 11 PPTX-specific failure modes implemented; the main route really exported 10 slides / 399 editable containers, template-fill really exported 5 slides / 199 editable containers and opened+rendered in LibreOffice, both including notes, Fade transitions, and the Humanize OOXML presentation checkup. Record: docs/showcase/ppt-master-native/verification-2026-07-10.md.",
       "best_for": [
-        "原生可编辑 PowerPoint",
+        "native editable PowerPoint",
         "DrawingML shapes",
         "speaker notes",
-        "原生转场与对象动画",
-        "可编辑表格与图表",
-        "raw .pptx template 原生填充"
+        "native transitions and object animation",
+        "editable tables and charts",
+        "native fill of a raw .pptx template"
       ],
       "inputs": [
         "ppt-master-source.md",
@@ -108,11 +108,11 @@
       "support_level": "full",
       "support_note": "v0.9.1: brief exit + real --qa-from checkup remain verified on docs/showcase/hermes-agent-mastery/en/ppt/index.html, and the English renderer now has 5 renderer-specific static failure modes: horizontal overflow, low contrast, hyphenation noise, font contract missing, and image alt text missing. This closes the gap that kept it at brief+qa-verified.",
       "best_for": [
-        "34套模板",
-        "英文默认至少5个真实预览",
-        "按occasion和mood选风格",
-        "design.md视觉契约",
-        "v0.6.4 由 Humanize 发 brief，beautiful-html-templates 原生渲染"
+        "34 templates",
+        "at least 5 real previews by default for English sources",
+        "style selection by occasion and mood",
+        "design.md visual contract",
+        "v0.6.4: Humanize writes the brief; beautiful-html-templates renders natively"
       ],
       "inputs": [
         "deck_brief.md",
@@ -150,12 +150,12 @@
       "skill_name": "html-ppt",
       "role": "full-deck-and-presenter-renderer",
       "best_for": [
-        "演讲者模式",
-        "逐字稿",
-        "36主题",
-        "15个full-deck模板",
-        "31个布局",
-        "动画丰富"
+        "presenter mode",
+        "full talk scripts",
+        "36 themes",
+        "15 full-deck templates",
+        "31 layouts",
+        "animation-rich"
       ],
       "inputs": [
         "deck_brief.md",
@@ -182,13 +182,13 @@
       "support_level": "full",
       "support_note": "v0.9.1: brief exit + real --qa-from checkup remain verified on docs/showcase/v0.9-frontend-slides/ppt/index.html, and the English renderer now has 5 renderer-specific static failure modes: horizontal overflow, low contrast, hyphenation noise, font contract missing, and image alt text missing. This closes the gap that kept it at brief+qa-verified.",
       "best_for": [
-        "PPTX转HTML",
-        "英文style discovery",
-        "show-don't-tell风格预览",
+        "PPTX-to-HTML conversion",
+        "English style discovery",
+        "show-don't-tell style previews",
         "viewport fitting",
         "Vercel deploy",
         "PDF export",
-        "v0.6.4 由 Humanize 发 brief，frontend-slides 原生渲染"
+        "v0.6.4: Humanize writes the brief; frontend-slides renders natively"
       ],
       "inputs": [
         "deck_brief.md",
@@ -222,20 +222,20 @@
     },
     {
       "id": "post-render-qa-loop",
-      "display_name": "Humanize PPT 演讲体检 (Post-Render QA Loop)",
+      "display_name": "Humanize PPT Presentation Checkup (Post-Render QA Loop)",
       "skill_name": "humanize-ppt",
       "role": "post-render-quality-gate",
       "best_for": [
-        "演讲体检：逐页核对渲染结果和大纲页的差异",
-        "把『只能看、不能讲』的页揪出来",
-        "写 fix_prompt.md 给下游 skill 重渲",
-        "3 轮上限，超出 needs-human",
-        "锁定 known-good 视觉基准"
+        "presentation checkup: diff every rendered page against its outline page",
+        "pull out the pages that can only be looked at, not spoken from",
+        "write fix_prompt.md for the downstream skill to re-render",
+        "3-round cap; needs-human beyond it",
+        "lock the known-good visual baseline"
       ],
       "inputs": [
         "--qa-from <rendered.html|native.pptx>",
         "out/slide_plan.json",
-        "out/qa_iteration.json (上一轮)"
+        "out/qa_iteration.json (previous round)"
       ],
       "outputs": [
         "outputs/qa/qa_report.md",
@@ -252,10 +252,10 @@
       "role": "humanize-native-presenter-shell",
       "support_level": "full",
       "best_for": [
-        "无下游 deck 时也能先上台讲",
-        "用 slide_plan.json + speaker_intent.md 生成独立演讲 shell",
-        "演讲稿面板、翻页状态、计时器、S/左右键快捷键",
-        "不抢下游 deck 的视觉主权"
+        "present even before any downstream deck exists",
+        "generate a standalone presenter shell from slide_plan.json + speaker_intent.md",
+        "speaker-notes panel, slide position, timer, S/arrow-key shortcuts",
+        "never claims the downstream deck's visual ownership"
       ],
       "inputs": [
         "slide_plan.json",
@@ -275,10 +275,10 @@
       "skill_name": "humanize-ppt",
       "role": "brief-mode-quality-gate",
       "best_for": [
-        "检查AST是否保留",
-        "检查AI草稿痕迹",
-        "检查路径",
-        "检查交付清单"
+        "check the AST is preserved",
+        "check for AI-draft residue",
+        "check routing",
+        "check the delivery checklist"
       ],
       "inputs": [
         "router_plan.json",

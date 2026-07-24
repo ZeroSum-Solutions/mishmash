@@ -10,7 +10,7 @@ Brief mode (v0.6.4 default — writes a Guizang production brief, no HTML):
 python3 scripts/humanize_ppt.py \
   --source examples/01-ai-tool-update/source.md \
   --out .humanize-ppt-runs/ai-tool-update-v0.6.4 \
-  --title "AI 工具更新，不只是功能清单" \
+  --title "AI tool updates are more than a feature list" \
   --renderer guizang \
   --guizang-style A
 ```
@@ -34,7 +34,7 @@ Native editable PowerPoint:
 python3 scripts/humanize_ppt.py \
   --source examples/01-ai-tool-update/source.md \
   --out .humanize-ppt-runs/ai-tool-update-pptx \
-  --title "AI 工具更新，不只是功能清单" \
+  --title "AI tool updates are more than a feature list" \
   --renderer ppt-master \
   --ppt-master-transition fade
 ```
@@ -47,7 +47,7 @@ Outline preview (audience state-transfer map from an existing `slide_plan.json`,
 python3 scripts/preview_outline_html.py \
   --slide-plan .humanize-ppt-runs/ai-tool-update-v0.6.4/slide_plan.json \
   --out .humanize-ppt-runs/ai-tool-update-v0.6.4/preview-outline.html \
-  --title "AI 工具更新，不只是功能清单"
+  --title "AI tool updates are more than a feature list"
 ```
 
 The legacy V0.2-compatible entrypoint remains available for compatibility with earlier agents:
@@ -56,7 +56,7 @@ The legacy V0.2-compatible entrypoint remains available for compatibility with e
 python3 scripts/humanize_ppt_v2.py \
   --source examples/01-ai-tool-update/source.md \
   --out .humanize-ppt-runs/ai-tool-update-v0.2 \
-  --title "AI 工具更新，不只是功能清单" \
+  --title "AI tool updates are more than a feature list" \
   --renderer auto
 ```
 
@@ -66,5 +66,5 @@ Legacy V0.1 demo remains available:
 python3 scripts/humanize_ppt_v1.py \
   --source examples/01-ai-tool-update/source.md \
   --out .humanize-ppt-runs/ai-tool-update \
-  --title "AI 工具更新，不只是功能清单"
+  --title "AI tool updates are more than a feature list"
 ```

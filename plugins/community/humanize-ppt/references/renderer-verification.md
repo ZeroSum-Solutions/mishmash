@@ -65,5 +65,6 @@ Recommended for the image media slot. Drives the local Codex CLI
 ## Additional trigger phrases
 
 Besides the two examples kept in the frontmatter description, these user
-utterances also mean the presentation checkup: "帮我盯一下渲染出来的 PPT
-有没有翻车", "告诉我哪几页只能看不能讲".
+utterances also mean the presentation checkup: "keep an eye on the rendered
+PPT and tell me if anything fell over", "tell me which pages can only be
+looked at but not spoken from".
