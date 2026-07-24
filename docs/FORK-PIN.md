@@ -41,8 +41,19 @@ Removed as owned-surface reduction: non-English locales + localized docs,
 GitHub/Teams/Discord top-bar buttons, `apps/desktop` and `apps/packaged`
 (team uses the web Studio only), `apps/landing-page` (the Astro marketing
 site was upstream's, not ours) — including their packaged/release CI
-workflows, e2e Electron specs, and CODEOWNERS/allowlist entries. See branch
-`feat/debloat`.
+workflows, e2e Electron specs, and CODEOWNERS/allowlist entries. Also:
+language-targeted plugins/templates, the od-branded landing template pair +
+atelier-zero marketplace copy, and user-facing "Open Design" branding
+(→ MishMash). See branch `feat/debloat`.
+
+**Known-dead surface (dispositioned, 2026-07-23 Luna audit):** `tools/pack`
+and `tools/release` source still references the deleted Electron packages
+(`@open-design/desktop`, `@open-design/packaged`). They compile and their
+builds pass; they fail only if a packaging/release command is actually run —
+a lane this fork never uses (web Studio via `tools-dev` only). Left in place
+deliberately: deleting them ripples into `scripts/scopes.ts`, guard tests,
+and CI topology for zero operational win. Revisit only if packaging is ever
+resurrected.
 
 ## Cherry-pick log
 
