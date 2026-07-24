@@ -161,7 +161,7 @@ export function WhatsNewPopup({ active }: { active: boolean }) {
           exit="exit"
         >
           <div className={styles.header}>
-            <span className={styles.eyebrow}>Open Design {card.appVersion}</span>
+            <span className={styles.eyebrow}>MishMash {card.appVersion}</span>
             <Button
               aria-label={t('whatsNew.dismissAria')}
               className={styles.close}

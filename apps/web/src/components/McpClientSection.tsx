@@ -887,7 +887,7 @@ function McpRow({ row, idx, total, template, onChange, onRemove, onMoveUp, onMov
               <McpOAuthControl serverId={row.id} />
             ) : (
               <div className="mcp-oauth-hint hint">
-                <strong>No managed OAuth.</strong> Open Design will use this
+                <strong>No managed OAuth.</strong> MishMash will use this
                 server as configured. Add headers below if the server needs a
                 token.
               </div>
@@ -895,13 +895,13 @@ function McpRow({ row, idx, total, template, onChange, onRemove, onMoveUp, onMov
           ) : null}
           {isHttpLike && row._isNew && usesManagedOAuth ? (
             <div className="mcp-oauth-hint hint">
-              Save first, then click <strong>Connect</strong> to grant Open Design
+              Save first, then click <strong>Connect</strong> to grant MishMash
               access via the provider's OAuth flow.
             </div>
           ) : null}
           {isHttpLike && row._isNew && !usesManagedOAuth ? (
             <div className="mcp-oauth-hint hint">
-              <strong>No managed OAuth.</strong> Save this server and Open Design
+              <strong>No managed OAuth.</strong> Save this server and MishMash
               will use it directly.
             </div>
           ) : null}
@@ -1316,7 +1316,7 @@ function McpOAuthControl({ serverId }: { serverId: string }) {
             <span>
               <strong>Not connected.</strong>{' '}
               <span className="hint">
-                Click Connect to grant Open Design access via the provider's OAuth flow.
+                Click Connect to grant MishMash access via the provider's OAuth flow.
               </span>
             </span>
           </>
