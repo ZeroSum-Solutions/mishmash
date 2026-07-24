@@ -621,11 +621,7 @@
   inset: auto;
   width: 30px;
   height: 30px;
-  object-fit: cover;
-  border-radius: var(--radius);
   display: block;
-  user-select: none;
-  -webkit-user-drag: none;
   pointer-events: none;
 }
 .entry-nav-rail__btn {
@@ -760,7 +756,13 @@
   background: var(--bg);
   isolation: isolate;
 }
-.entry-main__topbar:has(.entry-settings-menu__popover) {
+/* The topbar is an isolated sticky stacking context at z-index 10, so a
+   child popover's own z-index cannot escape it. While a topbar popover or
+   the updater's "update ready" prompt is open, lift the whole topbar above
+   raised page surfaces (e.g. the home composer card at z-index 1700 when
+   its agent picker is open) so the prompt paints on top. */
+.entry-main__topbar:has(.entry-settings-menu__popover),
+.entry-main__topbar:has(.updater-popup) {
   z-index: 1900;
 }
 .entry-main__topbar::before {
@@ -771,7 +773,7 @@
   pointer-events: none;
   background: var(--bg);
 }
-/* Chip group — the GitHub star, inline model switcher, and Use
+/* Chip group — the inline model switcher and Use
    everywhere chip live inside this wrapper so the responsive
    media query can flip the whole row's visibility in one place. */
 .entry-main__topbar-chips {
@@ -782,11 +784,10 @@
 
 /* ============================================================
    Icon-only topbar chips
-   Collapse the Star / Discord / model-switcher / Use-everywhere
-   chips to square icon buttons; the full label surfaces as a
-   downward hover tooltip. Keeps the entry topbar quiet and tidy.
+   Collapse the model-switcher / Use-everywhere chips to square
+   icon buttons; the full label surfaces as a downward hover
+   tooltip. Keeps the entry topbar quiet and tidy.
    ============================================================ */
-.entry-main__topbar-chips--icon-only .entry-discord-badge,
 .entry-main__topbar-chips--icon-only .use-everywhere-chip,
 .entry-main__topbar-chips--icon-only .inline-switcher__chip {
   width: 32px;
@@ -801,13 +802,8 @@
      collapsed there's no text, so let the downward tooltip escape. */
   overflow: visible;
 }
-/* Hide every text fragment; keep only the leading icon glyph. The Discord
-   badge also carries a "· {n} online" suffix; collapsed it must hide too,
-   otherwise the separator + count leak out of the 32px square and render as
-   clipped text (e.g. "212 在s"). The full label lives in the hover tooltip. */
-.entry-main__topbar-chips--icon-only .entry-discord-badge__label,
-.entry-main__topbar-chips--icon-only .entry-discord-badge__sep,
-.entry-main__topbar-chips--icon-only .entry-discord-badge__online,
+/* Hide every text fragment; keep only the leading icon glyph. The full
+   label lives in the hover tooltip. */
 .entry-main__topbar-chips--icon-only .use-everywhere-chip__label,
 .entry-main__topbar-chips--icon-only .inline-switcher__chip-text,
 .entry-main__topbar-chips--icon-only .inline-switcher__chip-chevron {
@@ -880,9 +876,6 @@
   background: var(--bg-panel);
   box-shadow: var(--shadow-lg, 0 14px 36px rgba(0, 0, 0, 0.14));
 }
-.entry-settings-social-share {
-  padding: 0 3px;
-}
 .entry-settings-menu__section {
   display: flex;
   flex-direction: column;
@@ -896,111 +889,6 @@
   min-height: 20px;
   color: var(--text-muted);
   font-size: 11.5px;
-  font-weight: 600;
-}
-.entry-settings-menu__select {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-.entry-settings-menu__select-trigger {
-  appearance: none;
-  width: 100%;
-  min-height: 34px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-  border: 1px solid var(--border-soft);
-  border-radius: 9px;
-  background: var(--bg-subtle);
-  color: var(--text);
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease,
-    color 120ms ease;
-}
-.entry-settings-menu__select-trigger:hover {
-  background: var(--bg-panel);
-  border-color: var(--border);
-  color: var(--text-strong);
-}
-.entry-settings-menu__select-value {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.entry-settings-menu__select-caret {
-  margin-inline-start: auto;
-  flex: 0 0 auto;
-  color: var(--text-muted);
-  transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
-}
-.entry-settings-menu__select-trigger[aria-expanded='true']
-  .entry-settings-menu__select-caret {
-  transform: rotate(180deg);
-}
-.entry-settings-menu__select-list {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 200ms cubic-bezier(0.23, 1, 0.32, 1);
-}
-.entry-settings-menu__select-list.is-open {
-  grid-template-rows: 1fr;
-}
-.entry-settings-menu__select-list-inner {
-  min-height: 0;
-  overflow: hidden;
-}
-.entry-settings-menu__select-panel {
-  margin-top: 4px;
-  max-height: 220px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius);
-  background: var(--bg-subtle);
-  scrollbar-width: thin;
-}
-.entry-settings-menu__option {
-  appearance: none;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text);
-  min-height: 30px;
-  border-radius: 7px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 9px;
-  font-size: 12px;
-  text-align: start;
-  cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease,
-    color 120ms ease;
-}
-.entry-settings-menu__option-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.entry-settings-menu__option-check {
-  margin-inline-start: auto;
-  flex: 0 0 auto;
-  color: var(--accent-strong);
-}
-.entry-settings-menu__option:hover {
-  background: var(--bg-panel);
-  border-color: var(--border);
-  color: var(--text-strong);
-}
-.entry-settings-menu__option.is-active {
-  color: var(--accent-strong);
   font-weight: 600;
 }
 .entry-settings-menu__theme {
@@ -1083,19 +971,6 @@
   justify-content: center;
   flex: 0 0 auto;
   color: var(--text-muted);
-}
-.entry-settings-menu__x-mark {
-  font-size: 12px;
-  font-weight: 700;
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-}
-.entry-settings-menu__item-end {
-  margin-left: auto;
-  color: var(--text-faint);
-  flex: 0 0 auto;
-}
-.entry-settings-menu__item-meta + .entry-settings-menu__item-end {
-  margin-left: 0;
 }
 .entry-settings-menu__item-meta {
   margin-left: auto;
@@ -1792,6 +1667,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.model-select-searchable__option-label > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .model-select-searchable__value-badge,
 .model-select-searchable__option-badge {
   --model-tag-color: var(--text-muted);
@@ -1842,6 +1723,12 @@
 .model-select-searchable__option.is-active .model-select-searchable__option-meta {
   color: color-mix(in srgb, var(--accent-strong) 60%, var(--text-muted));
 }
+.model-select-searchable__option-affordances {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 4px;
+  flex: 0 0 auto;
+}
 .model-select-searchable__option-lock-inline {
   display: inline-flex;
   align-items: center;
@@ -1856,7 +1743,6 @@
   color: var(--text-muted);
   cursor: pointer;
   vertical-align: middle;
-  margin-left: 6px;
   transition:
     color 160ms cubic-bezier(0.23, 1, 0.32, 1),
     background 160ms cubic-bezier(0.23, 1, 0.32, 1);
@@ -2014,16 +1900,13 @@
   gap: 8px;
 }
 
-/* Brand mark above the title. Uses the monochrome brand glyph masked with
-   --text-strong so it reads as black in light mode and white in dark mode. */
+/* Brand mark above the title; the glyph itself comes from the shared
+   .od-brand-glyph primitive. */
 .onboarding-cloud__logo {
   display: block;
   width: 52px;
   height: 52px;
   margin-bottom: 22px;
-  background-color: var(--text-strong);
-  -webkit-mask: url(/brand-icon.svg) center / contain no-repeat;
-  mask: url(/brand-icon.svg) center / contain no-repeat;
 }
 
 /* Compact, icon-only language switcher used in the cloud landing top bar —
@@ -4208,193 +4091,6 @@
 
 
 
-/* ============================================================
-   GitHub star pill — sticky top-bar CTA.
-
-   Mirrors the marketing landing-page "Star · <count>" affordance:
-   small chrome, low-emphasis, sits next to the model switcher and
-   settings cog. Hover swaps to the panel-strong palette so the call-
-   to-action still reads as clickable when the topbar is otherwise
-   sparse. The count slot animates in via `data-loading` so the
-   pill never visibly jumps when the API response arrives.
-   ============================================================ */
-.entry-star-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--bg-panel);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
-  text-decoration: none;
-  cursor: pointer;
-  box-shadow: var(--shadow-xs);
-  transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out),
-    color 120ms var(--ease-out), transform 120ms var(--ease-out);
-  white-space: nowrap;
-}
-.entry-star-badge:hover {
-  background: var(--bg-subtle);
-  border-color: var(--border-strong);
-  color: var(--text-strong);
-}
-.entry-star-badge:active {
-  transform: scale(0.98);
-}
-.entry-star-badge:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.entry-star-badge__icon {
-  color: var(--text-strong);
-  flex: 0 0 auto;
-}
-.entry-star-badge:hover .entry-star-badge__icon {
-  color: var(--text-strong);
-}
-.entry-star-badge__label {
-  color: var(--text-strong);
-  font-weight: 600;
-}
-.entry-star-badge__sep {
-  color: var(--text-faint);
-}
-.entry-star-badge__count {
-  display: inline-block;
-  min-width: 5ch;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-  transition: opacity 160ms var(--ease-out);
-}
-.entry-star-badge__count[data-loading='true'] {
-  opacity: 0.55;
-}
-
-.entry-discord-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--bg-panel);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-  text-decoration: none;
-  cursor: pointer;
-  box-shadow: var(--shadow-xs);
-  transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out),
-    color 120ms var(--ease-out), transform 120ms var(--ease-out);
-  white-space: nowrap;
-}
-.entry-discord-badge:hover {
-  background: var(--bg-subtle);
-  border-color: var(--border-strong);
-  color: var(--text-strong);
-}
-.entry-discord-badge:active {
-  transform: scale(0.98);
-}
-.entry-discord-badge:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.entry-discord-badge__icon {
-  color: #5865f2;
-  flex: 0 0 auto;
-}
-.entry-discord-badge:hover .entry-discord-badge__icon {
-  color: #5865f2;
-}
-.entry-discord-badge__label {
-  white-space: nowrap;
-}
-.entry-discord-badge__sep {
-  color: var(--text-faint);
-}
-.entry-discord-badge__online {
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-/* Workspace / team-edition entry. Neutral white-panel chip matching the
-   GitHub-star / Discord pills next to it; keeps its label visible (unlike the
-   icon-only discord/use-everywhere chips) because guiding the click is the
-   whole point. Tokens resolve in both light and dark themes. */
-.entry-workspace-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--bg-panel);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-  text-decoration: none;
-  cursor: pointer;
-  box-shadow: var(--shadow-xs);
-  transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out),
-    color 120ms var(--ease-out), transform 120ms var(--ease-out);
-  white-space: nowrap;
-}
-.entry-workspace-chip:hover {
-  background: var(--bg-subtle);
-  border-color: var(--border-strong);
-  color: var(--text-strong);
-}
-.entry-workspace-chip:active {
-  transform: scale(0.98);
-}
-.entry-workspace-chip:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.entry-workspace-chip__icon {
-  color: var(--text-strong);
-  flex: 0 0 auto;
-}
-.entry-workspace-chip__label {
-  color: var(--text-strong);
-  white-space: nowrap;
-}
-
-@media (max-width: 700px) {
-  .entry-workspace-chip__label {
-    display: none;
-  }
-  .entry-workspace-chip {
-    padding: 0 9px;
-  }
-  .entry-star-badge__label {
-    display: none;
-  }
-  .entry-star-badge__sep {
-    display: none;
-  }
-  .entry-discord-badge {
-    padding: 0 9px;
-  }
-  .entry-discord-badge__label {
-    display: none;
-  }
-  .entry-discord-badge__sep {
-    display: none;
-  }
-}
-
 @media (max-width: 900px) {
   .entry-nav-rail {
     width: 56px;
@@ -4405,7 +4101,7 @@
   .entry-main__inner--wide {
     max-width: 100%;
   }
-  /* Collapse the three topbar chips into the settings dropdown.
+  /* Collapse the topbar chips into the settings dropdown.
      The chips' container disappears and the matching menu rows
      inside `.avatar-popover` are unhidden so every action stays
      one click away from the lone settings cog. */

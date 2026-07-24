@@ -1,99 +1,99 @@
-# Presenter Mode Guide · 演讲者模式指南
+# Presenter Mode Guide
 
-这份文档说明如何在 html-ppt skill 里做出**带逐字稿的演讲者模式 PPT**。
+This document explains how to build a **presentation with speaker notes and a presenter mode** using the html-ppt skill.
 
-## 何时使用演讲者模式
+## When to use presenter mode
 
-当用户的需求涉及以下任何一项时，**优先使用演讲者模式**：
+**Default to presenter mode** whenever the user's request involves any of the following:
 
-- 提到"**演讲**"、"**分享**"、"**讲稿**"、"**逐字稿**"、"**speaker notes**"
-- 提到"**presenter view**"、"**演讲者视图**"、"**演讲者模式**"
-- 需要"**30 分钟 / 45 分钟 / 1 小时**的分享"
-- 说"我要去给团队讲 xxx"、"要做一场技术分享"、"要做路演"
-- 强调"**不想忘词**"、"**怕讲不流畅**"、"**需要提词器**"
+- Mentions "**talk**", "**presenting**", "**speaker notes**", "**presenter view**"
+- Needs a "**30-minute / 45-minute / 1-hour**" talk
+- Says "I'm going to present xxx to my team", "I need to give a tech talk", "I need to do a roadshow pitch"
+- Emphasizes "**don't want to forget my lines**", "**worried about stumbling**", "**need a prompter**"
 
-如果用户只要做一份"静态好看的 PPT"（例如小红书图文、产品图册、汇报 slides 自己不讲），**不需要**演讲者模式。
+If the user only wants a "static, good-looking deck" (e.g. an image-card post, a product catalog, report slides they won't personally present), presenter mode is **not needed**.
 
-## 两种做法
+## Two approaches
 
-### ✅ 推荐做法：直接用 `presenter-mode-reveal` 模板
+### ✅ Recommended: use the `presenter-mode-reveal` template directly
 
 ```bash
 cp -r templates/full-decks/presenter-mode-reveal examples/my-talk
 ```
 
-这个模板已经预设好所有必需元素：
-- 支持 S 键切换演讲者视图
-- 5 个主题可用 T 键循环（tokyo-night / dracula / catppuccin-mocha / nord / corporate-clean）
-- 左右键翻页
-- 每一页都有 150–300 字的示例逐字稿
-- 底部有键位提示
+This template already has every required element preset:
+- Supports the S key to toggle presenter view
+- 5 themes cyclable with the T key (tokyo-night / dracula / catppuccin-mocha / nord / corporate-clean)
+- Arrow keys to change slides
+- Every slide ships with 150–300 words of example speaker notes
+- Keyboard hints shown at the bottom
 
-直接改内容即可。
+Just edit the content directly.
 
-### 🔧 进阶做法：给任意已有模板加演讲者模式
+### 🔧 Advanced: add presenter mode to any existing template
 
-html-ppt 的 **S 键演讲者视图是 `runtime.js` 内置的，所有 full-deck 模板都自动支持**。你只需要做两件事：
+html-ppt's **S-key presenter view is built into `runtime.js`, and every full-deck template supports it automatically**. You only need to do two things:
 
-1. **每张 slide 末尾加 `<aside class="notes">`**（或 `<div class="notes">`），里面写逐字稿
-2. **确认 HTML 引入了 `assets/runtime.js`**
+1. **Add `<aside class="notes">`** (or `<div class="notes">`) to the end of each slide, and write the speaker notes inside it
+2. **Confirm the HTML imports `assets/runtime.js`**
 
 ```html
 <section class="slide">
-  <h2>你的标题</h2>
-  <p>内容...</p>
+  <h2>Your title</h2>
+  <p>Content...</p>
   <aside class="notes">
-    <p>这里是演讲时要说的话，150-300 字...</p>
+    <p>What you'll say while presenting, 150-300 words...</p>
   </aside>
 </section>
 ```
 
-## 逐字稿写作三铁律
+## The 3 hard rules for writing speaker notes
 
-这是整个方法论的核心。AI 在帮用户写逐字稿时必须遵守：
+This is the core of the whole methodology. When AI helps a user write speaker notes, it must follow these:
 
-### 铁律 1：不是讲稿，是"提示信号"
+### Rule 1: Not a script — a "cue signal"
 
-❌ **错误写法**（像在念稿）：
+❌ **Wrong** (reads like it's being recited):
 ```
-大家好，欢迎来到今天的分享。今天我将要给大家介绍一下我们团队在过去三个月做的工作。
-首先，我们来看一下背景情况。在过去的三个月中，我们遇到了以下几个问题……
-```
-
-✅ **正确写法**（提示信号 + 加粗核心）：
-```
-<p>欢迎！今天分享我们团队<strong>过去 3 个月</strong>的工作。</p>
-<p>先说<em>背景</em>——三个月前我们遇到了<strong>三个核心问题</strong>：
-延迟高、成本炸、稳定性差。</p>
-<p>接下来逐个讲解怎么解的。</p>
+Hi everyone, welcome to today's talk. Today I'm going to walk you through the work our team has
+done over the past three months. First, let's look at the background. Over the past three
+months, we ran into the following problems...
 ```
 
-**差别**：正确版本把关键词加粗，过渡句独立成段，看一眼就能接上。
+✅ **Right** (a cue signal + bolded core points):
+```
+<p>Welcome! Today I'll cover our team's <strong>work from the past 3 months</strong>.</p>
+<p>Starting with <em>context</em> — three months ago we hit <strong>three core problems</strong>:
+high latency, costs blowing up, poor stability.</p>
+<p>Next I'll walk through how we fixed each one.</p>
+```
 
-### 铁律 2：每页 150–300 字
+**The difference**: the correct version bolds the key words and puts transition lines in their own paragraph — a glance is enough to pick it back up.
 
-- **少于 150 字**：提示不够，讲到一半会卡
-- **多于 300 字**：你根本来不及扫完
-- **2–3 分钟/页** 是最舒服的节奏
+### Rule 2: 150–300 words per slide
 
-### 铁律 3：用口语，不用书面语
+- **Under 150 words**: not enough of a cue — you'll stall halfway through
+- **Over 300 words**: there's no way you can scan it in time
+- **2–3 minutes per slide** is the most comfortable pace
 
-| ❌ 书面语 | ✅ 口语 |
+### Rule 3: Write it in spoken language, not written language
+
+| ❌ Written | ✅ Spoken |
 |---|---|
-| 因此 | 所以 |
-| 该方案 | 这个方案 |
-| 然而 | 但是 / 不过 |
-| 进行优化 | 优化一下 |
-| 我们将会 | 我们会 / 接下来 |
-| 综上所述 | 所以简单来说 |
+| Therefore | So |
+| The aforementioned approach | This approach |
+| However | But / Though |
+| Undertake optimization | Optimize it |
+| We will proceed to | We'll / next up |
+| In summary | So, basically |
 
-**检查方法**：写完读一遍，听起来像说话才对。
+**How to check**: read it back after writing it — it should sound like speech.
 
-## 必备 HTML 结构
+## The required HTML structure
 
 ```html
 <!DOCTYPE html>
-<html lang="zh-CN" data-themes="tokyo-night,dracula,corporate-clean">
+<html lang="en" data-themes="tokyo-night,dracula,corporate-clean">
 <head>
   <meta charset="utf-8">
   <title>...</title>
@@ -107,16 +107,16 @@ html-ppt 的 **S 键演讲者视图是 `runtime.js` 内置的，所有 full-deck
 <div class="deck">
 
   <section class="slide" data-title="Cover">
-    <h1>你的标题</h1>
-    <p>副标题</p>
+    <h1>Your title</h1>
+    <p>Subtitle</p>
     <aside class="notes">
-      <p>讲稿段落 1（加<strong>加粗关键词</strong>）。</p>
-      <p>讲稿段落 2（过渡句独立成段）。</p>
-      <p>讲稿段落 3（自然收尾，引出下一页）。</p>
+      <p>Notes paragraph 1 (with <strong>bolded keywords</strong>).</p>
+      <p>Notes paragraph 2 (transition line in its own paragraph).</p>
+      <p>Notes paragraph 3 (a natural close, leading into the next slide).</p>
     </aside>
   </section>
 
-  <!-- 更多 slide ... -->
+  <!-- more slides... -->
 
 </div>
 <script src="../../../assets/runtime.js"></script>
@@ -124,117 +124,117 @@ html-ppt 的 **S 键演讲者视图是 `runtime.js` 内置的，所有 full-deck
 </html>
 ```
 
-## 演讲者视图显示的内容
+## What the presenter view shows
 
-按 `S` 键后，**弹出一个独立的演讲者窗口**（原页面保持观众视图不变）。演讲者窗口是 **4 个独立的磁吸卡片**：
+Pressing `S` **pops out a separate presenter window** (the original page stays in audience view). The presenter window is **4 independent draggable cards**:
 
 ```
- 观众窗口（原页面）           演讲者窗口（磁吸卡片）
+ Audience window (original page)      Presenter window (draggable cards)
 ┌─────────────────┐   ┌─────────────────────┬──────────────────┐
 │                 │   │ 🔵 CURRENT         │ 🟣 NEXT            │
-│  正常 slide     │   │ ━━━━━━━━━━━━━━━━ │ ━━━━━━━━━━━━━ │
-│  全屏展示       │◄►│                   │  iframe preview   │
-│                 │   │  iframe preview   │  （下一页）         │
-│                 │   │  （当前页）        ├──────────────────┤
+│  Normal slide   │   │ ━━━━━━━━━━━━━━━━ │ ━━━━━━━━━━━━━ │
+│  fullscreen     │◄►│                   │  iframe preview   │
+│                 │   │  iframe preview   │  (next slide)      │
+│                 │   │  (current slide)  ├──────────────────┤
 │                 │   │                   │ 🟠 SPEAKER SCRIPT  │
 │                 │   │                   │ ━━━━━━━━━━━━━ │
-│                 │   ├─────────────────────┤  [大字号逐字稿]   │
-│                 │   │ 🟢 TIMER           │  [可滚动]         │
+│                 │   ├─────────────────────┤  [large-type notes]│
+│                 │   │ 🟢 TIMER           │  [scrollable]      │
 │                 │   │ ⏱ 12:34   3 / 8 │                   │
 │                 │   │ [← Prev][Next →]  │                   │
 └─────────────────┘   └─────────────────────┴──────────────────┘
-       ↑ BroadcastChannel 双向同步翻页 ↑
+       ↑ slide changes sync both ways via BroadcastChannel ↑
 ```
 
-卡片交互规则：
-- **拖动卡片 header**（带彩色圆点和标题的顶部条）→ 移动卡片位置
-- **拖动卡片右下角的三角手柄** → 调整卡片大小
-- **位置/尺寸自动保存到 localStorage**，下次打开恢复
-- 底部 "重置布局" 按钮恢复默认排列
+Card interaction rules:
+- **Drag the card header** (the top bar with the colored dot and title) → moves the card
+- **Drag the triangular handle in the card's bottom-right corner** → resizes the card
+- **Position/size are saved to localStorage automatically** and restored next time
+- The "Reset layout" button at the bottom restores the default arrangement
 
-卡片内容：
-- 🔵 **CURRENT** — 当前页 **像素级完美预览**（iframe 加载原 HTML 文件的 `?preview=N` 模式，错色不可能）
-- 🟣 **NEXT** — 下一页预览，同样像素级完美
-- 🟠 **SPEAKER SCRIPT** — 逐字稿，字号 18px，支持 `<strong>` (橘色加粗)、`<em>` (蓝色强调)、`<code>` 等 inline 样式
-- 🟢 **TIMER** — 计时器不会丢失焦点，带切页按钮
+Card contents:
+- 🔵 **CURRENT** — a **pixel-perfect preview** of the current slide (an iframe loads the same HTML file in `?preview=N` mode — color mismatches aren't possible)
+- 🟣 **NEXT** — a preview of the next slide, equally pixel-perfect
+- 🟠 **SPEAKER SCRIPT** — the speaker notes, 18px type, supports inline styles like `<strong>` (bold orange), `<em>` (blue emphasis), `<code>`
+- 🟢 **TIMER** — a timer that never loses focus, with slide-change buttons
 
-两窗口同步：在任一窗口按 ← → 翻页，另一个窗口自动同步（BroadcastChannel）。
+Two-window sync: press ← → in either window to change slides, and the other window syncs automatically (BroadcastChannel).
 
-丝滑翻页：iframe 只加载一次，后续翻页用 `postMessage` 切换可见的 slide，**不重新加载、不闪烁**。
+Smooth slide changes: the iframe loads only once; subsequent slide changes use `postMessage` to switch the visible slide, **no reload, no flicker**.
 
-## 键盘快捷键（演讲者模式）
+## Keyboard shortcuts (presenter mode)
 
-| 键 | 动作 |
+| Key | Action |
 |---|---|
-| `S` | 打开演讲者窗口（弹出新窗口，原页面保持观众视图） |
-| `←` `→` / Space / PgDn | 翻页（即使在演讲者视图里） |
-| `T` | 切换主题 |
-| `R` | 重置计时器（仅演讲者视图下） |
-| `F` | 全屏 |
-| `O` | 总览 |
-| `Esc` | 关闭所有浮层 |
+| `S` | Opens the presenter window (a new popup; the original page stays in audience view) |
+| `←` `→` / Space / PgDn | Change slide (even from within presenter view) |
+| `T` | Switch theme |
+| `R` | Reset the timer (presenter view only) |
+| `F` | Fullscreen |
+| `O` | Overview |
+| `Esc` | Close all overlays |
 
-## 双屏演讲的标准流程
+## Standard workflow for dual-screen presenting
 
-1. 打开 `index.html`，按 `S` → 弹出演讲者窗口
-2. 把**观众窗口**（原页面）拖到投影 / 外接屏，按 `F` 全屏
-3. 把**演讲者窗口**（弹窗）留在你面前的屏幕
-4. 在任一窗口按 ← → 翻页，两边自动同步
-5. 演讲者窗口里看逐字稿 + 下一页 + 计时器
+1. Open `index.html`, press `S` → the presenter window pops out
+2. Drag the **audience window** (the original page) to the projector / external display, press `F` for fullscreen
+3. Keep the **presenter window** (the popup) on the screen in front of you
+4. Press ← → in either window to change slides — both sides stay in sync
+5. Read the speaker notes + next slide + timer in the presenter window
 
-> 💡 **为什么预览像素级完美**：每个预览是一个 `<iframe>`，它加载的就是同一个 deck HTML 文件，只是 URL 多了 `?preview=N` 参数。`runtime.js` 检测到这个参数时只渲染第 N 页、隐藏所有 chrome。**iframe 使用与观众视图完全相同的 CSS、主题、字体和 viewport**——颜色和排版保证一致。外层用 CSS `transform: scale()` 把 1920×1080 缩到卡片宽高，等比缩放不变形。
+> 💡 **Why the previews are pixel-perfect**: each preview is an `<iframe>` that loads the exact same deck HTML file, just with a `?preview=N` parameter added to the URL. When `runtime.js` detects that parameter, it renders only slide N and hides all chrome. **The iframe uses the exact same CSS, theme, fonts, and viewport as the audience view** — colors and layout are guaranteed to match. The outer wrapper uses CSS `transform: scale()` to shrink the 1920×1080 canvas to the card's dimensions, scaling proportionally with no distortion.
 
-> 💡 **为什么不闪烁**：iframe 初次加载后就常驻，翻页时 presenter 窗口通过 `postMessage({type:'preview-goto', idx:N})` 告诉 iframe 切换到第 N 页。iframe 内的 runtime.js 只切换 `.is-active` class，**不重新加载、不渲染白屏**。
+> 💡 **Why there's no flicker**: the iframe loads once and stays resident; on a slide change, the presenter window tells the iframe to switch to slide N via `postMessage({type:'preview-goto', idx:N})`. The runtime.js inside the iframe only toggles the `.is-active` class — **no reload, no white-screen flash**.
 
-## 常见错误
+## Common mistakes
 
-### ❌ 把逐字稿写在 slide 可见位置
+### ❌ Writing speaker notes somewhere visible on the slide
 
 ```html
-<!-- 错误：这段文字观众会看到 -->
+<!-- Wrong: the audience will see this text -->
 <p style="font-size:12px;color:gray">
-  这里讲 xxx，然后讲 yyy...
+  Talk about xxx here, then yyy...
 </p>
 ```
 
-✅ 正确：
+✅ Right:
 ```html
 <aside class="notes">
-  <p>这里讲 xxx，然后讲 yyy...</p>
+  <p>Talk about xxx here, then yyy...</p>
 </aside>
 ```
 
-`.notes` 类默认 `display:none`，只在演讲者视图可见。
+The `.notes` class defaults to `display:none`, visible only in presenter view.
 
-### ❌ 忘记引入 runtime.js
+### ❌ Forgetting to import runtime.js
 
-没有 `<script src="../../../assets/runtime.js"></script>` = 没有 S 键、没有演讲者视图、没有翻页。
+No `<script src="../../../assets/runtime.js"></script>` = no S key, no presenter view, no slide navigation.
 
-### ❌ 逐字稿用书面语
+### ❌ Writing speaker notes in written language
 
-念出来像 AI 机器人。**写完一定读一遍**。
+Read aloud, it sounds like an AI robot. **Always read it back after writing it**.
 
-### ❌ 每页 50 字
+### ❌ 50 words per slide
 
-提示不够，照样忘词。
+Not enough of a cue — you'll still forget your lines.
 
-### ❌ 每页 500 字
+### ❌ 500 words per slide
 
-眼睛根本扫不过来，等于没写。
+Your eyes can't scan that fast — might as well not have written it.
 
-## 用 AI 生成逐字稿的标准 prompt
+## A standard prompt for generating speaker notes with AI
 
-> "请为每一张 slide 写一段 **150-300 字**的逐字稿，放在 `<aside class="notes">` 里。
-> 要求：
-> 1. 用**口语**，不要书面语（所以/但是/接下来，不是因此/然而/综上所述）
-> 2. 把**核心关键词**用 `<strong>` 加粗
-> 3. 过渡句独立成段（每段 1-3 句）
-> 4. 读起来像说话，不像念稿
-> 5. 结尾要有自然的过渡，引出下一页"
+> "Write **150-300 words** of speaker notes for each slide, placed inside `<aside class="notes">`.
+> Requirements:
+> 1. Use **spoken** language, not written language (so/but/next, not therefore/however/in summary)
+> 2. Bold the **core keywords** with `<strong>`
+> 3. Put transition lines in their own paragraph (1-3 sentences each)
+> 4. It should read like speech, not like something being recited
+> 5. End with a natural transition into the next slide"
 
-## 推荐搭配
+## Recommended pairings
 
-- **主题**：`tokyo-night`（深色，技术分享首选）、`corporate-clean`（浅色，商务汇报）、`dracula`（深色备选）
-- **字体**：默认 Noto Sans SC + JetBrains Mono，无需更改
-- **动效**：克制使用，`fade-up` / `rise-in` 最自然，不要用 `glitch-in` / `confetti-burst` 之类花哨的
-- **页数**：30 分钟分享 = 8–12 页；45 分钟 = 12–16 页；1 小时 = 16–22 页
+- **Theme**: `tokyo-night` (dark, the default pick for tech talks), `corporate-clean` (light, business presentations), `dracula` (dark alternative)
+- **Fonts**: Noto Sans SC + JetBrains Mono by default, no need to change
+- **Motion**: use sparingly — `fade-up` / `rise-in` feel the most natural; avoid flashy ones like `glitch-in` / `confetti-burst`
+- **Slide count**: a 30-minute talk = 8–12 slides; 45 minutes = 12–16 slides; 1 hour = 16–22 slides

@@ -1,4 +1,6 @@
-node_modules/
+# No trailing slash: worktrees may symlink node_modules to the main checkout,
+# and `node_modules/` matches only real directories, not symlinks.
+node_modules
 dist/
 out/
 .next/
@@ -6,6 +8,8 @@ out/
 .tmp/
 .DS_Store
 *.log
+__pycache__/
+*.py[cod]
 /OpenDesign.exe
 .vite
 .astro/
@@ -98,3 +102,6 @@ growth/**
 # Agent long-running task memory
 .task/
 deploy/agent-bins/
+
+# Looper harness attachments (bug screenshots etc.) — agent scratch, not repo content
+.looper-attachments/

@@ -45,14 +45,6 @@ test.beforeEach(async ({ page }) => {
     );
   }, STORAGE_KEY);
 
-  await page.route('**/api/github/open-design', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ stargazers_count: 51600 }),
-    });
-  });
-
   await routeAgents(page, [
     {
       id: 'codex',
@@ -101,17 +93,6 @@ test('[P2] home topbar shows the new entry chips and links', async ({ page }) =>
   const topbar = page.locator('.entry-main__topbar');
   await expect(topbar).toBeVisible();
 
-  const star = page.getByTestId('entry-star-badge');
-  await expect(star).toBeVisible();
-  await expect(star).toHaveAttribute('href', 'https://github.com/nexu-io/open-design');
-  await expect(star).toContainText('Star');
-  await expect(star).toContainText('51.6K');
-
-  const discord = page.getByTestId('entry-discord-badge');
-  await expect(discord).toBeVisible();
-  await expect(discord).toHaveAttribute('href', 'https://discord.gg/mHAjSMV6gz');
-  await expect(discord).toContainText('Join Discord');
-
   await expect(page.getByTestId('inline-model-switcher-chip')).toBeVisible();
   await expect(page.getByTestId('entry-use-everywhere-button')).toBeVisible();
   await expect(page.getByRole('button', { name: OPEN_SETTINGS_LABEL })).toBeVisible();
@@ -138,20 +119,6 @@ test('[P1] home topbar execution pill reflects the selected Local CLI agent and 
   await expect(popover.getByRole('radio', { name: /Codex CLI/i })).toBeVisible();
 });
 
-test('[P2] home topbar star and discord badges expose the current external-link contract', async ({ page }) => {
-  await gotoEntryHome(page);
-
-  const star = page.getByTestId('entry-star-badge');
-  await expect(star).toHaveAttribute('target', '_blank');
-  await expect(star).toHaveAttribute('rel', /noreferrer/);
-  await expect(star).toHaveAttribute('rel', /noopener/);
-
-  const discord = page.getByTestId('entry-discord-badge');
-  await expect(discord).toHaveAttribute('href', 'https://discord.gg/mHAjSMV6gz');
-  await expect(discord).toHaveAttribute('title', /Join the Open Design Discord/i);
-  await expect(discord).toHaveAttribute('aria-label', /Join the Open Design Discord/i);
-});
-
 test('[P2] home topbar Use everywhere navigates to Integrations with the tab selected', async ({ page }) => {
   await gotoEntryHome(page);
 
@@ -163,7 +130,7 @@ test('[P2] home topbar Use everywhere navigates to Integrations with the tab sel
   );
 });
 
-test('[P1] home topbar settings button opens settings and closes the execution popover', async ({ page }) => {
+test('[P1] home topbar settings menu opens settings and closes the execution popover', async ({ page }) => {
   await gotoEntryHome(page);
 
   const pill = page.getByTestId('inline-model-switcher-chip');
@@ -173,8 +140,14 @@ test('[P1] home topbar settings button opens settings and closes the execution p
   await expect(popover).toBeVisible();
 
   await page.getByRole('button', { name: OPEN_SETTINGS_LABEL }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
   await expect(popover).toHaveCount(0);
+  await expect(page.getByTestId('entry-settings-menu')).toBeVisible();
+
+  await page.getByTestId('entry-settings-open-details').click();
+  const settings = page.locator('.modal-settings');
+  await expect(settings).toBeVisible();
+  await expect(settings.getByRole('heading', { name: 'Execution mode' })).toBeVisible();
+  await expect(page.getByTestId('entry-settings-menu')).toHaveCount(0);
 });
 
 test('[P2] returning from another entry view via the home nav reaches the home hero', async ({ page }) => {
@@ -190,5 +163,4 @@ test('[P2] returning from another entry view via the home nav reaches the home h
   await expect(page.getByTestId('home-hero')).toBeVisible();
   await expect(page.getByTestId('home-hero-input')).toBeVisible();
   await expect(page.getByTestId('home-hero-type-tabs')).toBeVisible();
-  await expect(page.getByTestId('entry-star-badge')).toBeVisible();
 });

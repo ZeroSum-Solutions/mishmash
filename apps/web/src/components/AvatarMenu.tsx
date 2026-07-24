@@ -54,7 +54,7 @@ interface Props {
 }
 
 function displayAgentName(agent: Pick<AgentInfo, 'id' | 'name'>): string {
-  return agent.id === 'amr' ? 'Open Design' : agent.name;
+  return agent.id === 'amr' ? 'MishMash' : agent.name;
 }
 
 /**
@@ -315,8 +315,8 @@ export function AvatarMenu({
 
   const byokModelOptions = mergeProviderModelOptions(
     fetchedByokModels,
-    byokProvider?.models?.length
-      ? byokProvider.models
+    byokProvider?.preferredModels.length
+      ? byokProvider.preferredModels
       : SUGGESTED_MODELS_BY_PROTOCOL[apiProtocol] ?? [],
   );
 
@@ -333,7 +333,7 @@ export function AvatarMenu({
         title={t('avatar.title')}
         aria-label={t('avatar.title')}
       >
-        {currentAgent ? (
+        {config.mode === 'daemon' && currentAgent ? (
           <AgentIcon id={currentAgent.id} size={20} />
         ) : (
           <RemixIcon name="link" size={20} />
@@ -640,7 +640,7 @@ export function AvatarMenu({
                       ? [
                           {
                             value: config.model,
-                            label: byokProvider?.models?.includes(config.model)
+                            label: byokProvider?.preferredModels.includes(config.model)
                               ? config.model
                               : `${config.model} ${t('avatar.customSuffix')}`,
                           },

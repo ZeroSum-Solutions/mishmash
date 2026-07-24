@@ -27,9 +27,11 @@ const HOME_ARGUMENT_PLACEHOLDER_PATTERN =
 
 export type PromptLocaleKind = 'zh' | 'ja' | 'en';
 
+// Open Design ships English-only, so this always resolves 'en' now — kept as
+// a function (rather than inlined) so callers like `examplePresetSeedPrompt`
+// below and HomeHero's chip-brief branches don't need to change.
 export function promptLocaleKind(locale: Locale): PromptLocaleKind {
-  if (locale === 'zh-CN' || locale === 'zh-TW') return 'zh';
-  if (locale === 'ja') return 'ja';
+  void locale;
   return 'en';
 }
 

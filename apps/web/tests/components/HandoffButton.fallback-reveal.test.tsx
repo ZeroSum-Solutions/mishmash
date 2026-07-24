@@ -108,7 +108,7 @@ describe('HandoffButton zero-editors fallback', () => {
     ];
 
     render(
-      <I18nProvider initial="zh-CN">
+      <I18nProvider initial="en">
         <HandoffButton
           projectId="p1"
           projectName="Landing"
@@ -121,8 +121,8 @@ describe('HandoffButton zero-editors fallback', () => {
     );
 
     fireEvent.click(await screen.findByTestId('handoff-caret'));
-    fireEvent.click(await screen.findByRole('tab', { name: '复制给 CLI' }));
-    const amrWebsiteLink = screen.getByRole('link', { name: /打开 Open Design Cloud 官网/ }) as HTMLAnchorElement;
+    fireEvent.click(await screen.findByRole('tab', { name: 'Copy for CLI' }));
+    const amrWebsiteLink = screen.getByRole('link', { name: /Visit MishMash Cloud/ }) as HTMLAnchorElement;
     expect(amrWebsiteLink.getAttribute('href'))
       .toBe('https://open-design.ai/amr');
     fireEvent.click(amrWebsiteLink);
@@ -134,8 +134,8 @@ describe('HandoffButton zero-editors fallback', () => {
       '/api/integrations/vela/analytics-entry',
       expect.objectContaining({ method: 'POST' }),
     );
-    expect(screen.getByTestId('handoff-cli-item-amr').textContent).toContain('Open Design');
-    expect(screen.getByTestId('handoff-cli-item-amr').textContent).not.toContain('未安装');
+    expect(screen.getByTestId('handoff-cli-item-amr').textContent).toContain('MishMash');
+    expect(screen.getByTestId('handoff-cli-item-amr').textContent).not.toContain('Not installed');
     expect(
       screen.getByTestId('handoff-cli-item-amr').compareDocumentPosition(
         screen.getByTestId('handoff-cli-item-codex'),
@@ -149,7 +149,7 @@ describe('HandoffButton zero-editors fallback', () => {
     expect(prompt).toContain('/tmp/open-design/Landing');
     expect(prompt).toContain('Vue.js');
     expect(prompt).toContain('Claude Code');
-    expect(prompt).toContain('真实可运行');
+    expect(prompt).toContain('real runnable');
   });
 
   it('keeps the project path hidden behind a compact copy row', async () => {

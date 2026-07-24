@@ -6,7 +6,6 @@ import type { ConnectorDetail, InstalledPluginRecord } from '@open-design/contra
 
 import { NewAutomationModal } from '../../src/components/NewAutomationModal';
 import type { AutomationTemplate } from '../../src/components/NewAutomationModal';
-import { I18nProvider } from '../../src/i18n';
 import type { SkillSummary } from '../../src/types';
 import { listPlugins } from '../../src/state/projects';
 import { fetchMcpServers } from '../../src/state/mcp';
@@ -90,17 +89,6 @@ describe('NewAutomationModal context picker', () => {
     prompt: 'Use Automation template "memory-refresh-template".',
   };
 
-  const liveArtifactTemplate: AutomationTemplate = {
-    id: 'live-artifact-template',
-    category: 'memory',
-    kind: 'live-artifact',
-    icon: 'sparkles',
-    title: 'Refresh artifact from recent work.',
-    description: 'Use recent changes to refresh an artifact.',
-    defaultName: 'Artifact refresh',
-    prompt: 'Use Automation template "live-artifact-template".',
-  };
-
   it('picks skills, plugins, MCP servers, and connectors from @ in the prompt', async () => {
     vi.mocked(listPlugins).mockResolvedValue([plugin]);
     vi.mocked(fetchMcpServers).mockResolvedValue({ servers: [mcpServer], templates: [] });
@@ -181,29 +169,5 @@ describe('NewAutomationModal context picker', () => {
     );
 
     expect((screen.getByTestId('automation-modal-title') as HTMLInputElement).value).toBe('Memory refresh');
-  });
-
-  it('localizes template kind labels in the picker', () => {
-    vi.mocked(listPlugins).mockResolvedValue([]);
-    vi.mocked(fetchMcpServers).mockResolvedValue({ servers: [], templates: [] });
-
-    render(
-      <I18nProvider initial="zh-CN">
-        <NewAutomationModal
-          open
-          templates={[liveArtifactTemplate]}
-          projects={[]}
-          skills={[]}
-          connectors={[]}
-          onClose={() => undefined}
-          onSaved={() => undefined}
-        />
-      </I18nProvider>,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: '使用模板' }));
-
-    expect(screen.getByText('实时看板')).toBeTruthy();
-    expect(screen.queryByText('Live artifact')).toBeNull();
   });
 });

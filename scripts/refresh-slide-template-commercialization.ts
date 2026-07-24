@@ -4,7 +4,12 @@
  * Source of truth for WHICH template becomes WHICH commercial use-case is
  * `assignment.json` (default: `<repo>/.tmp/assignment.json`, override with
  * `OD_SLIDE_ASSIGNMENT`). Each entry pins a template id to a category, a
- * unique title (EN/ZH), a concrete subject, and buyer-facing descriptions.
+ * unique title, a concrete subject, and buyer-facing descriptions.
+ *
+ * English-only: this script generates English metadata only. `assignment.json`
+ * entries may still carry legacy `titleZh`/`descZh` fields (older planning
+ * exports); they are accepted but ignored — no zh_name, zh_description, or
+ * zh-CN/zh-TW i18n entries are written to SKILL.md or open-design.json.
  *
  * This script ONLY rewrites metadata (`SKILL.md` frontmatter +
  * `open-design.json`) and, for `example.html`, it STRIPS any stale
@@ -39,7 +44,6 @@ type CommercialCategoryId =
 interface CommercialCategory {
   id: CommercialCategoryId;
   enLabel: string;
-  zhLabel: string;
   coreQuery: string;
   scenario: string;
   criticRubric: string;
@@ -51,21 +55,20 @@ interface Assignment {
   categoryId: CommercialCategoryId;
   mode: 'od-reframe' | 'diverse';
   titleEn: string;
-  titleZh: string;
+  /** @deprecated Legacy planning-export field. Accepted but no longer used. */
+  titleZh?: string;
   subject: string;
   audience: string;
   descEn: string;
-  descZh: string;
+  /** @deprecated Legacy planning-export field. Accepted but no longer used. */
+  descZh?: string;
 }
 
 interface RefreshCopy {
   category: CommercialCategory;
   enName: string;
-  zhName: string;
   enDescription: string;
-  zhDescription: string;
   examplePrompt: string;
-  zhExamplePrompt: string;
   tags: string[];
 }
 
@@ -77,21 +80,21 @@ const assignmentPath =
   process.env.OD_SLIDE_ASSIGNMENT ?? path.join(repoRoot, '.tmp', 'assignment.json');
 
 const commercialCategories: CommercialCategory[] = [
-  { id: 'student-coursework', enLabel: 'Student coursework', zhLabel: '课业/课程作业', coreQuery: 'senior-capstone-defense-deck', scenario: 'education', criticRubric: 'can a reviewer find the contribution, evidence, and limitation in under 90 seconds', tags: ['coursework', 'defense', 'academic'] },
-  { id: 'corporate-strategy', enLabel: 'Corporate strategy', zhLabel: '企业战略/经营管理', coreQuery: 'board-pre-read-deck', scenario: 'strategy', criticRubric: 'would a board member know what to approve and why before page five', tags: ['board', 'strategy', 'business-review'] },
-  { id: 'professional-training', enLabel: 'Professional training', zhLabel: '培训/教学交付', coreQuery: 'employee-onboarding-deck', scenario: 'education', criticRubric: 'can a learner perform the target task the next day', tags: ['training-deck', 'workshop', 'course-module'] },
-  { id: 'b2b-sales', enLabel: 'B2B sales', zhLabel: 'B2B 销售/续约', coreQuery: 'b2b-saas-sales-proposal', scenario: 'sales', criticRubric: 'can the champion forward this internally without rewriting it', tags: ['sales', 'renewal', 'customer'] },
-  { id: 'academic-research', enLabel: 'Academic research', zhLabel: '学术研究/科研申请', coreQuery: 'academic-review-deck', scenario: 'research', criticRubric: 'does the deck prove novelty without overclaiming', tags: ['research', 'grant', 'review'] },
-  { id: 'marketing-gtm', enLabel: 'Marketing & GTM', zhLabel: '市场/增长/GTM', coreQuery: 'annual-marketing-plan', scenario: 'marketing', criticRubric: 'can the plan connect creative choices to measurable growth', tags: ['launch', 'campaign', 'pipeline'] },
-  { id: 'data-finance', enLabel: 'Data, KPI & finance', zhLabel: '数据/KPI/金融', coreQuery: 'product-analytics-deck', scenario: 'finance', criticRubric: 'does every chart have a decision above it', tags: ['kpi', 'finance', 'metrics'] },
-  { id: 'fundraising-pitch', enLabel: 'Fundraising pitch', zhLabel: '融资/路演', coreQuery: 'series-a-pitch-deck', scenario: 'finance', criticRubric: 'would an investor know why this is venture-scale and urgent', tags: ['pitch-deck', 'fundraising', 'investor-deck'] },
-  { id: 'government-policy', enLabel: 'Government & policy', zhLabel: '公共政策/监管/非营利', coreQuery: 'policy-briefing-deck', scenario: 'policy', criticRubric: 'does the deck reduce approval risk rather than create rhetorical heat', tags: ['policy', 'regulatory', 'risk-review'] },
-  { id: 'product-management', enLabel: 'Product management', zhLabel: '产品/技术管理', coreQuery: 'pm-feature-business-case-deck', scenario: 'product', criticRubric: 'can cross-functional reviewers agree on the next irreversible step', tags: ['product', 'roadmap', 'architecture'] },
-  { id: 'consulting', enLabel: 'Consulting', zhLabel: '咨询/客户交付', coreQuery: 'consulting-final-deck', scenario: 'strategy', criticRubric: 'would a client know what to do Monday morning', tags: ['consulting-deliverable', 'strategy', 'client'] },
-  { id: 'career', enLabel: 'Career', zhLabel: '职业/个人发展', coreQuery: 'year-end-self-review-deck', scenario: 'personal', criticRubric: 'does the evidence make the claim feel earned', tags: ['portfolio', 'promotion', 'self-review'] },
-  { id: 'ai-literacy', enLabel: 'AI literacy', zhLabel: 'AI 素养/企业 AI', coreQuery: 'enterprise-ai-copilot-rollout-brief', scenario: 'ai', criticRubric: 'does the deck make AI implementation concrete enough to fund', tags: ['ai', 'copilot', 'workflow'] },
-  { id: 'life', enLabel: 'Life & story', zhLabel: '生活/兴趣/故事', coreQuery: 'travel-photo-essay-deck', scenario: 'personal', criticRubric: 'would someone retell the story after seeing it once', tags: ['story', 'personal', 'photo-essay'] },
-  { id: 'design-craft', enLabel: 'Design craft', zhLabel: '设计打磨/视觉系统', coreQuery: 'board-upgrade-deck-rescue', scenario: 'design', criticRubric: 'does the deck feel authored by a senior designer rather than generated', tags: ['design', 'brand', 'visual-system'] },
+  { id: 'student-coursework', enLabel: 'Student coursework', coreQuery: 'senior-capstone-defense-deck', scenario: 'education', criticRubric: 'can a reviewer find the contribution, evidence, and limitation in under 90 seconds', tags: ['coursework', 'defense', 'academic'] },
+  { id: 'corporate-strategy', enLabel: 'Corporate strategy', coreQuery: 'board-pre-read-deck', scenario: 'strategy', criticRubric: 'would a board member know what to approve and why before page five', tags: ['board', 'strategy', 'business-review'] },
+  { id: 'professional-training', enLabel: 'Professional training', coreQuery: 'employee-onboarding-deck', scenario: 'education', criticRubric: 'can a learner perform the target task the next day', tags: ['training-deck', 'workshop', 'course-module'] },
+  { id: 'b2b-sales', enLabel: 'B2B sales', coreQuery: 'b2b-saas-sales-proposal', scenario: 'sales', criticRubric: 'can the champion forward this internally without rewriting it', tags: ['sales', 'renewal', 'customer'] },
+  { id: 'academic-research', enLabel: 'Academic research', coreQuery: 'academic-review-deck', scenario: 'research', criticRubric: 'does the deck prove novelty without overclaiming', tags: ['research', 'grant', 'review'] },
+  { id: 'marketing-gtm', enLabel: 'Marketing & GTM', coreQuery: 'annual-marketing-plan', scenario: 'marketing', criticRubric: 'can the plan connect creative choices to measurable growth', tags: ['launch', 'campaign', 'pipeline'] },
+  { id: 'data-finance', enLabel: 'Data, KPI & finance', coreQuery: 'product-analytics-deck', scenario: 'finance', criticRubric: 'does every chart have a decision above it', tags: ['kpi', 'finance', 'metrics'] },
+  { id: 'fundraising-pitch', enLabel: 'Fundraising pitch', coreQuery: 'series-a-pitch-deck', scenario: 'finance', criticRubric: 'would an investor know why this is venture-scale and urgent', tags: ['pitch-deck', 'fundraising', 'investor-deck'] },
+  { id: 'government-policy', enLabel: 'Government & policy', coreQuery: 'policy-briefing-deck', scenario: 'policy', criticRubric: 'does the deck reduce approval risk rather than create rhetorical heat', tags: ['policy', 'regulatory', 'risk-review'] },
+  { id: 'product-management', enLabel: 'Product management', coreQuery: 'pm-feature-business-case-deck', scenario: 'product', criticRubric: 'can cross-functional reviewers agree on the next irreversible step', tags: ['product', 'roadmap', 'architecture'] },
+  { id: 'consulting', enLabel: 'Consulting', coreQuery: 'consulting-final-deck', scenario: 'strategy', criticRubric: 'would a client know what to do Monday morning', tags: ['consulting-deliverable', 'strategy', 'client'] },
+  { id: 'career', enLabel: 'Career', coreQuery: 'year-end-self-review-deck', scenario: 'personal', criticRubric: 'does the evidence make the claim feel earned', tags: ['portfolio', 'promotion', 'self-review'] },
+  { id: 'ai-literacy', enLabel: 'AI literacy', coreQuery: 'enterprise-ai-copilot-rollout-brief', scenario: 'ai', criticRubric: 'does the deck make AI implementation concrete enough to fund', tags: ['ai', 'copilot', 'workflow'] },
+  { id: 'life', enLabel: 'Life & story', coreQuery: 'travel-photo-essay-deck', scenario: 'personal', criticRubric: 'would someone retell the story after seeing it once', tags: ['story', 'personal', 'photo-essay'] },
+  { id: 'design-craft', enLabel: 'Design craft', coreQuery: 'board-upgrade-deck-rescue', scenario: 'design', criticRubric: 'does the deck feel authored by a senior designer rather than generated', tags: ['design', 'brand', 'visual-system'] },
 ];
 
 const categoryById = new Map(commercialCategories.map((c) => [c.id, c]));
@@ -122,7 +125,6 @@ export function buildCopy(a: Assignment): RefreshCopy {
     `First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers.`,
     `Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: ${category.criticRubric}.`,
   ].join(' ');
-  const zhExamplePrompt = `${a.titleZh}。${a.descZh} 主题：${a.subject} 先确认受众、决策目标、素材来源、截止时间和必须保留的数据，再输出叙事主线、页面规划、逐页文案、视觉方向和按评审标准自检的版本。`;
   const tags = Array.from(new Set([
     a.categoryId,
     category.coreQuery,
@@ -135,11 +137,8 @@ export function buildCopy(a: Assignment): RefreshCopy {
   return {
     category,
     enName: a.titleEn,
-    zhName: a.titleZh,
     enDescription: a.descEn,
-    zhDescription: a.descZh,
     examplePrompt,
-    zhExamplePrompt,
     tags,
   };
 }
@@ -198,16 +197,13 @@ function updateSkillMarkdown(raw: string, copy: RefreshCopy): string {
   const nameIndex = lines.findIndex((line) => /^name:/u.test(line));
   const displayBlock = [
     `en_name: ${yamlScalar(copy.enName)}`,
-    `zh_name: ${yamlScalar(copy.zhName)}`,
     ...yamlBlock('description', copy.enDescription),
     ...yamlBlock('en_description', copy.enDescription),
-    ...yamlBlock('zh_description', copy.zhDescription),
     ...yamlList('tags', copy.tags),
     ...yamlList('triggers', Array.from(new Set([
       copy.category.coreQuery,
       copy.category.id,
       copy.enName,
-      copy.zhName,
       ...copy.category.tags,
       'html deck',
       'html slides',
@@ -253,9 +249,9 @@ function updateOpenDesignJson(raw: string, copy: RefreshCopy): string {
   try { manifest = JSON.parse(raw) as Record<string, unknown>; } catch { return raw; }
 
   manifest.title = copy.enName;
-  manifest.title_i18n = { en: copy.enName, 'zh-CN': copy.zhName, 'zh-TW': copy.zhName };
+  manifest.title_i18n = { en: copy.enName };
   manifest.description = copy.enDescription;
-  manifest.description_i18n = { en: copy.enDescription, 'zh-CN': copy.zhDescription, 'zh-TW': copy.zhDescription };
+  manifest.description_i18n = { en: copy.enDescription };
   // Drop stale category-id tags from prior passes, then re-add the current set.
   const staleCategoryIds = new Set(commercialCategories.map((c) => c.id));
   const staleCoreQueries = new Set(commercialCategories.map((c) => c.coreQuery));
@@ -272,16 +268,16 @@ function updateOpenDesignJson(raw: string, copy: RefreshCopy): string {
   od.scenario = copy.category.scenario;
   od.surface = typeof od.surface === 'string' ? od.surface : 'web';
   const useCase = objectFromUnknown(od.useCase);
-  useCase.query = { en: copy.examplePrompt, 'zh-CN': copy.zhExamplePrompt };
+  useCase.query = { en: copy.examplePrompt };
   const exampleOutputs = Array.isArray(useCase.exampleOutputs)
     ? useCase.exampleOutputs.map((entry) => (
         typeof entry === 'object' && entry !== null
-          ? { ...(entry as Record<string, unknown>), title: copy.enName, title_i18n: { en: copy.enName, 'zh-CN': copy.zhName, 'zh-TW': copy.zhName } }
+          ? { ...(entry as Record<string, unknown>), title: copy.enName, title_i18n: { en: copy.enName } }
           : entry
       ))
     : [];
   if (exampleOutputs.length === 0) {
-    exampleOutputs.push({ path: './example.html', title: copy.enName, title_i18n: { en: copy.enName, 'zh-CN': copy.zhName, 'zh-TW': copy.zhName } });
+    exampleOutputs.push({ path: './example.html', title: copy.enName, title_i18n: { en: copy.enName } });
   }
   useCase.exampleOutputs = exampleOutputs;
   od.useCase = useCase;

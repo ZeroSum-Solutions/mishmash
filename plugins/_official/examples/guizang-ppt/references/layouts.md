@@ -52,12 +52,12 @@ The image must be wrapped in `<figure class="frame-img">`; the inner `<img>` aut
 ```html
 <section class="slide [light|dark|hero light|hero dark]">
   <div class="chrome">
-    <div>上下文标签 · 子标签</div>
-    <div>ACT · 页号 / 总页数</div>
+    <div>Section label · sub-label</div>
+    <div>ACT · page / total pages</div>
   </div>
-  <!-- 主内容 -->
+  <!-- main content -->
   <div class="foot">
-    <div>页码说明 · Page Description</div>
+    <div>Page caption · Page Description</div>
     <div>— · —</div>
   </div>
 </section>
@@ -75,9 +75,9 @@ This is the most common content-duplication problem. The two are on completely d
 |------|------|---------|------|
 | `.chrome` top-left | **magazine masthead / nav metadata** | a stable "section name" or "chapter category," can be the same across pages | "Act II · Workflow" / "Data · Result" / "lukew.com · 2026.04" |
 | `.chrome` top-right | **page number + act number** | fixed format | "Act II · 15 / 25" |
-| `.kicker` | **the one-of-a-kind lead-in for this page** | the "small prefix" of the headline, like the line above a magazine headline, different on every page | "BUT" / "一个人,做了什么。" / "Phase 01 · 设计阶段" |
+| `.kicker` | **the one-of-a-kind lead-in for this page** | the "small prefix" of the headline, like the line above a magazine headline, different on every page | "BUT" / "One person. What did they build." / "Phase 01 · Design Stage" |
 
-**Counter-example** (already learned the hard way): chrome says "设计先行 · Design First" and kicker says "Phase 01 · 设计阶段": the meaning repeats, and the reader instantly senses AI generation.
+**Counter-example** (already learned the hard way): chrome says "Design First" and kicker says "Phase 01 · Design Stage": the meaning repeats, and the reader instantly senses AI generation.
 
 **Right approach**: chrome is the **section label** (stable, reusable across pages), kicker is the **hook for this page** (a short line, dramatic); the two complement each other and don't translate into each other.
 
@@ -133,18 +133,18 @@ This is the most common content-duplication problem. The two are on completely d
     <div>Vol.01</div>
   </div>
   <div class="frame" style="display:grid; gap:4vh; align-content:center; min-height:80vh">
-    <div class="kicker">私享会 · 李继刚</div>
-    <h1 class="h-hero">一人公司</h1>
-    <h2 class="h-sub">被 AI 折叠的组织</h2>
+    <div class="kicker">Private Salon · Guizang</div>
+    <h1 class="h-hero">One-Person Company</h1>
+    <h2 class="h-sub">The Org AI Folded</h2>
     <p class="lead" style="max-width:60vw">
-      一个 AI 创作者 —— 在 64 天里做了 11 万行代码、在 9 个平台上持续输出，生活节奏几乎没有被改变。
+      One AI-native creator — shipped 110K lines of code in 64 days, kept posting across 9 platforms the whole time, and barely changed their daily routine.
     </p>
     <div class="meta-row">
-      <span>歸藏 Guizang</span><span>·</span><span>独立创作者 / CodePilot 作者</span>
+      <span>Guizang</span><span>·</span><span>Indie creator / author of CodePilot</span>
     </div>
   </div>
   <div class="foot">
-    <div>一场关于 AI · 组织 · 个体的分享</div>
+    <div>A talk about AI · organizations · the individual</div>
     <div>— 2026 —</div>
   </div>
 </section>
@@ -163,18 +163,18 @@ This is the most common content-duplication problem. The two are on completely d
 ```html
 <section class="slide hero light">
   <div class="chrome">
-    <div>第一幕 · 硬数据</div>
+    <div>Act I · The Numbers</div>
     <div>Act I · 01 / 25</div>
   </div>
   <div class="frame" style="display:grid; gap:6vh; align-content:center; min-height:80vh">
     <div class="kicker">Act I</div>
-    <h1 class="h-hero" style="font-size:8.5vw">硬数据</h1>
+    <h1 class="h-hero" style="font-size:8.5vw">The Numbers</h1>
     <p class="lead" style="max-width:55vw">
-      先看数字，再谈方法。
+      Look at the numbers first, talk method second.
     </p>
   </div>
   <div class="foot">
-    <div>第一幕引子</div>
+    <div>Act I lead-in</div>
     <div>— · —</div>
   </div>
 </section>
@@ -192,49 +192,49 @@ This is the most common content-duplication problem. The two are on completely d
 ```html
 <section class="slide light">
   <div class="chrome">
-    <div>过去 64 天 · 开发篇</div>
+    <div>The last 64 days · Dev diary</div>
     <div>Act I / Dev · 02 / 25</div>
   </div>
   <div class="frame" style="padding-top:6vh">
-    <div class="kicker">一个人，做了什么。</div>
-    <h2 class="h-xl">过去 64 天</h2>
-    <p class="lead" style="margin-bottom:5vh">从 0 到开源 CodePilot。</p>
+    <div class="kicker">One person. What did they build.</div>
+    <h2 class="h-xl">The last 64 days</h2>
+    <p class="lead" style="margin-bottom:5vh">From zero to open-sourcing CodePilot.</p>
 
     <div class="grid-6" style="margin-top:6vh">
       <div class="stat-card">
         <div class="stat-label">Duration</div>
-        <div class="stat-nb">64 <span class="stat-unit">天</span></div>
-        <div class="stat-note">从 0 到现在</div>
+        <div class="stat-nb">64 <span class="stat-unit">days</span></div>
+        <div class="stat-note">Zero to now</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Lines of Code</div>
         <div class="stat-nb">110K+</div>
-        <div class="stat-note">一行行写到 11 万+</div>
+        <div class="stat-note">Written line by line to 110K+</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">GitHub Stars</div>
         <div class="stat-nb">5,166</div>
-        <div class="stat-note">一个开源仓库</div>
+        <div class="stat-note">One open-source repo</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Downloads</div>
         <div class="stat-nb">41K+</div>
-        <div class="stat-note">装到了几万台电脑里</div>
+        <div class="stat-note">Installed on tens of thousands of machines</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">AI Providers</div>
         <div class="stat-nb">19</div>
-        <div class="stat-note">跨平台接入</div>
+        <div class="stat-note">Cross-platform integrations</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Commits</div>
         <div class="stat-nb">608+</div>
-        <div class="stat-note">没有协作者</div>
+        <div class="stat-note">No collaborators</div>
       </div>
     </div>
   </div>
   <div class="foot">
-    <div>项目 · CodePilot　|　github.com/codepilot</div>
+    <div>Project · CodePilot　|　github.com/codepilot</div>
     <div>Act I · Dev Numbers</div>
   </div>
 </section>
@@ -253,35 +253,35 @@ This is the most common content-duplication problem. The two are on completely d
 ```html
 <section class="slide light">
   <div class="chrome">
-    <div>身份反差 · The Twist</div>
+    <div>Identity Twist · The Twist</div>
     <div>03 / 25</div>
   </div>
   <div class="frame grid-2-7-5" style="padding-top:6vh">
-    <!-- 左列：标题 + 正文 + callout，flex column 让 callout 贴列底 -->
+    <!-- Left column: title + body + callout, flex column keeps the callout pinned to the column's bottom -->
     <div style="display:flex; flex-direction:column; justify-content:space-between; gap:3vh">
       <div>
         <div class="kicker">BUT</div>
         <h2 class="h-xl" style="white-space:nowrap; font-size:7.2vw">
-          我不是程序员。
+          I'm not a programmer.
         </h2>
         <p class="lead" style="margin-top:3vh">
-          大学毕业之后再也没写过一行代码。过去十年做的是 UI 设计和 AI 特效。
+          Haven't written a line of code since graduating. The last decade was UI design and AI VFX.
         </p>
       </div>
       <div class="callout">
-        "这东西在三年前，<br>
-        需要一个十人团队做一年。"
-        <div class="callout-src">— 一个观察者的判断</div>
+        "Three years ago, this<br>
+        would have taken a ten-person team a year."
+        <div class="callout-src">— one observer's take</div>
       </div>
     </div>
-    <!-- 右列：图片用标准 16/10 比例 + max-height，不要 align-self:end -->
+    <!-- Right column: image at a standard 16/10 ratio + max-height, no align-self:end -->
     <figure class="frame-img" style="aspect-ratio:16/10; max-height:56vh">
-      <img src="images/codepilot.png" alt="CodePilot 产品截图">
-      <figcaption class="img-cap">CodePilot · 产品截图</figcaption>
+      <img src="images/codepilot.png" alt="CodePilot product screenshot">
+      <figcaption class="img-cap">CodePilot · product screenshot</figcaption>
     </figure>
   </div>
   <div class="foot">
-    <div>Page 03 · 我不是程序员</div>
+    <div>Page 03 · I'm not a programmer</div>
     <div>— · —</div>
   </div>
 </section>
@@ -300,43 +300,43 @@ This is the most common content-duplication problem. The two are on completely d
 ```html
 <section class="slide light">
   <div class="chrome">
-    <div>平台粉丝实证</div>
+    <div>Platform following, verified</div>
     <div>Act I / Ops · 05 / 27</div>
   </div>
   <div class="frame" style="padding-top:5vh">
-    <div class="kicker">Proof · 粉丝实证</div>
-    <h2 class="h-xl">10 个平台 · 6 张截图</h2>
+    <div class="kicker">Proof · Follower count</div>
+    <h2 class="h-xl">10 platforms · 6 screenshots</h2>
 
     <div class="grid-3-3" style="margin-top:4vh">
       <figure class="frame-img" style="height:26vh">
-        <img src="images/weibo.png" alt="微博 289K">
-        <figcaption class="img-cap">微博 · 289K</figcaption>
+        <img src="images/twitter.png" alt="Twitter 289K">
+        <figcaption class="img-cap">Twitter · 289K</figcaption>
       </figure>
       <figure class="frame-img" style="height:26vh">
-        <img src="images/twitter.png" alt="推特 137K">
-        <figcaption class="img-cap">推特 · 137K</figcaption>
+        <img src="images/threads.png" alt="Threads 137K">
+        <figcaption class="img-cap">Threads · 137K</figcaption>
       </figure>
       <figure class="frame-img" style="height:26vh">
-        <img src="images/wechat.png" alt="公众号 96K">
-        <figcaption class="img-cap">公众号 · 96K</figcaption>
+        <img src="images/newsletter.png" alt="Newsletter 96K">
+        <figcaption class="img-cap">Newsletter · 96K</figcaption>
       </figure>
       <figure class="frame-img" style="height:26vh">
-        <img src="images/jike.png" alt="即刻 26K">
-        <figcaption class="img-cap">即刻 · 26K</figcaption>
+        <img src="images/youtube.png" alt="YouTube 26K">
+        <figcaption class="img-cap">YouTube · 26K</figcaption>
       </figure>
       <figure class="frame-img" style="height:26vh">
-        <img src="images/xhs.png" alt="小红书 19K">
-        <figcaption class="img-cap">小红书 · 19K</figcaption>
+        <img src="images/instagram.png" alt="Instagram 19K">
+        <figcaption class="img-cap">Instagram · 19K</figcaption>
       </figure>
       <figure class="frame-img" style="height:26vh">
-        <img src="images/douyin.png" alt="抖音 10K">
-        <figcaption class="img-cap">抖音 · 10K</figcaption>
+        <img src="images/tiktok.png" alt="TikTok 10K">
+        <figcaption class="img-cap">TikTok · 10K</figcaption>
       </figure>
     </div>
   </div>
   <div class="foot">
-    <div>截图时间 · 2026.04</div>
-    <div>Page 05 · 粉丝实证</div>
+    <div>Screenshots taken · 2026.04</div>
+    <div>Page 05 · Follower proof</div>
   </div>
 </section>
 ```
@@ -353,69 +353,69 @@ This is the most common content-duplication problem. The two are on completely d
 ```html
 <section class="slide light">
   <div class="chrome">
-    <div>我的工作流 · Workflow</div>
+    <div>My workflow · Workflow</div>
     <div>Act II · 15 / 27</div>
   </div>
   <div class="frame">
-    <div class="kicker">Pipeline · 流水线</div>
-    <h2 class="h-xl">两条流水线</h2>
+    <div class="kicker">Pipeline</div>
+    <h2 class="h-xl">Two pipelines</h2>
 
-    <!-- 第一组：文本侧 -->
+    <!-- Group 1: text side -->
     <div class="pipeline-section">
-      <div class="pipeline-label">文本侧 · Text Pipeline</div>
+      <div class="pipeline-label">Text side · Text Pipeline</div>
       <div class="pipeline">
         <div class="step">
           <div class="step-nb">01</div>
           <div class="step-title">Draft</div>
-          <div class="step-desc">AI 帮我起草初稿</div>
+          <div class="step-desc">AI drafts the first pass</div>
         </div>
         <div class="step">
           <div class="step-nb">02</div>
           <div class="step-title">Polish</div>
-          <div class="step-desc">AI 润色去 AI 味</div>
+          <div class="step-desc">AI polishes out the AI smell</div>
         </div>
         <div class="step">
           <div class="step-nb">03</div>
           <div class="step-title">Morph</div>
-          <div class="step-desc">AI 变形成推特 / 小红书</div>
+          <div class="step-desc">AI reshapes it per platform</div>
         </div>
         <div class="step">
           <div class="step-nb">04</div>
           <div class="step-title">Illustrate</div>
-          <div class="step-desc">AI 生成信息图</div>
+          <div class="step-desc">AI generates the infographic</div>
         </div>
         <div class="step">
           <div class="step-nb">05</div>
           <div class="step-title">Distribute</div>
-          <div class="step-desc">一键分发 9 平台</div>
+          <div class="step-desc">One click ships to 9 platforms</div>
         </div>
       </div>
     </div>
 
-    <!-- 第二组：视频侧 -->
+    <!-- Group 2: video side -->
     <div class="pipeline-section">
-      <div class="pipeline-label">视觉 · 视频侧 · Video Pipeline</div>
+      <div class="pipeline-label">Visual · Video side · Video Pipeline</div>
       <div class="pipeline">
         <div class="step">
           <div class="step-nb">06</div>
           <div class="step-title">Cut</div>
-          <div class="step-desc">AI 帮我剪辑</div>
+          <div class="step-desc">AI helps edit the cut</div>
         </div>
         <div class="step">
           <div class="step-nb">07</div>
           <div class="step-title">Wrap</div>
-          <div class="step-desc">AI 帮我包装</div>
+          <div class="step-desc">AI helps package it</div>
         </div>
         <div class="step">
           <div class="step-nb">08</div>
           <div class="step-title">Cover</div>
-          <div class="step-desc">AI 生成封面</div>
+          <div class="step-desc">AI generates the cover art</div>
         </div>
       </div>
     </div>
   </div>
   <div class="foot">
-    <div>Page 15 · 我的内容工厂</div>
+    <div>Page 15 · My content factory</div>
     <div>Workflow</div>
   </div>
 </section>
@@ -434,18 +434,18 @@ This is the most common content-duplication problem. The two are on completely d
 ```html
 <section class="slide hero dark">
   <div class="chrome">
-    <div>留给你的问题</div>
+    <div>A question for you</div>
     <div>24 / 27</div>
   </div>
   <div class="frame" style="display:grid; gap:8vh; align-content:center; min-height:80vh">
     <div class="kicker">The Question</div>
     <h1 class="h-hero" style="font-size:7vw; line-height:1.15">
-      你的公司里，<br>
-      哪些岗位本来就<br>
-      不该由人来做？
+      In your company,<br>
+      which roles were never<br>
+      supposed to be done by people?
     </h1>
     <p class="lead" style="max-width:50vw">
-      这个问题，不是技术问题，是架构问题。
+      This isn't a technology question. It's an architecture question.
     </p>
   </div>
   <div class="foot">
@@ -468,13 +468,13 @@ This is the most common content-duplication problem. The two are on completely d
 ```html
 <section class="slide light">
   <div class="chrome">
-    <div>The Takeaway · 核心金句</div>
+    <div>The Takeaway</div>
     <div>18 / 25</div>
   </div>
   <div class="frame" style="display:grid; gap:5vh; align-content:center; min-height:80vh">
-    <div class="kicker">Quote · 金句</div>
+    <div class="kicker">Quote</div>
     <blockquote style="font-family:var(--serif-zh); font-weight:700; font-size:5.8vw; line-height:1.2; letter-spacing:-.01em; max-width:72vw">
-      "没有交接,<br>所有人都在构建。"
+      "No handoff.<br>Everyone builds."
     </blockquote>
     <p class="lead" style="max-width:55vw; opacity:.65">
       Without the handoff, everyone builds.<br>
@@ -485,7 +485,7 @@ This is the most common content-duplication problem. The two are on completely d
     </div>
   </div>
   <div class="foot">
-    <div>Page 18 · 金句</div>
+    <div>Page 18 · Takeaway</div>
     <div>— · —</div>
   </div>
 </section>
@@ -504,40 +504,40 @@ This is the most common content-duplication problem. The two are on completely d
 ```html
 <section class="slide light">
   <div class="chrome">
-    <div>旧 vs 新 · The Shift</div>
+    <div>Old vs New · The Shift</div>
     <div>12 / 25</div>
   </div>
   <div class="frame" style="padding-top:5vh">
-    <div class="kicker">Before / After · 范式转变</div>
-    <h2 class="h-xl" style="margin-bottom:4vh">从交接到共建</h2>
+    <div class="kicker">Before / After · The paradigm shift</div>
+    <h2 class="h-xl" style="margin-bottom:4vh">From handoff to co-building</h2>
 
     <div class="grid-2-6-6" style="gap:5vw 4vh">
-      <!-- 左列：旧 -->
+      <!-- Left column: old -->
       <div style="padding:3vh 2vw; border-left:3px solid currentColor; opacity:.55">
-        <div class="kicker" style="opacity:.9">Before · 旧模式</div>
-        <h3 class="h-md" style="margin-top:2vh">设计 → 开发 → 交接</h3>
+        <div class="kicker" style="opacity:.9">Before · Old model</div>
+        <h3 class="h-md" style="margin-top:2vh">Design → build → handoff</h3>
         <ul style="margin-top:3vh; padding-left:1.2em; display:flex; flex-direction:column; gap:1.4vh; font-family:var(--sans-zh); font-size:max(14px,1.1vw); line-height:1.55">
-          <li>设计师在 Figma 做稿</li>
-          <li>开发者盯着文件翻译像素</li>
-          <li>反复 PR 沟通对齐</li>
-          <li>非技术人员无法触碰代码</li>
+          <li>Designer builds the comp in Figma</li>
+          <li>Developer stares at the file, translates pixels</li>
+          <li>Round after round of PR back-and-forth to align</li>
+          <li>Non-technical people can't touch the code</li>
         </ul>
       </div>
-      <!-- 右列:新 -->
+      <!-- Right column: new -->
       <div style="padding:3vh 2vw; border-left:3px solid currentColor">
-        <div class="kicker" style="opacity:.9">After · 新模式</div>
-        <h3 class="h-md" style="margin-top:2vh">同工具 · 并行 · 共建</h3>
+        <div class="kicker" style="opacity:.9">After · New model</div>
+        <h3 class="h-md" style="margin-top:2vh">Same tool · parallel · co-built</h3>
         <ul style="margin-top:3vh; padding-left:1.2em; display:flex; flex-direction:column; gap:1.4vh; font-family:var(--sans-zh); font-size:max(14px,1.1vw); line-height:1.55">
-          <li>三个角色同时在 Intent 工作</li>
-          <li>agents.md 作为共享上下文</li>
-          <li>代理处理对齐 / 冲突 / 动画</li>
-          <li>任何人都能安全贡献代码</li>
+          <li>All three roles work in Intent at once</li>
+          <li>agents.md serves as shared context</li>
+          <li>The agent handles alignment / conflicts / animation</li>
+          <li>Anyone can safely contribute code</li>
         </ul>
       </div>
     </div>
   </div>
   <div class="foot">
-    <div>Page 12 · 范式转变</div>
+    <div>Page 12 · The paradigm shift</div>
     <div>Before / After</div>
   </div>
 </section>
@@ -556,21 +556,21 @@ This is the most common content-duplication problem. The two are on completely d
 ```html
 <section class="slide light">
   <div class="chrome">
-    <div>Design First · 设计先行</div>
+    <div>Design First</div>
     <div>08 / 16</div>
   </div>
   <div class="frame grid-2-8-4" style="padding-top:6vh">
-    <!-- 左列:大段正文 + 引用 -->
+    <!-- Left column: long-form body + quote -->
     <div>
-      <div class="kicker">Phase 01 · 设计阶段</div>
-      <h2 class="h-xl" style="margin-top:1vh; margin-bottom:3vh">设计先行 · 2 周</h2>
+      <div class="kicker">Phase 01 · Design stage</div>
+      <h2 class="h-xl" style="margin-top:1vh; margin-bottom:3vh">Design first · 2 weeks</h2>
 
       <p class="lead" style="margin-bottom:3vh">
-        在 Figma 中完成视觉探索与设计系统,网格 / 排版 / 颜色变量 / 可复用组件,桌面和移动端稿件几轮反馈迭代。
+        Finished visual exploration and the design system in Figma — grid / typography / color variables / reusable components — with a few rounds of feedback on the desktop and mobile comps.
       </p>
 
       <p style="font-family:var(--sans-zh); font-size:max(14px,1.15vw); line-height:1.75; opacity:.78; margin-bottom:2.4vh">
-        两周之内,视觉风格、粗略结构、方向性内容全部稳定。这是扎实的传统设计流程——在这里还没什么新鲜事。
+        Within two weeks, the visual style, rough structure, and directional content were all locked in. This is a solid, traditional design process — nothing new here yet.
       </p>
 
       <div class="callout" style="margin-top:3vh">
@@ -578,7 +578,7 @@ This is the most common content-duplication problem. The two are on completely d
         <div class="callout-src">— Luke Wroblewski</div>
       </div>
     </div>
-    <!-- 右列:辅助图 · 竖版或方形 -->
+    <!-- Right column: supporting image · portrait or square -->
     <figure class="frame-img" style="aspect-ratio:3/4; max-height:60vh">
       <img src="images/figma.png" alt="Figma design system">
       <figcaption class="img-cap">Figma · Design System</figcaption>
@@ -586,7 +586,7 @@ This is the most common content-duplication problem. The two are on completely d
   </div>
   <div class="foot">
     <div>Page 08 · Design First</div>
-    <div>约 2 周</div>
+    <div>~ 2 weeks</div>
   </div>
 </section>
 ```

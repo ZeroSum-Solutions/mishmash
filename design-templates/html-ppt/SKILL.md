@@ -1,13 +1,10 @@
 ---
 name: html-ppt
 en_name: "Brief AI in Your Industry like a Tier-1 Consulting AI Vertical Lead"
-zh_name: "像一线咨询 AI 行业负责人一样讲清行业 AI"
 description: |
   For consulting delivery work: turn diagnosis, frameworks, and project work into a client-adoptable action plan. Built around the core query "consulting-final-deck", with engagement manager judgment, buyer-ready proof, and this outcome: accept the recommendation and commit owners to the roadmap.
 en_description: |
   For consulting delivery work: turn diagnosis, frameworks, and project work into a client-adoptable action plan. Built around the core query "consulting-final-deck", with engagement manager judgment, buyer-ready proof, and this outcome: accept the recommendation and commit owners to the roadmap.
-zh_description: |
-  咨询/客户交付场景：围绕 core query「consulting-final-deck」把粗糙材料整理成“像一线咨询 AI 行业负责人一样讲清行业 AI”这类可购买、可复用的专业 Deck；突出受众、决策目标、证据链、风险取舍和评审标准。
 tags:
   - "consulting"
   - "consulting-final-deck"
@@ -21,7 +18,6 @@ triggers:
   - "consulting-final-deck"
   - "consulting"
   - "Brief AI in Your Industry like a Tier-1 Consulting AI Vertical Lead"
-  - "像一线咨询 AI 行业负责人一样讲清行业 AI"
   - "consulting-deliverable"
   - "strategy"
   - "client"
@@ -58,7 +54,7 @@ One command, no build. Pure static HTML/CSS/JS with only CDN webfonts.
 ## What the skill gives you
 
 - **36 themes** (`assets/themes/*.css`) — minimal-white, editorial-serif, soft-pastel, sharp-mono, arctic-cool, sunset-warm, catppuccin-latte/mocha, dracula, tokyo-night, nord, solarized-light, gruvbox-dark, rose-pine, neo-brutalism, glassmorphism, bauhaus, swiss-grid, terminal-green, xiaohongshu-white, rainbow-gradient, aurora, blueprint, memphis-pop, cyberpunk-neon, y2k-chrome, retro-tv, japanese-minimal, vaporwave, midcentury, corporate-clean, academic-paper, news-broadcast, pitch-deck-vc, magazine-bold, engineering-whiteprint
-- **15 full-deck templates** (`templates/full-decks/<name>/`) — complete multi-slide decks with scoped `.tpl-<name>` CSS. 8 extracted from real-world decks (xhs-white-editorial, graphify-dark-graph, knowledge-arch-blueprint, hermes-cyber-terminal, obsidian-claude-gradient, testing-safety-alert, xhs-pastel-card, dir-key-nav-minimal), 7 scenario scaffolds (pitch-deck, product-launch, tech-sharing, weekly-report, xhs-post 3:4, course-module, **presenter-mode-reveal** — 演讲者模式专用)
+- **14 full-deck templates** (`templates/full-decks/<name>/`) — complete multi-slide decks with scoped `.tpl-<name>` CSS. 8 extracted from real-world decks (xhs-white-editorial, graphify-dark-graph, knowledge-arch-blueprint, hermes-cyber-terminal, obsidian-claude-gradient, testing-safety-alert, xhs-pastel-card, dir-key-nav-minimal), 6 scenario scaffolds (pitch-deck, product-launch, tech-sharing, weekly-report, course-module, **presenter-mode-reveal** — presenter-mode showcase)
 - **31 layouts** (`templates/single-page/*.html`) with realistic demo data
 - **27 CSS animations** (`assets/animations/animations.css`) via `data-anim`
 - **20 canvas FX animations** (`assets/animations/fx/*.js`) via `data-fx` — particle-burst, confetti-cannon, firework, starfield, matrix-rain, knowledge-graph (force-directed), neural-net (pulses), constellation, orbit-ring, galaxy-swirl, word-cascade, letter-explode, chain-react, magnetic-field, data-stream, gradient-blob, sparkle-trail, shockwave, typewriter-multi, counter-explosion
@@ -72,19 +68,19 @@ One command, no build. Pure static HTML/CSS/JS with only CDN webfonts.
 Use when the user asks for any kind of slide-based output or wants to turn
 text/notes into a presentable deck. Prefer this over building from scratch.
 
-### 🎤 Presenter Mode (演讲者模式 + 逐字稿)
+### 🎤 Presenter Mode (Presenter View + Speaker Script)
 
-If the user mentions any of: **演讲 / 分享 / 讲稿 / 逐字稿 / speaker notes / presenter view / 演讲者视图 / 提词器**, or says things like "我要去给团队讲 xxx", "要做一场技术分享", "怕讲不流畅", "想要一份带逐字稿的 PPT" — **use the `presenter-mode-reveal` full-deck template** and write 150–300 words of 逐字稿 in each slide's `<aside class="notes">`.
+If the user mentions any of: **talk / presentation / speech draft / speaker script / speaker notes / presenter view / teleprompter**, or says things like "I need to present this to my team," "I'm giving a tech talk," "I'm worried about stumbling through it," "I want a deck with a full speaker script" — **use the `presenter-mode-reveal` full-deck template** and write 150–300 words of speaker script in each slide's `<aside class="notes">`.
 
 See [references/presenter-mode.md](references/presenter-mode.md) for the full authoring guide including the 3 rules of speaker script writing:
-1. **不是讲稿，是提示信号** — 加粗核心词 + 过渡句独立成段
-2. **每页 150–300 字** — 2–3 分钟/页的节奏
-3. **用口语，不用书面语** — "因此"→"所以"，"该方案"→"这个方案"
+1. **It's not a script to read verbatim — it's a cue system** — bold the key terms and give transition sentences their own paragraph
+2. **150–300 words per slide** — a pace of 2–3 minutes per slide
+3. **Use spoken language, not written language** — say "so" instead of "therefore," "this approach" instead of "the aforementioned approach"
 
 All full-deck templates support the S key presenter mode (it's built into `runtime.js`). **S opens a new popup window with 4 magnetic cards**:
 - 🔵 **CURRENT** — pixel-perfect iframe preview of the current slide
 - 🟣 **NEXT** — pixel-perfect iframe preview of the next slide
-- 🟠 **SPEAKER SCRIPT** — large-font 逐字稿 (scrollable)
+- 🟠 **SPEAKER SCRIPT** — large-font speaker script (scrollable)
 - 🟢 **TIMER** — elapsed time + slide counter + prev/next/reset buttons
 
 Each card is **draggable by its header** and **resizable by the bottom-right corner handle**. Card positions/sizes persist to `localStorage` per deck. A "Reset layout" button restores the default arrangement.
@@ -93,7 +89,7 @@ Each card is **draggable by its header** and **resizable by the bottom-right cor
 
 **Smooth navigation**: on slide change, the presenter window sends `postMessage({type:'preview-goto', idx:N})` to each iframe. The iframe just toggles `.is-active` between slides — **no reload, no flicker**. The two windows also stay in sync via `BroadcastChannel`.
 
-Only `presenter-mode-reveal` is designed from the ground up around the feature with proper example 逐字稿 on every slide.
+Only `presenter-mode-reveal` is designed from the ground up around the feature with a proper example speaker script on every slide.
 
 Keyboard in presenter window: `← →` navigate (syncs audience) · `R` reset timer · `Esc` close popup.
 Keyboard in audience window: `S` open presenter · `T` cycle theme · `← →` navigate (syncs presenter) · `F` fullscreen · `O` overview.
@@ -105,28 +101,28 @@ the user directly, or — if they already handed you rich content — propose a
 tasteful default and confirm.
 
 1. **Content & audience.** What's the deck about, how many slides, who's
-   watching (engineers / execs / 小红书读者 / 学生 / VC)?
+   watching (engineers / execs / Xiaohongshu readers / students / VC)?
 2. **Style / theme.** Which of the 36 themes fits? If unsure, recommend 2-3
    candidates based on tone:
    - Business / investor pitch → `pitch-deck-vc`, `corporate-clean`, `swiss-grid`
    - Tech sharing / engineering → `tokyo-night`, `dracula`, `catppuccin-mocha`,
      `terminal-green`, `blueprint`
-   - 小红书图文 → `xiaohongshu-white`, `soft-pastel`, `rainbow-gradient`,
+   - Xiaohongshu-style image-and-text posts → `xiaohongshu-white`, `soft-pastel`, `rainbow-gradient`,
      `magazine-bold`
    - Academic / report → `academic-paper`, `editorial-serif`, `minimal-white`
    - Edgy / cyber / launch → `cyberpunk-neon`, `vaporwave`, `y2k-chrome`,
      `neo-brutalism`
 3. **Starting point.** One of the 14 full-deck templates, or scratch? Point
    to the closest `templates/full-decks/<name>/` and ask if it fits. If the
-   user's content suggests something obvious (e.g. "我要做产品发布会" →
+   user's content suggests something obvious (e.g. "I'm doing a product launch" →
    `product-launch`), propose it confidently instead of asking blindly.
 
 A good opening message looks like:
 
-> 我可以给你做这份 PPT！先确认三件事：
-> 1. 大致内容 / 页数 / 观众是谁？
-> 2. 风格偏好？我建议从这 3 个主题里选一个：`tokyo-night`（技术分享默认好看）、`xiaohongshu-white`（小红书风）、`corporate-clean`（正式汇报）。
-> 3. 要不要用我现成的 `tech-sharing` 全 deck 模板打底？
+> I can put this deck together for you! Let's just confirm three things first:
+> 1. Roughly what's the content / page count / who's the audience?
+> 2. Any style preference? I'd suggest picking one of these 3 themes: `tokyo-night` (a great-looking default for tech talks), `xiaohongshu-white` (Xiaohongshu style), `corporate-clean` (formal reporting).
+> 3. Want to use my ready-made `tech-sharing` full-deck template as a starting point?
 
 Only after those are clear, scaffold the deck and start writing.
 
@@ -178,7 +174,7 @@ Only after those are clear, scaffold the deck and start writing.
 - **Supply notes.** Wrap speaker notes in `<div class="notes">…</div>` inside
   each slide. Press S to open the overlay.
 - **NEVER put presenter-only text on the slide itself.** Descriptive text like
-  "这一页展示了……" or "Speaker: 这里可以补充……" or small explanatory captions
+  "This slide shows…" or "Speaker: you can add more here…" or small explanatory captions
   aimed at the presenter MUST go inside `<div class="notes">`, NOT as visible
   `<p>` / `<span>` elements on the slide. The `.notes` class is `display:none`
   by default — it only appears in the S overlay. Slides should contain ONLY
@@ -196,8 +192,8 @@ Chinese + English deck, and how to export.
 - [references/themes.md](references/themes.md) — all 36 themes with when-to-use.
 - [references/layouts.md](references/layouts.md) — all 31 layout types.
 - [references/animations.md](references/animations.md) — 27 CSS + 20 canvas FX animations.
-- [references/full-decks.md](references/full-decks.md) — all 15 full-deck templates.
-- [references/presenter-mode.md](references/presenter-mode.md) — **演讲者模式 + 逐字稿编写指南（技术分享/演讲必看）**.
+- [references/full-decks.md](references/full-decks.md) — all 14 full-deck templates.
+- [references/presenter-mode.md](references/presenter-mode.md) — **presenter mode + speaker-script writing guide (a must-read for tech talks and presentations)**.
 - [references/authoring-guide.md](references/authoring-guide.md) — full workflow.
 
 ## File structure

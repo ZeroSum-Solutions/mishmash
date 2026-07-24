@@ -56,6 +56,7 @@ import {
 import { auditDesignSystemPackage } from '../../tools-connectors-cli.js';
 import { parseOrchestratorWorkspace } from '../../workspace-contract.js';
 import { registerProjectConversationRoutes } from './conversations.js';
+import { cancelRunsOwnedBy } from './cancel-owned-runs.js';
 
 export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation'> {}
 
@@ -110,12 +111,43 @@ const URL_PREVIEW_SCROLL_BRIDGE = `<script data-od-url-scroll-bridge>
   if (window.__odUrlScrollBridge) return;
   window.__odUrlScrollBridge = true;
   var pending = false;
+  var contentSizePending = false;
   function scrollElement(){
     return document.querySelector('.design-canvas') || document.scrollingElement || document.documentElement;
   }
   function num(value){
     var next = Number(value || 0);
     return Number.isFinite(next) ? next : 0;
+  }
+  function measureContentWidth(){
+    var root = document.documentElement;
+    var body = document.body || root;
+    if (!root) return null;
+    var values = [
+      root.scrollWidth,
+      body && body.scrollWidth,
+      root.offsetWidth,
+      body && body.offsetWidth,
+      root.clientWidth,
+      body && body.clientWidth
+    ];
+    var width = 0;
+    for (var i = 0; i < values.length; i += 1) {
+      var next = num(values[i]);
+      if (next > width) width = next;
+    }
+    return width > 0 ? Math.ceil(width) : null;
+  }
+  function postContentSize(){
+    window.parent.postMessage({ type: 'od:preview-content-size', width: measureContentWidth() }, '*');
+  }
+  function scheduleContentSize(){
+    if (contentSizePending) return;
+    contentSizePending = true;
+    window.requestAnimationFrame(function(){
+      contentSizePending = false;
+      postContentSize();
+    });
   }
   function post(){
     var el = scrollElement();
@@ -171,21 +203,43 @@ const URL_PREVIEW_SCROLL_BRIDGE = `<script data-od-url-scroll-bridge>
     if (data.type === 'od:preview-scroll-by') {
       scrollBy(scrollElement(), data.left, data.top);
       schedule();
+      scheduleContentSize();
+      return;
+    }
+    if (data.type === 'od:preview-content-size-request') {
+      scheduleContentSize();
     }
   });
   window.addEventListener('scroll', schedule, true);
   document.addEventListener('scroll', schedule, true);
-  window.addEventListener('resize', schedule);
+  window.addEventListener('resize', function(){
+    schedule();
+    scheduleContentSize();
+  });
+  if (typeof ResizeObserver !== 'undefined') {
+    try {
+      var observer = new ResizeObserver(scheduleContentSize);
+      observer.observe(document.documentElement);
+      if (document.body) observer.observe(document.body);
+    } catch (_) {}
+  }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function(){
       requestRestore();
       schedule();
+      scheduleContentSize();
     });
   } else {
     setTimeout(function(){
       requestRestore();
       schedule();
+      scheduleContentSize();
     }, 0);
+  }
+  setTimeout(scheduleContentSize, 80);
+  setTimeout(scheduleContentSize, 260);
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(scheduleContentSize).catch(function(){});
   }
 })();
 </script>`;
@@ -808,6 +862,39 @@ function injectUrlPreviewBridge(html: string, bridge: 'scroll' | 'selection' | '
   return injectBeforeBodyClose(html, 'data-od-url-snapshot-bridge', URL_PREVIEW_SNAPSHOT_BRIDGE);
 }
 
+function applyUrlPreviewBridgesToHtml(
+  transformed: string | Buffer,
+  mime: string,
+  requestedBridge: unknown,
+): string | Buffer {
+  if (
+    !(
+      wantsUrlPreviewScrollBridge(requestedBridge) ||
+      wantsUrlPreviewSelectionBridge(requestedBridge) ||
+      wantsUrlPreviewSnapshotBridge(requestedBridge)
+    ) ||
+    !/^text\/html(?:;|$)/i.test(mime)
+  ) {
+    return transformed;
+  }
+
+  let html = Buffer.isBuffer(transformed) ? transformed.toString('utf8') : transformed;
+  // Sanitize the <title> so Cmd+P -> "Save as PDF" produces a Teams-safe
+  // filename. URL-load iframes cannot rely on the host rewriting the document
+  // title after load, and powered previews are intentionally cross-origin.
+  html = daemonSanitizeTitleInDoc(html);
+  if (wantsUrlPreviewScrollBridge(requestedBridge)) {
+    html = injectUrlPreviewBridge(html, 'scroll');
+  }
+  if (wantsUrlPreviewSelectionBridge(requestedBridge)) {
+    html = injectUrlPreviewBridge(html, 'selection');
+  }
+  if (wantsUrlPreviewSnapshotBridge(requestedBridge)) {
+    html = injectUrlPreviewBridge(html, 'snapshot');
+  }
+  return html;
+}
+
 // ---------------------------------------------------------------------------
 // Teams-safe title sanitization for the URL-load preview path (issue #3918).
 //
@@ -1423,8 +1510,16 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   });
 
   function projectStatusFromRun(run: any) {
+    const normalized = normalizeProjectDisplayStatus(run.status);
+    // A just-finished in-memory run overrides the DB-derived status for its
+    // project (it is newer), so it must carry the same incomplete signal the
+    // persisted projection derives — otherwise the pill flashes "Completed" for
+    // the ~30 min the run stays in memory before the DB-derived `incomplete`
+    // takes over (#1247 / #1060). run.endedWithUnfinishedWork is set at finish().
+    const value =
+      normalized === 'succeeded' && run.endedWithUnfinishedWork ? 'incomplete' : normalized;
     return {
-      value: normalizeProjectDisplayStatus(run.status),
+      value,
       updatedAt: run.updatedAt,
       runId: run.id,
     };
@@ -2177,6 +2272,10 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
 
   app.delete('/api/projects/:id', async (req, res) => {
     try {
+      // Stop any live agent run in this project before its row and directory
+      // are removed, otherwise the CLI subprocess is orphaned — it keeps
+      // billing and writes into a directory that no longer exists (#5468).
+      await cancelRunsOwnedBy(design.runs, { projectId: req.params.id });
       dbDeleteProject(db, req.params.id);
       await removeProjectDir(PROJECTS_DIR, req.params.id).catch(() => {});
       /** @type {import('@open-design/contracts').OkResponse} */
@@ -3209,7 +3308,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
         project?.metadata,
         undefined,
         skipHtmlPreviewBridge ? undefined : async (file) => {
-          let transformed = await maybeResolveVitePreviewHtml({
+          const transformed = await maybeResolveVitePreviewHtml({
             file,
             projectId,
             relPath,
@@ -3217,31 +3316,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
             projectsRoot: PROJECTS_DIR,
             readProjectFile,
           });
-          if (
-            (wantsUrlPreviewScrollBridge(req.query.odPreviewBridge) ||
-              wantsUrlPreviewSelectionBridge(req.query.odPreviewBridge) ||
-              wantsUrlPreviewSnapshotBridge(req.query.odPreviewBridge)) &&
-            /^text\/html(?:;|$)/i.test(file.mime)
-          ) {
-            let html = Buffer.isBuffer(transformed) ? transformed.toString('utf8') : transformed;
-            // Sanitize the <title> so Cmd+P → "Save as PDF" produces a
-            // Teams-safe filename. The URL-load iframe uses sandbox without
-            // allow-same-origin, so the host cannot rewrite contentDocument.title
-            // after load — we must do it here in the response. The srcDoc path
-            // has its own sanitization in buildSrcdoc (apps/web/src/runtime/srcdoc.ts).
-            html = daemonSanitizeTitleInDoc(html);
-            if (wantsUrlPreviewScrollBridge(req.query.odPreviewBridge)) {
-              html = injectUrlPreviewBridge(html, 'scroll');
-            }
-            if (wantsUrlPreviewSelectionBridge(req.query.odPreviewBridge)) {
-              html = injectUrlPreviewBridge(html, 'selection');
-            }
-            if (wantsUrlPreviewSnapshotBridge(req.query.odPreviewBridge)) {
-              html = injectUrlPreviewBridge(html, 'snapshot');
-            }
-            transformed = html;
-          }
-          return transformed;
+          return applyUrlPreviewBridgesToHtml(transformed, file.mime, req.query.odPreviewBridge);
         },
         true, // revalidate: emit ETag/Last-Modified so covers/preview/export reuse cached assets
       );
@@ -3291,15 +3366,17 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
         relPath,
         project?.metadata,
         () => setPoweredPreviewHeaders(res),
-        skipPoweredTransform ? undefined : async (file) =>
-          maybeResolveVitePreviewHtml({
+        skipPoweredTransform ? undefined : async (file) => {
+          const transformed = await maybeResolveVitePreviewHtml({
             file,
             projectId,
-              relPath,
-              metadata: project?.metadata,
-              projectsRoot: PROJECTS_DIR,
-              readProjectFile,
-            }),
+            relPath,
+            metadata: project?.metadata,
+            projectsRoot: PROJECTS_DIR,
+            readProjectFile,
+          });
+          return applyUrlPreviewBridgesToHtml(transformed, file.mime, req.query.odPreviewBridge);
+        },
       );
     } catch (err: any) {
       const status = err && err.code === 'ENOENT' ? 404 : 400;

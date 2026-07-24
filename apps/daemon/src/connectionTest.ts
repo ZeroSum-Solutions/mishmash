@@ -42,7 +42,10 @@ import { createCopilotStreamHandler } from './copilot-stream.js';
 import { createJsonEventStreamHandler } from './runtimes/json-event-stream.js';
 import { agentCliEnvForAgent, validateAgentCliEnv } from './app-config.js';
 import {
+  antigravityAuthGuidance,
+  antigravityQuotaGuidance,
   classifyAgentAuthFailure,
+  classifyAgentServiceFailure,
   cursorAuthGuidance,
   probeAgentAuthStatus,
 } from './runtimes/auth.js';
@@ -88,6 +91,10 @@ import {
   resolveDefaultModelFromOptions,
   resolveModelForAgent,
 } from './runtimes/models.js';
+import {
+  BYOK_OPENCODE_PROVIDER_ID,
+  buildOpenCodeByokProviderConfig,
+} from './runtimes/byok-opencode.js';
 
 export { validateBaseUrl } from '@open-design/contracts/api/connectionTest';
 
@@ -1139,6 +1146,73 @@ interface ProviderCallShape {
   retryBodyOnUnsupportedMaxTokens?: unknown;
 }
 
+export function resolveOpenAIConnectionTestRunProviderPackage(
+  input: Pick<ProviderTestRequest, 'protocol' | 'baseUrl' | 'apiKey' | 'apiVersion' | 'model'>,
+): string | null {
+  if (input.protocol !== 'openai') return null;
+  const providerConfig = {
+    protocol: input.protocol,
+    baseUrl: input.baseUrl,
+    apiKey: input.apiKey,
+    ...(input.apiVersion !== undefined ? { apiVersion: input.apiVersion } : {}),
+  };
+  const byokConfig = buildOpenCodeByokProviderConfig(
+    providerConfig,
+    input.model,
+  );
+  const providerEntries = byokConfig?.config.provider;
+  if (!providerEntries || typeof providerEntries !== 'object') return null;
+  const provider = (providerEntries as Record<string, unknown>)[BYOK_OPENCODE_PROVIDER_ID];
+  if (!provider || typeof provider !== 'object') return null;
+  const npm = (provider as { npm?: unknown }).npm;
+  return typeof npm === 'string' ? npm : null;
+}
+
+function openAIChatCompletionsProviderCall(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+): ProviderCallShape {
+  return {
+    url: appendVersionedApiPath(baseUrl, '/chat/completions'),
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${apiKey}`,
+      ...(new URL(baseUrl).hostname === 'openrouter.ai' ? {
+        'HTTP-Referer': 'https://opendesign.dev',
+        'X-Title': 'Open Design',
+      } : {}),
+    },
+    body: {
+      model,
+      ...buildOpenAIChatTokenParam(model, PROVIDER_MAX_TOKENS),
+      messages: [{ role: 'user', content: SMOKE_PROMPT }],
+      stream: false,
+    },
+    extractText: extractOpenAIMessageText,
+  };
+}
+
+function openAIResponsesProviderCall(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+): ProviderCallShape {
+  return {
+    url: appendVersionedApiPath(baseUrl, '/responses'),
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: {
+      model,
+      input: SMOKE_PROMPT,
+      max_output_tokens: PROVIDER_MAX_TOKENS,
+    },
+    extractText: extractOpenAIResponsesText,
+  };
+}
+
 function buildProviderCall(input: ProviderTestRequest): ProviderCallShape {
   const baseUrl = String(input.baseUrl);
   const apiKey = String(input.apiKey);
@@ -1199,24 +1273,16 @@ function buildProviderCall(input: ProviderTestRequest): ProviderCallShape {
       // smoke test reuses the same call shape. We default the base URL
       // upstream-side in chat-routes; this layer assumes the caller passed
       // a concrete URL via the BYOK form.
-      return {
-        url: appendVersionedApiPath(baseUrl, '/chat/completions'),
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${apiKey}`,
-          ...(new URL(baseUrl).hostname === 'openrouter.ai' ? {
-            'HTTP-Referer': 'https://opendesign.dev',
-            'X-Title': 'Open Design',
-          } : {}),
-        },
-        body: {
-          model,
-          ...buildOpenAIChatTokenParam(model, PROVIDER_MAX_TOKENS),
-          messages: [{ role: 'user', content: SMOKE_PROMPT }],
-          stream: false,
-        },
-        extractText: extractOpenAIMessageText,
-      };
+      if (input.protocol === 'openai') {
+        const runProviderPackage = resolveOpenAIConnectionTestRunProviderPackage(input);
+        if (runProviderPackage === '@ai-sdk/openai') {
+          return openAIResponsesProviderCall(baseUrl, apiKey, model);
+        }
+        if (runProviderPackage === '@ai-sdk/openai-compatible') {
+          return openAIChatCompletionsProviderCall(baseUrl, apiKey, model);
+        }
+      }
+      return openAIChatCompletionsProviderCall(baseUrl, apiKey, model);
     case 'azure': {
       const url = new URL(baseUrl);
       const basePath = url.pathname.replace(/\/+$/, '');
@@ -1327,6 +1393,22 @@ function extractOpenAIMessageText(data: unknown): string {
     | undefined;
   if (typeof first?.message?.content === 'string') return first.message.content;
   if (typeof first?.text === 'string') return first.text;
+  return '';
+}
+
+function extractOpenAIResponsesText(data: unknown): string {
+  const outputText = (data as { output_text?: unknown }).output_text;
+  if (typeof outputText === 'string') return outputText;
+  const output = (data as { output?: unknown }).output;
+  if (!Array.isArray(output)) return '';
+  for (const item of output) {
+    const content = (item as { content?: unknown } | undefined)?.content;
+    if (!Array.isArray(content)) continue;
+    for (const block of content) {
+      const text = (block as { text?: unknown } | undefined)?.text;
+      if (typeof text === 'string') return text;
+    }
+  }
   return '';
 }
 
@@ -1828,6 +1910,7 @@ function extractOpenCodeTextFromRawStdout(stdout: string): string {
 
 const OPENCODE_OUTDATED_CLI_DETAIL =
   'OpenCode CLI appears to be outdated or incompatible with this connection test. Update it with `npm i -g opencode-ai@latest`, then retry the OpenCode connection test.';
+const OPENCODE_PROVIDER_CONNECTIVITY_DETAIL_MAX_LENGTH = 240;
 
 function openCodeOutdatedCliDetail(output: string): string | null {
   const value = output.toLowerCase();
@@ -1839,6 +1922,23 @@ function openCodeOutdatedCliDetail(output: string): string | null {
   return looksLikeOpenCodeHelp || looksLikeUnsupportedArgs
     ? OPENCODE_OUTDATED_CLI_DETAIL
     : null;
+}
+
+function openCodeProviderConnectivityDetail(output: string): string | null {
+  for (const rawLine of output.split(/\r?\n/u)) {
+    const line = rawLine.replace(/\s+/gu, ' ').trim();
+    if (!line) continue;
+    const match = /\bCannot connect to API:[^"'`\r\n]+/iu.exec(line) ??
+      /\bUnable to connect[^"'`\r\n]+/iu.exec(line) ??
+      /\bWas there a typo in the url or port\?/iu.exec(line);
+    if (!match) continue;
+    const detail = match[0].trim();
+    const boundedDetail = detail.length > OPENCODE_PROVIDER_CONNECTIVITY_DETAIL_MAX_LENGTH
+      ? `${detail.slice(0, OPENCODE_PROVIDER_CONNECTIVITY_DETAIL_MAX_LENGTH - 3).trimEnd()}...`
+      : detail;
+    return `OpenCode reported a provider connectivity failure before the connection test timed out: ${boundedDetail}`;
+  }
+  return null;
 }
 
 interface AgentSpawnHandle {
@@ -2047,6 +2147,17 @@ async function testAgentConnectionInternal(
   }
 
   const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'od-conn-test-'));
+  // Antigravity's print mode is silent on stdout/stderr for both
+  // missing-auth and quota-exhausted failures — it exits 0 without
+  // echoing the upstream error. The only place that failure shape
+  // surfaces is agy's `--log-file`, so hand the smoke test a temp log
+  // path under `tempDir` (cleaned up with the rest of the dir) and let
+  // the exit handler grep it for auth / quota signals (#4281). Non-agy
+  // adapters ignore `agentLogFilePath`.
+  const antigravityLogFilePath =
+    def.id === 'antigravity'
+      ? path.join(tempDir, 'agy-connection-test.log')
+      : null;
   let child: AgentChild | null = null;
   let childExit: Promise<AgentChildExit> | null = null;
   let childClosed = false;
@@ -2186,6 +2297,23 @@ async function testAgentConnectionInternal(
     kind: 'timeout' | 'aborted',
   ): ConnectionTestResponse => {
     const latencyMs = Date.now() - start;
+    if (kind === 'timeout' && input.agentId === 'opencode') {
+      const rawDetail = `${sink.getStderrTail()}\n${sink.getRawStdoutTail()}`;
+      const providerDetail = openCodeProviderConnectivityDetail(rawDetail);
+      if (providerDetail) {
+        const detail = redactSecrets(providerDetail);
+        console.warn(`[test:agent] ${def.name} → upstream_unavailable: ${detail}`);
+        return {
+          ok: false,
+          kind: 'upstream_unavailable',
+          latencyMs,
+          model,
+          agentName: def.name,
+          detail,
+          diagnostics: buildDiagnostics({ phase: 'connection_smoke_test' }),
+        };
+      }
+    }
     console.warn(`[test:agent] ${def.name} → ${kind} in ${(latencyMs / 1000).toFixed(1)}s`);
     return {
       ok: false,
@@ -2212,6 +2340,9 @@ async function testAgentConnectionInternal(
         {
           cwd: tempDir,
           ...(promptFile ? { promptFilePath: promptFile.path } : {}),
+          ...(antigravityLogFilePath
+            ? { agentLogFilePath: antigravityLogFilePath }
+            : {}),
         },
       );
       // Connection tests should validate the adapter's core CLI path, not
@@ -2439,6 +2570,79 @@ async function testAgentConnectionInternal(
             signal: winner.signal,
           });
         }
+      }
+      // Antigravity print-mode empty-output guard. agy exits cleanly
+      // (code 0) with no assistant text for BOTH missing-auth and
+      // quota-exhausted failures, so without this the connection test
+      // collapses every such failure into a useless `unknown` / "Test
+      // failed: exit 0" (#4281). Mirror the chat-run guard in
+      // server.ts: fold agy's `--log-file` tail into the classifier
+      // input and route to the specific auth / quota result so Settings
+      // can show actionable re-authentication or quota guidance. Only
+      // runs when agy produced no visible text — a healthy `ok` reply
+      // returns above before reaching here.
+      if (input.agentId === 'antigravity' && !visibleText) {
+        let combinedDetail = `${stderrTail}\n${rawStdoutTail}`;
+        if (antigravityLogFilePath) {
+          try {
+            const logContent = await fsp.readFile(antigravityLogFilePath, 'utf8');
+            // Keep the last 8 KB — quota / auth lines land near the tail,
+            // after the spawn / model-config preamble.
+            combinedDetail = `${combinedDetail}\n${logContent.slice(-8192)}`;
+          } catch {
+            // Missing log file (agy never wrote it, read-only tmp, etc.)
+            // is fine — fall through to the clean-exit auth fallback below.
+          }
+        }
+        const antigravityAuth = classifyAgentAuthFailure('antigravity', combinedDetail);
+        const serviceFailure = classifyAgentServiceFailure(combinedDetail);
+        // Empirically a silent agy print-mode exit almost always means
+        // missing OAuth; quota is the only other silent path and it is
+        // caught by the log-file grep above. Apply the auth fallback only
+        // on a clean exit so a genuine crash still reports as a spawn
+        // failure with its exit code.
+        const isAuth =
+          antigravityAuth?.status === 'missing' ||
+          serviceFailure === 'AGENT_AUTH_REQUIRED' ||
+          (!antigravityAuth && !serviceFailure && exitedCleanly);
+        if (isAuth) {
+          console.warn(
+            `[test:agent] ${def.name} → auth_required (silent exit ${winner.code ?? 'null'})`,
+          );
+          return {
+            ok: false,
+            kind: 'agent_auth_required',
+            latencyMs,
+            model,
+            agentName: def.name,
+            detail: antigravityAuth?.message ?? antigravityAuthGuidance(),
+            diagnostics: buildDiagnostics({
+              phase: 'connection_smoke_test',
+              exitCode: winner.code,
+              signal: winner.signal,
+            }),
+          };
+        }
+        if (serviceFailure === 'RATE_LIMITED') {
+          console.warn(
+            `[test:agent] ${def.name} → rate_limited (silent exit ${winner.code ?? 'null'})`,
+          );
+          return {
+            ok: false,
+            kind: 'rate_limited',
+            latencyMs,
+            model,
+            agentName: def.name,
+            detail: antigravityQuotaGuidance(),
+            diagnostics: buildDiagnostics({
+              phase: 'connection_smoke_test',
+              exitCode: winner.code,
+              signal: winner.signal,
+            }),
+          };
+        }
+        // UPSTREAM_UNAVAILABLE or a non-clean exit with no recognizable
+        // signal falls through to the generic exit-detail path below.
       }
       const acpFatal = Boolean(acpSession?.hasFatalError?.());
       const rawDetail = [

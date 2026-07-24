@@ -62,9 +62,9 @@ describe('SessionModeToggle', () => {
     expect(screen.getByRole('img', { name: 'Typical usage: Heavy' })).toBeTruthy();
   });
 
-  it('shows localized guidance only after opening the menu', () => {
+  it('shows guidance only after opening the menu', () => {
     render(
-      <I18nProvider initial="zh-CN">
+      <I18nProvider initial="en">
         <SessionModeToggle mode="plan" onChange={vi.fn()} />
       </I18nProvider>,
     );
@@ -75,17 +75,17 @@ describe('SessionModeToggle', () => {
     expect(screen.queryByRole('tooltip')).toBeNull();
 
     fireEvent.click(trigger);
-    expect(screen.getByRole('tooltip').textContent).toContain('规划模式');
-    expect(screen.getByRole('tooltip').textContent).toContain('先生成一份逐页 PPT 大纲。');
+    expect(screen.getByRole('tooltip').textContent).toContain('Plan mode');
+    expect(screen.getByRole('tooltip').textContent).toContain('Create a slide-by-slide PPT outline first.');
 
-    const designOption = screen.getByRole('menuitemradio', { name: /设计模式/i });
+    const designOption = screen.getByRole('menuitemradio', { name: /Design mode/i });
     fireEvent.pointerEnter(designOption);
 
     const menu = screen.getByRole('menu');
     const card = screen.getByRole('tooltip');
-    expect(menu.textContent).not.toContain('适合创建或修改具体设计产物');
-    expect(card.textContent).toContain('适合创建或修改具体设计产物');
-    expect(card.textContent).toContain('图片、视频、HyperFrames、音频');
-    expect(card.textContent).toContain('为这次 campaign 生成图片、视频和音频创意。');
+    expect(menu.textContent).not.toContain('For creating or changing concrete outputs');
+    expect(card.textContent).toContain('For creating or changing concrete outputs');
+    expect(card.textContent).toContain('images, videos, HyperFrames, audio');
+    expect(card.textContent).toContain('Generate image, video, and audio concepts for this campaign.');
   });
 });

@@ -47,15 +47,27 @@ vi.mock('../../src/components/ChatPane', () => ({
     initialDraft,
     onNewConversation,
     onSend,
+    projectFileNames,
+    onRequestOpenFile,
   }: {
     error?: string | null;
     initialDraft?: string;
     onNewConversation?: () => void;
     onSend: (prompt: string, attachments: unknown[], commentAttachments: unknown[]) => void;
+    projectFileNames?: Set<string>;
+    onRequestOpenFile?: (name: string) => void;
   }) => (
     <>
       {error ? <div role="alert">{error}</div> : null}
       {initialDraft ? <div data-testid="chat-initial-draft">{initialDraft}</div> : null}
+      <div data-testid="chat-file-names">{[...(projectFileNames ?? [])].join(',')}</div>
+      <button
+        type="button"
+        data-testid="chat-open-file"
+        onClick={() => onRequestOpenFile?.('index.html')}
+      >
+        open file
+      </button>
       <button
         type="button"
         data-testid="new-conversation"
@@ -76,7 +88,9 @@ vi.mock('../../src/components/ChatPane', () => ({
 
 vi.mock('../../src/components/FileWorkspace', () => ({
   DESIGN_SYSTEM_TAB: '__design_system__',
-  FileWorkspace: () => <div data-testid="design-system-files" />,
+  FileWorkspace: ({ openRequest }: { openRequest?: { name: string } | null }) => (
+    <div data-testid="design-system-files" data-open-request={openRequest?.name ?? ''} />
+  ),
 }));
 
 vi.mock('../../src/providers/daemon', () => ({
@@ -323,20 +337,6 @@ describe('DesignSystemCreationFlow', () => {
   // background.
   // Source-material specs below exercise the current handoff by staging files
   // into the backing brand project after kickoff and before navigation.
-  it('renders the new create surface copy with the active non-English locale', () => {
-    render(
-      <I18nProvider initial="zh-CN">
-        <DesignSystemCreationFlow onBack={() => {}} onCreated={() => {}} />
-      </I18nProvider>,
-    );
-
-    expect(screen.getByRole('heading', { name: '从 GitHub、网站或源素材提取' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /继续生成/ })).toBeTruthy();
-    expect(screen.getByText('从品牌开始')).toBeTruthy();
-    expect(screen.queryByText('Continue to generation')).toBeNull();
-    expect(screen.queryByText('Start from a brand')).toBeNull();
-  });
-
   it('extracts a design system from a website via POST /api/brands and opens the backing project', async () => {
     const project: Project = {
       id: 'brand-acme-com',
@@ -392,7 +392,7 @@ describe('DesignSystemCreationFlow', () => {
     expect(mocks.ensureDesignSystemWorkspace).not.toHaveBeenCalled();
   });
 
-  it('normalizes GitHub SSH source links before starting extraction', async () => {
+  it('keeps GitHub-only source links out of website brand extraction', async () => {
     const project: Project = {
       id: 'brand-github',
       name: 'GitHub Design System',
@@ -416,9 +416,10 @@ describe('DesignSystemCreationFlow', () => {
       | { body: string }
       | undefined;
     expect(requestInit).toBeTruthy();
-    expect(JSON.parse(requestInit!.body)).toMatchObject({
-      url: 'https://github.com/nexu-io/open-design',
-    });
+    const body = JSON.parse(requestInit!.body) as { url?: string; designMd?: string };
+    expect(body.url).toBeUndefined();
+    expect(body.designMd).toEqual(expect.stringContaining('https://github.com/nexu-io/open-design'));
+    expect(body.designMd).toEqual(expect.stringContaining('GitHub repositories: https://github.com/nexu-io/open-design'));
   });
 
   it('keeps protocol-less website paths as website URLs', async () => {
@@ -2454,6 +2455,91 @@ describe('DesignSystemCreationFlow', () => {
 });
 
 describe('DesignSystemDetailView', () => {
+  it('opens chat file links through the Files tab workspace (#5611 round 9)', async () => {
+    // The design-system chat must thread the workspace's known-file set and
+    // an opener into ChatPane; without them a current-project file link is
+    // classified but the click stays inert (opener undefined). The opener
+    // must also switch to the Files tab, where the FileWorkspace consuming
+    // the open request actually mounts.
+    const system: DesignSystemDetail = {
+      id: 'user:acme-design-system',
+      title: 'Acme Design System',
+      category: 'Custom',
+      summary: 'Acme product workspace.',
+      swatches: [],
+      surface: 'web',
+      body: '# Acme Design System\n',
+      source: 'user',
+      status: 'draft',
+      isEditable: true,
+      projectId: 'ds-acme-design-system',
+    };
+    const project: Project = {
+      id: 'ds-acme-design-system',
+      name: 'Acme Design System',
+      skillId: null,
+      designSystemId: system.id,
+      createdAt: 1,
+      updatedAt: 1,
+      metadata: {
+        kind: 'other',
+        importedFrom: 'design-system',
+        entryFile: 'DESIGN.md',
+        sourceFileName: system.id,
+      },
+    };
+    const workspaceFile: ProjectFile = {
+      name: 'index.html',
+      path: 'index.html',
+      type: 'file',
+      size: 100,
+      mtime: 1,
+      kind: 'html',
+      mime: 'text/html',
+    };
+    const config: AppConfig = {
+      mode: 'daemon',
+      apiKey: '',
+      baseUrl: '',
+      model: '',
+      agentId: 'agent-1',
+      agentModels: {},
+      skillId: null,
+      designSystemId: null,
+    };
+
+    mocks.fetchDesignSystem.mockResolvedValue(system);
+    mocks.ensureDesignSystemWorkspace.mockResolvedValue({ project, files: [workspaceFile] });
+    mocks.listConversations.mockResolvedValue([
+      { id: 'conv-design-system', projectId: project.id, title: 'Design system', createdAt: 1, updatedAt: 1 },
+    ]);
+
+    render(
+      <DesignSystemDetailView
+        id={system.id}
+        selectedId={system.id}
+        config={config}
+        agents={[{ id: 'agent-1', name: 'OpenCode', bin: 'opencode', available: true, models: [] }]}
+        onBack={() => {}}
+        onSetDefault={() => {}}
+      />,
+    );
+
+    await screen.findByText('Acme Design System');
+
+    // The known-file set reaches the chat pane…
+    await waitFor(() =>
+      expect(screen.getByTestId('chat-file-names').textContent).toContain('index.html'),
+    );
+
+    // …and the opener switches to the Files tab and hands the workspace the
+    // open request.
+    expect(screen.queryByTestId('design-system-files')).toBeNull();
+    fireEvent.click(screen.getByTestId('chat-open-file'));
+    const workspace = await screen.findByTestId('design-system-files');
+    expect(workspace.getAttribute('data-open-request')).toBe('index.html');
+  });
+
   it('does not silently seed audit repair prompts into the composer after manual runs', async () => {
     const system: DesignSystemDetail = {
       id: 'user:acme-design-system',
@@ -2988,7 +3074,7 @@ describe('DesignSystemDetailView', () => {
     ]);
 
     render(
-      <I18nProvider initial="zh-CN">
+      <I18nProvider initial="en">
         <DesignSystemDetailView
           id={system.id}
           selectedId={system.id}
@@ -3009,7 +3095,7 @@ describe('DesignSystemDetailView', () => {
         projectId: project.id,
         conversationId: 'conv-design-system',
         designSystemId: system.id,
-        locale: 'zh-CN',
+        locale: 'en',
       }),
     );
   });

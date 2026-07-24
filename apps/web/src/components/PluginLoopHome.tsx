@@ -69,13 +69,14 @@ interface Props {
   onSubmit: (payload: PluginLoopSubmit) => void;
 }
 
+// Open Design ships English-only; the zh-CN variant of this copy was
+// removed in the de-bloat pass. `locale` stays on the signature so the two
+// call sites below don't need to change.
 function pluginLoopLocalLabel(
   locale: string,
   key: 'pluginActive' | 'reloadExampleQuery',
 ): string {
-  if (locale === 'zh-CN') {
-    return key === 'pluginActive' ? '插件已启用' : '重新加载示例请求';
-  }
+  void locale;
   return key === 'pluginActive' ? 'Plugin active' : 'Reload example query';
 }
 

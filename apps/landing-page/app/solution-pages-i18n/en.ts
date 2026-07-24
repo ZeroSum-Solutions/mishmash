@@ -1572,7 +1572,6 @@ export const EN: SolutionLocaleCopy = {
     features: [
       { title: "Social cards", body: "X / Twitter cards composed with your headline and brand.", thumb: "example-card-twitter" },
       { title: "Article covers", body: "Editorial, magazine-style covers for posts and newsletters.", thumb: "example-article-magazine" },
-      { title: "Xiaohongshu cards", body: "RedNote-style cards tuned for that feed.", thumb: "example-card-xiaohongshu" },
       { title: "Hero graphics", body: "Liquid, gradient hero visuals for sites and launches.", thumb: "example-frame-liquid-bg-hero" },
       { title: "Carousels", body: "Multi-slide social carousels that stay consistent across frames.", thumb: "example-social-carousel" },
       { title: "UI mock frames", body: "Notification and device frames for product storytelling.", thumb: "example-frame-macos-notification" },

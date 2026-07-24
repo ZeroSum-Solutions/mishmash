@@ -35,6 +35,12 @@ export type ProjectDisplayStatus =
   | 'running'
   | 'awaiting_input'
   | 'succeeded'
+  // Terminal-but-not-really-done: the latest run stamped `succeeded` yet ended
+  // with unfinished declared work (a non-`completed` TodoWrite task, or a
+  // max_tokens truncation). Kept distinct from `succeeded` so the project pill
+  // never reads "Completed" for a run whose work is not actually finished
+  // (#1247 / #1060).
+  | 'incomplete'
   | 'failed'
   | 'canceled';
 
@@ -554,7 +560,7 @@ export interface DeployConfigResponse {
   accountId?: string;
   projectName?: string;
   cloudflarePages?: CloudflarePagesConfigHints;
-  target: 'preview';
+  target: 'preview' | 'production';
 }
 
 export interface UpdateDeployConfigRequest {
@@ -575,7 +581,7 @@ export interface DeploymentInfo {
   url: string;
   deploymentId?: string;
   deploymentCount: number;
-  target: 'preview';
+  target: 'preview' | 'production';
   status: DeploymentStatus;
   statusMessage?: string;
   reachableAt?: number;
@@ -592,6 +598,7 @@ export interface DeployProjectFileRequest {
   fileName: string;
   providerId?: DeployProviderId;
   cloudflarePages?: CloudflarePagesDeploySelection;
+  target?: 'preview' | 'production';
 }
 
 export interface DeployProjectFileResponse extends DeploymentInfo {}

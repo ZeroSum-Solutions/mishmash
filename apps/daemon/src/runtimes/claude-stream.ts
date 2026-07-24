@@ -447,14 +447,31 @@ export function createClaudeStreamHandler(
       // assistant message has been emitted, so the daemon's stdin-close
       // handler sees the final `stop_reason` before deciding whether to
       // close stream-json input stdin.
-      if (stopReason) {
+      //
+      // `turn_end` is the MAIN turn's boundary. Under `--verbose`, a Task
+      // sub-agent's messages stream inline carrying a non-null top-level
+      // `parent_tool_use_id`, and its internal turn ends with its own
+      // `stop_reason: 'end_turn'`. That sub-turn boundary must NOT be treated
+      // as the run's turn completion: emitting `turn_end` for it would let
+      // applyClaudeStreamJsonRunBookkeeping mark `turnCompletedCleanly` and
+      // close stdin while the main turn is still running (so a later non-zero
+      // crash with no result frame is misclassified as succeeded, #5487), and
+      // would reset the per-turn artifact-echo dedup state below mid-turn.
+      // Only a main-turn frame (`parent_tool_use_id == null`) may fire it.
+      if (stopReason && obj.parent_tool_use_id == null) {
         onEvent({ type: 'turn_end', stopReason });
         if (stopReason !== 'tool_use') {
           recentWriteContents.length = 0;
           wroteHtmlFileThisTurn = false;
         }
       }
-      if (typeof obj.error === 'string' && obj.error.trim()) {
+      // A sub-agent (parent_tool_use_id != null) in-stream error must NOT be
+      // emitted as a run-level error: it condemns a main turn that has already
+      // recovered (end_turn + is_error:false result + exit 0) to a false
+      // `failed`. Mirror the parent_tool_use_id guard the turn_end emit above
+      // already carries (#5488). Main-turn errors (connection-drop path) are
+      // unaffected since they carry a null parent_tool_use_id.
+      if (typeof obj.error === 'string' && obj.error.trim() && obj.parent_tool_use_id == null) {
         onEvent({
           type: 'error',
           message: assistantText(obj.message.content) || obj.error,

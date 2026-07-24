@@ -377,39 +377,6 @@ describe('ChatComposer context pickers', () => {
     expect(screen.getByText('Search Design Files, tabs, plugins, skills, MCP servers, and connectors.')).toBeTruthy();
   });
 
-  it('localizes @ panel tabs and empty states in Chinese mode', async () => {
-    plugins = [];
-    skills = [];
-    servers = [];
-    renderComposer({}, { locale: 'zh-CN' });
-    await flushMounts();
-
-    await typeAndSettle('@');
-
-    await waitFor(() => expect(screen.getByRole('tab', { name: '全部' })).toBeTruthy());
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
-      '全部',
-      '设计文件',
-      '标签页',
-      '插件',
-      '技能',
-      'MCP',
-      '连接器',
-    ]);
-    expect(screen.getByRole('tab', { name: '插件' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: '技能' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'MCP' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: '连接器' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: '设计文件' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: '标签页' })).toBeTruthy();
-    expect(screen.getByText('搜索设计文件、标签页、插件、技能、MCP 服务器和连接器。')).toBeTruthy();
-
-    await typeAndSettle('@missing');
-
-    await waitFor(() => expect(screen.getByText('没有找到“missing”的结果。')).toBeTruthy());
-    expect(screen.queryByText('No results for “missing”.')).toBeNull();
-  });
-
   it('lists Design Files first in All and picks the first file with Enter', async () => {
     renderComposer({
       projectFiles: [
@@ -541,7 +508,7 @@ describe('ChatComposer context pickers', () => {
       expect(screen.queryByText('reference-dir')).toBeNull();
     });
     expect(onProjectMetadataChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({ linkedDirs: [] }),
+      expect.objectContaining({ metadata: expect.objectContaining({ linkedDirs: [] }) }),
     );
   });
 
@@ -599,11 +566,13 @@ describe('ChatComposer context pickers', () => {
     });
     expect(onProjectMetadataChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        linkedDirs: [
-          '/Users/me/work-dir',
-          '/tmp/open-design/reference-a',
-          '/tmp/open-design/reference-b',
-        ],
+        metadata: expect.objectContaining({
+          linkedDirs: [
+            '/Users/me/work-dir',
+            '/tmp/open-design/reference-a',
+            '/tmp/open-design/reference-b',
+          ],
+        }),
       }),
     );
   });
@@ -657,7 +626,7 @@ describe('ChatComposer context pickers', () => {
         projectMetadata: metadata,
         onProjectMetadataChange: (next) => {
           onProjectMetadataChange(next);
-          setMetadata(next);
+          setMetadata(next.metadata ?? { kind: 'prototype' });
         },
         onSend,
       });
@@ -700,7 +669,7 @@ describe('ChatComposer context pickers', () => {
     expect(projectPatchBodies()[1]?.metadata?.linkedDirs).toEqual([]);
     expect(screen.queryByTestId('staged-contexts')?.textContent ?? '').not.toContain('reference-dir');
     expect(onProjectMetadataChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({ linkedDirs: [] }),
+      expect.objectContaining({ metadata: expect.objectContaining({ linkedDirs: [] }) }),
     );
   });
 
@@ -819,7 +788,7 @@ describe('ChatComposer context pickers', () => {
         projectMetadata: metadata,
         onProjectMetadataChange: (next) => {
           onProjectMetadataChange(next);
-          setMetadata(next);
+          setMetadata(next.metadata ?? { kind: 'prototype' });
         },
       });
     }
@@ -873,7 +842,7 @@ describe('ChatComposer context pickers', () => {
         projectMetadata: metadata,
         onProjectMetadataChange: (next) => {
           onProjectMetadataChange(next);
-          setMetadata(next);
+          setMetadata(next.metadata ?? { kind: 'prototype' });
         },
       });
     }
@@ -908,7 +877,7 @@ describe('ChatComposer context pickers', () => {
     expect(projectPatchBodies()).toHaveLength(2);
     expect(screen.getByTestId('working-dir-trigger').textContent).toContain('shared');
     expect(onProjectMetadataChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({ linkedDirs: ['/Users/me/shared'] }),
+      expect.objectContaining({ metadata: expect.objectContaining({ linkedDirs: ['/Users/me/shared'] }) }),
     );
   });
 
@@ -922,7 +891,7 @@ describe('ChatComposer context pickers', () => {
         projectMetadata: metadata,
         onProjectMetadataChange: (next) => {
           onProjectMetadataChange(next);
-          setMetadata(next);
+          setMetadata(next.metadata ?? { kind: 'prototype' });
         },
       });
     }
@@ -959,7 +928,7 @@ describe('ChatComposer context pickers', () => {
     expect(screen.getByTestId('staged-contexts').textContent).toContain('shared');
     expect(screen.getByTestId('working-dir-trigger').textContent).not.toContain('shared');
     expect(onProjectMetadataChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({ linkedDirs: ['/Users/me/shared'] }),
+      expect.objectContaining({ metadata: expect.objectContaining({ linkedDirs: ['/Users/me/shared'] }) }),
     );
   });
 
@@ -996,7 +965,7 @@ describe('ChatComposer context pickers', () => {
     });
     expect(projectPatchBodies()).toHaveLength(1);
     expect(onProjectMetadataChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({ linkedDirs: ['/Users/me/shared'] }),
+      expect.objectContaining({ metadata: expect.objectContaining({ linkedDirs: ['/Users/me/shared'] }) }),
     );
   });
 

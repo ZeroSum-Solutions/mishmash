@@ -1,10 +1,10 @@
 # hermes-cyber-terminal
 
-黑底 (`#0a0c10`) + 终端 chrome + 扫描线 + 薄荷绿 glow 大字 + JetBrains Mono 全文打字机感。灵感来自 `20260414-hermes-agent/ppt/hermes-record.html` 的 `codebox #15151b` 深色代码盒和 `hermes-vs-openclaw.html` 的实测对比气质 —— 把两者合成一份「honest cyber review」。
+Black background (`#0a0c10`) + terminal chrome + scanlines + big mint-green glow text + JetBrains Mono typewriter feel throughout. Inspired by the `codebox #15151b` dark code box in `20260414-hermes-agent/ppt/hermes-record.html` and the head-to-head benchmark tone of `hermes-vs-openclaw.html` — the two are fused into one "honest cyber review."
 
-**Visual traits:** 56px cyber 网格 + CRT vignette + 半透明 scanlines 叠层、窗口 traffic-light chrome、`$ prompt` 开头的 command-line 标题、薄荷绿 text-shadow glow `#7ed3a4`、monospace 全局、虚拟 bar chart 用 stroke-only 呈现、blinking cursor、amber/green/red 分级标签。
+**Visual traits:** 56px cyber grid + CRT vignette + a semi-transparent scanline overlay, window traffic-light chrome, `$ prompt`-prefixed command-line headlines, mint-green text-shadow glow `#7ed3a4`, monospace throughout, bar charts rendered stroke-only, a blinking cursor, amber/green/red tiered tags.
 
-**Use when:** 评测一个开发者工具 / CLI / agent，展示跑分数据、trace、diff；想要即刻给出「技术人 honest review」的视觉语气；适合长 trace / long code 的场景。
+**Use when:** reviewing a dev tool / CLI / agent, showing benchmark numbers, traces, diffs; you want an instantly "honest technical review" visual tone; suits long-trace / long-code scenarios.
 
 **Source inspiration:** `20260414-hermes-agent/ppt/hermes-record.html` + `hermes-vs-openclaw.html`.
 

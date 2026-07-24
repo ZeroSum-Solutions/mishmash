@@ -101,17 +101,6 @@ describe('examplePresetSeedPrompt', () => {
     expect(seed.fromRenderedQuery).toBe(true);
   });
 
-  it('keeps the zh description-first behavior', () => {
-    const record = fixture({
-      id: 'localized-description-example',
-      description: '沉浸式视差落地页。',
-      query: { 'zh-CN': '构建梦核风格的沉浸式视差落地页（详见 en 字段的完整规格说明，以 en 为准）。' },
-    });
-    const seed = examplePresetSeedPrompt(record, 'zh-CN', fallback);
-    expect(seed.text).toBe('沉浸式视差落地页。');
-    expect(seed.fromRenderedQuery).toBe(false);
-  });
-
   it('falls back to the query head when there is no description', () => {
     const record = fixture({
       id: 'no-description',

@@ -13,7 +13,6 @@ import {
   FileWorkspace,
   scrollWorkspaceTabsWithWheel,
 } from '../../src/components/FileWorkspace';
-import { I18nProvider } from '../../src/i18n';
 import { DesignFilesPanel } from '../../src/components/DesignFilesPanel';
 import { projectSplitClassName, projectSplitStyle } from '../../src/components/ProjectView';
 import {
@@ -756,107 +755,6 @@ describe('FileWorkspace upload input', () => {
     await waitFor(() => expect(onRefreshFiles).toHaveBeenCalledTimes(1));
   });
 
-  it('localizes page creator content and saves template query as the first version prompt', async () => {
-    const onRefreshFiles = vi.fn();
-    const onTabsStateChange = vi.fn();
-    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url === '/api/plugins') {
-        return new Response(JSON.stringify({
-          plugins: [{
-            id: 'html-ppt-pitch-deck',
-            title: 'Write a Demo Day Pitch like a Top Accelerator Group Partner',
-            version: '0.1.0',
-            sourceKind: 'bundled',
-            source: '/tmp',
-            trust: 'bundled',
-            capabilitiesGranted: [],
-            manifest: {
-              name: 'html-ppt-pitch-deck',
-              version: '0.1.0',
-              title: 'Write a Demo Day Pitch like a Top Accelerator Group Partner',
-              title_i18n: { 'zh-CN': '像顶级加速器合伙人一样写 Demo Day 路演' },
-              description: 'For fundraising pitch work: turn a startup story into growth, moat, and fundraise narrative that earns another meeting.',
-              description_i18n: { 'zh-CN': '融资/路演场景：围绕 core query「series-a-pitch-deck」把粗糙材料整理成可购买、可复用的专业 Deck。' },
-              tags: ['pitch-deck', 'fundraising-pitch', 'series-a-pitch-deck', 'commercial-slide-agent'],
-              od: {
-                kind: 'scenario',
-                mode: 'deck',
-                preview: { type: 'html', entry: './preview.html' },
-                useCase: {
-                  query: {
-                    en: 'Create "Write a Demo Day Pitch like a Top Accelerator Group Partner" as a Fundraising pitch deck.',
-                    'zh-CN': '像顶级加速器合伙人一样写 Demo Day 路演。先确认受众、决策目标、素材来源、截止时间和必须保留的数据，再输出叙事主线、页面规划、逐页文案、视觉方向和按评审标准自检的版本。',
-                  },
-                },
-              },
-            },
-            fsPath: '/tmp',
-            installedAt: 0,
-            updatedAt: 0,
-          }],
-        }), { headers: { 'content-type': 'application/json' } });
-      }
-      if (url === '/api/plugins/html-ppt-pitch-deck/preview') {
-        return new Response(
-          '<!doctype html><html><body><main>Write a Demo Day Pitch like a Top Accelerator Group Partner</main></body></html>',
-          { headers: { 'content-type': 'text/html' } },
-        );
-      }
-      return new Response('', { status: 404 });
-    }));
-    mockedWriteProjectTextFile.mockImplementation(async (_projectId, name) => workspaceFile(name));
-
-    render(
-      <I18nProvider initial="zh-CN">
-        <FileWorkspace
-          projectId="project-1"
-          projectKind="slide_deck"
-          files={[]}
-          liveArtifacts={[]}
-          onRefreshFiles={onRefreshFiles}
-          isDeck={false}
-          tabsState={{ tabs: [], active: null }}
-          onTabsStateChange={onTabsStateChange}
-        />
-      </I18nProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId('workspace-pages-menu-trigger'));
-    fireEvent.click(screen.getByRole('menuitem', { name: /新建空白页面/ }));
-
-    const dialog = await screen.findByRole('dialog', { name: '新建页面' });
-    const dialogScope = within(dialog);
-    expect(dialogScope.getByRole('tab', { name: /全部 幻灯片/ })).toBeTruthy();
-    // The deck's commercial scene ("融资路演" / fundraising-pitch) is now the
-    // sub-category tab, resolved from its category tag — the filter row and the
-    // per-card 品类 chip share one taxonomy.
-    expect(await dialogScope.findByRole('tab', { name: /融资路演/ })).toBeTruthy();
-    const title = await dialogScope.findByText('像顶级加速器合伙人一样写 Demo Day 路演');
-    const card = title.closest('article');
-    expect(card).not.toBeNull();
-    expect(within(card as HTMLElement).getByText('融资/路演场景：围绕 core query「series-a-pitch-deck」把粗糙材料整理成可购买、可复用的专业 Deck。')).toBeTruthy();
-    fireEvent.click(within(card as HTMLElement).getByRole('button', { name: '使用' }));
-
-    await waitFor(() => expect(mockedWriteProjectTextFile).toHaveBeenCalledTimes(1));
-    const [projectId, name, , options] = mockedWriteProjectTextFile.mock.calls[0]!;
-    expect(projectId).toBe('project-1');
-    expect(name).toBe('像顶级加速器合伙人一样写-demo-day-路演.html');
-    expect(options).toMatchObject({
-      versionSource: 'manual',
-      versionPrompt: '像顶级加速器合伙人一样写 Demo Day 路演。先确认受众、决策目标、素材来源、截止时间和必须保留的数据，再输出叙事主线、页面规划、逐页文案、视觉方向和按评审标准自检的版本。',
-    });
-    await waitFor(() =>
-      expect(onTabsStateChange).toHaveBeenCalledWith(
-        expect.objectContaining({
-          tabs: ['像顶级加速器合伙人一样写-demo-day-路演.html'],
-          active: '像顶级加速器合伙人一样写-demo-day-路演.html',
-        }),
-      ),
-    );
-    await waitFor(() => expect(onRefreshFiles).toHaveBeenCalledTimes(1));
-  });
-
   it('hides blank cards and media category entries in the page creator dialog', async () => {
     render(
       <FileWorkspace
@@ -1414,6 +1312,9 @@ describe('FileWorkspace launcher tab creation', () => {
 
     fireEvent.click(screen.getByTestId('emit-browser-snapshot-success'));
     await screen.findByRole('button', { name: 'View Design Files' });
+    const toastAnchor = document.querySelector('.workspace-toast-anchor');
+    expect(toastAnchor).toBeTruthy();
+    expect(toastAnchor?.querySelector('.od-toast-browser-snapshot')).toBeTruthy();
     const toastAction = document.querySelector<HTMLButtonElement>('.od-toast-action');
     if (!toastAction) throw new Error('Could not find browser snapshot toast action');
     await act(async () => {
@@ -1430,6 +1331,47 @@ describe('FileWorkspace launcher tab creation', () => {
     expect(onTabsStateChange).not.toHaveBeenCalledWith(
       expect.objectContaining({ active: 'browser-archive/example/manifest.json' }),
     );
+  });
+
+  it('anchors the browser snapshot toast inside the workspace pane', async () => {
+    // The Download Page progress/result toast is workspace-owned UI. Rendered
+    // as a bare fixed .od-toast it centers on the whole viewport, drifting
+    // over the chat pane and covering the composer send area in split view;
+    // the anchor scopes it to the workspace pane instead.
+    const browserTab = {
+      id: '__browser__:1',
+      insertAfter: '__design_files__',
+      label: 'Browser',
+      title: 'Example',
+      url: 'https://example.com',
+    };
+
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="prototype"
+        files={[]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{
+          tabs: [],
+          active: '__browser__:1',
+          browserTabs: [browserTab],
+        }}
+        onTabsStateChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('emit-browser-snapshot-success'));
+
+    const toast = await waitFor(() => {
+      const node = document.querySelector<HTMLElement>('.od-toast');
+      expect(node?.textContent).toContain('Saved page snapshot');
+      return node as HTMLElement;
+    });
+    expect(toast.closest('.workspace-toast-anchor')).toBeTruthy();
+    expect(toast.closest('[data-testid="file-workspace"]')).toBeTruthy();
   });
 
   it('anchors a new browser after the visible tab tail', async () => {
@@ -2021,79 +1963,6 @@ describe('FileWorkspace tab reordering', () => {
 
     expect(target.className).not.toContain('drag-over-before');
     expect(target.className).not.toContain('drag-over-after');
-  });
-});
-
-describe('FileWorkspace Questions tab', () => {
-  const discoveryForm = {
-    id: 'discovery',
-    title: 'Quick brief',
-    questions: [
-      {
-        id: 'platform',
-        label: 'Platform',
-        type: 'radio' as const,
-        options: [
-          { label: 'Mobile', value: 'Mobile' },
-          { label: 'Desktop web', value: 'Desktop web' },
-        ],
-        required: true,
-      },
-    ],
-  };
-
-  it('shows the Questions tab while the form is unanswered', () => {
-    render(
-      <FileWorkspace
-        projectId="project-1"
-        projectKind="prototype"
-        files={[]}
-        liveArtifacts={[]}
-        onRefreshFiles={vi.fn()}
-        isDeck={false}
-        tabsState={{ tabs: [], active: null }}
-        onTabsStateChange={vi.fn()}
-        questionForm={discoveryForm}
-      />,
-    );
-
-    expect(screen.getByTestId('questions-tab')).toBeTruthy();
-  });
-
-  it('closes the Questions preview after submit, then lets the answered form reopen', async () => {
-    const baseProps: React.ComponentProps<typeof FileWorkspace> = {
-      projectId: 'project-1',
-      projectKind: 'prototype',
-      files: [],
-      liveArtifacts: [],
-      onRefreshFiles: vi.fn(),
-      isDeck: false,
-      tabsState: { tabs: [], active: null },
-      onTabsStateChange: vi.fn(),
-      questionForm: discoveryForm,
-      focusQuestionsRequest: { nonce: 1 },
-    };
-    const { rerender } = render(<FileWorkspace {...baseProps} />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Quick brief')).toBeTruthy();
-    });
-
-    rerender(
-      <FileWorkspace
-        {...baseProps}
-        questionFormSubmittedAnswers={{ platform: 'Mobile' }}
-      />,
-    );
-
-    await waitFor(() => {
-      expect(screen.queryByText('Quick brief')).toBeNull();
-    });
-    expect(screen.getByTestId('questions-tab')).toBeTruthy();
-
-    fireEvent.click(screen.getByTestId('questions-tab'));
-    expect(screen.getByText('Quick brief')).toBeTruthy();
-    expect(screen.getByText('Mobile')).toBeTruthy();
   });
 });
 
@@ -3108,4 +2977,105 @@ describe('FileWorkspace empty-project generation contract', () => {
       expect(screen.getByTestId('design-files-empty')).toBeTruthy();
     },
   );
+
+  it('keeps delivery recovery in Chat and leaves a passive failure hint over existing preview files', () => {
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="prototype"
+        files={[workspaceFile('previous-design.html')]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{ tabs: [], active: DESIGN_FILES_TAB }}
+        onTabsStateChange={vi.fn()}
+        messages={[
+          {
+            ...assistantMessage('failed'),
+            id: 'delivery-failure',
+            runStatus: 'succeeded',
+            resultDeliveryState: 'no_result',
+            sessionMode: 'design',
+            endedAt: 1_700_000_012_000,
+          },
+        ]}
+      />,
+    );
+
+    const previewStatus = screen.getByTestId('preview-run-status');
+    expect(previewStatus).toHaveTextContent('Delivery needs attention · Retry in Chat');
+    expect(previewStatus.closest('.ws-preview-run-status-slot')).not.toBeNull();
+    expect(previewStatus.closest('[data-testid="design-files-empty"]')).toBeNull();
+    expect(screen.queryByTestId('preview-run-status-retry')).toBeNull();
+    expect(screen.queryByTestId('preview-run-status-view-details')).toBeNull();
+    expect(previewStatus).not.toHaveTextContent('Elapsed');
+  });
+
+  it('does not mount main-preview delivery feedback over a browser tab', () => {
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="prototype"
+        files={[workspaceFile('previous-design.html')]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{
+          tabs: ['previous-design.html'],
+          active: '__browser__:1',
+          browserTabs: [{ id: '__browser__:1', label: 'Browser', url: 'https://example.com' }],
+        }}
+        onTabsStateChange={vi.fn()}
+        messages={[
+          {
+            ...assistantMessage('failed'),
+            id: 'browser-delivery-failure',
+            runStatus: 'succeeded',
+            resultDeliveryState: 'delivery_failed',
+            sessionMode: 'design',
+            endedAt: 1_700_000_012_000,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('design-browser-panel')).toBeTruthy();
+    expect(screen.queryByTestId('preview-run-status')).toBeNull();
+  });
+
+  it('keeps a delivered confirmation on the preview canvas after files arrive', () => {
+    const now = 1_700_000_012_500;
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="prototype"
+        files={[workspaceFile('delivered-design.html')]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{ tabs: ['delivered-design.html'], active: 'delivered-design.html' }}
+        onTabsStateChange={vi.fn()}
+        messages={[
+          {
+            ...assistantMessage('failed'),
+            id: 'delivery-succeeded',
+            runStatus: 'succeeded',
+            resultDeliveryState: 'delivered',
+            sessionMode: 'design',
+            startedAt: now - 4_000,
+            endedAt: now - 1_000,
+          },
+        ]}
+      />,
+    );
+
+    const previewStatus = screen.getByTestId('preview-run-status');
+    expect(previewStatus).toHaveTextContent('Design ready');
+    expect(previewStatus.closest('.ws-preview-run-status-slot')).not.toBeNull();
+    expect(previewStatus.closest('[data-testid="design-files-empty"]')).toBeNull();
+    expect(previewStatus).not.toHaveAttribute('aria-live');
+    expect(within(previewStatus).getByRole('status')).toHaveTextContent('Design ready');
+    expect(previewStatus.querySelector('[aria-hidden="true"]')).toHaveTextContent('Elapsed 0:03');
+  });
 });

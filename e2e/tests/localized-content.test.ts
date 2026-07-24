@@ -41,7 +41,10 @@ const {
   localizePromptTemplateSummary,
   localizeSkillDescription,
 } = localizedContentModule;
-const COVERAGE_LOCALES = ['de', 'fr', 'ru'] as const;
+// Open Design ships English-only; 'en' is the only remaining locale, and the
+// coverage loop below now just locks in the unconditional English-fallback
+// behavior (see git history for the pre-de-bloat multi-locale coverage).
+const COVERAGE_LOCALES = ['en'] as const;
 const RESOURCE_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
 function sorted(values: Iterable<string>): string[] {
@@ -385,7 +388,7 @@ describe('localized display content coverage', () => {
       expect(localized.summary).toBe(' English summary from source ');
       expect(localized.category).toBe('Untranslated Category');
       expect(localized.tags[0]).toBe('untranslated-tag');
-      expect(normalizeText(localized.tags[1] ?? ''), `${locale} should still localize known tags`).not.toEqual(
+      expect(normalizeText(localized.tags[1] ?? ''), `${locale} tags pass through unchanged (English-only)`).toEqual(
         '3d',
       );
     });

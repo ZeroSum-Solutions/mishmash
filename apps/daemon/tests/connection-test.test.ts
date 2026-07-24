@@ -16,6 +16,7 @@ import {
   mergeNoProxyWithLoopbackDefaults,
   proxyDispatcherRequestInit,
   redactSecrets,
+  resolveOpenAIConnectionTestRunProviderPackage,
   resolveConnectionTestTimeoutMs,
   testAgentConnection,
   testProviderConnection,
@@ -163,6 +164,10 @@ async function withFakeKimi<T>(script: string, run: () => Promise<T>): Promise<T
   return withFakeAgent('kimi', script, run);
 }
 
+async function withFakeAntigravity<T>(script: string, run: () => Promise<T>): Promise<T> {
+  return withFakeAgent('agy', script, run);
+}
+
 async function waitForFile(file: string, timeoutMs = 5_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -254,14 +259,14 @@ describe('POST /api/provider/models', () => {
       kind: 'success',
       models: [
         {
-          id: 'gpt-4o',
-          label: 'gpt-4o',
-          metadata: { cost: 'medium', capability: 'advanced' },
-        },
-        {
           id: 'gpt-4o-mini',
           label: 'gpt-4o-mini',
           metadata: { cost: 'low', capability: 'standard' },
+        },
+        {
+          id: 'gpt-4o',
+          label: 'gpt-4o',
+          metadata: { cost: 'medium', capability: 'advanced' },
         },
       ],
     });
@@ -382,8 +387,8 @@ describe('POST /api/provider/models', () => {
     await expect(res.json()).resolves.toMatchObject({
       ok: true,
       models: [
-        { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
         { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
+        { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
       ],
     });
   });
@@ -429,8 +434,8 @@ describe('POST /api/provider/models', () => {
     await expect(res.json()).resolves.toMatchObject({
       ok: true,
       models: [
-        { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
         { id: 'gemini-custom', label: 'Gemini Custom' },
+        { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
       ],
     });
   });
@@ -1161,15 +1166,8 @@ describe('POST /api/test/connection provider mode', () => {
       'fetch',
       passThroughOrUpstream(() =>
         jsonResponse({
-          choices: [
-            {
-              message: {
-                role: 'assistant',
-                content:
-                  "There's an issue with the selected model (abcde). It may not exist.",
-              },
-            },
-          ],
+          output_text:
+            "There's an issue with the selected model (abcde). It may not exist.",
         }),
       ),
     );
@@ -1626,11 +1624,9 @@ describe('POST /api/test/connection provider mode', () => {
     }
   });
 
-  it('keeps max_tokens for legacy OpenAI connection tests', async () => {
+  it('uses max_output_tokens for native OpenAI connection tests', async () => {
     const fetchMock = passThroughOrUpstream(() =>
-      jsonResponse({
-        choices: [{ message: { role: 'assistant', content: 'ok' } }],
-      }),
+      jsonResponse({ output_text: 'ok' }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -1651,12 +1647,16 @@ describe('POST /api/test/connection provider mode', () => {
       ([input]) => !String(input).startsWith(baseUrl),
     );
     expect(upstream).toBeDefined();
+    expect(String(upstream?.[0])).toBe('https://api.openai.com/v1/responses');
     const [, upstreamInit] = upstream!;
     expect(JSON.parse(String(upstreamInit?.body))).toMatchObject({
       model: 'gpt-4o',
-      max_tokens: 100,
-      stream: false,
+      input: 'Reply with only: ok',
+      max_output_tokens: 100,
     });
+    expect(JSON.parse(String(upstreamInit?.body))).not.toHaveProperty(
+      'max_tokens',
+    );
     expect(JSON.parse(String(upstreamInit?.body))).not.toHaveProperty(
       'max_completion_tokens',
     );
@@ -1701,6 +1701,82 @@ describe('POST /api/test/connection provider mode', () => {
     expect(JSON.parse(String(upstreamInit?.body))).not.toHaveProperty(
       'max_completion_tokens',
     );
+  });
+
+  it('binds non-OpenAI openai-protocol connection tests to the BYOK OpenCode compatible route', async () => {
+    expect(resolveOpenAIConnectionTestRunProviderPackage({
+      protocol: 'openai',
+      baseUrl: 'https://api.moonshot.cn/v1',
+      apiKey: 'moonshot-key',
+      model: 'kimi-k2.7-code',
+    })).toBe('@ai-sdk/openai-compatible');
+
+    const fetchMock = passThroughOrUpstream((url) => {
+      if (url === 'https://api.moonshot.cn/v1/models') {
+        return jsonResponse({
+          data: [{ id: 'kimi-k2.7-code', object: 'model' }],
+        });
+      }
+      return jsonResponse({
+        choices: [{ message: { role: 'assistant', content: 'ok' } }],
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await realFetch(`${baseUrl}/api/test/connection`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'provider',
+        protocol: 'openai',
+        baseUrl: 'https://api.moonshot.cn/v1',
+        apiKey: 'moonshot-key',
+        model: 'kimi-k2.7-code',
+      }),
+    });
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.ok).toBe(true);
+    const upstream = fetchMock.mock.calls.find(
+      ([input]) => String(input) === 'https://api.moonshot.cn/v1/chat/completions',
+    );
+    expect(upstream).toBeDefined();
+  });
+
+  it('binds native OpenAI connection tests to the BYOK OpenCode responses route', async () => {
+    expect(resolveOpenAIConnectionTestRunProviderPackage({
+      protocol: 'openai',
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'openai-key',
+      model: 'gpt-5.5',
+    })).toBe('@ai-sdk/openai');
+
+    const fetchMock = passThroughOrUpstream((url) => {
+      if (url === 'https://api.openai.com/v1/models') {
+        return jsonResponse({
+          data: [{ id: 'gpt-5.5', object: 'model' }],
+        });
+      }
+      return jsonResponse({ output_text: 'ok' });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await realFetch(`${baseUrl}/api/test/connection`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'provider',
+        protocol: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        apiKey: 'openai-key',
+        model: 'gpt-5.5',
+      }),
+    });
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.ok).toBe(true);
+    const upstream = fetchMock.mock.calls.find(
+      ([input]) => String(input) === 'https://api.openai.com/v1/responses',
+    );
+    expect(upstream).toBeDefined();
   });
 
   it('keeps max_tokens for Azure gpt-4o connection tests on the default deployment path', async () => {
@@ -3623,6 +3699,94 @@ process.stdin.on('end', () => {
     }
   });
 
+  it('surfaces OpenCode provider connectivity errors captured before timeout (#4999)', async () => {
+    const oldTimeout = process.env.OD_CONNECTION_TEST_AGENT_TIMEOUT_MS;
+    process.env.OD_CONNECTION_TEST_AGENT_TIMEOUT_MS = '1500';
+    try {
+      await withFakeOpenCode(
+        `
+const args = process.argv.slice(2);
+if (args[0] === 'models') {
+  console.log('ollama/qwen3.5-9b');
+  process.exit(0);
+}
+console.error('Cannot connect to API: Unable to connect. Is the computer able to access the url?');
+console.log('UNRELATED_STDOUT_TAIL_MARKER');
+setInterval(() => {}, 1000);
+`,
+        async () => {
+          const result = await testAgentConnection({
+            agentId: 'opencode',
+            model: 'ollama/qwen3.5-9b',
+          });
+
+          expect(result.ok).toBe(false);
+          expect(result.kind).toBe('upstream_unavailable');
+          expect(result.detail).toContain('OpenCode reported a provider connectivity failure');
+          expect(result.detail).toContain('Cannot connect to API');
+          expect(result.detail).not.toContain('UNRELATED_STDOUT_TAIL_MARKER');
+          expect(result.diagnostics?.phase).toBe('connection_smoke_test');
+          expect(result.diagnostics?.stderrTail).toContain('Cannot connect to API');
+        },
+      );
+    } finally {
+      if (oldTimeout === undefined) {
+        delete process.env.OD_CONNECTION_TEST_AGENT_TIMEOUT_MS;
+      } else {
+        process.env.OD_CONNECTION_TEST_AGENT_TIMEOUT_MS = oldTimeout;
+      }
+    }
+  });
+
+  it.each([
+    [
+      'Unable to connect fallback',
+      'Unable to connect. Is the computer able to access the url?',
+      'Unable to connect',
+    ],
+    [
+      'URL typo fallback',
+      'Was there a typo in the url or port?',
+      'Was there a typo in the url or port?',
+    ],
+  ])(
+    'surfaces OpenCode provider connectivity errors from %s before timeout (#4999)',
+    async (_name, stderrLine, expectedDetail) => {
+      const oldTimeout = process.env.OD_CONNECTION_TEST_AGENT_TIMEOUT_MS;
+      process.env.OD_CONNECTION_TEST_AGENT_TIMEOUT_MS = '1500';
+      try {
+        await withFakeOpenCode(
+          `
+const args = process.argv.slice(2);
+if (args[0] === 'models') {
+  console.log('ollama/qwen3.5-9b');
+  process.exit(0);
+}
+console.error(${JSON.stringify(stderrLine)});
+setInterval(() => {}, 1000);
+`,
+          async () => {
+            const result = await testAgentConnection({
+              agentId: 'opencode',
+              model: 'ollama/qwen3.5-9b',
+            });
+
+            expect(result.ok).toBe(false);
+            expect(result.kind).toBe('upstream_unavailable');
+            expect(result.detail).toContain(expectedDetail);
+            expect(result.diagnostics?.phase).toBe('connection_smoke_test');
+          },
+        );
+      } finally {
+        if (oldTimeout === undefined) {
+          delete process.env.OD_CONNECTION_TEST_AGENT_TIMEOUT_MS;
+        } else {
+          process.env.OD_CONNECTION_TEST_AGENT_TIMEOUT_MS = oldTimeout;
+        }
+      }
+    },
+  );
+
   it('launches Kimi connection tests without the legacy acp positional arg', async () => {
     const markerDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'od-kimi-argv-'));
     const argvFile = path.join(markerDir, 'argv.json');
@@ -3682,6 +3846,89 @@ console.log(JSON.stringify({ role: 'assistant', content: 'ok' }));
     } finally {
       await fsp.rm(markerDir, { recursive: true, force: true });
     }
+  });
+
+  // Regression for #4281: agy print mode is silent on stdout/stderr for
+  // BOTH missing-auth and quota-exhausted failures — it exits 0 without
+  // echoing the upstream error, so the only place the failure shape
+  // surfaces is agy's `--log-file`. Before the fix the connection test
+  // never handed agy a `--log-file` and never inspected it, so every
+  // silent failure collapsed into `kind: 'unknown'` / "Test failed: exit
+  // 0". These three cases pin the actionable auth / quota / fallback
+  // results that let Settings tell the user how to recover.
+  //
+  // The fake agy writes the caller-supplied log body to whatever
+  // `--log-file` path the daemon passes, then exits 0 with no stdout —
+  // exactly the not-logged-in / quota shape captured from the real CLI.
+  const fakeAgyScript = (logBody: string) => `
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+if (args[0] === '--version') {
+  console.log('1.0.3-test');
+  process.exit(0);
+}
+const logIdx = args.indexOf('--log-file');
+const logPath = logIdx !== -1 ? args[logIdx + 1] : null;
+let stdin = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => { stdin += chunk; });
+process.stdin.on('end', () => {
+  const body = ${JSON.stringify(logBody)};
+  if (logPath && body) {
+    try { fs.writeFileSync(logPath, body); } catch {}
+  }
+  // Silent clean exit — no assistant text on stdout, matching agy's
+  // real print-mode behavior when it cannot establish a connection.
+  process.exit(0);
+});
+`;
+
+  it('surfaces antigravity missing-auth as agent_auth_required instead of "exit 0" (#4281)', async () => {
+    await withFakeAntigravity(
+      fakeAgyScript(
+        [
+          'Propagating selected model override to backend: label="Gemini 3.1 Pro (High)"',
+          'error getting token source: You are not logged into Antigravity',
+        ].join('\n'),
+      ),
+      async () => {
+        const result = await testAgentConnection({ agentId: 'antigravity' });
+        expect(result.ok).toBe(false);
+        expect(result.kind).toBe('agent_auth_required');
+        expect(result.agentName).toBe('Antigravity');
+        // The old bug surfaced the bare process-exit line as the detail.
+        expect(result.detail).not.toBe('exit 0');
+        expect(result.detail).toContain('sign in');
+      },
+    );
+  });
+
+  it('surfaces antigravity quota exhaustion as rate_limited (#4281)', async () => {
+    await withFakeAntigravity(
+      fakeAgyScript(
+        [
+          'Propagating selected model override to backend: label="Gemini 3.1 Pro (High)"',
+          'upstream error: code = 429 RESOURCE_EXHAUSTED: Individual quota reached',
+        ].join('\n'),
+      ),
+      async () => {
+        const result = await testAgentConnection({ agentId: 'antigravity' });
+        expect(result.ok).toBe(false);
+        expect(result.kind).toBe('rate_limited');
+        expect(result.detail).toContain('quota');
+      },
+    );
+  });
+
+  it('falls back to agent_auth_required when antigravity exits silently with no log signal (#4281)', async () => {
+    await withFakeAntigravity(fakeAgyScript(''), async () => {
+      const result = await testAgentConnection({ agentId: 'antigravity' });
+      expect(result.ok).toBe(false);
+      // A silent clean exit almost always means missing OAuth; it must
+      // never regress back to the opaque `unknown` / "exit 0" result.
+      expect(result.kind).toBe('agent_auth_required');
+      expect(result.kind).not.toBe('unknown');
+    });
   });
 
   it('keeps OpenCode smoke tests green when git bootstrap is unavailable', async () => {

@@ -112,7 +112,10 @@ describe('DesignBrowserPanel <webview> navigation', () => {
 
     const downloadItem = await screen.findByRole('menuitem', { name: 'Download Page' });
     expect(downloadItem.classList.contains('is-attention')).toBe(true);
-    expect(screen.getByText(/click Download Page here/)).toBeTruthy();
+    const assistGuide = view.container.querySelector('.db-download-assist');
+    expect(assistGuide).toBeTruthy();
+    expect(assistGuide?.textContent).toContain('When the page is ready, click Download Page');
+    expect(view.container.querySelector('.db-status')).toBeNull();
 
     view.rerender(
       <DesignBrowserPanel
@@ -437,7 +440,7 @@ describe('DesignBrowserPanel <webview> navigation', () => {
     const onRequestBrowserUsePrompt = vi.fn();
 
     render(
-      <I18nProvider initial="zh-CN">
+      <I18nProvider initial="en">
         <DesignBrowserPanel
           projectId="proj-webview-browser-use"
           initialTitle="Example"
@@ -449,9 +452,9 @@ describe('DesignBrowserPanel <webview> navigation', () => {
       </I18nProvider>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '灵感' }));
-    fireEvent.change(screen.getByRole('searchbox', { name: '搜索灵感' }), {
-      target: { value: '字体' },
+    fireEvent.click(screen.getByRole('button', { name: 'Inspiration' }));
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search inspiration' }), {
+      target: { value: 'font' },
     });
     expect(screen.queryByRole('menuitem', { name: /validate_view/ })).toBeNull();
     fireEvent.click(screen.getByRole('menuitem', { name: /extract_fonts/ }));
@@ -748,7 +751,7 @@ describe('DesignBrowserPanel <webview> navigation', () => {
 
   it('does not expose page annotation controls in the external browser', () => {
     const { container } = render(
-      <I18nProvider initial="zh-CN">
+      <I18nProvider initial="en">
         <DesignBrowserPanel
           initialUrl="https://example.com"
           projectId="proj-webview-mark-i18n"
@@ -758,8 +761,6 @@ describe('DesignBrowserPanel <webview> navigation', () => {
       </I18nProvider>,
     );
 
-    expect(screen.queryByRole('button', { name: '标记' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '评论' })).toBeNull();
     expect(container.querySelector('.ri-pencil-line')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Annotate page' })).toBeNull();
   });
@@ -790,9 +791,9 @@ describe('DesignBrowserPanel <webview> navigation', () => {
     expect(webview.executeJavaScript).not.toHaveBeenCalled();
   });
 
-  it('does not show the bottom Download Page hint when the workspace owns snapshot toasts', async () => {
+  it('keeps Download Page guidance inside the Browser panel when the workspace owns snapshot toasts', async () => {
     const attentionRequest = { action: 'download-page' as const, nonce: 1 };
-    render(
+    const { container } = render(
       <DesignBrowserPanel
         projectId="proj-webview-download-attention-parent-toast"
         initialTitle="Example"
@@ -806,7 +807,8 @@ describe('DesignBrowserPanel <webview> navigation', () => {
 
     const downloadItem = await screen.findByRole('menuitem', { name: 'Download Page' });
     expect(downloadItem.classList.contains('is-attention')).toBe(true);
-    expect(screen.queryByText(/click Download Page here/)).toBeNull();
+    expect(container.querySelector('.db-download-assist')).toBeTruthy();
+    expect(container.querySelector('.db-status')).toBeNull();
   });
 
   it('does not render saved browser comment markers in the external browser', async () => {

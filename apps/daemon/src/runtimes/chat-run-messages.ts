@@ -144,10 +144,28 @@ export function runSseEventToPersistedAgentEvent(
   return daemonAgentPayloadToPersistedAgentEvent(record);
 }
 
+/**
+ * ACP status labels that are purely protocol-internal. They carry no
+ * user-visible detail and must be suppressed at persistence time so that
+ * history replay doesn't render empty expandable rows in the assistant
+ * process panel.
+ */
+const TRANSIENT_ACP_PERSISTED_STATUS_LABELS = new Set([
+  'waiting_for_first_output',
+  'tool_call',
+  'tool_call_update',
+  'session_update',
+]);
+
 export function daemonAgentPayloadToPersistedAgentEvent(data: unknown): PersistedAgentEvent | null {
   if (!isRecord(data)) return null;
   const type = data.type;
   if (type === 'status' && typeof data.label === 'string') {
+    // Filter out transient ACP status events that carry no user-visible content.
+    // The web-side translateAgentEvent already normalizes these for live display,
+    // but the daemon must also suppress them at persistence time so history replay
+    // doesn't show empty expandable rows labelled "tool_call" or "tool_call_update".
+    if (TRANSIENT_ACP_PERSISTED_STATUS_LABELS.has(data.label)) return null;
     const detail =
       typeof data.detail === 'string'
         ? data.detail
@@ -212,6 +230,9 @@ export function daemonAgentPayloadToPersistedAgentEvent(data: unknown): Persiste
       ...(typeof usage.output_tokens === 'number' ? { outputTokens: usage.output_tokens } : {}),
       ...(typeof data.costUsd === 'number' ? { costUsd: data.costUsd } : {}),
       ...(typeof data.durationMs === 'number' ? { durationMs: data.durationMs } : {}),
+      // Persist the terminal stop reason so the project projection can read a
+      // max_tokens truncation as incomplete after reload (#1247 / #1060).
+      ...(typeof data.stopReason === 'string' ? { stopReason: data.stopReason } : {}),
     };
   }
   if (type === 'diagnostic' && typeof data.name === 'string') {
