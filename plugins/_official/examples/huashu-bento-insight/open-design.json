@@ -106,7 +106,7 @@
         "label": "Topic",
         "type": "string",
         "required": true,
-        "placeholder": "你的主题，例如：2026 Q2 业务回顾",
+        "placeholder": "Your topic, e.g.: 2026 Q2 business review",
         "default": "the user's brief"
       },
       {
@@ -114,7 +114,7 @@
         "label": "Audience",
         "type": "string",
         "required": true,
-        "placeholder": "管理层 / 全员大会 / 客户高层",
+        "placeholder": "Leadership / all-hands / senior clients",
         "default": "leadership"
       },
       {

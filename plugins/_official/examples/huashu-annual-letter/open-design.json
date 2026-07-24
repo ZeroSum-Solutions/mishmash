@@ -99,7 +99,7 @@
         "label": "Topic",
         "type": "string",
         "required": true,
-        "placeholder": "你的主题，例如：2025 年度复盘与来年展望",
+        "placeholder": "Your topic, e.g.: 2025 annual review and outlook for next year",
         "default": "the user's brief"
       },
       {
@@ -107,7 +107,7 @@
         "label": "Audience",
         "type": "string",
         "required": true,
-        "placeholder": "股东 / 全员 / 用户与社区",
+        "placeholder": "Shareholders / all staff / users and community",
         "default": "stakeholders"
       },
       {

@@ -99,7 +99,7 @@
         "label": "Topic",
         "type": "string",
         "required": true,
-        "placeholder": "你的主题，例如：新一代随身 AI 终端发布",
+        "placeholder": "Your topic, e.g.: Next-gen wearable AI device launch",
         "default": "the user's brief"
       },
       {
@@ -107,7 +107,7 @@
         "label": "Audience",
         "type": "string",
         "required": true,
-        "placeholder": "发布会观众 / 全员大会 / 大会听众",
+        "placeholder": "Launch-event audience / all-hands / conference audience",
         "default": "a live audience"
       },
       {

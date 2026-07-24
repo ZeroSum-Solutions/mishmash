@@ -100,7 +100,7 @@
         "label": "Topic",
         "type": "string",
         "required": true,
-        "placeholder": "你的主题，例如：2026 品牌年度报告",
+        "placeholder": "Your topic, e.g.: 2026 brand annual report",
         "default": "the user's brief"
       },
       {
@@ -108,7 +108,7 @@
         "label": "Audience",
         "type": "string",
         "required": true,
-        "placeholder": "董事会 / 品牌客户 / VIP 会员",
+        "placeholder": "Board / brand clients / VIP members",
         "default": "decision makers"
       },
       {
