@@ -85,7 +85,7 @@ function fidelityFindings(recon, project, files) {
   const first = recon?.captures?.[0]?.signals || {};
   const add = (label, detail) => findings.push({ type: "fidelity", label, file: project, line: 0, match: detail });
 
-  // 字体: 原站有自定义字体 → 复刻必须有本地字体文件 + @font-face。
+  // Fonts: if the original uses custom fonts -> the clone must ship local font files + @font-face.
   const wantedFamilies = customFontFamilies(recon);
   if (wantedFamilies.length) {
     const fontFiles = files.filter((f) => /\.(woff2?|ttf|otf)$/i.test(f));
@@ -100,7 +100,7 @@ function fidelityFindings(recon, project, files) {
     }
   }
 
-  // 图片: 原站真实加载过图片 → 复刻必须落地本地图片文件，不许全靠占位。
+  // Images: if the original actually loaded images -> the clone must ship real local image files, not all placeholders.
   const originalImageCount = (first.resources?.images || first.images || []).length;
   if (originalImageCount >= 3) {
     const imageFiles = files.filter((f) => /\.(png|jpe?g|gif|webp|avif)$/i.test(f));
@@ -109,7 +109,7 @@ function fidelityFindings(recon, project, files) {
     }
   }
 
-  // 颜色: 关键区块(body/header/footer)的计算色必须在复刻源码里逐字出现。
+  // Colors: computed colors for key sections (body/header/footer) must appear verbatim in the clone source.
   const cloneColors = collectCloneColors(files);
   for (const key of ["body", "header", "footer"]) {
     const section = first.palette?.[key];
@@ -173,12 +173,12 @@ function markdown(findings, project, scannedFiles) {
     byType.get(finding.type).push(finding);
   }
   const types = [
-    ["fidelity", "保真度硬伤（字体 / 图片 / 颜色）"],
-    ["tracking", "追踪脚本 / 统计像素"],
-    ["brand", "原站品牌残留"],
-    ["japanese", "日文残留"],
-    ["todo", "TODO / 占位内容"],
-    ["external", "外部依赖 / 外链风险"],
+    ["fidelity", "Fidelity defects (fonts / images / colors)"],
+    ["tracking", "Tracking scripts / analytics pixels"],
+    ["brand", "Original-brand residue"],
+    ["japanese", "Leftover Japanese text"],
+    ["todo", "TODO / placeholder content"],
+    ["external", "External dependencies / external-link risk"],
   ];
   const lines = [
     `# Clone Audit`,
@@ -193,19 +193,19 @@ function markdown(findings, project, scannedFiles) {
     const items = byType.get(type) || [];
     lines.push(`## ${title}`);
     if (!items.length) {
-      lines.push("- 未发现");
+      lines.push("- None found");
       lines.push("");
       continue;
     }
     for (const item of items.slice(0, 200)) {
       lines.push(`- ${path.relative(project, item.file)}:${item.line} · ${item.label} · \`${item.match.replaceAll("`", "'")}\``);
     }
-    if (items.length > 200) lines.push(`- 还有 ${items.length - 200} 条未展开`);
+    if (items.length > 200) lines.push(`- ${items.length - 200} more not shown`);
     lines.push("");
   }
 
-  lines.push("## 结论");
-  lines.push(findings.length ? "- 需要处理上面的残留项后再声明可部署。" : "- 未发现明显残留项；仍需人工核查素材授权和视觉截图。");
+  lines.push("## Conclusion");
+  lines.push(findings.length ? "- Address the findings above before declaring this deployable." : "- No obvious residue found; asset licensing and visual screenshots still need manual review.");
   return `${lines.join("\n")}\n`;
 }
 
@@ -244,8 +244,8 @@ try {
     findings.push(...collectMatches(file, text, checks));
   }
 
-  // 字体/图片/颜色保真门槛——只在提供 --recon 时启用；walk() 跳过了字体/图片
-  // 二进制，这里需要一份含它们的完整清单。
+  // Font/image/color fidelity gates -- only enabled when --recon is given; walk()
+  // skips font/image binaries, so we need a full listing that includes them here.
   let fidelity = [];
   if (args.recon) {
     const recon = JSON.parse(fs.readFileSync(args.recon, "utf8"));
@@ -267,7 +267,7 @@ try {
   fs.writeFileSync(output, markdown(findings, project, files.length));
   console.log(output);
   if (fidelity.length) {
-    console.error(`⚠️ ${fidelity.length} 个保真度硬伤（详见 ${path.relative(process.cwd(), output)}）：`);
+    console.error(`⚠️ ${fidelity.length} fidelity defect(s) (see ${path.relative(process.cwd(), output)}):`);
     for (const item of fidelity) console.error(`   - ${item.label}: ${item.match}`);
     if (args.strict) process.exit(2);
   }

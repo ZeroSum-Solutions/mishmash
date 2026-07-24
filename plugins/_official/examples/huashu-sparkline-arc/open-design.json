@@ -105,7 +105,7 @@
         "label": "Topic",
         "type": "string",
         "required": true,
-        "placeholder": "你的主题，例如：客服体系智能化转型复盘",
+        "placeholder": "Your topic, e.g.: Customer-service intelligent transformation review",
         "default": "the user's brief"
       },
       {
@@ -113,7 +113,7 @@
         "label": "Audience",
         "type": "string",
         "required": true,
-        "placeholder": "全员大会 / 管理层 / 客户峰会",
+        "placeholder": "All-hands / leadership / customer summit",
         "default": "decision makers"
       },
       {

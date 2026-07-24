@@ -104,7 +104,7 @@
         "label": "Topic",
         "type": "string",
         "required": true,
-        "placeholder": "你的主题，例如：我们的产品增长方法论",
+        "placeholder": "Your topic, e.g.: Our product growth methodology",
         "default": "the user's brief"
       },
       {
@@ -112,7 +112,7 @@
         "label": "Audience",
         "type": "string",
         "required": true,
-        "placeholder": "高管会 / 全员大会 / 行业演讲",
+        "placeholder": "Executive team / all-hands / industry talk",
         "default": "a general audience"
       },
       {

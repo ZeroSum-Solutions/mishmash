@@ -1,144 +1,144 @@
-# 产物规范与模板
+# Deliverable spec and templates
 
-每个复刻子项目（`当前项目目录/`）的标准产物。
+Standard deliverables for each clone sub-project (`current-project-dir/`).
 
-## NOTES.md（必须）
+## NOTES.md (required)
 
 ```markdown
-# <站名> · 克隆笔记
+# <site-name> · Clone Notes
 
-## 源信息
-- 原站 URL:
-- 源码仓库:（如有）
-- 原作者:
-- 许可证: MIT / Apache / NONE / 专有  ← 必须核实，见 SKILL.md 许可表
-- 致谢要求:
+## Source info
+- Original site URL:
+- Source repo: (if any)
+- Original author:
+- License: MIT / Apache / NONE / Proprietary  <- must be verified, see the license table in SKILL.md
+- Attribution requirements:
 
-## 技术栈
-- 框架 / 关键库 / Node 版本:
+## Tech stack
+- Framework / key libraries / Node version:
 
-## 复刻前预判
-- 复杂度等级: L1 / L2 / L3 / L4 / L5 / L6（见 web-clone skill 的 references/assessment.md）
-- 推荐模式: 忠实复刻 / 视觉复刻 / 内容爆改 / 技术拆解
-- 可高保真的部分:
-- 需要近似或替代的部分:
-- 不克隆的部分:
-- 主要风险:
+## Pre-clone assessment
+- Complexity level: L1 / L2 / L3 / L4 / L5 / L6 (see the web-clone skill's references/assessment.md)
+- Recommended mode: faithful clone / visual clone / content overhaul / technical teardown
+- Parts that can be high-fidelity:
+- Parts that need approximation or substitution:
+- Parts that will not be cloned:
+- Main risks:
 
-## 跑起来
+## How to run
 \`\`\`bash
-cd 当前项目目录
-# 单文件静态站: python3 -m http.server 8123
-# 框架站: nvm use <ver> && npm install && npm run dev
+cd current-project-dir
+# single-file static site: python3 -m http.server 8123
+# framework site: nvm use <ver> && npm install && npm run dev
 \`\`\`
 
-## 改了什么（对照原版）
-- 删了追踪脚本: ...（GA/gtag 行号）
+## What changed (vs. the original)
+- Removed tracking scripts: ... (GA/gtag line numbers)
 - ...
 
-## 原站 vs 克隆站
-| 模块 | 原站表现 | 克隆实现 | 差异 / 取舍 | 证据 |
+## Original vs. clone
+| Module | Original behavior | Clone implementation | Difference / tradeoff | Evidence |
 |---|---|---|---|---|
-| 首屏 |  |  |  | screenshot / file:line |
-| 导航 |  |  |  |  |
-| 核心动效 |  |  |  |  |
-| 内容区块 |  |  |  |  |
-| 移动端 |  |  |  |  |
+| Hero |  |  |  | screenshot / file:line |
+| Nav |  |  |  |  |
+| Core motion |  |  |  |  |
+| Content sections |  |  |  |  |
+| Mobile |  |  |  |  |
 
-## 复刻评分
-- 源证据: /5
-- 结构保真: /5
-- 视觉保真: /5
-- 动效/交互: /5
-- 响应式: /5
-- 功能完整: /5
-- 内容替换: /5
-- 法务/部署风险: /5
-- 总评:
+## Clone score
+- Source evidence: /5
+- Structural fidelity: /5
+- Visual fidelity: /5
+- Motion/interaction: /5
+- Responsive: /5
+- Functional completeness: /5
+- Content replacement: /5
+- Legal/deployment risk: /5
+- Overall:
 
-## 替换地图（要换什么改哪）
-- 文字 → 文件 行
-- 图片/媒体 → 目录
-- 配色 → CSS 变量 / theme
-- 3D 模型 / 字体 → ...
+## Replacement map (what to swap, where)
+- Text -> file, line
+- Images/media -> directory
+- Colors -> CSS variables / theme
+- 3D models / fonts -> ...
 
-## 验证
-- [ ] 本地跑通、console 0 error
-- [ ] 截图对照原站（RECON/screenshots/）
-- [ ] `route-crawl.mjs` 输出原站/克隆站路由地图（多页面站必做）
-- [ ] `interaction-probe.mjs` 输出 hover/click/scroll/canvas 状态证据（交互站必做）
-- [ ] `visual-diff.mjs` 输出截图差异报告（能做时）
-- [ ] `audit-clone.mjs` 输出残留审计报告
-- 验证不了的点（如实记，别伪造）: ...
+## Verification
+- [ ] Runs locally, 0 console errors
+- [ ] Screenshots compared against the original (RECON/screenshots/)
+- [ ] `route-crawl.mjs` output for original/clone route maps (required for multi-page sites)
+- [ ] `interaction-probe.mjs` output for hover/click/scroll/canvas state evidence (required for interactive sites)
+- [ ] `visual-diff.mjs` screenshot diff report (when feasible)
+- [ ] `audit-clone.mjs` leftover-audit report
+- Anything that couldn't be verified (write it down honestly, don't fake it): ...
 ```
 
-## TEARDOWN.md（复杂交互站追加）
+## TEARDOWN.md (add for complex interactive sites)
 
-技术拆解文档，**所有结论标真源码行号**。结构：
-- **0. 一句话本质**
-- **A. 真实技术拆解**（按支柱：渲染/合成/物理/交互/音频，每条标行号 **+ 证据级别 `SOURCE`/`PARTIAL`/`GUESS`**，见 `effect-extraction.md`）
-- **B. 二手分析校验表**（若有 AI 分析文档：`声称 | 真源码 | 准确度✅/⚠️/❌ | 说明`，重点揪实质性错误）
-- **C. 可迁移方法论**（通用套路 / 本站特有 / 复刻路径）
+The technical teardown doc — **every conclusion must cite a real source line number**. Structure:
+- **0. One-sentence essence**
+- **A. Real technical teardown** (by pillar: rendering/compositing/physics/interaction/audio, each item tagged with a line number **+ evidence level `SOURCE`/`PARTIAL`/`GUESS`**, see `effect-extraction.md`)
+- **B. Secondhand-analysis verification table** (if an AI analysis doc exists: `Claim | Real source | Accuracy ✅/⚠️/❌ | Notes`, focused on catching substantive errors)
+- **C. Transferable methodology** (general patterns / site-specific quirks / clone path)
 
-范例：`当前项目目录/marbles-clone/TEARDOWN.md`。
+Example: `current-project-dir/marbles-clone/TEARDOWN.md`.
 
-## RECON/（侦察产物）
-- `screenshots/original-{1440,768,390}.png` 原站三档
-- `screenshots/clone-1440.png` 克隆图（对照）
-- `screenshots/visual-diff-1440.png` 截图差异图（能做时）
-- `global-recon.json` 侦察探针输出（框架/canvas/滚动库/字体等）
-- `routes/original-route-map.json` / `.md` 原站内部路由地图和逐路由截图
-- `routes-clone/clone-route-map.json` / `.md` 克隆站内部路由地图和逐路由截图
-- `interactions/original-interactions.json` / `.md` 原站交互状态、网络、console、截图证据
-- `interactions-clone/clone-interactions.json` / `.md` 克隆站交互状态、网络、console、截图证据
-- `asset-manifest.json` 原站素材清单和下载状态（能做时）
-- `network/original-network.json` API/XHR 捕获清单（SPA/SaaS 必做）
-- `network/fixtures/` 保存下来的 JSON/text 响应
-- `sourcemaps/sourcemap-manifest.json` source map 搜索结果（复杂前端优先做）
-- `visual-diff-1440.json` 像素差异指标
-- `design-dna.json` 结构化设计身份（视觉复刻/内容爆改模式产出，由 `dna-scaffold.mjs` 起手，人工补全；schema 见 `design-dna.md`）
-- `baseline/` WebGL/特效逆向时"最小原样可复现"产物 + 证据包（见 `effect-extraction.md` 的 baseline-first 闸门）
+## RECON/ (recon deliverables)
+- `screenshots/original-{1440,768,390}.png` original site, three sizes
+- `screenshots/clone-1440.png` clone screenshot (for comparison)
+- `screenshots/visual-diff-1440.png` screenshot diff image (when feasible)
+- `global-recon.json` recon probe output (framework/canvas/scroll library/fonts/etc.)
+- `routes/original-route-map.json` / `.md` original site's internal route map and per-route screenshots
+- `routes-clone/clone-route-map.json` / `.md` clone site's internal route map and per-route screenshots
+- `interactions/original-interactions.json` / `.md` original site's interaction state, network, console, screenshot evidence
+- `interactions-clone/clone-interactions.json` / `.md` clone site's interaction state, network, console, screenshot evidence
+- `asset-manifest.json` original site's asset manifest and download status (when feasible)
+- `network/original-network.json` API/XHR capture manifest (required for SPA/SaaS)
+- `network/fixtures/` saved JSON/text responses
+- `sourcemaps/sourcemap-manifest.json` source-map search results (prioritize for complex frontends)
+- `visual-diff-1440.json` pixel-diff metrics
+- `design-dna.json` structured design identity (produced in visual-clone/content-overhaul mode, scaffolded by `dna-scaffold.mjs` and completed manually; schema in `design-dna.md`)
+- `baseline/` the "minimal, as-is reproduction" deliverable plus evidence package from WebGL/effect reverse-engineering (see the baseline-first gate in `effect-extraction.md`)
 
-## CLONE_REPORT.md（需要对外汇报或评估 skill 效果时追加）
+## CLONE_REPORT.md (add when reporting externally or evaluating skill quality)
 
 ```markdown
-# <站名> · 原站 vs 克隆站评估报告
+# <site-name> · Original vs. Clone Assessment Report
 
-## 结论
-- 复杂度等级:
-- 复刻模式:
-- 总体还原度:
-- 最适合怎么用: 本地学习 / 继续爆改 / 可部署展示 / 仅技术拆解
+## Conclusion
+- Complexity level:
+- Clone mode:
+- Overall fidelity:
+- Best used for: local learning / continued overhaul / deployable demo / technical teardown only
 
-## 对比
-| 维度 | 原站 | 克隆站 | 结论 |
+## Comparison
+| Dimension | Original | Clone | Conclusion |
 |---|---|---|---|
-| 信息架构 |  |  |  |
-| 视觉语言 |  |  |  |
-| 动效交互 |  |  |  |
-| 响应式 |  |  |  |
-| 内容替换 |  |  |  |
-| 功能边界 |  |  |  |
+| Information architecture |  |  |  |
+| Visual language |  |  |  |
+| Motion/interaction |  |  |  |
+| Responsive |  |  |  |
+| Content replacement |  |  |  |
+| Functional boundary |  |  |  |
 
-## 评分
-按 web-clone skill 的 `references/assessment.md` 8 项维度打分。
+## Score
+Scored on the 8 dimensions in the web-clone skill's `references/assessment.md`.
 
-## 已知缺口
+## Known gaps
 -
 
-## 下一步升级建议
+## Suggested next-step upgrades
 -
 ```
 
-## CLONE_AUDIT.md（上线前追加）
+## CLONE_AUDIT.md (add before shipping)
 
-由 `scripts/audit-clone.mjs` 生成。重点看：
-- 追踪脚本 / 统计像素是否已删
-- 原站品牌名、日文、TODO 是否残留
-- 外部 URL 是否仍指向原站或第三方不可控资源
-- 素材和 license 风险是否已记录
+Generated by `scripts/audit-clone.mjs`. Key things to check:
+- Whether tracking scripts / analytics pixels have been removed
+- Whether the original site's brand name, leftover Japanese text, or TODOs remain
+- Whether external URLs still point at the original site or uncontrolled third-party resources
+- Whether asset and license risk has been documented
 
-## 收尾
-- 更新中枢 `当前项目目录/README.md` 索引行（状态 emoji：🟡侦察/🟢跑通/🔵改造/✅上线/🔴卡住/🗂️归档）
-- 原始源码留只读基准 `index-original.html`，不要在它上面改
-- 跑完关掉本地服务器进程
+## Wrap-up
+- Update the status-emoji index line in the hub `current-project-dir/README.md` (🟡 recon / 🟢 running / 🔵 in progress / ✅ shipped / 🔴 stuck / 🗂️ archived)
+- Keep the original source as a read-only baseline `index-original.html` — don't edit it
+- Kill the local server process once you're done

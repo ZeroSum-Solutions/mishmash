@@ -1,27 +1,33 @@
 #!/usr/bin/env node
-// asset-harvest.mjs — 把目标页真实用到的图片/字体/媒体"想尽一切办法"全部拔到本地。
+// asset-harvest.mjs -- pulls every image/font/media asset a target page actually
+// uses down to local disk, "by any means necessary".
 //
-// 为什么用真浏览器而不是裸 fetch:
-//   1. 大站的图片/字体几乎都在第三方 CDN(static.nike.com / use.typekit.net /
-//      fonts.gstatic.com …)，带防盗链(referer/UA/cookie 校验)。裸 fetch + 机器人
-//      UA 会被 403；复用浏览器网络栈(同一 UA/cookie/协议)则和真实用户无差别。
-//   2. 懒加载图(loading=lazy / data-src / IntersectionObserver)只有真滚动才发请求。
-//   3. CSS background-image、@font-face、srcset/picture 变体只在渲染时按需请求，
-//      静态解析 HTML 抓不全；监听 network response 才是"页面真实用到的资产"全集。
+// Why a real browser instead of a bare fetch:
+//   1. Images/fonts on large sites are almost always on a third-party CDN
+//      (static.nike.com / use.typekit.net / fonts.gstatic.com ...) with hotlink
+//      protection (referer/UA/cookie checks). A bare fetch + bot UA gets 403'd;
+//      reusing the browser's network stack (same UA/cookies/protocol) is
+//      indistinguishable from a real user.
+//   2. Lazy-loaded images (loading=lazy / data-src / IntersectionObserver) only
+//      fire their request once actually scrolled into view.
+//   3. CSS background-image, @font-face, and srcset/picture variants are only
+//      requested on demand at render time -- static HTML parsing won't catch
+//      them all; listening to network responses is the only way to get the full
+//      set of "assets actually used".
 //
-// 用法(首选, --url 直接捕获):
+// Usage (preferred, --url captures directly):
 //   node scripts/asset-harvest.mjs --url <URL> --out assets [--recon RECON/original-recon.json]
 //     [--types image,font,media,stylesheet] [--max-bytes 26214400] [--scroll-step 700] [--settle 2500]
-// 兼容旧用法(--recon-only, 无浏览器捕获, 仅按 recon JSON 里的 URL 裸下载):
+// Legacy usage (--recon-only, no browser capture, bare-downloads URLs from recon JSON only):
 //   node scripts/asset-harvest.mjs --recon original-recon.json --out assets/original --recon-only
 //
-// 产物:
-//   <out>/images/<host>/<name>   全部图片(含第三方 CDN、srcset 变体、CSS 背景图)
-//   <out>/fonts/<host>/<name>    全部字体二进制(woff2/woff/ttf/otf)
-//   <out>/fonts/fonts.css        自托管 @font-face(从 webfont CSS + @font-face 规则改写为本地路径)
-//   <out>/media/<host>/<name>    音视频(受 --max-bytes 限制)
-//   <out>/asset-manifest.json    originalUrl → localPath 全映射 + 每项状态
-//     构建复刻页时照 manifest 机械替换引用，禁止凭记忆写外链。
+// Output:
+//   <out>/images/<host>/<name>   every image (including third-party CDN, srcset variants, CSS background images)
+//   <out>/fonts/<host>/<name>    every font binary (woff2/woff/ttf/otf)
+//   <out>/fonts/fonts.css        self-hosted @font-face (rewritten from webfont CSS + @font-face rules to local paths)
+//   <out>/media/<host>/<name>    audio/video (subject to --max-bytes)
+//   <out>/asset-manifest.json    full originalUrl -> localPath mapping + each entry's status
+//     When building the clone page, swap in references mechanically per the manifest -- never write an external link from memory.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -29,13 +35,13 @@ import crypto from "node:crypto";
 import { loadPlaywright, launchChromium } from "./lib/playwright-loader.mjs";
 
 function usage() {
-  console.log(`asset-harvest.mjs — 抓取页面真实用到的图片/字体/媒体(含第三方 CDN)并生成本地映射
+  console.log(`asset-harvest.mjs -- captures every image/font/media asset a page actually uses (including third-party CDN) and generates a local mapping
 
   node scripts/asset-harvest.mjs --url <URL> --out assets [--recon RECON/original-recon.json]
     [--types image,font,media,stylesheet] [--max-bytes 26214400] [--scroll-step 700] [--settle 2500]
 
-产物: <out>/{images,fonts,media}/<host>/<name> + <out>/fonts/fonts.css(自托管 @font-face)
-      + <out>/asset-manifest.json(originalUrl → localPath, 构建时照此机械替换)`);
+Output: <out>/{images,fonts,media}/<host>/<name> + <out>/fonts/fonts.css (self-hosted @font-face)
+      + <out>/asset-manifest.json (originalUrl -> localPath, swap in mechanically per this at build time)`);
 }
 
 function parseArgs(argv) {
@@ -97,8 +103,9 @@ function localPathFor(kind, url) {
   return path.join(dir, host, safeName(url));
 }
 
-// recon JSON 里能静态看出来的 URL(img src/srcset、@font-face src、stylesheet)——
-// 补充给 network 捕获兜底(比如首屏截图后才出现的资源)。
+// URLs statically visible in recon JSON (img src/srcset, @font-face src, stylesheet)
+// -- a fallback supplement to the network capture (e.g. resources that only
+// appear after the first-fold screenshot).
 function urlsFromRecon(recon) {
   const urls = new Map(); // url -> hinted kind
   const add = (raw, kind, base) => {
@@ -127,16 +134,16 @@ function urlsFromRecon(recon) {
   return urls;
 }
 
-// 把 webfont CSS / @font-face 源 CSS 里的 url(...) 改写为本地字体路径，
-// 汇总成一份可直接 <link> 的 fonts.css。
+// Rewrite url(...) in webfont CSS / @font-face source CSS to local font paths,
+// combining them into one fonts.css that can be linked directly.
 function rewriteFontCss(cssText, cssUrl, urlToLocal) {
   return cssText.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (match, quote, ref) => {
     try {
       const abs = new URL(ref, cssUrl).href;
       const local = urlToLocal.get(abs);
       if (!local) return match;
-      // fonts.css 落在 <out>/fonts/ 下，字体在 <out>/fonts/<host>/,
-      // 所以相对引用去掉前导 "fonts/"。
+      // fonts.css lives under <out>/fonts/, and fonts live under <out>/fonts/<host>/,
+      // so strip the leading "fonts/" from the relative reference.
       const rel = path.relative("fonts", local).split(path.sep).join("/");
       return `url(${quote}${rel}${quote})`;
     } catch {
@@ -181,7 +188,7 @@ try {
   const pageUrl = args.url || recon?.url || "";
   if (!pageUrl) throw new Error("need --url or a recon JSON with a url");
 
-  // 候选资产: network 捕获(权威) + recon 静态清单(兜底)。
+  // Candidate assets: network capture (authoritative) + recon's static manifest (fallback).
   const candidates = new Map(); // url -> {kind, via}
   const addCandidate = (url, kind, via) => {
     if (!kind || !args.types.includes(kind)) return;
@@ -201,7 +208,7 @@ try {
         if (kind) addCandidate(resp.url(), kind, "network");
       } catch {}
     });
-    console.log(`▸ 加载 + 全程滚动捕获资产请求: ${pageUrl}`);
+    console.log(`▸ Loading + scrolling through the full page to capture asset requests: ${pageUrl}`);
     await page.goto(pageUrl, { waitUntil: "networkidle", timeout: 90000 }).catch((e) => console.warn("  goto:", e.message));
     const total = await page.evaluate(() => document.documentElement.scrollHeight);
     for (let y = 0; y <= total; y += args.scrollStep) {
@@ -221,12 +228,13 @@ try {
   const entries = Array.from(candidates.values());
   const fontCount = entries.filter((e) => e.kind === "font").length;
   const imageCount = entries.filter((e) => e.kind === "image").length;
-  console.log(`▸ 候选资产 ${entries.length} 个(图片 ${imageCount} / 字体 ${fontCount})，开始下载…`);
+  console.log(`▸ ${entries.length} candidate asset(s) (${imageCount} image(s) / ${fontCount} font(s)), downloading…`);
 
   const results = await downloadAll(entries, ctx, args, pageUrl);
 
-  // 自托管 @font-face: 抓 webfont CSS(typekit/google fonts) + recon 里的 @font-face
-  // 规则，把 url() 改写成本地字体路径，汇成一份 fonts.css。
+  // Self-hosted @font-face: take the webfont CSS (typekit/google fonts) + the
+  // @font-face rules from recon, rewrite url() to local font paths, and combine
+  // them into one fonts.css.
   const urlToLocal = new Map(
     results.filter((r) => r.status === "ok").map((r) => [r.url, r.localPath]),
   );
@@ -265,10 +273,10 @@ try {
   }, null, 2)}\n`);
 
   if (browser) await browser.close();
-  console.log(`✅ 下载 ${okCount} 成功 / ${errCount} 失败 → ${path.resolve(args.outDir)}`);
-  if (fontCssBlocks.length) console.log(`▸ 自托管字体样式: ${path.join(args.outDir, "fonts/fonts.css")} (页面 <link> 引入即可)`);
+  console.log(`✅ Downloaded ${okCount} succeeded / ${errCount} failed -> ${path.resolve(args.outDir)}`);
+  if (fontCssBlocks.length) console.log(`▸ Self-hosted font stylesheet: ${path.join(args.outDir, "fonts/fonts.css")} (just <link> it in the page)`);
   const failedFonts = results.filter((r) => r.kind === "font" && r.status === "error");
-  if (failedFonts.length) console.log(`⚠️ ${failedFonts.length} 个字体下载失败——不许用系统字体糊弄，逐个排查:\n   ${failedFonts.map((f) => `${f.error} ${f.url}`).slice(0, 10).join("\n   ")}`);
+  if (failedFonts.length) console.log(`⚠️ ${failedFonts.length} font(s) failed to download -- do not fall back to system fonts, investigate each one:\n   ${failedFonts.map((f) => `${f.error} ${f.url}`).slice(0, 10).join("\n   ")}`);
   console.log(manifestFile);
 } catch (error) {
   console.error(`asset-harvest failed: ${error.message}`);

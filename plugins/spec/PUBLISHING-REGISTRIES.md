@@ -1,7 +1,5 @@
 # Publishing To Skill Registries
 
-Language: English | [简体中文](PUBLISHING-REGISTRIES.zh-CN.md)
-
 Open Design plugins are intentionally shaped so one folder can travel across multiple agent ecosystems. The safest publishing model is:
 
 1. Keep the source of truth in a public GitHub repository or in an Open Design PR.

@@ -1,7 +1,5 @@
 # Plugin Spec Examples
 
-Language: English | [简体中文](README.zh-CN.md)
-
 These examples are source material for plugin authors and external agents. They are not bundled first-party plugins and are not scanned by the daemon at startup.
 
 Coverage:

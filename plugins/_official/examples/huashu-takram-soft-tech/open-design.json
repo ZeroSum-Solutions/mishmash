@@ -104,7 +104,7 @@
         "label": "Topic",
         "type": "string",
         "required": true,
-        "placeholder": "你的主题，例如：环境感知网络 2026 产品发布",
+        "placeholder": "Your topic, e.g.: Ambient sensing network 2026 product launch",
         "default": "the user's brief"
       },
       {
@@ -112,7 +112,7 @@
         "label": "Audience",
         "type": "string",
         "required": true,
-        "placeholder": "客户 / 投资人 / 研究社区",
+        "placeholder": "Clients / investors / research community",
         "default": "decision makers"
       },
       {

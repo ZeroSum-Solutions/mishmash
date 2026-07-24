@@ -101,7 +101,7 @@
         "label": "Topic",
         "type": "string",
         "required": true,
-        "placeholder": "你的主题，例如：2026 年度增长数据复盘",
+        "placeholder": "Your topic, e.g.: 2026 annual growth data review",
         "default": "the user's brief"
       },
       {
@@ -109,7 +109,7 @@
         "label": "Audience",
         "type": "string",
         "required": true,
-        "placeholder": "董事会 / 投资人 / 全员大会",
+        "placeholder": "Board / investors / all-hands",
         "default": "decision makers"
       },
       {

@@ -1,38 +1,38 @@
-# 我读完 @trq212 那条推之后, 把所有 markdown 都换成了 HTML
+# After reading @trq212's tweet, I replaced all my markdown with HTML
 
-> 灵感原文: https://x.com/trq212/status/2052809885763747935
+> Original inspiration: https://x.com/trq212/status/2052809885763747935
 >
-> 简而言之: 在 AI 写作 / 编辑器 / 代理时代, markdown 这个"中间态"已经撑不住了 —— HTML 才是面向读者的最终形态。
+> In short: in the age of AI writing / editors / agents, markdown's role as an "intermediate form" no longer holds up — HTML is the actual final form for readers.
 
-## 让我点头的三个观察
+## Three observations that made me nod along
 
-第一, 我们对 markdown 的爱, 主要是写起来爽。但读者从来没投过票。
-读者拿到的永远是某个 markdown 渲染器吐出来的结果 —— 而那个渲染器属于平台, 不属于你。
+First, our love for markdown is mostly about how nice it is to write. Readers never got a vote.
+What a reader actually sees is always whatever some markdown renderer spits out — and that renderer belongs to the platform, not to you.
 
-第二, 截图发推这件事, markdown 输了。
-随便挑一段 markdown, 截图发出去都是被 GitHub 默认主题压扁的灰白方块。HTML 可以是壁纸级图片。
+Second, markdown loses when it comes to screenshotting a post.
+Screenshot any markdown snippet and share it, and it's a gray-and-white block flattened by GitHub's default theme. HTML can look like wallpaper-quality art.
 
-第三, 公众号 / 知乎 / 小红书 / Notion / 飞书 —— 每一家解释 markdown 的方式都不一样。
-你写一份, 5 个平台得调 5 次。HTML + 内联 CSS, 一次粘贴, 任何平台都还原。
+Third, WeChat / Zhihu / Xiaohongshu / Notion / Feishu — every platform interprets markdown differently.
+Write it once, and you have to adjust it 5 times across 5 platforms. HTML + inline CSS: paste once, renders identically anywhere.
 
-## 但 HTML 太啰嗦, 这是真的
+## But HTML really is too verbose — that part is true
 
-`<div class="...">` 写多了想吐, 这是事实。
-之前没人愿意花成本写 HTML, 因为同样的内容, markdown 30 秒, HTML 30 分钟。
+Writing pile after pile of `<div class="...">` gets old fast. That's a fact.
+No one wanted to pay that cost before, because for the same content, markdown takes 30 seconds and HTML takes 30 minutes.
 
-变量是 —— **AI 把这 30 分钟降到 30 秒了**。
-你写 markdown, AI 把它升级成可交付的 HTML。你管最终形态, AI 管啰嗦细节。
+The variable that changed — **AI collapsed those 30 minutes into 30 seconds.**
+You write markdown, AI upgrades it into deliverable HTML. You own the final form, AI handles the verbose details.
 
-## 我们顺手做了一个工具
+## So we built a small tool for this
 
-灵感来自原推, 加上 Claude Code 团队的实践, 我们做了 [HTML Anything](https://github.com/your-org/html-anything)。
-左侧贴 markdown / CSV / JSON, 选一个模板 (杂志、PPT、海报、小红书、数据报告 …), 按 ⌘+Enter ——
-本地的 Claude / Cursor / Codex 在你**已经登录**的 session 里跑, 几秒后右侧就是一份可以直接复制到公众号 / 推特 / 知乎的 HTML。
+Inspired by the original tweet, plus the Claude Code team's own practice, we built [HTML Anything](https://github.com/your-org/html-anything).
+Paste markdown / CSV / JSON on the left, pick a template (magazine, deck, poster, Xiaohongshu, data report, ...), hit ⌘+Enter —
+a local Claude / Cursor / Codex runs in a session you're **already logged into**, and a few seconds later the right side has HTML ready to paste straight into WeChat / Twitter / Zhihu.
 
-不需要 API Key, 不浪费 token (二次编辑只跑 diff)。
+No API key needed, no wasted tokens (a second edit only re-runs the diff).
 
-## 结论
+## Conclusion
 
-如果你也觉得 "markdown → 编辑器手动重排" 这件事浪费了你的人生 —— 看一眼原推, 看一眼 Claude Code 团队的迁移, 然后试试任何一个能把 markdown 自动升格为 HTML 的工具。
+If you also feel like "markdown -> manually reformat it in an editor" is wasting your life — take a look at the original tweet, take a look at how the Claude Code team migrated, then try any tool that can automatically upgrade markdown into HTML.
 
-> 题图致敬: 推文中那个 "everything is HTML" 的瞬间。
+> Header image homage: the moment in the tweet where "everything is HTML".

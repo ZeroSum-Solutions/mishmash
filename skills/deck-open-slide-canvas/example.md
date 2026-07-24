@@ -1,6 +1,6 @@
-# 一句关键问题
+# One Key Question
 
-> Sea Indigo 调色, 单页 hero question 风格
+> Sea Indigo palette, single-page hero-question style
 
-## 问题
-当生成内容的成本逼近零, 留下的只有品味 —— 你打算在哪一帧上, 让读者停下来?
+## Question
+When the cost of generating content approaches zero, all that's left is taste — which frame will you make the reader stop on?

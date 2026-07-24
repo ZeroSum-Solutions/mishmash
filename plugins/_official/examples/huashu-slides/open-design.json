@@ -103,7 +103,7 @@
         "label": "Topic",
         "type": "string",
         "required": true,
-        "placeholder": "你的主题，例如：AI 设计工作流的下一步",
+        "placeholder": "Your topic, e.g.: The next step in AI design workflows",
         "default": "the user's brief"
       },
       {
@@ -111,7 +111,7 @@
         "label": "Audience",
         "type": "string",
         "required": true,
-        "placeholder": "投资人 / 团队全员 / 大会听众",
+        "placeholder": "Investors / whole team / conference audience",
         "default": "decision makers"
       },
       {

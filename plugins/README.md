@@ -1,7 +1,5 @@
 # Open Design Plugins
 
-Language: English | [简体中文](README.zh-CN.md)
-
 This directory has two different jobs:
 
 - `_official/` - first-party plugins bundled with Open Design. The daemon scans this tree at startup and registers these plugins as official.

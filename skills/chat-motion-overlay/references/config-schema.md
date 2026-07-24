@@ -50,12 +50,12 @@ Provide a JSON file when the user wants anything beyond the defaults.
   - `always`
 
 - `deliveryFormat`
-  - `mov`: `MOV（透明背景，可直接导入剪映 / PR / FCP 叠加）`
-  - `webm`: `WebM（透明背景，适合网页 / 浏览器播放）`
-  - `remotion`: `Remotion 工程（适合继续编辑和拼装）`
-  - `hyperframe`: `Hyperframe 工程（适合作为模块继续复用）`
-  - `json`: `JSON 数据（适合程序处理 / 自定义渲染）`
-  - `preview`: `预览图 / 预览工程（适合先确认效果）`
+  - `mov`: `MOV (transparent background, drop directly into Jianying / Premiere / FCP as an overlay)`
+  - `webm`: `WebM (transparent background, suited to web/browser playback)`
+  - `remotion`: `Remotion project (suited to continued editing and assembly)`
+  - `hyperframe`: `Hyperframe project (suited to reuse as a module)`
+  - `json`: `JSON data (suited to programmatic processing / custom rendering)`
+  - `preview`: `Preview image / preview project (suited to confirming the look first)`
 
 - `showTimestamp`
   - boolean

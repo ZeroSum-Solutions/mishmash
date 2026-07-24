@@ -2,7 +2,7 @@
 
 Use user-facing delivery choices and let the skill map them to concrete artifacts.
 
-## MOV（透明背景，可直接导入剪映 / PR / FCP 叠加）
+## MOV (transparent background, drop directly into Jianying / Premiere / FCP as an overlay)
 
 Use this when the clip should be layered in editors such as Premiere, Final Cut, Jianying, or CapCut.
 
@@ -10,7 +10,7 @@ Use this when the clip should be layered in editors such as Premiere, Final Cut,
 npx remotion render src/index.ts ChatMotionOverlay out/chat-motion-overlay.mov --image-format=png --pixel-format=yuva444p10le --codec=prores --prores-profile=4444
 ```
 
-## WebM（透明背景，适合网页 / 浏览器播放）
+## WebM (transparent background, suited to web/browser playback)
 
 Use this when the clip should play in browser or web composition contexts.
 
@@ -18,14 +18,14 @@ Use this when the clip should play in browser or web composition contexts.
 npx remotion render src/index.ts ChatMotionOverlay out/chat-motion-overlay.webm --image-format=png --pixel-format=yuva420p --codec=vp9
 ```
 
-## JSON 数据（适合程序处理 / 自定义渲染）
+## JSON data (suited to programmatic processing / custom rendering)
 
 Use this when another system should consume the scene structure directly.
 
 - Run `scripts/build_chat_overlay_spec.py`
 - Keep the resulting JSON as the transport artifact
 
-## Remotion 工程 / Hyperframe 工程（适合继续编辑和拼装）
+## Remotion project / Hyperframe project (suited to continued editing and assembly)
 
 Use this when the user wants to keep composing downstream rather than receiving a final video.
 
