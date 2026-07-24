@@ -19,7 +19,9 @@ studio: the one-stop workbench for the team.
    fetch and cherry-pick the specific commits:
    `git fetch upstream-pinned && git cherry-pick <sha>`.
    Each cherry-pick gets a one-line entry in the log below.
-3. **`origin` is our fork** (`wiggdevin/open-design-upstream`). Push there.
+3. **`origin` is our private repo** (`wiggdevin/mishmash`, PRIVATE — created
+   2026-07-23 after the public GitHub fork `open-design-upstream` was found
+   un-privatizable and deleted; full history migrated). Push there.
    Local `main` and all working branches track `origin`, never
    `upstream-pinned` (fixed 2026-07-23 — `main` previously tracked upstream,
    making a bare `git pull` a policy violation).
