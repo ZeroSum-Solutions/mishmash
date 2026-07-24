@@ -396,13 +396,13 @@ interface ProjectPagePreset {
 }
 type PagePresetPreviewAvailability = Record<ProjectPagePresetId, 'ok' | 'missing'>;
 
-function pageText(en: string, zhCN?: string, zhTW?: string): LocalizedText {
-  if (!zhCN && !zhTW) return en;
-  return {
-    en,
-    'zh-CN': zhCN ?? en,
-    'zh-TW': zhTW ?? zhCN ?? en,
-  };
+// Open Design ships English-only; the zh-CN/zh-TW preset title/description
+// translations were removed in the de-bloat pass, so this always resolves to
+// the English source now. Kept as a function (rather than inlining `en`
+// directly at each call site) so the ~70 preset entries below don't need to
+// change beyond dropping their translated arguments.
+function pageText(en: string): LocalizedText {
+  return en;
 }
 
 const BLANK_PAGE_PRESETS: ProjectPagePreset[] = [
@@ -507,12 +507,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-open-design-landing',
     category: 'prototype',
-    title: pageText('Open Design Landing', 'Open Design 落地页', 'Open Design 落地頁'),
-    description: pageText(
-      'Editorial landing page with a strong hero, proof points, and product narrative.',
-      '带强主视觉、信任证明和产品叙事的编辑风落地页。',
-      '帶強主視覺、信任證明和產品敘事的編輯風落地頁。',
-    ),
+    title: pageText('Open Design Landing'),
+    description: pageText('Editorial landing page with a strong hero, proof points, and product narrative.'),
     icon: 'globe',
     fileBaseName: 'open-design-landing',
     source: 'community',
@@ -521,12 +517,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-kanban-board',
     category: 'prototype',
-    title: pageText('Kanban Board', '看板任务板', '看板任務板'),
-    description: pageText(
-      'Dense work board with lanes, tags, filters, and task cards for operational flows.',
-      '适合运营流程的密集工作看板，包含泳道、标签、筛选和任务卡片。',
-      '適合營運流程的密集工作看板，包含泳道、標籤、篩選和任務卡片。',
-    ),
+    title: pageText('Kanban Board'),
+    description: pageText('Dense work board with lanes, tags, filters, and task cards for operational flows.'),
     icon: 'kanban',
     fileBaseName: 'kanban-board',
     source: 'community',
@@ -535,12 +527,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-social-carousel',
     category: 'prototype',
-    title: pageText('Social Carousel', '社媒轮播', '社群輪播'),
-    description: pageText(
-      'Multi-panel social story layout for campaigns, launches, and creator content.',
-      '用于活动、发布和创作者内容的多页社媒故事版。',
-      '用於活動、發布和創作者內容的多頁社群故事版。',
-    ),
+    title: pageText('Social Carousel'),
+    description: pageText('Multi-panel social story layout for campaigns, launches, and creator content.'),
     icon: 'slides',
     fileBaseName: 'social-carousel',
     source: 'community',
@@ -549,12 +537,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-blog-post',
     category: 'document',
-    title: pageText('Blog Post', '博客文章', '部落格文章'),
-    description: pageText(
-      'Long-form editorial article with pull quotes, section rhythm, and readable typography.',
-      '带引用、章节节奏和高可读排版的长篇编辑文章。',
-      '帶引用、章節節奏和高可讀排版的長篇編輯文章。',
-    ),
+    title: pageText('Blog Post'),
+    description: pageText('Long-form editorial article with pull quotes, section rhythm, and readable typography.'),
     icon: 'file-text',
     fileBaseName: 'blog-post',
     source: 'community',
@@ -563,12 +547,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-wireframe-sketch',
     category: 'wireframe',
-    title: pageText('Wireframe Sketch', '手绘线框', '手繪線框'),
-    description: pageText(
-      'Hand-sketched screen map for early structure, hierarchy, and annotation passes.',
-      '用于早期结构、层级和批注推演的手绘线框页面。',
-      '用於早期結構、層級和批註推演的手繪線框頁面。',
-    ),
+    title: pageText('Wireframe Sketch'),
+    description: pageText('Hand-sketched screen map for early structure, hierarchy, and annotation passes.'),
     icon: 'draw',
     fileBaseName: 'wireframe-sketch',
     source: 'community',
@@ -576,12 +556,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-wireframe-greybox',
     category: 'wireframe',
-    title: pageText('Wireframe Greybox', '灰盒线框', '灰盒線框'),
-    description: pageText(
-      'Crisp greybox layout for dashboards, forms, tables, and multi-panel tools.',
-      '适合仪表盘、表单、表格和多面板工具的清晰灰盒布局。',
-      '適合儀表板、表單、表格和多面板工具的清晰灰盒版面。',
-    ),
+    title: pageText('Wireframe Greybox'),
+    description: pageText('Crisp greybox layout for dashboards, forms, tables, and multi-panel tools.'),
     icon: 'grid',
     fileBaseName: 'wireframe-greybox',
     source: 'community',
@@ -589,12 +565,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-wireframe-mobile-flow',
     category: 'wireframe',
-    title: pageText('Mobile Flow Wireframe', '移动流程线框', '行動流程線框'),
-    description: pageText(
-      'Phone-screen flow map for onboarding, checkout, or task completion paths.',
-      '用于入门、结账或任务完成路径的手机屏流程图。',
-      '用於入門、結帳或任務完成路徑的手機螢幕流程圖。',
-    ),
+    title: pageText('Mobile Flow Wireframe'),
+    description: pageText('Phone-screen flow map for onboarding, checkout, or task completion paths.'),
     icon: 'smartphone',
     fileBaseName: 'wireframe-mobile-flow',
     source: 'community',
@@ -602,12 +574,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-mobile-app',
     category: 'mobile',
-    title: pageText('Mobile App', '移动应用', '行動應用'),
-    description: pageText(
-      'Native-feeling mobile screen with product hierarchy, controls, and states.',
-      '带产品层级、控件和状态的原生感移动界面。',
-      '帶產品層級、控制元件和狀態的原生感行動介面。',
-    ),
+    title: pageText('Mobile App'),
+    description: pageText('Native-feeling mobile screen with product hierarchy, controls, and states.'),
     icon: 'smartphone',
     fileBaseName: 'mobile-app-screen',
     source: 'community',
@@ -615,12 +583,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-mobile-onboarding',
     category: 'mobile',
-    title: pageText('Mobile Onboarding', '移动端引导', '行動端引導'),
-    description: pageText(
-      'First-run app flow with value props, permissions, and account setup states.',
-      '首启应用流程，包含价值点、权限请求和账号设置状态。',
-      '首次啟動應用流程，包含價值點、權限請求和帳號設定狀態。',
-    ),
+    title: pageText('Mobile Onboarding'),
+    description: pageText('First-run app flow with value props, permissions, and account setup states.'),
     icon: 'smartphone',
     fileBaseName: 'mobile-onboarding',
     source: 'community',
@@ -628,12 +592,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-gamified-app',
     category: 'mobile',
-    title: pageText('Gamified App', '游戏化应用', '遊戲化應用'),
-    description: pageText(
-      'Mobile progression screen with streaks, rewards, missions, and playful states.',
-      '带连续记录、奖励、任务和趣味状态的移动进度页面。',
-      '帶連續紀錄、獎勵、任務和趣味狀態的行動進度頁面。',
-    ),
+    title: pageText('Gamified App'),
+    description: pageText('Mobile progression screen with streaks, rewards, missions, and playful states.'),
     icon: 'star',
     fileBaseName: 'gamified-app',
     source: 'community',
@@ -641,12 +601,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-resume-modern',
     category: 'document',
-    title: pageText('Modern Resume', '现代简历', '現代履歷'),
-    description: pageText(
-      'Structured resume page with professional hierarchy, highlights, and printable rhythm.',
-      '带专业层级、亮点模块和打印节奏的结构化简历页面。',
-      '帶專業層級、亮點模組和列印節奏的結構化履歷頁面。',
-    ),
+    title: pageText('Modern Resume'),
+    description: pageText('Structured resume page with professional hierarchy, highlights, and printable rhythm.'),
     icon: 'file-text',
     fileBaseName: 'modern-resume',
     source: 'community',
@@ -654,12 +610,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-data-report',
     category: 'document',
-    title: pageText('Data Report', '数据报告', '資料報告'),
-    description: pageText(
-      'Analytical report with KPI callouts, charts, commentary, and executive summary.',
-      '包含 KPI 亮点、图表、解读和管理摘要的分析报告。',
-      '包含 KPI 亮點、圖表、解讀和管理摘要的分析報告。',
-    ),
+    title: pageText('Data Report'),
+    description: pageText('Analytical report with KPI callouts, charts, commentary, and executive summary.'),
     icon: 'file-text',
     fileBaseName: 'data-report',
     source: 'community',
@@ -667,12 +619,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-invoice',
     category: 'document',
-    title: pageText('Invoice', '发票', '發票'),
-    description: pageText(
-      'Clean commercial document with line items, totals, terms, and payment notes.',
-      '整洁的商务文档，包含明细、总计、条款和付款说明。',
-      '整潔的商務文件，包含明細、總計、條款和付款說明。',
-    ),
+    title: pageText('Invoice'),
+    description: pageText('Clean commercial document with line items, totals, terms, and payment notes.'),
     icon: 'file-text',
     fileBaseName: 'invoice',
     source: 'community',
@@ -680,12 +628,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-live-dashboard',
     category: 'liveArtifact',
-    title: pageText('Live Dashboard', '实时仪表盘', '即時儀表板'),
-    description: pageText(
-      'Refreshable operations dashboard with KPIs, charts, controls, and data states.',
-      '可刷新的运营仪表盘，包含 KPI、图表、控件和数据状态。',
-      '可重新整理的營運儀表板，包含 KPI、圖表、控制元件和資料狀態。',
-    ),
+    title: pageText('Live Dashboard'),
+    description: pageText('Refreshable operations dashboard with KPIs, charts, controls, and data states.'),
     icon: 'kanban',
     fileBaseName: 'live-dashboard',
     source: 'community',
@@ -693,12 +637,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-trading-analysis',
     category: 'liveArtifact',
-    title: pageText('Trading Analysis Dashboard', '交易分析看板', '交易分析看板'),
-    description: pageText(
-      'Market analysis workspace with chart panels, positions, alerts, and watchlists.',
-      '市场分析工作台，包含图表面板、持仓、提醒和关注列表。',
-      '市場分析工作台，包含圖表面板、持倉、提醒和關注列表。',
-    ),
+    title: pageText('Trading Analysis Dashboard'),
+    description: pageText('Market analysis workspace with chart panels, positions, alerts, and watchlists.'),
     icon: 'kanban',
     fileBaseName: 'trading-analysis-dashboard',
     source: 'community',
@@ -706,12 +646,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-social-media-matrix',
     category: 'liveArtifact',
-    title: pageText('Social Media Matrix', '社媒矩阵追踪', '社群矩陣追蹤'),
-    description: pageText(
-      'Content operations grid for channels, campaigns, publishing status, and metrics.',
-      '内容运营矩阵，跟踪渠道、活动、发布状态和指标。',
-      '內容營運矩陣，追蹤渠道、活動、發布狀態和指標。',
-    ),
+    title: pageText('Social Media Matrix'),
+    description: pageText('Content operations grid for channels, campaigns, publishing status, and metrics.'),
     icon: 'grid',
     fileBaseName: 'social-media-matrix',
     source: 'community',
@@ -719,12 +655,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-pitch-book',
     category: 'slides',
-    title: pageText('Pitch Book', '融资路演稿', '募資簡報'),
-    description: pageText(
-      'Investor-ready narrative deck with market, product, traction, team, and ask.',
-      '面向投资人的叙事型幻灯片，覆盖市场、产品、牵引力、团队和融资诉求。',
-      '面向投資人的敘事型投影片，涵蓋市場、產品、牽引力、團隊和募資訴求。',
-    ),
+    title: pageText('Pitch Book'),
+    description: pageText('Investor-ready narrative deck with market, product, traction, team, and ask.'),
     icon: 'present',
     fileBaseName: 'pitch-book',
     source: 'community',
@@ -732,12 +664,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-replit-deck',
     category: 'slides',
-    title: pageText('Replit Deck', 'Replit 风格幻灯片', 'Replit 風格投影片'),
-    description: pageText(
-      'Product storytelling deck with developer energy, system diagrams, and launch rhythm.',
-      '带开发者气质、系统图和发布节奏的产品叙事幻灯片。',
-      '帶開發者氣質、系統圖和發布節奏的產品敘事投影片。',
-    ),
+    title: pageText('Replit Deck'),
+    description: pageText('Product storytelling deck with developer energy, system diagrams, and launch rhythm.'),
     icon: 'present',
     fileBaseName: 'replit-deck',
     source: 'community',
@@ -745,12 +673,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-guizang-ppt',
     category: 'slides',
-    title: pageText('Guizang PPT', '归藏 PPT', '歸藏 PPT'),
-    description: pageText(
-      'Polished Chinese presentation style with strong section rhythm and dense visuals.',
-      '成熟中文演示风格，章节节奏强，视觉信息密度高。',
-      '成熟中文簡報風格，章節節奏強，視覺資訊密度高。',
-    ),
+    title: pageText('Guizang PPT'),
+    description: pageText('Polished Chinese presentation style with strong section rhythm and dense visuals.'),
     icon: 'present',
     fileBaseName: 'guizang-ppt',
     source: 'community',
@@ -758,12 +682,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-frontend-slides',
     category: 'slides',
-    title: pageText('Frontend Slides', '前端分享幻灯片', '前端分享投影片'),
-    description: pageText(
-      'Technical talk deck with code-friendly structure, diagrams, and pacing.',
-      '适合技术分享的幻灯片，包含代码友好结构、图解和节奏控制。',
-      '適合技術分享的投影片，包含程式碼友善結構、圖解和節奏控制。',
-    ),
+    title: pageText('Frontend Slides'),
+    description: pageText('Technical talk deck with code-friendly structure, diagrams, and pacing.'),
     icon: 'present',
     fileBaseName: 'frontend-slides',
     source: 'community',
@@ -771,12 +691,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-ecommerce-live-stream',
     category: 'image',
-    title: pageText('E-commerce Live Stream UI', '电商直播界面', '電商直播介面'),
-    description: pageText(
-      'Image direction board for commerce livestream overlays, offers, and product cards.',
-      '用于电商直播叠层、优惠和商品卡片的图片方向板。',
-      '用於電商直播疊層、優惠和商品卡片的圖片方向板。',
-    ),
+    title: pageText('E-commerce Live Stream UI'),
+    description: pageText('Image direction board for commerce livestream overlays, offers, and product cards.'),
     icon: 'image',
     fileBaseName: 'ecommerce-live-stream-ui',
     source: 'community',
@@ -784,12 +700,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-dance-infographic',
     category: 'image',
-    title: pageText('Dance Infographic', '舞蹈信息图', '舞蹈資訊圖'),
-    description: pageText(
-      'Storyboard-style visual sheet for choreography, motion beats, and explainers.',
-      '用于编舞、动作节拍和解说的故事板式视觉页面。',
-      '用於編舞、動作節拍和解說的故事板式視覺頁面。',
-    ),
+    title: pageText('Dance Infographic'),
+    description: pageText('Storyboard-style visual sheet for choreography, motion beats, and explainers.'),
     icon: 'image',
     fileBaseName: 'dance-infographic',
     source: 'community',
@@ -797,12 +709,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-avatar-portrait',
     category: 'image',
-    title: pageText('Avatar Portrait', '头像肖像', '頭像肖像'),
-    description: pageText(
-      'Portrait art direction page for identity, lighting, styling, and crop references.',
-      '用于身份、光线、造型和裁切参考的肖像视觉方向页。',
-      '用於身份、光線、造型和裁切參考的肖像視覺方向頁。',
-    ),
+    title: pageText('Avatar Portrait'),
+    description: pageText('Portrait art direction page for identity, lighting, styling, and crop references.'),
     icon: 'image',
     fileBaseName: 'avatar-portrait',
     source: 'community',
@@ -810,12 +718,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-showa-magazine',
     category: 'image',
-    title: pageText('Showa Magazine Cover', '昭和杂志封面', '昭和雜誌封面'),
-    description: pageText(
-      'Retro editorial image brief for magazine covers, posters, and social graphics.',
-      '复古编辑风图片 brief，适合杂志封面、海报和社媒图形。',
-      '復古編輯風圖片 brief，適合雜誌封面、海報和社群圖形。',
-    ),
+    title: pageText('Showa Magazine Cover'),
+    description: pageText('Retro editorial image brief for magazine covers, posters, and social graphics.'),
     icon: 'image',
     fileBaseName: 'showa-magazine-cover',
     source: 'community',
@@ -823,12 +727,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-three-kingdoms-video',
     category: 'video',
-    title: pageText('Three Kingdoms Cinematic', '三国电影感短片', '三國電影感短片'),
-    description: pageText(
-      'Cinematic video storyboard with hero action, environment notes, timing, and negatives.',
-      '电影感视频故事板，包含英雄动作、环境说明、时间线和负面约束。',
-      '電影感影片故事板，包含英雄動作、環境說明、時間軸和負面約束。',
-    ),
+    title: pageText('Three Kingdoms Cinematic'),
+    description: pageText('Cinematic video storyboard with hero action, environment notes, timing, and negatives.'),
     icon: 'play',
     fileBaseName: 'three-kingdoms-cinematic',
     source: 'community',
@@ -836,12 +736,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-romance-short-film',
     category: 'video',
-    title: pageText('Romance Short Film', '浪漫短片', '浪漫短片'),
-    description: pageText(
-      'Short-film plan with scene beats, lighting, camera moves, dialogue, and sound.',
-      '短片策划页，包含场景节拍、光线、镜头运动、对白和声音。',
-      '短片企劃頁，包含場景節拍、光線、鏡頭運動、對白和聲音。',
-    ),
+    title: pageText('Romance Short Film'),
+    description: pageText('Short-film plan with scene beats, lighting, camera moves, dialogue, and sound.'),
     icon: 'play',
     fileBaseName: 'romance-short-film',
     source: 'community',
@@ -849,12 +745,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-hand-dance-video',
     category: 'video',
-    title: pageText('Hand Dance Video', '手势舞视频', '手勢舞影片'),
-    description: pageText(
-      'Performance video sheet for motion timing, close-ups, styling, and edit beats.',
-      '表演类视频页面，规划动作时机、特写、造型和剪辑节拍。',
-      '表演類影片頁面，規劃動作時機、特寫、造型和剪輯節拍。',
-    ),
+    title: pageText('Hand Dance Video'),
+    description: pageText('Performance video sheet for motion timing, close-ups, styling, and edit beats.'),
     icon: 'play',
     fileBaseName: 'hand-dance-video',
     source: 'community',
@@ -862,12 +754,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-supercar-video',
     category: 'video',
-    title: pageText('Luxury Supercar Video', '豪车宣传片', '豪車宣傳片'),
-    description: pageText(
-      'Premium product-film storyboard with hero shots, pacing, materials, and sound design.',
-      '高端产品影片故事板，覆盖主视觉镜头、节奏、材质和声音设计。',
-      '高端產品影片故事板，涵蓋主視覺鏡頭、節奏、材質和聲音設計。',
-    ),
+    title: pageText('Luxury Supercar Video'),
+    description: pageText('Premium product-film storyboard with hero shots, pacing, materials, and sound design.'),
     icon: 'play',
     fileBaseName: 'luxury-supercar-video',
     source: 'community',
@@ -875,12 +763,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-hf-app-showcase',
     category: 'hyperframes',
-    title: pageText('HyperFrames App Showcase', 'HyperFrames 应用展示', 'HyperFrames 應用展示'),
-    description: pageText(
-      'HTML motion composition plan with floating devices, labels, transitions, and timing.',
-      'HTML 动效方案，包含漂浮设备、标签、转场和时间线。',
-      'HTML 動效方案，包含漂浮裝置、標籤、轉場和時間軸。',
-    ),
+    title: pageText('HyperFrames App Showcase'),
+    description: pageText('HTML motion composition plan with floating devices, labels, transitions, and timing.'),
     icon: 'sparkles',
     fileBaseName: 'hyperframes-app-showcase',
     source: 'community',
@@ -888,12 +772,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-hf-brand-sizzle',
     category: 'hyperframes',
-    title: pageText('HyperFrames Brand Sizzle', 'HyperFrames 品牌混剪', 'HyperFrames 品牌混剪'),
-    description: pageText(
-      'Motion brand reel with kinetic type, scene cuts, shader transitions, and end card.',
-      '品牌动效混剪，包含动态排版、场景剪辑、着色器转场和收尾卡。',
-      '品牌動效混剪，包含動態排版、場景剪輯、著色器轉場和收尾卡。',
-    ),
+    title: pageText('HyperFrames Brand Sizzle'),
+    description: pageText('Motion brand reel with kinetic type, scene cuts, shader transitions, and end card.'),
     icon: 'sparkles',
     fileBaseName: 'hyperframes-brand-sizzle',
     source: 'community',
@@ -901,12 +781,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-hf-social-overlay',
     category: 'hyperframes',
-    title: pageText('HyperFrames Social Overlay', 'HyperFrames 社交叠层', 'HyperFrames 社群疊層'),
-    description: pageText(
-      'Vertical motion stack with social cards, captions, lower thirds, and CTA timing.',
-      '竖屏动效叠层，包含社交卡片、字幕、下三分之一和 CTA 时间点。',
-      '直式動效疊層，包含社群卡片、字幕、下三分之一和 CTA 時間點。',
-    ),
+    title: pageText('HyperFrames Social Overlay'),
+    description: pageText('Vertical motion stack with social cards, captions, lower thirds, and CTA timing.'),
     icon: 'sparkles',
     fileBaseName: 'hyperframes-social-overlay',
     source: 'community',
@@ -914,12 +790,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-hf-flight-map',
     category: 'hyperframes',
-    title: pageText('HyperFrames Flight Map', 'HyperFrames 航线地图', 'HyperFrames 航線地圖'),
-    description: pageText(
-      'Animated route map brief with path drawing, counters, city labels, and camera moves.',
-      '动态航线地图 brief，包含路径绘制、计数器、城市标签和镜头运动。',
-      '動態航線地圖 brief，包含路徑繪製、計數器、城市標籤和鏡頭運動。',
-    ),
+    title: pageText('HyperFrames Flight Map'),
+    description: pageText('Animated route map brief with path drawing, counters, city labels, and camera moves.'),
     icon: 'sparkles',
     fileBaseName: 'hyperframes-flight-map',
     source: 'community',
@@ -927,12 +799,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-hf-website-promo',
     category: 'hyperframes',
-    title: pageText('Website to Video Promo', '网站转宣传片', '網站轉宣傳片'),
-    description: pageText(
-      'Website capture-to-motion plan with viewport shots, transitions, and marketing pacing.',
-      '网站捕获转动效方案，包含多视口镜头、转场和营销节奏。',
-      '網站擷取轉動效方案，包含多視口鏡頭、轉場和行銷節奏。',
-    ),
+    title: pageText('Website to Video Promo'),
+    description: pageText('Website capture-to-motion plan with viewport shots, transitions, and marketing pacing.'),
     icon: 'sparkles',
     fileBaseName: 'website-to-video-promo',
     source: 'community',
@@ -940,12 +808,8 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
     id: 'community-audio-jingle',
     category: 'audio',
-    title: pageText('Audio Jingle', '音频 Jingle', '音訊 Jingle'),
-    description: pageText(
-      'Audio generation brief for jingles, beds, voiceovers, SFX, duration, and delivery notes.',
-      '音频生成 brief，规划 jingle、铺底音乐、旁白、音效、时长和交付说明。',
-      '音訊生成 brief，規劃 jingle、鋪底音樂、旁白、音效、時長和交付說明。',
-    ),
+    title: pageText('Audio Jingle'),
+    description: pageText('Audio generation brief for jingles, beds, voiceovers, SFX, duration, and delivery notes.'),
     icon: 'volume',
     fileBaseName: 'audio-jingle',
     source: 'community',

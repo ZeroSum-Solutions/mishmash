@@ -13,7 +13,6 @@ import {
   FileWorkspace,
   scrollWorkspaceTabsWithWheel,
 } from '../../src/components/FileWorkspace';
-import { I18nProvider } from '../../src/i18n';
 import { DesignFilesPanel } from '../../src/components/DesignFilesPanel';
 import { projectSplitClassName, projectSplitStyle } from '../../src/components/ProjectView';
 import {
@@ -753,107 +752,6 @@ describe('FileWorkspace upload input', () => {
       versionSource: 'manual',
       versionPrompt: 'Create a clean launch deck for founder teams.',
     });
-    await waitFor(() => expect(onRefreshFiles).toHaveBeenCalledTimes(1));
-  });
-
-  it('localizes page creator content and saves template query as the first version prompt', async () => {
-    const onRefreshFiles = vi.fn();
-    const onTabsStateChange = vi.fn();
-    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url === '/api/plugins') {
-        return new Response(JSON.stringify({
-          plugins: [{
-            id: 'html-ppt-pitch-deck',
-            title: 'Write a Demo Day Pitch like a Top Accelerator Group Partner',
-            version: '0.1.0',
-            sourceKind: 'bundled',
-            source: '/tmp',
-            trust: 'bundled',
-            capabilitiesGranted: [],
-            manifest: {
-              name: 'html-ppt-pitch-deck',
-              version: '0.1.0',
-              title: 'Write a Demo Day Pitch like a Top Accelerator Group Partner',
-              title_i18n: { 'zh-CN': '像顶级加速器合伙人一样写 Demo Day 路演' },
-              description: 'For fundraising pitch work: turn a startup story into growth, moat, and fundraise narrative that earns another meeting.',
-              description_i18n: { 'zh-CN': '融资/路演场景：围绕 core query「series-a-pitch-deck」把粗糙材料整理成可购买、可复用的专业 Deck。' },
-              tags: ['pitch-deck', 'fundraising-pitch', 'series-a-pitch-deck', 'commercial-slide-agent'],
-              od: {
-                kind: 'scenario',
-                mode: 'deck',
-                preview: { type: 'html', entry: './preview.html' },
-                useCase: {
-                  query: {
-                    en: 'Create "Write a Demo Day Pitch like a Top Accelerator Group Partner" as a Fundraising pitch deck.',
-                    'zh-CN': '像顶级加速器合伙人一样写 Demo Day 路演。先确认受众、决策目标、素材来源、截止时间和必须保留的数据，再输出叙事主线、页面规划、逐页文案、视觉方向和按评审标准自检的版本。',
-                  },
-                },
-              },
-            },
-            fsPath: '/tmp',
-            installedAt: 0,
-            updatedAt: 0,
-          }],
-        }), { headers: { 'content-type': 'application/json' } });
-      }
-      if (url === '/api/plugins/html-ppt-pitch-deck/preview') {
-        return new Response(
-          '<!doctype html><html><body><main>Write a Demo Day Pitch like a Top Accelerator Group Partner</main></body></html>',
-          { headers: { 'content-type': 'text/html' } },
-        );
-      }
-      return new Response('', { status: 404 });
-    }));
-    mockedWriteProjectTextFile.mockImplementation(async (_projectId, name) => workspaceFile(name));
-
-    render(
-      <I18nProvider initial="zh-CN">
-        <FileWorkspace
-          projectId="project-1"
-          projectKind="slide_deck"
-          files={[]}
-          liveArtifacts={[]}
-          onRefreshFiles={onRefreshFiles}
-          isDeck={false}
-          tabsState={{ tabs: [], active: null }}
-          onTabsStateChange={onTabsStateChange}
-        />
-      </I18nProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId('workspace-pages-menu-trigger'));
-    fireEvent.click(screen.getByRole('menuitem', { name: /新建空白页面/ }));
-
-    const dialog = await screen.findByRole('dialog', { name: '新建页面' });
-    const dialogScope = within(dialog);
-    expect(dialogScope.getByRole('tab', { name: /全部 幻灯片/ })).toBeTruthy();
-    // The deck's commercial scene ("融资路演" / fundraising-pitch) is now the
-    // sub-category tab, resolved from its category tag — the filter row and the
-    // per-card 品类 chip share one taxonomy.
-    expect(await dialogScope.findByRole('tab', { name: /融资路演/ })).toBeTruthy();
-    const title = await dialogScope.findByText('像顶级加速器合伙人一样写 Demo Day 路演');
-    const card = title.closest('article');
-    expect(card).not.toBeNull();
-    expect(within(card as HTMLElement).getByText('融资/路演场景：围绕 core query「series-a-pitch-deck」把粗糙材料整理成可购买、可复用的专业 Deck。')).toBeTruthy();
-    fireEvent.click(within(card as HTMLElement).getByRole('button', { name: '使用' }));
-
-    await waitFor(() => expect(mockedWriteProjectTextFile).toHaveBeenCalledTimes(1));
-    const [projectId, name, , options] = mockedWriteProjectTextFile.mock.calls[0]!;
-    expect(projectId).toBe('project-1');
-    expect(name).toBe('像顶级加速器合伙人一样写-demo-day-路演.html');
-    expect(options).toMatchObject({
-      versionSource: 'manual',
-      versionPrompt: '像顶级加速器合伙人一样写 Demo Day 路演。先确认受众、决策目标、素材来源、截止时间和必须保留的数据，再输出叙事主线、页面规划、逐页文案、视觉方向和按评审标准自检的版本。',
-    });
-    await waitFor(() =>
-      expect(onTabsStateChange).toHaveBeenCalledWith(
-        expect.objectContaining({
-          tabs: ['像顶级加速器合伙人一样写-demo-day-路演.html'],
-          active: '像顶级加速器合伙人一样写-demo-day-路演.html',
-        }),
-      ),
-    );
     await waitFor(() => expect(onRefreshFiles).toHaveBeenCalledTimes(1));
   });
 

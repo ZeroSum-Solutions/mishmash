@@ -1,14 +1,14 @@
-# AI 工具更新，不只是功能清单
+# AI tool updates are more than a feature list
 
-最近很多 AI 工具都在更新：更长上下文、更强的代码能力、更多 Agent 能力、更漂亮的网页生成。
+AI tools ship updates constantly: longer context windows, stronger coding, more agent capabilities, prettier web generation.
 
-但普通用户真正困惑的不是“功能有没有”，而是：这些更新到底会不会改变我的工作流？
+But what actually confuses everyday users is not "does the feature exist" — it is: will these updates change my workflow at all?
 
-如果只是把功能列成清单，观众很快会忘。更好的讲法是：
+If you just list the features, the audience forgets them fast. A better way to tell it:
 
-- 先指出大家已经疲劳：AI 工具每天都在更新。
-- 再提出反常识：真正值得关注的不是功能数量，而是工作流入口是否迁移。
-- 然后用一个具体例子说明：同样是做 PPT，以前是人先整理大纲，现在可以由 Humanize PPT 先做 AST 大纲，再交给下游 Skill 生成页面。
-- 最后给出判断：未来会拉开差距的不是谁收藏了更多工具，而是谁能把工具组织成稳定流程。
+- Start from the fatigue everyone already feels: AI tools update every single day.
+- Then land the counterintuitive point: what matters is not the feature count, but whether the workflow entry point is moving.
+- Then make it concrete with one example: for building a PPT, a person used to draft the outline first — now Humanize PPT can direct the AST outline first and hand the pages to a downstream skill.
+- Close with the judgment: the gap will not open between people who bookmark more tools, but between people who organize tools into a stable workflow.
 
-这份材料要做成一个 5 页左右的演示，用来解释 Humanize PPT 的 V0.1 工作流。
+This material should become a roughly 5-page presentation explaining the Humanize PPT V0.1 workflow.

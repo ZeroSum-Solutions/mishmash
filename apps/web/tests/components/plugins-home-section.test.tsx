@@ -15,7 +15,6 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import type { InstalledPluginRecord } from '@open-design/contracts';
 import type { ComponentProps } from 'react';
 import { PluginsHomeSection } from '../../src/components/PluginsHomeSection';
-import { I18nProvider } from '../../src/i18n';
 
 function makePlugin(overrides: {
   id: string;
@@ -76,25 +75,6 @@ function renderSection(
       onOpenDetails={() => {}}
       {...props}
     />,
-  );
-}
-
-function renderSectionInChinese(
-  plugins: InstalledPluginRecord[] = sample,
-  props: Partial<ComponentProps<typeof PluginsHomeSection>> = {},
-) {
-  return render(
-    <I18nProvider initial="zh-CN">
-      <PluginsHomeSection
-        plugins={plugins}
-        loading={false}
-        activePluginId={null}
-        pendingApplyId={null}
-        onUse={() => {}}
-        onOpenDetails={() => {}}
-        {...props}
-      />
-    </I18nProvider>,
   );
 }
 
@@ -332,31 +312,6 @@ describe('PluginsHomeSection (category bar)', () => {
 
     fireEvent.click(screen.getByTestId('plugins-home-chip-saved'));
     expect(pluginIds()).toEqual(['prototype-dashboard']);
-  });
-
-  it('localizes plugin card titles, descriptions, search, and save toast', () => {
-    renderSectionInChinese([
-      makePlugin({
-        id: 'localized-deck',
-        title: 'Swiss International Deck',
-        titleI18n: { en: 'Swiss International Deck', 'zh-CN': '瑞士国际主义 Deck' },
-        description: '16-column grid.',
-        descriptionI18n: { en: '16-column grid.', 'zh-CN': '16 列网格。' },
-        mode: 'deck',
-        tags: ['grid'],
-      }),
-    ], { preferDefaultFacet: false });
-
-    expect(screen.getAllByText('瑞士国际主义 Deck').length).toBeGreaterThan(0);
-    expect(screen.queryByText('Swiss International Deck')).toBeNull();
-
-    fireEvent.change(screen.getByPlaceholderText('搜索插件…'), {
-      target: { value: '瑞士' },
-    });
-    expect(pluginIds()).toEqual(['localized-deck']);
-
-    fireEvent.click(screen.getByTestId('plugins-home-save-localized-deck'));
-    expect(screen.getByRole('status').textContent).toContain('Saved 瑞士国际主义 Deck.');
   });
 
   it('shows the normal empty-filter state for planned empty buckets', () => {

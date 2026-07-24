@@ -5,12 +5,12 @@ description: >-
   template. It turns raw material into an AST (audience-state-transfer) outline
   with per-page visual-enhancement decisions (image / SVG diagram / video),
   hands a production brief to a downstream renderer (HTML-PPT skills or native
-  PPTX), then runs a capped 3-round presentation checkup (演讲体检) on the
+  PPTX), then runs a capped 3-round presentation checkup on the
   rendered deck. It never renders slides itself. Use before generating
   PPT/HTML slides from raw material, and after rendering when the user says
-  things like "给这份 deck 做演讲体检" or "PPT 渲染质检". If all you want is
-  one beautiful template page with no outline and no checkup, a rendering
-  skill alone is enough.
+  things like "run a presentation checkup on this deck" or "QA the rendered
+  PPT". If all you want is one beautiful template page with no outline and no
+  checkup, a rendering skill alone is enough.
 version: 1.1.1
 author: LearnPrompt
 license: MIT
@@ -35,7 +35,7 @@ Use this skill when a user wants to turn raw material, notes, voice transcripts,
 
 ## Positioning
 
-Humanize PPT is a **presentation system, born for the talk**: an **Outline Director** (AST audience-state-transfer — every page turn moves the audience forward), a **Per-Page Visual-Enhancement Director** (real image / SVG diagram / Remotion video), a **Production Brief Orchestrator**, a **Presentation Checkup Runner** (演讲体检; formerly the QA loop, CLI flag still `--qa-from`), and a **Presenter-Mode hand-off**. The motivation: HTML-PPT template skills are great at *concept display* but blow a simple idea into a dozen pretty pages, while a real 90-minute talk is ~30 — the pretty shell outruns the content density. Humanize closes that gap: it keeps the beauty (rendered natively by the downstream template skill) and makes it *presentable* — a line you can stand up and deliver. Downstream template skills own "renders beautifully"; Humanize owns "it's a talk, and someone checked it."
+Humanize PPT is a **presentation system, born for the talk**: an **Outline Director** (AST audience-state-transfer — every page turn moves the audience forward), a **Per-Page Visual-Enhancement Director** (real image / SVG diagram / Remotion video), a **Production Brief Orchestrator**, a **Presentation Checkup Runner** (formerly the QA loop; the CLI flag is still `--qa-from`), and a **Presenter-Mode hand-off**. The motivation: HTML-PPT template skills are great at *concept display* but blow a simple idea into a dozen pretty pages, while a real 90-minute talk is ~30 — the pretty shell outruns the content density. Humanize closes that gap: it keeps the beauty (rendered natively by the downstream template skill) and makes it *presentable* — a line you can stand up and deliver. Downstream template skills own "renders beautifully"; Humanize owns "it's a talk, and someone checked it."
 
 The presentation checkup in one sentence: it does not grade beauty, it grades the outline. It compares every rendered page against its outline page, pulls out the pages that can only be looked at but not spoken from, and keeps going until every page is one the speaker can stand up and present. A failed page, in plain words: a page that holds only a few words and never finishes its point, or a page that fails the audience state transfer it promised (the listener walks out of that page in the same state they walked in). Such a page should not exist; the checkup pulls it out and generates fix instructions.
 
@@ -110,7 +110,7 @@ P — Native Renderer Invocation (100% downstream)
   NOT inject SLIDES_HERE / [必填] replacements, does NOT add
   postMessage bridges to the rendered HTML.
 
-Q — Presentation Checkup (演讲体检) on the rendered artifact
+Q — Presentation Checkup on the rendered artifact
   Humanize --qa-from <rendered.html|native.pptx> reads the output of P,
   compares pages against the outline, scans for failure modes
   (references/qa-failure-modes.md), writes qa_report.md and
@@ -148,7 +148,7 @@ C — Complete / Control
 ## Operational references
 
 - `references/guizang-production-brief-orchestrator.md` — canonical brief specification: what `<renderer>-production-prompt.md` must and must not contain.
-- `references/qa-failure-modes.md` (+ English mirror `references/qa-failure-modes.en.md`) — failure-mode catalog for the presentation checkup; code-side source of truth is `FAILURE_MODES` in `scripts/humanize_ppt_v2.py`.
+- `references/qa-failure-modes.md` — failure-mode catalog for the presentation checkup; code-side source of truth is `FAILURE_MODES` in `scripts/humanize_ppt_v2.py`.
 - `references/style-gallery-spec.md` — the `--style-gallery` cover-style gate.
 - `references/renderer-guidance.md` — per-renderer recommended paths and the known-good checkpoint rules.
 - `references/renderer-verification.md` — per-renderer verification evidence behind the frontmatter one-liners.

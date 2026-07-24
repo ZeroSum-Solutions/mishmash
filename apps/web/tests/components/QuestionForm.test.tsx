@@ -566,10 +566,12 @@ describe('QuestionFormView', () => {
     expect(container.querySelectorAll('input[type="checkbox"]:checked')).toHaveLength(0);
   });
 
-  it('renders host strings in the form language, not the UI locale', () => {
-    // A Chinese form in an English UI must not mix scripts: the model
-    // declares `lang` alongside its localized labels, and the host's own
-    // in-card strings (the Other chip, custom-answer copy) follow it.
+  it('falls back to English host strings when the form declares an unbundled language', () => {
+    // Open Design ships English-only: `tForLanguageTag` can no longer resolve
+    // a bundled dictionary for a non-English `lang` tag (see the de-bloat
+    // pass that removed every non-English locale), so a model-declared
+    // `lang: 'zh-CN'` form still renders the host's own in-card strings (the
+    // Other chip, custom-answer copy) in English rather than mixing scripts.
     const zhForm = {
       ...richForm,
       lang: 'zh-CN',
@@ -577,9 +579,8 @@ describe('QuestionFormView', () => {
 
     render(<QuestionFormView form={zhForm} interactive onSubmit={vi.fn()} />);
 
-    expect(screen.getByRole('button', { name: '其他' })).toBeTruthy();
-    expect(screen.queryByLabelText('Other')).toBeNull();
-    expect(screen.getByLabelText('自定义填写')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Other' })).toBeTruthy();
+    expect(screen.getByLabelText('Custom answer')).toBeTruthy();
   });
 
   it('submits native defaults for required color and defaultless range controls', () => {

@@ -7,7 +7,7 @@ import { T } from '@/timeouts';
 // slides under the sticky topbar strip, then open the composer's agent/model
 // switcher. Opening any composer popover elevated the whole input card to
 // z-index 1700 — far above the topbar's z-index 10 — so the card body painted
-// over the topbar chips (GitHub star, Teams, Discord, settings). The sticky
+// over the topbar chips (settings). The sticky
 // topbar is opaque chrome: content scrolling underneath must stay behind it
 // in every composer state, while the composer's popovers still need to paint
 // above the static home content below the card.
@@ -39,10 +39,6 @@ test.beforeEach(async ({ page }) => {
     },
     { key: STORAGE_KEY, value: HOME_CONFIG },
   );
-
-  await page.route('**/api/github/open-design', async (route) => {
-    await route.fulfill({ json: { stargazers_count: 51600 } });
-  });
 
   await routeAgents(page, [
     {
@@ -92,7 +88,7 @@ test('[P1] sticky topbar chips stay above the composer card while its switcher p
   await page.setViewportSize({ width: 1120, height: 640 });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.getByText('Loading Open Design…').waitFor({ state: 'hidden', timeout: 15_000 });
-  await expect(page.getByTestId('entry-star-badge')).toBeVisible();
+  await expect(page.getByTestId('entry-use-everywhere-button')).toBeVisible();
   await expect(page.getByTestId('home-hero-input')).toBeVisible();
 
   // Reveal the community templates section (first-run gesture) so the scroll
@@ -111,7 +107,7 @@ test('[P1] sticky topbar chips stay above the composer card while its switcher p
   await expect(popover).toBeVisible();
 
   const probe = await page.evaluate(() => {
-    const badge = document.querySelector('[data-testid="entry-star-badge"]');
+    const badge = document.querySelector('[data-testid="entry-use-everywhere-button"]');
     const card = document.querySelector('.home-hero__input-card');
     if (!badge || !card) return { overlap: false, hits: [] as never[] };
     const b = badge.getBoundingClientRect();
@@ -143,7 +139,7 @@ test('[P1] sticky topbar chips stay above the composer card while its switcher p
 
   expect(
     probe.overlap,
-    'test setup: the composer card should overlap the GitHub star chip after scrolling',
+    'test setup: the composer card should overlap the Use everywhere chip after scrolling',
   ).toBe(true);
   const covered = probe.hits.filter((h) => !h.inTopbar);
   expect(

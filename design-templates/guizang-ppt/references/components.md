@@ -74,7 +74,7 @@ The metadata bars at the top and bottom of every page. Almost every page should 
 ```html
 <div class="chrome">
   <div class="left">
-    <span>第一幕 · 硬数据</span>
+    <span>Act I · The Numbers</span>
     <span class="sep"></span>
     <span>Act I</span>
   </div>
@@ -84,14 +84,14 @@ The metadata bars at the top and bottom of every page. Almost every page should 
 <!-- ... page body ... -->
 
 <div class="foot">
-  <div class="title">项目名 · CodePilot　|　github.com/codepilot</div>
+  <div class="title">Project · CodePilot　|　github.com/codepilot</div>
   <div>Act I · Dev Numbers</div>
 </div>
 ```
 
 **Rules**:
 - `chrome.right` always holds the page number `NN / TOTAL` (TOTAL is the total page count)
-- `foot.title` is the Chinese caption, `foot.right` is the English act marker
+- `foot.title` is the project caption, the sibling `<div>` is the English act marker
 - chrome and foot together form the magazine-like "header and footer"
 
 ---
@@ -102,8 +102,8 @@ Displays a quote / key takeaway / someone else's words.
 
 ```html
 <div class="callout" style="max-width:80vw">
-  <div class="q-big">"这东西在三年前，<br>需要一个十人团队做一年。"</div>
-  <span class="cite">— 一个观察者的判断</span>
+  <div class="q-big">"Three years ago, this<br>would have taken a ten-person team a year."</div>
+  <span class="cite">— one observer’s take</span>
 </div>
 ```
 
@@ -122,8 +122,8 @@ Displays data metrics, often paired with `.grid-6` / `.grid-4`.
 <div class="grid-6">
   <div class="stat">
     <span class="m">Duration</span>
-    <span class="n">64<em style="font-size:.4em;opacity:.5;font-style:normal"> 天</em></span>
-    <span class="l">从 0 到现在</span>
+    <span class="n">64<em style="font-size:.4em;opacity:.5;font-style:normal"> days</em></span>
+    <span class="l">Zero to now</span>
   </div>
   <!-- ... more stats ... -->
 </div>
@@ -144,8 +144,8 @@ Displays a social platform / channel + follower count.
 
 ```html
 <div class="plat">
-  <div class="sub">Weibo</div>
-  <div class="name">微博</div>
+  <div class="sub">X</div>
+  <div class="name">Twitter</div>
   <div class="nb">289K</div>
 </div>
 ```
@@ -153,7 +153,7 @@ Displays a social platform / channel + follower count.
 Optional fourth line (supplementary note):
 ```html
 <div class="body-zh" style="font-size:max(11px,.8vw);opacity:.5;margin-top:.6vh">
-  含小绿书同步
+  Cross-posted to Threads
 </div>
 ```
 
@@ -162,7 +162,7 @@ Optional fourth line (supplementary note):
 <div class="plat" style="border-top-style:dashed;opacity:.72">
   <div class="sub">Also On</div>
   <div class="body-zh" style="font-weight:600;margin-top:.8vh">
-    B 站　·　知乎
+    YouTube　·　Substack
   </div>
 </div>
 ```
@@ -176,7 +176,7 @@ List-style content, one entry per row.
 ```html
 <div class="rowline">
   <div class="k">CLAUDE.md</div>
-  <div class="v">你该怎么做事 —— 行为规则 + 工作偏好 + 禁止事项</div>
+  <div class="v">How you should operate — behavior rules + working preferences + do-not-do list</div>
   <div class="m">EMPLOYEE · HANDBOOK</div>
 </div>
 ```
@@ -195,8 +195,8 @@ A three-pillar structure, often used for "concepts side by side" pages.
 <div class="grid-3">
   <div class="pillar">
     <div class="ic">01</div>
-    <div class="t">三层<br>文档体系</div>
-    <div class="d">CLAUDE.md<br>+ 项目知识库<br>+ 护栏文件</div>
+    <div class="t">Three-layer<br>doc system</div>
+    <div class="d">CLAUDE.md<br>+ project knowledge base<br>+ guardrail file</div>
   </div>
   <!-- ... more pillars ... -->
 </div>
@@ -206,8 +206,8 @@ A three-pillar structure, often used for "concepts side by side" pages.
 ```html
 <div class="pillar" style="padding:4vh 2vw;border:1px solid currentColor;border-color:rgba(10,10,11,.2)">
   <div class="ic"><i data-lucide="compass" class="ico-lg"></i></div>
-  <div class="t">判断力</div>
-  <div class="d">决策和方向的权威。<br>取舍、品味、方向感。</div>
+  <div class="t">Judgment</div>
+  <div class="d">The authority behind decisions and direction.<br>Trade-offs, taste, a sense of direction.</div>
 </div>
 ```
 
@@ -219,16 +219,16 @@ A three-pillar structure, often used for "concepts side by side" pages.
 
 **Kicker** is the small hint text above the title (mono, all caps, small size):
 ```html
-<div class="kicker">过去 64 天 · 开发篇</div>
-<div class="h1-zh">一个人，做了什么。</div>
+<div class="kicker">The last 64 days · Dev diary</div>
+<div class="h1-zh">One person. What did they build.</div>
 ```
 
 **Tag** is a standalone label pill (with a border):
 ```html
 <div style="display:flex;gap:1.6vw;flex-wrap:wrap">
-  <div class="tag">早上 10 点起床</div>
-  <div class="tag">周二 / 四下午健身</div>
-  <div class="tag">晚上照样看剧 · 玩游戏</div>
+  <div class="tag">Wakes up at 10am</div>
+  <div class="tag">Gym Tue / Thu afternoons</div>
+  <div class="tag">Still watches shows at night · plays games</div>
 </div>
 ```
 
@@ -243,10 +243,10 @@ A three-pillar structure, often used for "concepts side by side" pages.
 ```html
 <figure class="tile">
   <div class="frame-img" style="height:26vh">
-    <img src="图片素材/xxx.png" alt="说明">
+    <img src="image-assets/xxx.png" alt="caption">
   </div>
   <figcaption class="frame-cap">
-    <span class="pf">推特 · Twitter</span>
+    <span class="pf">Twitter</span>
     <span class="nb">137K</span>
   </figcaption>
 </figure>
@@ -277,14 +277,14 @@ A three-pillar structure, often used for "concepts side by side" pages.
 ```html
 <!-- Standard: figure name on the left, number on the right -->
 <figcaption class="frame-cap">
-  <span class="pf">推特 · Twitter</span>
+  <span class="pf">Twitter</span>
   <span class="nb">137K</span>
 </figcaption>
 
 <!-- Numbered -->
 <figcaption class="frame-cap">
   <span class="idx">01</span>
-  <span class="pf">AI 润色</span>
+  <span class="pf">AI Polish</span>
   <span>Polish</span>
 </figcaption>
 ```
@@ -295,7 +295,7 @@ When the image isn't in place yet, use a dashed frame as a placeholder:
 ```html
 <div class="img-slot r-4x3">  <!-- r-4x3 / r-16x9(default) / r-3x2 / r-1x1 -->
   <span class="plus">+</span>
-  <span class="label">GitHub 截图位置</span>
+  <span class="label">GitHub screenshot goes here</span>
 </div>
 ```
 
@@ -326,7 +326,7 @@ When the image isn't in place yet, use a dashed frame as a placeholder:
 ```html
 <div class="h3-zh" style="display:flex;align-items:center;gap:.8em">
   <i data-lucide="target" class="ico-md"></i>
-  判断 — 什么值得写
+  Judgment — what’s worth writing
 </div>
 ```
 
@@ -354,8 +354,8 @@ Used as "decorative background text," extremely low opacity, to create a magazin
 The "highlighter" effect on an inline phrase:
 
 ```html
-<span class="hi">不是</span>
-<span class="hi">一次性爆发</span>
+<span class="hi">not</span>
+<span class="hi">a one-time burst</span>
 ```
 
 It generates a semi-transparent highlight bar at the bottom of the text. A dark theme uses a bright bar, a light theme a dark bar (the CSS handles this).

@@ -111,7 +111,7 @@
 - **A deck uses only one theme**, don't change colors midway
 - The WebGL shader's default primary colors (titanium dispersion / silver flow) suit all 5 presets (tested as acceptable)
 - The `currentColor`-driven border / icon automatically adapts to the section's text color, no extra tuning needed
-- After picking a theme, the `<title>` text and `chrome` copy can reinforce that theme's semantics (e.g. Kraft Paper paired with something like "Vol.03 · 秋")
+- After picking a theme, the `<title>` text and `chrome` copy can reinforce that theme's semantics (e.g. Kraft Paper paired with something like "Vol.03 · Autumn")
 
 ## ❌ What not to do
 

@@ -254,50 +254,6 @@ describe('NextStepActions', () => {
     expect(PROJECT_GENERATE_ARTIFACT_PROMPT).not.toContain('usually index.html');
   });
 
-  it('localizes incomplete-project recovery prompts in Chinese', () => {
-    const onPromptAction = vi.fn();
-    renderActions({
-      variant: 'project-incomplete',
-      fileName: null,
-      onPromptAction,
-    }, 'zh-CN');
-
-    fireEvent.click(screen.getByTestId('next-step-project-action-project-continue'));
-    expect(onPromptAction).toHaveBeenCalledWith(
-      expect.stringContaining('从已停止或未完成的回合继续处理'),
-    );
-    fireEvent.click(screen.getByTestId('next-step-project-action-project-generate-artifact'));
-    expect(onPromptAction).toHaveBeenCalledWith(
-      expect.stringContaining('现在生成缺失的项目产物'),
-    );
-    expect(onPromptAction).toHaveBeenCalledWith(
-      expect.stringContaining('语义化文件名'),
-    );
-    expect(onPromptAction).not.toHaveBeenCalledWith(
-      expect.stringContaining('Generate the missing project artifact now'),
-    );
-    expect(onPromptAction).not.toHaveBeenCalledWith(
-      expect.stringContaining('通常保存为 index.html'),
-    );
-  });
-
-  it('localizes design-system project prompts in Chinese', () => {
-    const onPromptAction = vi.fn();
-    renderActions({ variant: 'design-system', onPromptAction }, 'zh-CN');
-
-    fireEvent.click(screen.getByTestId('next-step-design-system-action-design-system-ai-refine'));
-    expect(onPromptAction).toHaveBeenCalledWith(
-      expect.stringContaining('原地优化这个设计系统'),
-    );
-    fireEvent.click(screen.getByTestId('next-step-design-system-action-design-system-audit-kit'));
-    expect(onPromptAction).toHaveBeenCalledWith(
-      expect.stringContaining('审查这个设计系统是否已经可用'),
-    );
-    expect(onPromptAction).not.toHaveBeenCalledWith(
-      expect.stringContaining('refine this design system in place'),
-    );
-  });
-
   it('keeps brand-extraction rows visible and disabled while their actions are starting', () => {
     renderActions({
       variant: 'brand-extraction',
@@ -395,44 +351,6 @@ describe('NextStepActions', () => {
     expect(within(list).getByTestId('next-step-toolbox-resource-emilkowalski-motion')).toBeTruthy();
     // ...and the action it is the preferred skill for must stay visible too,
     // instead of the action row disappearing while its resource row shows.
-    expect(within(list).getByTestId('next-step-toolbox-sub-action-motion')).toBeTruthy();
-  });
-
-  it('matches and renders a global resource by its localized text under a non-English locale', () => {
-    const localizedSkill = {
-      ...skill('creative-director', 'creative-director'),
-      displayName: { 'zh-CN': '创意总监' },
-      descriptionI18n: { 'zh-CN': 'AI 创意总监，负责整体审美方向' },
-    } as SkillSummary;
-    renderActions({ skills: [localizedSkill] }, 'zh-CN');
-    fireEvent.mouseEnter(screen.getByTestId('next-step-toolbox-more'));
-    fireEvent.mouseEnter(screen.getByTestId('next-step-more-toolbox'));
-    const list = screen.getByTestId('next-step-toolbox-actions');
-
-    fireEvent.change(within(list).getByRole('textbox'), { target: { value: '创意总监' } });
-
-    // The localized query matches (parity with the composer's localized index)...
-    expect(within(list).getByTestId('next-step-toolbox-resource-creative-director')).toBeTruthy();
-    // ...and the row renders the localized name rather than the raw id.
-    expect(within(list).getByText('创意总监')).toBeTruthy();
-  });
-
-  it('keeps the paired action visible for a localized preferred-skill query (action/resource parity under a non-English locale)', () => {
-    const motionSkill = {
-      ...skill('emilkowalski-motion', 'emilkowalski-motion', 'animation-motion'),
-      displayName: { 'zh-CN': '动效大师' },
-    } as SkillSummary;
-    renderActions({ skills: [motionSkill] }, 'zh-CN');
-    fireEvent.mouseEnter(screen.getByTestId('next-step-toolbox-more'));
-    fireEvent.mouseEnter(screen.getByTestId('next-step-more-toolbox'));
-    const list = screen.getByTestId('next-step-toolbox-actions');
-
-    fireEvent.change(within(list).getByRole('textbox'), { target: { value: '动效大师' } });
-
-    // The resource row matches the localized name...
-    expect(within(list).getByTestId('next-step-toolbox-resource-emilkowalski-motion')).toBeTruthy();
-    // ...and the action it is the preferred skill for must stay visible, instead
-    // of the action matcher ignoring the localized skill text and hiding it.
     expect(within(list).getByTestId('next-step-toolbox-sub-action-motion')).toBeTruthy();
   });
 

@@ -4,8 +4,8 @@ import { routeAgents } from '@/playwright/mock-factory';
 import type { Page } from '@playwright/test';
 
 const STORAGE_KEY = 'open-design:config';
-const OPEN_SETTINGS_LABEL = /Open settings|打开设置|開啟設定/i;
-const AUTOMATIONS_TITLE = /Automations|自动化/i;
+const OPEN_SETTINGS_LABEL = /Open settings/i;
+const AUTOMATIONS_TITLE = /Automations/i;
 
 test.describe.configure({ timeout: 30_000 });
 
@@ -539,15 +539,15 @@ test.describe('Automations page', () => {
     });
   });
 
-  test('[P1] renders localized automation schedule summaries in zh-CN', async ({ page }) => {
-    await seedAutomationsBase(page, { locale: 'zh-CN' });
+  test('[P1] renders weekly and weekdays automation schedule summaries', async ({ page }) => {
+    await seedAutomationsBase(page);
 
     const now = Date.now();
     const routines = [
       {
-        id: 'routine-zh-weekly-1',
-        name: '中文周报',
-        prompt: '总结本周项目进展。',
+        id: 'routine-weekly-1',
+        name: 'Weekly launch digest',
+        prompt: 'Summarize this week\'s project progress.',
         schedule: { kind: 'weekly', weekday: 5, time: '16:45', timezone: 'UTC' },
         target: { mode: 'create_each_run' },
         enabled: true,
@@ -557,9 +557,9 @@ test.describe('Automations page', () => {
         updatedAt: now,
       },
       {
-        id: 'routine-zh-weekdays-1',
-        name: '工作日摘要',
-        prompt: '总结工作日活动。',
+        id: 'routine-weekdays-1',
+        name: 'Weekday activity summary',
+        prompt: 'Summarize weekday activity.',
         schedule: { kind: 'weekdays', time: '09:30', timezone: 'UTC' },
         target: { mode: 'create_each_run' },
         enabled: true,
@@ -611,11 +611,11 @@ test.describe('Automations page', () => {
     });
 
     const view = await gotoAutomations(page);
-    await expect(view.getByRole('heading', { name: '自动化', exact: true })).toBeVisible();
-    await expect(view.getByLabel('你的自动化')).toContainText('中文周报');
-    await expect(view.getByTestId('automation-row-routine-zh-weekly-1')).toContainText('每周五 4:45 下午');
-    await expect(view.getByTestId('automation-row-routine-zh-weekly-1')).toContainText('UTC');
-    await expect(view.getByTestId('automation-row-routine-zh-weekdays-1')).toContainText('周一至周五 9:30 上午');
+    await expect(view.getByRole('heading', { name: 'Automations', exact: true })).toBeVisible();
+    await expect(view.getByLabel('Your automations')).toContainText('Weekly launch digest');
+    await expect(view.getByTestId('automation-row-routine-weekly-1')).toContainText('Runs every Friday at 4:45 PM');
+    await expect(view.getByTestId('automation-row-routine-weekly-1')).toContainText('UTC');
+    await expect(view.getByTestId('automation-row-routine-weekdays-1')).toContainText('Runs Mon–Fri at 9:30 AM');
   });
 
   test('[P1] edits an existing automation and persists updated schedule, prompt, and target', async ({ page }) => {

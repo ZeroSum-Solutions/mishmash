@@ -3759,44 +3759,6 @@
       }
     },
     {
-      "name": "open-design/example-card-xiaohongshu",
-      "title": "Xiaohongshu Card",
-      "version": "0.1.0",
-      "source": "github:nexu-io/open-design@main/plugins/_official/examples/card-xiaohongshu",
-      "publisher": {
-        "id": "open-design",
-        "url": "https://open-design.ai"
-      },
-      "capabilitiesSummary": [
-        "prompt:inject",
-        "fs:write"
-      ],
-      "description": "Xiaohongshu-style knowledge cards, arranged as a swipeable multi-card carousel.",
-      "tags": [
-        "example",
-        "first-party",
-        "prototype",
-        "marketing",
-        "web",
-        "desktop",
-        "xhs",
-        "untitled",
-        "carousel"
-      ],
-      "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/card-xiaohongshu",
-      "license": "MIT",
-      "mode": "prototype",
-      "taskKind": "new-generation",
-      "title_i18n": {
-        "en": "Xiaohongshu Card",
-        "zh-CN": "小红书图文卡片"
-      },
-      "description_i18n": {
-        "en": "Xiaohongshu-style knowledge cards, arranged as a swipeable multi-card carousel.",
-        "zh-CN": "小红书风格知识卡片, 多张联排可滑动浏览"
-      }
-    },
-    {
       "name": "open-design/example-clinical-case-report",
       "title": "Clinical Case Report",
       "version": "0.1.0",

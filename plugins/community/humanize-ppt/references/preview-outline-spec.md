@@ -7,7 +7,7 @@ Status: Spec, not implemented. Will land in v0.6.6.
 
 In v0.6.5, `python3 scripts/humanize_ppt.py --research-md <path> --renderer guizang` writes a `<renderer>-production-prompt.md` and stops. The next agent (the user's downstream-skill runner) reads the brief and renders. This works, but the human in the loop has no chance to review the deck structure before commit.
 
-The 9-style showcase on "10 分钟入门 Agent 7 概念" exposed this gap concretely:
+The 9-style showcase on "A 10-minute intro to the 7 core Agent concepts" exposed this gap concretely:
 - The HV research doc had clean content but a methodology footer that leaked Khazix attribution into the deck.
 - Slide titles from subsection H2s were too long for layout slots.
 - Three takeaway pages had almost-empty visible_content, producing visually empty slides.
@@ -72,38 +72,38 @@ A human-readable markdown file with:
 > Slides: 8
 
 ## S01 · cover
-Title: 10 分钟入门 Agent 的 7 个核心概念
+Title: A 10-minute intro to the 7 core Agent concepts
 Body (kicker line only)
 
-## S02 · hook · 38 字
-Title: Agent 圈 7 个名词你能分清几个
+## S02 · hook · 38 chars
+Title: How many of the 7 Agent buzzwords can you actually tell apart
 Body:
-  7 个词都在同事嘴里蹦过：Agent、Tool、MCP、Skill、Rules、Hook、Subagent。
-  但问起来，没人能说全它们各自是什么、彼此什么关系。
+  All 7 words come up in hallway conversation: Agent, Tool, MCP, Skill, Rules, Hook, Subagent.
+  But ask around — nobody can say what each one is and how they relate.
 
-## S03 · context · 45 字
-Title: LLM 怎么从说话变成做事
+## S03 · context · 45 chars
+Title: How LLMs went from talking to doing
 Body:
-  2020 GPT-3 只能写文本...
+  In 2020, GPT-3 could only write text...
 
-## S04 · tension · 58 字
+## S04 · tension · 58 chars
 ...
 
-## S05 · method · 73 字
-Title: 7 概念对比：谁触发 / 在哪层 / 干什么
+## S05 · method · 73 chars
+Title: The 7 concepts compared: who triggers / which layer / what it does
 Body: (table-style content)
 Layout hint: table (4 col × 7 row)
 
-## S06 · method · 42 字
+## S06 · method · 42 chars
 ...
 
-## S07 · proof · 22 字
+## S07 · proof · 22 chars
 ...
 
-## S08 · takeaway · 46 字
+## S08 · takeaway · 46 chars
 ...
 
-## S09 · takeaway · 42 字
+## S09 · takeaway · 42 chars
 ...
 
 ---
@@ -124,8 +124,8 @@ Layout hint: table (4 col × 7 row)
 
 ## Review checklist
 
-- [ ] Title counts fit the layout slot (≤ 15 中文字 for cover/headline, ≤ 25 ASCII for body)
-- [ ] All visible_content ≥ 30 中文字 (no empty pages)
+- [ ] Title counts fit the layout slot (≤ 15 CJK chars for cover/headline on Chinese decks, ≤ 25 ASCII chars for body)
+- [ ] All visible_content is substantial (≥ 30 CJK chars on Chinese decks; no empty pages)
 - [ ] No banned substrings (Khazix, methodology, attribution) in any body
 - [ ] 7 concepts (Agent / Tool / Function calling / MCP / Skill / Rules / Hook / Subagent) all present
 - [ ] Per-page media decisions make sense for the page role
@@ -188,7 +188,7 @@ python3 scripts/humanize_ppt.py \
 
 - The Khazix-leak problem from v0.6.5 would be caught by the "No banned substrings" review item.
 - The title overflow problem from v0.6.5 would be caught by the "Title counts fit" review item.
-- The empty takeaway problem from v0.6.5 would be caught by the "All visible_content ≥ 30 中文字" review item.
+- The empty takeaway problem from v0.6.5 would be caught by the "All visible_content is substantial" review item.
 
 All three problems surface in the 5-minute human review window between `--preview-outline` and `--confirm-outline`.
 

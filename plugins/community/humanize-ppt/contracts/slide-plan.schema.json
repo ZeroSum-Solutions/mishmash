@@ -59,7 +59,7 @@
               },
               "prompt_hint": {
                 "type": "string",
-                "description": "v0.6.7: human-readable prompt for the image model. e.g. 'AI Agent 概念入门 封面图，10 分钟课程'."
+                "description": "v0.6.7: human-readable prompt for the image model. e.g. 'Cover image for an intro to AI Agent concepts, 10-minute course'."
               },
               "aspect_ratio": {
                 "type": "string",

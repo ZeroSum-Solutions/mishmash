@@ -48,7 +48,11 @@ function clearHost(): void {
   uninstallHost = null;
 }
 
-describe('detectInitialLocale priority chain', () => {
+// Open Design ships English-only, so every path through the priority chain
+// (manual localStorage pick > host OS locale > navigator.languages) now
+// resolves to 'en' — the only supported `Locale`. These tests lock that
+// down; see git history for the pre-de-bloat multi-locale coverage.
+describe('detectInitialLocale priority chain (English-only)', () => {
   beforeEach(() => {
     window.localStorage.clear();
     clearHost();
@@ -61,56 +65,35 @@ describe('detectInitialLocale priority chain', () => {
   });
 
   it('prefers a manually-tagged localStorage pick over host and navigator', () => {
-    setStoredLocale('ja', 'manual');
-    installHostWithOsLocale('zh-CN');
+    setStoredLocale('en', 'manual');
+    installHostWithOsLocale('en-US');
     setNavigatorLanguages(['fr-FR']);
 
-    expect(detectInitialLocale()).toBe('ja');
-  });
-
-  it('ignores an untagged localStorage value when a fresh host locale is available', () => {
-    setStoredLocale('ja', 'untagged');
-    installHostWithOsLocale('zh-CN');
-
-    expect(detectInitialLocale()).toBe('zh-CN');
+    expect(detectInitialLocale()).toBe('en');
   });
 
   it('falls through to navigator when an unsupported locale was stored', () => {
     setStoredLocale('xx-YY', 'manual');
     setNavigatorLanguages(['de-DE']);
 
-    expect(detectInitialLocale()).toBe('de');
-  });
-
-  it('uses the desktop host OS locale when no localStorage pick exists', () => {
-    installHostWithOsLocale('zh-CN');
-    setNavigatorLanguages(['en-US']);
-
-    expect(detectInitialLocale()).toBe('zh-CN');
-  });
-
-  it('routes packaged OS locale strings through resolveSystemLocale (zh-Hant → zh-TW)', () => {
-    installHostWithOsLocale('zh-Hant-TW');
-    setNavigatorLanguages(['en-US']);
-
-    expect(detectInitialLocale()).toBe('zh-TW');
+    expect(detectInitialLocale()).toBe('en');
   });
 
   it('falls back to navigator when host osLocale is missing or not a string', () => {
     installHostWithOsLocale(undefined);
     setNavigatorLanguages(['ko-KR']);
-    expect(detectInitialLocale()).toBe('ko');
+    expect(detectInitialLocale()).toBe('en');
 
     installHostWithOsLocale(42);
     setNavigatorLanguages(['fr-FR']);
-    expect(detectInitialLocale()).toBe('fr');
+    expect(detectInitialLocale()).toBe('en');
   });
 
   it('falls back to navigator when host osLocale is not in the supported set', () => {
     installHostWithOsLocale('nl-NL');
     setNavigatorLanguages(['pt-PT']);
 
-    expect(detectInitialLocale()).toBe('pt-BR');
+    expect(detectInitialLocale()).toBe('en');
   });
 
   it('falls back to en when nothing else is available', () => {

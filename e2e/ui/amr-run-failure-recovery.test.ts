@@ -132,8 +132,8 @@ test('[P0] @critical AMR insufficient-balance failures surface Top up AMR and re
   await gotoProject(page, amr.projectId);
   await sendPrompt(page, 'AMR insufficient balance recovery smoke');
 
-  const topUp = page.getByRole('button', { name: /Top up|充值|儲值/i }).first();
-  const retry = page.getByRole('button', { name: /^Retry$|^重试$|^重試$/i }).first();
+  const topUp = page.getByRole('button', { name: /Top up/i }).first();
+  const retry = page.getByRole('button', { name: /^Retry$/i }).first();
   await expect(topUp).toBeVisible({ timeout: T.long });
   await expect(retry).toBeVisible();
 
@@ -205,7 +205,7 @@ test('[P0] @critical AMR auth failures offer inline Authorize & retry sign-in an
   await gotoProject(page, amr.projectId);
   await sendPrompt(page, 'AMR auth failure recovery smoke');
 
-  const authorizeAndRetry = page.getByRole('button', { name: /Authorize.*retry|授权并重试/i }).first();
+  const authorizeAndRetry = page.getByRole('button', { name: /Authorize.*retry/i }).first();
   await expect(authorizeAndRetry).toBeVisible({ timeout: T.long });
   await authorizeAndRetry.click();
 
@@ -305,9 +305,9 @@ test('[P0] @critical AMR model catalog invalid-key failures authorize and auto-r
 
   await gotoProject(page, projectId);
 
-  const authorizeAndRetry = page.getByRole('button', { name: /Authorize.*retry|授权并重试/i }).first();
+  const authorizeAndRetry = page.getByRole('button', { name: /Authorize.*retry/i }).first();
   await expect(authorizeAndRetry).toBeVisible({ timeout: T.long });
-  await expect(page.getByRole('button', { name: /^Retry$|^重试$|^重試$/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Retry$/i })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Switch to Open Design Cloud & retry/i })).toHaveCount(0);
 
   await authorizeAndRetry.click();
@@ -629,7 +629,7 @@ test('[P0] @critical Settings preserves AMR account, recharge shortcut, and mode
   await expect(settings.getByTestId('settings-agent-select-amr')).toHaveAttribute('aria-pressed', 'true');
   await expect(settings.getByTestId('settings-agent-select-amr')).toContainText('settings-amr-switch@example.com');
   await expect(settings.locator('.agent-card-amr-profile-badge')).toContainText(/test/i);
-  await expect(settings.getByRole('link', { name: /Manage|管理/i })).toBeVisible();
+  await expect(settings.getByRole('link', { name: /Manage/i })).toBeVisible();
 
   await settings.getByRole('combobox', { name: 'Model', exact: true }).click();
   let modelPopover = page.getByTestId('settings-agent-model-popover-amr');
@@ -646,7 +646,7 @@ test('[P0] @critical Settings preserves AMR account, recharge shortcut, and mode
   await expect(settings.getByTestId('settings-agent-select-amr')).toHaveAttribute('aria-pressed', 'true');
   await expect(settings.getByTestId('settings-agent-select-amr')).toContainText('settings-amr-switch@example.com');
   await expect(settings.locator('.agent-card-amr-profile-badge')).toContainText(/test/i);
-  const amrConsole = settings.getByRole('link', { name: /Manage|管理/i });
+  const amrConsole = settings.getByRole('link', { name: /Manage/i });
   await expect(amrConsole).toBeVisible();
   await expect(amrConsole).toHaveAttribute('href', /source=open_design/);
 
@@ -696,7 +696,7 @@ test('[P0] after an AMR failure the user can switch to Codex and complete a fres
     /Open Design agent isn't signed in yet|AMR sign-in is required/i,
     { timeout: T.long },
   );
-  await expect(page.getByRole('button', { name: /Authorize.*retry|授权并重试/i }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /Authorize.*retry/i }).first()).toBeVisible();
 
   const settings = await openSettingsDialog(page);
   await settings.getByTestId('settings-agent-select-codex').click();
@@ -789,17 +789,13 @@ test('[P0] upstream outages keep Retry available without promoting AMR', async (
 
   await gotoProject(page, projectId);
 
-  await expect(page.getByRole('button', { name: /^Retry$|^重试$|^重試$/i }).first()).toBeVisible({ timeout: T.long });
+  await expect(page.getByRole('button', { name: /^Retry$/i }).first()).toBeVisible({ timeout: T.long });
   await expect(page.getByText(/Generation service unavailable|model provider is temporarily unavailable/i).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /Switch to Open Design Cloud & retry/i })).toHaveCount(0);
   await expect(page.getByText(/Model call failed/i)).toHaveCount(0);
 });
 
-test('[P1] zh-CN run failure guidance shows actionable copy and expandable raw source', async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('open-design:locale', 'zh-CN');
-    window.localStorage.setItem('open-design:locale-source', 'manual');
-  });
+test('[P1] prompt-too-large run failure guidance shows actionable copy and expandable raw source', async ({ page }) => {
   await stubCatalogsEmpty(page);
   await stubRuntimeAgents(page);
 
@@ -869,12 +865,12 @@ test('[P1] zh-CN run failure guidance shows actionable copy and expandable raw s
   await gotoProject(page, projectId);
 
   const card = runErrorCard(page);
-  await expect(card).toContainText('内容过长', { timeout: T.long });
-  await expect(card).toContainText('本轮输入超出了模型的上下文上限');
-  await expect(page.getByRole('button', { name: /^重试$/ }).first()).toBeVisible();
+  await expect(card).toContainText('Input too long', { timeout: T.long });
+  await expect(card).toContainText("This turn exceeded the model's context limit.");
+  await expect(page.getByRole('button', { name: /^Retry$/ }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /Switch to Open Design Cloud & retry/i })).toHaveCount(0);
 
-  const sourceToggle = card.getByRole('button', { name: /查看详情/ });
+  const sourceToggle = card.getByRole('button', { name: /View details/ });
   await expect(sourceToggle).toHaveAttribute('aria-expanded', 'false');
   await sourceToggle.click();
   await expect(sourceToggle).toHaveAttribute('aria-expanded', 'true');
@@ -959,7 +955,7 @@ test('[P0] antigravity rate limits offer terminal model switching without promot
 
   const launchTerminal = page.getByRole('button', { name: /Switch model in terminal/i }).first();
   await expect(launchTerminal).toBeVisible({ timeout: T.long });
-  await expect(page.getByRole('button', { name: /^Retry$|^重试$|^重試$/i }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Retry$/i }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /Switch to Open Design Cloud & retry/i })).toHaveCount(0);
 
   await launchTerminal.click();

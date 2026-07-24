@@ -377,39 +377,6 @@ describe('ChatComposer context pickers', () => {
     expect(screen.getByText('Search Design Files, tabs, plugins, skills, MCP servers, and connectors.')).toBeTruthy();
   });
 
-  it('localizes @ panel tabs and empty states in Chinese mode', async () => {
-    plugins = [];
-    skills = [];
-    servers = [];
-    renderComposer({}, { locale: 'zh-CN' });
-    await flushMounts();
-
-    await typeAndSettle('@');
-
-    await waitFor(() => expect(screen.getByRole('tab', { name: '全部' })).toBeTruthy());
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
-      '全部',
-      '设计文件',
-      '标签页',
-      '插件',
-      '技能',
-      'MCP',
-      '连接器',
-    ]);
-    expect(screen.getByRole('tab', { name: '插件' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: '技能' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'MCP' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: '连接器' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: '设计文件' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: '标签页' })).toBeTruthy();
-    expect(screen.getByText('搜索设计文件、标签页、插件、技能、MCP 服务器和连接器。')).toBeTruthy();
-
-    await typeAndSettle('@missing');
-
-    await waitFor(() => expect(screen.getByText('没有找到“missing”的结果。')).toBeTruthy());
-    expect(screen.queryByText('No results for “missing”.')).toBeNull();
-  });
-
   it('lists Design Files first in All and picks the first file with Enter', async () => {
     renderComposer({
       projectFiles: [

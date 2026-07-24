@@ -39,7 +39,7 @@ function shouldRunManualCheck(status: OpenDesignHostUpdaterStatusSnapshot): bool
 }
 
 export function UpdateDialog() {
-  const { locale, t } = useI18n();
+  const { t } = useI18n();
   const analytics = useAnalytics();
   const analyticsTrackRef = useRef(analytics.track);
   analyticsTrackRef.current = analytics.track;
@@ -357,9 +357,7 @@ export function UpdateDialog() {
     if (model.upToDate) {
       if (status?.currentVersion == null) return t('updater.upToDate');
       const version = `v${status.currentVersion}`;
-      return locale === 'zh-CN' || locale === 'zh-TW'
-        ? `${t('updater.upToDate')}（${version}）`
-        : `${t('updater.upToDate')} (${version})`;
+      return `${t('updater.upToDate')} (${version})`;
     }
     if (unsupported) return t('updater.dialogUnsupported');
     return t('settings.updateStatusNotChecked');

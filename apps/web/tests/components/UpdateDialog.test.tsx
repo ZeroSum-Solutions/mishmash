@@ -294,7 +294,7 @@ describe('UpdateDialog', () => {
     });
     fireEvent.click(await screen.findByRole('button', { name: 'Install and restart' }));
 
-    expect(await screen.findByText('Open Design is still working')).toBeTruthy();
+    expect(await screen.findByText('MishMash is still working')).toBeTruthy();
     expect(screen.getByText('2 active tasks are still running. Restarting now will interrupt them.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Later' })).toHaveFocus();
 

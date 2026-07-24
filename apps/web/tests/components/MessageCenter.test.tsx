@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageCenter } from '../../src/components/MessageCenter';
-import { I18nProvider, useI18n } from '../../src/i18n';
+import { I18nProvider } from '../../src/i18n';
 import type { MessageCenterMessage } from '../../src/message-center-client';
 
 const defaultMessages: MessageCenterMessage[] = [
@@ -31,19 +31,10 @@ function mockFetch(
   }));
 }
 
-function renderMessageCenter(locale: 'en' | 'zh-CN' = 'en') {
+function renderMessageCenter() {
   const onOpenNotificationSettings = vi.fn();
-  const result = render(<I18nProvider initial={locale}><MessageCenter onOpenNotificationSettings={onOpenNotificationSettings}/></I18nProvider>);
+  const result = render(<I18nProvider initial="en"><MessageCenter onOpenNotificationSettings={onOpenNotificationSettings}/></I18nProvider>);
   return { ...result, onOpenNotificationSettings };
-}
-
-function LocaleSwitcher() {
-  const { setLocale } = useI18n();
-  return (
-    <button type="button" onClick={() => setLocale('fr')}>
-      Switch locale
-    </button>
-  );
 }
 
 async function openCenter(unreadCount = 1) {
@@ -64,18 +55,15 @@ afterEach(() => {
 });
 
 describe('MessageCenter', () => {
-  it('formats published dates using the selected locale', async () => {
+  it('formats published dates using the active locale', async () => {
     const publishedAt = new Date(defaultMessages[0]!.publishedAt);
-    const zhDate = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' }).format(publishedAt);
-    const enDate = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(publishedAt);
-    renderMessageCenter('zh-CN');
+    const enDate = new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(publishedAt);
+    renderMessageCenter();
     fireEvent.click(screen.getByTestId('message-center-trigger'));
 
     await waitFor(() => {
-      expect(screen.getByText(zhDate)).toBeTruthy();
+      expect(screen.getByText(enDate)).toBeTruthy();
     });
-    expect(zhDate).not.toBe(enDate);
-    expect(screen.queryByText(enDate)).toBeNull();
   });
 
   it('renders API messages for anonymous clients without a local window', async () => {
@@ -226,40 +214,6 @@ describe('MessageCenter', () => {
       ).toBe(true),
     );
     expect(localStorage.getItem('open-design.message-center.anonymous-read-ids.v1')).toBeNull();
-  });
-
-  it('keeps visible account messages when locale changes and the follow-up sync fails', async () => {
-    let messageRequests = 0;
-    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (url.includes('/status')) return Response.json({ loggedIn: true });
-      if (url.includes('/messages?')) {
-        messageRequests += 1;
-        if (messageRequests === 1) {
-          return Response.json({ messages: defaultMessages, nextCursor: null, unreadCount: 1 });
-        }
-        return new Response(null, { status: 500 });
-      }
-      if (url.includes('/read')) return Response.json({ read: true, markedCount: 1 });
-      return new Response(null, { status: 404 });
-    }));
-
-    render(
-      <I18nProvider initial="en">
-        <LocaleSwitcher />
-        <MessageCenter />
-      </I18nProvider>,
-    );
-
-    await openCenter();
-    await waitFor(() => expect(screen.getByText('Open Design 0.14 is available')).toBeTruthy());
-
-    fireEvent.click(screen.getByRole('button', { name: 'Switch locale' }));
-
-    await waitFor(() => expect(messageRequests).toBeGreaterThanOrEqual(2));
-    expect(screen.getByText('Open Design 0.14 is available')).toBeTruthy();
-    expect(screen.getByRole('status')).toBeTruthy();
-    expect(within(screen.getByRole('status')).getByRole('button')).toBeTruthy();
   });
 
   it('shows a loading state instead of the empty copy during the first empty sync', async () => {

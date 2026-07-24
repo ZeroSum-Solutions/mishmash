@@ -1,29 +1,12 @@
-// Supported UI locales. Adding a new locale requires creating a new
-// dictionary in `./locales/` and registering it in `./index.tsx`.
-export type Locale = 'en' | 'id' | 'de' | 'zh-CN' | 'zh-TW' | 'pt-BR' | 'es-ES' | 'ru' | 'fa' | 'ar' | 'ja' | 'ko' | 'pl' | 'hu' | 'fr' | 'uk' | 'tr' | 'th' | 'it';
+// Supported UI locales. Open Design ships English-only; non-English locale
+// dictionaries, `./locales/*.ts` files, and `./content.<locale>.ts` bundles
+// were removed in the English-only de-bloat pass.
+export type Locale = 'en';
 
-export const LOCALES: Locale[] = ['en', 'id', 'de', 'zh-CN', 'zh-TW', 'pt-BR', 'es-ES', 'ru', 'fa', 'ar', 'ja', 'ko', 'pl', 'hu', 'fr', 'uk', 'tr', 'th', 'it'];
+export const LOCALES: Locale[] = ['en'];
 
 export const LOCALE_LABEL: Record<Locale, string> = {
   'en': 'English',
-  'id': 'Bahasa Indonesia',
-  'de': 'Deutsch',
-  'zh-CN': '简体中文',
-  'zh-TW': '繁體中文',
-  'pt-BR': 'Português (Brasil)',
-  'es-ES': 'Español (España)',
-  'ru': 'Русский',
-  'fa': 'فارسی',
-  'ar': 'العربية',
-  'ja': '日本語',
-  'ko': '한국어',
-  'pl': 'Polski',
-  'hu': 'Magyar',
-  'fr': 'Français',
-  'uk': 'Українська',
-  'tr': 'Türkçe',
-  'th': 'ภาษาไทย',
-  'it': 'Italiano'
 };
 
 // Translation dictionary shape — flat keys, dot-namespaced. We keep it
@@ -1006,22 +989,11 @@ export interface Dict {
   'entry.openSettingsTitle': string;
   'entry.openSettingsAria': string;
   'entry.discordLabel': string;
-  'entry.discordAria': string;
-  'entry.discordAriaWithOnline': string;
-  'entry.discordOnlineLabel': string;
   'entry.followXLabel': string;
-  'entry.followThreadsLabel': string;
-  'entry.youtubeLabel': string;
-  'entry.followInstagramLabel': string;
-  'entry.followLinkedinLabel': string;
-  'entry.followXiaohongshuLabel': string;
   'entry.resizeAria': string;
   'entry.loadingWorkspace': string;
   'entry.useEverywhereTitle': string;
   'entry.useEverywhereAria': string;
-  'entry.workspaceTeamsLabel': string;
-  'entry.workspaceTeamsTitle': string;
-  'entry.workspaceTeamsAria': string;
   // Left nav rail (icon-only) — surface labels also serve as tooltips
   'entry.navExpand': string;
   'entry.navCollapse': string;
@@ -1869,10 +1841,6 @@ export interface Dict {
   'entry.helpSubmitFeature': string;
   'entry.helpWhatsNew': string;
   'entry.helpDownloadDesktop': string;
-  // GitHub star pill in the top bar
-  'entry.githubStarLabel': string;
-  'entry.githubStarTitle': string;
-  'entry.githubStarAria': string;
 
   // Connectors tab
   'connectors.title': string;
@@ -2410,10 +2378,6 @@ export interface Dict {
   'avatar.modelLabel': string;
   'avatar.reasoningLabel': string;
   'avatar.customSuffix': string;
-  'socialShare.openDesignSection': string;
-  'socialShare.openDesignTitle': string;
-  'socialShare.openDesignText': string;
-  'socialShare.openDesignCopyText': string;
   'socialShare.projectSection': string;
   'socialShare.publishPageTitle': string;
   'socialShare.publishPageSubtitle': string;

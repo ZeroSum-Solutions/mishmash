@@ -125,7 +125,7 @@ PPT Master exception: `--renderer ppt-master --style-gallery` writes `style_gall
 
 Per-page review of rendered HTML or native PPTX against the outline — grades the outline, not beauty. Capped at `--max-qa-iterations` (default 3); unresolved findings at the cap flip `qa_status` to `needs-human`.
 
-- `FAILURE_MODES` (in `humanize_ppt_v2.py`) is the code-side source of truth; the human-readable catalog is `references/qa-failure-modes.md` (+ English mirror `references/qa-failure-modes.en.md`), matched by id.
+- `FAILURE_MODES` (in `humanize_ppt_v2.py`) is the code-side source of truth; the human-readable catalog is `references/qa-failure-modes.md`, matched by id.
 - Each round: `run_checks` → findings `[{id, severity, pages, evidence}]` → `qa_report.md` (human) + `fix_prompt.md` (downstream-actionable) + `qa_iteration.json` (round state).
 - PPTX dispatch uses `scripts/pptx_qa.py::inspect_pptx`: OOXML package integrity, page count, placeholder residue, editable shapes, speaker notes, AST/notes drift, relationships, transitions, and requested native table/chart objects.
 - Failure classes the static scan can't catch (text overflow, badge occlusion, the WebGL static-screenshot trap) are listed but not packaged as `FAILURE_MODES` rules — catalog discipline: only rules that exist in code.
@@ -141,7 +141,7 @@ A media slot **with** `asset_path` is an executable task; **without** one it is 
 
 ## 9. Renderer registry
 
-`registry/renderer_registry.json` snapshots renderer capability. `support_level` values, updated only on real results (宁空不摆拍):
+`registry/renderer_registry.json` snapshots renderer capability. `support_level` values, updated only on real results (leave it empty before staging a fake):
 
 - `guizang` → `full`
 - `beautiful-html-templates` → `full` (brief exit + real Neo-Grid checkup + 5 English-specific modes)
@@ -152,4 +152,4 @@ A media slot **with** `asset_path` is an executable task; **without** one it is 
 
 - `VERSION` in `humanize_ppt_v2.py`. Version history under `docs/versions/`.
 - Tests in `tests/` (pytest); run `python3 -m pytest -q`. v0.9 adds `tests/test_v090_style_gallery.py`.
-- The Luban discipline for this project: 验料 (confirm baseline green) → 访行 (read the existing flow) → 过尺 (run pytest) → 慢刨 (implement) → 回炉 (registry / SKILL.md / version / marketplace). Release actions (push / tag / marketplace bump) are gated on human review.
+- The working discipline for this project: confirm the baseline is green → read the existing flow → run the tests → implement slowly → close the loop (registry / SKILL.md / version / marketplace). Release actions (push / tag / marketplace bump) are gated on human review.

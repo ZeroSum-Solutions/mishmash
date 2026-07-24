@@ -24,14 +24,16 @@ DEFAULT_ZH_PREVIEW_COUNT = 3
 DEFAULT_EN_PREVIEW_COUNT = 5
 
 ROLE_ARC = [
-    ("hook", "抓住注意力：先把观众从信息疲劳里拉出来。"),
-    ("context", "建立共同背景：说明为什么现在要听这件事。"),
-    ("tension", "制造认知张力：指出旧理解和真实问题之间的差距。"),
-    ("method", "给出方法：把复杂信息变成可执行路径。"),
-    ("proof", "给出证据：用案例、步骤或指标证明它不是口号。"),
-    ("takeaway", "收束行动：让观众带走一句可复述的方法。"),
+    ("hook", "Grab attention: pull the audience out of information fatigue first."),
+    ("context", "Establish shared context: explain why this matters right now."),
+    ("tension", "Create cognitive tension: expose the gap between the old understanding and the real problem."),
+    ("method", "Give the method: turn complex information into an executable path."),
+    ("proof", "Give the evidence: prove it with cases, steps, or metrics, not slogans."),
+    ("takeaway", "Close with action: leave the audience one repeatable takeaway."),
 ]
 
+# Chinese model-draft residue markers ("thinking process", "as an AI", ...).
+# Functional detection data for Chinese-source decks — not translatable prose.
 BANNED_VISIBLE_PATTERNS = ["思考过程", "推理过程", "作为AI", "作为一个AI", "我将", "首先我需要"]
 
 # ---------------------------------------------------------------------------
@@ -52,78 +54,78 @@ STYLE_GALLERY_CANDIDATES = {
     "guizang": [
         {
             "id": "guizang-ink-classic",
-            "label": "墨水经典 / Ink Classic",
-            "description": "Style A · WebGL 水墨封面 · 已验证的 known-good 基线（examples/03）",
+            "label": "Ink Classic",
+            "description": "Style A · WebGL ink-wash cover · the verified known-good baseline (examples/03)",
             "cli": {"--renderer": "guizang", "--guizang-style": "A", "--guizang-theme": "ink-classic"},
         },
         {
             "id": "guizang-kraft-paper",
-            "label": "牛皮纸 / Kraft Paper",
-            "description": "Style A · 暖棕纸质调 · 适合手作 / 复古 / 温度感选题",
+            "label": "Kraft Paper",
+            "description": "Style A · warm brown paper tones · for handmade / retro / warm topics",
             "cli": {"--renderer": "guizang", "--guizang-style": "A", "--guizang-theme": "kraft-paper"},
         },
         {
             "id": "guizang-indigo-porcelain",
-            "label": "靛蓝瓷 / Indigo Porcelain",
-            "description": "Style A · 蓝灰瓷面调 · 沉静、东方、适合品牌 / 文化选题",
+            "label": "Indigo Porcelain",
+            "description": "Style A · blue-grey porcelain palette · calm, understated, for brand / culture topics",
             "cli": {"--renderer": "guizang", "--guizang-style": "A", "--guizang-theme": "indigo-porcelain"},
         },
         {
             "id": "guizang-swiss-ikb",
-            "label": "瑞士国际 · 克莱因蓝 / Swiss · IKB",
-            "description": "Style B · 16 栏网格 + 单一饱和强调色 · 静态稳定、不依赖 WebGL",
+            "label": "Swiss · IKB",
+            "description": "Style B · 16-column grid + one saturated accent · static-stable, no WebGL dependency",
             "cli": {"--renderer": "guizang", "--guizang-style": "B", "--guizang-accent": "ikb"},
         },
     ],
     "frontend-slides": [
         {
             "id": "frontend-editorial-serif",
-            "label": "编辑杂志 / Editorial Serif",
-            "description": "衬线标题 + 大留白 · 长文转述、观点型选题",
+            "label": "Editorial Serif",
+            "description": "Serif headlines + generous whitespace · long-form retellings, opinion-led topics",
             "cli": {"--renderer": "frontend-slides", "--style-direction": "editorial-serif"},
         },
         {
             "id": "frontend-techno-grid",
-            "label": "科技网格 / Techno Grid",
-            "description": "等宽字 + 暗色网格 + 强调色 · 产品 / 数据 / 工程选题",
+            "label": "Techno Grid",
+            "description": "Monospace + dark grid + accent color · product / data / engineering topics",
             "cli": {"--renderer": "frontend-slides", "--style-direction": "techno-grid"},
         },
         {
             "id": "frontend-soft-gradient",
-            "label": "柔和渐变 / Soft Gradient",
-            "description": "渐变背景 + 圆角卡片 · 消费、品牌、温度感选题",
+            "label": "Soft Gradient",
+            "description": "Gradient backgrounds + rounded cards · consumer, brand, warm topics",
             "cli": {"--renderer": "frontend-slides", "--style-direction": "soft-gradient"},
         },
         {
             "id": "frontend-mono-contrast",
-            "label": "黑白高反差 / Mono Contrast",
-            "description": "纯黑白 + 超大字号 · 宣言、keynote、强观点开场",
+            "label": "Mono Contrast",
+            "description": "Pure black & white + oversized type · manifestos, keynotes, strong-opinion openers",
             "cli": {"--renderer": "frontend-slides", "--style-direction": "mono-contrast"},
         },
     ],
     "beautiful-html-templates": [
         {
             "id": "beautiful-template-1",
-            "label": "候选模板 1 / Template Slot 1",
-            "description": "由 beautiful-html-templates 的原生模板库填充（占位 slug，下游选定真实模板）",
+            "label": "Template Slot 1",
+            "description": "Filled from beautiful-html-templates' native template library (placeholder slug; downstream picks the real template)",
             "cli": {"--renderer": "beautiful-html-templates", "--selected-template": "slot-1"},
         },
         {
             "id": "beautiful-template-2",
-            "label": "候选模板 2 / Template Slot 2",
-            "description": "由 beautiful-html-templates 的原生模板库填充（占位 slug，下游选定真实模板）",
+            "label": "Template Slot 2",
+            "description": "Filled from beautiful-html-templates' native template library (placeholder slug; downstream picks the real template)",
             "cli": {"--renderer": "beautiful-html-templates", "--selected-template": "slot-2"},
         },
         {
             "id": "beautiful-template-3",
-            "label": "候选模板 3 / Template Slot 3",
-            "description": "由 beautiful-html-templates 的原生模板库填充（占位 slug，下游选定真实模板）",
+            "label": "Template Slot 3",
+            "description": "Filled from beautiful-html-templates' native template library (placeholder slug; downstream picks the real template)",
             "cli": {"--renderer": "beautiful-html-templates", "--selected-template": "slot-3"},
         },
         {
             "id": "beautiful-template-4",
-            "label": "候选模板 4 / Template Slot 4",
-            "description": "由 beautiful-html-templates 的原生模板库填充（占位 slug，下游选定真实模板）",
+            "label": "Template Slot 4",
+            "description": "Filled from beautiful-html-templates' native template library (placeholder slug; downstream picks the real template)",
             "cli": {"--renderer": "beautiful-html-templates", "--selected-template": "slot-4"},
         },
     ],
@@ -249,7 +251,7 @@ def markdown_segments(text):
     return [s for s in segments if s.get("title") or s.get("body")]
 
 
-def first_sentence(text, fallback="未命名要点"):
+def first_sentence(text, fallback="Untitled point"):
     text = " ".join(text.split())
     if not text:
         return fallback
@@ -265,10 +267,11 @@ def detect_language(text):
 
 
 def infer_audience(text, language):
+    # The keyword list keeps Chinese terms so Chinese-language sources still match.
     lower = text.lower()
     if any(k in lower for k in ["agent", "skill", "ai", "模型", "工具", "ppt"]):
-        return "对AI工具、PPT生产、Agent工作流感兴趣的内容创作者、产品人和独立开发者。" if language == "zh" else "Creators, product builders, and independent developers interested in AI tools and agent workflows."
-    return "需要快速理解主题、形成判断并采取下一步行动的听众。" if language == "zh" else "An audience that needs to understand the topic, form judgment, and take action."
+        return "Creators, product builders, and independent developers interested in AI tools and agent workflows."
+    return "An audience that needs to understand the topic, form judgment, and take action."
 
 
 def build_slide_plan(title, text, segments, renderer_hint):
@@ -476,8 +479,8 @@ def media_slot(role, kind):
 
 def write_contracts(out, title, source_path, text, plan, language):
     audience = infer_audience(text, language)
-    tension = "资料很多，但能让观众听懂、记住、复述的路径不清晰。" if language == "zh" else "There is too much material and not enough audience-ready narrative path."
-    goal = f"把《{title}》整理成可讲、可生成、可交付的PPT生产契约。" if language == "zh" else f"Turn '{title}' into a presentation-ready production contract."
+    tension = "There is too much material and not enough audience-ready narrative path."
+    goal = f"Turn '{title}' into a presentation-ready production contract."
     out.mkdir(parents=True, exist_ok=True)
     (out / "deck_brief.md").write_text(
         f"""# Deck Brief
@@ -495,25 +498,25 @@ def write_contracts(out, title, source_path, text, plan, language):
 {audience}
 
 ## Initial State
-听众知道一些零散信息，但缺少清晰判断和行动路径。
+The audience knows scattered facts but lacks a clear judgment and a path to act.
 
 ## Desired State
-听众能复述核心判断，理解为什么现在要做，并知道下一步怎么执行。
+The audience can restate the core judgment, understands why it matters now, and knows the next step.
 
 ## Core Tension
 {tension}
 
 ## Success Criteria
-- 观众能用一句话说出这份PPT的核心判断。
-- 每页只承担一个状态转移任务。
-- 下游渲染器不直接吞原始素材，只消费Humanize PPT契约。
+- The audience can state this deck's core judgment in one sentence.
+- Every page carries exactly one state-transfer task.
+- Downstream renderers never consume the raw material directly — only the Humanize PPT contract.
 """,
         encoding="utf-8",
     )
     (out / "ast_outline.md").write_text(
         "# AST Outline\n\n"
         f"## Audience\n{audience}\n\n"
-        "## State\n- Initial: 信息分散，缺少可讲路径。\n- Desired: 形成清晰判断，并能执行下一步。\n\n"
+        "## State\n- Initial: scattered information, no presentable path.\n- Desired: a clear judgment the audience can act on.\n\n"
         "## Transfer\n"
         + "\n".join([f"- {p['slide_id']} / {p['role']}: {p['speaker_intent']}" for p in plan])
         + "\n",
@@ -523,7 +526,7 @@ def write_contracts(out, title, source_path, text, plan, language):
     (out / "speaker_intent.md").write_text(
         "\n".join(
             [
-                f"## {p['slide_id']} {p['title']}\n\n- Intent: {p['speaker_intent']}\n- Say: {p['message']}\n- Avoid: 不要把模型草稿、推理过程或工具清单直接放到页面上。\n"
+                f"## {p['slide_id']} {p['title']}\n\n- Intent: {p['speaker_intent']}\n- Say: {p['message']}\n- Avoid: do not put model drafts, reasoning traces, or tool lists directly on the slide.\n"
                 for p in plan
             ]
         ),
@@ -574,34 +577,34 @@ def choose_routes(args, source_path, text, language):
     suffix = source_path.suffix.lower()
     if getattr(args, "ppt_master_template", None):
         primary = "ppt-master"
-        reason = "用户提供 raw .pptx template，按 PPT Master template-fill-pptx 路由原生填充。"
+        reason = "User supplied a raw .pptx template; route to PPT Master's native template-fill-pptx."
     elif requested != "auto":
         primary = requested
-        reason = f"用户指定 renderer={requested}。"
+        reason = f"User requested renderer={requested}."
     elif suffix in {".ppt", ".pptx"}:
         primary = "frontend-slides"
-        reason = "输入是PPT/PPTX，优先走转换路径。"
+        reason = "Input is PPT/PPTX; prefer the conversion path."
     elif getattr(args, "selected_template", None):
         primary = "beautiful-html-templates"
-        reason = f"用户指定 selected_template={args.selected_template}，用选中 Beautiful 模板生成完整 deck。"
+        reason = f"User requested selected_template={args.selected_template}; generate the full deck with the chosen Beautiful template."
     elif args.style_mode == "preview-first":
         primary = "beautiful-html-templates"
-        reason = "用户选择 preview-first，优先进入可视化风格探索。"
+        reason = "User chose preview-first; enter visual style exploration first."
     elif args.style_mode == "presenter-first" or args.presenter:
         primary = "html-ppt"
-        reason = "用户需要演讲者模式，优先走html-ppt。"
+        reason = "User needs presenter mode; prefer html-ppt."
     elif language == "zh":
         primary = "guizang"
-        reason = "中文内容且未指定风格探索，优先走guizang稳定路径。"
+        reason = "Chinese-language source with no style exploration requested; prefer the stable guizang path."
     else:
         primary = "beautiful-html-templates"
-        reason = "英文或跨风格内容，先定主题并生成至少5个风格候选，再进入成稿。"
+        reason = "English or cross-style content: settle the theme first, generate at least 5 style candidates, then move to the final deck."
 
     routes = [
         {
             "id": primary,
             "stage": "produce",
-            "purpose": "根据Humanize PPT契约生成主deck或候选预览。",
+            "purpose": "Generate the main deck or candidate previews from the Humanize PPT contract.",
             "reason": reason,
             "command_file": f"commands/{primary}-agent.md" if primary != "beautiful-html-templates" else "commands/beautiful-agent.md",
             "status": "planned",
@@ -612,8 +615,8 @@ def choose_routes(args, source_path, text, language):
             {
                 "id": "html-ppt",
                 "stage": "complete",
-                "purpose": "在最终deck确定后增加演讲者模式和speaker notes。",
-                "reason": "presenter=True。",
+                "purpose": "Add presenter mode and speaker notes once the final deck is settled.",
+                "reason": "presenter=True.",
                 "command_file": "commands/html-ppt-agent.md",
                 "status": "planned",
             }
@@ -623,17 +626,17 @@ def choose_routes(args, source_path, text, language):
             {
                 "id": "presenter-adapter",
                 "stage": "complete",
-                "purpose": "为最终deck生成独立 presenter shell 和逐页 speaker notes。",
-                "reason": "presenter_adapter=True。",
+                "purpose": "Generate a standalone presenter shell and per-page speaker notes for the final deck.",
+                "reason": "presenter_adapter=True.",
                 "command_file": "commands/presenter-adapter-agent.md",
                 "status": "planned",
             }
         )
     if getattr(args, "export_adapter", False):
         export_purpose = (
-            "由 PPT Master 原生 export + render manifest 接管；不再生成 HTML/PDF export package。"
+            "Handled by PPT Master's native export + render manifest; no separate HTML/PDF export package."
             if primary == "ppt-master"
-            else "为最终deck生成可移植导出包和 PDF 导出脚本。"
+            else "Generate a portable export package and a PDF export script for the final deck."
         )
         routes.append(
             {
@@ -641,9 +644,9 @@ def choose_routes(args, source_path, text, language):
                 "stage": "complete",
                 "purpose": export_purpose,
                 "reason": (
-                    "export_adapter=True；PPT Master 路线由其原生 exporter 接管。"
+                    "export_adapter=True; the PPT Master route is owned by its native exporter."
                     if primary == "ppt-master"
-                    else "export_adapter=True。"
+                    else "export_adapter=True."
                 ),
                 "command_file": "commands/export-adapter-agent.md",
                 "status": "planned",
@@ -653,8 +656,8 @@ def choose_routes(args, source_path, text, language):
         {
             "id": "qa",
             "stage": "control",
-            "purpose": "检查契约、路径、人感、AI草稿痕迹和交付完整性。",
-            "reason": "所有Humanize PPT运行必须经过QA。",
+            "purpose": "Check the contract, routing, human feel, AI-draft residue, and delivery completeness.",
+            "reason": "Every Humanize PPT run must pass QA.",
             "command_file": "commands/qa-agent.md",
             "status": "planned",
         }
@@ -773,7 +776,7 @@ def select_beautiful_templates(repo_path, title, text, language, occasion=None, 
 
     results = []
     for score, template in selected[:count]:
-        reason = f"匹配 occasion=`{brief['occasion']}`，mood=`{brief['mood']}`；{template.get('tagline', template.get('best_for', ''))}"
+        reason = f"Matched occasion=`{brief['occasion']}`, mood=`{brief['mood']}`; {template.get('tagline', template.get('best_for', ''))}"
         results.append(
             {
                 "slug": template["slug"],
@@ -1534,7 +1537,7 @@ REGISTERED_SWISS_LAYOUTS = {f"S{n:02d}" for n in range(1, 23)}  # S01..S22
 FAILURE_MODES = {
     "placeholder-residue": {
         # v0.8.0: renderer-agnostic. "any" means the rule applies to every
-        # renderer the presentation checkup (演讲体检) is pointed at, not just
+        # renderer the presentation checkup is pointed at, not just
         # guizang. The audience symptom is the same everywhere: visible
         # lorem/TODO/[必填] text on a live slide.
         "scope": ["any"],
@@ -2327,11 +2330,11 @@ def write_guizang_production_brief(out, title, plan, source, language, style="A"
     # Style A themes cannot be customized — pick from the 5 presets.
     # Style B accents are single-color overlays on the Swiss template.
     style_a_themes = {
-        "ink-classic":      "Ink Classic (墨水经典) — the verified known-good baseline at examples/03-codex-guizang-native-ink-classic/",
-        "indigo-porcelain": "Indigo Porcelain (靛蓝瓷) — blue-grey porcelain palette",
-        "forest-ink":       "Forest Ink (森林墨) — green-on-cream palette",
-        "kraft-paper":      "Kraft Paper (牛皮纸) — warm brown paper palette",
-        "dune":             "Dune (沙丘) — sand-and-shadow palette",
+        "ink-classic":      "Ink Classic — the verified known-good baseline at examples/03-codex-guizang-native-ink-classic/",
+        "indigo-porcelain": "Indigo Porcelain — blue-grey porcelain palette",
+        "forest-ink":       "Forest Ink — green-on-cream palette",
+        "kraft-paper":      "Kraft Paper — warm brown paper palette",
+        "dune":             "Dune — sand-and-shadow palette",
     }
     style_b_accents = {
         "ikb":             "Klein Blue (IKB) — International Klein Blue, the most-cited Swiss reference",
@@ -2998,11 +3001,11 @@ def write_manifest(out, title, source_path, primary, routes, qa_passed):
 
 def write_style_brief(out, primary, language, preview_count=None):
     if primary == "ppt-master":
-        route_rule = "PPT Master 使用自己的三阶段确认页锁定视觉系统；Humanize 不复制其模板或绕过确认门。"
+        route_rule = "PPT Master locks the visual system through its own three-stage Confirm UI; Humanize never copies its templates or bypasses the confirmation gate."
     elif language == "zh":
-        route_rule = "中文默认走 guizang 稳定成稿；用户显式要求时再进入 preview-first。"
+        route_rule = "Chinese-language sources default to the stable guizang path; preview-first only on explicit request."
     else:
-        route_rule = f"英文默认先定主题，再生成至少 {preview_count or DEFAULT_EN_PREVIEW_COUNT} 个风格候选；选中风格后才进入完整 deck、presenter 和 deploy。"
+        route_rule = f"English sources settle the theme first, then generate at least {preview_count or DEFAULT_EN_PREVIEW_COUNT} style candidates; the full deck, presenter, and deploy come only after a style is chosen."
     style = {
         "version": VERSION,
         "primary_renderer": primary,
@@ -3012,7 +3015,7 @@ def write_style_brief(out, primary, language, preview_count=None):
             if primary == "ppt-master"
             else ("stable-first" if primary == "guizang" else "preview-first")
         ),
-        "rule": "先保留AST叙事，再选择视觉系统；不要把推荐Skill清单写成产品边界。",
+        "rule": "Preserve the AST narrative first, then choose the visual system; never write the recommended-skill list as a product boundary.",
         "route_rule": route_rule,
         "preview_count": preview_count,
     }
@@ -3166,11 +3169,13 @@ def _format_outline_preview(title, plan, source_path, language, style, theme, ac
         "",
     ]
     for p in plan:
+        # CJK character counts drive the layout-fit review items for
+        # Chinese-language decks; they read 0 for pure-English content.
         title_chars = len([c for c in p.get("title", "") if "一" <= c <= "鿿"])
         body_chars = sum(len([c for c in v if "一" <= c <= "鿿"]) for v in p.get("visible_content", []))
         lines.append(f"## {p.get('slide_id', '?')} · {p.get('role', 'slide')}")
-        lines.append(f"Title ({title_chars} 中文字): {p.get('title', '')}")
-        lines.append(f"Body ({body_chars} 中文字):")
+        lines.append(f"Title ({title_chars} CJK chars): {p.get('title', '')}")
+        lines.append(f"Body ({body_chars} CJK chars):")
         for v in p.get("visible_content", []):
             lines.append(f"  - {v}")
         if p.get("speaker_intent"):
@@ -3206,8 +3211,8 @@ def _format_outline_preview(title, plan, source_path, language, style, theme, ac
     lines.append("")
     lines.append("## Review checklist")
     lines.append("")
-    lines.append("- [ ] Title counts fit the layout slot (≤ 15 中文字 for cover/headline)")
-    lines.append("- [ ] All visible_content ≥ 30 中文字 (no empty pages)")
+    lines.append("- [ ] Title counts fit the layout slot (≤ 15 CJK chars for cover/headline on Chinese decks)")
+    lines.append("- [ ] All visible_content is substantial (≥ 30 CJK chars on Chinese decks; no empty pages)")
     lines.append("- [ ] No banned substrings (Khazix, methodology, attribution) in any body")
     lines.append("- [ ] 7 concepts (Agent / Tool / Function calling / MCP / Skill / Rules / Hook / Subagent) all present if relevant")
     lines.append("- [ ] Per-page media decisions make sense for the page role")
@@ -3273,47 +3278,47 @@ def _style_gallery_cover_command_md(candidate, cover_slide, title, source_path, 
     webgl_warning = ""
     if candidate["cli"].get("--guizang-style") == "A":
         webgl_warning = (
-            "\n## ⚠️ WebGL 封面静态截图陷阱\n\n"
-            "本候选是 Style A，封面用 WebGL hero canvas。**静态 PNG 截图会捕获到空白**"
-            "（canvas 在加载后才绘制，截图早于绘制）。\n\n"
-            "- 以 `cover.html`（活页）为准，`cover.png` 仅作缩略。\n"
-            "- 截图前等待 canvas 完成首帧（或截屏延迟 ≥1.5s）。\n"
-            "- 若 `cover.png` < 20KB，判定为截图失败而非空封面，重截或只交活页。\n"
+            "\n## ⚠️ WebGL cover static-screenshot trap\n\n"
+            "This candidate is Style A: the cover uses a WebGL hero canvas. **A static PNG "
+            "screenshot captures blank** (the canvas paints after load; the screenshot fires first).\n\n"
+            "- Treat `cover.html` (the live page) as truth; `cover.png` is a thumbnail only.\n"
+            "- Wait for the canvas's first frame before screenshotting (delay ≥1.5s).\n"
+            "- A `cover.png` under 20KB is a failed capture, not an empty cover — re-shoot or ship the live page only.\n"
         )
 
-    return f"""# 风格画廊候选 · {candidate['label']}
+    return f"""# Style gallery candidate · {candidate['label']}
 
-> Humanize 出 spec / command，**不自渲**。本命令只渲染封面（S01）一页，供人挑风格。
-> 下游 skill：`{renderer}`。
+> Humanize emits the spec / command — **it never renders**. This command renders only the cover page (S01) so a human can pick a style.
+> Downstream skill: `{renderer}`.
 
-## 任务
+## Task
 
-只渲染**封面一页**（S01，hook），用下面的风格，然后写到：
+Render **only the cover page** (S01, hook) in the style below, then write:
 
-- `{out_dir}/cover.html` —— 活页封面（首选交付物）
-- `{out_dir}/cover.png` —— 封面缩略图（用于 style_gallery.html 缩略，可选）
+- `{out_dir}/cover.html` — live cover page (preferred deliverable)
+- `{out_dir}/cover.png` — cover thumbnail (for style_gallery.html; optional)
 
-不要渲染整套 deck。这是选风格的门，不是成稿。
+Do not render the full deck. This is the style-selection gate, not the final deck.
 
-## 风格
+## Style
 
-- 渲染器：`{renderer}`
-- 风格参数：`{style_args or '(默认)'}`
+- Renderer: `{renderer}`
+- Style args: `{style_args or '(default)'}`
 
-## 封面内容（来自 slide_plan S01）
+## Cover content (from slide_plan S01)
 
-- 标题：{title}
-{cover_lines or '  - (无可见正文)'}
+- Title: {title}
+{cover_lines or '  - (no visible body)'}
 {webgl_warning}
-## 选定本风格后
+## After picking this style
 
-挑中这张封面后，回灌以下命令把该风格带进正常的大纲 → brief 流程：
+Once this cover is chosen, re-run the command below to carry the style into the normal outline → brief flow:
 
 ```bash
 {reinjection_cmd}
 ```
 
-（想先过大纲审查门，自行追加 `--preview-outline`。）
+(Add `--preview-outline` yourself if you want the outline review gate first.)
 """
 
 
@@ -3322,7 +3327,8 @@ def _render_style_gallery_html(title, primary, candidates, source_path, base_com
 
     Each card embeds the candidate's cover.html via a relative-path iframe.
     Honest about pending state: a card whose cover is not yet rendered shows
-    blank — the caption says so rather than faking a thumbnail (宁空不摆拍).
+    blank — the caption says so rather than faking a thumbnail (leave it
+    empty before staging a fake).
     """
     generated = now_iso()
     cards = []
@@ -3339,18 +3345,18 @@ def _render_style_gallery_html(title, primary, candidates, source_path, base_com
           <div class="card-id">{esc_html(c['id'])}</div>
           <h2>{esc_html(c['label'])}</h2>
           <p class="desc">{esc_html(c['description'])}</p>
-          <p class="cover-note">封面 = <code>{esc_html(cmd_rel)}</code> 的渲染产物（上方空白 = 尚未渲染，或 WebGL hero 静态截图陷阱）</p>
-          <div class="cmd-label">选定后回灌命令</div>
+          <p class="cover-note">Cover = the rendered output of <code>{esc_html(cmd_rel)}</code> (blank above = not rendered yet, or the WebGL hero static-screenshot trap)</p>
+          <div class="cmd-label">Re-run command after picking</div>
           <pre class="cmd">{esc_html(reinjection)}</pre>
         </div>
       </article>""")
 
     return f"""<!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{esc_html(title)} · 风格画廊</title>
+<title>{esc_html(title)} · Style Gallery</title>
 <style>
   :root {{
     --ink: #0a0a0b;
@@ -3364,7 +3370,7 @@ def _render_style_gallery_html(title, primary, candidates, source_path, base_com
   body {{
     background: var(--paper);
     color: var(--ink);
-    font-family: "Songti SC", "Noto Serif SC", Georgia, serif;
+    font-family: Georgia, "Times New Roman", serif;
     padding: 48px clamp(24px, 6vw, 96px);
     line-height: 1.6;
   }}
@@ -3431,15 +3437,15 @@ def _render_style_gallery_html(title, primary, candidates, source_path, base_com
 </style>
 </head>
 <body>
-  <div class="kicker">Humanize PPT · 风格画廊 · Cover Style Gallery</div>
+  <div class="kicker">Humanize PPT · Cover Style Gallery</div>
   <h1>{esc_html(title)}</h1>
   <div class="meta">renderer: {esc_html(primary)} · candidates: {len(candidates)} · source: {esc_html(source_path)} · generated: {esc_html(generated)} · v{VERSION}</div>
 
   <div class="grid">{''.join(cards)}</div>
 
   <footer>
-    零依赖单文件 · 每张封面由下游 skill 真渲（commands/style-gallery/&lt;id&gt;.md）· Humanize 只出 spec / command，不渲染 PPT。<br>
-    封面空白 = 该候选尚未渲染，或 WebGL hero 静态截图陷阱（以活页 cover.html 为准）。
+    Zero-dependency single file · every cover is really rendered by the downstream skill (commands/style-gallery/&lt;id&gt;.md) · Humanize only emits the spec / command; it never renders the deck.<br>
+    A blank cover = that candidate is not rendered yet, or the WebGL hero static-screenshot trap (treat the live cover.html as truth).
   </footer>
 </body>
 </html>

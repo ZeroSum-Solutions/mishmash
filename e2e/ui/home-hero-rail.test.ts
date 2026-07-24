@@ -6,9 +6,7 @@ import { T } from '@/timeouts';
 test.describe.configure({ timeout: T.xlong });
 
 const STORAGE_KEY = 'open-design:config';
-const LOCALE_KEY = 'open-design:locale';
-const LOCALE_SOURCE_KEY = 'open-design:locale-source';
-const OPEN_SETTINGS_LABEL = /Open settings|打开设置|開啟設定/i;
+const OPEN_SETTINGS_LABEL = /Open settings/i;
 
 const HOME_CONFIG = {
   mode: 'daemon',
@@ -340,16 +338,6 @@ async function seedBrowserConfig(page: Page, config: Record<string, unknown>) {
   );
 }
 
-async function seedBrowserLocale(page: Page, locale: string) {
-  await page.addInitScript(
-    ({ localeKey, sourceKey, value }) => {
-      window.localStorage.setItem(localeKey, value);
-      window.localStorage.setItem(sourceKey, 'manual');
-    },
-    { localeKey: LOCALE_KEY, sourceKey: LOCALE_SOURCE_KEY, value: locale },
-  );
-}
-
 async function gotoEntryHome(page: Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await waitForLoadingToClear(page);
@@ -367,14 +355,6 @@ test.beforeEach(async ({ page }) => {
     window.sessionStorage.clear();
     window.localStorage.setItem(key, JSON.stringify(value));
   }, { key: STORAGE_KEY, value: HOME_CONFIG });
-
-  await page.route('**/api/github/open-design', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ stargazers_count: 51600 }),
-    });
-  });
 
   await routeAgents(page, [
     {
@@ -1065,7 +1045,6 @@ test('[P1] home staged workspace context auto-sends into the first project run',
 test('[P2] home hero exposes the template picker, starter cards, blank project, and More shortcuts', async ({ page }) => {
   await gotoEntryHome(page);
 
-  await expect(page.getByTestId('entry-star-badge')).toContainText('51.6K');
   await expect(page.getByTestId('home-hero-template-picker')).toBeVisible();
   await expect(page.getByTestId('home-hero-design-system-picker')).toBeVisible();
   await expect(page.getByTestId('working-dir-picker')).toBeVisible();
@@ -1208,7 +1187,7 @@ test('[P1] home Brand Kit chip opens design-system creation and starts brand ext
   await expect(page.getByTestId('file-workspace')).toBeVisible();
   await expect(page.getByTestId('design-system-project-tab')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('design-system-project-tab-panel')).toBeVisible();
-  await expect(page.getByTestId('design-system-extraction-status')).toContainText(/Extracting design system|正在提取|正在擷取/i);
+  await expect(page.getByTestId('design-system-extraction-status')).toContainText(/Extracting design system/i);
 });
 
 test('[P1] brand-backed design system previews as a Brand Kit and carries into project creation', async ({ page }) => {
@@ -1306,7 +1285,7 @@ test('[P2] home template picker supports no-results, clear, Escape, and outside 
 
   await page.getByTestId('home-hero-template-trigger').click();
   await page.getByTestId('home-hero-template-search').fill('zzzz-no-template');
-  await expect(page.getByTestId('home-hero-template-menu')).toContainText(/No matches|没有匹配|沒有相符/i);
+  await expect(page.getByTestId('home-hero-template-menu')).toContainText(/No matches/i);
   await page.getByTestId('home-hero-template-clear').click();
   await expect(activeHeroChip(page)).toHaveCount(0);
 
@@ -1317,23 +1296,6 @@ test('[P2] home template picker supports no-results, clear, Escape, and outside 
   await expect(page.getByTestId('home-hero-template-menu')).toBeVisible();
   await page.getByTestId('home-hero-input').click();
   await expect(page.getByTestId('home-hero-template-menu')).toHaveCount(0);
-});
-
-test('[P2] zh-CN home smoke exposes the localized template, design system, working directory, and send entries', async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('open-design:locale', 'zh-CN');
-    window.localStorage.setItem('open-design:locale-source', 'manual');
-  });
-  await seedBrowserLocale(page, 'zh-CN');
-  await routeHomeDesignSystems(page);
-  await gotoEntryHome(page);
-
-  await expect(page.getByRole('heading', { name: '今天想和你的 Agent 一起设计什么？' })).toBeVisible();
-  await expect(page.getByText('从模板开始…')).toBeVisible();
-  await expect(page.getByText('…或创建一个空白项目')).toBeVisible();
-  await expect(page.getByText('不指定设计系统')).toBeVisible();
-  await expect(page.getByTestId('working-dir-picker')).toContainText(/本地存储|选择工作目录/);
-  await expect(page.getByTestId('home-hero-submit')).toContainText('发送');
 });
 
 test('[P1] home template picker selects a starter template and can clear it', async ({ page }) => {
@@ -1349,11 +1311,11 @@ test('[P1] home template picker selects a starter template and can clear it', as
   await expect(page.getByTestId('home-hero-template-card-deck')).toBeVisible();
   await page.getByTestId('home-hero-template-card-deck').click();
 
-  await expect(page.getByTestId('home-hero-template-trigger')).toContainText(/Slide deck|幻灯片|投影片/i);
+  await expect(page.getByTestId('home-hero-template-trigger')).toContainText(/Slide deck/i);
 
   await page.getByTestId('home-hero-template-reset').click();
   await expect(page.getByTestId('home-hero-footer-option-speakerNotes')).toHaveCount(0);
-  await expect(page.getByTestId('home-hero-template-trigger')).toContainText(/None|无|無/i);
+  await expect(page.getByTestId('home-hero-template-trigger')).toContainText(/None/i);
 });
 
 test('[P1] first-run home keeps community templates collapsed until the hint is used', async ({ page }) => {
@@ -1792,7 +1754,7 @@ function activeHeroChip(page: Page) {
 async function clearActiveChip(page: Page) {
   const activeChip = activeHeroChip(page);
   if ((await activeChip.count()) > 0) {
-    const clearPlugin = page.getByRole('button', { name: /Clear active plugin|清除/i });
+    const clearPlugin = page.getByRole('button', { name: /Clear active plugin/i });
     if ((await clearPlugin.count()) > 0) {
       await clearPlugin.click();
     } else {
@@ -2084,7 +2046,7 @@ async function selectHomeDesignSystem(page: Page, id: string | null) {
   const popover = page.getByTestId('project-ds-picker-popover');
   await expect(popover).toBeVisible();
   if (id === null) {
-    await popover.getByRole('option', { name: /No design system|不指定设计系统|不指定設計系統/i }).click();
+    await popover.getByRole('option', { name: /No design system/i }).click();
   } else {
     await popover.getByTestId(`project-ds-picker-option-${id}`).click();
   }

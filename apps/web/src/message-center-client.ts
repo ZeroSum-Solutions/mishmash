@@ -100,8 +100,10 @@ export async function markAllAccountMessagesRead(): Promise<void> {
   if (!response.ok) throw new Error(`Mark all messages read failed: ${response.status}`);
 }
 
+// Open Design ships English-only; the es-ES/pt-BR mappings were removed in
+// the de-bloat pass.
 function apiLocale(locale: string): string {
-  const mapping: Record<string, string> = { en: 'en-US', 'es-ES': 'es', 'pt-BR': 'pt' };
+  const mapping: Record<string, string> = { en: 'en-US' };
   return mapping[locale] ?? locale;
 }
 

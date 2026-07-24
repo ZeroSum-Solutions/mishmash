@@ -10,7 +10,7 @@ Before touching files, clarify:
 1. **Audience** — engineers? designers? executives? consumers?
 2. **Length** — 5 min lightning? 20 min share? 45 min talk?
 3. **Language** — Chinese, English, bilingual? (Noto Sans SC is preloaded.)
-4. **Format** — on-screen live, PDF export, 小红书图文?
+4. **Format** — on-screen live, PDF export, image-card post?
 5. **Tone** — clinical / playful / editorial / cyber?
 
 The audience + tone map to a theme; the length maps to slide count; the
@@ -112,7 +112,7 @@ Walk through every slide with ← →. Press:
 ```
 
 Output is 1920×1080 by default. Change in `render.sh` if the user wants 3:4
-for 小红书图文 (1242×1660).
+for image-card posts (1242×1660).
 
 ## 10. What to NOT do
 
@@ -124,7 +124,7 @@ for 小红书图文 (1242×1660).
   type is needed. Prefer composition.
 - Don't delete slides from the showcase decks.
 - **Don't put presenter-only text on the slide.** Any descriptive text,
-  narration cues, or explanations meant for the speaker (e.g. "这一页的重点是…",
+  narration cues, or explanations meant for the speaker (e.g. "the key point of this slide is...",
   "Note: mention X here", small grey captions explaining the slide's purpose)
   MUST go inside `<div class="notes">`, not as visible elements. The `.notes`
   div is hidden (`display:none`) and only shown via the S overlay. Slides

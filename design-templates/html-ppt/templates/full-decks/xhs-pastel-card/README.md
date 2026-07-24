@@ -1,11 +1,11 @@
 # xhs-pastel-card
 
-暖奶油 `#fef8f1` 底 + 模糊彩色 blob + Playfair italic 衬线大字 + 整色马卡龙卡片（桃 / 薄荷 / 天 / 丁香 / 柠檬 / 玫瑰）。共性提取自 `20260412-obsidian-skills/html/xhs-obsidian-skills.html` 的 `soft-purple/pink/blue/green/orange/teal` 软色卡系统，以及 `20260409 v2-白底版` 的胶囊 chip 顶部条。
+A warm cream `#fef8f1` background + blurred colorful blobs + big Playfair italic serif type + solid-color macaron cards (peach / mint / sky / lilac / lemon / rose). Distilled from the `soft-purple/pink/blue/green/orange/teal` soft card system in `20260412-obsidian-skills/html/xhs-obsidian-skills.html` and the pill-chip top bar from the `20260409` white-bg v2 set.
 
-**Visual traits:** 三颗柔光 blob 作背景、顶部 chip+page 组合、Playfair italic 做 accent 词（em / rose / mint）、整色圆角 28px 大卡片、italic Playfair 序号 01-04、donut SVG 图、小 divider 条 + 渐变、衬线正文做标题 / sans 做正文混排。
+**Visual traits:** three soft-glow blobs as the background, a chip+page combo at the top, Playfair italic for accent words (em / rose / mint), solid-color 28px rounded big cards, italic Playfair 01-04 numerals, a donut SVG chart, small divider bars + gradients, serif body copy for headlines mixed with sans for body text.
 
-**Use when:** 生活方式 / 个人成长 / 轻内容 / 情感向的小红书贴或个人演讲；你想要一种「不那么科技感、偏杂志偏手作」的气质；适合讲「慢」「休息」「温柔」主题。
+**Use when:** a lifestyle / personal-growth / light-content / emotionally-toned social post or personal talk; you want a tone that's "less tech, more magazine, more handmade"; suits themes like "slow," "rest," "gentle."
 
-**Source inspiration:** `20260412-obsidian-skills/html/xhs-obsidian-skills.html` + `20260409` v2-白底版（共性 pastel 系统）。
+**Source inspiration:** `20260412-obsidian-skills/html/xhs-obsidian-skills.html` + the `20260409` white-bg v2 set (shared pastel system).
 
 **Path:** `templates/full-decks/xhs-pastel-card/index.html`

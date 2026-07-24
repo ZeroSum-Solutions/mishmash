@@ -26,7 +26,7 @@ describe('BrandReadyPrompt', () => {
     const onDismiss = vi.fn();
 
     render(
-      <I18nProvider initial="zh-CN">
+      <I18nProvider initial="en">
         <BrandReadyPrompt
           brandName="Open Design"
           onPreview={vi.fn()}
@@ -35,9 +35,9 @@ describe('BrandReadyPrompt', () => {
       </I18nProvider>,
     );
 
-    const dismiss = screen.getByRole('button', { name: '忽略' });
+    const dismiss = screen.getByRole('button', { name: 'Dismiss' });
 
-    expect(dismiss.getAttribute('title')).toBe('忽略');
+    expect(dismiss.getAttribute('title')).toBe('Dismiss');
     expect(dismiss.querySelector('svg')).toBeTruthy();
 
     fireEvent.click(dismiss);
