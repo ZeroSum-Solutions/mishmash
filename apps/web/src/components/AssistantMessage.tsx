@@ -279,7 +279,7 @@ function SkillPluginCandidateCard({
         { action },
       );
       setNotice({
-        message: `Open Design contribution task started for ${data?.path ?? "the draft"}.`,
+        message: `MishMash contribution task started for ${data?.path ?? "the draft"}.`,
       });
     } catch (err) {
       setNotice({ message: err instanceof Error ? err.message : String(err) });
@@ -2270,7 +2270,7 @@ function PluginActionPanel({
                   <span>
                     {actionBusy && busyKey === `contribute:${folder.path}`
                       ? "Sending..."
-                      : "Open Design PR"}
+                      : "MishMash PR"}
                   </span>
                 </button>
                 {onRequestOpenFile ? (
@@ -2366,7 +2366,7 @@ function pathMatchesFolderFileBasename(
 }
 
 function hasPluginFinalActionHint(content: string): boolean {
-  return /\b(Add to My plugins|Open Design PR|Publish repo|plugin publish|ready to publish|ready to add)\b/i.test(
+  return /\b(Add to My plugins|MishMash PR|Publish repo|plugin publish|ready to publish|ready to add)\b/i.test(
     content,
   );
 }

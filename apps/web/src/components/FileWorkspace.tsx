@@ -6176,7 +6176,7 @@ function initialPrototypePage(title: string, body = DEFAULT_PROTOTYPE_PAGE_BODY)
   <main>
     <section class="hero">
       <div>
-        <div class="eyebrow">Open Design</div>
+        <div class="eyebrow">MishMash</div>
         <h1>${safeTitle}</h1>
         <p>${safeBody}</p>
       </div>
@@ -6318,7 +6318,7 @@ function initialSlidesPage(title: string, body = DEFAULT_SLIDES_PAGE_BODY): stri
   <div class="deck-shell">
     <main class="deck-stage" id="deck-stage">
       <section class="slide active cover" data-screen-label="01 Cover">
-        <div class="kicker">Open Design deck</div>
+        <div class="kicker">MishMash deck</div>
         <h1>${safeTitle}</h1>
         <p class="body">${safeBody}</p>
         <div class="num">01</div>
@@ -6456,7 +6456,7 @@ function initialDocumentPage(title: string, body = DEFAULT_DOCUMENT_PAGE_BODY): 
 </head>
 <body>
   <article>
-    <div class="meta">Open Design document</div>
+    <div class="meta">MishMash document</div>
     <h1>${safeTitle}</h1>
     <p>${safeBody}</p>
     <h2>Purpose</h2>
