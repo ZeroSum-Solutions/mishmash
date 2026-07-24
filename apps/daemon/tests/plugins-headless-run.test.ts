@@ -36,6 +36,7 @@ import { startServer } from '../src/server.js';
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const FIXTURE_DIR = path.join(__dirname, 'fixtures', 'plugin-fixtures', 'sample-plugin');
+const ESCAPING_FIXTURE_DIR = path.join(__dirname, 'fixtures', 'plugin-fixtures', 'escaping-plugin');
 const CLI_SRC = path.join(__dirname, '../src/cli.ts');
 const TSX_CLI = path.join(REPO_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs');
 const execFileP = promisify(execFile);
@@ -233,23 +234,18 @@ describe('Plan §8 e2e-3 (entry slice) — headless install → project → run'
     }).catch(() => {});
   });
 
-  it('rejects bundled examples that reference local files outside the duplicated directory', async () => {
-    const listResp = await fetch(`${baseUrl}/api/plugins`);
-    expect(listResp.status).toBe(200);
-    const listBody = (await listResp.json()) as {
-      plugins?: Array<{
-        id: string;
-        manifest?: { name?: string };
-      }>;
-    };
-    const plugin = (listBody.plugins ?? []).find((record) =>
-      record.id === 'example-open-design-landing-deck' ||
-      record.manifest?.name === 'example-open-design-landing-deck',
-    );
-    expect(plugin).toBeTruthy();
+  it('rejects installed plugins that reference local files outside the duplicated directory', async () => {
+    const installResp = await fetch(`${baseUrl}/api/plugins/install`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
+      body: JSON.stringify({ source: ESCAPING_FIXTURE_DIR }),
+    });
+    expect(installResp.status).toBe(200);
+    const installSuccess = await readSseUntilSuccess(installResp);
+    expect(installSuccess?.plugin?.id).toBe('escaping-plugin');
 
     const duplicateResp = await fetch(
-      `${baseUrl}/api/plugins/${encodeURIComponent(plugin!.id)}/duplicate-project`,
+      `${baseUrl}/api/plugins/escaping-plugin/duplicate-project`,
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -264,14 +260,23 @@ describe('Plan §8 e2e-3 (entry slice) — headless install → project → run'
     expect(body.error).toMatchObject({
       code: 'UNSUPPORTED_DUPLICATE_DEPENDENCIES',
     });
-    expect(body.error?.message).toContain('../open-design-landing/assets/hero.png');
+    expect(body.error?.message).toContain('../sample-plugin/assets/hero.png');
   });
 
   it('surfaces duplicate daemon errors through CLI structured stderr', async () => {
+    const installResp = await fetch(`${baseUrl}/api/plugins/install`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
+      body: JSON.stringify({ source: ESCAPING_FIXTURE_DIR }),
+    });
+    expect(installResp.status).toBe(200);
+    const installSuccess = await readSseUntilSuccess(installResp);
+    expect(installSuccess?.plugin?.id).toBe('escaping-plugin');
+
     const result = await runCliResult([
       'plugin',
       'duplicate',
-      'example-open-design-landing-deck',
+      'escaping-plugin',
       '--json',
     ]);
 
@@ -281,7 +286,7 @@ describe('Plan §8 e2e-3 (entry slice) — headless install → project → run'
       error?: { code?: string; message?: string };
     };
     expect(body.error?.code).toBe('UNSUPPORTED_DUPLICATE_DEPENDENCIES');
-    expect(body.error?.message).toContain('../open-design-landing/assets/hero.png');
+    expect(body.error?.message).toContain('../sample-plugin/assets/hero.png');
   });
 
   it('walks install → project create → run start → status with snapshot pinned', async () => {

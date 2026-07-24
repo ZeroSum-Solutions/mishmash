@@ -139,12 +139,12 @@ const DECKS: SeedFixture[] = [
 
 const WEBS: SeedFixture[] = [
   {
-    skillId: 'open-design-landing',
+    skillId: 'saas-landing',
     sourceKind: 'skill',
     kind: 'prototype',
-    name: 'Editorial landing — Atelier Zero',
+    name: 'SaaS landing page',
     pendingPrompt:
-      'Single-page editorial landing page for an AI design tool. Magazine collage hero, sticky nav, scroll reveal.',
+      'Single-page SaaS landing page for an AI design tool. Strong hero, sticky nav, scroll reveal.',
   },
   {
     skillId: 'kami-landing',

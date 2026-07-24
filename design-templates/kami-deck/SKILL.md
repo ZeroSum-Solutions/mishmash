@@ -193,16 +193,13 @@ template's CSS; the visual language is Kami's own.
   and use solid hex from the table in
   `design-systems/kami/DESIGN.md` §2.
 - **Do not** add a router. This is a single-file artifact.
-- **Do not** reuse Atelier Zero collage imagery (the open-design-landing
-  visual system). Kami is gradient-free, image-light, and hierarchy
-  is carried by type.
+- **Do not** add heavy collage/gradient imagery. Kami is gradient-free,
+  image-light, and hierarchy is carried by type.
 
 ## See also
 
 - [`kami-landing`](../kami-landing/) — long-form one-pager sister skill.
 - [`design-systems/kami/DESIGN.md`](../../design-systems/kami/DESIGN.md) — token spec.
-- Other decks in this same horizontal swipe-nav family use a different
-  visual language (e.g. Atelier Zero's editorial collage system).
 - Upstream: [`tw93/kami`](https://github.com/tw93/kami) — original
   Claude skill (MIT). Kami's slides.py template documents the macro
   × 1.6 / micro × 0.6 ratios this skill applies.

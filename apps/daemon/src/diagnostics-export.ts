@@ -1,5 +1,4 @@
 import { homedir, userInfo } from 'node:os';
-import { dirname, join } from 'node:path';
 
 import type { RequestHandler } from 'express';
 
@@ -101,8 +100,8 @@ function safeUsername(): string | undefined {
 
 export const STANDALONE_LAUNCH_WARNING =
   "Daemon started without a sidecar runtime (plain `od` / standalone launch); " +
-  "file-based logs are not captured. Re-run via `pnpm tools-dev` or the packaged " +
-  "desktop app to include daemon/web/desktop log files in the bundle.";
+  "file-based logs are not captured. Re-run via `pnpm tools-dev` to include " +
+  "daemon/web log files in the bundle.";
 
 function buildSidecarLogSources(runtime: SidecarRuntimeContext<SidecarStamp> | null): LogSource[] {
   if (runtime == null) return [];
@@ -115,7 +114,7 @@ function buildSidecarLogSources(runtime: SidecarRuntimeContext<SidecarStamp> | n
     runtime,
     runtimeMode: SIDECAR_MODES.RUNTIME,
   });
-  const apps = [APP_KEYS.DAEMON, APP_KEYS.WEB, APP_KEYS.DESKTOP];
+  const apps = [APP_KEYS.DAEMON, APP_KEYS.WEB];
   const sources: LogSource[] = [];
   for (const app of apps) {
     const absolutePath = resolveLogFilePath({
@@ -129,47 +128,8 @@ function buildSidecarLogSources(runtime: SidecarRuntimeContext<SidecarStamp> | n
       kind: 'text',
       tailBytes: TAIL_BYTES_PER_LOG,
     });
-    // Only desktop runs an Electron renderer that writes `renderer.log`
-    // (see apps/desktop/src/main/runtime.ts). daemon and web are pure Node
-    // services with no renderer process, so listing the file there only
-    // produces missing-file placeholders and manifest warnings.
-    if (app === APP_KEYS.DESKTOP) {
-      sources.push({
-        name: `logs/${app}/renderer.log`,
-        absolutePath: `${dirname(absolutePath)}/renderer.log`,
-        kind: 'text',
-        tailBytes: TAIL_BYTES_PER_LOG,
-      });
-      // GPU + system snapshot the desktop main writes at startup. For a native
-      // renderer crash (e.g. a GPU/V8 CHECK, exit 0x80000003) this answers "is
-      // hardware acceleration on / which driver / is a feature blocklisted",
-      // which the text logs alone can't.
-      sources.push({
-        name: `logs/${app}/gpu-info.json`,
-        absolutePath: `${dirname(absolutePath)}/gpu-info.json`,
-        kind: 'json',
-      });
-    }
   }
   return sources;
-}
-
-// The desktop relocates Electron's crashDumps to `<logs/desktop>/crashes` (see
-// apps/desktop/src/main/crash-diagnostics.ts) so the minidumps live inside the
-// same log tree this export already collects. Derive that dir the same way.
-function resolveDesktopCrashDumpsDir(runtime: SidecarRuntimeContext<SidecarStamp> | null): string | null {
-  if (runtime == null) return null;
-  const namespaceRoot = resolveRuntimeNamespaceRoot({
-    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
-    runtime,
-    runtimeMode: SIDECAR_MODES.RUNTIME,
-  });
-  const desktopLog = resolveLogFilePath({
-    app: APP_KEYS.DESKTOP,
-    contract: OPEN_DESIGN_SIDECAR_CONTRACT,
-    runtimeRoot: namespaceRoot,
-  });
-  return join(dirname(desktopLog), 'crashes');
 }
 
 export function createDiagnosticsExportHandler(options: DiagnosticsHandlerOptions): RequestHandler {
@@ -193,7 +153,6 @@ export function createDiagnosticsExportHandler(options: DiagnosticsHandlerOption
         })),
       ];
       const username = safeUsername();
-      const crashDumpsDir = resolveDesktopCrashDumpsDir(options.runtime);
 
       // Surface "expected-but-empty" so a reader can tell a collection gap
       // apart from "no runs happened". buildRunEventLogSources returns [] both
@@ -241,12 +200,6 @@ export function createDiagnosticsExportHandler(options: DiagnosticsHandlerOption
           maxReports: 10,
           homeDir: home,
         },
-        // Electron minidumps the desktop relocated into the log tree. These carry
-        // the native crash stack — the only reliable root-cause for an opaque
-        // renderer abort like 0x80000003 that no text log captures.
-        ...(crashDumpsDir != null
-          ? { crashDumps: { dir: crashDumpsDir, withinDays: 14, maxDumps: 10 } }
-          : {}),
       });
 
       const filename = diagnosticsFileName(DIAGNOSTICS_FILENAME_PREFIX);
