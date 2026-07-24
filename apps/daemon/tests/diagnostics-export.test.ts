@@ -83,7 +83,7 @@ describe('diagnostics export handler — non-sidecar launch', () => {
     expect(typeof manifest.extra?.browserUse?.socketCount).toBe('number');
     expect(typeof manifest.extra?.browserUse?.candidateCount).toBe('number');
     expect(typeof manifest.extra?.browserUse?.staleCount).toBe('number');
-    // Standalone launches intentionally omit sidecar-managed daemon/web/desktop
+    // Standalone launches intentionally omit sidecar-managed daemon/web
     // log files, but real developer machines may still contribute matching
     // macOS crash reports from /Library/Logs/DiagnosticReports. Keep the test
     // focused on the contract that no sidecar log files are bundled.
@@ -173,13 +173,10 @@ describe('diagnostics export handler — packaged (runtime) layout', () => {
       const fileNames = manifest.files.map((file) => file.name);
       expect(fileNames).toContain('logs/daemon/latest.log');
       expect(fileNames).toContain('logs/web/latest.log');
-      expect(fileNames).toContain('logs/desktop/latest.log');
       expect(fileNames.some((name) => name.includes('runtime/release-beta/logs'))).toBe(false);
 
       const webLog = manifest.files.find((file) => file.name === 'logs/web/latest.log');
-      const desktopLog = manifest.files.find((file) => file.name === 'logs/desktop/latest.log');
       expect(webLog?.error).toBeTruthy();
-      expect(desktopLog?.error).toBeTruthy();
     } finally {
       await rm(root, { recursive: true, force: true });
     }

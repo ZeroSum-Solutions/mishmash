@@ -63,13 +63,8 @@ import { resolveSharedPortsFromRunningState } from "./shared-ports.js";
 
 type CliOptions = ToolDevOptions & {
   envFile?: string | string[];
-  expr?: string;
   noEnvFile?: boolean;
   parentPid?: number;
-  path?: string;
-  selector?: string;
-  timeout?: string;
-  updateAction?: string;
 };
 
 const TOOLS_DEV_PARENT_PID_ENV = SIDECAR_ENV.TOOLS_DEV_PARENT_PID;
@@ -854,61 +849,7 @@ function printCheckResult(result: unknown, options: CliOptions): void {
   }
 }
 
-function parseTimeoutMs(value: string | undefined): number | undefined {
-  if (value == null) return undefined;
-  const seconds = Number(value);
-  if (!Number.isFinite(seconds) || seconds <= 0) throw new Error("--timeout must be a positive number of seconds");
-  return seconds * 1000;
-}
-
-async function inspectDesktop(config: ToolDevConfig, target: string | undefined, options: CliOptions) {
-  const operation = target ?? "status";
-  const timeoutMs = parseTimeoutMs(options.timeout) ?? 30000;
-
-  switch (operation) {
-    case "status":
-      return (await inspectDesktopRuntime(runtimeLookup(config), 1000)) ?? ({ state: "idle" } satisfies DesktopStatusSnapshot);
-    case "eval":
-      if (options.expr == null) throw new Error("--expr is required for desktop eval");
-      return await requestJsonIpc<DesktopEvalResult>(
-        config.apps.desktop.ipcPath,
-        { input: { expression: options.expr }, type: SIDECAR_MESSAGES.EVAL },
-        { timeoutMs },
-      );
-    case "screenshot":
-      if (options.path == null) throw new Error("--path is required for desktop screenshot");
-      return await requestJsonIpc<DesktopScreenshotResult>(
-        config.apps.desktop.ipcPath,
-        { input: { path: options.path }, type: SIDECAR_MESSAGES.SCREENSHOT },
-        { timeoutMs },
-      );
-    case "console":
-      return await requestJsonIpc<DesktopConsoleResult>(config.apps.desktop.ipcPath, { type: SIDECAR_MESSAGES.CONSOLE }, { timeoutMs });
-    case "update":
-      if (
-        options.updateAction != null &&
-        !["status", "check", "download", "install"].includes(options.updateAction)
-      ) {
-        throw new Error("--update-action must be status, check, download, or install");
-      }
-      return await requestJsonIpc<DesktopUpdateResult>(
-        config.apps.desktop.ipcPath,
-        { input: { action: options.updateAction ?? "status" }, type: SIDECAR_MESSAGES.UPDATE },
-        { timeoutMs },
-      );
-    case "click":
-      if (options.selector == null) throw new Error("--selector is required for desktop click");
-      return await requestJsonIpc<DesktopClickResult>(
-        config.apps.desktop.ipcPath,
-        { input: { selector: options.selector }, type: SIDECAR_MESSAGES.CLICK },
-        { timeoutMs },
-      );
-    default:
-      throw new Error(`unsupported desktop inspect target: ${operation}`);
-  }
-}
-
-async function inspect(config: ToolDevConfig, appName: string, target: string | undefined, options: CliOptions) {
+async function inspect(config: ToolDevConfig, appName: string, target: string | undefined) {
   if (appName === APP_KEYS.DAEMON) {
     if (target != null && target !== "status") throw new Error(`unsupported daemon inspect target: ${target}`);
     return (
@@ -920,8 +861,7 @@ async function inspect(config: ToolDevConfig, appName: string, target: string | 
     if (target != null && target !== "status") throw new Error(`unsupported web inspect target: ${target}`);
     return (await inspectWebRuntime(runtimeLookup(config), 1000)) ?? ({ state: "idle", url: null } satisfies WebStatusSnapshot);
   }
-  if (appName !== APP_KEYS.DESKTOP) throw new Error(`unsupported tools-dev app: ${appName}`);
-  return await inspectDesktop(config, target, options);
+  throw new Error(`unsupported tools-dev app: ${appName}`);
 }
 
 async function runSequential<T>(targets: readonly ToolDevAppName[], operation: (target: ToolDevAppName) => Promise<T>) {
@@ -985,7 +925,7 @@ function addPortOptions(command: ReturnType<typeof cli.command>) {
     .option("--prod", "use production build (requires pnpm --filter @open-design/web build first)");
 }
 
-addPortOptions(addSharedOptions(cli.command("start [app]", "Start daemon, web, desktop, or all when app is omitted"))).action(
+addPortOptions(addSharedOptions(cli.command("start [app]", "Start daemon, web, or all when app is omitted"))).action(
   async (appName: string | undefined, options: CliOptions) => {
     assertSupportedNodeRuntimeForStart();
     const config = resolveToolDevConfig(options);
@@ -1006,13 +946,13 @@ addPortOptions(addSharedOptions(cli.command("run [app]", "Start apps and keep th
   },
 );
 
-addSharedOptions(cli.command("status [app]", "Show app status for daemon, web, desktop, or all")).action(
+addSharedOptions(cli.command("status [app]", "Show app status for daemon, web, or all")).action(
   async (appName: string | undefined, options: CliOptions) => {
     printStatusResult(await status(resolveToolDevConfig(options), appName), options, appName);
   },
 );
 
-addSharedOptions(cli.command("stop [app]", "Stop daemon, web, desktop, or all when app is omitted")).action(
+addSharedOptions(cli.command("stop [app]", "Stop daemon, web, or all when app is omitted")).action(
   async (appName: string | undefined, options: CliOptions) => {
     const config = resolveToolDevConfig(options);
     const targets = resolveStopApps(appName);
@@ -1021,14 +961,14 @@ addSharedOptions(cli.command("stop [app]", "Stop daemon, web, desktop, or all wh
   },
 );
 
-addPortOptions(addSharedOptions(cli.command("restart [app]", "Restart daemon, web, desktop, or all when app is omitted"))).action(
+addPortOptions(addSharedOptions(cli.command("restart [app]", "Restart daemon, web, or all when app is omitted"))).action(
   async (appName: string | undefined, options: CliOptions) => {
     assertSupportedNodeRuntimeForStart();
     printRestartResult(await restartTargets(resolveToolDevConfig(options), appName, options), options);
   },
 );
 
-addSharedOptions(cli.command("logs [app]", "Show log tail for daemon, web, desktop, or all")).action(
+addSharedOptions(cli.command("logs [app]", "Show log tail for daemon, web, or all")).action(
   async (appName: string | undefined, options: CliOptions) => {
     const config = resolveToolDevConfig(options);
     const targets = resolveTargetApps(appName, DEFAULT_START_APPS);
@@ -1039,17 +979,11 @@ addSharedOptions(cli.command("logs [app]", "Show log tail for daemon, web, deskt
   },
 );
 
-addSharedOptions(
-  cli.command("inspect <app> [target]", "Inspect daemon/web status or desktop status/eval/screenshot/console/click"),
-)
-  .option("--expr <js>", "JavaScript expression for desktop eval")
-  .option("--path <file>", "Output path for desktop screenshot")
-  .option("--selector <css>", "CSS selector for desktop click")
-  .option("--timeout <seconds>", "Desktop inspect timeout in seconds")
-  .option("--update-action <action>", "Desktop update action: status|check|download|install")
-  .action(async (appName: string, target: string | undefined, options: CliOptions) => {
-    output(await inspect(resolveToolDevConfig(options), appName, target, options), options);
-  });
+addSharedOptions(cli.command("inspect <app> [target]", "Inspect daemon or web status")).action(
+  async (appName: string, target: string | undefined, options: CliOptions) => {
+    output(await inspect(resolveToolDevConfig(options), appName, target), options);
+  },
+);
 
 addSharedOptions(cli.command("check [app]", "Print status and recent logs for quick diagnostics")).action(
   async (appName: string | undefined, options: CliOptions) => {

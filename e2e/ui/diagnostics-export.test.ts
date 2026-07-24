@@ -33,7 +33,7 @@ test.beforeEach(async ({ page }) => {
   }, STORAGE_KEY);
 });
 
-test('[P1] diagnostics export zip includes the primary daemon, web, and desktop logs', async ({ page }) => {
+test('[P1] diagnostics export zip includes the primary daemon and web logs', async ({ page }) => {
   await gotoEntryHome(page);
 
   const response = await page.request.get('/api/diagnostics/export');
@@ -50,7 +50,6 @@ test('[P1] diagnostics export zip includes the primary daemon, web, and desktop 
       'summary/manifest.json',
       'logs/daemon/latest.log',
       'logs/web/latest.log',
-      'logs/desktop/latest.log',
     ]));
 
     const manifest = JSON.parse(await unzipRead(zipPath, 'summary/manifest.json')) as {
@@ -59,14 +58,11 @@ test('[P1] diagnostics export zip includes the primary daemon, web, and desktop 
     const manifestNames = new Set((manifest.files ?? []).map((file) => file.name).filter(Boolean));
     expect(manifestNames.has('logs/daemon/latest.log')).toBe(true);
     expect(manifestNames.has('logs/web/latest.log')).toBe(true);
-    expect(manifestNames.has('logs/desktop/latest.log')).toBe(true);
 
     const daemonLog = await unzipRead(zipPath, 'logs/daemon/latest.log');
     const webLog = await unzipRead(zipPath, 'logs/web/latest.log');
-    const desktopLog = await unzipRead(zipPath, 'logs/desktop/latest.log');
     expect(daemonLog.length).toBeGreaterThan(0);
     expect(webLog.length).toBeGreaterThan(0);
-    expect(desktopLog.length).toBeGreaterThan(0);
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });
   }
