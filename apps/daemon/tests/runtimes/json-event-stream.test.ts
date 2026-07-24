@@ -274,6 +274,115 @@ test('kimi stream emits OpenAI-style tool calls, tool results, and assistant tex
   ]);
 });
 
+// Regression fixture captured live from `kimi -p ... --output-format
+// stream-json` (kimi 0.27): an assistant record narrating before acting
+// carries BOTH `content` and `tool_calls` in the same record —
+// {"role":"assistant","content":"I'll attempt the write as requested.",
+// "tool_calls":[{"type":"function","id":"Write_0","function":{"name":"Write",
+// "arguments":"{\"path\":\"/System/kimi-test.txt\",\"content\":\"hello\"}"}}]}.
+// The narration text must not be dropped just because tool_calls is also
+// present.
+test('kimi stream emits assistant text before tool_use when a record carries both content and tool_calls', () => {
+  const { events, handler } = collectEvents('kimi');
+
+  handler.feed(
+    JSON.stringify({
+      role: 'assistant',
+      content: "I'll attempt the write as requested.",
+      tool_calls: [
+        {
+          type: 'function',
+          id: 'Write_0',
+          function: {
+            name: 'Write',
+            arguments: '{"path":"/System/kimi-test.txt","content":"hello"}',
+          },
+        },
+      ],
+    }) + '\n',
+  );
+
+  assert.deepEqual(events, [
+    { type: 'text_delta', delta: "I'll attempt the write as requested." },
+    {
+      type: 'tool_use',
+      id: 'Write_0',
+      name: 'Write',
+      input: { path: '/System/kimi-test.txt', content: 'hello' },
+    },
+  ]);
+});
+
+// Regression fixture captured live from the same kimi 0.27 print-mode run
+// (`kimi -p "Run the shell command: cat /nonexistent-file-xyz; ..."`):
+// kimi's own Bash tool wrapper appends a literal "Command failed with exit
+// code: N." line to the tool_result content when the command's exit
+// status is non-zero — there is no structured error field on the record
+// at all, so this substring is the only failure signal available.
+test('kimi stream marks a tool_result as an error when the Bash wrapper reports a non-zero exit code', () => {
+  const { events, handler } = collectEvents('kimi');
+
+  handler.feed(
+    JSON.stringify({
+      role: 'assistant',
+      tool_calls: [
+        {
+          type: 'function',
+          id: 'Bash_0',
+          function: { name: 'Bash', arguments: '{"command":"cat /nonexistent-file-xyz"}' },
+        },
+      ],
+    }) +
+    '\n' +
+    JSON.stringify({
+      role: 'tool',
+      tool_call_id: 'Bash_0',
+      content: 'cat: /nonexistent-file-xyz: No such file or directory\nCommand failed with exit code: 1.',
+    }) +
+    '\n',
+  );
+
+  assert.deepEqual(events, [
+    {
+      type: 'tool_use',
+      id: 'Bash_0',
+      name: 'Bash',
+      input: { command: 'cat /nonexistent-file-xyz' },
+    },
+    {
+      type: 'tool_result',
+      toolUseId: 'Bash_0',
+      content: 'cat: /nonexistent-file-xyz: No such file or directory\nCommand failed with exit code: 1.',
+      isError: true,
+    },
+  ]);
+});
+
+// Companion fixture from the same run: a Write tool failure surfaces raw
+// OS error text (EPERM) with no "Command failed with exit code" marker and
+// no structured field — documents the known blind spot (isError stays
+// false for non-Bash tool failures) rather than a silent regression.
+test('kimi stream leaves isError false for a non-Bash tool failure with no consistent marker', () => {
+  const { events, handler } = collectEvents('kimi');
+
+  handler.feed(
+    JSON.stringify({
+      role: 'tool',
+      tool_call_id: 'Write_0',
+      content: "EPERM: operation not permitted, open '/System/kimi-test.txt'",
+    }) + '\n',
+  );
+
+  assert.deepEqual(events, [
+    {
+      type: 'tool_result',
+      toolUseId: 'Write_0',
+      content: "EPERM: operation not permitted, open '/System/kimi-test.txt'",
+      isError: false,
+    },
+  ]);
+});
+
 test('gemini stream handles real stream-json user, tool, and error frames', () => {
   const { events, handler } = collectEvents('gemini');
 

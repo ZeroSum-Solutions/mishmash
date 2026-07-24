@@ -6,12 +6,14 @@ export const kimiAgentDef = {
     name: 'Kimi CLI',
     bin: 'kimi',
     versionArgs: ['--version'],
+    // Bare legacy ids (kimi-k2-turbo-preview, moonshot-v1-8k/32k) fail
+    // against the provider-prefixed catalog this install's `kimi provider
+    // catalog add` configures (verified: the catalog only resolves
+    // `moonshotai/...`-prefixed ids), so the fallback list stays limited to
+    // ids that actually work here.
     fallbackModels: [
       DEFAULT_MODEL_OPTION,
       { id: 'moonshotai/kimi-k3', label: 'Kimi K3' },
-      { id: 'kimi-k2-turbo-preview', label: 'kimi-k2-turbo-preview' },
-      { id: 'moonshot-v1-8k', label: 'moonshot-v1-8k' },
-      { id: 'moonshot-v1-32k', label: 'moonshot-v1-32k' },
     ],
     // `kimi acp` is hard-gated behind a paid Kimi Code membership on this
     // class of install ("unable to verify membership benefits", reproduced
@@ -56,6 +58,7 @@ export const kimiAgentDef = {
     eventParser: 'kimi',
     // Daemon-process env override for operator pinning of the fallback
     // default model, mirroring amr.ts's VELA_DEFAULT_MODEL. Lets an operator
-    // point Kimi at kimi-k3 (or a future default) without a code change.
+    // point Kimi at moonshotai/kimi-k3 (or a future default) without a code
+    // change.
     defaultModelEnvVar: 'KIMI_DEFAULT_MODEL',
 } satisfies RuntimeAgentDef;
