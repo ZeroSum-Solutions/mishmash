@@ -8,6 +8,7 @@ export const kimiAgentDef = {
     versionArgs: ['--version'],
     fallbackModels: [
       DEFAULT_MODEL_OPTION,
+      { id: 'kimi-k3', label: 'kimi-k3' },
       { id: 'kimi-k2-turbo-preview', label: 'kimi-k2-turbo-preview' },
       { id: 'moonshot-v1-8k', label: 'moonshot-v1-8k' },
       { id: 'moonshot-v1-32k', label: 'moonshot-v1-32k' },
@@ -24,4 +25,8 @@ export const kimiAgentDef = {
     streamFormat: 'acp-json-rpc',
     mcpDiscovery: 'mature-acp',
     externalMcpInjection: 'acp-merge',
+    // Daemon-process env override for operator pinning of the fallback
+    // default model, mirroring amr.ts's VELA_DEFAULT_MODEL. Lets an operator
+    // point Kimi at kimi-k3 (or a future default) without a code change.
+    defaultModelEnvVar: 'KIMI_DEFAULT_MODEL',
 } satisfies RuntimeAgentDef;
