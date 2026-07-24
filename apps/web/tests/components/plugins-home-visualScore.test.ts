@@ -134,12 +134,12 @@ describe('sortByVisualAppeal', () => {
         },
       }),
       fixture({
-        id: 'example-editorial-landing',
+        id: 'example-kanban-board',
         od: { mode: 'prototype', preview: { type: 'html', entry: './index.html' } },
       }),
     ];
     const sorted = sortByVisualAppeal(records).map((r) => r.id);
-    expect(sorted[0]).toBe('example-editorial-landing');
+    expect(sorted[0]).toBe('example-kanban-board');
   });
 
   it('keeps numeric featured rank ahead of media bonuses', () => {
