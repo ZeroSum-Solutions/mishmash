@@ -1187,7 +1187,7 @@ test('[P1] home Brand Kit chip opens design-system creation and starts brand ext
   await expect(page.getByTestId('file-workspace')).toBeVisible();
   await expect(page.getByTestId('design-system-project-tab')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('design-system-project-tab-panel')).toBeVisible();
-  await expect(page.getByTestId('design-system-extraction-status')).toContainText(/Extracting design system|正在提取|正在擷取/i);
+  await expect(page.getByTestId('design-system-extraction-status')).toContainText(/Extracting design system/i);
 });
 
 test('[P1] brand-backed design system previews as a Brand Kit and carries into project creation', async ({ page }) => {
@@ -1285,7 +1285,7 @@ test('[P2] home template picker supports no-results, clear, Escape, and outside 
 
   await page.getByTestId('home-hero-template-trigger').click();
   await page.getByTestId('home-hero-template-search').fill('zzzz-no-template');
-  await expect(page.getByTestId('home-hero-template-menu')).toContainText(/No matches|没有匹配|沒有相符/i);
+  await expect(page.getByTestId('home-hero-template-menu')).toContainText(/No matches/i);
   await page.getByTestId('home-hero-template-clear').click();
   await expect(activeHeroChip(page)).toHaveCount(0);
 
@@ -1311,11 +1311,11 @@ test('[P1] home template picker selects a starter template and can clear it', as
   await expect(page.getByTestId('home-hero-template-card-deck')).toBeVisible();
   await page.getByTestId('home-hero-template-card-deck').click();
 
-  await expect(page.getByTestId('home-hero-template-trigger')).toContainText(/Slide deck|幻灯片|投影片/i);
+  await expect(page.getByTestId('home-hero-template-trigger')).toContainText(/Slide deck/i);
 
   await page.getByTestId('home-hero-template-reset').click();
   await expect(page.getByTestId('home-hero-footer-option-speakerNotes')).toHaveCount(0);
-  await expect(page.getByTestId('home-hero-template-trigger')).toContainText(/None|无|無/i);
+  await expect(page.getByTestId('home-hero-template-trigger')).toContainText(/None/i);
 });
 
 test('[P1] first-run home keeps community templates collapsed until the hint is used', async ({ page }) => {
@@ -1754,7 +1754,7 @@ function activeHeroChip(page: Page) {
 async function clearActiveChip(page: Page) {
   const activeChip = activeHeroChip(page);
   if ((await activeChip.count()) > 0) {
-    const clearPlugin = page.getByRole('button', { name: /Clear active plugin|清除/i });
+    const clearPlugin = page.getByRole('button', { name: /Clear active plugin/i });
     if ((await clearPlugin.count()) > 0) {
       await clearPlugin.click();
     } else {
@@ -2046,7 +2046,7 @@ async function selectHomeDesignSystem(page: Page, id: string | null) {
   const popover = page.getByTestId('project-ds-picker-popover');
   await expect(popover).toBeVisible();
   if (id === null) {
-    await popover.getByRole('option', { name: /No design system|不指定设计系统|不指定設計系統/i }).click();
+    await popover.getByRole('option', { name: /No design system/i }).click();
   } else {
     await popover.getByTestId(`project-ds-picker-option-${id}`).click();
   }

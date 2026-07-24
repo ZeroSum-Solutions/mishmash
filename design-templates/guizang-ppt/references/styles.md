@@ -32,7 +32,7 @@ At the start of SKILL.md's `Step 1 · Clarify intent`: **first let the user pick
 | Workhorse layouts | **1 Cover / 2 Act divider / 4 Lead image + text / 8 Big quote / 10 Image + text mix** |
 | Chrome copy | `Vol.04 · Spring 2026` / `Act II · 12 / 24` / `lukew.com · 2026.04` |
 | Kicker style | short English + middot: `THE TWIST` / `BUT` / `DEC.` |
-| Foot copy | `Page 12 · 一种新的工作方式` |
+| Foot copy | `Page 12 · A New Way of Working` |
 
 **Fits**: commercial launches, industry keynotes, product promotion, personal-brand consolidation talks. **Just pick this by default**, it won't go badly wrong.
 
@@ -74,8 +74,8 @@ At the start of SKILL.md's `Step 1 · Clarify intent`: **first let the user pick
 | Theme color | 🍂 Kraft Paper |
 | Recommended slide count | 9–12 pages (slow, spacious, low density) |
 | Workhorse layouts | **1 Cover / 4 Lead image + text / 8 Big quote / 10 Image + text mix / 2 Act divider** |
-| Chrome copy | `Vol.07 · Autumn` / `一封信 · 03` / `Notes from Kyoto` |
-| Kicker style | Chinese short phrase + punctuation: "给一个朋友。" / "晚秋。" / "Letter Three" |
+| Chrome copy | `Vol.07 · Autumn` / `A Letter · 03` / `Notes from Kyoto` |
+| Kicker style | Short phrase + punctuation: "To a friend." / "Late autumn." / "Letter Three" |
 | Foot copy | `Page 03 · Letter Three` / `2026 · Spring Issue` |
 
 **Fits**: private salons, book talks, interview retros, lifestyle brands, personal essays.
@@ -163,7 +163,7 @@ At the start of SKILL.md's `Step 1 · Clarify intent`: **first let the user pick
 
 ## Decision record (do before generating)
 
-After picking a direction, **create or update `项目记录.md` (Project Record) in the project folder** (or `大纲-v1.md`, Outline v1), with the first line stating clearly:
+After picking a direction, **create or update `project-record.md` (Project Record) in the project folder** (or `outline-v1.md`, Outline v1), with the first line stating clearly:
 
 ```markdown
 # [Talk Title] · Project Record
@@ -190,6 +190,6 @@ Update this section every time you adjust the direction in later iterations. **D
 ## ✅ What you should do
 
 - ✅ Pick only from the 5 directions, and use the chosen one to answer the other 5 clarifying questions
-- ✅ State the direction clearly on the first line of `项目记录.md` (Project Record) and keep it unchanged throughout
+- ✅ State the direction clearly on the first line of `project-record.md` (Project Record) and keep it unchanged throughout
 - ✅ Let the three text slots chrome / kicker / foot "speak for" the direction: they carry half the direction's recognizability
 - ✅ If unsure, **default to Monocle Editorial**: it's the lowest-failure-rate fallback of the 5 directions

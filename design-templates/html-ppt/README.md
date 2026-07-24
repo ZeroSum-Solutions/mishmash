@@ -1,24 +1,23 @@
 # html-ppt — HTML PPT Studio
 
 > A world-class AgentSkill for producing professional HTML presentations in
-> **36 themes**, **15 full-deck templates**, **31 page layouts**,
+> **36 themes**, **14 full-deck templates**, **31 page layouts**,
 > **47 animations** (27 CSS + 20 canvas FX), and a **true presenter mode**
 > with pixel-perfect previews + speaker script + timer — all pure static
 > HTML/CSS/JS, no build step.
 
 **Author:** lewis &lt;sudolewis@gmail.com&gt;
 **License:** MIT
-**中文文档:** [README.zh-CN.md](README.zh-CN.md)
 
 ![html-ppt — cover with live previews](https://repo-assets.open-design.ai/resources/images/design-templates/html-ppt/hero.gif)
 
-> One command installs **36 themes × 20 canvas FX × 31 layouts × 15 full decks + presenter mode**. Every preview above is a live iframe of a real template file rendering inside the deck — no screenshots, no mock-ups.
+> One command installs **36 themes × 20 canvas FX × 31 layouts × 14 full decks + presenter mode**. Every preview above is a live iframe of a real template file rendering inside the deck — no screenshots, no mock-ups.
 
 ## 🎤 Presenter Mode (new!)
 
 Press `S` on any deck to pop open a dedicated presenter window with four
 draggable, resizable **magnetic cards**: current slide, next slide preview,
-speaker script (逐字稿), and timer. Two windows stay in sync via
+speaker script, and timer. Two windows stay in sync via
 `BroadcastChannel`.
 
 ![Presenter mode with 4 magnetic cards](docs/readme/presenter-mode.png)
@@ -94,18 +93,18 @@ isolated iframe so theme ≠ theme is visually guaranteed).
 Eight extracted from real-world decks, seven generic scenario scaffolds:
 
 **Extracted looks**
-- `xhs-white-editorial` — 小红书白底杂志风
-- `graphify-dark-graph` — 暗底 + 力导向知识图谱
-- `knowledge-arch-blueprint` — 蓝图 / 架构图风
-- `hermes-cyber-terminal` — 终端 cyberpunk
-- `obsidian-claude-gradient` — 紫色渐变卡
-- `testing-safety-alert` — 红 / 琥珀警示风
-- `xhs-pastel-card` — 柔和马卡龙图文
-- `dir-key-nav-minimal` — 方向键极简
+- `xhs-white-editorial` — white-bg magazine style
+- `graphify-dark-graph` — dark bg + force-directed knowledge graph
+- `knowledge-arch-blueprint` — blueprint / architecture-diagram look
+- `hermes-cyber-terminal` — terminal cyberpunk
+- `obsidian-claude-gradient` — purple gradient card
+- `testing-safety-alert` — red / amber alert style
+- `xhs-pastel-card` — soft macaron image cards
+- `dir-key-nav-minimal` — arrow-key minimalist
 
 **Scenario decks**
 - `pitch-deck`, `product-launch`, `tech-sharing`, `weekly-report`,
-  `xhs-post` (9-slide 3:4), `course-module`,
+  `course-module`,
   **`presenter-mode-reveal`** 🎤 — complete talk template with full 150-300
   word speaker scripts on every slide, designed around the `S` key presenter mode
 

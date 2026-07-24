@@ -88,7 +88,7 @@ Open `references/styles.md`, **copy the whole section over** to show the user th
 
 If the user says "I don't know, you recommend": **default to Monocle Editorial**, because it has the lowest failure probability. If the user mentions "AI / benchmark / technical launch": recommend WIRED; "reading / private / social circle": recommend Kinfolk; "design / architecture / portfolio": recommend Domus; "research / academic / methodology": recommend Lab.
 
-After picking a direction, create or update `项目记录.md` (Project Record) in the project folder, with the first line clearly stating direction + theme color + audience + duration (see the template at the end of `styles.md`). **Do not change direction at any point**: switching midway = everything before is wasted.
+After picking a direction, create or update `project-record.md` (Project Record) in the project folder, with the first line clearly stating direction + theme color + audience + duration (see the template at the end of `styles.md`). **Do not change direction at any point**: switching midway = everything before is wasted.
 
 ### Step 1 · Clarify intent (**do before starting**)
 
@@ -123,13 +123,13 @@ Takeaway   → 1-2 pages : a punchline / a suspenseful question / a call to acti
 
 Narrative arc + page-count plan + theme rhythm table (see `layouts.md`); **align all three tables** before moving to Step 2.
 
-It's best to save the outline as `项目记录.md` (Project Record) or `大纲-v1.md` (Outline v1) for later iteration.
+It's best to save the outline as `project-record.md` (Project Record) or `outline-v1.md` (Outline v1) for later iteration.
 
 #### Image convention (tell the user)
 
 Make these clear to the user before starting:
 
-- **Folder location**: under `项目/XXX/ppt/images/` (sibling to `index.html`)
+- **Folder location**: under `project/XXX/ppt/images/` (sibling to `index.html`)
 - **Naming convention**: `{page number}-{semantic}.{ext}`, e.g. `01-cover.jpg` / `03-figma.jpg` / `05-dashboard.png`
   - Pad the page number with zeros for easy sorting
   - Use English for the semantic part, short, specific, matching the content
@@ -142,24 +142,24 @@ Make these clear to the user before starting:
 
 ### Step 2 · Copy the template
 
-Copy `assets/template.html` to the target location (usually `项目/XXX/ppt/index.html`), and create an `images/` folder as a sibling, ready to receive images.
+Copy `assets/template.html` to the target location (usually `project/XXX/ppt/index.html`), and create an `images/` folder as a sibling, ready to receive images.
 
 ```bash
-mkdir -p "项目/XXX/ppt/images"
-cp "<SKILL_ROOT>/assets/template.html" "项目/XXX/ppt/index.html"
+mkdir -p "project/XXX/ppt/images"
+cp "<SKILL_ROOT>/assets/template.html" "project/XXX/ppt/index.html"
 ```
 
 `template.html` is a **complete, runnable** file: CSS, WebGL shader, paging JS, font/icon CDNs are all preset; only inside `<main id="deck">` are there 3 example slides (cover, act divider, blank filler page).
 
 #### 2.1 · Placeholders you must change (**easy to miss**)
 
-Right after copying, change the placeholders below, or the browser tab will show awkward text like "[必填] replace with the PPT title":
+Right after copying, change the placeholders below, or the browser tab will show awkward text like "[REQUIRED] replace with the PPT title":
 
 | Location | Original | Change to |
 |------|------|--------|
-| `<title>` | `[必填] 替换为 PPT 标题 · Deck Title` | the actual deck title (e.g. `一种新的工作方式 · Luke Wroblewski`) |
+| `<title>` | `[REQUIRED] replace with PPT title · Deck Title` | the actual deck title (e.g. `A New Way of Working · Luke Wroblewski`) |
 
-The first thing to do every time you finish copying template.html: grep for "[必填]" to confirm everything is replaced.
+The first thing to do every time you finish copying template.html: grep for "[REQUIRED]" to confirm everything is replaced.
 
 #### 2.2 · Choose the theme color (5 presets · no customization allowed)
 
@@ -268,7 +268,7 @@ A few items to watch especially:
 Just open `index.html` directly in the browser. On macOS:
 
 ```bash
-open "项目/XXX/ppt/index.html"
+open "project/XXX/ppt/index.html"
 ```
 
 No local server needed. Images use the relative path `images/xxx.png`.

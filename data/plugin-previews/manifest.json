@@ -512,13 +512,6 @@
       "holdMs": 2500,
       "hash": "996a6deb2a701338"
     },
-    "example-card-xiaohongshu": {
-      "video": "example-card-xiaohongshu/cf3365de334eab06/preview.mp4",
-      "poster": "example-card-xiaohongshu/cf3365de334eab06/poster.jpg",
-      "durationMs": 10067,
-      "holdMs": 2500,
-      "hash": "cf3365de334eab06"
-    },
     "example-html-ppt-zhangzara-biennale-yellow": {
       "video": "example-html-ppt-zhangzara-biennale-yellow/903cffd8265525b7/preview.mp4",
       "poster": "example-html-ppt-zhangzara-biennale-yellow/903cffd8265525b7/poster.jpg",

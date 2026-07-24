@@ -88,11 +88,11 @@ In the CSS, `.frame-img img` already presets `object-position:top`, so only the 
 
 ### 2c. chrome and kicker must not say the same thing
 
-**Symptom**: the top-left `.chrome` says "Design First · 设计先行" while the same page's `.kicker` says "Phase 01 · 设计阶段": a synonymous translation that reeks of AI.
+**Symptom**: the top-left `.chrome` says "Design First" while the same page's `.kicker` says "Phase 01 · Design Stage": a synonymous restatement that reeks of AI.
 
 **What to do**:
 - **chrome = magazine masthead / nav label**: it can stay the same across multiple pages (e.g. "Act II · Workflow", "Data · Result", "lukew.com · 2026.04").
-- **kicker = the one-of-a-kind lead-in for this page**: short, with a hook, the "small prefix" above the headline (e.g. "BUT", "一个人,做了什么。", "The Question").
+- **kicker = the one-of-a-kind lead-in for this page**: short, with a hook, the "small prefix" above the headline (e.g. "BUT", "One person. What did they build?", "The Question").
 - One describes the section, the other describes this single page: never translate one into the other.
 
 ### 3. Headline size must not exceed the screen width / character count
@@ -105,7 +105,7 @@ In the CSS, `.frame-img img` already presets `object-position:top`, so only the 
 - For long titles, break lines manually with `<br>`; do not rely on automatic wrapping
 - Add `white-space:nowrap` when needed
 
-**Example**: `我不是程序员。` (6 characters) uses `h-xl` at 7.2vw + nowrap, laid out on one line.
+**Example**: `I'm not a programmer.` uses `h-xl` at 7.2vw + nowrap, laid out on one line.
 
 ### 4. Type division of labor: serif for headlines, sans-serif for body
 
@@ -159,7 +159,7 @@ Big-number pages (big numbers / hero question) and dense pages (pipeline / image
 
 ### 8. English/Chinese usage for the same concept must be consistent
 
-**Symptom**: sometimes you write "Skills", sometimes "技能", sometimes "薄承载厚技能": inconsistent throughout.
+**Symptom**: sometimes you write "Skills", sometimes "Capabilities", sometimes "Thin-Interface, Thick-Skills": inconsistent throughout.
 
 **What to do**:
 - Prefer the **English word** for terms (Skills / Harness / Pipeline / Workflow); these are familiar in-circle terms.
@@ -234,7 +234,7 @@ Pre-flight (before generating)
   □ Decided which Layout (1-10) each page uses
   □ Drew the "theme rhythm table": each page has a clear hero dark / hero light / light / dark
   □ The rhythm table meets the hard rules: no 3 consecutive same-theme pages / ≥1 hero dark + ≥1 hero light (8+ pages) / at least 1 dark body page
-  □ `<title>` updated to the actual deck title (grep "[必填]" should return nothing)
+  □ `<title>` updated to the actual deck title (grep "[REQUIRED]" should return nothing)
 
 Content
   □ Each act has a reasonable page proportion (not top-heavy)

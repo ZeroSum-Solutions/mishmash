@@ -14,50 +14,50 @@ All themes define the same variables: `--bg`, `--bg-soft`, `--surface`,
 
 | name | description | when to use |
 |---|---|---|
-| `minimal-white` | 极简白，克制高级。Inter，强文字层级，极低阴影。 | 内部汇报、一对一技术评审、不抢内容的严肃话题 |
-| `editorial-serif` | 杂志风 Playfair 衬线 + 奶油底。 | 品牌故事、文字密度大的长文演讲 |
-| `soft-pastel` | 柔和马卡龙三色渐变。 | 产品发布、面向消费者、轻松话题 |
-| `xiaohongshu-white` | 小红书白底 + 暖红 accent + 衬线标题。 | 小红书图文、生活/美学类内容 |
-| `solarized-light` | 经典低眩光配色。 | 长时间观看的工作坊、教学 |
-| `catppuccin-latte` | catppuccin 浅色。 | 开发者、极客友好的技术分享 |
+| `minimal-white` | Minimal, restrained, premium. Inter, strong type hierarchy, very low shadow. | Internal reports, 1:1 tech reviews, serious content that shouldn't compete for attention |
+| `editorial-serif` | Magazine-style Playfair serif + cream background. | Brand storytelling, text-dense long-form talks |
+| `soft-pastel` | A soft three-color macaron gradient. | Product launches, consumer-facing, lighthearted topics |
+| `xiaohongshu-white` | White background + warm-red accent + serif headline. | Image-card posts, lifestyle/aesthetic content |
+| `solarized-light` | The classic low-glare palette. | Long workshops, teaching sessions |
+| `catppuccin-latte` | Catppuccin, light mode. | Developer- and geek-friendly tech talks |
 
 ## Bold & statement
 
 | name | description | when to use |
 |---|---|---|
-| `sharp-mono` | 纯黑白 + Archivo Black + 硬阴影。 | 宣言类、极具冲击力的视觉 |
-| `neo-brutalism` | 厚描边、硬阴影、明黄 accent。 | 创业路演、敢说敢做的调性 |
-| `bauhaus` | 几何 + 红黄蓝原色。 | 设计 talk、艺术史/产品美学主题 |
-| `swiss-grid` | 瑞士网格 + Helvetica 感 + 12 栏底纹。 | 严肃排版、设计行业 |
-| `memphis-pop` | 孟菲斯波普背景点 + 大字标题。 | 年轻、潮流、品牌合作 |
+| `sharp-mono` | Pure black and white + Archivo Black + hard shadows. | Manifestos, high-impact visuals |
+| `neo-brutalism` | Thick outlines, hard shadows, bright yellow accent. | Startup pitches, bold and unapologetic tone |
+| `bauhaus` | Geometric shapes + red/yellow/blue primaries. | Design talks, art-history/product-aesthetics topics |
+| `swiss-grid` | Swiss grid + a Helvetica feel + a 12-column underlay. | Serious typography, the design industry |
+| `memphis-pop` | Memphis-pop dot background + big headline type. | Young, trendy, brand collaborations |
 
 ## Cool & dark
 
 | name | description | when to use |
 |---|---|---|
-| `catppuccin-mocha` | catppuccin 深。 | 开发者内部分享、长时间观看 |
-| `dracula` | 经典 Dracula 紫红主色。 | 代码密集的技术分享 |
-| `tokyo-night` | Tokyo Night 蓝夜。 | 偏冷技术分享、基础设施 |
-| `nord` | 北欧清冷蓝白。 | 基础设施、云产品 |
-| `gruvbox-dark` | 温暖复古深色。 | Terminal / vim / *nix 社群 |
-| `rose-pine` | 玫瑰松，柔和暗色。 | 设计+开发交界、审美向技术 |
-| `arctic-cool` | 蓝/青/石板灰 浅色版。 | 商业分析、金融、冷静理性 |
+| `catppuccin-mocha` | Catppuccin, dark mode. | Internal developer talks, long viewing sessions |
+| `dracula` | The classic Dracula purple-red palette. | Code-dense tech talks |
+| `tokyo-night` | Tokyo Night blue-night palette. | Cooler-toned tech talks, infrastructure |
+| `nord` | Nordic cool blue and white. | Infrastructure, cloud products |
+| `gruvbox-dark` | A warm, retro dark palette. | Terminal / vim / *nix communities |
+| `rose-pine` | Rosé Pine, a soft dark palette. | The design/dev crossover, aesthetically-minded technical talks |
+| `arctic-cool` | A light blue/teal/slate-gray palette. | Business analysis, finance, cool and rational tones |
 
 ## Warm & vibrant
 
 | name | description | when to use |
 |---|---|---|
-| `sunset-warm` | 橘 / 珊瑚 / 琥珀三色渐变。 | 生活方式、奖项颁发、情绪正向 |
+| `sunset-warm` | An orange/coral/amber three-color gradient. | Lifestyle, awards, upbeat emotional tone |
 
 ## Effect-heavy
 
 | name | description | when to use |
 |---|---|---|
-| `glassmorphism` | 毛玻璃 + 多色光斑背景。 | Apple 式发布会、产品特性展示 |
-| `aurora` | 极光渐变 + blur + saturate。 | 封面 / CTA / 结语页 |
-| `rainbow-gradient` | 白底 + 彩虹流动渐变 accent。 | 欢乐向、节日、庆祝页 |
-| `blueprint` | 蓝图工程 + 网格底纹 + 蒙太奇字体。 | 系统架构、工程蓝图 |
-| `terminal-green` | 绿屏终端 + 等宽 + 发光文字。 | CLI/black-hat/复古朋克 |
+| `glassmorphism` | Frosted glass + a multicolor light-bloom background. | Apple-style keynotes, product-feature showcases |
+| `aurora` | An aurora gradient + blur + saturation boost. | Cover / CTA / closing pages |
+| `rainbow-gradient` | White background + a flowing rainbow-gradient accent. | Upbeat, festive, celebratory pages |
+| `blueprint` | Engineering-blueprint look + grid underlay + a monospaced-adjacent typeface. | System architecture, engineering blueprints |
+| `terminal-green` | Green-screen terminal + monospace + glowing text. | CLI / black-hat / retro-punk |
 
 ## v2 additions
 
@@ -65,28 +65,28 @@ All themes define the same variables: `--bg`, `--bg-soft`, `--surface`,
 
 | name | description | when to use |
 |---|---|---|
-| `corporate-clean` | 纯白 + 海军蓝 accent + Inter + 保守边框。 | 董事会汇报、B2B 销售、金融保险 |
-| `pitch-deck-vc` | YC 风白底 + 蓝紫渐变 accent + 大留白。 | 融资路演、种子轮、VC meeting |
-| `academic-paper` | 论文白 + 衬线正文 + 黑墨 + 蓝链接。 | 学术报告、研究分享、会议论文 |
-| `japanese-minimal` | 象牙白 + 朱红 accent + 极大留白 + Noto Serif。 | 品牌升级、匠人故事、禅意叙事 |
-| `engineering-whiteprint` | 白底 + 坐标纸网格 + 海军墨线 + 等宽字。 | 系统设计、API 文档、架构白皮书 |
+| `corporate-clean` | Pure white + navy accent + Inter + conservative borders. | Board reports, B2B sales, finance and insurance |
+| `pitch-deck-vc` | A YC-style white background + blue-purple gradient accent + generous whitespace. | Fundraising roadshows, seed rounds, VC meetings |
+| `academic-paper` | Paper-white + serif body + black ink + blue links. | Academic reports, research talks, conference papers |
+| `japanese-minimal` | Ivory white + vermilion accent + extreme whitespace + Noto Serif. | Brand refreshes, artisan storytelling, zen-inflected narratives |
+| `engineering-whiteprint` | White background + graph-paper grid + navy ink lines + monospace type. | System design, API docs, architecture white papers |
 
 ### Bold & editorial
 
 | name | description | when to use |
 |---|---|---|
-| `magazine-bold` | 奶油底 + 超大 Playfair 衬线 + 橙色 spot。 | 专栏文章、封面故事、品牌月刊 |
-| `news-broadcast` | 白底 + 红色竖条 + Oswald 大写 + 硬阴影。 | 突发新闻、发布通稿、数据播报 |
-| `midcentury` | 奶油底 + 芥末/青/焦橙 + 锐利几何。 | 设计史、家居美学、复古品牌 |
-| `retro-tv` | 暖奶油 + CRT 扫描线 + 琥珀橙 accent。 | 怀旧叙事、八零九零年代主题 |
+| `magazine-bold` | Cream background + oversized Playfair serif + an orange spot color. | Column articles, cover stories, brand magazines |
+| `news-broadcast` | White background + a red vertical bar + uppercase Oswald + hard shadows. | Breaking-news style, press releases, data broadcasts |
+| `midcentury` | Cream background + mustard/teal/burnt-orange + sharp geometry. | Design history, home-aesthetics content, retro branding |
+| `retro-tv` | Warm cream + CRT scanlines + an amber-orange accent. | Nostalgic storytelling, '80s/'90s-themed content |
 
 ### Effect-heavy / dramatic
 
 | name | description | when to use |
 |---|---|---|
-| `cyberpunk-neon` | 纯黑 + 霓虹粉青黄 + 发光 + JetBrains Mono。 | 黑客、地下文化、赛博 talk |
-| `vaporwave` | 深紫 + 粉红青蓝渐变 + 晕染光斑。 | 音乐、潮流艺术、A E S T H E T I C |
-| `y2k-chrome` | 银铬渐变 + 彩虹 accent + 大圆角 + Space Grotesk。 | 千禧怀旧、时尚品牌、Gen-Z |
+| `cyberpunk-neon` | Pure black + neon pink/teal/yellow + glow + JetBrains Mono. | Hacker culture, underground themes, cyber talks |
+| `vaporwave` | Deep purple + a pink/teal/blue gradient + hazy light bloom. | Music, trend-forward art, A E S T H E T I C |
+| `y2k-chrome` | A chrome-silver gradient + rainbow accent + large radii + Space Grotesk. | Y2K nostalgia, fashion brands, Gen-Z |
 
 ## How to apply
 

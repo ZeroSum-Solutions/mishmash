@@ -37,34 +37,34 @@ od:
     zh-CN: "用「Kami 羊皮纸文档」模板把我的内容做成一份「暖羊皮纸底 (#f5f4ed) + 墨蓝单色 accent (#1B365D) + 单一衬线字体, 编辑级排印」。保持模板的视觉签名，使用真实内容和数据，避免 lorem ipsum 和占位图片。"
 ---
 
-【模板: Kami 羊皮纸文档】
-【意图】严肃排版文档: one-pager / 长报告 / 信函 / 简历 / 财报 / changelog / portfolio。Inspired by tw93/kami。强调"写得像被排过版的纸", 不是 dashboard, 不是网页。
+【Template: Kami Parchment Document】
+【Intent】Serious typeset documents: one-pager / long report / letter / resume / financial report / changelog / portfolio. Inspired by tw93/kami. The goal is "reads like paper that's been properly typeset," not a dashboard, not a webpage.
 
-【硬性视觉签名 — 不许改】
-- **画布**: 暖羊皮纸 `#f5f4ed` (永远不用纯白 `#fff`)。次级背景 `#efeee5`。
-- **墨色**: 主文字 `#1f1d18` (近黑暖灰, 不用纯黑 `#000`)。次文字 `#6b665b`。
-- **唯一色彩**: 墨蓝 `#1B365D` ——所有 accent (链接、tag 描边、重点数字、引用左 rule) 只能用这一个色, 严禁多色。
-- **字体**: 一种语言一种衬线, 全文不混用:
-  - 英文: `Charter` (fallback: `Source Serif Pro`, `Iowan Old Style`)
-  - 中文: `TsangerJinKai02 W04` (fallback: `Noto Serif SC`)
-  - 日文: `YuMincho` (fallback: `Noto Serif JP`)
-  - Body 400, Heading 500 (不要 700/800/900)。
-- **行高**: 标题 1.1–1.3, 紧凑正文 1.4–1.45, 阅读型正文 1.5–1.55。
-- **绝不**: drop-shadow / blur / 圆角 ≥ 8px / 渐变 / 霓虹色 / rgba (用 solid hex)。
-- **细节**: tag 用 solid hex 背景方块 (因为 WeasyPrint 不渲染 rgba 好); 单线几何 icon; 边缘 1px hairline `#d4d1c5` rule, 长度受控不到边。
+【Hard visual signature — do not change】
+- **Canvas**: warm parchment `#f5f4ed` (never pure white `#fff`). Secondary background `#efeee5`.
+- **Ink**: primary text `#1f1d18` (near-black warm gray, not pure black `#000`). Secondary text `#6b665b`.
+- **Sole accent color**: ink-blue `#1B365D` — every accent (links, tag outlines, key numbers, the left rule on quotes) uses this one color only; multiple accent colors are forbidden.
+- **Fonts**: one serif per language, never mixed within a document:
+  - Latin: `Charter` (fallback: `Source Serif Pro`, `Iowan Old Style`)
+  - CJK: `TsangerJinKai02 W04` (fallback: `Noto Serif SC`)
+  - Japanese: `YuMincho` (fallback: `Noto Serif JP`)
+  - Body 400, Heading 500 (never 700/800/900).
+- **Line height**: headings 1.1–1.3, tight body copy 1.4–1.45, reading-length body copy 1.5–1.55.
+- **Never**: drop-shadow / blur / border-radius ≥ 8px / gradients / neon colors / rgba (use solid hex).
+- **Details**: tags use a solid-hex background block (rgba doesn't render well in WeasyPrint); single-stroke geometric icons; a 1px hairline `#d4d1c5` rule at the edge, kept short of the full bleed.
 
-【可选文档类型 — 按用户内容判断】
-- **One-Pager** — 顶 logotype (Charter italic) + 标题 + lede + 3 列要点 + 底脚 metadata。
-- **Long Doc** — 封面页 (大标题 + 副标 + 作者 + 日期) → 目录 (kicker + page no.) → 章节 (folio 顶角 + section rule + body) → 注释脚注 + 文末 colophon。
-- **Letter** — 抬头地址 + 日期 + 收件人 + 正文 (左对齐, 段间空 1.5em) + 署名 + 签名占位线。
-- **Portfolio** — 项目 hero (大标题 + sub) + 1 张全幅图 (用 CSS 块绘制占位) + 项目描述 + 角色 / 时间 / stack 元数据 row。
-- **Resume** — 顶部姓名 (大字) + tagline 一行 + contact row + 主要 section: experience (公司 / 时间 / 职位 / bullets) + skills + education。
-- **Slides** — keynote 风, 页数由【用户内容】决定 (短内容 6 页起步, 长内容应更多), 每页满铺羊皮纸, 大标题 + lede + 角标 page no., 简洁到只有"被印出来"的感觉。
-- **Equity Report** — 公司名 + ticker + Q × 年份 + key metrics row (revenue / margin / yoy) + body 分析 + 图表 (SVG 单色折线)。
-- **Changelog** — 版本号 (Charter italic 大字) + 日期 + 改动列表 (Added / Changed / Fixed), 单 rule 分隔。
+【Optional document types — pick based on user content】
+- **One-Pager** — logotype at top (Charter italic) + title + lede + a 3-column list of points + footer metadata.
+- **Long Doc** — cover page (big title + subtitle + author + date) → table of contents (kicker + page no.) → chapters (folio in the top corner + section rule + body) → footnotes + a colophon at the end.
+- **Letter** — letterhead address + date + recipient + body (left-aligned, 1.5em paragraph spacing) + signature line + a signature placeholder rule.
+- **Portfolio** — a project hero (big title + sub) + one full-width image (drawn as a CSS block placeholder) + project description + a role / timeline / stack metadata row.
+- **Resume** — name at the top (large) + a one-line tagline + a contact row + main sections: experience (company / dates / title / bullets) + skills + education.
+- **Slides** — keynote-style, page count set by 【user content】(short content starts at 6 pages, longer content should run more), each page fills the parchment canvas, big title + lede + a page-number folio, restrained enough to feel "printed."
+- **Equity Report** — company name + ticker + Q × year + a key-metrics row (revenue / margin / yoy) + body analysis + a chart (single-color SVG line).
+- **Changelog** — version number (large Charter italic) + date + a change list (Added / Changed / Fixed), separated by a single rule.
 
-【设计准则】
-- "Composed pages, not dashboards." 不要堆 KPI 卡, 不要堆 emoji 图标, 不要 hero gradient。
-- "Ring or whisper only, no hard drop shadows." 阴影只能是 `0 0 0 1px #d4d1c5` 这种 hairline 描边。
-- 文字层级靠**衬线对比 + 字号 + 留白**, 不靠颜色。
-- 单文件 HTML, 用 Tailwind CDN; 全文中英混排时加盘古之白; 不要外链图片, 占位用 paper-tint 色块 + 1px ink 描边。
+【Design principles】
+- "Composed pages, not dashboards." Don't stack KPI cards, don't stack emoji icons, no hero gradients.
+- "Ring or whisper only, no hard drop shadows." Shadows may only be a hairline outline like `0 0 0 1px #d4d1c5`.
+- Text hierarchy comes from **serif contrast + size + whitespace**, never from color.
+- Single-file HTML using the Tailwind CDN; add proper spacing between mixed-script runs; no hotlinked images — use a paper-tint block + 1px ink outline as a placeholder.
