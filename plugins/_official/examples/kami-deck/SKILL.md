@@ -162,10 +162,11 @@ Output a single file with all CSS inline. Mirror the structure of
 `design-systems/kami/DESIGN.md`.
 
 The runtime script (keyboard / wheel / touch nav, dot indicator,
-progress bar, ESC overview) should match the model documented in
-[`open-design-landing-deck/scripts/compose.ts`](../open-design-landing-deck/scripts/compose.ts).
-Do **not** reuse the open-design-landing-deck CSS; the visual
-language is different.
+progress bar, ESC overview) should implement standard horizontal
+swipe-deck navigation: arrow keys / space / scroll advance one
+viewport at a time, a dot indicator tracks position, and Esc opens
+a scaled-thumbnail overview grid. Do not reuse another deck
+template's CSS; the visual language is Kami's own.
 
 ### 4. Self-check
 
@@ -201,8 +202,8 @@ language is different.
 
 - [`kami-landing`](../kami-landing/) — long-form one-pager sister skill.
 - [`design-systems/kami/DESIGN.md`](../../design-systems/kami/DESIGN.md) — token spec.
-- [`open-design-landing-deck`](../open-design-landing-deck/) — same
-  horizontal swipe nav model, different visual language (Atelier Zero).
+- Other decks in this same horizontal swipe-nav family use a different
+  visual language (e.g. Atelier Zero's editorial collage system).
 - Upstream: [`tw93/kami`](https://github.com/tw93/kami) — original
   Claude skill (MIT). Kami's slides.py template documents the macro
   × 1.6 / micro × 0.6 ratios this skill applies.
