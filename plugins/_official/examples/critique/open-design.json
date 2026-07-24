@@ -25,7 +25,7 @@
   },
   "version": "0.1.0",
   "publishedAt": "2026-05-12T07:18:16Z",
-  "description": "Run a 5-dimension expert design review on any HTML artifact in the project — Philosophy / Visual hierarchy / Detail / Functionality / Innovation, each scored 0–10. Outputs a single self-contained HTML report with a radar chart, evidence-backed scores, and three lists: Keep / Fix / Quick-wins. Use when the brief asks for a \"design review\", \"design critique\", \"5 维度评审\", \"design audit\", or \"what's wrong with my design\".",
+  "description": "Run a 5-dimension expert design review on any HTML artifact in the project — Philosophy / Visual hierarchy / Detail / Functionality / Innovation, each scored 0–10. Outputs a single self-contained HTML report with a radar chart, evidence-backed scores, and three lists: Keep / Fix / Quick-wins. Use when the brief asks for a \"design review\", \"design critique\", \"5-dimension review\", \"design audit\", or \"what's wrong with my design\".",
   "description_i18n": {
     "zh-CN": "对项目中的任何 HTML 成品进行 5 维度专家设计评审——哲学/视觉层级/细节/功能性/创新性，每项评分 0-10。输出包含雷达图、有据可依的评分以及三个清单（保留/修复/快速优化）的独立 HTML 报告。",
     "zh-TW": "對專案中的任何 HTML 成品進行 5 維度專家設計評審——哲學/視覺層級/細節/功能性/創新性，每項評分 0-10。輸出包含雷達圖、有據可依的評分以及三個清單（保留/修復/快速優化）的獨立 HTML 報告。",

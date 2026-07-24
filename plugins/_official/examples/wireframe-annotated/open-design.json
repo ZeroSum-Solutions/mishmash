@@ -25,7 +25,7 @@
   },
   "version": "0.1.0",
   "publishedAt": "2026-06-25T03:56:14Z",
-  "description": "An annotated / redline lo-fi wireframe of a desktop landing page — greybox blocks inside a browser frame, numbered annotation pins (①–⑤), and a right-hand spec panel mapping each pin to a short engineering / UX note. Use when the brief asks for \"annotated wireframe\", \"redline\", \"wireframe spec\", \"lo-fi landing\", \"low fidelity\", \"线框图\", or \"标注线框\".",
+  "description": "An annotated / redline lo-fi wireframe of a desktop landing page — greybox blocks inside a browser frame, numbered annotation pins (①–⑤), and a right-hand spec panel mapping each pin to a short engineering / UX note. Use when the brief asks for \"annotated wireframe\", \"redline\", \"wireframe spec\", \"lo-fi landing\", \"low fidelity\", \"wireframe diagram\", or \"annotated wireframe\".",
   "description_i18n": {
     "zh-CN": "桌面落地页的标注/红线低保真线框图——浏览器框架内的灰盒区块、带编号的标注图钉（①–⑤），以及将每个图钉映射到简短工程/UX 说明的右侧规格面板。适用于「标注线框图」「红线」「线框规格」「低保真落地页」「低保真」「线框图」「标注线框」等需求。",
     "zh-TW": "桌面著陸頁的標註/紅線低保真線框圖——瀏覽器框架內的灰盒區塊、帶編號的標註圖釘（①–⑤），以及將每個圖釘對應到簡短工程/UX 說明的右側規格面板。適用於「標註線框圖」「紅線」「線框規格」「低保真著陸頁」「低保真」「線框圖」「標註線框」等需求。",

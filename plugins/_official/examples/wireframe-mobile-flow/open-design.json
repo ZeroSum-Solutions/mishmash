@@ -25,7 +25,7 @@
   },
   "version": "0.1.0",
   "publishedAt": "2026-06-25T03:56:14Z",
-  "description": "A lo-fi mobile app flow wireframe — three to four phone frames in a row (onboarding → home feed → item detail → confirm), greybox content inside each device, dashed connector arrows with numbered step labels, and sticky-note annotations. Use when the brief asks for \"mobile wireframe\", \"app flow\", \"user flow\", \"lo-fi mobile\", \"low fidelity\", \"移动端线框\", or \"App 流程图\".",
+  "description": "A lo-fi mobile app flow wireframe — three to four phone frames in a row (onboarding → home feed → item detail → confirm), greybox content inside each device, dashed connector arrows with numbered step labels, and sticky-note annotations. Use when the brief asks for \"mobile wireframe\", \"app flow\", \"user flow\", \"lo-fi mobile\", \"low fidelity\", \"mobile wireframe\", or \"app flow diagram\".",
   "description_i18n": {
     "zh-CN": "低保真移动端应用流程线框图，将三到四个手机屏幕排成一行（引导 → 首页信息流 → 商品详情 → 确认），每个设备内为灰盒占位内容，屏幕间用带编号步骤标签的虚线箭头连接，并配有便签注释。适用于「移动端线框」「App 流程」「用户流程」「低保真移动端」「低保真」「移动端线框」「App 流程图」等需求。",
     "zh-TW": "低保真行動端應用流程線框圖，將三到四個手機螢幕排成一行（引導 → 首頁資訊流 → 商品詳情 → 確認），每個裝置內為灰盒佔位內容，螢幕間以帶編號步驟標籤的虛線箭頭連接，並附便利貼註解。適用於「行動端線框」「App 流程」「使用者流程」「低保真行動端」「低保真」等需求。",
