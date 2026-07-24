@@ -6,6 +6,8 @@ out/
 .tmp/
 .DS_Store
 *.log
+__pycache__/
+*.py[cod]
 /OpenDesign.exe
 .vite
 .astro/
