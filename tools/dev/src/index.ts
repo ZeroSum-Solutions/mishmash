@@ -11,12 +11,6 @@ import {
   SIDECAR_MESSAGES,
   SIDECAR_SOURCES,
   type DaemonStatusSnapshot,
-  type DesktopClickResult,
-  type DesktopConsoleResult,
-  type DesktopEvalResult,
-  type DesktopScreenshotResult,
-  type DesktopStatusSnapshot,
-  type DesktopUpdateResult,
   type WebStatusSnapshot,
 } from "@open-design/sidecar-proto";
 import { createSidecarLaunchEnv, requestJsonIpc } from "@open-design/sidecar";
@@ -61,11 +55,9 @@ import {
   inspectDesktopRuntime,
   inspectWebRuntime,
   waitForDaemonRuntime,
-  waitForDesktopRuntime,
   waitForWebRuntime,
 } from "./sidecar-client.js";
 import { rewriteCliArgsForDefaultStart } from "./cli-args.js";
-import { ensureDaemonGateForDesktop } from "./desktop-auth-gate.js";
 import { loadWorkspaceLocalEnv } from "./local-env.js";
 import { resolveSharedPortsFromRunningState } from "./shared-ports.js";
 
@@ -495,19 +487,6 @@ async function spawnWebRuntime(config: ToolDevConfig, options: CliOptions): Prom
   }
 }
 
-async function buildDesktop(config: ToolDevConfig, logHandle: FileHandle): Promise<void> {
-  await logHandle.write(`\n[tools-dev] building @open-design/desktop at ${new Date().toISOString()}\n`);
-  const invocation = createPackageManagerInvocation(["--filter", "@open-design/desktop", "build"], process.env);
-  await runLoggedCommand({
-    args: invocation.args,
-    command: invocation.command,
-    cwd: config.workspaceRoot,
-    env: process.env,
-    logFd: logHandle.fd,
-    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
-  });
-}
-
 async function latestMtimeMs(filePath: string): Promise<number> {
   const entry = await lstat(filePath).catch(() => null);
   if (entry == null) return 0;
@@ -607,54 +586,6 @@ async function writeWebDevTsconfig(config: ToolDevConfig): Promise<void> {
   );
 }
 
-async function spawnDesktopRuntime(config: ToolDevConfig, options: CliOptions): Promise<{ pid: number }> {
-  const { args: stampArgs, env } = createAppStamp(config, APP_KEYS.DESKTOP);
-  const logHandle = await openAppLog(config, APP_KEYS.DESKTOP);
-
-  try {
-    await buildDesktop(config, logHandle);
-    await logHandle.write(`[tools-dev] launching desktop at ${new Date().toISOString()}\n`);
-    const spawnEnv: NodeJS.ProcessEnv = {
-      ...process.env,
-      ...env,
-      ...(options.parentPid == null ? {} : { [TOOLS_DEV_PARENT_PID_ENV]: String(options.parentPid) }),
-    };
-    // ELECTRON_RUN_AS_NODE=1 makes Electron boot as plain Node and skip
-    // main-process API injection (app, BrowserWindow, protocol all become
-    // undefined). Strip it from the spawn env so desktop always boots in
-    // real Electron mode even when the parent shell is an Electron-based
-    // IDE that sets this variable for sidecar reuse.
-    //
-    // Iterate keys with a case-insensitive comparison rather than
-    // `delete spawnEnv.ELECTRON_RUN_AS_NODE`: spreading process.env into
-    // a plain object loses Node's Windows case-insensitive proxy, so any
-    // alternate-cased variant (e.g. `electron_run_as_node`) would still
-    // be passed to the child and Win32 CreateProcess would treat it as
-    // the same variable, undoing the fix.
-    //
-    // Scope is tools-dev only. The packaged runtime intentionally sets
-    // ELECTRON_RUN_AS_NODE on its own daemon/web sidecars (see
-    // apps/packaged/src/sidecars.ts) to reuse the bundled Node binary;
-    // that flow is independent and untouched here.
-    for (const key of Object.keys(spawnEnv)) {
-      if (key.toUpperCase() === "ELECTRON_RUN_AS_NODE") {
-        delete spawnEnv[key];
-      }
-    }
-    const spawned = await spawnBackgroundProcess({
-      args: [config.apps.desktop.mainEntryPath, ...stampArgs],
-      command: config.apps.desktop.electronBinaryPath,
-      cwd: config.workspaceRoot,
-      detached: true,
-      env: spawnEnv,
-      logFd: logHandle.fd,
-    });
-    return { pid: spawned.pid };
-  } finally {
-    await logHandle.close();
-  }
-}
-
 async function startDaemon(
   config: ToolDevConfig,
   options: CliOptions,
@@ -743,29 +674,6 @@ async function startWeb(config: ToolDevConfig, options: CliOptions) {
   }
 }
 
-async function startDesktop(config: ToolDevConfig, options: CliOptions) {
-  const existing = await inspectDesktopRuntime(runtimeLookup(config));
-  if (existing != null) {
-    return { app: APP_KEYS.DESKTOP, created: false, logPath: config.apps.desktop.latestLogPath, status: existing };
-  }
-  await assertNoStaleActiveProcess(config, APP_KEYS.DESKTOP);
-
-  const spawned = await spawnDesktopRuntime(config, options);
-  try {
-    const status = await waitForDesktopRuntime(runtimeLookup(config));
-    return {
-      app: APP_KEYS.DESKTOP,
-      created: true,
-      logPath: config.apps.desktop.latestLogPath,
-      pid: spawned.pid,
-      status,
-    };
-  } catch (error) {
-    await stopApp(config, APP_KEYS.DESKTOP).catch(() => undefined);
-    throw error;
-  }
-}
-
 async function startApp(
   config: ToolDevConfig,
   appName: ToolDevAppName,
@@ -775,48 +683,10 @@ async function startApp(
   switch (appName) {
     case APP_KEYS.DAEMON:
       return await startDaemon(config, options, {
-        // PR #974 round-4 P1: when daemon is being spawned alongside
-        // desktop in the same orchestrator invocation, pin the import-
-        // auth gate via env var so the daemon refuses tokenless imports
-        // before desktop has had a chance to register. The introspection
-        // case (desktop already running) is handled inside startDaemon.
         refreshWebOrigin: context.targets?.includes(APP_KEYS.WEB) === true,
-        requireDesktopAuth: context.targets?.includes(APP_KEYS.DESKTOP) === true,
       });
     case APP_KEYS.WEB:
       return await startWeb(config, options);
-    case APP_KEYS.DESKTOP:
-      // PR #974 round 6 (mrcfps): if a daemon is already running but
-      // ungated (split-start dev flow `start daemon` -> `start desktop`),
-      // restart it with the gate armed BEFORE launching desktop main —
-      // see `ensureDaemonGateForDesktop` above for the rationale.
-      await ensureDaemonGateForDesktop({
-        inspectDaemon: () => inspectDaemonRuntime(runtimeLookup(config)),
-        inspectWeb: () => inspectWebRuntime(runtimeLookup(config)),
-        stopApp: async (app) => {
-          await stopApp(config, app);
-        },
-        // Round 7 (lefarcen P2): preserve the running daemon/web ports
-        // across the hardening restart. Without this, a stack started
-        // with `--daemon-port`/`--web-port` would silently drift to
-        // random ports during the restart, breaking pinned browsers.
-        startDaemonGated: async ({ port, webPort }) => {
-          const portedOptions: CliOptions =
-            port != null ? { ...options, daemonPort: port } : { ...options };
-          if (webPort != null) portedOptions.webPort = webPort;
-          await startDaemon(config, portedOptions, {
-            refreshWebOrigin: webPort != null,
-            requireDesktopAuth: true,
-          });
-        },
-        startWeb: async ({ port }) => {
-          const portedOptions: CliOptions =
-            port != null ? { ...options, webPort: port } : options;
-          await startWeb(config, portedOptions);
-        },
-        log: (msg) => process.stderr.write(`${msg}\n`),
-      });
-      return await startDesktop(config, options);
   }
 }
 
@@ -881,17 +751,11 @@ async function inspectAppStatus(config: ToolDevConfig, appName: ToolDevAppName) 
       url: null,
     } satisfies DaemonStatusSnapshot;
   }
-  if (appName === APP_KEYS.WEB) {
-    const status = await inspectWebRuntime(runtimeLookup(config));
-    if (status != null) return status;
-    const active = await findAppProcessTree(config, appName);
-    return { pid: active.rootPids[0] ?? null, state: active.pids.length > 0 ? "starting" : "idle", url: null } satisfies WebStatusSnapshot;
-  }
 
-  const status = await inspectDesktopRuntime(runtimeLookup(config));
+  const status = await inspectWebRuntime(runtimeLookup(config));
   if (status != null) return status;
   const active = await findAppProcessTree(config, appName);
-  return { pid: active.rootPids[0] ?? null, state: active.pids.length > 0 ? "unknown" : "idle", url: null };
+  return { pid: active.rootPids[0] ?? null, state: active.pids.length > 0 ? "starting" : "idle", url: null } satisfies WebStatusSnapshot;
 }
 
 function summarizeStatus(apps: Record<ToolDevAppName, any>): string {

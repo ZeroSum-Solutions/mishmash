@@ -505,16 +505,6 @@ const BLANK_PAGE_PRESETS: ProjectPagePreset[] = [
 
 const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
   {
-    id: 'community-open-design-landing',
-    category: 'prototype',
-    title: pageText('Open Design Landing'),
-    description: pageText('Editorial landing page with a strong hero, proof points, and product narrative.'),
-    icon: 'globe',
-    fileBaseName: 'open-design-landing',
-    source: 'community',
-    featured: true,
-  },
-  {
     id: 'community-kanban-board',
     category: 'prototype',
     title: pageText('Kanban Board'),
