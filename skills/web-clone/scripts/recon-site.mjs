@@ -58,12 +58,12 @@ function writeSummary(file, data) {
     `- Console errors: ${data.console.errors.length}`,
     `- Page errors: ${data.console.pageErrors.length}`,
     "",
-    "## Palette (computed — 复刻必须照抄这些值，不许目测)",
+    "## Palette (computed — clones must copy these values exactly, no eyeballing)",
     ...Object.entries(first.palette || {})
       .filter(([key, value]) => key !== "buttons" && value)
       .map(([key, value]) => `- ${key}: bg ${value.backgroundColor} · text ${value.color} · font ${value.fontFamily?.split(",")[0] || ""}`),
     "",
-    "## Fonts (真字体自托管，禁止系统字体近似)",
+    "## Fonts (self-host the real fonts, no system-font approximations)",
     `- Loaded families: ${(first.fonts || []).join(", ") || "none"}`,
     `- @font-face rules: ${(first.fontFaces || []).length}; font files: ${(first.resources?.fonts || []).length}`,
     "",
@@ -132,8 +132,8 @@ async function collectSignals(page) {
       width: img.naturalWidth || img.width || 0,
       height: img.naturalHeight || img.height || 0,
     }));
-    // @font-face 规则原文 + 解析出的 src url——复刻必须自托管这些真字体，
-    // 禁止用系统字体近似(见 SKILL.md 保真门槛)。
+    // Raw @font-face rules + parsed src urls -- clones must self-host these real
+    // fonts, no system-font approximations (see the fidelity gate in SKILL.md).
     const fontFaces = Array.from(document.styleSheets).flatMap((sheet) => {
       let rules;
       try {
@@ -156,8 +156,9 @@ async function collectSignals(page) {
           };
         });
     }).slice(0, 60);
-    // 页面实际加载过的资源 URL(懒加载图、CSS 背景图、字体二进制都在这)——
-    // 这是"真实用到的资产"全集，asset-harvest 以此下载。
+    // Resource URLs the page actually loaded (lazy images, CSS background images,
+    // font binaries all show up here) -- this is the full set of "assets actually
+    // used", which asset-harvest downloads from.
     const resourceEntries = performance.getEntriesByType("resource");
     const resources = { images: [], fonts: [], media: [] };
     for (const entry of resourceEntries) {
@@ -169,7 +170,8 @@ async function collectSignals(page) {
     resources.images = Array.from(new Set(resources.images)).slice(0, 300);
     resources.fonts = Array.from(new Set(resources.fonts)).slice(0, 60);
     resources.media = Array.from(new Set(resources.media)).slice(0, 40);
-    // 关键区块的精确取色——复刻时颜色必须照抄这里的值，不许目测。
+    // Exact computed colors for key sections -- clones must copy these values
+    // exactly, no eyeballing colors.
     const paletteOf = (node) => {
       if (!node) return null;
       const style = getComputedStyle(node);
@@ -191,8 +193,9 @@ async function collectSignals(page) {
         .slice(0, 12)
         .map((node) => ({ text: text(node).slice(0, 40), ...paletteOf(node) })),
     };
-    // 滚动体感信号——复刻必须还原原站的滚动手感(平滑滚动库/snap/sticky)，
-    // 配合 frameworks 里的 lenis/gsap 检测一起读。
+    // Scroll-feel signals -- clones must reproduce the original site's scroll
+    // feel (smooth-scroll library/snap/sticky); read together with the
+    // lenis/gsap detection in frameworks.
     const motion = (() => {
       let scrollSnapRules = 0;
       let smoothScrollRules = 0;
@@ -222,7 +225,8 @@ async function collectSignals(page) {
         stickyOrFixedCount,
       };
     })();
-    // :root 自定义属性的"计算后"值(声明值可能是 var() 链)。
+    // Computed values of :root custom properties (the declared value may be a
+    // chain of var() references).
     const rootStyle = getComputedStyle(document.documentElement);
     const rootVariables = cssVariables
       .map(([name]) => [name, rootStyle.getPropertyValue(name).trim()])
@@ -287,8 +291,10 @@ async function collectSignals(page) {
   });
 }
 
-// 全程滚动一遍再采集: 懒加载图(loading=lazy / IntersectionObserver)只有滚到才
-// 发请求; 不滚的话 images/resources 只覆盖首屏, 复刻必然缺图。
+// Scroll through the whole page before collecting: lazy images (loading=lazy /
+// IntersectionObserver) only fire their request once scrolled into view; without
+// scrolling, images/resources only cover the fold and the clone will end up
+// missing images.
 async function scrollThroughPage(page, stepPx = 700) {
   const total = await page.evaluate(() => document.documentElement.scrollHeight);
   for (let y = 0; y <= total; y += stepPx) {

@@ -1,7 +1,5 @@
 # Plugin Title
 
-Language: English | [简体中文](README.template.zh-CN.md)
-
 One paragraph explaining what this plugin helps a user do.
 
 ## Use Cases

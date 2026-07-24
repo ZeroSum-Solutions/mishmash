@@ -1,25 +1,25 @@
-# HTML Anything · 产品介绍
+# HTML Anything · Product Introduction
 
-## 我们解决的问题
-- Markdown 易写但发出去丑
-- 截图发推丑得离谱
-- 公众号 / 知乎 各家排版规则不一
+## The problem we solve
+- Markdown is easy to write but ugly once shared
+- Screenshotting it for a tweet looks terrible
+- WeChat / Zhihu each have different layout rules
 
-## 我们的方案
-**任何输入 → 世界级 HTML**, 用你本地的 AI agent
+## Our solution
+**Any input -> world-class HTML**, using your local AI agent
 
-## 三个核心
-1. 复用你已经登录的本地 agent (Claude / Cursor / Codex), 不要 API Key
-2. 9 套世界级模板 (PPT / 简历 / 海报 / 小红书 / 数据报告 ...)
-3. 一键复制到公众号 / 推特 / 知乎, 或导出 PNG
+## Three core pieces
+1. Reuses your already logged-in local agent (Claude / Cursor / Codex), no API key needed
+2. 9 world-class templates (deck / resume / poster / Xiaohongshu / data report ...)
+3. One-click copy to WeChat / Twitter / Zhihu, or export as PNG
 
-## 数据
-- 80 秒生成 31KB 的可交付文章
-- 9 套模板, 8 个本地 agent 适配
-- 0 API Key, 100% 复用本地 session
+## Numbers
+- Generates a deliverable 31KB article in 80 seconds
+- 9 templates, works with 8 local agents
+- 0 API keys, 100% reuses your local session
 
-## 为什么是现在
-Claude 团队不再用 markdown, 全换成 HTML 了。HTML 是面向读者的最终形态, AI 让"啰嗦"不再是问题。
+## Why now
+The Claude team no longer uses markdown — they switched entirely to HTML. HTML is the actual final form for readers, and AI means "verbose" is no longer a problem.
 
-## 立即开始
-`pnpm tools-dev run web` → 打开终端输出的网址 → ⌘+Enter
+## Get started
+`pnpm tools-dev run web` -> open the URL printed in the terminal -> ⌘+Enter

@@ -4,9 +4,9 @@ This file is generated during setup and should be treated as source evidence for
 
 ## Company / Product
 
-Canonical design-system title: Claude / Anthropic 风格设计系统
+Canonical design-system title: Claude / Anthropic Style Design System
 
-非官方 Claude / Anthropic 风格整理版：温暖、克制、编辑感、适合阅读与深度思考的 AI 工作台。当前 canonical 依据包括 `assets/Claude-anthropic-DESIGN风格设计系统.md`，以及 2026-06-29 抽查的 Anthropic 官网首页、Newsroom、Company 页面公开 CSS。颜色和交互以官网 token 命名校准：`ivory-light #faf9f5`、`ivory-medium #f0eee6`、`ivory-dark #e8e6dc`、`slate-dark #141413`、`clay #d97757`。
+An unofficial Claude / Anthropic-style compilation: warm, restrained, editorial, suited to an AI workspace for reading and deep thinking. The current canonical basis includes `assets/Claude-anthropic-DESIGN-style-design-system.md`, plus publicly available CSS sampled 2026-06-29 from the Anthropic website's homepage, Newsroom, and Company pages. Colors and interactions are calibrated against the site's own token naming: `ivory-light #faf9f5`, `ivory-medium #f0eee6`, `ivory-dark #e8e6dc`, `slate-dark #141413`, `clay #d97757`.
 
 ## Source Links
 
@@ -30,10 +30,10 @@ Figma files selected: none.
 
 Decoded Figma snapshots: none.
 Fonts, logos, and assets selected:
-- Claude-anthropic DESIGN风格设计系统.md
+- Claude-anthropic-DESIGN-style-design-system.md
 
 Uploaded brand asset files under `assets/`:
-- assets/Claude-anthropic-DESIGN风格设计系统.md
+- assets/Claude-anthropic-DESIGN-style-design-system.md
 
 ## Notes
 

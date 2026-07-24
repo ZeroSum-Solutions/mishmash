@@ -34,7 +34,7 @@ This matrix covers the configurable surface of `$chat-motion-overlay`.
    - Avatar mode: `preset`
    - Device frame: `iphone-dynamic-island`
    - Nickname mode: `hidden`
-   - Delivery: `MOV（透明背景，可直接导入剪映 / PR / FCP 叠加）`
+   - Delivery: `MOV (transparent background, drop directly into Jianying / Premiere / FCP as an overlay)`
    - Render frames: `14`, `15`, `120` to cross the first message `appearAt`
 
 2. `plain_bubbles_no_frame_first_message`
@@ -42,42 +42,42 @@ This matrix covers the configurable surface of `$chat-motion-overlay`.
    - Avatar mode: `preset`
    - Device frame: `none`
    - Nickname mode: `first-message-only`
-   - Delivery: `Remotion 工程（适合继续编辑和拼装）`
+   - Delivery: `Remotion project (suited to continued editing and assembly)`
 
 3. `telegram_no_frame_always`
    - Container: `telegram`
    - Avatar mode: `preset`
    - Device frame: `none`
    - Nickname mode: `always`
-   - Delivery: `WebM（透明背景，适合网页 / 浏览器播放）`
+   - Delivery: `WebM (transparent background, suited to web/browser playback)`
 
 4. `messenger_phone_hidden`
    - Container: `messenger`
    - Avatar mode: `preset`
    - Device frame: `iphone-dynamic-island`
    - Nickname mode: `hidden`
-   - Delivery: `MOV（透明背景，可直接导入剪映 / PR / FCP 叠加）`
+   - Delivery: `MOV (transparent background, drop directly into Jianying / Premiere / FCP as an overlay)`
 
 5. `upload_phone_always`
    - Container: `wechat`
    - Avatar mode: `upload`
    - Device frame: `iphone-dynamic-island`
    - Nickname mode: `always`
-   - Delivery: `MOV（透明背景，可直接导入剪映 / PR / FCP 叠加）`
+   - Delivery: `MOV (transparent background, drop directly into Jianying / Premiere / FCP as an overlay)`
 
 6. `mixed_wechat_phone_first_message`
    - Container: `wechat`
    - Avatar mode: `mixed`
    - Device frame: `iphone-dynamic-island`
    - Nickname mode: `first-message-only`
-   - Delivery: `Hyperframe 工程（适合作为模块继续复用）`
+   - Delivery: `Hyperframe project (suited to reuse as a module)`
 
 7. `json_spec_only`
    - Container: `wechat`
    - Avatar mode: `preset`
    - Device frame: `iphone-dynamic-island`
    - Nickname mode: `hidden`
-   - Delivery: `JSON 数据（适合程序处理 / 自定义渲染）`
+   - Delivery: `JSON data (suited to programmatic processing / custom rendering)`
 
 8. `group_multi_participant_distinct_presets`
    - Container: `wechat`

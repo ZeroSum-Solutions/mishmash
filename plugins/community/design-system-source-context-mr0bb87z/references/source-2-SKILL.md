@@ -4,7 +4,7 @@ description: Use this Claude / Anthropic style design system for warm, restraine
 user-invocable: true
 ---
 
-# Claude / Anthropic 风格设计系统
+# Claude / Anthropic Style Design System
 
 ## What's inside
 

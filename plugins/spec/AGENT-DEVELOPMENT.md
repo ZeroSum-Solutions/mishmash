@@ -1,7 +1,5 @@
 # Agent Development Handoff
 
-Language: English | [简体中文](AGENT-DEVELOPMENT.zh-CN.md)
-
 Give this file to a coding agent when you want it to create or improve an Open Design plugin.
 
 ## Mission

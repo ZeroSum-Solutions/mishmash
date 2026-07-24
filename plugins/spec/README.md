@@ -1,6 +1,5 @@
 # Open Design Plugin Spec Kit
 
-Language: English | [简体中文](README.zh-CN.md)
 
 This folder is the shareable specification kit for Open Design plugin authors. It is meant to work for a human reading the repo and for an external coding agent such as Claude Code, Codex, Cursor, OpenClaw, Hermes Agent, or another Agent Skills compatible tool.
 
@@ -14,14 +13,6 @@ Open Design plugins follow the same portable shape as Agent Skills: a folder wit
 - [`PUBLISHING-REGISTRIES.md`](PUBLISHING-REGISTRIES.md) - strategies for skills.sh, ClawHub, GitHub, and Open Design publishing.
 - [`templates/`](templates/) - blank starter files.
 - [`examples/`](examples/) - complete example plugin folders and a sample marketplace index.
-
-Chinese mirrors:
-
-- [`SPEC.zh-CN.md`](SPEC.zh-CN.md)
-- [`AGENT-DEVELOPMENT.zh-CN.md`](AGENT-DEVELOPMENT.zh-CN.md)
-- [`CONTRIBUTING.zh-CN.md`](CONTRIBUTING.zh-CN.md)
-- [`PUBLISHING-REGISTRIES.zh-CN.md`](PUBLISHING-REGISTRIES.zh-CN.md)
-- [`examples/README.zh-CN.md`](examples/README.zh-CN.md)
 
 ## What To Build
 

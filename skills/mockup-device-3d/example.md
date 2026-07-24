@@ -1,15 +1,15 @@
-# HTML Anything · 移动版界面预览
+# HTML Anything · Mobile Interface Preview
 
-> iPhone 屏幕展示一个 mock 新建任务页, MacBook 屏幕展示桌面版编辑器
+> iPhone screen shows a mock new-task page, MacBook screen shows the desktop editor
 
-## iPhone 内容
+## iPhone content
 - App: HTML Anything Mobile
-- 顶部: 选择模板 → 杂志风网页 PPT
-- 中间: 输入框 + ⌘+Enter
-- 底部: Tab bar (任务 / 模板 / 设置)
+- Top: Choose a template -> magazine-style webpage deck
+- Middle: input box + ⌘+Enter
+- Bottom: tab bar (Tasks / Templates / Settings)
 
-## MacBook 内容
-- 桌面版三栏布局: 任务列表 / 编辑器 / 实时预览
+## MacBook content
+- Desktop three-column layout: task list / editor / live preview
 
-## 标签
+## Tag
 2026 SPRING · CODENAME ATLAS · v0.4

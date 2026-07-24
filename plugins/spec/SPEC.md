@@ -1,7 +1,5 @@
 # Open Design Plugin Spec
 
-Language: English | [简体中文](SPEC.zh-CN.md)
-
 This spec is the compact contract for portable Open Design plugins. The canonical product spec remains `docs/plugins-spec.md`; this document is optimized for contributors and external coding agents.
 
 ## 1. Minimum Plugin

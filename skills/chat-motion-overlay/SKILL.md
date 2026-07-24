@@ -43,7 +43,7 @@ Turn chat content into a configurable motion overlay clip instead of a single ha
 
 5. Render the target output.
    - Use the exact export commands in `references/output-modes.md`.
-   - Prefer `MOV（透明背景，可直接导入剪映 / PR / FCP 叠加）` for editing, `WebM（透明背景，适合网页 / 浏览器播放）` for browsers, and editable engineering outputs when the user wants to keep composing downstream.
+   - Prefer `MOV (transparent background, drop directly into Jianying / Premiere / FCP as an overlay)` for editing, `WebM (transparent background, suited to web/browser playback)` for browsers, and editable engineering outputs when the user wants to keep composing downstream.
 
 ## Supported Dimensions
 
@@ -52,12 +52,12 @@ Turn chat content into a configurable motion overlay clip instead of a single ha
 - `deviceFrame`: `none`, `iphone-dynamic-island`
 - `nicknameMode`: `hidden`, `first-message-only`, `always`
 - `deliveryFormat`:
-  - `mov`: `MOV（透明背景，可直接导入剪映 / PR / FCP 叠加）`
-  - `webm`: `WebM（透明背景，适合网页 / 浏览器播放）`
-  - `remotion`: `Remotion 工程（适合继续编辑和拼装）`
-  - `hyperframe`: `Hyperframe 工程（适合作为模块继续复用）`
-  - `json`: `JSON 数据（适合程序处理 / 自定义渲染）`
-  - `preview`: `预览图 / 预览工程（适合先确认效果）`
+  - `mov`: `MOV (transparent background, drop directly into Jianying / Premiere / FCP as an overlay)`
+  - `webm`: `WebM (transparent background, suited to web/browser playback)`
+  - `remotion`: `Remotion project (suited to continued editing and assembly)`
+  - `hyperframe`: `Hyperframe project (suited to reuse as a module)`
+  - `json`: `JSON data (suited to programmatic processing / custom rendering)`
+  - `preview`: `Preview image / preview project (suited to confirming the look first)`
 
 ## Output Rules
 
@@ -75,7 +75,7 @@ Turn chat content into a configurable motion overlay clip instead of a single ha
 - Ask only for missing high-impact choices.
 - Keep the question set to 1-3 items.
 - Prefer user-facing wording over technical wording.
-- Ask about `deliveryFormat` using `格式（场景描述）` labels, not internal render terms.
+- Ask about `deliveryFormat` using `format (scenario description)` labels, not internal render terms.
 - If the user says they do not care, continue with defaults and note them in the result.
 
 ## Resources

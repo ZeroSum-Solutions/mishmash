@@ -1,7 +1,5 @@
 # Contributing Plugins
 
-Language: English | [简体中文](CONTRIBUTING.zh-CN.md)
-
 Plugins that follow this spec can live in this repo as examples, or in their own public repositories with a PR that adds them to a marketplace index.
 
 ## Accepted Contributions
