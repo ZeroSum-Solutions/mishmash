@@ -128,7 +128,7 @@ describe('UpdaterPopup', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Update ready' });
     expect(dialog).toBeTruthy();
     expect(dialog.className).toBe('updater-popup is-ready');
-    expect(screen.getByText('Open Design 1.2.3-beta.4 is ready. Open Design will close and open the installer.')).toBeTruthy();
+    expect(screen.getByText('MishMash 1.2.3-beta.4 is ready. MishMash will close and open the installer.')).toBeTruthy();
     expect(screen.getByTestId('updater-silent-update-checkbox')).toBeChecked();
     expect(screen.getByTestId('updater-install-button').textContent).toBe('Install update');
     expect(screen.queryByRole('button', { name: 'Collapse' })).toBeNull();
@@ -155,7 +155,7 @@ describe('UpdaterPopup', () => {
 
     expect(await screen.findByRole('dialog', { name: 'Update ready' })).toBeTruthy();
     expect(screen.getByTestId('updater-install-button').textContent).toBe('Install and restart');
-    expect(screen.getByText('Open Design 1.2.3-beta.4 is ready. Open Design will close and restart automatically.')).toBeTruthy();
+    expect(screen.getByText('MishMash 1.2.3-beta.4 is ready. MishMash will close and restart automatically.')).toBeTruthy();
   });
 
   it('seeds the default silent-update preference only after a successful daemon GET', async () => {
@@ -453,7 +453,7 @@ describe('UpdaterPopup', () => {
       });
 
       expect(screen.getByRole('dialog', { name: 'Could not quit' })).toBeTruthy();
-      expect(screen.getByTestId('updater-install-button').textContent).toBe('Quit Open Design');
+      expect(screen.getByTestId('updater-install-button').textContent).toBe('Quit MishMash');
       expect(screen.getByTestId('updater-install-button').getAttribute('disabled')).toBeNull();
       fireEvent.click(screen.getByTestId('updater-install-button'));
 

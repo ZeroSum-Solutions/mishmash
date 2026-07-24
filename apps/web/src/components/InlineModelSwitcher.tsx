@@ -147,11 +147,11 @@ function markAmrReminderSeen(): void {
 }
 
 function displayAgentName(agent: Pick<AgentInfo, 'id' | 'name'>): string {
-  return agent.id === 'amr' ? 'Open Design' : agent.name;
+  return agent.id === 'amr' ? 'MishMash' : agent.name;
 }
 
 function displayAgentChipName(agent: Pick<AgentInfo, 'id' | 'name'>): string {
-  return agent.id === 'amr' ? 'Open Design' : displayAgentName(agent);
+  return agent.id === 'amr' ? 'MishMash' : displayAgentName(agent);
 }
 
 export function InlineModelSwitcher({
@@ -916,7 +916,7 @@ export function InlineModelSwitcher({
                     type="button"
                     role="radio"
                     aria-checked={config.agentId === 'amr'}
-                    aria-label={`Open Design ${amrInlineStatus}`}
+                    aria-label={`MishMash ${amrInlineStatus}`}
                     className="inline-switcher__account-id inline-switcher__account-select"
                     data-testid="inline-model-switcher-agent-amr"
                     title={amrLoginPending ? amrPendingHoverLabel : undefined}
@@ -935,7 +935,7 @@ export function InlineModelSwitcher({
                     <span className="inline-switcher__account-text">
                       <span className="inline-switcher__account-name-row">
                         <span className="inline-switcher__account-name">
-                          Open Design
+                          MishMash
                         </span>
                         {amrLoggedIn ? (
                           <PlanBadge plan={amrPlanLabel} size="md" />

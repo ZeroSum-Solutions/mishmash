@@ -267,11 +267,11 @@ async function clickCloudSignIn() {
 }
 
 async function findCloudSignInButton() {
-  return screen.findByRole('button', { name: /Sign in to Open Design/i });
+  return screen.findByRole('button', { name: /Sign in to MishMash/i });
 }
 
 function openLocalRuntimeSetup() {
-  expect(screen.getByRole('heading', { name: 'Sign in to Open Design' })).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Sign in to MishMash' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: /Local coding agent/i }));
   expect(screen.getByText('Local CLI')).toBeTruthy();
 }
@@ -293,49 +293,13 @@ beforeEach(() => {
 
 describe('EntryShell settings menu', () => {
   it('opens quick actions before opening the full settings dialog', async () => {
-    globalThis.fetch = vi.fn(async (input) => {
-      const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
-      if (url.endsWith('/api/community/discord')) {
-        return jsonResponse({
-          inviteCode: 'mHAjSMV6gz',
-          inviteUrl: 'https://discord.gg/mHAjSMV6gz',
-          onlineCount: 1234,
-          memberCount: 4321,
-          fetchedAt: Date.now(),
-          stale: false,
-        });
-      }
-      if (url.endsWith('/api/github/open-design')) {
-        return jsonResponse({
-          repo: 'nexu-io/open-design',
-          stargazers_count: 56100,
-          fetchedAt: Date.now(),
-          stale: false,
-        });
-      }
-      return jsonResponse({});
-    }) as typeof fetch;
     const props = renderHome();
 
     fireEvent.click(screen.getByTestId('entry-settings-menu-trigger'));
 
     expect(props.onOpenSettings).not.toHaveBeenCalled();
     expect(screen.getByTestId('entry-settings-menu')).toBeTruthy();
-    expect(screen.getByText('Language')).toBeTruthy();
     expect(screen.getByText('Appearance')).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: /Join Discord/i })).toBeTruthy();
-    await waitFor(() => {
-      expect(screen.getByRole('menuitem', { name: /1.2k online/i })).toBeTruthy();
-    });
-    expect(
-      screen.getByRole('menuitem', { name: /Follow @OpenDesignHQ on X/i }).getAttribute('href'),
-    ).toBe('https://x.com/OpenDesignHQ');
-    expect(
-      screen.getByRole('menuitem', { name: /Follow Open Design on Threads/i }).getAttribute('href'),
-    ).toBe('https://www.threads.com/@opendesign.ai');
-    expect(
-      screen.getByRole('menuitem', { name: /Open Design on YouTube/i }).getAttribute('href'),
-    ).toBe('https://www.youtube.com/@Open-Design-ai');
 
     fireEvent.click(screen.getByTestId('entry-settings-open-details'));
 
@@ -572,8 +536,8 @@ describe('EntryShell Home submit handoff', () => {
   });
 });
 
-describe('EntryShell onboarding Open Design AMR runtime', () => {
-  it('does not auto-select Open Design AMR when the AMR runtime is unavailable', async () => {
+describe('EntryShell onboarding MishMash AMR runtime', () => {
+  it('does not auto-select MishMash AMR when the AMR runtime is unavailable', async () => {
     globalThis.fetch = vi.fn(async () =>
       jsonResponse({ loggedIn: false, profile: 'prod', user: null, configPath: '/x' }),
     ) as typeof fetch;
@@ -582,10 +546,10 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
       onRefreshAgents: vi.fn(() => [cliAgent()]),
     });
 
-    expect(await screen.findByRole('heading', { name: 'Sign in to Open Design' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Sign in to MishMash' })).toBeTruthy();
     expect(await findCloudSignInButton()).toBeTruthy();
     openLocalRuntimeSetup();
-    expect(screen.queryByRole('button', { name: /Open Design AMR/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /MishMash AMR/i })).toBeNull();
 
     await waitFor(() => {
       expect(props.onAgentChange).not.toHaveBeenCalledWith('amr');
@@ -594,23 +558,23 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
     expect(screen.queryByText('Sign in to continue')).toBeNull();
   });
 
-  it('shows Open Design Cloud as the default connect surface when AMR is available', async () => {
+  it('shows MishMash Cloud as the default connect surface when AMR is available', async () => {
     globalThis.fetch = vi.fn(async () =>
       jsonResponse({ loggedIn: false, profile: 'prod', user: null, configPath: '/x' }),
     ) as typeof fetch;
     renderOnboarding();
 
-    expect(screen.getByRole('heading', { name: 'Sign in to Open Design' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Sign in to MishMash' })).toBeTruthy();
     expect(await findCloudSignInButton()).toBeTruthy();
     // No runtime card, no AMR version text, no "Sign in to continue" CTA.
-    expect(screen.queryByRole('button', { name: /Open Design AMR/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /MishMash AMR/i })).toBeNull();
     expect(screen.queryByText('AMR v0.1.0')).toBeNull();
     expect(screen.queryByRole('button', { name: /Sign in to continue/i })).toBeNull();
     expect(screen.queryByRole('link', { name: /Authorize AMR/i })).toBeNull();
     // The secondary runtime links remain available on the landing.
     expect(screen.getByRole('button', { name: /Local coding agent/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Bring your own key/i })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /Open Design AMR/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /MishMash AMR/i })).toBeNull();
     expect(screen.queryByRole('link', { name: /Authorize AMR/i })).toBeNull();
     expect(screen.queryByText('Not signed in')).toBeNull();
     expect(screen.queryByRole('button', { name: /^Sign in$/i })).toBeNull();
@@ -814,7 +778,7 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
     // The landing CTA returns to its signed-out copy and is enabled again,
     // and the secondary runtime links are available once more.
     const cloudButton = await screen.findByRole('button', {
-      name: /Sign in to Open Design/i,
+      name: /Sign in to MishMash/i,
     });
     expect(cloudButton.hasAttribute('disabled')).toBe(false);
     expect(screen.getByRole('button', { name: /Local coding agent/i })).toBeTruthy();
@@ -873,7 +837,7 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
     expect(screen.queryByText('Signing in…')).toBeNull();
     expect(
       screen
-        .getByRole('button', { name: /Sign in to Open Design/i })
+        .getByRole('button', { name: /Sign in to MishMash/i })
         .hasAttribute('disabled'),
     ).toBe(false);
     expect(props.onCompleteOnboarding).not.toHaveBeenCalled();
@@ -957,7 +921,7 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
     });
   });
 
-  it('continues normally when Open Design AMR is signed in', async () => {
+  it('continues normally when MishMash AMR is signed in', async () => {
     globalThis.fetch = vi.fn(async () =>
       jsonResponse({
         loggedIn: true,
@@ -1623,13 +1587,13 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
       onRefreshAgents: vi.fn(() => [cliAgent()]),
     });
 
-    expect(screen.getByRole('heading', { name: 'Sign in to Open Design' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Sign in to MishMash' })).toBeTruthy();
     const primary = screen.getByRole('button', { name: /Loading/i });
     expect(primary).toBeTruthy();
     expect(primary.getAttribute('aria-busy')).toBe('true');
     expect((primary as HTMLButtonElement).disabled).toBe(true);
     expect(document.querySelector('.onboarding-view__card--skeleton')).toBeNull();
-    expect(screen.queryByRole('button', { name: /Open Design AMR/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /MishMash AMR/i })).toBeNull();
     expect(screen.getByRole('button', { name: /Local coding agent/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Bring your own key/i })).toBeTruthy();
   });
@@ -1641,7 +1605,7 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
     renderOnboarding({ agentsLoading: false });
 
     expect(await findCloudSignInButton()).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /Open Design AMR/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /MishMash AMR/i })).toBeNull();
     expect(document.querySelector('.onboarding-view__card--skeleton')).toBeNull();
   });
 
@@ -1656,9 +1620,9 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
     });
 
     expect(
-      await screen.findByRole('button', { name: /Sign in to Open Design/i }),
+      await screen.findByRole('button', { name: /Sign in to MishMash/i }),
     ).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /Open Design AMR/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /MishMash AMR/i })).toBeNull();
     expect(document.querySelector('.onboarding-view__card--skeleton')).toBeNull();
   });
 

@@ -785,7 +785,7 @@ function cleanAgentVersionLabel(
 }
 
 function displayAgentName(agent: Pick<AgentInfo, 'id' | 'name'>): string {
-  return agent.id === 'amr' ? 'Open Design' : agent.name;
+  return agent.id === 'amr' ? 'MishMash' : agent.name;
 }
 
 const AGENT_CLI_ENV_FIELDS = [

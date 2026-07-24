@@ -989,18 +989,11 @@ export interface Dict {
   'entry.openSettingsTitle': string;
   'entry.openSettingsAria': string;
   'entry.discordLabel': string;
-  'entry.discordOnlineLabel': string;
   'entry.followXLabel': string;
-  'entry.followThreadsLabel': string;
-  'entry.youtubeLabel': string;
-  'entry.followInstagramLabel': string;
-  'entry.followLinkedinLabel': string;
-  'entry.followXiaohongshuLabel': string;
   'entry.resizeAria': string;
   'entry.loadingWorkspace': string;
   'entry.useEverywhereTitle': string;
   'entry.useEverywhereAria': string;
-  'entry.workspaceTeamsLabel': string;
   // Left nav rail (icon-only) — surface labels also serve as tooltips
   'entry.navExpand': string;
   'entry.navCollapse': string;
@@ -2385,10 +2378,6 @@ export interface Dict {
   'avatar.modelLabel': string;
   'avatar.reasoningLabel': string;
   'avatar.customSuffix': string;
-  'socialShare.openDesignSection': string;
-  'socialShare.openDesignTitle': string;
-  'socialShare.openDesignText': string;
-  'socialShare.openDesignCopyText': string;
   'socialShare.projectSection': string;
   'socialShare.publishPageTitle': string;
   'socialShare.publishPageSubtitle': string;
