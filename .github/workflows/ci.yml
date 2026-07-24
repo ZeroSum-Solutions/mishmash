@@ -232,27 +232,22 @@ jobs:
       # `scripts/postinstall.mjs` only prebuilds package/tool entrypoints that
       # are needed immediately after install for linked bins and shared
       # sidecar/platform imports. It intentionally skips app outputs because
-      # building all apps would make every install run a Next/Electron-adjacent
-      # app build, even when a developer only needs packages/tools.
+      # building all apps would make every install run a Next-adjacent app
+      # build, even when a developer only needs packages/tools.
       #
-      # Fresh CI typecheck/test still need these specific generated declarations:
+      # Fresh CI typecheck/test still need this specific generated declaration:
       #   - `apps/daemon/dist/*.d.ts` for packaged/runtime consumers of the daemon
       #     package export
-      #   - `apps/desktop/dist/main/index.d.ts` for `apps/packaged` imports of
-      #     `@open-design/desktop/main`
-      #   - `apps/web/dist/sidecar/index.d.ts` for `apps/packaged` imports of
-      #     `@open-design/web/sidecar`
-      # If postinstall grows a targeted app type-generation phase covering these
-      # three exports without broad app builds, this CI prebuild can be removed.
+      # If postinstall grows a targeted app type-generation phase covering this
+      # export without a broad app build, this CI prebuild can be removed.
       - name: Prebuild workspace type declarations
         run: |
           pnpm --filter @open-design/daemon build
-          pnpm --filter @open-design/desktop build
           pnpm --filter @open-design/web build:sidecar
 
       - name: Typecheck workspaces
         run: |
-          pnpm -r --filter '!open-design' --filter '!@open-design/landing-page' --workspace-concurrency="${OPEN_DESIGN_WORKSPACE_CONCURRENCY:-1}" --if-present run typecheck
+          pnpm -r --filter '!open-design' --workspace-concurrency="${OPEN_DESIGN_WORKSPACE_CONCURRENCY:-1}" --if-present run typecheck
           pnpm exec tsc -p scripts/tsconfig.json --noEmit
 
       - name: Check repository layout policies
@@ -387,7 +382,6 @@ jobs:
       - name: Prebuild workspace type declarations
         run: |
           pnpm --filter @open-design/daemon build
-          pnpm --filter @open-design/desktop build
           pnpm --filter @open-design/web build:sidecar
 
       - name: E2E Vitest
@@ -430,7 +424,6 @@ jobs:
       - name: Prebuild workspace type declarations
         run: |
           pnpm --filter @open-design/daemon build
-          pnpm --filter @open-design/desktop build
           pnpm --filter @open-design/web build:sidecar
 
       - name: Clean Playwright state
@@ -474,7 +467,6 @@ jobs:
       - name: Prebuild workspace type declarations
         run: |
           pnpm --filter @open-design/daemon build
-          pnpm --filter @open-design/desktop build
           pnpm --filter @open-design/web build:sidecar
 
       - name: Clean Playwright state
@@ -546,7 +538,6 @@ jobs:
       - name: Prebuild workspace type declarations
         run: |
           pnpm --filter @open-design/daemon build
-          pnpm --filter @open-design/desktop build
           pnpm --filter @open-design/web build:sidecar
 
       - name: Run strict visual Playwright suite

@@ -38,8 +38,11 @@ studio: the one-stop workbench for the team.
 ## De-bloat log (2026-07)
 
 Removed as owned-surface reduction: non-English locales + localized docs,
-GitHub/Teams/Discord top-bar buttons, `apps/desktop` (team uses the web
-Studio). See branch `feat/debloat`.
+GitHub/Teams/Discord top-bar buttons, `apps/desktop` and `apps/packaged`
+(team uses the web Studio only), `apps/landing-page` (the Astro marketing
+site was upstream's, not ours) — including their packaged/release CI
+workflows, e2e Electron specs, and CODEOWNERS/allowlist entries. See branch
+`feat/debloat`.
 
 ## Cherry-pick log
 

@@ -81,18 +81,8 @@ const residualAllowedExactPaths = new Set([
   "scripts/postinstall.mjs",
   // Checked-in bin shim so pnpm can link `od` before daemon dist output exists.
   "apps/daemon/bin/od.mjs",
-  "apps/packaged/esbuild.config.mjs",
   // Browser service workers must be served as JavaScript files.
   "apps/web/public/od-notifications-sw.js",
-  // Vendored dom-to-pptx browser bundle used by the packaged desktop renderer
-  // for editable PPTX export. It is loaded into the off-screen Chromium page as
-  // an upstream browser asset, not compiled as project-owned TypeScript.
-  "apps/desktop/vendor/dom-to-pptx/dom-to-pptx.bundle.js",
-  // Shared nav enhancer for the landing-page static `/community/` pages,
-  // which are verbatim HTML served straight from `public/` (not Astro-
-  // compiled). It must ship as a browser-loadable `.js` asset, same as the
-  // web notifications service worker above.
-  "apps/landing-page/public/community/_site-nav.js",
   // PostCSS loads Tailwind through a web-local .mjs compatibility config entry.
   "apps/web/postcss.config.mjs",
   "scripts/bake-html-ppt-examples.mjs",

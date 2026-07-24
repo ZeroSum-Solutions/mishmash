@@ -3,8 +3,8 @@
 **Parent:** [`spec.md`](spec.md) · **Siblings:** [`skills-protocol.md`](skills-protocol.md) · [`agent-adapters.md`](agent-adapters.md) · [`modes.md`](modes.md)
 
 This document describes the code-backed runtime topology and the boundaries
-between the web app, daemon, desktop/packaged shells, agent runtimes, and
-content registries. For repository ownership rules, the root and layer
+between the web app, daemon, agent runtimes, and content registries. For
+repository ownership rules, the root and layer
 `AGENTS.md` files remain authoritative. For embedding Open Design behind
 another control plane, see [`orchestrator-workspaces.md`](orchestrator-workspaces.md).
 
@@ -20,9 +20,8 @@ another control plane, see [`orchestrator-workspaces.md`](orchestrator-workspace
 ### Source development
 
 `pnpm tools-dev` is the only repository lifecycle entry point. It manages the
-daemon and web sidecars and, for the default target set, the Electron desktop
-shell. `pnpm tools-dev run web` keeps daemon and web in the foreground without
-starting desktop.
+daemon and web sidecars. `pnpm tools-dev run web` keeps daemon and web in the
+foreground.
 
 When ports are not supplied, `tools-dev` chooses available daemon and web
 ports. `--daemon-port` and `--web-port` make them explicit. The web sidecar
@@ -30,16 +29,11 @@ receives the selected daemon port and rewrites `/api/*`, `/artifacts/*`, and
 `/frames/*` to the sibling Express process. Ports are transport details; they
 do not define process identity, namespaces, or daemon data roots.
 
-### Packaged desktop and packaged headless
-
-`apps/packaged` starts the packaged daemon and web sidecars. The Electron entry
-also starts the desktop shell; the headless entry omits desktop. Packaged code
-resolves channel/namespace-scoped runtime and data identities before spawning
-the daemon, and the desktop discovers the web URL through sidecar IPC rather
-than assuming a port.
-
-Read `tools/pack/AGENTS.md` before changing packaged launch, update, installer,
-or channel identity behavior.
+> `apps/desktop` (Electron shell) and `apps/packaged` (packaged Electron
+> runtime entry) have been removed from this fork; the team uses the web
+> Studio only. `tools/pack` still owns the historical packaged/updater
+> harness surface (see `tools/pack/AGENTS.md`) but has nothing left to
+> package.
 
 ### Container and daemon-served production
 
@@ -270,7 +264,7 @@ Shared DTOs live in `packages/contracts`.
 | Shared web/daemon DTOs and prompt contracts | `packages/contracts/src/` |
 | Runtime definitions and engine | `apps/daemon/src/runtimes/` |
 | Functional-skill loader | `apps/daemon/src/skills.ts` |
-| Packaged launch | `apps/packaged/`, `tools/pack/` |
+| Packaged launch (removed; `tools/pack/` retains the harness) | `tools/pack/` |
 | Development lifecycle | `tools/dev/` |
 | User-level validation | `e2e/` |
 
