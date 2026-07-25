@@ -79,6 +79,17 @@ plugin's `name`. `plugins/_official/examples/open-design-homepage` was deleted
 outright — a pixel clone of upstream's marketing site whose factual claims
 (Apache-2.0, "64,000+ repos", "30K stars") cannot honestly carry any other name.
 
+**CI needs `OD_CI_RUNNER_MODE=economic` on this fork.** `.github/scripts/runners.py`
+defaults to mode `default`, which resolves the `control` runner profile to
+upstream's self-hosted Contabo labels (`self-hosted`, `od-persistent-ci`,
+`od-ci-hot-poc`) and the hot-path profiles to the paid `blacksmith-4vcpu-ubuntu-2404`
+service. Neither exists for this repo, so `Static gate` and `Detect validation
+scopes` sit queued forever and no PR can ever go green. Mode `economic` resolves
+every Linux profile to GitHub-hosted `ubuntu-24.04`. Set as a repo variable
+(`gh variable set OD_CI_RUNNER_MODE --body economic`); re-set it on any new
+clone or fork. Note that a run already queued against a missing self-hosted
+runner cannot be cancelled promptly — push a new commit to get a fresh run.
+
 **Deleting a bundled plugin needs a daemon restart.** The plugin registry is
 cached: after removing the directory the daemon kept serving the entry with a
 `fsPath` that no longer existed (a card that renders nothing). `pnpm tools-dev
