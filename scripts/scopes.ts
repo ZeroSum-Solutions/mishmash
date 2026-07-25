@@ -296,7 +296,6 @@ function isUiP0RelevantFile(file: string): boolean {
       "pnpm-lock.yaml",
       "pnpm-workspace.yaml",
       ".github/workflows/ci.yml",
-      ".github/workflows/ui-extended-main.yml",
     ].includes(file)
   );
 }
@@ -320,7 +319,6 @@ function isVisualRelevantFile(file: string): boolean {
       ".github/workflows/ci.yml",
       ".github/workflows/comment.atom.yml",
       ".github/workflows/report.atom.yml",
-      ".github/workflows/visual-baseline.yml",
     ].includes(file)
   );
 }
@@ -336,10 +334,6 @@ function isWorkspaceValidationExemptFile(file: string): boolean {
     [
       "flake.nix",
       "flake.lock",
-      ".github/workflows/landing-page-ci.yml",
-      ".github/workflows/landing-page-staging.yml",
-      ".github/workflows/landing-page-production.yml",
-      ".github/workflows/blog-indexing-on-deploy.yml",
       ".github/workflows/autofix.atom.yml",
       ".github/workflows/comment.atom.yml",
       ".github/workflows/report.atom.yml",

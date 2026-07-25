@@ -1,5 +1,17 @@
 # GitHub automation guide
 
+**Fork note (2026-07-24):** this fork ships only four workflows — `ci.yml` plus the
+three `*.atom.yml` capabilities. Twenty-six inherited workflows were deleted:
+upstream's community management (contributor cards, Discord, stale-issue and
+inactivity bots, metrics), its release/backport process, its Docker and Nix
+distribution, the plugin-preview bake pipeline (it publishes to a bucket this fork
+cannot write to), the fork-PR approval boundary (no forks exist), and the
+visual-baseline / extended-UI suites. `scripts/guard.ts` fails if any of them
+reappears — the only upstream lane is `git cherry-pick`, so a pick touching those
+paths could otherwise silently revive a scheduled workflow. See `docs/FORK-PIN.md`.
+Sections below that describe deleted workflows are kept for context on the
+topology, not as a description of what runs here.
+
 This directory is still only partially standardized. Several historical workflows and helper locations do not yet follow one uniform shape. Do not copy old patterns blindly. For new work, bug fixes, and cleanup, use the `ci.yml` + `comment.atom.yml` + `autofix.atom.yml` + `report.atom.yml` + `.github/scripts/handoff.py` system as the reference topology unless a maintainer explicitly chooses a different boundary.
 
 ## Required reading

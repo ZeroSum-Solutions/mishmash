@@ -79,6 +79,31 @@ plugin's `name`. `plugins/_official/examples/open-design-homepage` was deleted
 outright — a pixel clone of upstream's marketing site whose factual claims
 (Apache-2.0, "64,000+ repos", "30K stars") cannot honestly carry any other name.
 
+**Only four workflows remain (2026-07-24).** `ci.yml` plus `comment.atom.yml`,
+`autofix.atom.yml`, `report.atom.yml`. Twenty-six were deleted as upstream surface
+this fork cannot or should not run: community bots, release/backport process,
+Docker + Nix distribution, the five preview-bake workflows (they publish to
+`repo-assets.open-design.ai`, and the nightly one would have re-published the
+manifest we emptied), fork-PR approval, and the visual-baseline / extended-UI
+suites. Two helpers went with them (`.github/actions/bake-previews/`,
+`.github/scripts/provision-agent-pr-explore-runner.sh`).
+
+`scripts/guard.ts` (`checkRemovedWorkflows`) fails if any of the 25 listed files
+returns, because a cherry-pick touching those paths could otherwise revive a
+scheduled workflow unnoticed. **`fork-pr-workflow-approval.yml` is deliberately
+excluded from that list**: it is a real security boundary deciding which workflows
+a fork PR may trigger, so restoring it must stay frictionless. **Restore it before
+ever making this repo public.** Two consequences accepted: the plugin grid's
+"Trending" order is frozen (`pluginPopularity.generated.ts` is no longer
+regenerated — those were upstream's usage stats anyway), and previews are never
+auto-baked.
+
+Verified before cutting: nothing globs `.github/workflows/*`, guard's CI-topology
+check reads only `ci.yml`, no kept workflow references a cut one, and the repo has
+no branch protection or rulesets — so no required status check can wedge a PR
+waiting on a job that no longer runs. Re-check that last point if branch
+protection is ever enabled.
+
 **CI needs `OD_CI_RUNNER_MODE=economic` on this fork.** `.github/scripts/runners.py`
 defaults to mode `default`, which resolves the `control` runner profile to
 upstream's self-hosted Contabo labels (`self-hosted`, `od-persistent-ci`,
