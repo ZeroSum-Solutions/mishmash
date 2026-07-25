@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { findChip } from '../src/components/home-hero/chips';
 import {
-  advanceTypewriter,
+  advanceDissolve,
   buildPlaceholderScenarios,
-  DEFAULT_TYPEWRITER_TIMING,
-  initialTypewriterState,
+  DEFAULT_DISSOLVE_TIMING,
+  initialDissolveState,
   PLACEHOLDER_BASE_HINT_KEY,
   PLACEHOLDER_SCENARIO_DEFS,
-  type TypewriterState,
+  type DissolveState,
 } from '../src/components/home-hero/placeholderScenarios';
 import { en } from '../src/i18n/locales/en';
 
-const TIMING = DEFAULT_TYPEWRITER_TIMING;
+const TIMING = DEFAULT_DISSOLVE_TIMING;
 
 describe('PLACEHOLDER_SCENARIO_DEFS bindings', () => {
   it('binds every scenario to an apply-scenario create chip that exists', () => {
@@ -98,72 +98,47 @@ describe('buildPlaceholderScenarios', () => {
   });
 });
 
-describe('advanceTypewriter', () => {
-  // Run the machine to the next state that satisfies `done`, capping steps so a
-  // logic regression fails fast instead of looping forever.
-  function runUntil(
-    start: TypewriterState,
-    length: number,
-    count: number,
-    done: (s: TypewriterState) => boolean,
-  ): TypewriterState {
-    let state = start;
-    for (let i = 0; i < 10_000; i += 1) {
-      ({ state } = advanceTypewriter(state, length, count, TIMING, false));
-      if (done(state)) return state;
-    }
-    throw new Error('advanceTypewriter did not reach the target state');
-  }
-
-  it('types one character at a time at the typing cadence', () => {
-    const { state, delayMs } = advanceTypewriter(
-      { index: 0, charCount: 0, phase: 'typing' },
-      10,
-      3,
-      TIMING,
-      false,
-    );
-    expect(state).toEqual({ index: 0, charCount: 1, phase: 'typing' });
-    expect(delayMs).toBe(TIMING.typeMs);
+describe('advanceDissolve', () => {
+  it('holds a line on screen for the full visible dwell before fading out', () => {
+    const { state, delayMs } = advanceDissolve({ index: 0, phase: 'visible' }, 3, TIMING, false);
+    expect(state).toEqual({ index: 0, phase: 'hidden' });
+    expect(delayMs).toBe(TIMING.visibleMs);
   });
 
-  it('holds once the full line is typed', () => {
-    const { state, delayMs } = advanceTypewriter(
-      { index: 0, charCount: 10, phase: 'typing' },
-      10,
-      3,
-      TIMING,
-      false,
-    );
-    expect(state.phase).toBe('holding');
-    expect(delayMs).toBe(TIMING.holdMs);
+  it('each line is on screen for about six seconds', () => {
+    // The founder-facing requirement: a slow dissolve, ~6s per line.
+    expect(TIMING.visibleMs).toBe(6000);
+    expect(TIMING.fadeMs).toBeLessThan(TIMING.visibleMs);
   });
 
-  it('cycles type → hold → delete → pause → next index with wraparound', () => {
-    const length = 5;
-    const count = 2;
-    // From a fully typed last scenario, the next typing state must wrap to 0.
-    const typed: TypewriterState = { index: 1, charCount: length, phase: 'typing' };
-    const next = runUntil(typed, length, count, (s) => s.phase === 'typing' && s.charCount === 0);
-    expect(next.index).toBe(0);
-    expect(next.phase).toBe('typing');
-    expect(next.charCount).toBe(0);
+  it('advances the index only after the fade-out completes', () => {
+    // The index must NOT move while the outgoing line is still fading, or the
+    // text would swap mid-dissolve (and Send-on-empty would bind the wrong
+    // scenario). It moves exactly when the next line starts fading in.
+    const { state, delayMs } = advanceDissolve({ index: 0, phase: 'hidden' }, 3, TIMING, false);
+    expect(state).toEqual({ index: 1, phase: 'visible' });
+    expect(delayMs).toBe(TIMING.fadeMs);
   });
 
-  it('reduced motion advances whole lines and keeps full charCount', () => {
-    const { state, delayMs } = advanceTypewriter(
-      { index: 0, charCount: 0, phase: 'typing' },
-      12,
-      3,
-      TIMING,
-      true,
-    );
-    expect(state.index).toBe(1);
-    expect(state.charCount).toBe(12);
-    expect(delayMs).toBe(TIMING.holdMs);
+  it('wraps to the first scenario after the last', () => {
+    const { state } = advanceDissolve({ index: 2, phase: 'hidden' }, 3, TIMING, false);
+    expect(state.index).toBe(0);
   });
 
-  it('starts empty on the first scenario', () => {
-    expect(initialTypewriterState()).toEqual({ index: 0, charCount: 0, phase: 'typing' });
+  it('reduced motion hard-swaps lines on the same dwell, never fading', () => {
+    const { state, delayMs } = advanceDissolve({ index: 0, phase: 'visible' }, 3, TIMING, true);
+    expect(state).toEqual({ index: 1, phase: 'visible' });
+    expect(delayMs).toBe(TIMING.visibleMs);
+  });
+
+  it('holds without advancing when there are no scenarios', () => {
+    const start: DissolveState = { index: 0, phase: 'visible' };
+    const { state, delayMs } = advanceDissolve(start, 0, TIMING, false);
+    expect(state).toBe(start);
+    expect(delayMs).toBe(TIMING.visibleMs);
+  });
+
+  it('starts fully visible on the first scenario', () => {
+    expect(initialDissolveState()).toEqual({ index: 0, phase: 'visible' });
   });
 });

@@ -1,7 +1,7 @@
-// Home composer placeholder carousel — data + pure typewriter state machine.
+// Home composer placeholder carousel — data + pure dissolve state machine.
 //
-// The empty Home composer rotates a set of scenario placeholders with a
-// typewriter effect (type → hold → delete → next). Each scenario is bound to
+// The empty Home composer rotates a set of scenario placeholders, cross-fading
+// between them (fade in → dwell → fade out → next). Each scenario is bound to
 // one of the create-rail templates (see `home-hero/chips.ts`): when the user
 // presses Send on an empty composer while a scenario is showing, HomeView
 // seeds the prompt with that scenario's text AND binds its template, so a
@@ -110,78 +110,59 @@ export function buildPlaceholderScenarios({
   }));
 }
 
-// ---- Typewriter state machine (pure, so it is unit-testable) --------------
+// ---- Dissolve state machine (pure, so it is unit-testable) ----------------
 
-export type TypewriterPhase = 'typing' | 'holding' | 'deleting' | 'pausing';
+// Each line fades in, sits, then fades out before the next one takes its place.
+// `visible` covers the fade-in AND the dwell; `hidden` is the fade-out, at the
+// end of which the index advances. The index therefore changes exactly when the
+// NEXT line starts appearing, which is what the Send-on-empty binding needs
+// (see HomeHero's `carouselScenario`).
+export type DissolvePhase = 'visible' | 'hidden';
 
-export interface TypewriterState {
+export interface DissolveState {
   // Index into the scenario list.
   index: number;
-  // Number of visible characters of the current scenario's text.
-  charCount: number;
-  phase: TypewriterPhase;
+  phase: DissolvePhase;
 }
 
-export interface TypewriterTiming {
-  // Per-character delay while typing.
-  typeMs: number;
-  // Per-character delay while deleting (faster than typing reads as decisive).
-  deleteMs: number;
-  // Dwell once a line is fully typed.
-  holdMs: number;
-  // Gap after a line is fully deleted, before the next line starts.
-  pauseMs: number;
+export interface DissolveTiming {
+  // How long a line stays on screen, fade-in included.
+  visibleMs: number;
+  // Cross-fade length. Must match the CSS opacity transition on
+  // `.home-hero__carousel-text` or the swap will visibly clip.
+  fadeMs: number;
 }
 
-export const DEFAULT_TYPEWRITER_TIMING: TypewriterTiming = {
-  typeMs: 42,
-  deleteMs: 22,
-  holdMs: 1900,
-  pauseMs: 320,
+export const DEFAULT_DISSOLVE_TIMING: DissolveTiming = {
+  visibleMs: 6000,
+  fadeMs: 700,
 };
 
-export function initialTypewriterState(): TypewriterState {
-  return { index: 0, charCount: 0, phase: 'typing' };
+export function initialDissolveState(): DissolveState {
+  return { index: 0, phase: 'visible' };
 }
 
 // Advance the machine one step and report how long to wait before applying it.
-// `length` is the current scenario's text length; `count` is the scenario
-// count (for wraparound). With `reducedMotion`, the per-character animation
-// collapses to whole-line swaps held for `holdMs` (the caller renders the full
-// text rather than a `slice`).
-export function advanceTypewriter(
-  state: TypewriterState,
-  length: number,
+// `count` is the scenario count (for wraparound). With `reducedMotion` the
+// cross-fade collapses to a hard swap on the same dwell.
+export function advanceDissolve(
+  state: DissolveState,
   count: number,
-  timing: TypewriterTiming,
+  timing: DissolveTiming,
   reducedMotion: boolean,
-): { state: TypewriterState; delayMs: number } {
-  if (count <= 0) return { state, delayMs: timing.holdMs };
+): { state: DissolveState; delayMs: number } {
+  if (count <= 0) return { state, delayMs: timing.visibleMs };
   if (reducedMotion) {
-    // Hold the current line, then jump straight to the next one.
     return {
-      state: { index: (state.index + 1) % count, charCount: length, phase: 'holding' },
-      delayMs: timing.holdMs,
+      state: { index: (state.index + 1) % count, phase: 'visible' },
+      delayMs: timing.visibleMs,
     };
   }
-  switch (state.phase) {
-    case 'typing':
-      if (state.charCount < length) {
-        return { state: { ...state, charCount: state.charCount + 1 }, delayMs: timing.typeMs };
-      }
-      return { state: { ...state, phase: 'holding' }, delayMs: timing.holdMs };
-    case 'holding':
-      return { state: { ...state, phase: 'deleting' }, delayMs: timing.deleteMs };
-    case 'deleting':
-      if (state.charCount > 0) {
-        return { state: { ...state, charCount: state.charCount - 1 }, delayMs: timing.deleteMs };
-      }
-      return { state: { ...state, phase: 'pausing' }, delayMs: timing.pauseMs };
-    case 'pausing':
-    default:
-      return {
-        state: { index: (state.index + 1) % count, charCount: 0, phase: 'typing' },
-        delayMs: timing.typeMs,
-      };
+  if (state.phase === 'visible') {
+    return { state: { ...state, phase: 'hidden' }, delayMs: timing.visibleMs };
   }
+  return {
+    state: { index: (state.index + 1) % count, phase: 'visible' },
+    delayMs: timing.fadeMs,
+  };
 }

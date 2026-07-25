@@ -4,7 +4,7 @@
   "name": "extend-plugin-author",
   "title": "Plugin Author",
   "version": "0.1.0",
-  "description": "Guide an agent through creating, validating, and preparing an Open Design plugin contribution.",
+  "description": "Guide an agent through creating, validating, and preparing an Northwind Design plugin contribution.",
   "license": "MIT",
   "tags": ["extend", "plugin-authoring", "create-plugin", "spec-plugin", "marketplace"],
   "compat": {

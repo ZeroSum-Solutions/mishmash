@@ -25,7 +25,7 @@
   },
   "version": "0.1.0",
   "publishedAt": "2026-05-12T13:38:45Z",
-  "description": "Guided scenario for creating a local Open Design plugin folder that can be added to My plugins.",
+  "description": "Guided scenario for creating a local Northwind Design plugin folder that can be added to My plugins.",
   "description_i18n": {
     "en": "Guided scenario for creating a local Open Design plugin folder that can be added to My plugins.",
     "zh-CN": "引导式场景：创建一个本地 Open Design 插件文件夹，可加到「我的插件」。",

@@ -1,7 +1,7 @@
 # Open Design Plugin Registry Strategy Plan
 
 **Date:** 2026-05-13
-**Related:** [docs/plugins-spec.zh-CN.md](../../docs/plugins-spec.zh-CN.md), [docs/plans/plugins-implementation.md](../../docs/plans/plugins-implementation.md), [specs/current/plugin-authoring-flow-plan.md](plugin-authoring-flow-plan.md), [specs/current/plugin-driven-flow-plan.md](plugin-driven-flow-plan.md)
+**Related:** [docs/plugins-spec.md](../../docs/plugins-spec.md), [docs/plans/plugins-implementation.md](../../docs/plans/plugins-implementation.md), [specs/current/plugin-authoring-flow-plan.md](plugin-authoring-flow-plan.md), [specs/current/plugin-driven-flow-plan.md](plugin-driven-flow-plan.md)
 
 ## Purpose
 
@@ -50,7 +50,7 @@ References checked:
 
 The repo already has the right substrate:
 
-- `docs/plugins-spec.zh-CN.md` names CLI as the canonical API, supports headless OD, and reserves federated `open-design-marketplace.json`.
+- `docs/plugins-spec.md` names CLI as the canonical API, supports headless OD, and reserves federated `open-design-marketplace.json`.
 - `packages/contracts/src/plugins/marketplace.ts` has a permissive catalog schema that can carry community-specific fields.
 - `apps/daemon/src/plugins/marketplaces.ts` supports add/list/info/refresh/remove/trust and bare-name resolution through configured marketplaces.
 - `apps/daemon/src/cli.ts` already exposes `od marketplace add/list/info/search/refresh/remove/trust`.

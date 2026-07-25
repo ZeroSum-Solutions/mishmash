@@ -882,7 +882,7 @@ function normalizeDesignSystemCraftApplies(value: unknown): string[] | undefined
 export function assembleExample(templateHtml: string, slidesHtml: string, title: string) {
   return templateHtml
     .replace('<!-- SLIDES_HERE -->', slidesHtml)
-    .replace(/<title>.*?<\/title>/, `<title>${title} | Open Design Example</title>`);
+    .replace(/<title>.*?<\/title>/, `<title>${title} | MishMash Example</title>`);
 }
 
 export function rewriteSkillAssetUrls(html: string, skillId: string) {
