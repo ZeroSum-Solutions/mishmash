@@ -626,7 +626,7 @@
   left: 4px;
   color: var(--text-soft);
 }
-/* Typewriter placeholder carousel — a pointer-events-none overlay aligned to
+/* Dissolving placeholder carousel — a pointer-events-none overlay aligned to
    the editor's first text line (matches .composer-input-placeholder metrics).
    Shown only while the composer is empty; the editor's own placeholder is
    blanked behind it. See home-hero/PlaceholderCarousel.tsx. */
@@ -644,35 +644,33 @@
   color: var(--text-soft);
   overflow: hidden;
 }
+/* The dissolve itself. --home-hero-carousel-fade MUST stay in step with
+   DEFAULT_DISSOLVE_TIMING.fadeMs in home-hero/placeholderScenarios.ts — the
+   machine waits this long for the fade-out before swapping the text, so a
+   longer transition here would clip mid-dissolve. Shared by the home hero and
+   the in-project chat composer (both render PlaceholderCarousel). */
 .home-hero__carousel-text {
+  --home-hero-carousel-fade: 700ms;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Deliberate deviation from the repo's default ease-out
+     cubic-bezier(0.23, 1, 0.32, 1): on a 700ms opacity fade that curve is
+     ~78% faded by 175ms and then crawls, which reads as a snap-out followed by
+     a dead pause — not a dissolve. The AGENTS.md easing default targets UI
+     elements entering/leaving, where that responsiveness is wanted; a
+     decorative cross-dissolve wants a symmetric, evenly-paced ramp. */
+  transition: opacity var(--home-hero-carousel-fade) cubic-bezier(0.4, 0, 0.6, 1);
 }
-.home-hero__carousel-caret {
-  flex: none;
-  width: 1.5px;
-  align-self: stretch;
-  margin: 3px 0 3px 2px;
-  background: var(--accent);
-  border-radius: 1px;
-  animation: home-hero-caret-blink 1.05s steps(1, end) infinite;
-}
-@keyframes home-hero-caret-blink {
-  0%,
-  50% {
-    opacity: 1;
-  }
-  50.01%,
-  100% {
-    opacity: 0;
-  }
+.home-hero__carousel-text[data-phase='hidden'] {
+  opacity: 0;
 }
 @media (prefers-reduced-motion: reduce) {
-  .home-hero__carousel-caret {
-    animation: none;
-    opacity: 1;
+  /* The machine already collapses to hard swaps under reduce; drop the
+     transition so the swap is instant rather than a shortened fade. */
+  .home-hero__carousel-text {
+    transition: none;
   }
 }
 .home-hero__input-card .plugin-inputs-form {

@@ -1037,7 +1037,7 @@ export interface Dict {
   'homeHero.subtitlePrefix': string;
   'homeHero.placeholder': string;
   'homeHero.placeholderActive': string;
-  // Rotating typewriter placeholder scenarios + idle hint (home-hero carousel).
+  // Rotating (cross-fading) placeholder scenarios + idle hint (home-hero carousel).
   'homeHero.carousel.hint': string;
   'homeHero.carousel.onePageBrief': string;
   'homeHero.carousel.notesToDeck': string;

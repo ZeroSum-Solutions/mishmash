@@ -10,7 +10,7 @@
   },
   "version": "1.0.0",
   "publishedAt": "2026-06-16T09:32:15Z",
-  "description": "Open Design from the CLI: driving the full design workflow with the `od` command — scripted, composable, agent-ready. Built as a decision-grade AI literacy deck for developers, power users.",
+  "description": "Northwind Design from the CLI: driving the full design workflow with the `od` command — scripted, composable, agent-ready. Built as a decision-grade AI literacy deck for developers, power users.",
   "description_i18n": {
     "en": "Open Design from the CLI: driving the full design workflow with the `od` command — scripted, composable, agent-ready. Built as a decision-grade AI literacy deck for developers, power users.",
     "zh-CN": "像开发者工具讲师一样教 AI CLI 工作流——一份可商业交付的AI 素养 Deck，围绕真实主题、证据链与决策目标组织。",

@@ -75,8 +75,15 @@ afterEach(async () => {
 describe('plugin preview bake manifest', () => {
   it('keeps every checked-in preview entry fetchable and path-safe', () => {
     const previews = checkedInManifest();
-    expect(Object.keys(previews).length).toBeGreaterThan(0);
-
+    // Deliberately NOT asserting the manifest is non-empty. Upstream always
+    // ships a populated manifest, but this fork shipped upstream's entries
+    // pointing at THEIR CDN, so every card rendered their branding (and, for
+    // some, Chinese copy) baked into the poster pixels — content we cannot
+    // re-bake on their bucket. The manifest was emptied so the gallery falls
+    // back to rendering each plugin's own local example HTML instead. It
+    // repopulates when previews are baked locally (scripts/bake-plugin-previews.mjs).
+    // What still matters is the invariant below: whatever entries ARE present
+    // must be fetchable and path-safe. See docs/FORK-PIN.md.
     for (const [id, entry] of Object.entries(previews)) {
       expect(entry.video, `${id} video`).toMatch(/\.mp4$/);
       expect(entry.poster, `${id} poster`).toMatch(/\.jpg$/);

@@ -1185,15 +1185,17 @@
   caret-color: var(--accent);
   -webkit-user-modify: read-write-plaintext-only; /* paste-as-plain-text guard */
 }
-/* While the empty composer runs the placeholder typewriter carousel, the
-   carousel draws its own decorative caret trailing the animated text. Suppress
-   the native caret (which sits at offset 0) so the two don't blink at once
-   (#5373). Keyed off the carousel being a later sibling of the editor, so it
-   covers both the chat composer (.composer-input-wrap) and the home hero
+/* While the empty composer runs the dissolving placeholder carousel, keep the
+   native caret (which sits at offset 0) hidden so nothing blinks against the
+   fading text — but only while the field is unfocused. Once the user focuses
+   the composer the real caret returns, since it is then the only affordance
+   telling them they can type (the carousel used to draw a decorative caret of
+   its own; that was removed with the typewriter, see #5373). Keyed off the
+   carousel being a later sibling of the editor, so it covers both the chat
+   composer (.composer-input-wrap) and the home hero
    (.home-hero__prompt-editor) without depending on the wrapper class. The
-   carousel unmounts as soon as the field has text, which restores the native
-   caret automatically. */
-.composer-input-editor:has(~ .home-hero__carousel) [contenteditable='true'] {
+   carousel unmounts as soon as the field has text. */
+.composer-input-editor:has(~ .home-hero__carousel) [contenteditable='true']:not(:focus) {
   caret-color: transparent;
 }
 .composer.composer-active-file-mode .composer-input-editor [contenteditable='true'],
@@ -1233,18 +1235,12 @@
   white-space: nowrap;
   overflow: hidden;
 }
+/* Fade behavior (transition + [data-phase='hidden']) is inherited from
+   .home-hero__carousel-text in styles/home/home-hero.css. */
 .composer-input-wrap .home-hero__carousel-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.composer-input-wrap .home-hero__carousel-caret {
-  width: 1px;
-  height: 1.25em;
-  flex: 0 0 auto;
-  background: var(--accent);
-  opacity: 0.85;
-  animation: home-hero-carousel-caret 900ms steps(1) infinite;
 }
 /* Single-paragraph + LineBreakNode model: collapse paragraph margins so a
    serialized "\n" reads as a single visual line break (no \n\n gap). */

@@ -1288,6 +1288,67 @@ async function checkCiTopology(): Promise<boolean> {
   return true;
 }
 
+// Workflows this fork deliberately removed (2026-07-24). They are upstream's
+// community management, release/backport process, distribution channels, and the
+// preview-bake pipeline that publishes to a bucket we cannot write to. Keeping
+// them cost Actions minutes and, in the bake case, would have re-published the
+// stale manifest we emptied on purpose.
+//
+// This check exists because the only upstream lane is `git cherry-pick`: a pick
+// that touches one of these paths can silently resurrect the file, and a revived
+// scheduled workflow would then run unattended. Failing `pnpm guard` is a much
+// better outcome than discovering a Discord bot firing at 3am.
+//
+// Deliberately NOT listed: fork-pr-workflow-approval.yml. It was also removed,
+// but it is a genuine security boundary for fork PRs, so restoring it must stay
+// easy if this repo is ever made public. See docs/FORK-PIN.md.
+const REMOVED_WORKFLOWS = [
+  "agent-pr-explore-sandbox.yml",
+  "agent-pr-explore.lock.yml",
+  "backport-automerge.yml",
+  "backport-label-guard.yml",
+  "backport.yml",
+  "bake-plugin-previews-automerge.yml",
+  "bake-plugin-previews-gc.yml",
+  "bake-plugin-previews-pr.yml",
+  "bake-plugin-previews-release.yml",
+  "bake-plugin-previews.yml",
+  "contributor-card-bot.yml",
+  "critique-conformance.yml",
+  "discord-resolved.yml",
+  "docker-image.yml",
+  "e2e-coverage-reminder.yml",
+  "metrics.yml",
+  "nix.yml",
+  "pr-author-inactivity.yml",
+  "refresh-contributors-wall.yml",
+  "refresh-plugin-popularity.yml",
+  "release-branch-direct-pr-guard.yml",
+  "release-gate.yml",
+  "stale-issues.yml",
+  "ui-extended-main.yml",
+  "visual-baseline.yml",
+] as const;
+
+async function checkRemovedWorkflows(): Promise<boolean> {
+  const present = new Set(await readdir(path.join(repoRoot, ".github/workflows")));
+  const revived = REMOVED_WORKFLOWS.filter((name) => present.has(name));
+
+  if (revived.length > 0) {
+    console.error("Removed-workflow check failed: these were deleted on purpose and are back:");
+    for (const name of revived) console.error(`- .github/workflows/${name}`);
+    console.error(
+      "A cherry-pick likely reintroduced them. Delete again, or update REMOVED_WORKFLOWS in scripts/guard.ts if the fork now wants one.",
+    );
+    return false;
+  }
+
+  console.log(
+    `Removed-workflow check passed: all ${REMOVED_WORKFLOWS.length} deliberately-removed workflows stay removed.`,
+  );
+  return true;
+}
+
 const checks: GuardCheck[] = [
   { name: "residual JavaScript", run: checkResidualJavaScript },
   { name: "package dependency specs", run: checkPackageDependencySpecs },
@@ -1301,6 +1362,7 @@ const checks: GuardCheck[] = [
   { name: "tools layout", run: checkToolsLayout },
   { name: "style policy", run: checkStylePolicy },
   { name: "CI topology", run: checkCiTopology },
+  { name: "removed workflows", run: checkRemovedWorkflows },
   { name: "craft references", run: checkCraftReferences },
   { name: "plugin preview manifest", run: checkPluginPreviewManifest },
   { name: "design system manifests", run: checkDesignSystemManifests },

@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  advanceTypewriter,
-  DEFAULT_TYPEWRITER_TIMING,
-  initialTypewriterState,
+  advanceDissolve,
+  DEFAULT_DISSOLVE_TIMING,
+  initialDissolveState,
   type PlaceholderScenario,
 } from './placeholderScenarios';
 
@@ -39,12 +39,12 @@ interface Props {
   onScenarioChange: (scenario: PlaceholderScenario) => void;
 }
 
-// Pointer-events-none overlay that types the rotating scenario placeholders
-// over the (empty) Lexical editor. It owns the per-character animation state so
-// the frequent re-renders stay confined here and never touch the editor.
+// Pointer-events-none overlay that cross-fades the rotating scenario
+// placeholders over the (empty) Lexical editor. It owns the animation state so
+// the re-renders stay confined here and never touch the editor.
 export function PlaceholderCarousel({ scenarios, active, onScenarioChange }: Props) {
   const reducedMotion = usePrefersReducedMotion();
-  const [state, setState] = useState(initialTypewriterState);
+  const [state, setState] = useState(initialDissolveState);
   const onChangeRef = useRef(onScenarioChange);
   onChangeRef.current = onScenarioChange;
   const reportedIndexRef = useRef(-1);
@@ -54,7 +54,7 @@ export function PlaceholderCarousel({ scenarios, active, onScenarioChange }: Pro
   useEffect(() => {
     if (!active) {
       reportedIndexRef.current = -1;
-      setState(initialTypewriterState());
+      setState(initialDissolveState());
     }
   }, [active]);
 
@@ -63,7 +63,7 @@ export function PlaceholderCarousel({ scenarios, active, onScenarioChange }: Pro
   // memoises the array, so this fires only on a real switch, not every render.)
   useEffect(() => {
     reportedIndexRef.current = -1;
-    setState(initialTypewriterState());
+    setState(initialDissolveState());
   }, [scenarios]);
 
   // Report the active scenario up on every index change (incl. first show).
@@ -81,13 +81,10 @@ export function PlaceholderCarousel({ scenarios, active, onScenarioChange }: Pro
   // chain self-sustains without overlapping timers (StrictMode-safe).
   useEffect(() => {
     if (!active || scenarios.length === 0) return;
-    const scenario = scenarios[state.index % scenarios.length];
-    const length = scenario?.text.length ?? 0;
-    const { state: nextState, delayMs } = advanceTypewriter(
+    const { state: nextState, delayMs } = advanceDissolve(
       state,
-      length,
       scenarios.length,
-      DEFAULT_TYPEWRITER_TIMING,
+      DEFAULT_DISSOLVE_TIMING,
       reducedMotion,
     );
     const timer = window.setTimeout(() => setState(nextState), Math.max(16, delayMs));
@@ -97,11 +94,13 @@ export function PlaceholderCarousel({ scenarios, active, onScenarioChange }: Pro
   if (!active || scenarios.length === 0) return null;
   const scenario = scenarios[state.index % scenarios.length];
   if (!scenario) return null;
-  const visible = reducedMotion ? scenario.text : scenario.text.slice(0, state.charCount);
   return (
     <div className="home-hero__carousel" aria-hidden="true" data-testid="home-hero-carousel">
-      <span className="home-hero__carousel-text">{visible}</span>
-      <span className="home-hero__carousel-caret" />
+      {/* data-phase drives the opacity transition; keying the span on the
+          scenario id would remount it and skip the fade-in. */}
+      <span className="home-hero__carousel-text" data-phase={state.phase}>
+        {scenario.text}
+      </span>
     </div>
   );
 }

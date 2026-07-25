@@ -1,6 +1,6 @@
 # Open Design Plugin & Marketplace — Implementation Plan (living)
 
-Source spec: [`docs/plugins-spec.md`](../plugins-spec.md) (zh-CN: [`docs/plugins-spec.zh-CN.md`](../plugins-spec.zh-CN.md)).
+Source spec: [`docs/plugins-spec.md`](../plugins-spec.md).
 
 Sibling docs: [`spec.md`](../spec.md) · [`skills-protocol.md`](../skills-protocol.md) · [`architecture.md`](../architecture.md).
 
@@ -595,7 +595,7 @@ Update this table on every plugin-system PR merge. When the value of "Current ph
 
 ## 10. References
 
-- Spec: [`docs/plugins-spec.md`](../plugins-spec.md) · [`docs/plugins-spec.zh-CN.md`](../plugins-spec.zh-CN.md)
+- Spec: [`docs/plugins-spec.md`](../plugins-spec.md)
 - Skills protocol: [`docs/skills-protocol.md`](../skills-protocol.md)
 - Architecture overview: [`docs/architecture.md`](../architecture.md)
 - Repository conventions: [`AGENTS.md`](../../AGENTS.md), [`apps/AGENTS.md`](../../apps/AGENTS.md), [`packages/AGENTS.md`](../../packages/AGENTS.md)

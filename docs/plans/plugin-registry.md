@@ -7,7 +7,7 @@
 > up their own Open Design plugin source with one config line.
 
 Source spec: [`docs/plugins-spec.md`](../plugins-spec.md) · zh-CN
-[`docs/plugins-spec.zh-CN.md`](../plugins-spec.zh-CN.md).
+[`docs/plugins-spec.md`](../plugins-spec.md).
 Sibling plan: [`plugins-implementation.md`](./plugins-implementation.md) —
 that file owns the per-plugin runtime/apply/snapshot pipeline. **This file
 owns the registry / distribution / website / multi-source story.**
