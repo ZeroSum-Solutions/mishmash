@@ -11,6 +11,7 @@ This file is the single source of truth for agents entering this repository. Rea
 - References and current plans: `docs/references.md`, `docs/code-review-guidelines.md`, `specs/current/maintainability-roadmap.md`.
 - Directory-level agent guidance: `.github/AGENTS.md`, `apps/AGENTS.md`, `packages/AGENTS.md`, `tools/AGENTS.md`, `e2e/AGENTS.md`.
 - Packaged auto-update architecture and high-confidence local harness: read `tools/pack/AGENTS.md` section "Packaged auto-update architecture and harness" before touching packaged updater code, release-channel identity, installer behavior, or updater UI.
+- Design authority and operator-context isolation: read the "Design authority" section at the end of this file before making any design, styling, token, or frontend-stack decision, and before importing an operator-level design workflow into this repository.
 
 ## Workspace directories
 
@@ -344,3 +345,70 @@ Run `pnpm install` after changing package manifests, workspace layout, command e
 ## Can I use Node 22 instead of Node 24?
 
 No. `package.json#engines` specifies `node: "~24"`, which is the only supported runtime. The current lockfile pins `better-sqlite3@11.10.0`; on Windows it has no prebuilt binary for Node 24 and is built from source via node-gyp (see the Windows native section). Older Node versions are not tested and may hit lockfile or dependency incompatibilities.
+
+# Design authority
+
+<!-- mishmash:context-isolation:v1 -->
+
+This repository is a design *product*. It reproduces other people's websites and
+generates other people's design systems. It therefore has no house aesthetic of its
+own, and it does not inherit one from whoever is operating it.
+
+## Sources of design truth, in order
+
+1. **The target.** When reproducing or cloning a site, the target's own computed CSS,
+   assets, type scale, spacing, and motion are the specification. Fidelity to the
+   target outranks every stylistic preference, including the ones below.
+2. **The client brief** and the brand materials supplied with it.
+3. **The active project's own design system** — the `DESIGN.md`, `tokens.css`, and
+   `design-tokens.json` under `design-systems/<id>/`. This is MishMash's native
+   format and remains fully in force.
+
+## Operator-level design doctrine is out of scope here
+
+Agents run this repository under an operator whose personal configuration may carry a
+general-purpose web-design doctrine — a personal token-contract workflow, a prescribed
+design-skill reach-order, and default frontend-stack preferences.
+
+Those rules exist to give *the operator's own client work* a consistent process.
+Applied here they are actively harmful: a house token contract rewrites the very
+tokens a clone is supposed to reproduce, and a default component stack overrides the
+target's real markup. A high-fidelity clone cannot be graded against a contract
+derived from anything other than the target itself.
+
+This section removes a *default reach-order*, not the underlying tools. Any skill in
+`skills/` may still be invoked on its merits, and any tool named below as retained
+stays fully available.
+
+## Machine-checked directives
+
+The enforceable claims live in **`docs/design-authority.json`**, not in this prose.
+Each entry pairs a stable `subject` id with a `directive` of `DISCLAIMED`,
+`RETAINED`, or `PENDING-DECISION`. `scripts/check-context-isolation.test.ts` reads
+that file and fails on a missing subject, an unexpected subject, or a flipped
+directive.
+
+Prose is deliberately not the contract. Markdown can be fenced, commented out,
+duplicated, or contradicted after a marker — all of which would let the doctrine be
+reversed while a text-matching guard still passed. To change what this repository
+disclaims or retains, edit `docs/design-authority.json` and the guard's expected
+map together; editing this section alone changes nothing.
+
+Current state, for readers: the operator's personal design-contract workflow, skill
+reach-order, frontend-stack defaults, and `design.mdc` are **disclaimed**. Google's
+`@google/design.md` tooling, MishMash's own `design-systems/`, and the `skills/`
+tree are **retained**. GSAP's default status is **pending**.
+
+**On GSAP.** GSAP is presently first-party motion infrastructure in this repository
+(the `gsap-*` skills under `skills/`). Whether it may be treated as a *sanctioned
+default* is deliberately unresolved until the licensing decision recorded in
+`docs/decisions/gsap-licensing.md` lands. Until then, treat existing GSAP usage as
+supported and do not add GSAP as a new default to additional surfaces.
+
+## Scope of this section
+
+This governs design, styling, token, and frontend-stack decisions only. Every other
+operator rule — credential handling, git and commit policy, destructive-command
+guards, deliverable routing — applies here unchanged.
+
+<!-- /mishmash:context-isolation:v1 -->

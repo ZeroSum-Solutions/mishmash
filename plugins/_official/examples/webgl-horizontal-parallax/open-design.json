@@ -3,26 +3,9 @@
   "specVersion": "1.0.0",
   "name": "example-webgl-horizontal-parallax",
   "title": "Horizontal Parallax Gallery",
-  "title_i18n": {
-    "zh-CN": "横向视差画廊",
-    "zh-TW": "橫向視差畫廊",
-    "ja": "横スクロール視差ギャラリー",
-    "ko": "가로 패럴랙스 갤러리",
-    "de": "Horizontale Parallax-Galerie",
-    "fr": "Galerie parallaxe horizontale",
-    "ru": "Горизонтальная параллакс-галерея",
-    "es": "Galería de paralaje horizontal",
-    "pt-BR": "Galeria de paralaxe horizontal",
-    "en": "Horizontal Parallax Gallery"
-  },
   "version": "0.1.0",
   "publishedAt": "2026-07-08T17:29:38Z",
   "description": "A horizontal-scroll WebGL gallery (Three.js): frames glide sideways with lerp smoothing and each image parallaxes its texture (UV shift) by its position in the viewport.",
-  "description_i18n": {
-    "zh-CN": "横向滚动 WebGL 画廊（Three.js）：画框随 lerp 平滑横移，每张图按其在视口的位置做纹理视差（UV 位移）。",
-    "zh-TW": "橫向捲動 WebGL 畫廊（Three.js）：畫框隨 lerp 平滑橫移，每張圖按其在視口的位置做紋理視差（UV 位移）。",
-    "en": "A horizontal-scroll WebGL gallery (Three.js): frames glide sideways with lerp smoothing and each image parallaxes its texture (UV shift) by its position in the viewport."
-  },
   "license": "MIT",
   "author": {
     "name": "Open Design",
@@ -70,10 +53,7 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": {
-        "en": "Build a horizontal-scroll WebGL gallery where frames glide sideways with smoothing and each image parallaxes its texture by its viewport position.",
-        "zh-CN": "构建横向滚动 WebGL 画廊，画框平滑横移，每图按视口位置做纹理视差。"
-      }
+      "query": "Build a horizontal-scroll WebGL gallery where frames glide sideways with smoothing and each image parallaxes its texture by its viewport position."
     },
     "context": {
       "skills": [

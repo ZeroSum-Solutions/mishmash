@@ -3,17 +3,9 @@
   "specVersion": "1.0.0",
   "name": "video-template-frame-creative-voltage",
   "title": "Creative Voltage Frame",
-  "title_i18n": {
-    "en": "Creative Voltage Frame",
-    "zh-CN": "创意电压分屏帧"
-  },
   "version": "0.1.0",
   "publishedAt": "2026-06-11T09:17:17Z",
   "description": "Electric split with hand-drawn script — offset panels slide in, display title rises with an outlined word, script strokes itself in.",
-  "description_i18n": {
-    "en": "Electric split with hand-drawn script — offset panels slide in, display title rises with an outlined word, script strokes itself in.",
-    "zh-CN": "创意电压分屏帧:电光蓝/暗错位分屏滑入 + 描边电光词 + 手写 script 自描, 复古现代有活力"
-  },
   "license": "Apache-2.0",
   "author": {
     "name": "nexu-io",
@@ -56,10 +48,7 @@
       "video": "https://cdn.jsdelivr.net/gh/nexu-io/open-design@main/plugins/_official/video-templates/frame-creative-voltage/preview.mp4"
     },
     "useCase": {
-      "query": {
-        "en": "Use the Creative Voltage Frame template to turn my title into an energetic split reveal — electric-blue and dark panels sliding in offset, a display title rising with one outlined electric word, and a handwritten script stroking itself in. Preserve the template's visual signature, use real content, and avoid lorem ipsum or placeholder images.",
-        "zh-CN": "用「创意电压分屏帧」模板把我的标题做成一段能量感分屏揭示:电光蓝与暗色面板错位滑入 + 标题升起带一个描边电光词 + 手写体自描入。保持模板的视觉签名,使用真实内容,避免 lorem ipsum 和占位图片。"
-      }
+      "query": "Use the Creative Voltage Frame template to turn my title into an energetic split reveal — electric-blue and dark panels sliding in offset, a display title rising with one outlined electric word, and a handwritten script stroking itself in. Preserve the template's visual signature, use real content, and avoid lorem ipsum or placeholder images."
     },
     "inputs": [
       {

@@ -3,17 +3,9 @@
   "specVersion": "1.0.0",
   "name": "video-template-frame-warm-grain",
   "title": "Warm Grain",
-  "title_i18n": {
-    "en": "Warm Grain",
-    "zh-CN": "暖色颗粒"
-  },
   "version": "0.1.0",
   "publishedAt": "2026-06-11T09:17:17Z",
   "description": "Cream aesthetic with grain texture",
-  "description_i18n": {
-    "en": "Cream aesthetic with grain texture",
-    "zh-CN": "暖色胶片颗粒质感的 Hero 动效，柔和光晕与缓慢推进，适合品牌开场。"
-  },
   "license": "Apache-2.0",
   "author": {
     "name": "heygen-com / Hyperframes",
@@ -54,10 +46,7 @@
       "video": "https://cdn.jsdelivr.net/gh/nexu-io/open-design@main/plugins/_official/video-templates/frame-warm-grain/preview.mp4"
     },
     "useCase": {
-      "query": {
-        "en": "Use the Warm Grain HyperFrames template to create a 10s presentation video. Replace the sample copy with real content, preserve the template's motion signature, and render to MP4.",
-        "zh-CN": "使用「暖色颗粒」HyperFrames 模板创建一段约 10 秒的presentation动效视频。把示例文案替换为真实内容，保留模板的动效签名，并渲染为 MP4。"
-      }
+      "query": "Use the Warm Grain HyperFrames template to create a 10s presentation video. Replace the sample copy with real content, preserve the template's motion signature, and render to MP4."
     },
     "inputs": [
       {
