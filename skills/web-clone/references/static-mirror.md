@@ -30,9 +30,19 @@ Output:
 
 The script uses a real browser to scroll the full page while capturing, and downloads over the browser's own network stack (cookies/TUN/proxy match what the page sees).
 
+### What the script now finishes on its own
+
+Three stages used to be printed as a "Next:" line for a human to action, and in practice were often skipped — leaving a mirror whose HTML still pointed at the origin, so it silently proxied the live site and broke offline. They now run automatically at the end of `mirror-site.mjs`:
+
+1. **Bot-wall detection.** If the captured `index.html` is a challenge/captcha interstitial, the run stops with exit code 2 instead of reporting a successful clone of a bot wall.
+2. **Second-pass asset fetch.** A scroll-through only downloads what the page actually requests, so lazy-loaded media, hover-state sprites, `srcset` variants the viewport never selected, and unused `@font-face` formats are referenced but absent. The references are read back off the mirror and fetched through the browser's stack. A challenge page returned for a binary asset is rejected rather than saved as a broken image.
+3. **URL rewrite.** Absolute same-origin references become relative local paths — but only when the mirrored file actually exists, so a missing asset stays an honest remote link instead of a guaranteed 404.
+
+Re-runnable standalone: `node scripts/rewrite-mirror.mjs --out <mirror-dir> [--dry-run]`.
+
 ## Manual wrap-up after mirroring (to get it running offline, 1:1)
 
-The script only pulls same-origin assets and doesn't auto-rewrite anything — **handle third parties manually, per `third-party.json`**:
+Same-origin assets are handled above. **Third parties still need manual work, per `third-party.json`**:
 
 1. **Self-host domain-locked webfonts (most commonly Adobe Typekit)**
    A Typekit kit locks its authorized domain, so a remote `@import` may stop rendering once the domain changes -> self-host it:
