@@ -21,7 +21,12 @@ import {
 } from '../utils/notifications';
 import { randomUUID } from '../utils/uuid';
 
-const STORAGE_KEY = 'open-design:config';
+export const CONFIG_STORAGE_KEY = 'mishmash:config';
+// Configs persisted before the rebrand live under this key. loadConfig falls
+// back to it so an upgrade keeps the user's settings; the next saveConfig
+// re-persists under STORAGE_KEY. The legacy entry is left in place (harmless,
+// keeps rollback safe).
+export const LEGACY_CONFIG_STORAGE_KEY = 'open-design:config';
 const CONFIG_MIGRATION_VERSION = 2;
 
 // Hatched out of the box, but tucked away — the user has to go through
@@ -44,7 +49,7 @@ export const DEFAULT_PET: PetConfig = {
   custom: {
     name: 'Buddy',
     glyph: '🦄',
-    accent: '#c96442',
+    accent: '#7c3aed',
     greeting: 'Hi! I am here whenever you need me.',
   },
 };
@@ -643,7 +648,8 @@ function migrateRetiredKnownProviderModel(
 
 export function loadConfig(): AppConfig {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(CONFIG_STORAGE_KEY)
+      ?? localStorage.getItem(LEGACY_CONFIG_STORAGE_KEY);
     if (!raw) {
       return {
         ...DEFAULT_CONFIG,
@@ -998,7 +1004,7 @@ export function saveConfig(config: AppConfig): void {
   for (const key of DAEMON_OWNED_KEYS) {
     delete (sanitized as unknown as Record<string, unknown>)[key];
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
+  localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(sanitized));
 }
 
 export function mergeDaemonConfig(

@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 
-const STORAGE_KEY = 'open-design:config';
+import {
+  CONFIG_STORAGE_KEY,
+  LEGACY_CONFIG_STORAGE_KEY,
+} from '../../../state/config';
 const TOGGLE_EVENT = 'open-design:critique-theater-toggle';
 
 interface ConfigShape {
@@ -11,7 +14,8 @@ interface ConfigShape {
 /**
  * Read the Settings-toggle flag for Critique Theater (Phase 15.3).
  *
- * Source of truth is the existing `open-design:config` localStorage
+ * Source of truth is the `mishmash:config` localStorage blob (with a
+ * legacy `open-design:config` fallback read)
  * blob the Settings panel already round-trips. The web layer reads the
  * stored boolean; the daemon-side `isCritiqueEnabled` makes the final
  * routing decision (project-level override, env override, rollout
@@ -42,7 +46,11 @@ export function useCritiqueTheaterEnabled(): boolean {
     if (typeof window === 'undefined') return;
     const reload = (): void => setEnabled(readToggle());
     const onStorage = (evt: StorageEvent): void => {
-      if (evt.key !== null && evt.key !== STORAGE_KEY) return;
+      if (
+        evt.key !== null
+        && evt.key !== CONFIG_STORAGE_KEY
+        && evt.key !== LEGACY_CONFIG_STORAGE_KEY
+      ) return;
       reload();
     };
     const onCustom = (evt: Event): void => {
@@ -130,7 +138,8 @@ export function setCritiqueTheaterEnabled(
   if (typeof window === 'undefined') return;
   let parsed: ConfigShape = {};
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(CONFIG_STORAGE_KEY)
+      ?? window.localStorage.getItem(LEGACY_CONFIG_STORAGE_KEY);
     if (raw) {
       const candidate: unknown = JSON.parse(raw);
       if (candidate && typeof candidate === 'object') {
@@ -142,7 +151,7 @@ export function setCritiqueTheaterEnabled(
   }
   parsed.critiqueTheaterEnabled = next;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+    window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(parsed));
   } catch {
     /* private mode / quota / disabled storage: the in-session event
        below still propagates to other mounts so the UI stays
@@ -234,7 +243,8 @@ function readToggle(): boolean {
   if (typeof window === 'undefined') return false;
   let raw: string | null;
   try {
-    raw = window.localStorage.getItem(STORAGE_KEY);
+    raw = window.localStorage.getItem(CONFIG_STORAGE_KEY)
+      ?? window.localStorage.getItem(LEGACY_CONFIG_STORAGE_KEY);
   } catch {
     return false;
   }

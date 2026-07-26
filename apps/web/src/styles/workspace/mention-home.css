@@ -280,7 +280,7 @@
    =========================================================== */
 .modal-backdrop {
   position: fixed; inset: 0;
-  background: rgba(28, 27, 26, 0.42);
+  background: rgba(21, 23, 27, 0.42);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   -webkit-app-region: no-drag;
@@ -1992,7 +1992,7 @@
   height: 16px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 3px rgba(28, 27, 26, 0.22);
+  box-shadow: 0 1px 3px rgba(21, 23, 27, 0.22);
   transition: transform 180ms cubic-bezier(0.2, 0, 0.2, 1);
 }
 .orbit-switch.is-on .orbit-switch-track { background: var(--accent); }

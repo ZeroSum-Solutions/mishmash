@@ -8367,7 +8367,7 @@ function AppearanceSection({
  * The toggle has two halves on opposite sides of the HTTP boundary:
  *
  *   * Browser-side: `useCritiqueTheaterEnabled` reads / writes the
- *     `open-design:config` localStorage blob; this is what gates
+ *     `mishmash:config` localStorage blob; this is what gates
  *     whether `<CritiqueTheaterMount>` actually renders.
  *   * Daemon-side: the rollout resolver in `server.ts` reads
  *     `project.metadata.critiqueTheaterEnabled`, so the daemon only
