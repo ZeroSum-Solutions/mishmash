@@ -77,13 +77,17 @@ describe('plain-stream artifact persistence vs run.events ring-buffer truncation
 
   it('persists an artifact the agent streamed early, even after >2000 later stdout events truncate the ring buffer', async () => {
     binDir = await mkdtemp(path.join(os.tmpdir(), 'od-plain-trunc-bin-'));
-    // 2x maxEvents with a full event-loop turn per chunk (setTimeout) so the
+    // 6x maxEvents with a full event-loop turn per chunk (setTimeout) so the
     // daemon reads each chunk as its own pipe 'data' event => one run event
     // per chunk, truncating the early artifact tag out of the ring buffer.
+    // 6x, not 2x: a loaded runner coalesces multiple pending chunks into one
+    // pipe read (observed ~2.25x on CI ubuntu — 4000 chunks became 1780
+    // events, so the buffer never even filled and the mechanism never armed).
+    // The flood must exceed maxEvents in EVENTS under worst-case coalescing.
     const fakeDeepseek = await writeArtifactThenFloodDeepseek(
       binDir,
       'deepseek-trunc',
-      PROD_DEFAULT_MAX_EVENTS * 2,
+      PROD_DEFAULT_MAX_EVENTS * 6,
     );
 
     delete process.env.POSTHOG_KEY;

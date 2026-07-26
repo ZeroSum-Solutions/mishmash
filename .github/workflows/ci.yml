@@ -293,8 +293,34 @@ jobs:
             pnpm --filter @open-design/tools-pack test
           fi
 
+  # Restores the full daemon suite as a merge gate. The suite ran single-file
+  # only since "Temporarily narrow CI debug scope" (891981d46) — never reverted.
+  # Runs serially (vitest fileParallelism: false is a correctness constraint),
+  # hence the dedicated job and generous timeout instead of sharing
+  # workspace_unit_tests' 20-minute budget.
+  daemon_full_tests:
+    name: Daemon full tests
+    needs: [scopes, runners]
+    if: ${{ needs.scopes.outputs.daemon_tests_required == 'true' }}
+    runs-on: ${{ fromJSON(needs.runners.outputs.runs_on).workspace_unit }}
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Configure CI parallelism
+        uses: ./.github/actions/configure-ci-parallelism
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          runner-labels: ${{ toJSON(fromJSON(needs.runners.outputs.runs_on).workspace_unit) }}
+
+      # Carried from the narrowed-scope era (891981d46): the watcher tests run
+      # inside this suite and CI runners are where watcher flakiness manifests,
+      # so the environment probe and debug flag stay with the job on purpose.
       - name: Probe watcher environment
-        if: ${{ needs.scopes.outputs.daemon_tests_required == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -304,14 +330,12 @@ jobs:
           cat /proc/sys/fs/inotify/max_user_watches /proc/sys/fs/inotify/max_user_instances || true
 
       - name: Prebuild daemon entrypoint declarations
-        if: ${{ needs.scopes.outputs.daemon_tests_required == 'true' }}
         run: pnpm --filter @open-design/daemon build
 
-      - name: Daemon workspace tests
-        if: ${{ needs.scopes.outputs.daemon_tests_required == 'true' }}
+      - name: Daemon full tests
         env:
           OD_WATCHER_TEST_DEBUG: "1"
-        run: pnpm --filter @open-design/daemon exec vitest run -c vitest.config.ts tests/project-watchers.test.ts
+        run: pnpm --filter @open-design/daemon exec vitest run -c vitest.config.ts
 
   windows_tools_pack_payload_tests:
     name: Windows tools-pack payload tests
@@ -605,6 +629,7 @@ jobs:
       - static_gate
       - preflight
       - workspace_unit_tests
+      - daemon_full_tests
       - windows_tools_pack_payload_tests
       - web_workspace_tests
       - e2e_vitest
@@ -651,6 +676,7 @@ jobs:
               ["scopes", "static_gate"]
               + when($out.run_preflight == "true"; ["preflight"])
               + when($out.run_workspace_unit_tests == "true"; ["workspace_unit_tests"])
+              + when($out.daemon_tests_required == "true"; ["daemon_full_tests"])
               + when($out.run_windows_tools_pack_payload_tests == "true"; ["windows_tools_pack_payload_tests"])
               + when($out.run_web_workspace_tests == "true"; ["web_workspace_tests"])
               + when($out.run_e2e_vitest == "true"; ["e2e_vitest"])
