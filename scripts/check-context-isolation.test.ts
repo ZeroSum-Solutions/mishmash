@@ -25,7 +25,7 @@ const EXPECTED_DIRECTIVES: Readonly<Record<string, string>> = {
   "google-design-md-tooling": "RETAINED",
   "mishmash-native-design-systems": "RETAINED",
   "mishmash-skills-on-merit": "RETAINED",
-  "gsap-default-permission": "PENDING-DECISION",
+  "gsap-default-permission": "RETAINED",
 };
 
 const LEGAL_DIRECTIVES = new Set(["DISCLAIMED", "RETAINED", "PENDING-DECISION"]);

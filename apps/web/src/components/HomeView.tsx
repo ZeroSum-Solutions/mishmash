@@ -1687,6 +1687,7 @@ export function HomeView({
     switch (chip.action.kind) {
       case 'apply-scenario':
       case 'apply-figma-migration': {
+        if (pluginsLoading) return;
         const targetId = chip.action.pluginId;
         const record = plugins.find((p) => p.id === targetId);
         if (!record) {

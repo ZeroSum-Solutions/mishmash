@@ -39,8 +39,8 @@
     },
     {
       "subject": "gsap-default-permission",
-      "directive": "PENDING-DECISION",
-      "label": "Whether GSAP may be treated as a sanctioned default — resolved by docs/decisions/gsap-licensing.md"
+      "directive": "RETAINED",
+      "label": "GSAP as a sanctioned default motion library — resolved RETAINED by docs/decisions/gsap-licensing.md; escalate before shipping any visual/no-code animation authoring surface"
     }
   ]
 }
