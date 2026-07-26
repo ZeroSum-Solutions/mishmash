@@ -306,6 +306,34 @@ async function scrollThroughPage(page, stepPx = 700) {
   await page.waitForTimeout(600);
 }
 
+/**
+ * Captures the whole page height at the *viewport* width.
+ *
+ * `fullPage: true` alone sizes the shot from the document's scrollWidth, so any
+ * horizontal overflow — a marquee row, an oversized decorative headline — makes
+ * the capture far wider than the layout a visitor actually sees. One real case:
+ * designbybrandin.com at a 1440px viewport captured 6013px wide, so 76% of the
+ * image was empty bleed and every fit-to-pane preview rendered the site as an
+ * unreadable ribbon. Clipping to the viewport width keeps the full scroll height
+ * while framing what the viewport really shows. Pages that do not overflow are
+ * captured unchanged, and an overflow is reported rather than silently cropped.
+ */
+async function captureFullHeightAtViewportWidth(page, screenshotPath, viewportWidth) {
+  const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  if (!Number.isFinite(documentWidth) || documentWidth <= viewportWidth) {
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    return { clipped: false, documentWidth };
+  }
+
+  const documentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+  await page.screenshot({
+    path: screenshotPath,
+    fullPage: true,
+    clip: { x: 0, y: 0, width: viewportWidth, height: documentHeight },
+  });
+  return { clipped: true, documentWidth };
+}
+
 try {
   const args = parseArgs(process.argv.slice(2));
   if (args.help || !args.url) {
@@ -341,10 +369,13 @@ try {
     const signals = await collectSignals(page);
     const screenshotName = `${args.label}-${width}.png`;
     const screenshotPath = path.join(screenshotsDir, screenshotName);
-    await page.screenshot({ path: screenshotPath, fullPage: true });
+    const overflow = await captureFullHeightAtViewportWidth(page, screenshotPath, width);
     captures.push({
       viewport: { width, height: 900 },
       screenshot: path.relative(outDir, screenshotPath),
+      ...(overflow.clipped
+        ? { horizontalOverflow: { documentWidth: overflow.documentWidth, capturedWidth: width } }
+        : {}),
       signals,
     });
     await page.close();
