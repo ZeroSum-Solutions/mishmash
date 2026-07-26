@@ -2521,6 +2521,8 @@ export const en: Dict = {
   'designFiles.projectMenu': 'Project actions',
   'designFiles.createDesignSystemFromProject': 'Create design system from this project',
   'designFiles.duplicateProject': 'Duplicate project',
+  'designFiles.downloadProject': 'Download project (.zip)',
+  'designFiles.downloadProjectFailed': "Couldn't download the project archive.",
 
   'designFiles.previewOpen': 'Open',
   'designFiles.previewClose': 'Close preview',

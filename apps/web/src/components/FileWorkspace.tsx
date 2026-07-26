@@ -1143,6 +1143,11 @@ export function FileWorkspace({
 
   const [showLibraryPicker, setShowLibraryPicker] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // Busy state for the Design Files "..." menu's "Download project (.zip)"
+  // item — self-contained here (unlike onDuplicateProject/onCreateDesignSystemFromProject,
+  // which are orchestrated by ProjectView) since projectId/rootDirName are
+  // already in scope and the download has no further app-state effects.
+  const [downloadProjectBusy, setDownloadProjectBusy] = useState(false);
   // The folder the Design Files panel is currently viewing (synced via
   // onCurrentDirChange). New files — uploads, pastes, sketches, dropped files —
   // are created under this folder instead of the project root.
@@ -3622,6 +3627,19 @@ export function FileWorkspace({
             createDesignSystemFromProjectBusy={createDesignSystemFromProjectBusy}
             onDuplicateProject={onDuplicateProject}
             duplicateProjectBusy={duplicateProjectBusy}
+            onDownloadProject={() => {
+              if (downloadProjectBusy) return;
+              setDownloadProjectBusy(true);
+              void downloadProjectArchive({
+                projectId,
+                fallbackTitle: rootDirName ?? t('workspace.allProjectFiles'),
+              })
+                .then((ok) => {
+                  if (!ok) setLauncherToast(t('designFiles.downloadProjectFailed'));
+                })
+                .finally(() => setDownloadProjectBusy(false));
+            }}
+            downloadProjectBusy={downloadProjectBusy}
             onSelectFromLibrary={() => {
               trackFileManagerClick(analytics.track, {
                 page_name: 'file_manager',

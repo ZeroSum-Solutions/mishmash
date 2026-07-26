@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve as pathResolve } from 'node:path';
@@ -19,6 +19,8 @@ interface CapturedRequest {
   url: string;
   body: string;
 }
+
+const FAKE_ARCHIVE_BODY = 'PK\x03\x04fake-archive-bytes';
 
 interface StubServer {
   baseUrl: string;
@@ -69,6 +71,24 @@ async function startProjectStubServer(): Promise<StubServer> {
         }));
         return;
       }
+      if (captured.method === 'GET' && captured.url.startsWith('/api/projects/archive-project/archive')) {
+        const url = new URL(captured.url, 'http://127.0.0.1');
+        const root = url.searchParams.get('root') || '';
+        if (root === 'missing-root') {
+          res.statusCode = 404;
+          res.end(JSON.stringify({ error: { code: 'FILE_NOT_FOUND', message: 'root not found' } }));
+          return;
+        }
+        const filename = root ? `${root}.zip` : 'archive-project.zip';
+        res.statusCode = 200;
+        res.setHeader('content-type', 'application/zip');
+        res.setHeader(
+          'content-disposition',
+          `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        );
+        res.end(FAKE_ARCHIVE_BODY);
+        return;
+      }
 
       res.statusCode = 404;
       res.end(JSON.stringify({ error: { code: 'unexpected-request', message: captured.url } }));
@@ -88,12 +108,15 @@ async function startProjectStubServer(): Promise<StubServer> {
   };
 }
 
-async function runCli(args: string[]): Promise<{ stdout: string; stderr: string; code: number | null }> {
+async function runCli(
+  args: string[],
+  cwd: string = DAEMON_ROOT,
+): Promise<{ stdout: string; stderr: string; code: number | null }> {
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env.NODE_OPTIONS;
   try {
     const { stdout, stderr } = await execFileP(process.execPath, [TSX_CLI, CLI_SRC, ...args], {
-      cwd: DAEMON_ROOT,
+      cwd,
       env,
       timeout: 15_000,
       maxBuffer: 4 * 1024 * 1024,
@@ -171,5 +194,102 @@ describe('od project CLI', () => {
       url: '/api/projects/source-project/duplicate',
     });
     expect(JSON.parse(stub.requests[0]!.body)).toEqual({ name: 'Duplicate Copy' });
+  });
+
+  it('downloads a project archive to the content-disposition filename by default', async () => {
+    stub = await startProjectStubServer();
+    tempRoot = mkdtempSync(join(tmpdir(), 'od-project-cli-archive-'));
+
+    const result = await runCli(
+      ['project', 'archive', 'archive-project', '--daemon-url', stub.baseUrl],
+      tempRoot,
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(result.stdout).toBe(
+      `[project] downloaded archive-project -> archive-project.zip (${Buffer.byteLength(FAKE_ARCHIVE_BODY)} bytes)\n`,
+    );
+    expect(stub.requests).toHaveLength(1);
+    expect(stub.requests[0]).toMatchObject({
+      method: 'GET',
+      url: '/api/projects/archive-project/archive',
+    });
+    expect(readFileSync(join(tempRoot, 'archive-project.zip'), 'utf8')).toBe(FAKE_ARCHIVE_BODY);
+  });
+
+  it('downloads a scoped project archive to an explicit --out path', async () => {
+    stub = await startProjectStubServer();
+    tempRoot = mkdtempSync(join(tmpdir(), 'od-project-cli-archive-'));
+    const outPath = join(tempRoot, 'custom-name.zip');
+
+    const result = await runCli([
+      'project',
+      'archive',
+      'archive-project',
+      '--root',
+      'ui-design',
+      '--out',
+      outPath,
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(result.stdout).toBe(
+      `[project] downloaded archive-project -> ${outPath} (${Buffer.byteLength(FAKE_ARCHIVE_BODY)} bytes)\n`,
+    );
+    expect(stub.requests).toHaveLength(1);
+    expect(stub.requests[0]).toMatchObject({
+      method: 'GET',
+      url: '/api/projects/archive-project/archive?root=ui-design',
+    });
+    expect(readFileSync(outPath, 'utf8')).toBe(FAKE_ARCHIVE_BODY);
+  });
+
+  it('prints a machine-readable ok/out/bytes envelope with --json', async () => {
+    stub = await startProjectStubServer();
+    tempRoot = mkdtempSync(join(tmpdir(), 'od-project-cli-archive-'));
+    const outPath = join(tempRoot, 'out.zip');
+
+    const result = await runCli([
+      'project',
+      'archive',
+      'archive-project',
+      '--out',
+      outPath,
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout)).toEqual({
+      ok: true,
+      projectId: 'archive-project',
+      out: outPath,
+      bytes: Buffer.byteLength(FAKE_ARCHIVE_BODY),
+    });
+  });
+
+  it('surfaces a 404 FILE_NOT_FOUND from a bogus --root as a structured CLI failure', async () => {
+    stub = await startProjectStubServer();
+
+    const result = await runCli([
+      'project',
+      'archive',
+      'archive-project',
+      '--root',
+      'missing-root',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).not.toBe(0);
+    expect(JSON.parse(result.stderr)).toMatchObject({
+      error: { code: 'FILE_NOT_FOUND', message: 'root not found' },
+    });
   });
 });
