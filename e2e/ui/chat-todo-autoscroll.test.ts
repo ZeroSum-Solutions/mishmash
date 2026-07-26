@@ -13,7 +13,7 @@ import { routeAgents } from '@/playwright/mock-factory';
 // inline message growth is observed; this spec confirms that the resulting
 // scroll behaviour is correct end-to-end.
 
-const STORAGE_KEY = 'open-design:config';
+const STORAGE_KEY = 'mishmash:config';
 
 // Reusable app-config seed: skip onboarding, mock agent, no real model calls.
 async function seedAppConfig(page: Page) {

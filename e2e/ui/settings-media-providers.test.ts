@@ -4,7 +4,7 @@ import { openNewProjectModal } from '@/playwright/rail';
 import type { Page, Route } from '@playwright/test';
 import { openSettingsDialog } from '../lib/playwright/amr.js';
 
-const STORAGE_KEY = 'open-design:config';
+const STORAGE_KEY = 'mishmash:config';
 
 function baseConfig(): Record<string, unknown> {
   return {

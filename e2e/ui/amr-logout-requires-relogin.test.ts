@@ -129,7 +129,7 @@ test('[P0] after local Sign out, AMR runs require re-login and Settings keeps AM
   };
   await putAppConfig(page, reloginConfig);
   await page.evaluate((next) => {
-    window.localStorage.setItem('open-design:config', JSON.stringify(next));
+    window.localStorage.setItem('mishmash:config', JSON.stringify(next));
   }, reloginConfig);
   await gotoProject(page, projectId);
   await sendPrompt(page, 'AMR logout should require relogin');

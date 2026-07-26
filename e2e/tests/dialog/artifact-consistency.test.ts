@@ -17,7 +17,7 @@ import { createSmokeSuite } from '@/vitest/suite';
 const PROMPT = 'Create a deterministic smoke artifact';
 const FILE_NAME = 'real-daemon-smoke.html';
 const HEADING = 'Real Daemon Smoke';
-const STORAGE_KEY = 'open-design:config';
+const STORAGE_KEY = 'mishmash:config';
 
 type ProjectResponse = {
   conversationId: string;

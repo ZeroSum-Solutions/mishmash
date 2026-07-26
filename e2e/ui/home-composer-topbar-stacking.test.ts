@@ -15,7 +15,7 @@ import { T } from '@/timeouts';
 
 test.describe.configure({ timeout: T.xlong });
 
-const STORAGE_KEY = 'open-design:config';
+const STORAGE_KEY = 'mishmash:config';
 
 const HOME_CONFIG = {
   mode: 'daemon',

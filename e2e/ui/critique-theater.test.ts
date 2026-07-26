@@ -40,7 +40,7 @@ import { expect, test } from '@/playwright/suite';
 import type { Page, Route } from '@playwright/test';
 import { routeAgents } from '@/playwright/mock-factory';
 
-const STORAGE_KEY = 'open-design:config';
+const STORAGE_KEY = 'mishmash:config';
 
 interface CritiqueFrame {
   event: string;

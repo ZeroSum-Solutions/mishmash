@@ -6,7 +6,7 @@ import { T } from '@/timeouts';
 
 test.describe.configure({ timeout: T.xlong });
 
-const STORAGE_KEY = 'open-design:config';
+const STORAGE_KEY = 'mishmash:config';
 const OPEN_SETTINGS_LABEL = /Open settings/i;
 
 const HOME_CONFIG = {
