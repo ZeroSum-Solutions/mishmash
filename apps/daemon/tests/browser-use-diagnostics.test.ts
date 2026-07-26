@@ -22,10 +22,22 @@ afterEach(async () => {
 });
 
 describe('browser use diagnostics', () => {
-  it('detects Browser Use prompts from the Open Design Browser menu', () => {
+  it('detects Browser Use prompts from the MishMash Browser menu', () => {
     expect(isBrowserUseRequested('hello')).toBe(false);
     expect(isBrowserUseRequested('@agent-browser\n\nBrowser tab context:')).toBe(true);
-    expect(isBrowserUseRequested('Use the selected Open Design Browser tab as the bound target.')).toBe(true);
+    // Deliberately a literal, not the BROWSER_USE_BOUND_TAB_MARKER constant the
+    // matcher now imports — asserting the constant against itself would pass no
+    // matter what it says. This case is the tripwire: rename the product again and
+    // it goes red here, where the rename is cheap to finish.
+    //
+    // Third arm on its own. browserUsePrompt() leads with '@agent-browser' and
+    // follows with 'Browser tab context:', so a real bound-tab prompt matches on
+    // arms 1 and 2 regardless — the de-brand left this arm stale but *redundant
+    // for browserUsePrompt() output*, not broken. Not dead outright: the matcher
+    // takes arbitrary strings, so a sentence-only caller reaches it, as this case
+    // does. An adversarial review corrected an earlier claim that discovery had
+    // silently stopped; it had not.
+    expect(isBrowserUseRequested('Use the selected MishMash Browser tab as the bound target.')).toBe(true);
   });
 
   it('returns a missing-registry snapshot without reading socket contents', () => {

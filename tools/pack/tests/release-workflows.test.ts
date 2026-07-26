@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
 
+import { RELEASE_WORKFLOWS_PRESENT } from "./fork-shape.js";
+
 function sectionBetween(content: string, start: string, end: string): string {
   const startIndex = content.indexOf(start);
   expect(startIndex).toBeGreaterThanOrEqual(0);
@@ -21,7 +23,9 @@ function countOccurrences(content: string, needle: string): number {
 }
 
 describe("release workflows", () => {
-  it("requires Vela CLI only for beta mac arm64 packaging", async () => {
+  // Reads five .github/workflows/release-*.yml files, all of which went with
+  // the desktop shell.
+  it.skipIf(!RELEASE_WORKFLOWS_PRESENT)("requires Vela CLI only for beta mac arm64 packaging", async () => {
     const [beta, betaSelfHosted, preview, prerelease, stable, stablePrepare, buildMac, buildWin, prepareMac, prepareWin, publishPlatform, winLifecycle, desktopUpdater, macBuild, macFs, installUnsafeDmg, winApp, macWorkspace, linuxPack] = await Promise.all([
       readFile(new URL("../../../.github/workflows/release-beta.yml", import.meta.url), "utf8"),
       readFile(new URL("../../../.github/workflows/release-beta-s.yml", import.meta.url), "utf8"),

@@ -1,0 +1,46 @@
+{
+  "$comment": "Source of truth for this repository's design-authority directives. AGENTS.md '# Design authority' carries the human rationale; THIS FILE carries the enforceable claims. Enforced by scripts/check-context-isolation.test.ts. Prose is not the contract: markdown can be fenced, commented out, duplicated, or contradicted after a marker, so the machine-checked claims live here instead.",
+  "version": 1,
+  "directives": [
+    {
+      "subject": "operator-global-claude-md-design-contract",
+      "directive": "DISCLAIMED",
+      "label": "Operator-global CLAUDE.md section 'Design contract (design.md)' — the personal token-contract workflow"
+    },
+    {
+      "subject": "operator-global-claude-md-design-skill-chain",
+      "directive": "DISCLAIMED",
+      "label": "Operator-global CLAUDE.md section 'Design skill chain' — the prescribed design-skill reach-order"
+    },
+    {
+      "subject": "operator-global-claude-md-frontend-defaults",
+      "directive": "DISCLAIMED",
+      "label": "Operator-global CLAUDE.md section 'Frontend Defaults' — default frontend stack preferences"
+    },
+    {
+      "subject": "operator-cursor-rule-design-mdc",
+      "directive": "DISCLAIMED",
+      "label": "Operator-level Cursor rule file design.mdc (alwaysApply)"
+    },
+    {
+      "subject": "google-design-md-tooling",
+      "directive": "RETAINED",
+      "label": "Google design.md tooling published as @google/design.md — available as a lint/export utility"
+    },
+    {
+      "subject": "mishmash-native-design-systems",
+      "directive": "RETAINED",
+      "label": "MishMash native design systems under design-systems/ (DESIGN.md, tokens.css, design-tokens.json)"
+    },
+    {
+      "subject": "mishmash-skills-on-merit",
+      "directive": "RETAINED",
+      "label": "MishMash skills under skills/ — invocable on their merits; only a default reach-order was removed"
+    },
+    {
+      "subject": "gsap-default-permission",
+      "directive": "CONDITIONAL",
+      "label": "GSAP permitted for CODE GENERATION only. Present-tense exposure: the Tweaks --motion control (design-templates/tweaks/SKILL.md) is already a visual surface that scales transition/animation durations. Do not expand visual motion authoring; pin exact GSAP versions. See docs/decisions/gsap-licensing.md"
+    }
+  ]
+}

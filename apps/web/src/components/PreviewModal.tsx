@@ -153,7 +153,7 @@ const SOCIAL_SHARE_PLATFORMS: Array<{
   {
     platform: 'xiaohongshu',
     labelKey: 'preview.shareToXiaohongshu',
-    mark: '小',
+    mark: 'XHS',
     mode: 'copy-open',
     entryUrl: 'https://www.xiaohongshu.com/',
   },

@@ -3,17 +3,9 @@
   "specVersion": "1.0.0",
   "name": "video-template-frame-play-mode",
   "title": "Play Mode",
-  "title_i18n": {
-    "en": "Play Mode",
-    "zh-CN": "玩乐模式"
-  },
   "version": "0.1.0",
   "publishedAt": "2026-06-11T09:17:17Z",
   "description": "Playful elastic animations",
-  "description_i18n": {
-    "en": "Playful elastic animations",
-    "zh-CN": "活泼俏皮的短视频动效，明快的色彩与弹跳节奏，适合社交短片与轻量预告。"
-  },
   "license": "Apache-2.0",
   "author": {
     "name": "heygen-com / Hyperframes",
@@ -54,10 +46,7 @@
       "video": "https://cdn.jsdelivr.net/gh/nexu-io/open-design@main/plugins/_official/video-templates/frame-play-mode/preview.mp4"
     },
     "useCase": {
-      "query": {
-        "en": "Use the Play Mode HyperFrames template to create a 10s social-shorts video. Replace the sample copy with real content, preserve the template's motion signature, and render to MP4.",
-        "zh-CN": "使用「玩乐模式」HyperFrames 模板创建一段约 10 秒的social-shorts动效视频。把示例文案替换为真实内容，保留模板的动效签名，并渲染为 MP4。"
-      }
+      "query": "Use the Play Mode HyperFrames template to create a 10s social-shorts video. Replace the sample copy with real content, preserve the template's motion signature, and render to MP4."
     },
     "inputs": [
       {

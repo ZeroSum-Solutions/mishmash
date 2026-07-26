@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { join, resolve } from "node:path";
 
 import { resolveToolPackConfig, WORKSPACE_ROOT } from "../src/config.js";
+import { DESKTOP_SHELL_PRESENT } from "./fork-shape.js";
 
 const savedTelemetryRelayUrl = process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
 const savedPosthogKey = process.env.POSTHOG_KEY;
@@ -31,7 +32,7 @@ afterEach(() => {
   }
 });
 
-describe("resolveToolPackConfig AMR profile", () => {
+describe.skipIf(!DESKTOP_SHELL_PRESENT)("resolveToolPackConfig AMR profile", () => {
   it("bakes OPEN_DESIGN_AMR_PROFILE into packaged config when set at build time", () => {
     process.env.OPEN_DESIGN_AMR_PROFILE = "test";
     const config = resolveToolPackConfig("mac", { namespace: "amr-profile-test" });
@@ -46,7 +47,7 @@ describe("resolveToolPackConfig AMR profile", () => {
   });
 });
 
-describe("resolveToolPackConfig Vela CLI requirement", () => {
+describe.skipIf(!DESKTOP_SHELL_PRESENT)("resolveToolPackConfig Vela CLI requirement", () => {
   it("defaults to optional Vela CLI bundling", () => {
     const config = resolveToolPackConfig("mac", { namespace: "vela-optional-test" });
     expect(config.requireVelaCli).toBe(false);
@@ -61,7 +62,7 @@ describe("resolveToolPackConfig Vela CLI requirement", () => {
   });
 });
 
-describe("resolveToolPackConfig win build target", () => {
+describe.skipIf(!DESKTOP_SHELL_PRESENT)("resolveToolPackConfig win build target", () => {
   it("accepts the portable zip target and rejects unsupported values", () => {
     expect(resolveToolPackConfig("win", { to: "zip" }).to).toBe("zip");
     expect(resolveToolPackConfig("win", { to: "all" }).to).toBe("all");
@@ -70,7 +71,7 @@ describe("resolveToolPackConfig win build target", () => {
   });
 });
 
-describe("resolveToolPackConfig cache root", () => {
+describe.skipIf(!DESKTOP_SHELL_PRESENT)("resolveToolPackConfig cache root", () => {
   it("keeps the default cache outside custom tools-pack roots", () => {
     const config = resolveToolPackConfig("win", {
       dir: "C:\\odqa-release-4ch",
@@ -93,7 +94,7 @@ describe("resolveToolPackConfig cache root", () => {
   });
 });
 
-describe("resolveToolPackConfig namespace defaults", () => {
+describe.skipIf(!DESKTOP_SHELL_PRESENT)("resolveToolPackConfig namespace defaults", () => {
   it("keeps ordinary local builds on the default namespace", () => {
     expect(resolveToolPackConfig("mac").namespace).toBe("default");
     expect(resolveToolPackConfig("win", { appVersion: "0.8.0" }).namespace).toBe("default");
@@ -118,7 +119,7 @@ describe("resolveToolPackConfig namespace defaults", () => {
   });
 });
 
-describe("resolveToolPackConfig telemetry relay", () => {
+describe.skipIf(!DESKTOP_SHELL_PRESENT)("resolveToolPackConfig telemetry relay", () => {
   it("reads and normalizes OPEN_DESIGN_TELEMETRY_RELAY_URL for packaged config", () => {
     process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL = "https://telemetry.open-design.ai/api/langfuse//";
     const config = resolveToolPackConfig("mac", { namespace: "telemetry-test" });
@@ -140,7 +141,7 @@ describe("resolveToolPackConfig telemetry relay", () => {
   });
 });
 
-describe("resolveToolPackConfig PostHog analytics", () => {
+describe.skipIf(!DESKTOP_SHELL_PRESENT)("resolveToolPackConfig PostHog analytics", () => {
   it("bakes POSTHOG_KEY into packaged config when set at build time", () => {
     process.env.POSTHOG_KEY = "phc_test_abc123";
     process.env.POSTHOG_HOST = "https://us.i.posthog.com";

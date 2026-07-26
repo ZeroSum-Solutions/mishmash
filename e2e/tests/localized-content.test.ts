@@ -41,7 +41,7 @@ const {
   localizePromptTemplateSummary,
   localizeSkillDescription,
 } = localizedContentModule;
-// Open Design ships English-only; 'en' is the only remaining locale, and the
+// MishMash ships English-only; 'en' is the only remaining locale, and the
 // coverage loop below now just locks in the unconditional English-fallback
 // behavior (see git history for the pre-de-bloat multi-locale coverage).
 const COVERAGE_LOCALES = ['en'] as const;

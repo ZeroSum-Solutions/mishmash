@@ -3,17 +3,9 @@
   "specVersion": "1.0.0",
   "name": "video-template-frame-decision-tree",
   "title": "Decision Tree",
-  "title_i18n": {
-    "en": "Decision Tree",
-    "zh-CN": "决策树"
-  },
   "version": "0.1.0",
   "publishedAt": "2026-06-11T09:17:17Z",
   "description": "Animated flowchart with branching paths",
-  "description_i18n": {
-    "en": "Animated flowchart with branching paths",
-    "zh-CN": "清爽的决策树 / 流程图动效合成，节点与连线依次绘入，适合讲清判断逻辑与分支流程。"
-  },
   "license": "Apache-2.0",
   "author": {
     "name": "heygen-com / Hyperframes",
@@ -53,10 +45,7 @@
       "video": "https://cdn.jsdelivr.net/gh/nexu-io/open-design@main/plugins/_official/video-templates/frame-decision-tree/preview.mp4"
     },
     "useCase": {
-      "query": {
-        "en": "Use the Decision Tree HyperFrames template to create a 15s explainer video. Replace the sample copy with real content, preserve the template's motion signature, and render to MP4.",
-        "zh-CN": "使用「决策树」HyperFrames 模板创建一段约 15 秒的explainer动效视频。把示例文案替换为真实内容，保留模板的动效签名，并渲染为 MP4。"
-      }
+      "query": "Use the Decision Tree HyperFrames template to create a 15s explainer video. Replace the sample copy with real content, preserve the template's motion signature, and render to MP4."
     },
     "inputs": [
       {

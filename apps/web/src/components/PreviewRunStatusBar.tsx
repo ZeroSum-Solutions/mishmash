@@ -51,7 +51,7 @@ export function PreviewRunStatusBar({
   const { t } = useI18n();
   const analytics = useAnalytics();
   const [now, setNow] = useState(() => Date.now());
-  const current = useMemo(
+  const resolved = useMemo(
     () => {
       // `now` is only a render tick for active/success timers. Evaluate the
       // message set against the wall clock so switching to an old conversation
@@ -62,6 +62,12 @@ export function PreviewRunStatusBar({
     },
     [conversationId, messages, now],
   );
+  // A delivery failure never expires on its own (see `previewRunStatusVisibleAt`)
+  // — right for a user who means to retry, but it otherwise leaves a permanent
+  // notice welded over the canvas with no way out. Key dismissal to the message
+  // id so clearing one failure cannot swallow the next one.
+  const [dismissedMessageId, setDismissedMessageId] = useState<string | null>(null);
+  const current = resolved && resolved.message.id === dismissedMessageId ? null : resolved;
   const [lastVisible, setLastVisible] = useState<PreviewRunStatus | null>(current);
   const [leaving, setLeaving] = useState(false);
   const exposureRef = useRef<string | null>(null);
@@ -146,7 +152,15 @@ export function PreviewRunStatusBar({
         >
           {label}
         </span>
-        {isFailure ? null : (
+        {isFailure ? (
+          <button
+            type="button"
+            className={styles.dismiss}
+            onClick={() => setDismissedMessageId(displayed.message.id)}
+          >
+            {t('previewRunStatus.dismiss')}
+          </button>
+        ) : (
           <span className={styles.elapsed} aria-hidden="true">
             {t('previewRunStatus.elapsed', { time: elapsed })}
           </span>

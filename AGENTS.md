@@ -11,6 +11,7 @@ This file is the single source of truth for agents entering this repository. Rea
 - References and current plans: `docs/references.md`, `docs/code-review-guidelines.md`, `specs/current/maintainability-roadmap.md`.
 - Directory-level agent guidance: `.github/AGENTS.md`, `apps/AGENTS.md`, `packages/AGENTS.md`, `tools/AGENTS.md`, `e2e/AGENTS.md`.
 - Packaged auto-update architecture and high-confidence local harness: read `tools/pack/AGENTS.md` section "Packaged auto-update architecture and harness" before touching packaged updater code, release-channel identity, installer behavior, or updater UI.
+- Design authority and operator-context isolation: read the "Design authority" section at the end of this file before making any design, styling, token, or frontend-stack decision, and before importing an operator-level design workflow into this repository.
 
 ## Workspace directories
 
@@ -21,7 +22,7 @@ This file is the single source of truth for agents entering this repository. Rea
 - `packages/contracts` is the pure TypeScript web/daemon app contract layer.
 - `packages/sidecar-proto` owns the Open Design sidecar business protocol; `packages/sidecar` owns the generic sidecar runtime; `packages/platform` owns generic OS process primitives.
 - `tools/dev` is the local development lifecycle control plane.
-- `tools/pack` is the local packaged build/start/stop/logs control plane, packaged updater harness, installer identity/registry validation surface, and mac beta release artifact preparation surface.
+- `tools/pack` is the local packaged build/start/stop/logs control plane, packaged updater harness, installer identity/registry validation surface, and mac beta release artifact preparation surface. **Dormant in this fork** — it packages the Electron desktop shell, which was removed; no `pnpm tools-pack …` command currently works. See `tools/pack/AGENTS.md`, "Dormant in this fork".
 - `tools/serve` is the local fixture-service control plane; first service is `tools-serve start updater` for deterministic updater metadata and artifacts.
 - `tools/release` owns release metadata, storage publishing, release reports, and notification-facing data contracts; packaged artifact construction and smoke testing remain in `tools/pack`.
 - `e2e` owns user-level end-to-end smoke tests and Playwright UI automation; read `e2e/AGENTS.md` before editing its tests or commands.
@@ -344,3 +345,82 @@ Run `pnpm install` after changing package manifests, workspace layout, command e
 ## Can I use Node 22 instead of Node 24?
 
 No. `package.json#engines` specifies `node: "~24"`, which is the only supported runtime. The current lockfile pins `better-sqlite3@11.10.0`; on Windows it has no prebuilt binary for Node 24 and is built from source via node-gyp (see the Windows native section). Older Node versions are not tested and may hit lockfile or dependency incompatibilities.
+
+# Design authority
+
+<!-- mishmash:context-isolation:v1 -->
+
+This repository is a design *product*. It reproduces other people's websites and
+generates other people's design systems. It therefore has no house aesthetic of its
+own, and it does not inherit one from whoever is operating it.
+
+## Sources of design truth, in order
+
+1. **The target.** When reproducing or cloning a site, the target's own computed CSS,
+   assets, type scale, spacing, and motion are the specification. Fidelity to the
+   target outranks every stylistic preference, including the ones below.
+2. **The client brief** and the brand materials supplied with it.
+3. **The active project's own design system** — the `DESIGN.md`, `tokens.css`, and
+   `design-tokens.json` under `design-systems/<id>/`. This is MishMash's native
+   format and remains fully in force.
+
+## Operator-level design doctrine is out of scope here
+
+Agents run this repository under an operator whose personal configuration may carry a
+general-purpose web-design doctrine — a personal token-contract workflow, a prescribed
+design-skill reach-order, and default frontend-stack preferences.
+
+Those rules exist to give *the operator's own client work* a consistent process.
+Applied here they are actively harmful: a house token contract rewrites the very
+tokens a clone is supposed to reproduce, and a default component stack overrides the
+target's real markup. A high-fidelity clone cannot be graded against a contract
+derived from anything other than the target itself.
+
+This section removes a *default reach-order*, not the underlying tools. Any skill in
+`skills/` may still be invoked on its merits, and any tool named below as retained
+stays fully available.
+
+## Machine-checked directives
+
+The enforceable claims live in **`docs/design-authority.json`**, not in this prose.
+Each entry pairs a stable `subject` id with a `directive` of `DISCLAIMED`,
+`RETAINED`, or `PENDING-DECISION`. `scripts/check-context-isolation.test.ts` reads
+that file and fails on a missing subject, an unexpected subject, or a flipped
+directive.
+
+Prose is deliberately not the contract. Markdown can be fenced, commented out,
+duplicated, or contradicted after a marker — all of which would let the doctrine be
+reversed while a text-matching guard still passed. To change what this repository
+disclaims or retains, edit `docs/design-authority.json` and the guard's expected
+map together; editing this section alone changes nothing.
+
+Current state, for readers: the operator's personal design-contract workflow, skill
+reach-order, frontend-stack defaults, and `design.mdc` are **disclaimed**. Google's
+`@google/design.md` tooling, MishMash's own `design-systems/`, and the `skills/` tree
+are **retained**. GSAP is **conditional** — code generation only.
+
+**On GSAP.** GSAP is first-party motion infrastructure here (the `gsap-*` skills) and is
+**CONDITIONAL**, resolved by `docs/decisions/gsap-licensing.md`. Free for commercial use
+including all plugins, but proprietary and Webflow-owned, not OSI open source.
+
+The licence prohibits GSAP in **no-code visual animation builders** competing with
+Webflow. Generating GSAP *code* is explicitly permitted — the licensor's FAQ blesses AI
+tools doing exactly that. **Present-tense exposure:** `design-templates/tweaks/SKILL.md`
+already ships a `--motion` control (Off/Subtle/Lively) that scales every
+`transition-duration` and `animation-duration` in an artifact. That is a visual surface
+editing animation timing, and it exists today — an adversarial review corrected an
+earlier draft that wrongly framed this as a future-only risk.
+
+So: **do not expand visual motion authoring** beyond that global multiplier. No timeline
+or keyframe editor, no per-element easing/duration UI, no extending
+`tweaks`/`palette`/inspect-and-edit into motion. Any expansion needs written Webflow
+consent first. Pin exact GSAP versions — the licence is unilaterally amendable and
+pinning is what makes an amendment reviewable.
+
+## Scope of this section
+
+This governs design, styling, token, and frontend-stack decisions only. Every other
+operator rule — credential handling, git and commit policy, destructive-command
+guards, deliverable routing — applies here unchanged.
+
+<!-- /mishmash:context-isolation:v1 -->

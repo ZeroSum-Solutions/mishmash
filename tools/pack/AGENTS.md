@@ -2,6 +2,31 @@
 
 Follow the root `AGENTS.md` and `tools/AGENTS.md` first. This tool owns the repo-external packaged build/start/stop/logs command surface.
 
+## Dormant in this fork
+
+**No `pnpm tools-pack …` command works here.** `tools/pack` packages the Electron
+desktop shell, and this fork removed `apps/desktop` and `apps/packaged` — the root
+`AGENTS.md` says not to recreate or reference them. So the "Owns" list below
+describes the tool's design, not a capability this repository currently has:
+
+- `src/config.ts` resolves Electron through `apps/desktop/package.json`, so
+  `resolveToolPackConfig()` throws for *every* platform.
+- `src/{mac,win,linux,workspace-build}` all list `apps/desktop` and `apps/packaged`
+  among the workspace packages a build must install and stage.
+
+The test suite still runs in CI. 220 cases that never touch the desktop shell keep
+their signal; the 34 that do are guarded by `tests/fork-shape.ts`, which probes the
+filesystem for `apps/desktop/package.json`, `apps/packaged/package.json`, and
+`.github/workflows/release-beta.yml`. That is a condition, not a `.skip`: restoring
+the desktop shell re-arms every guarded case with no flag to remember, and a partial
+restore turns them red instead of leaving them quietly off.
+
+The packaging source is retained rather than deleted so a future upstream re-sync
+stays cheap and restoring the shell is a revert rather than a rewrite.
+
+The Windows launcher-payload job (`tests/launcher-payload.test.ts`) is unaffected —
+it exercises archive packing only and does not reach the removed apps.
+
 ## Owns
 
 - Local packaging orchestration for packaged Open Design artifacts.

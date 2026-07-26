@@ -14,6 +14,7 @@ import {
   clearHostBrowserData,
   isOpenDesignHostAvailable,
 } from '@open-design/host';
+import { BROWSER_USE_BOUND_TAB_MARKER } from '@open-design/contracts';
 import type { TrackingReferenceBoardCategory } from '@open-design/contracts/analytics';
 import { useAnalytics } from '../analytics/provider';
 import {
@@ -728,7 +729,7 @@ export function browserUsePrompt(action: BrowserUseAction, context: BrowserUsePr
   return [
     '@agent-browser',
     '',
-    'Use the selected MishMash Browser tab as the bound target.',
+    BROWSER_USE_BOUND_TAB_MARKER,
     'Browser tab context:',
     `- tab: ${tabLabel}`,
     `- title: ${title}`,

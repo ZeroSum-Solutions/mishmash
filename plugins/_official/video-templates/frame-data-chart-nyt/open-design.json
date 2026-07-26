@@ -3,17 +3,9 @@
   "specVersion": "1.0.0",
   "name": "video-template-frame-data-chart-nyt",
   "title": "NYT-Style Data Chart Frame",
-  "title_i18n": {
-    "en": "NYT-Style Data Chart Frame",
-    "zh-CN": "NYT 风数据图表帧"
-  },
   "version": "0.1.0",
   "publishedAt": "2026-06-11T09:17:17Z",
   "description": "NYT-newsroom typography, staggered reveal animation, and editorial-grade charts (line, bar, or range band).",
-  "description_i18n": {
-    "en": "NYT-newsroom typography, staggered reveal animation, and editorial-grade charts (line, bar, or range band).",
-    "zh-CN": "NYT-newsroom 排版 + 错峰揭示动画 + 编辑级图表 (折线/柱/范围带)"
-  },
   "license": "Apache-2.0",
   "author": {
     "name": "nexu-io",
@@ -56,10 +48,7 @@
       "video": "https://cdn.jsdelivr.net/gh/nexu-io/open-design@main/plugins/_official/video-templates/frame-data-chart-nyt/preview.mp4"
     },
     "useCase": {
-      "query": {
-        "en": "Use the NYT-Style Data Chart Frame template to turn my content into a frame with NYT-newsroom typography, staggered reveal animation, and editorial-grade charts. Preserve the template's visual signature, use real content and data, and avoid lorem ipsum or placeholder images.",
-        "zh-CN": "用「NYT 风数据图表帧」模板把我的内容做成一段「NYT-newsroom 排版 + 错峰揭示动画 + 编辑级图表 (折线/柱/范围带)」。保持模板的视觉签名，使用真实内容和数据，避免 lorem ipsum 和占位图片。"
-      }
+      "query": "Use the NYT-Style Data Chart Frame template to turn my content into a frame with NYT-newsroom typography, staggered reveal animation, and editorial-grade charts. Preserve the template's visual signature, use real content and data, and avoid lorem ipsum or placeholder images."
     },
     "inputs": [
       {

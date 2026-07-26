@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { DESKTOP_SHELL_PRESENT } from "./fork-shape.js";
+
 const ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..", "..");
 
 type PackageJson = {
@@ -34,15 +36,17 @@ const PACK_LANES = [
 ];
 
 describe("INTERNAL_PACKAGES covers all workspace runtime deps", () => {
-  const requiredPackages = new Set<string>();
-  for (const app of PACKAGED_APPS) {
-    for (const dep of collectWorkspaceRuntimeDeps(app)) {
-      requiredPackages.add(dep);
-    }
-  }
-
   for (const { lane, file } of PACK_LANES) {
-    it(`${lane} lane includes all required workspace packages`, () => {
+    // PACKAGED_APPS spans apps/desktop and apps/packaged, so the required set is
+    // built inside the case: a skipped case must not read the missing manifests
+    // at collection time.
+    it.skipIf(!DESKTOP_SHELL_PRESENT)(`${lane} lane includes all required workspace packages`, () => {
+      const requiredPackages = new Set<string>();
+      for (const app of PACKAGED_APPS) {
+        for (const dep of collectWorkspaceRuntimeDeps(app)) {
+          requiredPackages.add(dep);
+        }
+      }
       const declared = new Set(loadInternalPackageNames(file));
       const missing = [...requiredPackages].filter((pkg) => !declared.has(pkg));
       expect(missing, `${lane} INTERNAL_PACKAGES is missing: ${missing.join(", ")}`).toEqual([]);

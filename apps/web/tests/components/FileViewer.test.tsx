@@ -381,6 +381,26 @@ describe('FileViewer preview scale', () => {
     expect(desktopPreviewAutoFitZoomPercent({ width: 1600, height: 900 }, 1440)).toBe(100);
   });
 
+  it('settles instead of shrinking every time its own scaling widens the preview', () => {
+    // The scaled shell is laid out at `100 / scale` percent, so lowering the zoom
+    // widens the iframe viewport, and the iframe's ResizeObserver re-reports a
+    // wider scrollWidth. Feeding that absolute width back in makes each pass
+    // smaller than the last, with nothing to stop it before the 1% floor.
+    const canvas = { width: 900, height: 700 };
+    const overflowPx = 540;
+    const zooms: number[] = [];
+    let zoom = 100;
+    for (let pass = 0; pass < 8; pass += 1) {
+      const viewportWidth = canvas.width / (zoom / 100);
+      const contentWidth = viewportWidth + overflowPx;
+      zoom = desktopPreviewAutoFitZoomPercent(canvas, contentWidth, viewportWidth);
+      zooms.push(Math.round(zoom * 1000));
+    }
+
+    expect(zoom).toBeCloseTo(62.5);
+    expect(new Set(zooms).size).toBe(1);
+  });
+
   it('measures desktop preview document content width from real iframe layout', () => {
     const doc = document.implementation.createHTMLDocument('preview');
     Object.defineProperty(doc.documentElement, 'scrollWidth', { configurable: true, value: 960 });

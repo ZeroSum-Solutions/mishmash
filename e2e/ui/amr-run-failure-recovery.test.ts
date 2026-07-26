@@ -25,7 +25,7 @@ let codexRuntime: Awaited<ReturnType<typeof createFakeAgentRuntimes>>['codex'];
 const ACTIVE_ARTIFACT_PREVIEW_SELECTOR = '[data-testid="artifact-preview-frame"]:visible, [data-testid="artifact-preview-frame-url-load"]:visible, [data-testid="artifact-preview-frame-srcdoc"]:visible, [data-testid="live-artifact-preview-frame"]:visible';
 const AMR_AGENT = {
   id: 'amr',
-  name: 'Open Design AMR',
+  name: 'MishMash AMR',
   bin: 'vela',
   available: true,
   version: 'test',
@@ -308,7 +308,7 @@ test('[P0] @critical AMR model catalog invalid-key failures authorize and auto-r
   const authorizeAndRetry = page.getByRole('button', { name: /Authorize.*retry/i }).first();
   await expect(authorizeAndRetry).toBeVisible({ timeout: T.long });
   await expect(page.getByRole('button', { name: /^Retry$/i })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Switch to Open Design Cloud & retry/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Switch to MishMash Cloud & retry/i })).toHaveCount(0);
 
   await authorizeAndRetry.click();
   await expect.poll(() => loginRequested, { timeout: T.medium }).toBe(true);
@@ -316,7 +316,7 @@ test('[P0] @critical AMR model catalog invalid-key failures authorize and auto-r
   await expect(page.getByText('AMR model catalog auth retry recovered.').first()).toBeVisible({ timeout: T.long });
 });
 
-test('[P0] @critical non-AMR model failures promote Open Design AMR and auto-retry after sign-in', async ({ page }) => {
+test('[P0] @critical non-AMR model failures promote MishMash AMR and auto-retry after sign-in', async ({ page }) => {
   await stubCatalogsEmpty(page);
   await stubRuntimeAgents(page);
   let loggedIn = false;
@@ -410,7 +410,7 @@ test('[P0] @critical non-AMR model failures promote Open Design AMR and auto-ret
 
   await gotoProject(page, projectId);
 
-  const switchAndRetry = page.getByRole('button', { name: /Switch to Open Design Cloud & retry/i }).first();
+  const switchAndRetry = page.getByRole('button', { name: /Switch to MishMash Cloud & retry/i }).first();
   await expect(switchAndRetry).toBeVisible({ timeout: T.long });
   await switchAndRetry.click();
 
@@ -640,7 +640,7 @@ test('[P0] @critical Settings preserves AMR account, recharge shortcut, and mode
 
   await settings.getByTestId('settings-agent-select-codex').click();
   await expect(settings.getByTestId('settings-agent-select-codex')).toHaveAttribute('aria-pressed', 'true');
-  await expect(settings.getByTestId('settings-agent-select-amr')).toContainText('Open Design');
+  await expect(settings.getByTestId('settings-agent-select-amr')).toContainText('MishMash');
 
   await settings.getByTestId('settings-agent-select-amr').click();
   await expect(settings.getByTestId('settings-agent-select-amr')).toHaveAttribute('aria-pressed', 'true');
@@ -693,7 +693,7 @@ test('[P0] after an AMR failure the user can switch to Codex and complete a fres
   await gotoProject(page, amr.projectId);
   await sendPrompt(page, 'AMR auth failure before switch smoke');
   await expect(runErrorCard(page)).toContainText(
-    /Open Design agent isn't signed in yet|AMR sign-in is required/i,
+    /MishMash Cloud agent isn't signed in yet|AMR sign-in is required/i,
     { timeout: T.long },
   );
   await expect(page.getByRole('button', { name: /Authorize.*retry/i }).first()).toBeVisible();
@@ -791,7 +791,7 @@ test('[P0] upstream outages keep Retry available without promoting AMR', async (
 
   await expect(page.getByRole('button', { name: /^Retry$/i }).first()).toBeVisible({ timeout: T.long });
   await expect(page.getByText(/Generation service unavailable|model provider is temporarily unavailable/i).first()).toBeVisible();
-  await expect(page.getByRole('button', { name: /Switch to Open Design Cloud & retry/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Switch to MishMash Cloud & retry/i })).toHaveCount(0);
   await expect(page.getByText(/Model call failed/i)).toHaveCount(0);
 });
 
@@ -868,7 +868,7 @@ test('[P1] prompt-too-large run failure guidance shows actionable copy and expan
   await expect(card).toContainText('Input too long', { timeout: T.long });
   await expect(card).toContainText("This turn exceeded the model's context limit.");
   await expect(page.getByRole('button', { name: /^Retry$/ }).first()).toBeVisible();
-  await expect(page.getByRole('button', { name: /Switch to Open Design Cloud & retry/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Switch to MishMash Cloud & retry/i })).toHaveCount(0);
 
   const sourceToggle = card.getByRole('button', { name: /View details/ });
   await expect(sourceToggle).toHaveAttribute('aria-expanded', 'false');
@@ -956,7 +956,7 @@ test('[P0] antigravity rate limits offer terminal model switching without promot
   const launchTerminal = page.getByRole('button', { name: /Switch model in terminal/i }).first();
   await expect(launchTerminal).toBeVisible({ timeout: T.long });
   await expect(page.getByRole('button', { name: /^Retry$/i }).first()).toBeVisible();
-  await expect(page.getByRole('button', { name: /Switch to Open Design Cloud & retry/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Switch to MishMash Cloud & retry/i })).toHaveCount(0);
 
   await launchTerminal.click();
 

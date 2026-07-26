@@ -3,17 +3,9 @@
   "specVersion": "1.0.0",
   "name": "video-template-frame-data-rollup",
   "title": "Data Rollup Frame",
-  "title_i18n": {
-    "en": "Data Rollup Frame",
-    "zh-CN": "数据滚动帧"
-  },
   "version": "0.1.0",
   "publishedAt": "2026-06-11T09:17:17Z",
   "description": "A native Remotion data frame — bars grow from zero by real data via spring physics while the figures roll 0→target in sync.",
-  "description_i18n": {
-    "en": "A native Remotion data frame — bars grow from zero by real data via spring physics while the figures roll 0→target in sync.",
-    "zh-CN": "数据滚动帧:原生 Remotion 数据动画 — 柱子按真实数据用 spring 从 0 长上去、数字同步从 0 滚到目标值。静态 HTML 图表做不出的'数字活起来'效果。"
-  },
   "license": "Apache-2.0",
   "author": {
     "name": "nexu-io",
@@ -57,10 +49,7 @@
       "poster": "https://cdn.jsdelivr.net/gh/nexu-io/open-design@main/plugins/_official/video-templates/frame-data-rollup/preview.png"
     },
     "useCase": {
-      "query": {
-        "en": "Use the Data Rollup Frame to show my weekly metrics as a bar chart where the bars grow from zero and the numbers count up to their real values. Feed it the actual data; keep it to a handful of bars. This is a Remotion-enhanced data frame — the animation should make the figures feel alive.",
-        "zh-CN": "用「数据滚动帧」把我的每周指标做成柱状图:柱子从 0 长上去、数字滚动到真实数值。喂真实数据,柱子控制在几根以内。这是 Remotion 增强的数据帧,动画要让数字有'活起来'的感觉。"
-      }
+      "query": "Use the Data Rollup Frame to show my weekly metrics as a bar chart where the bars grow from zero and the numbers count up to their real values. Feed it the actual data; keep it to a handful of bars. This is a Remotion-enhanced data frame — the animation should make the figures feel alive."
     },
     "inputs": [
       {

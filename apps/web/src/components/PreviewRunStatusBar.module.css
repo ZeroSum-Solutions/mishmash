@@ -48,6 +48,34 @@
   color: var(--text-faint);
 }
 
+/* `.root` is pointer-events: none so the hint never eats canvas clicks. The
+   dismiss control is the one interactive affordance, so it opts back in. */
+.dismiss {
+  pointer-events: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+  transition: color 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.dismiss::before {
+  content: '·';
+  margin-right: 6px;
+  color: var(--text-faint);
+  text-decoration: none;
+}
+
+.dismiss:hover,
+.dismiss:focus-visible {
+  color: var(--text);
+}
+
 .failed .label {
   /* The preview is intentionally a quiet, canvas-local hint. Keep the
      failure label neutral here; the full Chat failure card carries the

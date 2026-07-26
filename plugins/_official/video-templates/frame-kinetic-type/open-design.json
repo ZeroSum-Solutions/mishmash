@@ -3,17 +3,9 @@
   "specVersion": "1.0.0",
   "name": "video-template-frame-kinetic-type",
   "title": "Kinetic Type",
-  "title_i18n": {
-    "en": "Kinetic Type",
-    "zh-CN": "动态排版"
-  },
   "version": "0.1.0",
   "publishedAt": "2026-06-11T09:17:17Z",
   "description": "Bold kinetic typography promo",
-  "description_i18n": {
-    "en": "Bold kinetic typography promo",
-    "zh-CN": "大胆的动态排版动效，适用于有冲击力的宣传标题、口号与开场。"
-  },
   "license": "Apache-2.0",
   "author": {
     "name": "heygen-com / Hyperframes",
@@ -54,10 +46,7 @@
       "video": "https://cdn.jsdelivr.net/gh/nexu-io/open-design@main/plugins/_official/video-templates/frame-kinetic-type/preview.mp4"
     },
     "useCase": {
-      "query": {
-        "en": "Use the Kinetic Type HyperFrames template to create a 15s presentation video. Replace the sample copy with real content, preserve the template's motion signature, and render to MP4.",
-        "zh-CN": "使用「动态排版」HyperFrames 模板创建一段约 15 秒的presentation动效视频。把示例文案替换为真实内容，保留模板的动效签名，并渲染为 MP4。"
-      }
+      "query": "Use the Kinetic Type HyperFrames template to create a 15s presentation video. Replace the sample copy with real content, preserve the template's motion signature, and render to MP4."
     },
     "inputs": [
       {

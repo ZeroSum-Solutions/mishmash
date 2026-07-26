@@ -960,13 +960,37 @@ export function effectivePreviewScale(
   return Math.min(previewScale, fitScale);
 }
 
+/**
+ * Desktop auto-fit zoom, expressed against the width the content would occupy at
+ * 100%.
+ *
+ * The scaled shell is laid out at `100 / scale` percent (see
+ * previewScaleShellStyle), so lowering the zoom widens the iframe's viewport, and
+ * the bridge's ResizeObserver immediately re-reports a wider scrollWidth. Fitting
+ * to that absolute width makes every pass smaller than the last with nothing to
+ * arrest it — a page that overflows its viewport walks 100% -> 79% -> 7% down to
+ * the 1% floor on its own.
+ *
+ * `measuredViewportWidth` is the width the content was measured *in*. Fitting to
+ * the overflow beyond that viewport, rather than to the raw width, makes the
+ * result a fixed point: widening the shell grows the measured width and the
+ * viewport by the same amount, so the computed zoom stops moving.
+ */
 export function desktopPreviewAutoFitZoomPercent(
   canvasSize: PreviewCanvasSize | undefined,
   contentWidth?: number | null,
+  measuredViewportWidth?: number | null,
 ): number {
   if (!canvasSize?.width || !Number.isFinite(canvasSize.width)) return 100;
-  if (!contentWidth || !Number.isFinite(contentWidth) || contentWidth <= canvasSize.width) return 100;
-  return Math.max(1, Math.min(100, (canvasSize.width / contentWidth) * 100));
+  if (!contentWidth || !Number.isFinite(contentWidth)) return 100;
+  const viewportWidth =
+    measuredViewportWidth && Number.isFinite(measuredViewportWidth) && measuredViewportWidth > 0
+      ? measuredViewportWidth
+      : canvasSize.width;
+  const overflow = Math.max(0, contentWidth - viewportWidth);
+  const naturalWidth = canvasSize.width + overflow;
+  if (naturalWidth <= canvasSize.width) return 100;
+  return Math.max(1, Math.min(100, (canvasSize.width / naturalWidth) * 100));
 }
 
 export function desktopPreviewDocumentContentWidth(doc: Document | null | undefined): number | null {
@@ -6358,7 +6382,13 @@ function HtmlViewer({
   const [previewBodyRef, previewBodySize] = usePreviewCanvasSize<HTMLDivElement>();
   const [commentComposerHost, setCommentComposerHost] = useState<HTMLDivElement | null>(null);
   const [commentPreviewCanvasNode, setCommentPreviewCanvasNode] = useState<HTMLDivElement | null>(null);
-  const [desktopPreviewContentWidth, setDesktopPreviewContentWidth] = useState<number | null>(null);
+  // The measured content width and the viewport width it was measured in have to
+  // travel together: auto-fit works off the difference between them, and pairing a
+  // fresh width with a stale viewport is exactly what starts the shrink spiral.
+  const [desktopPreviewContentMetrics, setDesktopPreviewContentMetrics] = useState<
+    { width: number; viewportWidth: number | null } | null
+  >(null);
+  const desktopPreviewContentWidth = desktopPreviewContentMetrics?.width ?? null;
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const urlPreviewIframeRef = useRef<HTMLIFrameElement | null>(null);
   const srcDocPreviewIframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -6446,7 +6476,7 @@ function HtmlViewer({
   useEffect(() => {
     setManualEditSrcDocActive(false);
     setManualEditFrozenSource(null);
-    setDesktopPreviewContentWidth(null);
+    setDesktopPreviewContentMetrics(null);
   }, [projectId, file.name]);
   useEffect(() => {
     onCommentModeChange?.(commentPanelOpen);
@@ -6893,7 +6923,11 @@ function HtmlViewer({
   const speakerNotesTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const boardPreviewScaleOptions = localCommentSideDockActive ? { canvasPadding: 0 } : undefined;
   const previewZoomPercent = zoomMode === 'auto' && previewViewport === 'desktop'
-    ? desktopPreviewAutoFitZoomPercent(boardPreviewCanvasSize, desktopPreviewContentWidth)
+    ? desktopPreviewAutoFitZoomPercent(
+        boardPreviewCanvasSize,
+        desktopPreviewContentWidth,
+        desktopPreviewContentMetrics?.viewportWidth,
+      )
     : zoom;
   const previewScale = previewZoomPercent / 100;
   const previewZoomText = zoomPercentLabel(previewZoomPercent);
@@ -7887,7 +7921,17 @@ function HtmlViewer({
       const measuredWidth = typeof data.width === 'number' && Number.isFinite(data.width) && data.width > 0
         ? Math.ceil(data.width)
         : null;
-      setDesktopPreviewContentWidth((current) => (current === measuredWidth ? current : measuredWidth));
+      // Read the shell's laid-out width now, while it still matches the document
+      // the iframe just measured. `clientWidth` is pre-transform, so it is the
+      // CSS viewport the content actually laid out in.
+      const frameViewportWidth = iframeRef.current?.clientWidth || null;
+      setDesktopPreviewContentMetrics((current) => {
+        if (measuredWidth === null) return current === null ? current : null;
+        if (current && current.width === measuredWidth && current.viewportWidth === frameViewportWidth) {
+          return current;
+        }
+        return { width: measuredWidth, viewportWidth: frameViewportWidth };
+      });
     }
     window.addEventListener('message', onMessage);
     window.addEventListener('message', onRestoreRequest);

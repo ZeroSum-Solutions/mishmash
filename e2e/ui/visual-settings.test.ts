@@ -27,7 +27,7 @@ test('[P2] captures the settings execution surface', async ({ page }) => {
   await captureVisual(page, 'visual-settings-execution');
 });
 
-test('[P1] captures the settings Open Design account balance surface', async ({ page }) => {
+test('[P1] captures the settings MishMash account balance surface', async ({ page }) => {
   test.setTimeout(T.xlong);
 
   await configureVisualPage(page, {
@@ -44,7 +44,7 @@ test('[P1] captures the settings Open Design account balance surface', async ({ 
 
   const dialog = await prepareVisualSettingsDialog(page);
   const amrCard = dialog.getByTestId('settings-agent-card-amr');
-  await expect(amrCard).toContainText('Open Design');
+  await expect(amrCard).toContainText('MishMash');
   await expect(amrCard).toContainText('plus');
   await expect(amrCard).toContainText('$247.51');
   await expect(dialog.getByTestId('settings-agent-card-amr-upgrade')).toBeVisible();

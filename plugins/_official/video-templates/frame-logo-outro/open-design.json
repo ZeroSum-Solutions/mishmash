@@ -3,17 +3,9 @@
   "specVersion": "1.0.0",
   "name": "video-template-frame-logo-outro",
   "title": "Logo Outro Frame",
-  "title_i18n": {
-    "en": "Logo Outro Frame",
-    "zh-CN": "品牌 Logo 收尾帧"
-  },
   "version": "0.1.0",
   "publishedAt": "2026-06-11T09:17:17Z",
   "description": "Segmented logo assembly, glow bloom, and tagline reveal for video outros or brand closing frames.",
-  "description_i18n": {
-    "en": "Segmented logo assembly, glow bloom, and tagline reveal for video outros or brand closing frames.",
-    "zh-CN": "Logo 分块组装入场 + glow bloom + tagline 揭示, 适合视频片尾 / 品牌闭幕"
-  },
   "license": "Apache-2.0",
   "author": {
     "name": "nexu-io",
@@ -56,10 +48,7 @@
       "video": "https://cdn.jsdelivr.net/gh/nexu-io/open-design@main/plugins/_official/video-templates/frame-logo-outro/preview.mp4"
     },
     "useCase": {
-      "query": {
-        "en": "Use the Logo Outro Frame template to turn my content into a video outro or brand closing frame with segmented logo assembly, glow bloom, and tagline reveal. Preserve the template's visual signature, use real content and data, and avoid lorem ipsum or placeholder images.",
-        "zh-CN": "用「品牌 Logo 收尾帧」模板把我的内容做成一段「Logo 分块组装入场 + glow bloom + tagline 揭示, 适合视频片尾 / 品牌闭幕」。保持模板的视觉签名，使用真实内容和数据，避免 lorem ipsum 和占位图片。"
-      }
+      "query": "Use the Logo Outro Frame template to turn my content into a video outro or brand closing frame with segmented logo assembly, glow bloom, and tagline reveal. Preserve the template's visual signature, use real content and data, and avoid lorem ipsum or placeholder images."
     },
     "inputs": [
       {

@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { DESKTOP_SHELL_PRESENT } from "./fork-shape.js";
+
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const desktopPackageRoot = join(repoRoot, "apps", "desktop");
 const packagedSourcePath = join(repoRoot, "apps", "packaged", "src", "index.ts");
@@ -15,7 +17,7 @@ function readDesktopPackageJson(): {
   return JSON.parse(readFileSync(join(desktopPackageRoot, "package.json"), "utf8"));
 }
 
-describe("desktop package runtime shape", () => {
+describe.skipIf(!DESKTOP_SHELL_PRESENT)("desktop package runtime shape", () => {
   it("keeps exported desktop types inside the published dist allowlist", () => {
     const pkg = readDesktopPackageJson();
 
