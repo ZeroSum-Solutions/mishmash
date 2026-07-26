@@ -119,6 +119,10 @@ const counterPath = ${JSON.stringify(counterPath)};
 const grandchildPidPath = ${JSON.stringify(grandchildPidPath)};
 if (process.argv.includes('--version')) { fs.writeSync(1, 'claude-code 1.0.0-orphan\\n'); process.exit(0); }
 if (process.argv.includes('--help')) { fs.writeSync(1, 'Usage: claude -p\\n'); process.exit(0); }
+// The daemon's login probe (claudeAgentDef.authProbe: ['auth','status']) races
+// the chat spawn against this same binary; answering it without touching the
+// counter or argv log keeps the attempt sequence deterministic.
+if (process.argv.includes('auth')) { console.log('Logged in (fixture)'); process.exit(0); }
 // Auxiliary daemon invocations (memory extraction / title generation) must
 // not consume the chat-attempt counter.
 if (!process.argv.includes('--session-id') && !process.argv.includes('--resume')) {

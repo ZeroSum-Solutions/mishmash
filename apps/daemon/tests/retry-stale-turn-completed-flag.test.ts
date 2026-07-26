@@ -118,6 +118,10 @@ if (process.argv.includes('--help')) {
   console.log('Usage: claude -p [--include-partial-messages] [--add-dir DIR]');
   process.exit(0);
 }
+// The daemon's login probe (claudeAgentDef.authProbe: ['auth','status']) races
+// the chat spawn against this same binary; answering it without touching the
+// counter or argv log keeps the attempt sequence deterministic.
+if (process.argv.includes('auth')) { console.log('Logged in (fixture)'); process.exit(0); }
 let attempts = 0;
 try { attempts = Number(fs.readFileSync(counterPath, 'utf8')) || 0; } catch {}
 fs.writeFileSync(counterPath, String(attempts + 1));
