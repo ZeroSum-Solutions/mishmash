@@ -29,6 +29,7 @@ import {
   reportRewrite,
   rewriteMirror,
 } from "./rewrite-mirror.mjs";
+import { clampScrollAnimationOverflow, reportClamp } from "./clamp-scroll-animation-overflow.mjs";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -209,6 +210,15 @@ if (webfontCss.length) console.log(`▸ webfont CSS that needs self-hosting (dom
 // breaks the moment that host is unreachable.
 console.log(`▸ Rewriting absolute ${origin} references to local paths`);
 reportRewrite(rewriteMirror({ siteDir, origin }), origin, false);
+
+// Salient/WPBakery scroll-linked parallax rows (data-scroll-animation="true")
+// can latch a stale in-view flag before the mirror's layout settles, applying
+// a JS transform of several thousand pixels and inflating the served
+// document's scrollWidth. Contain those rows to their own box so a faithful
+// mirror doesn't present a document far wider than its viewport on first
+// paint. See clamp-scroll-animation-overflow.mjs for the full mechanism.
+console.log(`▸ Clamping scroll-linked overflow`);
+reportClamp(clampScrollAnimationOverflow({ siteDir }), false);
 
 console.log(`▸ Next: self-host third-party fonts + strip tracking -> cd ${siteDir} && python3 -m http.server 8124`);
 await browser.close();
