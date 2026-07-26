@@ -1611,6 +1611,15 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       );
     }
     const run = design.runs.create(meta);
+    // Pin the queued assistant-message row before the run can fail: a pre-spawn
+    // failure otherwise has no row for reconcileAssistantMessageOnRunEnd's
+    // terminal-status UPDATE to flip, and the client keeps a phantom pending
+    // message. Mirrors the POST /api/runs handler.
+    try {
+      pinAssistantMessageOnRunCreate(db, run);
+    } catch (err) {
+      console.warn('[runs] message create pin failed', err);
+    }
     design.runs.stream(run, req, res);
     reconcileAssistantMessageOnRunEnd(db, design.runs, run);
     design.runs.start(run, () => startChatRun(meta, run));

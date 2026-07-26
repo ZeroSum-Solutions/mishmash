@@ -4,7 +4,7 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { startServer } from '../src/server.js';
 
@@ -53,6 +53,15 @@ describe('AMR (vela) ACP session resume — full server cycle', () => {
   const originalEnv = snapshotEnv();
   let started: StartedServer | null = null;
   let binDir: string | null = null;
+
+  beforeEach(() => {
+    // The server's spawn gate (readVelaLoginStatus) requires a runtime key +
+    // link URL, or a real ~/.amr/config.json on the executing machine. Stub the
+    // env branch so the suite does not depend on the host's AMR sign-in state —
+    // same pattern as chat-route.test.ts and run-retry-runtime.test.ts.
+    process.env.VELA_RUNTIME_KEY = 'test-amr-runtime-key';
+    process.env.VELA_LINK_URL = 'https://amr-link.invalid/v1';
+  });
 
   afterEach(async () => {
     await Promise.resolve(started?.shutdown?.());
@@ -472,6 +481,8 @@ function snapshotEnv(): Record<string, string | undefined> {
     OPEN_DESIGN_TELEMETRY_RELAY_URL: process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL,
     POSTHOG_KEY: process.env.POSTHOG_KEY,
     POSTHOG_HOST: process.env.POSTHOG_HOST,
+    VELA_RUNTIME_KEY: process.env.VELA_RUNTIME_KEY,
+    VELA_LINK_URL: process.env.VELA_LINK_URL,
   };
 }
 

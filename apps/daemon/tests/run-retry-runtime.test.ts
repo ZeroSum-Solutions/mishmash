@@ -87,7 +87,7 @@ describe('same-run retry runtime', () => {
     expect(run.status).toBe('succeeded');
     expect(run.id).toBeTruthy();
 
-    const events = await readRunEvents(run.eventsLogPath);
+    const events = await readRunEvents(started.url, run.id);
     expect(events.filter((event) => event.event === 'start')).toHaveLength(2);
     expect(events.filter((event) => event.event === 'end')).toHaveLength(1);
 
@@ -144,7 +144,7 @@ describe('same-run retry runtime', () => {
     const run = await createAndWaitForRun(started.url, 'opencode');
     expect(run.status).toBe('succeeded');
 
-    const events = await readRunEvents(run.eventsLogPath);
+    const events = await readRunEvents(started.url, run.id);
     expect(events.filter((event) => event.event === 'start')).toHaveLength(2);
     expect(events.filter((event) => event.event === 'run_retry_attempted')).toHaveLength(1);
     expect(events.find((event) => event.event === 'run_retry_attempted')?.data).toMatchObject({
@@ -178,7 +178,7 @@ describe('same-run retry runtime', () => {
     const run = await createAndWaitForRun(started.url, 'amr');
     expect(run.status).toBe('succeeded');
 
-    const events = await readRunEvents(run.eventsLogPath);
+    const events = await readRunEvents(started.url, run.id);
     expect(events.filter((event) => event.event === 'start')).toHaveLength(2);
     expect(events.filter((event) => event.event === 'run_retry_attempted')).toHaveLength(1);
     expect(events.find((event) => event.event === 'run_retry_attempted')?.data).toMatchObject({
@@ -222,7 +222,7 @@ describe('same-run retry runtime', () => {
     expect(run.status).toBe('succeeded');
     expect(run.id).toBeTruthy();
 
-    const events = await readRunEvents(run.eventsLogPath);
+    const events = await readRunEvents(started.url, run.id);
     // Two spawns (silent stall + recovered retry), one terminal end.
     expect(events.filter((event) => event.event === 'start')).toHaveLength(2);
     expect(events.filter((event) => event.event === 'end')).toHaveLength(1);
@@ -315,6 +315,10 @@ const counterPath = ${JSON.stringify(counterPath)};
 const argsLogPath = ${JSON.stringify(argsLogPath)};
 if (process.argv.includes('--version')) { console.log('claude-code 1.0.0-crossgen'); process.exit(0); }
 if (process.argv.includes('--help')) { console.log('Usage: claude -p'); process.exit(0); }
+// The daemon's login probe (claudeAgentDef.authProbe: ['auth','status']) races
+// the chat spawn against this same binary; answering it without touching the
+// counter keeps the attempt sequence deterministic.
+if (process.argv.includes('auth')) { console.log('Logged in (fixture)'); process.exit(0); }
 let attempts = 0;
 try { attempts = Number(fs.readFileSync(counterPath, 'utf8')) || 0; } catch {}
 fs.writeFileSync(counterPath, String(attempts + 1));
@@ -383,6 +387,14 @@ if (process.argv.includes('--version')) {
 }
 if (process.argv.includes('--help')) {
   console.log('Usage: claude -p [--include-partial-messages] [--add-dir DIR]');
+  process.exit(0);
+}
+// The daemon's login probe (claudeAgentDef.authProbe: ['auth','status']) races
+// the chat spawn against this same binary. Untreated, the probe consumes the
+// attempts=0 failure branch and the tracked run's first attempt "succeeds"
+// without ever retrying — the flake this guard removes.
+if (process.argv.includes('auth')) {
+  console.log('Logged in (fixture)');
   process.exit(0);
 }
 let attempts = 0;
@@ -494,6 +506,13 @@ if (process.argv.includes('--help')) {
   console.log('Usage: claude -p [--include-partial-messages] [--add-dir DIR]');
   process.exit(0);
 }
+// The daemon's login probe (claudeAgentDef.authProbe: ['auth','status']) races
+// the chat spawn against this same binary; answering it without touching the
+// counter keeps the attempt sequence deterministic.
+if (process.argv.includes('auth')) {
+  console.log('Logged in (fixture)');
+  process.exit(0);
+}
 let attempts = 0;
 try { attempts = Number(fs.readFileSync(counterPath, 'utf8')) || 0; } catch {}
 fs.writeFileSync(counterPath, String(attempts + 1));
@@ -582,13 +601,60 @@ async function waitForRun(url: string, runId: string): Promise<RunStatus> {
   throw new Error(`run ${runId} did not finish`);
 }
 
-async function readRunEvents(file: string): Promise<RunEvent[]> {
-  const raw = await readFile(file, 'utf8');
-  return raw
-    .trim()
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as RunEvent);
+async function readRunEvents(url: string, runId: string): Promise<RunEvent[]> {
+  // Assert against the daemon's in-memory ring buffer, replayed by
+  // GET /api/runs/:id/events — not against events.jsonl. Disk persistence is
+  // explicitly best-effort (ensureLogStream drops buffered writes when the
+  // stream errors under fd pressure), so early events can be legitimately
+  // absent from the file while the ring buffer — what SSE clients actually
+  // consume — is complete. The run is terminal before this is called, so the
+  // replay is finite and closes with the terminal `end` event.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+  const events: RunEvent[] = [];
+  try {
+    const res = await fetch(`${url}/api/runs/${runId}/events`, {
+      signal: controller.signal,
+      headers: { accept: 'text/event-stream' },
+    });
+    if (!res.ok || !res.body) return events;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let sawEnd = false;
+    while (!sawEnd) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sep = buffer.indexOf('\n\n');
+      while (sep >= 0) {
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        sep = buffer.indexOf('\n\n');
+        let event = 'message';
+        let data = '';
+        for (const line of frame.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim();
+          else if (line.startsWith('data:')) data += line.slice(5).trim();
+        }
+        if (!event || frame.startsWith(':')) continue;
+        let parsed: Record<string, unknown> = {};
+        try {
+          parsed = JSON.parse(data) as Record<string, unknown>;
+        } catch {
+          // keepalives and no-payload events replay without JSON data
+        }
+        events.push({ event, data: parsed });
+        if (event === 'end') sawEnd = true;
+      }
+    }
+  } catch {
+    // timeout/abort: return whatever replayed so assertions fail with real data
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
+  }
+  return events;
 }
 
 async function readClaudeAttemptArgs(file: string): Promise<string[][]> {
