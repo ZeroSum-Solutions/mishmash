@@ -38,30 +38,41 @@ License", effective 2025-04-30, last modified 2025-05-30, © Webflow.
 
 ## Decision
 
-**GSAP stays.** Flip `gsap-default-permission` from `PENDING-DECISION` to `RETAINED`.
+**GSAP stays, CONDITIONALLY.** `gsap-default-permission` moves from `PENDING-DECISION`
+to `CONDITIONAL` — not `RETAINED`.
 
-The determining fact is the FAQ. MishMash is an AI harness that spawns a coding-agent
-CLI which writes GSAP **code** into artifacts. That is precisely the category the
-licensor blessed by name — and the list it blesses even includes Webstudio, a direct
-Webflow competitor. The prohibition targets *no-code visual animation builders*, which
-MishMash is not.
+Code generation is the well-covered case. MishMash spawns a coding-agent CLI that writes
+GSAP **code** into artifacts, and that is the category the licensor blessed by name — the
+list even includes Webstudio, a direct Webflow competitor. For that use, the position is
+strong.
 
-## The line we must not cross
+## Correction: the exposure is present-tense, not future
 
-The prohibition is drawn around **visual, no-code animation authoring**, not around
-competing with Webflow generally. So the risk is not "MishMash competes with Webflow" —
-it is a specific future feature shape.
+An earlier draft of this decision framed visual motion authoring as a *future* risk to
+escalate on. **That was wrong, and an adversarial review caught it.**
 
-**Escalate to written consent from Webflow before shipping any of these:**
+`design-templates/tweaks/SKILL.md` already ships a **`--motion` control (Off / Subtle /
+Lively)** that maps to a `--motion-mult` variable scaling every `transition-duration`
+and `animation-duration` in a rendered artifact. That is a visual interface through
+which a user edits animation timing. It exists today.
 
-- A visual timeline / keyframe editor for motion.
-- Any surface where a user authors or edits an animation by dragging, scrubbing, or
-  configuring it in a UI instead of by generating code.
-- Extending the existing `tweaks` / `palette` / inspect-and-edit bridges from styling
-  into **motion** authoring. This is the realistic path by which MishMash drifts across
-  the line without anyone deciding to.
+This is not a finding of infringement. `--motion` is a coarse three-position global
+multiplier, not a timeline or keyframe editor, and whether it is "similar to Webflow's
+visual animation building capabilities" is genuinely uncertain. But the claim that the
+line is safely in the future is false, and the risk register must say so.
 
-Generating, previewing, and re-generating GSAP *code* is not affected.
+## Conditions
+
+1. **Code generation is the sanctioned path.** Generating, previewing, and re-generating
+   GSAP code is unaffected.
+2. **Do not expand visual motion authoring.** No timeline or keyframe editor; no
+   per-element easing/duration UI; no extending `tweaks` / `palette` / inspect-and-edit
+   beyond the existing global `--motion` multiplier. Any expansion needs written consent
+   from Webflow first.
+3. **Pin exact GSAP versions.** §VI.2 preserves rights to versions released before an
+   amendment, which is only worth anything if the version is pinned. Note the `gsap-*`
+   skills currently recommend an unversioned `npm install gsap` — that gap should close.
+4. **Re-read this decision** on any GSAP version bump or licence revision.
 
 ## Residual risks accepted
 

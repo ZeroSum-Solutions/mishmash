@@ -25,10 +25,10 @@ const EXPECTED_DIRECTIVES: Readonly<Record<string, string>> = {
   "google-design-md-tooling": "RETAINED",
   "mishmash-native-design-systems": "RETAINED",
   "mishmash-skills-on-merit": "RETAINED",
-  "gsap-default-permission": "RETAINED",
+  "gsap-default-permission": "CONDITIONAL",
 };
 
-const LEGAL_DIRECTIVES = new Set(["DISCLAIMED", "RETAINED", "PENDING-DECISION"]);
+const LEGAL_DIRECTIVES = new Set(["DISCLAIMED", "RETAINED", "PENDING-DECISION", "CONDITIONAL"]);
 
 interface AuthorityFile {
   version: number;

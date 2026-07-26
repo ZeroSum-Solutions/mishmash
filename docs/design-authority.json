@@ -39,8 +39,8 @@
     },
     {
       "subject": "gsap-default-permission",
-      "directive": "RETAINED",
-      "label": "GSAP as a sanctioned default motion library — resolved RETAINED by docs/decisions/gsap-licensing.md; escalate before shipping any visual/no-code animation authoring surface"
+      "directive": "CONDITIONAL",
+      "label": "GSAP permitted for CODE GENERATION only. Present-tense exposure: the Tweaks --motion control (design-templates/tweaks/SKILL.md) is already a visual surface that scales transition/animation durations. Do not expand visual motion authoring; pin exact GSAP versions. See docs/decisions/gsap-licensing.md"
     }
   ]
 }

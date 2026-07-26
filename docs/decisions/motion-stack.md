@@ -58,9 +58,40 @@ drive the same property on the same element.
 ### Adoption rule
 
 Anything in the "not yet adopted" rows enters **one at a time**, and each entry must
-ship with a fixture that passes `e2e/tests/motion-gate.test.ts`. A library that cannot
-demonstrate a gate-passing reference is not adopted. This is the whole point of having
-built the gate first.
+ship with a fixture that passes `e2e/tests/motion-gate.test.ts` *and* a reviewer
+confirming the invariants above by reading the code. Both, because — see below — the
+gate alone does not enforce the invariants.
+
+## What the gate actually catches, and what it does not
+
+An adversarial review forced this section, and it corrects an overstatement in the
+first draft.
+
+**What it catches:** sustained main-thread invalidation. It measures rAF inter-frame
+gaps and native Long Tasks while driving real wheel input, and it reliably separates a
+page doing continuous layout thrash (24 dropped frames, 22 long tasks, 1167ms blocking)
+from one that is not (0/0/0/0).
+
+**What it does not catch.** A sensitivity probe against the reference fixture found
+that breaking rAF batching *alone*, swapping `transform` for `top` *alone*, or even
+`top` + `getBoundingClientRect` + no rAF *combined*, all still **passed**. Failure
+required additionally making the geometry math non-converging. The reason: with cached
+geometry, most per-frame writes settle to steady no-op values and Chromium skips
+re-invalidation.
+
+So the gate is a **cliff detector, not a gradient detector**. It will catch a
+catastrophic regression. It will not catch gradual degradation, and it does not verify
+that invariants 1–6 hold. Two further limits worth stating plainly:
+
+- It runs **headless** (`chromium.launch()` with default args). rAF gaps and Long Tasks
+  measure renderer main-thread stalls; they do not measure compositor cadence, GPU
+  raster cost, vsync, or real-device thermals. "No main-thread pathology under a
+  synthetic workload" is what a pass means — not "smooth for users."
+- Its negative control depends on the janky fixture staying pathological. If a future
+  Chromium optimises that pattern away, the gate goes quietly green and needs
+  recalibration rather than celebration.
+
+Treat a green gate as a floor, not a certificate.
 
 ## Consequences
 

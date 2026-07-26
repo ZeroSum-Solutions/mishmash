@@ -396,22 +396,26 @@ map together; editing this section alone changes nothing.
 
 Current state, for readers: the operator's personal design-contract workflow, skill
 reach-order, frontend-stack defaults, and `design.mdc` are **disclaimed**. Google's
-`@google/design.md` tooling, MishMash's own `design-systems/`, the `skills/` tree,
-and GSAP as a sanctioned default are **retained**.
+`@google/design.md` tooling, MishMash's own `design-systems/`, and the `skills/` tree
+are **retained**. GSAP is **conditional** — code generation only.
 
-**On GSAP.** GSAP is first-party motion infrastructure here (the `gsap-*` skills under
-`skills/`) and is a **sanctioned default**, resolved by
-`docs/decisions/gsap-licensing.md`. GSAP is free for commercial use including all
-plugins, but it is proprietary and Webflow-owned, not OSI open source.
+**On GSAP.** GSAP is first-party motion infrastructure here (the `gsap-*` skills) and is
+**CONDITIONAL**, resolved by `docs/decisions/gsap-licensing.md`. Free for commercial use
+including all plugins, but proprietary and Webflow-owned, not OSI open source.
 
-The one line that matters: GSAP's licence prohibits using it in **no-code visual
-animation builders** that compete with Webflow's animation authoring. Generating GSAP
-*code* is explicitly permitted — the licensor's own FAQ blesses AI tools doing exactly
-that. So **escalate for written consent before shipping any visual timeline/keyframe
-editor, or extending the `tweaks`/`palette`/inspect-and-edit bridges from styling into
-motion authoring.** That last one is the realistic way this repo drifts across the line
-without anyone deciding to. Pin GSAP versions: the licence is unilaterally amendable,
-and version-pinning is what makes an amendment a reviewable checkpoint.
+The licence prohibits GSAP in **no-code visual animation builders** competing with
+Webflow. Generating GSAP *code* is explicitly permitted — the licensor's FAQ blesses AI
+tools doing exactly that. **Present-tense exposure:** `design-templates/tweaks/SKILL.md`
+already ships a `--motion` control (Off/Subtle/Lively) that scales every
+`transition-duration` and `animation-duration` in an artifact. That is a visual surface
+editing animation timing, and it exists today — an adversarial review corrected an
+earlier draft that wrongly framed this as a future-only risk.
+
+So: **do not expand visual motion authoring** beyond that global multiplier. No timeline
+or keyframe editor, no per-element easing/duration UI, no extending
+`tweaks`/`palette`/inspect-and-edit into motion. Any expansion needs written Webflow
+consent first. Pin exact GSAP versions — the licence is unilaterally amendable and
+pinning is what makes an amendment reviewable.
 
 ## Scope of this section
 
