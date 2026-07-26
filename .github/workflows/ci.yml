@@ -285,9 +285,14 @@ jobs:
           if [ "${{ needs.scopes.outputs.tools_dev_tests_required }}" = "true" ]; then
             pnpm --filter @open-design/tools-dev test
           fi
-          if [ "${{ needs.scopes.outputs.tools_pack_tests_required }}" = "true" ]; then
-            pnpm --filter @open-design/tools-pack test
-          fi
+          # The tools-pack suite is NOT run here. tools/pack packages the Electron
+          # desktop shell, and this fork removed apps/desktop and apps/packaged
+          # (AGENTS.md: "Do not recreate or reference them"). Five of its test
+          # files assert on those deleted directories and on release workflows
+          # this fork does not carry, so they cannot pass — resolveToolPackConfig
+          # itself throws because it resolves electron through
+          # apps/desktop/package.json. See tools/pack/AGENTS.md, "Dormant in this
+          # fork". Restoring the desktop shell is what re-enables this line.
 
       - name: Probe watcher environment
         if: ${{ needs.scopes.outputs.daemon_tests_required == 'true' }}
