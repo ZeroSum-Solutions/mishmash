@@ -575,7 +575,10 @@ process.stdin.on('end', () => {
         };
         const provider = parsed.provider?.['open-design-byok'];
         expect(provider).toMatchObject({
-          npm: '@ai-sdk/openai',
+          // A non-api.openai.com host under the 'openai' protocol is routed to
+          // the compatible SDK on purpose (buildProviderEntry): such hosts only
+          // serve /chat/completions, not the Responses API.
+          npm: '@ai-sdk/openai-compatible',
           options: {
             baseURL: 'http://127.0.0.1:8000/v1',
           },
@@ -2741,7 +2744,10 @@ process.exit(0);
 
   it('fails stalled json-stream runs after the inactivity timeout elapses', async () => {
     const previous = process.env.OD_CHAT_RUN_INACTIVITY_TIMEOUT_MS;
-    process.env.OD_CHAT_RUN_INACTIVITY_TIMEOUT_MS = '500';
+    // 3000ms, not 500ms: the watchdog races the test's polling under load, and
+    // a sub-second window loses on a contended machine (documented flake
+    // inherited from upstream PR #832). Matches the neighboring keep-alive test.
+    process.env.OD_CHAT_RUN_INACTIVITY_TIMEOUT_MS = '3000';
     try {
       await withFakeAgent(
         'opencode',
@@ -2912,7 +2918,10 @@ setTimeout(() => {
 
   it('marks stalled runs failed even when the child ignores SIGTERM', async () => {
     const previous = process.env.OD_CHAT_RUN_INACTIVITY_TIMEOUT_MS;
-    process.env.OD_CHAT_RUN_INACTIVITY_TIMEOUT_MS = '500';
+    // 3000ms, not 500ms: the watchdog races the test's polling under load, and
+    // a sub-second window loses on a contended machine (documented flake
+    // inherited from upstream PR #832). Matches the neighboring keep-alive test.
+    process.env.OD_CHAT_RUN_INACTIVITY_TIMEOUT_MS = '3000';
     try {
       await withFakeAgent(
         'opencode',

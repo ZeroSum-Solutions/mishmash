@@ -131,7 +131,11 @@ describe('run failure telemetry smoke', () => {
         expectedDetail: 'prompt_too_large',
         expectedDiagnosticSource: 'error_event',
         expectStderr: false,
-        message: `od-failure-smoke-context ${'large-context '.repeat(4000)}`,
+        // On POSIX the argv budget is max(def.maxPromptArgBytes, 120k) — see
+        // resolveArgvPromptBudget — so the message alone must clear 120k, not
+        // deepseek's declared 30k, or the guard only trips when the composed
+        // prompt happens to pad past the floor.
+        message: `od-failure-smoke-context ${'large-context '.repeat(10000)}`,
       },
       {
         id: 'hang_timeout',
