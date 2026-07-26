@@ -8,11 +8,14 @@ import { INTERNAL_PACKAGES as LINUX_INTERNAL_PACKAGES } from "../src/linux.js";
 import { INTERNAL_PACKAGES as MAC_INTERNAL_PACKAGES } from "../src/mac/constants.js";
 import { shouldInstallInternalPackageForMacPrebundle } from "../src/mac-prebundle.js";
 import { INTERNAL_PACKAGES as WIN_INTERNAL_PACKAGES } from "../src/win/constants.js";
+import { DESKTOP_SHELL_PRESENT } from "./fork-shape.js";
 import { shouldInstallInternalPackageForWinPrebundle } from "../src/win-prebundle.js";
 
 const workspaceRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
 type PackageEntry = { readonly directory: string; readonly name: string };
+
+const DESKTOP_APP_DIRECTORIES = new Set(["apps/desktop", "apps/packaged"]);
 
 function runtimeWorkspaceDeps(directory: string): string[] {
   const manifest = JSON.parse(
@@ -64,7 +67,14 @@ const LANES: { name: string; packages: readonly PackageEntry[]; isInstalled: (pk
 
 describe("pack lane INTERNAL_PACKAGES dependency closure", () => {
   for (const lane of LANES) {
-    it(`${lane.name}: every installed package's runtime @open-design deps are installed`, () => {
+    // A lane that installs the desktop shell reads its manifest; the mac/win
+    // lanes prebundle it away and stay live in this fork.
+    const lanePacksDesktopShell = lane.packages.some(
+      (pkg) => lane.isInstalled(pkg) && DESKTOP_APP_DIRECTORIES.has(pkg.directory),
+    );
+    it.skipIf(lanePacksDesktopShell && !DESKTOP_SHELL_PRESENT)(
+      `${lane.name}: every installed package's runtime @open-design deps are installed`,
+      () => {
       const installed = lane.packages.filter((pkg) => lane.isInstalled(pkg));
       const installedNames = new Set(installed.map((pkg) => pkg.name));
       const missing: { dependency: string; dependent: string }[] = [];
@@ -78,6 +88,7 @@ describe("pack lane INTERNAL_PACKAGES dependency closure", () => {
       }
 
       expect(missing).toEqual([]);
-    });
+      },
+    );
   }
 });

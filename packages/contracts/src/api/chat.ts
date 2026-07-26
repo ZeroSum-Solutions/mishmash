@@ -255,6 +255,19 @@ export interface RunScopedToolBundleSummary {
   }>;
 }
 
+/**
+ * Sentence the web Design Browser panel puts at the head of a bound-tab prompt,
+ * and one of the markers the daemon uses to recognise one.
+ *
+ * It lives in contracts because it is a cross-app wire value, not display copy.
+ * The two sides had private copies of it until the MishMash de-brand renamed the
+ * web one and left the daemon matching the old text — invisible to both test
+ * suites, because each asserted against its own literal. A single exported
+ * constant makes that drift a compile error instead.
+ */
+export const BROWSER_USE_BOUND_TAB_MARKER =
+  'Use the selected MishMash Browser tab as the bound target.';
+
 export type BrowserUseUnavailableReason = 'no-matching-browser-backend';
 
 export type BrowserUseProbeFailureCategory =

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { BROWSER_USE_BOUND_TAB_MARKER } from '@open-design/contracts';
 import type { BrowserUseDiscoveryFacts, BrowserUseRunState } from '@open-design/contracts';
 
 const BROWSER_USE_REGISTRY_BASENAME = 'codex-browser-use';
@@ -17,7 +18,7 @@ export function isBrowserUseRequested(...values: unknown[]): boolean {
     (
       /(^|\s)@agent-browser(\s|$)/.test(value) ||
       value.includes('Browser tab context:') ||
-      value.includes('Use the selected MishMash Browser tab as the bound target.')
+      value.includes(BROWSER_USE_BOUND_TAB_MARKER)
     )
   ));
 }
