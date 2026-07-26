@@ -17,7 +17,7 @@ export function isBrowserUseRequested(...values: unknown[]): boolean {
     (
       /(^|\s)@agent-browser(\s|$)/.test(value) ||
       value.includes('Browser tab context:') ||
-      value.includes('Use the selected Open Design Browser tab as the bound target.')
+      value.includes('Use the selected MishMash Browser tab as the bound target.')
     )
   ));
 }

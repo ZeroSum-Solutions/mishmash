@@ -99,7 +99,7 @@ test('[P1] RTL: chat scrollbar gutter is not covered by the resize handle', asyn
   await gotoEntryHome(page);
   await createProject(page, 'Scrollbar hitbox RTL');
   await expectWorkspaceReady(page);
-  // Open Design ships English-only, so there is no in-app language picker
+  // MishMash ships English-only, so there is no in-app language picker
   // that can reach an RTL locale (Arabic/Persian) anymore — force `dir` on
   // <html> directly instead. This still exercises the logical-property CSS
   // fix under test; only the entry point into RTL changed.
@@ -157,7 +157,7 @@ async function readChatPanelWidth(handle: Locator): Promise<number> {
   return parsed;
 }
 
-// Force RTL directly on <html>. English-only Open Design has no locale that
+// Force RTL directly on <html>. English-only MishMash has no locale that
 // resolves to an RTL direction anymore, so this bypasses the (removed)
 // language picker entirely and just exercises the RTL CSS path under test.
 async function forceRtl(page: Page) {
@@ -166,8 +166,8 @@ async function forceRtl(page: Page) {
 
 async function gotoEntryHome(page: Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await page.getByText('Loading Open Design…').waitFor({ state: 'detached', timeout: 10_000 }).catch(() => {});
-  const privacyDialog = page.getByRole('dialog').filter({ hasText: 'Help us improve Open Design' });
+  await page.getByText('Loading workspace…').waitFor({ state: 'detached', timeout: 10_000 }).catch(() => {});
+  const privacyDialog = page.getByRole('dialog').filter({ hasText: 'Help us improve MishMash' });
   if (await privacyDialog.isVisible()) {
     await privacyDialog.getByRole('button', { name: /I get it|not now|got it|don't share/i }).click();
     await expect(privacyDialog).toHaveCount(0);
@@ -185,7 +185,7 @@ async function createProject(page: Page, projectName: string) {
 
 async function expectWorkspaceReady(page: Page) {
   await expect(page).toHaveURL(/\/projects\//);
-  await expect(page.getByText('Loading Open Design…')).toHaveCount(0);
+  await expect(page.getByText('Loading workspace…')).toHaveCount(0);
   await expect(page.getByTestId('chat-composer')).toBeVisible();
   await expect(page.getByTestId('chat-composer-input')).toBeVisible();
   await expect(page.getByTestId('file-workspace')).toBeVisible();

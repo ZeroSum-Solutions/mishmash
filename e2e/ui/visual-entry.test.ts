@@ -25,14 +25,14 @@ test('[P2] captures the onboarding cloud sign-in surface', async ({ page }) => {
   });
 
   await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
-  await page.getByText('Loading Open Design…').waitFor({ state: 'hidden', timeout: T.long });
+  await page.getByText('Loading workspace…').waitFor({ state: 'hidden', timeout: T.long });
   // The connect step opens on the cloud sign-in landing. Local CLI and BYOK
   // remain available as secondary paths from the same first screen.
   await expect(
-    page.getByRole('heading', { name: /Sign in to Open Design|登录 Open Design/i }),
+    page.getByRole('heading', { name: /Sign in to MishMash/i }),
   ).toBeVisible({ timeout: T.medium });
   await expect(
-    page.getByRole('button', { name: /Sign in to Open Design|登录 Open Design/i }),
+    page.getByRole('button', { name: /Sign in to MishMash/i }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: /Local coding agent|本地 Coding Agent/i }),

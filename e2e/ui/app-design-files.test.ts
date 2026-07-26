@@ -142,7 +142,7 @@ async function createProjectNameOnly(page: Page, entry: UiScenario) {
 async function gotoEntryHome(page: Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await waitForLoadingToClear(page);
-  const privacyDialog = page.getByRole('dialog').filter({ hasText: 'Help us improve Open Design' });
+  const privacyDialog = page.getByRole('dialog').filter({ hasText: 'Help us improve MishMash' });
   if (await privacyDialog.isVisible()) {
     await privacyDialog.getByRole('button', { name: /I get it|not now|got it|don't share/i }).click();
     await expect(privacyDialog).toHaveCount(0);
@@ -363,7 +363,7 @@ async function openDesignFile(page: Page, fileName: string) {
 }
 
 async function waitForLoadingToClear(page: Page) {
-  await page.getByText('Loading Open Design…').waitFor({ state: 'hidden', timeout: T.long });
+  await page.getByText('Loading workspace…').waitFor({ state: 'hidden', timeout: T.long });
 }
 
 function escapeRegExp(value: string): string {
@@ -394,7 +394,7 @@ async function runUploadedImageRendersInPreviewFlow(page: Page, entry: UiScenari
     projectId,
     'image-preview.html',
     // Generated pages commonly use site-root paths. Before the preview asset
-    // normalization fix, this resolved against the Open Design app origin and
+    // normalization fix, this resolved against the MishMash app origin and
     // left the uploaded image broken even though its project raw URL was valid.
     '<!doctype html><html><body><main><h1>Image Preview</h1><img alt="Brand logo" src="/brand.png"></main></body></html>',
   );

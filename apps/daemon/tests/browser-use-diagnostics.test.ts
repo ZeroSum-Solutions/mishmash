@@ -22,10 +22,13 @@ afterEach(async () => {
 });
 
 describe('browser use diagnostics', () => {
-  it('detects Browser Use prompts from the Open Design Browser menu', () => {
+  it('detects Browser Use prompts from the MishMash Browser menu', () => {
     expect(isBrowserUseRequested('hello')).toBe(false);
     expect(isBrowserUseRequested('@agent-browser\n\nBrowser tab context:')).toBe(true);
-    expect(isBrowserUseRequested('Use the selected Open Design Browser tab as the bound target.')).toBe(true);
+    // Must stay byte-identical to the sentence DesignBrowserPanel.tsx emits when a
+    // tab is bound. The de-brand renamed that sentence in the web app but not here,
+    // which silently stopped browser-use discovery for bound tabs.
+    expect(isBrowserUseRequested('Use the selected MishMash Browser tab as the bound target.')).toBe(true);
   });
 
   it('returns a missing-registry snapshot without reading socket contents', () => {

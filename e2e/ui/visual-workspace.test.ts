@@ -71,7 +71,7 @@ test('[P2] captures the topbar execution switcher surface', async ({ page }) => 
   );
 });
 
-test('[P1] captures the topbar Open Design account balance surface', async ({ page }) => {
+test('[P1] captures the topbar MishMash account balance surface', async ({ page }) => {
   test.setTimeout(60_000);
 
   await configureVisualPage(page, {
@@ -98,7 +98,7 @@ test('[P1] captures the topbar Open Design account balance surface', async ({ pa
   expect(codexBox).toBeTruthy();
   expect(amrBox!.y).toBeLessThan(claudeBox!.y);
   expect(amrBox!.y).toBeLessThan(codexBox!.y);
-  await expect(popover.locator('.inline-switcher__account')).toContainText('Open Design');
+  await expect(popover.locator('.inline-switcher__account')).toContainText('MishMash');
   await expect(popover.locator('.inline-switcher__account')).toContainText('plus');
   await expect(popover.locator('.inline-switcher__account')).toContainText('$247.51');
   const upgrade = page.getByTestId('inline-model-switcher-account-upgrade');
@@ -225,7 +225,7 @@ test('[P1] Avatar menu surfaces the signed-in plan/balance and upgrade entry', a
     'avatar-agent-option-codex',
   ]);
   const row = menu.locator('.avatar-amr-row');
-  await expect(row).toContainText('Open Design');
+  await expect(row).toContainText('MishMash');
   await expect(row).toContainText('Plus');
   await expect(row).toContainText('$247.51');
   const upgrade = row.locator('.avatar-amr-row__upgrade');

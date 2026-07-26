@@ -299,7 +299,7 @@ test('[P1] onboarding recommendation creates a project with prefilled first prom
   });
 
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await page.getByText('Loading Open Design…').waitFor({ state: 'hidden', timeout: T.long });
+  await page.getByText('Loading workspace…').waitFor({ state: 'hidden', timeout: T.long });
   await page.getByRole('button', { name: LOCAL_CLI_LABEL }).click();
   await page.getByRole('button', { name: /^Continue$/i }).click();
   await page.getByRole('button', { name: /Engineer$/i }).click();
@@ -793,7 +793,7 @@ test('[P1] Use everywhere guide uses daemon MCP install info and copies an agent
   await page.route('**/api/mcp/install-info', async (route) => {
     await route.fulfill({
       json: {
-        command: '/Applications/Open Design.app/Contents/MacOS/od',
+        command: '/Applications/MishMash.app/Contents/MacOS/od',
         args: ['mcp', '--daemon-url', 'http://127.0.0.1:7456'],
         env: {
           OD_DATA_DIR: '/Users/test/.open-design',
@@ -812,14 +812,14 @@ test('[P1] Use everywhere guide uses daemon MCP install info and copies an agent
 
   await page.getByTestId('use-everywhere-tab-mcp').click();
   const mcpSection = page.getByTestId('use-everywhere-section-mcp');
-  await expect(mcpSection).toContainText('/Applications/Open Design.app/Contents/MacOS/od');
+  await expect(mcpSection).toContainText('/Applications/MishMash.app/Contents/MacOS/od');
   await expect(mcpSection).toContainText('OD_DATA_DIR');
 
   await page.getByTestId('use-everywhere-copy-guide').click();
   await expect(page.getByTestId('use-everywhere-copy-guide')).toContainText(/Copied|已复制|已複製/i);
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __copiedTexts?: string[] }).__copiedTexts?.at(-1) ?? ''))
-    .toContain('/Applications/Open Design.app/Contents/MacOS/od');
+    .toContain('/Applications/MishMash.app/Contents/MacOS/od');
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __copiedTexts?: string[] }).__copiedTexts?.at(-1) ?? ''))
     .toMatch(/http:\/\/127\.0\.0\.1:\d+\/api\/mcp\/install-info/);
@@ -1080,7 +1080,7 @@ test('[P1] home starters can jump into plugin creation through the registry brow
   await expect(page.locator('h1').filter({ hasText: 'Plugins' })).toBeVisible();
   await page.getByTestId('plugins-create-button').click();
 
-  await expect(page.getByTestId('home-hero-input')).toHaveText(/Create an Open Design plugin/i);
+  await expect(page.getByTestId('home-hero-input')).toHaveText(/Create a MishMash plugin/i);
 });
 
 test('[P2] home starters search can enter a no-results state and recover with clear', async ({ page }) => {
@@ -1523,7 +1523,7 @@ test('[P1] home starters html details sidebar handle stays clickable after info 
     inputs: [{ name: 'topic', type: 'string', default: 'sidebar scroll' }],
     previewEntry: './example.html',
     tags: ['prototype', 'webgl', 'gallery', 'animation', 'landing-page', 'dashboard'],
-    authorName: 'Open Design',
+    authorName: 'MishMash',
     context: {
       skills: [{ path: './SKILL.md' }, { path: './QA.md' }],
       assets: ['./example.html', './textures/noise.png', './textures/depth.png'],
@@ -1582,7 +1582,7 @@ test('[P2] home starters html details modal shows metadata links and supports co
     inputs: [{ name: 'topic', type: 'string', default: 'editorial systems' }],
     previewEntry: './example.html',
     tags: ['deck', 'marketing'],
-    authorName: 'Open Design',
+    authorName: 'MishMash',
     authorUrl: 'https://github.com/nexu-io/open-design',
     homepage: 'https://example.com/html-metadata-plugin',
     context: {
@@ -1637,7 +1637,7 @@ test('[P2] home starters html details modal shows metadata links and supports co
   // preview-edge handle before inspecting the manifest metadata.
   await dialog.locator('.ds-modal-stage-handle.is-expand').click();
   await expect(dialog.locator('.ds-modal-sidebar')).toBeVisible();
-  await expect(page.getByTestId('plugin-details-author')).toContainText('Open Design');
+  await expect(page.getByTestId('plugin-details-author')).toContainText('MishMash');
   await expect(page.getByTestId('plugin-details-author-profile')).toHaveAttribute(
     'href',
     'https://github.com/nexu-io/open-design',
@@ -2348,9 +2348,9 @@ async function gotoEntryHome(page: Page) {
     )
     .catch(() => null);
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await page.getByText('Loading Open Design…').waitFor({ state: 'hidden', timeout: T.long });
+  await page.getByText('Loading workspace…').waitFor({ state: 'hidden', timeout: T.long });
   await projectsSettled;
-  const privacyDialog = page.getByRole('dialog').filter({ hasText: 'Help us improve Open Design' });
+  const privacyDialog = page.getByRole('dialog').filter({ hasText: 'Help us improve MishMash' });
   if (await privacyDialog.isVisible()) {
     await privacyDialog.getByRole('button', { name: /I get it|not now|got it|don't share/i }).click();
     await expect(privacyDialog).toHaveCount(0);

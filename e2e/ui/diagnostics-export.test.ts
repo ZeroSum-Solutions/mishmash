@@ -71,7 +71,7 @@ test('[P1] diagnostics export zip includes the primary daemon and web logs', asy
 async function gotoEntryHome(page: Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await waitForLoadingToClear(page);
-  const privacyDialog = page.getByRole('dialog').filter({ hasText: 'Help us improve Open Design' });
+  const privacyDialog = page.getByRole('dialog').filter({ hasText: 'Help us improve MishMash' });
   if (await privacyDialog.isVisible().catch(() => false)) {
     await privacyDialog.getByRole('button', { name: /I get it|not now|got it|don't share/i }).click();
   }
@@ -79,7 +79,7 @@ async function gotoEntryHome(page: Page) {
 }
 
 async function waitForLoadingToClear(page: Page) {
-  await expect(page.getByText('Loading Open Design…')).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.getByText('Loading workspace…')).toHaveCount(0, { timeout: 15_000 });
 }
 
 async function unzipList(zipPath: string): Promise<string[]> {

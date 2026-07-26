@@ -1131,7 +1131,7 @@ test('[P1] project detail composer context actions emit analytics event fields',
   expect(raw).toContain('local-code');
 });
 
-test('[P1] Open Design Cloud hard balance gate blocks a project send before a daemon run starts', async ({ page }) => {
+test('[P1] MishMash Cloud hard balance gate blocks a project send before a daemon run starts', async ({ page }) => {
   test.setTimeout(60_000);
 
   const runRequestBodies: Array<Record<string, unknown>> = [];
@@ -1163,7 +1163,7 @@ test('[P1] Open Design Cloud hard balance gate blocks a project send before a da
     ...AGENTS,
     {
       id: 'amr',
-      name: 'Open Design Cloud',
+      name: 'MishMash Cloud',
       bin: 'amr',
       available: true,
       version: 'cloud',
@@ -3245,7 +3245,7 @@ async function routeComposerPlusFixtures(page: Page) {
 
 async function expectWorkspaceReady(page: Page) {
   await expect(page).toHaveURL(/\/projects\//);
-  await page.getByText('Loading Open Design…').waitFor({ state: 'hidden', timeout: T.long }).catch(() => {});
+  await page.getByText('Loading workspace…').waitFor({ state: 'hidden', timeout: T.long }).catch(() => {});
   await dismissPrivacyDialog(page);
   await expect(page.getByTestId('project-title')).toBeVisible();
   await expect(page.getByTestId('chat-composer')).toBeVisible();
@@ -3292,7 +3292,7 @@ async function openHandoffCliTab(page: Page): Promise<Locator> {
 }
 
 async function dismissPrivacyDialog(page: Page) {
-  const privacyRegion = page.getByRole('region', { name: /Help us improve Open Design/i });
+  const privacyRegion = page.getByRole('region', { name: /Help us improve MishMash/i });
   if (await privacyRegion.isVisible().catch(() => false)) {
     await privacyRegion.getByRole('button', { name: /I get it|not now|got it/i }).click();
     await expect(privacyRegion).toBeHidden();
