@@ -1004,6 +1004,7 @@ export interface FileManagerClickProps {
     | 'create_design_system'
     | 'create_design_system_from_project'
     | 'duplicate_project'
+    | 'download_project'
     | 'paste'
     | 'upload'
     | 'library'

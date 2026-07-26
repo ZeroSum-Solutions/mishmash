@@ -65,6 +65,8 @@ interface Props {
   createDesignSystemFromProjectBusy?: boolean;
   onDuplicateProject?: () => void;
   duplicateProjectBusy?: boolean;
+  onDownloadProject?: () => void;
+  downloadProjectBusy?: boolean;
   /** Opens the "Select from library" picker to pull registry assets in. */
   onSelectFromLibrary?: () => void;
   // Reports the folder the panel is currently viewing so the parent can create
@@ -309,6 +311,8 @@ export function DesignFilesPanel({
   createDesignSystemFromProjectBusy = false,
   onDuplicateProject,
   duplicateProjectBusy = false,
+  onDownloadProject,
+  downloadProjectBusy = false,
   onSelectFromLibrary,
   uploadError = null,
   onClearUploadError,
@@ -914,7 +918,7 @@ export function DesignFilesPanel({
         <Icon name="upload" size={13} />
         <span>{t('designFiles.upload.label')}</span>
       </button>
-      {onCreateDesignSystemFromProject || onDuplicateProject ? (
+      {onCreateDesignSystemFromProject || onDuplicateProject || onDownloadProject ? (
         <div className="df-project-menu-anchor" ref={projectMenuRef}>
           <button
             type="button"
@@ -965,6 +969,25 @@ export function DesignFilesPanel({
                 >
                   <Icon name={duplicateProjectBusy ? 'spinner' : 'copy'} size={13} />
                   <span>{t('designFiles.duplicateProject')}</span>
+                </button>
+              ) : null}
+              {onDownloadProject ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={downloadProjectBusy}
+                  onClick={() => {
+                    trackFileManagerClick(analytics.track, {
+                      page_name: 'file_manager',
+                      area: 'file_manager',
+                      element: 'download_project',
+                    });
+                    setProjectMenuOpen(false);
+                    onDownloadProject();
+                  }}
+                >
+                  <Icon name={downloadProjectBusy ? 'spinner' : 'download'} size={13} />
+                  <span>{t('designFiles.downloadProject')}</span>
                 </button>
               ) : null}
             </div>

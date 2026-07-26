@@ -188,6 +188,19 @@ vi.mock('../../src/components/DesignFilesPanel', async () => {
   };
 });
 
+const { downloadProjectArchiveMock } = vi.hoisted(() => ({
+  downloadProjectArchiveMock: vi.fn(),
+}));
+vi.mock('../../src/runtime/exports', async () => {
+  const actual = await vi.importActual<typeof import('../../src/runtime/exports')>(
+    '../../src/runtime/exports',
+  );
+  return {
+    ...actual,
+    downloadProjectArchive: downloadProjectArchiveMock,
+  };
+});
+
 const mockedFetchProjectFileText = vi.mocked(fetchProjectFileText);
 const mockedUploadProjectFiles = vi.mocked(uploadProjectFiles);
 const mockedWriteProjectTextFile = vi.mocked(writeProjectTextFile);
@@ -3112,5 +3125,83 @@ describe('FileWorkspace empty-project generation contract', () => {
     expect(previewStatus).not.toHaveAttribute('aria-live');
     expect(within(previewStatus).getByRole('status')).toHaveTextContent('Design ready');
     expect(previewStatus.querySelector('[aria-hidden="true"]')).toHaveTextContent('Elapsed 0:03');
+  });
+});
+
+describe('FileWorkspace project archive download', () => {
+  afterEach(() => cleanup());
+
+  it('renders the download-project menu item and calls downloadProjectArchive with the project id and rootDirName as the fallback title', async () => {
+    downloadProjectArchiveMock.mockResolvedValue(true);
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="prototype"
+        files={[]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{ tabs: [], active: DESIGN_FILES_TAB }}
+        onTabsStateChange={vi.fn()}
+        rootDirName="my-folder"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Project actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Download project (.zip)' }));
+
+    await waitFor(() => {
+      expect(downloadProjectArchiveMock).toHaveBeenCalledWith({
+        projectId: 'project-1',
+        fallbackTitle: 'my-folder',
+      });
+    });
+  });
+
+  it('falls back to the "all project files" label when no rootDirName is set', async () => {
+    downloadProjectArchiveMock.mockResolvedValue(true);
+    render(
+      <FileWorkspace
+        projectId="project-2"
+        projectKind="prototype"
+        files={[]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{ tabs: [], active: DESIGN_FILES_TAB }}
+        onTabsStateChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Project actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Download project (.zip)' }));
+
+    await waitFor(() => {
+      expect(downloadProjectArchiveMock).toHaveBeenCalledWith({
+        projectId: 'project-2',
+        fallbackTitle: 'All project files',
+      });
+    });
+  });
+
+  it('surfaces a toast when downloadProjectArchive resolves false', async () => {
+    downloadProjectArchiveMock.mockResolvedValue(false);
+    render(
+      <FileWorkspace
+        projectId="project-3"
+        projectKind="prototype"
+        files={[]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{ tabs: [], active: DESIGN_FILES_TAB }}
+        onTabsStateChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Project actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Download project (.zip)' }));
+
+    expect(await screen.findByText("Couldn't download the project archive.")).toBeTruthy();
   });
 });

@@ -3282,6 +3282,8 @@ export interface Dict {
   'designFiles.projectMenu': string;
   'designFiles.createDesignSystemFromProject': string;
   'designFiles.duplicateProject': string;
+  'designFiles.downloadProject': string;
+  'designFiles.downloadProjectFailed': string;
 
   'designFiles.previewOpen': string;
   'designFiles.previewClose': string;

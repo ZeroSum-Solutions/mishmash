@@ -216,7 +216,7 @@ const PROJECT_STRING_FLAGS = new Set([
   'prompt-file', 'path', 'dir', 'as',
   'agent', 'model', 'snapshot-id', 'inputs', 'grant-caps', 'editor',
   'title', 'label', 'against', 'seed-from', 'fork-after', 'mode',
-  'source',
+  'source', 'root', 'out',
 ]);
 const PROJECT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'follow']);
 // `od templates …` mirrors NewProjectPanel / ExamplesTab. Same surface,
@@ -6014,6 +6014,10 @@ async function runProject(args) {
                     the design-system generation prompt.
   od project duplicate <id> [--name "<title>"] [--json]
                     Duplicate a project and copy its Design Files.
+  od project archive <id> [--root <dir>] [--out <path>] [--json]
+                    Download the project's on-disk files as a .zip. --root
+                    scopes the archive to a subdirectory; --out overrides the
+                    default filename derived from the daemon's response.
   od project import <baseDir> [--name "<title>"]
   od project import-folder <path> [--name "<title>"] [--skill <id>]
                     [--design-system <id>] [--json]
@@ -6165,6 +6169,51 @@ Common options:
         `[project] duplicated ${sourceProjectId} as ${data.project?.id ?? '-'} `
         + `(conversation ${data.conversationId ?? '-'})`,
       );
+      return;
+    }
+    case 'archive': {
+      const id = positionalArgs(rest, PROJECT_STRING_FLAGS)[0];
+      if (!id) {
+        console.error('Usage: od project archive <id> [--root <dir>] [--out <path>] [--json]');
+        process.exit(2);
+      }
+      const root = typeof flags.root === 'string' ? flags.root : '';
+      const archiveUrl = `${base}/api/projects/${encodeURIComponent(id)}/archive${
+        root ? `?root=${encodeURIComponent(root)}` : ''
+      }`;
+      let resp;
+      try {
+        resp = await fetch(archiveUrl);
+      } catch (err) {
+        surfaceFetchError(err, base);
+        process.exit(3);
+      }
+      if (!resp.ok) return structuredHttpFailure(resp, 'project-not-found');
+      const buffer = Buffer.from(await resp.arrayBuffer());
+      let out = typeof flags.out === 'string' ? flags.out : null;
+      if (!out) {
+        const cd = resp.headers.get('content-disposition') || '';
+        const star = /filename\*=UTF-8''([^;]+)/i.exec(cd);
+        const plain = /filename="([^"]+)"/i.exec(cd);
+        if (star && star[1]) {
+          try { out = decodeURIComponent(star[1]); } catch { out = plain && plain[1] ? plain[1] : null; }
+        } else if (plain && plain[1]) {
+          out = plain[1];
+        }
+        if (!out) out = 'project.zip';
+      }
+      const { writeFile } = await import('node:fs/promises');
+      await writeFile(out, buffer);
+      if (flags.json) {
+        return process.stdout.write(
+          JSON.stringify(
+            { ok: true, projectId: id, out, bytes: buffer.length },
+            null,
+            2,
+          ) + '\n',
+        );
+      }
+      console.log(`[project] downloaded ${id} -> ${out} (${buffer.length} bytes)`);
       return;
     }
     case 'import': {
