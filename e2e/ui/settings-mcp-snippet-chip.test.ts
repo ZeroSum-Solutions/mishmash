@@ -9,7 +9,7 @@ import { T } from '@/timeouts';
 // rectangle behind every wrapped segment — reading as permanent selection
 // highlights. The inner `<code>` must stay transparent.
 
-const STORAGE_KEY = 'open-design:config';
+const STORAGE_KEY = 'mishmash:config';
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript((key) => {

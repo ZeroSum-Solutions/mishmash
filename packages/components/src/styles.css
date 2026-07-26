@@ -17,7 +17,7 @@ button.primary {
   border-color: var(--accent);
   color: white;
   font-weight: 500;
-  box-shadow: 0 1px 0 rgba(180, 90, 59, 0.18) inset, var(--shadow-xs);
+  box-shadow: 0 1px 0 rgba(109, 40, 217, 0.18) inset, var(--shadow-xs);
 }
 button.primary:hover:not(:disabled) {
   background: var(--accent-hover);
@@ -113,7 +113,7 @@ input:focus, textarea:focus, select:focus {
 .entry-side textarea:focus,
 .entry-side select:focus {
   border-color: var(--text);
-  box-shadow: 0 0 0 3px rgba(28, 27, 26, 0.08);
+  box-shadow: 0 0 0 3px rgba(21, 23, 27, 0.08);
 }
 /* Native <select> on macOS uses its own intrinsic min-height that ends up
    shorter than <input> at the same `padding: 7px 10px` rule above, so any

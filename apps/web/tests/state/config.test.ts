@@ -1192,7 +1192,7 @@ describe('loadConfig', () => {
     });
 
     const persisted = JSON.parse(
-      store.get('open-design:config') ?? '{}',
+      store.get('mishmash:config') ?? '{}',
     ) as Partial<AppConfig>;
     expect(persisted.apiProtocol).toBe('anthropic');
     expect(persisted.apiKey).toBe('');
@@ -1367,7 +1367,7 @@ describe('loadConfig', () => {
   it('sets an explicit apiProtocol for new default configs', () => {
     expect(DEFAULT_CONFIG.apiProtocol).toBe('anthropic');
     expect(DEFAULT_CONFIG.configMigrationVersion).toBe(2);
-    expect(DEFAULT_CONFIG.accentColor).toBe('#c96442');
+    expect(DEFAULT_CONFIG.accentColor).toBe('#7c3aed');
   });
 });
 
@@ -1381,7 +1381,7 @@ describe('saveConfig', () => {
       allowSilentUpdates: true,
     });
 
-    const saved = JSON.parse(store.get('open-design:config') ?? '{}');
+    const saved = JSON.parse(store.get('mishmash:config') ?? '{}');
     expect(saved.installationId).toBeUndefined();
     expect(saved.privacyDecisionAt).toBeUndefined();
     expect(saved.telemetry).toBeUndefined();
@@ -1411,7 +1411,7 @@ describe('saveConfig', () => {
       },
     });
 
-    const saved = JSON.parse(store.get('open-design:config') ?? '{}');
+    const saved = JSON.parse(store.get('mishmash:config') ?? '{}');
     expect(saved.agentCliEnv.claude).toEqual({
       ANTHROPIC_BASE_URL: 'https://proxy.example/anthropic',
       CLAUDE_CONFIG_DIR: '~/.claude-2',
@@ -1424,5 +1424,41 @@ describe('saveConfig', () => {
       claude: { apiKeyOverride: true },
       codex: { apiKeyOverride: true },
     });
+  });
+});
+
+describe('storage key migration (open-design:config -> mishmash:config)', () => {
+  it('honors a config persisted under the legacy key and re-persists under the new key on save', () => {
+    const legacy: Partial<AppConfig> = {
+      theme: 'dark',
+      accentColor: '#dc2626',
+      onboardingCompleted: true,
+      agentId: null,
+      skillId: null,
+      designSystemId: null,
+    };
+    store.set('open-design:config', JSON.stringify(legacy));
+
+    const config = loadConfig();
+    expect(config.theme).toBe('dark');
+    expect(config.accentColor).toBe('#dc2626');
+    expect(config.onboardingCompleted).toBe(true);
+
+    saveConfig(config);
+    const persisted = JSON.parse(store.get('mishmash:config') ?? '{}') as Partial<AppConfig>;
+    expect(persisted.theme).toBe('dark');
+    expect(persisted.accentColor).toBe('#dc2626');
+  });
+
+  it('prefers the new key when both keys exist', () => {
+    store.set(
+      'open-design:config',
+      JSON.stringify({ theme: 'light', agentId: null, skillId: null, designSystemId: null }),
+    );
+    store.set(
+      'mishmash:config',
+      JSON.stringify({ theme: 'dark', agentId: null, skillId: null, designSystemId: null }),
+    );
+    expect(loadConfig().theme).toBe('dark');
   });
 });

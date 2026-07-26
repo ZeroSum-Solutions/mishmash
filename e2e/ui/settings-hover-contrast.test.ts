@@ -2,7 +2,7 @@ import { expect, test } from '@/playwright/suite';
 import type { Page } from '@playwright/test';
 import { openSettingsDialog } from '../lib/playwright/amr.js';
 
-const STORAGE_KEY = 'open-design:config';
+const STORAGE_KEY = 'mishmash:config';
 
 // WCAG AA threshold for normal text. We assert against this rather than AAA
 // because the codebase has historically targeted AA for muted-on-subtle
@@ -21,7 +21,7 @@ async function openSettings(page: Page, theme: Theme) {
       key: STORAGE_KEY,
       value: {
         theme,
-        accentColor: '#c96442',
+        accentColor: '#7c3aed',
         mode: 'daemon',
         onboardingCompleted: true,
         agentId: null,

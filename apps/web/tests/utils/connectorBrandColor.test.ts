@@ -14,8 +14,8 @@ function luminance(hex: string): number {
 
 // chat.css derives the pill text as `color-mix(in srgb, var(--m-hue) 72%, var(--text))`.
 // Mirror that here so the regression checks the value users actually read, not
-// just the raw hue. Dark theme `--text` is the light `#e8e4dc`.
-const DARK_TEXT = { r: 0xe8, g: 0xe4, b: 0xdc };
+// just the raw hue. Dark theme `--text` is the light `#e4e6ea`.
+const DARK_TEXT = { r: 0xe4, g: 0xe6, b: 0xea };
 function pillTextLuminance(hue: string): number {
   const { r, g, b } = parseHex(hue);
   const mix = {

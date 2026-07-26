@@ -1,35 +1,35 @@
 /* ============================================================
-   Open Design — neutral product workspace
+   MishMash — neutral product workspace
    ============================================================ */
 :root {
   /* Surface palette — neutral app chrome that does not bias generated artifacts.
      Keep warm/brand colors out of preview backgrounds; generated product UI
      must choose its own palette through the active skill/design brief. */
-  --bg: #faf9f7;
-  --bg-app: #faf9f7;
-  --bg-panel: #fdfcfa;
+  --bg: #f8f9fb;
+  --bg-app: #f8f9fb;
+  --bg-panel: #fcfcfd;
   --bg-subtle: #f4f5f7;
   --bg-muted: #eef1f5;
   --bg-fill-tertiary: rgba(0, 0, 0, 0.03);
   --bg-fill-secondary: rgba(0, 0, 0, 0.06);
   --bg-fill: rgba(0, 0, 0, 0.12);
-  --bg-elevated: #fffefc;
+  --bg-elevated: #ffffff;
   --border: #e1e5eb;
   --border-strong: #c9d0da;
   --border-soft: #edf0f4;
 
-  --text: #1a1916;
-  --text-strong: #0d0c0a;
-  --text-muted: #74716b;
-  --text-soft: #989590;
-  --text-faint: #b3b0a8;
+  --text: #17181b;
+  --text-strong: #0a0b0d;
+  --text-muted: #6f7278;
+  --text-soft: #92959b;
+  --text-faint: #b0b3b9;
 
-  /* Accent — Open Design action color for app chrome only. */
-  --accent: #c96442;
-  --accent-strong: #b45a3b;
-  --accent-soft: #f5d8cb;
-  --accent-tint: #fbeee5;
-  --accent-hover: #b45a3b;
+  /* Accent — MishMash action color for app chrome only. */
+  --accent: #7c3aed;
+  --accent-strong: #6d28d9;
+  --accent-soft: #e4d8fb;
+  --accent-tint: #f2ecfd;
+  --accent-hover: #6d28d9;
 
   /* Semantic accent tints used by tool / status pills. */
   --green: #1f7a3a;
@@ -47,10 +47,10 @@
   --amber: #b26200;
   --amber-bg: #fff3e0;
 
-  --shadow-xs: 0 1px 0 rgba(28, 27, 26, 0.04);
-  --shadow-sm: 0 1px 2px rgba(28, 27, 26, 0.05), 0 1px 3px rgba(28, 27, 26, 0.04);
-  --shadow-md: 0 6px 24px rgba(28, 27, 26, 0.07), 0 2px 6px rgba(28, 27, 26, 0.04);
-  --shadow-lg: 0 24px 60px rgba(28, 27, 26, 0.16), 0 8px 16px rgba(28, 27, 26, 0.07);
+  --shadow-xs: 0 1px 0 rgba(21, 23, 27, 0.04);
+  --shadow-sm: 0 1px 2px rgba(21, 23, 27, 0.05), 0 1px 3px rgba(21, 23, 27, 0.04);
+  --shadow-md: 0 6px 24px rgba(21, 23, 27, 0.07), 0 2px 6px rgba(21, 23, 27, 0.04);
+  --shadow-lg: 0 24px 60px rgba(21, 23, 27, 0.16), 0 8px 16px rgba(21, 23, 27, 0.07);
 
   /* Corner-radius scale — the only radii UI should reach for (Shape
      Consistency Lock). xs for inline code / micro-chips, sm for controls,
@@ -99,30 +99,30 @@
    OS-level prefers-color-scheme media query (system mode = no data-theme attr). */
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #1a1917;
-  --bg-app: #1a1917;
-  --bg-panel: #222120;
-  --bg-subtle: #252321;
-  --bg-muted: #2e2c29;
+  --bg: #18191c;
+  --bg-app: #18191c;
+  --bg-panel: #202225;
+  --bg-subtle: #232528;
+  --bg-muted: #2c2e32;
   --bg-fill-tertiary: rgba(255, 255, 255, 0.06);
   --bg-fill-secondary: rgba(255, 255, 255, 0.10);
   --bg-fill: rgba(255, 255, 255, 0.16);
-  --bg-elevated: #2a2825;
-  --border: #333128;
-  --border-strong: #46433c;
-  --border-soft: #2a2825;
+  --bg-elevated: #27292d;
+  --border: #313338;
+  --border-strong: #45474d;
+  --border-soft: #27292d;
 
-  --text: #e8e4dc;
-  --text-strong: #f2ede4;
-  --text-muted: #9a9690;
-  --text-soft: #6e6b65;
-  --text-faint: #4e4b46;
+  --text: #e4e6ea;
+  --text-strong: #eff1f4;
+  --text-muted: #94979d;
+  --text-soft: #6a6d73;
+  --text-faint: #4a4d53;
 
-  --accent: #d97a56;
-  --accent-strong: #e8896a;
-  --accent-soft: #3d2318;
-  --accent-tint: #2e1a12;
-  --accent-hover: #e8896a;
+  --accent: #a78bfa;
+  --accent-strong: #b8a1fb;
+  --accent-soft: #2b2150;
+  --accent-tint: #221a3e;
+  --accent-hover: #b8a1fb;
 
   --green: #4caf72;
   --green-bg: #0f2a18;
@@ -152,30 +152,30 @@
 @media (prefers-color-scheme: dark) {
   html:not([data-theme]) {
     color-scheme: dark;
-    --bg: #1a1917;
-    --bg-app: #1a1917;
-    --bg-panel: #222120;
-    --bg-subtle: #252321;
-    --bg-muted: #2e2c29;
+    --bg: #18191c;
+    --bg-app: #18191c;
+    --bg-panel: #202225;
+    --bg-subtle: #232528;
+    --bg-muted: #2c2e32;
     --bg-fill-tertiary: rgba(255, 255, 255, 0.06);
     --bg-fill-secondary: rgba(255, 255, 255, 0.10);
     --bg-fill: rgba(255, 255, 255, 0.16);
-    --bg-elevated: #2a2825;
-    --border: #333128;
-    --border-strong: #46433c;
-    --border-soft: #2a2825;
+    --bg-elevated: #27292d;
+    --border: #313338;
+    --border-strong: #45474d;
+    --border-soft: #27292d;
 
-    --text: #e8e4dc;
-    --text-strong: #f2ede4;
-    --text-muted: #9a9690;
-    --text-soft: #6e6b65;
-    --text-faint: #4e4b46;
+    --text: #e4e6ea;
+    --text-strong: #eff1f4;
+    --text-muted: #94979d;
+    --text-soft: #6a6d73;
+    --text-faint: #4a4d53;
 
-    --accent: #d97a56;
-    --accent-strong: #e8896a;
-    --accent-soft: #3d2318;
-    --accent-tint: #2e1a12;
-    --accent-hover: #e8896a;
+    --accent: #a78bfa;
+    --accent-strong: #b8a1fb;
+    --accent-soft: #2b2150;
+    --accent-tint: #221a3e;
+    --accent-hover: #b8a1fb;
 
     --green: #4caf72;
     --green-bg: #0f2a18;

@@ -8458,7 +8458,7 @@ export function ProjectView({
 
   // Wire the Critique Theater drop-in mount into the project workspace.
   // The hook reads the M1 Settings toggle out of the existing
-  // `open-design:config` localStorage blob and stays in sync with the
+  // `mishmash:config` localStorage blob and stays in sync with the
   // platform `storage` event (cross-tab) plus the same-tab
   // `open-design:critique-theater-toggle` CustomEvent. The mount itself
   // returns `null` until the daemon emits a `critique.run_started` for

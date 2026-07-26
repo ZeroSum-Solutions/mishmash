@@ -1208,9 +1208,9 @@ button.qf-chip-other:disabled { cursor: default; opacity: 0.6; }
 .qf-card:hover { border-color: var(--border-strong); }
 .qf-card:active { transform: translateY(1px); }
 .qf-card-on {
-  border-color: var(--accent, #c96442);
-  background: color-mix(in oklch, var(--accent, #c96442) 4%, var(--bg));
-  box-shadow: 0 0 0 1px var(--accent, #c96442) inset;
+  border-color: var(--accent, #7c3aed);
+  background: color-mix(in oklch, var(--accent, #7c3aed) 4%, var(--bg));
+  box-shadow: 0 0 0 1px var(--accent, #7c3aed) inset;
 }
 .qf-card-disabled { cursor: not-allowed; opacity: 0.6; }
 .qf-card-head {
@@ -1232,7 +1232,7 @@ button.qf-chip-other:disabled { cursor: default; opacity: 0.6; }
   letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: 2px 6px;
-  background: var(--accent, #c96442);
+  background: var(--accent, #7c3aed);
   color: #fff;
   border-radius: var(--radius-pill);
   flex-shrink: 0;
@@ -2110,7 +2110,7 @@ button.qf-chip-other:disabled { cursor: default; opacity: 0.6; }
   position: fixed;
   inset: 0;
   z-index: 1700;
-  background: rgba(28, 27, 26, 0.42);
+  background: rgba(21, 23, 27, 0.42);
   backdrop-filter: blur(2px);
   -webkit-app-region: no-drag;
   display: flex;
@@ -2962,7 +2962,7 @@ button.filter-pill:hover:not(:disabled) .filter-pill-count,
 }
 .example-preview:hover {
   border-color: var(--accent);
-  box-shadow: 0 6px 18px rgba(201, 100, 66, 0.10);
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.10);
 }
 .example-preview:focus-visible {
   outline: none;
@@ -2977,7 +2977,7 @@ button.filter-pill:hover:not(:disabled) .filter-pill-count,
   font-size: 11.5px;
   font-weight: 500;
   color: white;
-  background: rgba(28, 27, 26, 0.78);
+  background: rgba(21, 23, 27, 0.78);
   border-radius: var(--radius-pill);
   opacity: 0;
   transition: opacity 0.15s;

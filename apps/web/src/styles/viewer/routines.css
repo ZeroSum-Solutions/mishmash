@@ -2906,7 +2906,7 @@ body.od-quick-switcher-open .chat-composer-fixed-layer .composer-send:disabled {
   background: color-mix(in srgb, var(--accent) 18%, var(--bg-panel));
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
-    0 1px 2px rgba(180, 90, 59, 0.14);
+    0 1px 2px rgba(109, 40, 217, 0.14);
   font-weight: 700;
 }
 .app .handoff-framework-chip.active:hover {

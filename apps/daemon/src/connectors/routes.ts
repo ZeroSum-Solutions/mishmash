@@ -322,23 +322,23 @@ function renderConnectorConnectedHtml(connectorId: string): string {
     <title>${connectorLabelHtml} connected · MishMash</title>
     <style>
       :root {
-        --bg: #faf9f7;
+        --bg: #f8f9fb;
         --bg-panel: #ffffff;
-        --bg-subtle: #f4f2ed;
-        --border: #ebe8e1;
-        --border-strong: #d8d4cb;
-        --text: #1a1916;
-        --text-strong: #0d0c0a;
-        --text-muted: #74716b;
-        --text-soft: #989590;
-        --accent: #c96442;
-        --accent-hover: #b45a3b;
-        --accent-tint: #fbeee5;
+        --bg-subtle: #f4f5f7;
+        --border: #e1e5eb;
+        --border-strong: #c9d0da;
+        --text: #17181b;
+        --text-strong: #0a0b0d;
+        --text-muted: #6f7278;
+        --text-soft: #92959b;
+        --accent: #7c3aed;
+        --accent-hover: #6d28d9;
+        --accent-tint: #f2ecfd;
         --green: #1f7a3a;
         --green-bg: #e8f7ee;
         --green-border: #c6ead2;
-        --shadow-xs: 0 1px 0 rgba(28, 27, 26, 0.04);
-        --shadow-lg: 0 24px 60px rgba(28, 27, 26, 0.16), 0 8px 16px rgba(28, 27, 26, 0.07);
+        --shadow-xs: 0 1px 0 rgba(21, 23, 27, 0.04);
+        --shadow-lg: 0 24px 60px rgba(21, 23, 27, 0.16), 0 8px 16px rgba(21, 23, 27, 0.07);
         --radius: 10px;
         --radius-lg: 14px;
         --radius-pill: 999px;
@@ -353,7 +353,7 @@ function renderConnectorConnectedHtml(connectorId: string): string {
         padding: 32px;
         color: var(--text);
         background:
-          radial-gradient(circle at 50% 0%, rgba(201, 100, 66, 0.11), transparent 34rem),
+          radial-gradient(circle at 50% 0%, rgba(124, 58, 237, 0.11), transparent 34rem),
           linear-gradient(180deg, #ffffff 0%, var(--bg) 42%, var(--bg) 100%);
         font: 13.5px/1.5 var(--sans);
         -webkit-font-smoothing: antialiased;
@@ -383,7 +383,7 @@ function renderConnectorConnectedHtml(connectorId: string): string {
         height: 24px;
         border-radius: 50%;
         color: var(--accent);
-        background: linear-gradient(135deg, #fbeee5 0%, #f5d8cb 100%);
+        background: linear-gradient(135deg, #f2ecfd 0%, #e4d8fb 100%);
         font-family: var(--serif);
         font-size: 11px;
         font-weight: 700;
@@ -455,7 +455,7 @@ function renderConnectorConnectedHtml(connectorId: string): string {
         padding: 8px 14px;
         color: white;
         background: var(--accent);
-        box-shadow: 0 1px 0 rgba(180, 90, 59, 0.18) inset, var(--shadow-xs);
+        box-shadow: 0 1px 0 rgba(109, 40, 217, 0.18) inset, var(--shadow-xs);
         font: 500 13px/1.4 var(--sans);
         cursor: pointer;
         transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;

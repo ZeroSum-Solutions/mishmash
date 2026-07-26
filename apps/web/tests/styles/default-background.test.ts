@@ -14,15 +14,15 @@ describe('default app background colors', () => {
   it('uses the release light background color by default', () => {
     const root = cssBlock(':root');
 
-    expect(root).toContain('--bg: #faf9f7;');
-    expect(root).toContain('--bg-app: #faf9f7;');
+    expect(root).toContain('--bg: #f8f9fb;');
+    expect(root).toContain('--bg-app: #f8f9fb;');
   });
 
-  it('keeps the dark theme background unchanged', () => {
+  it('pins the dark theme background to the canonical token value', () => {
     const dark = cssBlock('[data-theme="dark"]');
 
-    expect(dark).toContain('--bg: #1a1917;');
-    expect(dark).toContain('--bg-app: #1a1917;');
+    expect(dark).toContain('--bg: #18191c;');
+    expect(dark).toContain('--bg-app: #18191c;');
   });
 
   it('prefers platform UI fonts over optional local app fonts', () => {

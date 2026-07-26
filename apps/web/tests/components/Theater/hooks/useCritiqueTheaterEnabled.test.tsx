@@ -2,7 +2,8 @@
 
 /**
  * Coverage for the M1 Settings-toggle hook (Phase 15.3). The hook
- * reads from the existing `open-design:config` localStorage blob and
+ * reads from the `mishmash:config` localStorage blob (falling back to the
+ * legacy `open-design:config` blob) and
  * stays in sync via the platform `storage` event (cross-tab) and a
  * `open-design:critique-theater-toggle` CustomEvent (same-tab).
  */
@@ -36,7 +37,7 @@ describe('useCritiqueTheaterEnabled (Phase 15.3)', () => {
     expect(sink.enabled).toBe(false);
   });
 
-  it('reads the toggle from the existing open-design:config blob', () => {
+  it('reads the toggle from a legacy open-design:config blob (fallback path)', () => {
     window.localStorage.setItem(
       'open-design:config',
       JSON.stringify({
@@ -73,7 +74,7 @@ describe('useCritiqueTheaterEnabled (Phase 15.3)', () => {
       }),
     );
     setCritiqueTheaterEnabled(true);
-    const stored = JSON.parse(window.localStorage.getItem('open-design:config') ?? '{}');
+    const stored = JSON.parse(window.localStorage.getItem('mishmash:config') ?? '{}');
     expect(stored.critiqueTheaterEnabled).toBe(true);
     // Other fields stay intact: the toggle handshake does not stomp
     // user config.
@@ -404,6 +405,41 @@ describe('useCritiqueTheaterEnabled (Phase 15.3)', () => {
     // the network round-trip, so the in-session UI flips regardless of
     // the network outcome. A transient PATCH failure does not unwind
     // the flip; the next save retries.
+    expect(sink.enabled).toBe(true);
+  });
+});
+
+describe('storage key migration', () => {
+  it('prefers the mishmash:config blob over a legacy blob', () => {
+    window.localStorage.setItem(
+      'open-design:config',
+      JSON.stringify({ critiqueTheaterEnabled: true }),
+    );
+    window.localStorage.setItem(
+      'mishmash:config',
+      JSON.stringify({ critiqueTheaterEnabled: false }),
+    );
+    const sink: { enabled?: boolean } = {};
+    render(<Probe sink={sink} />);
+    expect(sink.enabled).toBe(false);
+  });
+
+  it('reloads on a storage event for the mishmash:config key', () => {
+    const sink: { enabled?: boolean } = {};
+    render(<Probe sink={sink} />);
+    expect(sink.enabled).toBe(false);
+    act(() => {
+      window.localStorage.setItem(
+        'mishmash:config',
+        JSON.stringify({ critiqueTheaterEnabled: true }),
+      );
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'mishmash:config',
+          newValue: window.localStorage.getItem('mishmash:config'),
+        }),
+      );
+    });
     expect(sink.enabled).toBe(true);
   });
 });

@@ -4,7 +4,7 @@ import { ensureRailOpen } from '@/playwright/rail';
 import { routeAgents } from '@/playwright/mock-factory';
 import type { Page } from '@playwright/test';
 
-const STORAGE_KEY = 'open-design:config';
+const STORAGE_KEY = 'mishmash:config';
 const OPEN_SETTINGS_LABEL = /Open settings/i;
 const AUTOMATIONS_TITLE = /Automations/i;
 

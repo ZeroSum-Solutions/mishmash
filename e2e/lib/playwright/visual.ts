@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fulfillAgentsRoute } from './mock-factory.js';
 import { T } from '@/timeouts';
 
-const STORAGE_KEY = 'open-design:config';
+const STORAGE_KEY = 'mishmash:config';
 const VISUAL_STABILITY_STORAGE_KEY = 'open-design:visual-stability';
 const VISUAL_STYLE_ID = 'od-visual-stability-style';
 

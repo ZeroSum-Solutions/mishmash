@@ -3,7 +3,7 @@ import { expect, test } from '@/playwright/suite';
 import type { Page, Route } from '@playwright/test';
 import { openSettingsDialog } from '../lib/playwright/amr.js';
 
-const STORAGE_KEY = 'open-design:config';
+const STORAGE_KEY = 'mishmash:config';
 
 type DesignSystemFixture = {
   id: string;
