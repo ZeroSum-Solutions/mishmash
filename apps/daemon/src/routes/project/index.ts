@@ -1167,7 +1167,10 @@ function buildDesignSystemCopyPendingPrompt(input: {
     .slice(0, 140)
     .map((name) => `  - ${name}`);
   return [
-    'Create this project as a complete Open Design design system workspace.',
+    // Keep in sync with apps/web/src/design-system-auto-prompt.ts
+    // DESIGN_SYSTEM_WORKSPACE_PROMPT_PREFIX — the web gate prefix-matches this
+    // persisted literal to render the structured workspace card.
+    'Create this project as a complete MishMash design system workspace.',
     '',
     'Autonomy requirement:',
     '- Do not ask setup or clarification questions during design-system generation.',

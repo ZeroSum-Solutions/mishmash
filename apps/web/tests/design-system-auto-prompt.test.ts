@@ -14,6 +14,18 @@ describe('isDesignSystemWorkspacePrompt', () => {
     expect(isDesignSystemWorkspacePrompt(`\n  ${DESIGN_SYSTEM_WORKSPACE_PROMPT_PREFIX} extra detail`)).toBe(true);
   });
 
+  it('accepts the legacy persisted prefix from projects created before the rebrand', () => {
+    // Old projects carry this exact literal in their persisted pendingPrompt /
+    // first message forever; if the gate stops matching it, their chats render
+    // the raw prompt wall instead of the "Creating design system workspace"
+    // card. Regression spec for the bef2daeed rename.
+    expect(
+      isDesignSystemWorkspacePrompt(
+        'Create this project as a complete Open Design design system workspace.\n\nSource project handoff:',
+      ),
+    ).toBe(true);
+  });
+
   it('rejects content that mentions the sentinel mid-string', () => {
     expect(isDesignSystemWorkspacePrompt(`Hello! ${DESIGN_SYSTEM_WORKSPACE_PROMPT_PREFIX}`)).toBe(false);
   });

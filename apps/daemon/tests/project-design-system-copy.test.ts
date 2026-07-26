@@ -74,7 +74,12 @@ describe('project design-system copy route', () => {
     expect(copied.project.designSystemId).toMatch(/^user:/);
     expect(copied.designSystemId).toBe(copied.project.designSystemId);
     expect(copied.conversationId).toBeTruthy();
-    expect(copied.project.pendingPrompt).toContain('complete Open Design design system');
+    // Must emit the CURRENT brand literal: the web gate
+    // (isDesignSystemWorkspacePrompt) prefix-matches the persisted prompt to
+    // render the structured workspace card instead of a raw prompt wall.
+    expect(copied.project.pendingPrompt).toContain(
+      'Create this project as a complete MishMash design system workspace.',
+    );
     expect(copied.project.pendingPrompt).toContain('context/source-context.md');
     expect(copied.project.pendingPrompt).toContain('refs/brand.md');
     expect(copied.project.metadata).toMatchObject({
