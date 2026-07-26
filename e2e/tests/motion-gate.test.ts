@@ -8,7 +8,11 @@ import { chromium, type Browser, type Page } from '@playwright/test';
 import { afterEach, describe, expect, test } from 'vitest';
 
 import { T } from '@/timeouts';
-import { GOOD_FIXTURE_HTML, JANKY_FIXTURE_HTML } from '../resources/motion-gate-fixtures.js';
+import {
+  GOOD_FIXTURE_HTML,
+  JANKY_FIXTURE_HTML,
+  REFERENCE_FIXTURE_HTML,
+} from '../resources/motion-gate-fixtures.js';
 
 // -----------------------------------------------------------------------------
 // Motion verification gate
@@ -39,7 +43,11 @@ import { GOOD_FIXTURE_HTML, JANKY_FIXTURE_HTML } from '../resources/motion-gate-
 // would be undefined by the time metrics are read.
 const FIXTURE_DIR = mkdtempSync(path.join(tmpdir(), 'motion-gate-'));
 const FIXTURE_PATHS: Record<string, string> = {};
-for (const [name, html] of Object.entries({ good: GOOD_FIXTURE_HTML, janky: JANKY_FIXTURE_HTML })) {
+for (const [name, html] of Object.entries({
+  good: GOOD_FIXTURE_HTML,
+  janky: JANKY_FIXTURE_HTML,
+  reference: REFERENCE_FIXTURE_HTML,
+})) {
   const file = path.join(FIXTURE_DIR, `${name}.html`);
   writeFileSync(file, html, 'utf8');
   FIXTURE_PATHS[name] = file;
@@ -258,6 +266,7 @@ describe('motion verification gate', () => {
 
       const goodSamples: MotionMetrics[] = [];
       const jankySamples: MotionMetrics[] = [];
+      const referenceSamples: MotionMetrics[] = [];
       for (let i = 0; i < MEASUREMENT_REPEATS; i += 1) {
         const goodPage = await browser.newPage({ viewport: { width: 1280, height: 800 } });
         goodSamples.push(await driveScrollAndMeasure(goodPage, 'good'));
@@ -266,21 +275,29 @@ describe('motion verification gate', () => {
         const jankyPage = await browser.newPage({ viewport: { width: 1280, height: 800 } });
         jankySamples.push(await driveScrollAndMeasure(jankyPage, 'janky'));
         await jankyPage.close();
+
+        const referencePage = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+        referenceSamples.push(await driveScrollAndMeasure(referencePage, 'reference'));
+        await referencePage.close();
       }
 
       const good = medianMetrics(goodSamples);
       const janky = medianMetrics(jankySamples);
+      const reference = medianMetrics(referenceSamples);
 
       // Surfaced so the measured numbers are visible in test output, not
       // just the pass/fail booleans asserted below: every raw sample plus
       // the median used for the gate decision.
-      console.log('[motion-gate] good  samples', JSON.stringify(goodSamples));
-      console.log('[motion-gate] janky samples', JSON.stringify(jankySamples));
-      console.log('[motion-gate] good  median ', JSON.stringify(good));
-      console.log('[motion-gate] janky median ', JSON.stringify(janky));
+      console.log('[motion-gate] good      samples', JSON.stringify(goodSamples));
+      console.log('[motion-gate] janky     samples', JSON.stringify(jankySamples));
+      console.log('[motion-gate] reference samples', JSON.stringify(referenceSamples));
+      console.log('[motion-gate] good      median ', JSON.stringify(good));
+      console.log('[motion-gate] janky     median ', JSON.stringify(janky));
+      console.log('[motion-gate] reference median ', JSON.stringify(reference));
 
       const goodResult = evaluateMotionGate(good);
       const jankyResult = evaluateMotionGate(janky);
+      const referenceResult = evaluateMotionGate(reference);
 
       expect(
         goodResult.pass,
@@ -292,17 +309,25 @@ describe('motion verification gate', () => {
         'expected the janky fixture to FAIL the motion gate (it passed instead — either the fixture no longer reproduces real jank, or the thresholds have been loosened)',
       ).toBe(false);
 
+      expect(
+        referenceResult.pass,
+        `expected the reference fixture (docs/decisions/motion-stack.md) to pass the motion gate; it failed because: ${referenceResult.reasons.join('; ') || 'n/a'}`,
+      ).toBe(true);
+
       // Sanity check the harness itself actually swept the page top to bottom
-      // for both fixtures, so a pass/fail result can't come from a scroll
+      // for all three fixtures, so a pass/fail result can't come from a scroll
       // that silently never happened.
       expect(good.captures[0]?.target).toBe(0);
       expect(good.captures.at(-1)?.target).toBe(1);
       expect(janky.captures[0]?.target).toBe(0);
       expect(janky.captures.at(-1)?.target).toBe(1);
+      expect(reference.captures[0]?.target).toBe(0);
+      expect(reference.captures.at(-1)?.target).toBe(1);
     },
-    // MEASUREMENT_REPEATS samples per fixture (2 fixtures) means this test
-    // drives a full scroll gesture 2 * MEASUREMENT_REPEATS times; T.xlong
-    // alone isn't enough headroom for that on a loaded CI machine.
-    T.xlong * MEASUREMENT_REPEATS,
+    // MEASUREMENT_REPEATS samples per fixture (3 fixtures: good, janky,
+    // reference) means this test drives a full scroll gesture
+    // 3 * MEASUREMENT_REPEATS times; T.xlong alone isn't enough headroom for
+    // that on a loaded CI machine.
+    T.xlong * MEASUREMENT_REPEATS * 1.5,
   );
 });
