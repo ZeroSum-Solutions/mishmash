@@ -1,10 +1,10 @@
-// Open Design web clipper on-page UI.
+// MishMash web clipper on-page UI.
 //
 // Three on-page surfaces, all isolated in their own Shadow DOM so page CSS
 // can't bleed in (and the extension's own nodes are excluded from captures):
 //
 //   1. A floating launcher toolbar (page / design system / figma / shot / images / element),
-//      led by the Open Design brand mark. HIDDEN by default — turned on from
+//      led by the MishMash brand mark. HIDDEN by default — turned on from
 //      the popup; the preference is remembered. A grip handle on its leading
 //      edge drags it anywhere on the page, and the resting spot is remembered.
 //   2. A DevTools-style element picker: hover to highlight, click to capture
@@ -33,7 +33,7 @@
   // content script's isolated world, because we share the host page's DOM and
   // its CSP governs every DOM sink. That throw used to abort this whole script
   // right after the injection guard was set, leaving the page flagged but with
-  // no message listener: the popup then reported "Open Design hasn't attached to
+  // no message listener: the popup then reported "MishMash hasn't attached to
   // this page yet" and neither a reload nor the popup's "Refresh page" could
   // recover it. DOMParser is NOT a Trusted Types sink, so parse the markup in a
   // detached document and move the nodes in. `<style>` lands in <head> and the
@@ -240,10 +240,9 @@
           <circle cx="2.5" cy="13" r="1.4"/><circle cx="7.5" cy="13" r="1.4"/>
         </svg>
       </div>
-      <a class="brand" href="https://open-design.ai" target="_blank" rel="noopener noreferrer" data-tip="${esc(t('toolbarHomeTip'))}" aria-label="${esc(t('toolbarHomeLabel'))}">
+      <a class="brand" href="https://example.com" target="_blank" rel="noopener noreferrer" data-tip="${esc(t('toolbarHomeTip'))}" aria-label="${esc(t('toolbarHomeLabel'))}">
         <svg viewBox="0 0 93 93" fill="#fff" xmlns="http://www.w3.org/2000/svg">
-          <path fill-rule="evenodd" clip-rule="evenodd" d="M46.38 17.5c15.85 0 28.7 12.85 28.7 28.7 0 15.85-12.85 28.7-28.7 28.7H21.5a3.82 3.82 0 0 1-3.82-3.82V46.19c0-15.85 12.85-28.7 28.7-28.7Zm0 5.74c-12.68 0-22.96 10.28-22.96 22.96 0 12.68 10.28 22.96 22.96 22.96 12.68 0 22.96-10.28 22.96-22.96 0-12.68-10.28-22.96-22.96-22.96Z"/>
-          <path d="M44.59 59.66 35.84 36.64a.94.94 0 0 1 1.18-1.19l23.04 8.91c.95.37.69 1.78-.33 1.78H46.36v13.19c0 1.03-1.41 1.29-1.77.33Z"/>
+          <text x="46.5" y="47" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="40">MM</text>
         </svg>
       </a>
       <span class="sep"></span>
@@ -824,7 +823,7 @@
         sourceTitle: document.title,
       });
     } catch (err) {
-      console.warn('[Open Design] element capture failed', err);
+      console.warn('[MishMash] element capture failed', err);
       stopBusy();
       toast(t('extensionErrorReload'));
       return;
@@ -1175,9 +1174,8 @@
           <div class="head">
             <span class="mark" aria-hidden="true">
               <svg viewBox="0 0 93 93" xmlns="http://www.w3.org/2000/svg">
-                <path d="M93 46.19c0 40.35-6.15 46.5-46.5 46.5C6.15 92.69 0 86.54 0 46.19 0 5.84 6.15-.31 46.5-.31 86.85-.31 93 5.84 93 46.19Z" fill="#202020"/>
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M46.38 17.5c15.85 0 28.7 12.85 28.7 28.7 0 15.85-12.85 28.7-28.7 28.7H21.5a3.82 3.82 0 0 1-3.82-3.82V46.19c0-15.85 12.85-28.7 28.7-28.7Zm0 5.74c-12.68 0-22.96 10.28-22.96 22.96 0 12.68 10.28 22.96 22.96 22.96 12.68 0 22.96-10.28 22.96-22.96 0-12.68-10.28-22.96-22.96-22.96Z" fill="#fff"/>
-                <path d="M44.59 59.66 35.84 36.64a.94.94 0 0 1 1.18-1.19l23.04 8.91c.95.37.69 1.78-.33 1.78H46.36v13.19c0 1.03-1.41 1.29-1.77.33Z" fill="#fff"/>
+                <rect x="0" y="0" width="93" height="93" rx="27" fill="#202020"/>
+                <text x="46.5" y="47.5" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="42" fill="#fff">MM</text>
               </svg>
             </span>
             <span class="title">${esc(t('selectImagesToSave'))}</span>

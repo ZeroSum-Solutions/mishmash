@@ -44,7 +44,7 @@ const cardIn: Variants = {
 type CardModel = {
   /** Highlight identity — recorded as "seen" so the card shows once per id. */
   id: string;
-  /** Running app version, shown as the "Open Design x.y.z" eyebrow. */
+  /** Running app version, shown as the "MishMash x.y.z" eyebrow. */
   appVersion: string;
   /** The release headline, rendered as the main serif title. */
   title: string;

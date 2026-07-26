@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  DEFAULT_WHATS_NEW_URL,
   createWhatsNewService,
   parseWhatsNewDocument,
   whatsNewSourceUrl,
@@ -24,9 +23,9 @@ function jsonResponse(payload: unknown, status = 200): Response {
 }
 
 describe('whatsNewSourceUrl', () => {
-  it('uses the dedicated hosted document on release channels', () => {
-    expect(whatsNewSourceUrl({}, 'stable')).toBe(DEFAULT_WHATS_NEW_URL);
-    expect(whatsNewSourceUrl({}, 'beta')).toBe(DEFAULT_WHATS_NEW_URL);
+  it('has no built-in default document for any channel (MishMash hosts none yet)', () => {
+    expect(whatsNewSourceUrl({}, 'stable')).toBeNull();
+    expect(whatsNewSourceUrl({}, 'beta')).toBeNull();
   });
 
   it('resolves to null on non-release channels (development/CI show no card)', () => {
@@ -36,6 +35,9 @@ describe('whatsNewSourceUrl', () => {
 
   it('honors OD_WHATS_NEW_URL for fixtures and tests regardless of channel', () => {
     expect(whatsNewSourceUrl({ OD_WHATS_NEW_URL: 'https://fixture.local/whats-new.json' }, 'development')).toBe(
+      'https://fixture.local/whats-new.json',
+    );
+    expect(whatsNewSourceUrl({ OD_WHATS_NEW_URL: 'https://fixture.local/whats-new.json' }, 'stable')).toBe(
       'https://fixture.local/whats-new.json',
     );
   });
@@ -73,7 +75,7 @@ describe('createWhatsNewService', () => {
   it('caches the parsed result and reuses it within the TTL', async () => {
     let calls = 0;
     const service = createWhatsNewService({
-      env: {},
+      env: { OD_WHATS_NEW_URL: 'https://fixture.local/whats-new.json' },
       fetchImpl: async () => {
         calls += 1;
         return jsonResponse(DOC);
@@ -102,7 +104,7 @@ describe('createWhatsNewService', () => {
 
   it('resolves to null content instead of failing when the document is unreachable', async () => {
     const service = createWhatsNewService({
-      env: {},
+      env: { OD_WHATS_NEW_URL: 'https://fixture.local/whats-new.json' },
       fetchImpl: async () => {
         throw new Error('offline');
       },
@@ -115,7 +117,7 @@ describe('createWhatsNewService', () => {
 
   it('resolves to null content on a non-OK response', async () => {
     const service = createWhatsNewService({
-      env: {},
+      env: { OD_WHATS_NEW_URL: 'https://fixture.local/whats-new.json' },
       fetchImpl: async () => jsonResponse({ error: 'nope' }, 404),
     });
     const result = await service.readWhatsNew('stable');

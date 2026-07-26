@@ -51,7 +51,7 @@ describe('PLUGIN_AUTHORING_PROMPT_TEMPLATE', () => {
     expect(PLUGIN_AUTHORING_PROMPT_TEMPLATE).toContain('gh auth login -h github.com -s repo,workflow');
     expect(PLUGIN_AUTHORING_PROMPT_TEMPLATE).toContain('od plugin publish-repo generated-plugin --owner <github-login-or-org>');
     expect(PLUGIN_AUTHORING_PROMPT_TEMPLATE).toMatch(/Never write placeholder owners/i);
-    expect(PLUGIN_AUTHORING_PROMPT_TEMPLATE).toContain('open-design-user');
+    expect(PLUGIN_AUTHORING_PROMPT_TEMPLATE).toContain('mishmash-user');
     expect(PLUGIN_AUTHORING_PROMPT_TEMPLATE).toContain('<vendor>');
     expect(PLUGIN_AUTHORING_PROMPT_TEMPLATE).toContain('your-username');
   });

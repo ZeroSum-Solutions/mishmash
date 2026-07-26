@@ -8302,7 +8302,7 @@ async function runDesignSystemImportShadcn(args) {
     console.log(`Usage:
   od design-systems import-shadcn <reference> [--name <name>] [--import-mode <mode>] [--craft <slugs>] [--json] [--daemon-url <url>]
 
-Imports a shadcn registry item as an MishMash design system.
+Imports a shadcn registry item as a MishMash design system.
 
   <reference>            "<owner>/<repo>/<item>" (e.g. shadcn/ui/theme-zinc)
                          or an https URL to a registry-item JSON document.
@@ -8384,7 +8384,7 @@ into a zip. The bundle is the same one Settings → About → Export
 diagnostics produces.
 
   <path>                 Where to write the zip. Defaults to
-                         ./open-design-diagnostics-<timestamp>.zip in the
+                         ./mishmash-diagnostics-<timestamp>.zip in the
                          current working directory. Alias: --output <path>.
   --json                 Print {path, sizeBytes} on stdout instead of a
                          human-readable summary. The file is still written

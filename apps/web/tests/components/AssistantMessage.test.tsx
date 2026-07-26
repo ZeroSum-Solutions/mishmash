@@ -85,7 +85,7 @@ describe('AssistantMessage feedback gate', () => {
     );
 
     expect(container.querySelector('[data-user-action-card="plugin-suggestion"]')).toBeTruthy();
-    const contribute = screen.getByRole('button', { name: 'Contribute to open-design' });
+    const contribute = screen.getByRole('button', { name: 'Contribute to MishMash' });
     expect(contribute).toBeTruthy();
     expect(contribute.classList.contains('plugin-action-button--primary')).toBe(false);
     const toggle = screen.getByRole('button', { name: 'View details' });
