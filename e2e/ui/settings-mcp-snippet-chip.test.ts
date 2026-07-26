@@ -29,7 +29,7 @@ test.beforeEach(async ({ page }) => {
 test('[P1] MCP server snippet code stays transparent, not the inline-code chip (#4509)', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await page.getByText(APP_LOADING_TEXT).waitFor({ state: 'hidden', timeout: T.medium });
+  await page.getByText(APP_LOADING_TEXT).first().waitFor({ state: 'hidden', timeout: T.medium });
   const privacyDialog = page.getByRole('dialog').filter({ hasText: 'Help us improve MishMash' });
   if (await privacyDialog.isVisible()) {
     await privacyDialog.getByRole('button', { name: /I get it|not now|got it|don't share/i }).click();

@@ -66,7 +66,7 @@ function baseConfig(overrides: Partial<AppConfigSeed> = {}): AppConfigSeed {
 }
 
 async function waitForLoadingToClear(page: Page) {
-  await page.getByText(APP_LOADING_TEXT).waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+  await page.getByText(APP_LOADING_TEXT).first().waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
 }
 
 async function gotoEntryHome(page: Page) {

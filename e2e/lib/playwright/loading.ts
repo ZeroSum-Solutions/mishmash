@@ -23,5 +23,14 @@
  * repointed those copies at `Loading workspace…` — the other loader — leaving
  * them just as vacuous. Both times the literal and the app drifted apart
  * silently. Import this instead of writing either string inline.
+ *
+ * Call `.first()` before `waitFor()`. Matching two strings means the locator
+ * can resolve to two nodes, and `waitFor()` throws a strict-mode violation on
+ * a multi-match locator — measured, both for `hidden` and for `detached`. It
+ * costs nothing to be safe here and the alternative is trading a silent pass
+ * for a hard error. `.first()` re-resolves on every poll, so it still means
+ * "wait until none of them are left": the shell goes, the loader becomes the
+ * first match, and the wait ends when that one goes too. `toHaveCount(0)`
+ * counts rather than resolves, so those call sites need no `.first()`.
  */
 export const APP_LOADING_TEXT = /Loading MishMash…|Loading workspace…/;

@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test';
 import type { Locator } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { T } from '@/timeouts';
 
 /**
  * The entry nav rail is collapsed by default; its destinations
@@ -18,16 +19,24 @@ export async function ensureRailOpen(page: Page): Promise<void> {
   // the click and then failed its own assertion on the line after.
   await expect(entry).toBeVisible();
 
-  // Decide on the class, which is the state itself, rather than on the
-  // toggle's visibility, which is a CSS consequence of it.
-  const open = await entry.evaluate((element) => element.classList.contains('entry--rail-open'));
-  if (!open) {
-    const toggle = page.getByTestId('entry-rail-toggle');
-    await expect(toggle).toBeVisible();
-    await toggle.scrollIntoViewIfNeeded();
-    await toggle.click();
-  }
-  await expect(entry).toHaveClass(/entry--rail-open/);
+  // Retry the read-then-click as a unit, and decide on the class — which is the
+  // state itself — rather than on the toggle's visibility, which is only a CSS
+  // consequence of it. The rail restores `od.entry.railOpen` from localStorage
+  // while React hydrates, so a single snapshot of the class can be taken before
+  // that lands and send a click the wrong way. Re-reading converges; deciding
+  // once would repeat, in a new place, the same non-retried read this helper
+  // was fixed to remove.
+  const toggle = page.getByTestId('entry-rail-toggle');
+  await expect(async () => {
+    const open = await entry.evaluate((element) => element.classList.contains('entry--rail-open'));
+    if (!open) {
+      await expect(toggle).toBeVisible({ timeout: T.short });
+      await toggle.scrollIntoViewIfNeeded();
+      await toggle.click({ timeout: T.short });
+    }
+    await expect(entry).toHaveClass(/entry--rail-open/, { timeout: T.short });
+  }).toPass({ timeout: T.medium });
+
   await expect(page.locator('.entry-nav-rail')).not.toHaveAttribute('aria-hidden', 'true');
 }
 

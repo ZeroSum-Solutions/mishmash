@@ -365,7 +365,7 @@ async function routeConnectors(page: Page, connectors: typeof CONNECTORS) {
 
 async function gotoEntryHome(page: Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await page.getByText(APP_LOADING_TEXT).waitFor({ state: 'hidden', timeout: T.long });
+  await page.getByText(APP_LOADING_TEXT).first().waitFor({ state: 'hidden', timeout: T.long });
   await expect(page.getByTestId('home-hero')).toBeVisible({ timeout: T.long });
   await expect(page.getByTestId('home-hero-input')).toBeVisible({ timeout: T.long });
 }

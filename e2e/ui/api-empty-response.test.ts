@@ -146,5 +146,5 @@ async function sendPrompt(page: Page, prompt: string) {
 }
 
 async function waitForLoadingToClear(page: Page) {
-  await page.getByText(APP_LOADING_TEXT).waitFor({ state: 'hidden', timeout: T.medium });
+  await page.getByText(APP_LOADING_TEXT).first().waitFor({ state: 'hidden', timeout: T.medium });
 }

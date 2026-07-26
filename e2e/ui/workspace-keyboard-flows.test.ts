@@ -451,7 +451,7 @@ async function createProject(
 
 async function gotoEntryHome(page: Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await page.getByText(APP_LOADING_TEXT).waitFor({ state: 'detached', timeout: 10_000 }).catch(() => {});
+  await page.getByText(APP_LOADING_TEXT).first().waitFor({ state: 'detached', timeout: 10_000 }).catch(() => {});
   const privacyDialog = page.getByRole('dialog').filter({ hasText: 'Help us improve MishMash' });
   if (await privacyDialog.isVisible()) {
     await privacyDialog.getByRole('button', { name: /I get it|not now|got it|don't share/i }).click();

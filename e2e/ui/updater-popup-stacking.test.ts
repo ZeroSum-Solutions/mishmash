@@ -87,7 +87,7 @@ test('[P1] update ready prompt paints above the composer and its agent picker', 
   // anchors to the sticky topbar, so it stays pinned to the viewport top.
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await page.getByText(APP_LOADING_TEXT).waitFor({ state: 'hidden', timeout: T.long });
+  await page.getByText(APP_LOADING_TEXT).first().waitFor({ state: 'hidden', timeout: T.long });
   await expect(page.getByTestId('home-hero')).toBeVisible();
 
   // Scroll the entry main pane until the composer card sits at the viewport

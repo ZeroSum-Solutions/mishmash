@@ -1294,7 +1294,7 @@ async function openNewProjectModal(page: Page) {
 }
 
 async function waitForLoadingToClear(page: Page) {
-  await page.getByText(APP_LOADING_TEXT).waitFor({ state: 'hidden', timeout: T.long });
+  await page.getByText(APP_LOADING_TEXT).first().waitFor({ state: 'hidden', timeout: T.long });
 }
 
 async function getCurrentProjectContext(

@@ -90,7 +90,7 @@ async function seedProjectWithAssistantFileLink(
 }
 
 async function waitForWorkspaceReady(page: Page) {
-  await page.getByText(APP_LOADING_TEXT).waitFor({ state: 'hidden', timeout: T.medium }).catch(() => {});
+  await page.getByText(APP_LOADING_TEXT).first().waitFor({ state: 'hidden', timeout: T.medium }).catch(() => {});
   await expect(page.getByTestId('chat-composer')).toBeVisible({ timeout: T.medium });
   await expect(page.getByTestId('file-workspace')).toBeVisible({ timeout: T.medium });
 }

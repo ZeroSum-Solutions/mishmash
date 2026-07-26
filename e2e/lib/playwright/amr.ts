@@ -16,7 +16,7 @@ type MockAmrWalletOptions = {
 };
 
 export async function waitForLoadingToClear(page: Page) {
-  await page.getByText(APP_LOADING_TEXT).waitFor({ state: 'hidden', timeout: T.long }).catch(() => {});
+  await page.getByText(APP_LOADING_TEXT).first().waitFor({ state: 'hidden', timeout: T.long }).catch(() => {});
 }
 
 export async function dismissPrivacyDialog(page: Page) {
