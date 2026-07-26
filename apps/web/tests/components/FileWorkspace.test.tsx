@@ -780,6 +780,41 @@ describe('FileWorkspace upload input', () => {
     expect(dialogScope.queryByRole('button', { name: /^Audio\b/i })).toBeNull();
   });
 
+  it('distinguishes pages that share the index.html basename', async () => {
+    // A mirrored WordPress site stores every page as <slug>/index.html, so a
+    // basename-only label collapses the whole site into one repeated "index"
+    // entry and the menu becomes unusable.
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="web_clone"
+        files={[
+          workspaceFile('index.html'),
+          workspaceFile('nosotros/index.html'),
+          workspaceFile('contacto/index.html'),
+          workspaceFile('casos-de-exito/index.html'),
+        ]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{ tabs: [], active: null }}
+        onTabsStateChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('workspace-pages-menu-trigger'));
+    const menu = await screen.findByTestId('workspace-pages-menu');
+    const labels = within(menu)
+      .getAllByRole('menuitem')
+      .map((item) => item.textContent?.trim() ?? '')
+      .filter((label) => label && !/New blank page|All project files/i.test(label));
+
+    expect(labels).toHaveLength(4);
+    expect(new Set(labels).size).toBe(labels.length);
+    expect(labels).toContain('nosotros');
+    expect(labels).toContain('casos de exito');
+  });
+
   it('hides upload failure details during in-panel preview and restores them after closing preview', async () => {
     mockedUploadProjectFiles.mockRejectedValueOnce(new Error('storage offline'));
 

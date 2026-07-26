@@ -6084,8 +6084,16 @@ function isPrimaryWorkspaceTab(
 }
 
 function pageDisplayName(name: string): string {
-  const basename = normalizeProjectFilePath(name).split('/').filter(Boolean).pop() ?? name;
-  return basename.replace(/\.html?$/i, '').replace(/[-_]+/g, ' ').trim() || basename;
+  const segments = normalizeProjectFilePath(name).split('/').filter(Boolean);
+  const basename = segments.pop() ?? name;
+  const stem = basename.replace(/\.html?$/i, '');
+  // A mirrored site addresses each page by directory — `nosotros/index.html`,
+  // `contacto/index.html` — so the basename alone labels every page "index" and
+  // the menu becomes a column of identical entries. The directory is the name.
+  const label = stem.toLowerCase() === 'index' && segments.length > 0
+    ? segments[segments.length - 1] ?? stem
+    : stem;
+  return label.replace(/[-_]+/g, ' ').trim() || basename;
 }
 
 function pageIconName(name: string): IconName {
