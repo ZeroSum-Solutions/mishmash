@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // P7 (mirror width fidelity, docket #7): a mirrored Salient/WPBakery site can
@@ -18,15 +18,23 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // web-clone-skill-ref.test.ts convention of referencing skills/web-clone from
 // the daemon test suite.
 //
-// Fixture pair (goal-run amendment 33):
-//   - regressionFixtureHtml reproduces the real overflow pattern (a
-//     data-scroll-animation row with an already-wild inline transform and no
-//     overflow containment) and must come back changed, with the row's own
-//     overflow-x scoped to hidden.
-//   - legitimateScrollerFixtureHtml is a genuine horizontal carousel
-//     (overflow-x: auto, no data-scroll-animation attribute) and must come
-//     back byte-for-byte unchanged -- the fix must not touch scrollers that
-//     were never the bug.
+// This file also covers an adversary review pass on the first version of the
+// fix, which confirmed four scoping/correctness bugs against the module
+// directly (see the fixtures below, one per finding):
+//   1. Over-clamping: matching on `data-scroll-animation="true"` alone (no
+//      movement check) would touch `transform_y`/`fade_in`/etc rows too, even
+//      ones with an intentionally bleeding child. -> transformYFixtureHtml.
+//   2. Skip-guard false negative: a substring check for "overflow" wrongly
+//      treated `text-overflow: ellipsis` as "already constrained" and skipped
+//      a row that genuinely needed clamping. -> textOverflowFixtureHtml.
+//   3. Single-quoted `style='...'` attributes produced a *second*,
+//      double-quoted `style="..."` attribute -- the browser drops the real
+//      one, including its initial transform. -> singleQuotedStyleFixtureHtml.
+//   4. `overflow-x: hidden` alone forces computed `overflow-y` to `auto` per
+//      CSS Overflow L3's visible/non-visible coercion rule, risking an
+//      unwanted vertical scrollbar; `overflow-x: clip` is exempt from that
+//      coercion. This is exercised as a real headless Chrome check further
+//      down, not just a string assertion on the emitted markup.
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../..');
 const clampScriptPath = path.join(
   repoRoot,
@@ -52,6 +60,45 @@ const legitimateScrollerFixtureHtml = `<!doctype html><html><body>
 </div>
 </body></html>`;
 
+// Finding 1: a scroll-animation row on a NON-transform_x axis, wrapping a
+// child that intentionally bleeds wider than its row. Must be left
+// byte-for-byte untouched -- this axis cannot produce the runaway-width bug,
+// and clamping it would silently alter a deliberate layout.
+const transformYFixtureHtml = `<!doctype html><html><body>
+<div class="vc_col-sm-12 feature-banner wpb_column column_container" data-scroll-animation="true" data-scroll-animation-movement="transform_y" data-scroll-animation-intensity="3">
+  <div class="vc_column-inner" style="width: 140%; transform: translateY(30px);">Intentionally wide decorative banner</div>
+</div>
+</body></html>`;
+
+// Finding 2: a transform_x row whose *pre-existing* style declares
+// `text-overflow: ellipsis`, not `overflow`/`overflow-x`. A substring check
+// for "overflow" would wrongly treat this as already constrained and skip
+// it; the row must still get clamped.
+const textOverflowFixtureHtml = `<!doctype html><html><body>
+<div class="vc_col-sm-12 milestone-container wpb_column column_container" data-scroll-animation="true" data-scroll-animation-movement="transform_x" style="text-overflow:ellipsis;white-space:nowrap">
+  <div class="vc_column-inner" style="transform: translateX(3000px);">Overlong stat label</div>
+</div>
+</body></html>`;
+
+// Finding 3: a transform_x row whose pre-existing style attribute is
+// single-quoted. The clamp must merge into that same attribute (preserving
+// its quote style and original declarations), not add a second `style="..."`
+// attribute alongside it.
+const singleQuotedStyleFixtureHtml =
+  `<!doctype html><html><body>\n` +
+  `<div class='vc_col-sm-12 milestone-container' data-scroll-animation='true' data-scroll-animation-movement='transform_x' style='transform: translateX(4499.95px) translateZ(0px);'>\n` +
+  `  <div class="wpb_wrapper">85+ Brands Directed</div>\n` +
+  `</div>\n` +
+  `</body></html>`;
+
+// LOW (optional, cheap): unquoted attribute values are valid HTML5. Confirms
+// the matcher isn't accidentally quote-dependent.
+const unquotedAttributesFixtureHtml = `<!doctype html><html><body>
+<div class="vc_col-sm-12 milestone-container" data-scroll-animation=true data-scroll-animation-movement=transform_x>
+  <div class="vc_column-inner" style="transform: translateX(4499.95px);">Unquoted attrs</div>
+</div>
+</body></html>`;
+
 let siteDir: string;
 
 beforeEach(() => {
@@ -62,9 +109,18 @@ afterEach(() => {
   fs.rmSync(siteDir, { recursive: true, force: true });
 });
 
+async function loadClamp() {
+  return (await import(pathToFileURL(clampScriptPath).href)) as {
+    clampScrollAnimationOverflow: (opts: { siteDir: string; dryRun?: boolean }) => {
+      clamped: number;
+      filesChanged: number;
+    };
+  };
+}
+
 describe('clamp-scroll-animation-overflow (P7 mirror width fidelity)', () => {
   it('scopes an overflow-x clip to the exact scroll-animation row that overflows', async () => {
-    const { clampScrollAnimationOverflow } = await import(pathToFileUrl(clampScriptPath));
+    const { clampScrollAnimationOverflow } = await loadClamp();
     const file = path.join(siteDir, 'index.html');
     fs.writeFileSync(file, regressionFixtureHtml);
 
@@ -77,8 +133,10 @@ describe('clamp-scroll-animation-overflow (P7 mirror width fidelity)', () => {
 
     expect(result.clamped).toBe(1);
     expect(result.filesChanged).toBe(1);
-    // The row carrying the attribute now clips its own overflow...
-    expect(after).toMatch(/<div style="overflow-x:hidden;" class="vc_col-sm-12 milestone-container/);
+    // The row carrying both attributes now clips its own overflow on the x
+    // axis only (see finding 4 -- overflow-x: clip, not overflow-x: hidden,
+    // so the y axis is never coerced)...
+    expect(after).toMatch(/<div style="overflow-x:clip;" class="vc_col-sm-12 milestone-container/);
     expect(after).toMatch(/data-scroll-animation="true"/);
     // ...while the element and its animation-driving transform are left
     // fully intact: nothing here hides the marquee or stops it animating.
@@ -89,7 +147,7 @@ describe('clamp-scroll-animation-overflow (P7 mirror width fidelity)', () => {
   });
 
   it('leaves a legitimate horizontal scroller byte-for-byte untouched', async () => {
-    const { clampScrollAnimationOverflow } = await import(pathToFileUrl(clampScriptPath));
+    const { clampScrollAnimationOverflow } = await loadClamp();
     const file = path.join(siteDir, 'index.html');
     fs.writeFileSync(file, legitimateScrollerFixtureHtml);
 
@@ -101,22 +159,92 @@ describe('clamp-scroll-animation-overflow (P7 mirror width fidelity)', () => {
     expect(after).toBe(legitimateScrollerFixtureHtml);
   });
 
-  it('is idempotent: a second pass over an already-clamped mirror changes nothing', async () => {
-    const { clampScrollAnimationOverflow } = await import(pathToFileUrl(clampScriptPath));
+  it('(finding 1) leaves a transform_y row with an intentionally bleeding child byte-for-byte untouched', async () => {
+    const { clampScrollAnimationOverflow } = await loadClamp();
     const file = path.join(siteDir, 'index.html');
-    fs.writeFileSync(file, regressionFixtureHtml);
+    fs.writeFileSync(file, transformYFixtureHtml);
 
-    clampScrollAnimationOverflow({ siteDir });
-    const onceClamped = fs.readFileSync(file, 'utf8');
-    const second = clampScrollAnimationOverflow({ siteDir });
-    const stillClamped = fs.readFileSync(file, 'utf8');
+    const result = clampScrollAnimationOverflow({ siteDir });
+    const after = fs.readFileSync(file, 'utf8');
 
-    expect(second.clamped).toBe(0);
-    expect(second.filesChanged).toBe(0);
-    expect(stillClamped).toBe(onceClamped);
+    expect(result.clamped).toBe(0);
+    expect(result.filesChanged).toBe(0);
+    expect(after).toBe(transformYFixtureHtml);
+  });
+
+  it('(finding 2) clamps a transform_x row even when its style already declares text-overflow: ellipsis', async () => {
+    const { clampScrollAnimationOverflow } = await loadClamp();
+    const file = path.join(siteDir, 'index.html');
+    fs.writeFileSync(file, textOverflowFixtureHtml);
+
+    const result = clampScrollAnimationOverflow({ siteDir });
+    const after = fs.readFileSync(file, 'utf8');
+
+    expect(result.clamped).toBe(1);
+    expect(result.filesChanged).toBe(1);
+    // The clamp is prepended; text-overflow/white-space survive unchanged.
+    expect(after).toMatch(/style="overflow-x:clip;text-overflow:ellipsis;white-space:nowrap"/);
+  });
+
+  it('(finding 3) merges the clamp into a pre-existing single-quoted style attribute, keeping one style attribute', async () => {
+    const { clampScrollAnimationOverflow } = await loadClamp();
+    const file = path.join(siteDir, 'index.html');
+    fs.writeFileSync(file, singleQuotedStyleFixtureHtml);
+
+    const result = clampScrollAnimationOverflow({ siteDir });
+    const after = fs.readFileSync(file, 'utf8');
+
+    expect(result.clamped).toBe(1);
+    expect(result.filesChanged).toBe(1);
+    // Exactly one `style=` attribute on the clamped element -- never two.
+    const styleAttrCount = (after.match(/\sstyle\s*=/g) ?? []).length;
+    expect(styleAttrCount).toBe(1);
+    // Single-quoted, with the clamp prepended and the original transform
+    // (the real inline style the theme's JS wrote) preserved verbatim.
+    expect(after).toContain(
+      `style='overflow-x:clip;transform: translateX(4499.95px) translateZ(0px);'`,
+    );
+    expect(after).toContain('85+ Brands Directed');
+  });
+
+  it('(LOW, optional) clamps a row whose data-scroll-animation attributes are unquoted', async () => {
+    const { clampScrollAnimationOverflow } = await loadClamp();
+    const file = path.join(siteDir, 'index.html');
+    fs.writeFileSync(file, unquotedAttributesFixtureHtml);
+
+    const result = clampScrollAnimationOverflow({ siteDir });
+    const after = fs.readFileSync(file, 'utf8');
+
+    expect(result.clamped).toBe(1);
+    expect(result.filesChanged).toBe(1);
+    expect(after).toContain('style="overflow-x:clip;"');
+    expect(after).toContain('data-scroll-animation=true');
+    expect(after).toContain('data-scroll-animation-movement=transform_x');
+  });
+
+  it('is idempotent across every fixture: a second pass changes nothing further', async () => {
+    const { clampScrollAnimationOverflow } = await loadClamp();
+    const fixtures = [
+      regressionFixtureHtml,
+      legitimateScrollerFixtureHtml,
+      transformYFixtureHtml,
+      textOverflowFixtureHtml,
+      singleQuotedStyleFixtureHtml,
+      unquotedAttributesFixtureHtml,
+    ];
+
+    for (const html of fixtures) {
+      const file = path.join(siteDir, 'index.html');
+      fs.writeFileSync(file, html);
+
+      clampScrollAnimationOverflow({ siteDir });
+      const onceClamped = fs.readFileSync(file, 'utf8');
+      const second = clampScrollAnimationOverflow({ siteDir });
+      const stillClamped = fs.readFileSync(file, 'utf8');
+
+      expect(second.clamped).toBe(0);
+      expect(second.filesChanged).toBe(0);
+      expect(stillClamped).toBe(onceClamped);
+    }
   });
 });
-
-function pathToFileUrl(p: string): string {
-  return new URL(`file://${p}`).href;
-}

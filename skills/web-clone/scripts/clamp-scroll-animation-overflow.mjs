@@ -20,8 +20,18 @@
 // behavior, not something the mirror introduced, but a faithful clone should
 // not present it as a wider document on first paint).
 //
-// Fix: give every element carrying that exact attribute its own horizontal
-// clipping box (`overflow-x: hidden`, scoped to that element only). This is
+// The bug is specific to the `transform_x` movement axis: Salient's other
+// `data-scroll-animation-movement` values (`transform_y`, `fade_in`,
+// `bottom_top`, `zoom_in`, ...) drive vertical/opacity/scale effects that do
+// not translate the element horizontally, so they cannot cause this class of
+// overflow -- and some rows intentionally bleed horizontally on purpose (a
+// wide decorative child inside a `transform_y` row, for instance). Matching
+// on `data-scroll-animation="true"` alone would clamp those too, silently
+// altering their layout for no reason. This module therefore requires BOTH
+// attributes before touching anything.
+//
+// Fix: give every element carrying both attributes its own horizontal
+// clipping box (`overflow-x: clip`, scoped to that element only). This is
 // not a page-level `overflow-x: hidden` -- it targets only the elements whose
 // JS-driven transform can run away, so any other horizontal scroller (a
 // deliberate `overflow-x: auto` carousel, for example) is untouched. The
@@ -29,10 +39,28 @@
 // exactly as before; only the portion that would have escaped the row's own
 // box no longer reaches into the document's reported scroll width.
 //
+// `overflow-x: clip` rather than `overflow-x: hidden`: CSS Overflow Module
+// Level 3 computes an `overflow-x`/`overflow-y` pair that mixes `visible`
+// with anything other than `visible` or `clip` by forcing the `visible` side
+// to `auto` -- i.e. `overflow-x: hidden` alone silently turns a row's
+// (unspecified, therefore `visible`) `overflow-y` into `auto`, which can grow
+// an unwanted vertical scrollbar on a row with incidental vertical bleed.
+// `clip` is exempt from that coercion, so pairing it with an unspecified
+// `overflow-y` leaves the vertical axis genuinely untouched. Verified in a
+// real headless Chrome check (see the phase's proof artifacts): with
+// `overflow-x: hidden` alone, computed `overflow-y` reads `auto`; with
+// `overflow-x: clip` alone, computed `overflow-y` reads `visible`; explicitly
+// pairing `overflow-x: hidden; overflow-y: visible;` does NOT avoid the
+// coercion (computed `overflow-y` still reads `auto`), so explicit pairing is
+// not a viable fallback here. `clip` was also verified to clamp
+// `document.documentElement.scrollWidth` identically to `hidden` on the real
+// mirror, and to leave the element's own scroll-linked animation running
+// (transform keeps updating once the row is scrolled into view).
+//
 // Usage:
 //   node scripts/clamp-scroll-animation-overflow.mjs --site <mirrored-site-dir> [--dry-run]
 //
-// Discipline: touches only elements carrying the exact attribute this bug is
+// Discipline: touches only elements carrying both attributes this bug is
 // keyed on; every other element's markup is left byte-for-byte unchanged.
 
 import fs from "node:fs";
@@ -40,14 +68,33 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { walk } from "./rewrite-mirror.mjs";
 
-const SCROLL_ANIMATION_ATTR = /data-scroll-animation\s*=\s*["']true["']/i;
+// Both attributes are required (see the module docblock): the bug is keyed to
+// the `transform_x` movement axis specifically, not to `data-scroll-animation`
+// generally. Each matches a quoted value in either quote style, or a bare
+// unquoted value (valid HTML5 as long as it isn't followed immediately by
+// another token) -- tolerant of the attribute-order/spacing variation real
+// mirrored markup exhibits.
+const SCROLL_ANIMATION_TRUE = /data-scroll-animation\s*=\s*(?:"true"|'true'|true(?=[\s/>]))/i;
+const SCROLL_ANIMATION_MOVEMENT_TRANSFORM_X =
+  /data-scroll-animation-movement\s*=\s*(?:"transform_x"|'transform_x'|transform_x(?=[\s/>]))/i;
 const OPEN_TAG_WITH_ATTR = /<([a-zA-Z][a-zA-Z0-9-]*)((?:[^>"']|"[^"]*"|'[^']*')*?)>/g;
-const STYLE_ATTR = /\sstyle\s*=\s*"([^"]*)"/i;
-const CLAMP_DECLARATION = "overflow-x:hidden;";
+// Matches a `style` attribute in either quote style; group 1 holds a
+// double-quoted value, group 2 a single-quoted one (never both).
+const STYLE_ATTR = /\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
+const CLAMP_DECLARATION = "overflow-x:clip;";
+
+/** True when `styleValue` already declares `overflow` or `overflow-x` (any value). Ignores unrelated properties like `text-overflow` -- a substring check would wrongly match those. */
+function hasOverflowDeclaration(styleValue) {
+  return styleValue.split(";").some((decl) => {
+    const prop = decl.split(":")[0]?.trim().toLowerCase();
+    return prop === "overflow" || prop === "overflow-x";
+  });
+}
 
 function usage() {
   console.log(`clamp-scroll-animation-overflow.mjs -- scope a horizontal overflow clip to
-Salient/WPBakery scroll-linked parallax rows (data-scroll-animation="true"), so a
+Salient/WPBakery scroll-linked parallax rows on the transform_x movement axis
+(data-scroll-animation="true" data-scroll-animation-movement="transform_x"), so a
 stale in-view flag cannot inflate the mirrored document's scrollWidth.
 
   node scripts/clamp-scroll-animation-overflow.mjs --site <mirrored-site-dir> [--dry-run]
@@ -72,12 +119,22 @@ function parseArgs(argv) {
 function clampTagStyle(tag) {
   const existing = tag.match(STYLE_ATTR);
   if (existing) {
+    // Preserve whichever quote character the origin used -- rewriting a
+    // single-quoted `style='...'` as a *second*, double-quoted `style="..."`
+    // attribute would leave two `style` attributes on the same element, and
+    // the browser drops everything the real one carried (including the
+    // element's own initial transform).
+    const isDoubleQuoted = existing[1] !== undefined;
+    const value = isDoubleQuoted ? existing[1] : existing[2];
+    const quote = isDoubleQuoted ? '"' : "'";
     // Already constrained (by us on a prior run, or by the page itself) --
     // leave whatever overflow rule is already there rather than layering a
     // second, possibly conflicting one.
-    if (/overflow/i.test(existing[1])) return tag;
-    const replaced = `${CLAMP_DECLARATION}${existing[1]}`;
-    return tag.slice(0, existing.index) + ` style="${replaced}"` + tag.slice(existing.index + existing[0].length);
+    if (hasOverflowDeclaration(value)) return tag;
+    const replaced = `${CLAMP_DECLARATION}${value}`;
+    return (
+      tag.slice(0, existing.index) + ` style=${quote}${replaced}${quote}` + tag.slice(existing.index + existing[0].length)
+    );
   }
   // No style attribute at all -- insert one right after the tag name.
   const nameMatch = tag.match(/^<[a-zA-Z][a-zA-Z0-9-]*/);
@@ -85,11 +142,16 @@ function clampTagStyle(tag) {
   return `${tag.slice(0, insertAt)} style="${CLAMP_DECLARATION}"${tag.slice(insertAt)}`;
 }
 
-/** Clamps every `data-scroll-animation="true"` element's opening tag in one file's text. */
+/** True when `tag` is a scroll-linked row on the buggy `transform_x` axis (see module docblock). */
+function isTransformXScrollAnimationRow(tag) {
+  return SCROLL_ANIMATION_TRUE.test(tag) && SCROLL_ANIMATION_MOVEMENT_TRANSFORM_X.test(tag);
+}
+
+/** Clamps every matching element's opening tag in one file's text. */
 function clampText(text) {
   let changed = 0;
   const next = text.replace(OPEN_TAG_WITH_ATTR, (tag) => {
-    if (!SCROLL_ANIMATION_ATTR.test(tag)) return tag;
+    if (!isTransformXScrollAnimationRow(tag)) return tag;
     const clamped = clampTagStyle(tag);
     if (clamped !== tag) changed += 1;
     return clamped;
@@ -115,7 +177,7 @@ export function clampScrollAnimationOverflow({ siteDir, dryRun = false }) {
 export function reportClamp(result, dryRun) {
   const verb = dryRun ? "would clamp" : "clamped";
   console.log(
-    `✅ ${verb} ${result.clamped} scroll-animation row(s) across ${result.filesChanged} file(s) with a scoped overflow-x: hidden`,
+    `✅ ${verb} ${result.clamped} scroll-animation row(s) across ${result.filesChanged} file(s) with a scoped overflow-x: clip`,
   );
 }
 
