@@ -33,8 +33,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 //   4. `overflow-x: hidden` alone forces computed `overflow-y` to `auto` per
 //      CSS Overflow L3's visible/non-visible coercion rule, risking an
 //      unwanted vertical scrollbar; `overflow-x: clip` is exempt from that
-//      coercion. This is exercised as a real headless Chrome check further
-//      down, not just a string assertion on the emitted markup.
+//      coercion. The coercion behavior was verified in live headless Chrome
+//      during review; this file asserts the emitted `overflow-x:clip` markup.
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../..');
 const clampScriptPath = path.join(
   repoRoot,
