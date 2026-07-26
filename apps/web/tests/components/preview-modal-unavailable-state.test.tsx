@@ -125,7 +125,7 @@ describe('PreviewModal unavailable state', () => {
     expect(screen.getByRole('menuitem', { name: /Facebook/i })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: /LinkedIn/i })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: /Instagram/i })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: /小红书/i })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: /Xiaohongshu/i })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: /Copy template link/i })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: /Export as PDF/i })).toBeTruthy();
     expect(xShare.getAttribute('href')).toContain(
@@ -155,7 +155,7 @@ describe('PreviewModal unavailable state', () => {
     expect(screen.getByRole('menuitem', { name: /Instagram/i }).getAttribute('href')).toBe(
       'https://www.instagram.com/',
     );
-    expect(screen.getByRole('menuitem', { name: /小红书/i }).getAttribute('href')).toBe(
+    expect(screen.getByRole('menuitem', { name: /Xiaohongshu/i }).getAttribute('href')).toBe(
       'https://www.xiaohongshu.com/',
     );
   });

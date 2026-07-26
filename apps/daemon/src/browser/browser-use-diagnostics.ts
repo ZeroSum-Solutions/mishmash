@@ -111,7 +111,7 @@ export function renderBrowserUseUnavailablePrompt(state: BrowserUseRunState | nu
   return [
     '## Browser automation availability',
     '',
-    `Browser automation was requested, but Open Design has not confirmed a matching in-app browser backend for this run. Reason: \`${state.reason}\`.`,
+    `Browser automation was requested, but MishMash has not confirmed a matching in-app browser backend for this run. Reason: \`${state.reason}\`.`,
     'Treat browser-use / in-app-browser automation as unavailable for this turn.',
     'Do not use raw Google Chrome headless or ad-hoc Chrome fallback from the packaged desktop sandbox.',
     'If the task requires browser evidence, report the unavailable reason and use only the provided browser tab URL, title, and saved project context until a backend is attached.',
