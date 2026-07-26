@@ -1,3 +1,4 @@
+import { APP_LOADING_TEXT } from '@/playwright/loading';
 import { expect, test } from '@/playwright/suite';
 import type { Page } from '@playwright/test';
 import { openSettingsDialog } from '../lib/playwright/amr.js';
@@ -65,7 +66,7 @@ function baseConfig(overrides: Partial<AppConfigSeed> = {}): AppConfigSeed {
 }
 
 async function waitForLoadingToClear(page: Page) {
-  await page.getByText('Loading workspace…').waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+  await page.getByText(APP_LOADING_TEXT).waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
 }
 
 async function gotoEntryHome(page: Page) {

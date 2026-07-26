@@ -1,3 +1,4 @@
+import { APP_LOADING_TEXT } from '@/playwright/loading';
 import { expect, test } from '@/playwright/suite';
 import { ensureRailOpen, openNewProjectModal as openNewProjectModalFromProjects } from '@/playwright/rail';
 import { runErrorCard } from '@/playwright/chat';
@@ -3961,7 +3962,7 @@ async function expectProjectsView(page: Page) {
 }
 
 async function waitForLoadingToClear(page: Page) {
-  await page.getByText('Loading workspace…').waitFor({ state: 'hidden', timeout: T.long });
+  await page.getByText(APP_LOADING_TEXT).waitFor({ state: 'hidden', timeout: T.long });
 }
 
 async function getCurrentProjectContext(

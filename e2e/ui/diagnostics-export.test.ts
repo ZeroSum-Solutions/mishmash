@@ -1,3 +1,4 @@
+import { APP_LOADING_TEXT } from '@/playwright/loading';
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -79,7 +80,7 @@ async function gotoEntryHome(page: Page) {
 }
 
 async function waitForLoadingToClear(page: Page) {
-  await expect(page.getByText('Loading workspace…')).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.getByText(APP_LOADING_TEXT)).toHaveCount(0, { timeout: 15_000 });
 }
 
 async function unzipList(zipPath: string): Promise<string[]> {

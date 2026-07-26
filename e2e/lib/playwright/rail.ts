@@ -10,13 +10,24 @@ import type { Page } from '@playwright/test';
  * item or asserting the rail/logo is visible.
  */
 export async function ensureRailOpen(page: Page): Promise<void> {
-  const toggle = page.getByTestId('entry-rail-toggle');
-  // The toggle is only present while collapsed (it's display:none once docked).
-  if (await toggle.isVisible().catch(() => false)) {
+  const entry = page.locator('.entry');
+  // Wait for the shell before reading any state off it. `isVisible()` does not
+  // retry, so it answers "false" for a toggle that has not rendered yet — the
+  // same answer it gives when the rail is already docked and the toggle is
+  // `display:none`. Reading the first as the second is how this helper skipped
+  // the click and then failed its own assertion on the line after.
+  await expect(entry).toBeVisible();
+
+  // Decide on the class, which is the state itself, rather than on the
+  // toggle's visibility, which is a CSS consequence of it.
+  const open = await entry.evaluate((element) => element.classList.contains('entry--rail-open'));
+  if (!open) {
+    const toggle = page.getByTestId('entry-rail-toggle');
+    await expect(toggle).toBeVisible();
     await toggle.scrollIntoViewIfNeeded();
     await toggle.click();
   }
-  await expect(page.locator('.entry')).toHaveClass(/entry--rail-open/);
+  await expect(entry).toHaveClass(/entry--rail-open/);
   await expect(page.locator('.entry-nav-rail')).not.toHaveAttribute('aria-hidden', 'true');
 }
 

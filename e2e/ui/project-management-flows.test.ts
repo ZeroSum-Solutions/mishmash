@@ -1,3 +1,4 @@
+import { APP_LOADING_TEXT } from '@/playwright/loading';
 import { expect, test } from '@/playwright/suite';
 import { ensureRailOpen, openNewProjectModal } from '@/playwright/rail';
 import { openAllProjectFiles } from '@/playwright/workspace';
@@ -3245,7 +3246,7 @@ async function routeComposerPlusFixtures(page: Page) {
 
 async function expectWorkspaceReady(page: Page) {
   await expect(page).toHaveURL(/\/projects\//);
-  await page.getByText('Loading workspace…').waitFor({ state: 'hidden', timeout: T.long }).catch(() => {});
+  await page.getByText(APP_LOADING_TEXT).waitFor({ state: 'hidden', timeout: T.long }).catch(() => {});
   await dismissPrivacyDialog(page);
   await expect(page.getByTestId('project-title')).toBeVisible();
   await expect(page.getByTestId('chat-composer')).toBeVisible();

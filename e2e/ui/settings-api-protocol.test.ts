@@ -1,3 +1,4 @@
+import { APP_LOADING_TEXT } from '@/playwright/loading';
 import { expect, test } from '@/playwright/suite';
 import type { Locator, Page } from '@playwright/test';
 import { openSettingsDialog } from '../lib/playwright/amr.js';
@@ -12,7 +13,7 @@ const MODEL_POPOVER_SELECTOR = '.model-select-searchable__popover';
 test.describe.configure({ timeout: T.xlong });
 
 async function waitForLoadingToClear(page: Page) {
-  await expect(page.getByText('Loading workspace…')).toHaveCount(0, { timeout: T.long });
+  await expect(page.getByText(APP_LOADING_TEXT)).toHaveCount(0, { timeout: T.long });
 }
 
 async function gotoEntryHome(page: Page) {

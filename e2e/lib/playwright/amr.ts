@@ -1,3 +1,4 @@
+import { APP_LOADING_TEXT } from '@/playwright/loading';
 import type { Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 import { T } from '@/timeouts';
@@ -15,7 +16,7 @@ type MockAmrWalletOptions = {
 };
 
 export async function waitForLoadingToClear(page: Page) {
-  await page.getByText('Loading workspace…').waitFor({ state: 'hidden', timeout: T.long }).catch(() => {});
+  await page.getByText(APP_LOADING_TEXT).waitFor({ state: 'hidden', timeout: T.long }).catch(() => {});
 }
 
 export async function dismissPrivacyDialog(page: Page) {

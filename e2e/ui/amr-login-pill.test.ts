@@ -11,6 +11,7 @@
 // during manual demos: "Sign in" → "Signed in" → hover-only "Sign out"
 // label flip → "Sign in" again on logout.
 
+import { APP_LOADING_TEXT } from '@/playwright/loading';
 import { expect, test } from '@/playwright/suite';
 import type { Page } from '@playwright/test';
 import { openSettingsDialog as openEntrySettingsDialog } from '../lib/playwright/amr.js';
@@ -22,7 +23,7 @@ const OPEN_SETTINGS_LABEL = /Open settings|打开设置|開啟設定/i;
 test.describe.configure({ timeout: 30_000 });
 
 async function waitForLoadingToClear(page: Page) {
-  await expect(page.getByText('Loading workspace…')).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.getByText(APP_LOADING_TEXT)).toHaveCount(0, { timeout: 15_000 });
 }
 
 async function gotoEntryHome(page: Page) {

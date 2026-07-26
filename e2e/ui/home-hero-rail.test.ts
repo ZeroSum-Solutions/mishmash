@@ -1,3 +1,4 @@
+import { APP_LOADING_TEXT } from '@/playwright/loading';
 import { expect, test } from '@/playwright/suite';
 import type { Page } from '@playwright/test';
 import { routeAgents, suppressWhatsNew } from '@/playwright/mock-factory';
@@ -326,7 +327,7 @@ const PROMPT_TEMPLATES = [
 ];
 
 async function waitForLoadingToClear(page: Page) {
-  await page.getByText('Loading workspace…').waitFor({ state: 'hidden', timeout: 15_000 });
+  await page.getByText(APP_LOADING_TEXT).waitFor({ state: 'hidden', timeout: 15_000 });
 }
 
 async function seedBrowserConfig(page: Page, config: Record<string, unknown>) {

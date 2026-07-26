@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { APP_LOADING_TEXT } from '@/playwright/loading';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 
@@ -197,7 +198,7 @@ async function expectWorkspaceReady(page: Page) {
 }
 
 async function waitForLoadingToClear(page: Page) {
-  const loading = page.getByText('Loading workspace…');
+  const loading = page.getByText(APP_LOADING_TEXT);
   await loading.waitFor({ state: 'detached', timeout: 10_000 }).catch(() => {});
 }
 

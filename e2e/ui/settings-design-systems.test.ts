@@ -1,3 +1,4 @@
+import { APP_LOADING_TEXT } from '@/playwright/loading';
 import { expect, test } from '@/playwright/suite';
 import type { Page, Route } from '@playwright/test';
 import { openSettingsDialog } from '../lib/playwright/amr.js';
@@ -44,7 +45,7 @@ async function seedSettingsBase(page: Page, override?: Record<string, unknown>) 
 }
 
 async function waitForLoadingToClear(page: Page) {
-  await expect(page.getByText('Loading workspace…')).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.getByText(APP_LOADING_TEXT)).toHaveCount(0, { timeout: 15_000 });
 }
 
 async function gotoEntryHome(page: Page) {

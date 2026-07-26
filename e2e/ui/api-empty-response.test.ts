@@ -1,3 +1,4 @@
+import { APP_LOADING_TEXT } from '@/playwright/loading';
 import { expect, test } from '@/playwright/suite';
 import { fulfillAgentsRoute } from '@/playwright/mock-factory';
 import { openNewProjectModal as openNewProjectModalFromProjects } from '@/playwright/rail';
@@ -145,5 +146,5 @@ async function sendPrompt(page: Page, prompt: string) {
 }
 
 async function waitForLoadingToClear(page: Page) {
-  await page.getByText('Loading workspace…').waitFor({ state: 'hidden', timeout: T.medium });
+  await page.getByText(APP_LOADING_TEXT).waitFor({ state: 'hidden', timeout: T.medium });
 }

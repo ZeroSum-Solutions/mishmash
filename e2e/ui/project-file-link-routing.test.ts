@@ -1,3 +1,4 @@
+import { APP_LOADING_TEXT } from '@/playwright/loading';
 import { expect, test } from '@/playwright/suite';
 import type { Page } from '@playwright/test';
 import { applyStandardMocks } from '@/playwright/mock-factory';
@@ -89,7 +90,7 @@ async function seedProjectWithAssistantFileLink(
 }
 
 async function waitForWorkspaceReady(page: Page) {
-  await page.getByText('Loading workspace…').waitFor({ state: 'hidden', timeout: T.medium }).catch(() => {});
+  await page.getByText(APP_LOADING_TEXT).waitFor({ state: 'hidden', timeout: T.medium }).catch(() => {});
   await expect(page.getByTestId('chat-composer')).toBeVisible({ timeout: T.medium });
   await expect(page.getByTestId('file-workspace')).toBeVisible({ timeout: T.medium });
 }
