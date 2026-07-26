@@ -3228,6 +3228,7 @@ export interface Dict {
   'previewRunStatus.verifying': string;
   'previewRunStatus.succeeded': string;
   'previewRunStatus.failed': string;
+  'previewRunStatus.dismiss': string;
   'previewRunStatus.elapsed': string;
   'designFiles.title': string;
   'designFiles.upload': string;
