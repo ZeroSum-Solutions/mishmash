@@ -32,8 +32,10 @@ describe('browser use diagnostics', () => {
     //
     // Third arm on its own. browserUsePrompt() leads with '@agent-browser' and
     // follows with 'Browser tab context:', so a real bound-tab prompt matches on
-    // arms 1 and 2 regardless — the de-brand left this arm stale but dead, not
-    // broken. An adversarial review corrected an earlier claim that discovery had
+    // arms 1 and 2 regardless — the de-brand left this arm stale but *redundant
+    // for browserUsePrompt() output*, not broken. Not dead outright: the matcher
+    // takes arbitrary strings, so a sentence-only caller reaches it, as this case
+    // does. An adversarial review corrected an earlier claim that discovery had
     // silently stopped; it had not.
     expect(isBrowserUseRequested('Use the selected MishMash Browser tab as the bound target.')).toBe(true);
   });

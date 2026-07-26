@@ -262,8 +262,10 @@ export interface RunScopedToolBundleSummary {
  * It lives in contracts because it is a cross-app wire value, not display copy.
  * The two sides had private copies of it until the MishMash de-brand renamed the
  * web one and left the daemon matching the old text — invisible to both test
- * suites, because each asserted against its own literal. A single exported
- * constant makes that drift a compile error instead.
+ * suites, because each asserted against its own literal. One exported constant
+ * removes the way that drift happened; it does not make it impossible, since
+ * nothing stops a future edit from inlining a literal again. The daemon and web
+ * tests keep literals of their own precisely to catch that.
  */
 export const BROWSER_USE_BOUND_TAB_MARKER =
   'Use the selected MishMash Browser tab as the bound target.';
