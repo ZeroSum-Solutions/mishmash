@@ -5,7 +5,7 @@
 //
 //   - Copy plugin id          (raw `<id>` for paste-into-yaml)
 //   - Copy install command    (`od plugin install <ref>`)
-//   - Copy README badge       (Open Design powered, includes link)
+//   - Copy README badge       (MishMash powered, includes link)
 //   - Open source on GitHub   (when the source is a github repo)
 //   - Open homepage           (when manifest.homepage is set)
 //   - Open in marketplace     (always — the canonical detail page)

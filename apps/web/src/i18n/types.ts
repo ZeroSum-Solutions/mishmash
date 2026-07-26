@@ -989,7 +989,6 @@ export interface Dict {
   'entry.openSettingsTitle': string;
   'entry.openSettingsAria': string;
   'entry.discordLabel': string;
-  'entry.followXLabel': string;
   'entry.resizeAria': string;
   'entry.loadingWorkspace': string;
   'entry.useEverywhereTitle': string;
@@ -3358,7 +3357,6 @@ export interface Dict {
   'designFiles.usefulInfoTip5': string;
   'designFiles.usefulInfoTip6': string;
   'designFiles.usefulInfoTip7': string;
-  'designFiles.usefulInfoTip8': string;
   'designFiles.usefulInfoTip9': string;
   'designFiles.usefulInfoTip10': string;
   'designFiles.usefulInfoTip11': string;
@@ -3366,10 +3364,6 @@ export interface Dict {
   'designFiles.usefulInfoTip13': string;
   'designFiles.usefulInfoTip14': string;
   'designFiles.usefulInfoTip15': string;
-  'designFiles.usefulInfoTip16': string;
-  'designFiles.usefulInfoTip17': string;
-  'designFiles.usefulInfoTip18': string;
-  'designFiles.usefulInfoTip19': string;
   'designFiles.usefulInfoTip20': string;
   'quickSwitcher.placeholder': string;
   'quickSwitcher.empty': string;

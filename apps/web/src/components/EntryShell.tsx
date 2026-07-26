@@ -201,7 +201,6 @@ function writeStoredRailOpen(open: boolean): void {
   }
 }
 
-const X_URL = 'https://x.com/OpenDesignHQ';
 const ONBOARDING_DROPDOWN_OPEN_EVENT = 'open-design:onboarding-dropdown-open';
 
 type OnboardingAgentTestState =

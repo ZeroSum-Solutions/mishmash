@@ -390,7 +390,7 @@ export function TerminalViewer({ terminalId, projectId, onClose, onSessionIdChan
           <div className={styles.loadingStack}>
             <div className={styles.loadingPromptLine} aria-hidden>
               <span className={styles.loadingPrompt}>$</span>
-              <span className={styles.loadingCommand}>open-design shell</span>
+              <span className={styles.loadingCommand}>mishmash shell</span>
               <span className={styles.loadingCursor} />
             </div>
             <div className={styles.loadingCopy}>

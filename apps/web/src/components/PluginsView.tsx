@@ -1452,7 +1452,7 @@ function SourcesPanel({
               onSourceUrlInput?.();
             }}
             onChange={(event) => setUrl(event.target.value)}
-            placeholder="https://example.com/open-design-marketplace.json"
+            placeholder="https://example.com/marketplace.json"
             disabled={pendingAction === 'add'}
           />
           <select
