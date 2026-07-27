@@ -1,6 +1,6 @@
 # Selector eval corpus (W7 / S7-2)
 
-**Corpus freeze sha256: f79661c38371b294c632d6900c6660416255cb59011dcc824e72eaa764236a8c**
+**Corpus freeze sha256: 4772ebbf1becac624cfa63099f9b1f003662663ad9cc0a4b0ae619ecf665df12**
 
 That hash is `sha256(evals/selector/corpus/manifest.json)` at the commit that freezes this
 document. `scripts/waves/verify-w7.ts` re-hashes the manifest at HEAD and requires an exact match
@@ -8,11 +8,16 @@ document. `scripts/waves/verify-w7.ts` re-hashes the manifest at HEAD and requir
 is the point: everything downstream (per-case IR instances, the scorer's population/counterfactual
 controls) is built against this exact, pinned manifest state.
 
-*Re-frozen three times*, before any scorer/metrics work landed. The third fix: `constraints[].rule`
-and `variantAxes[].{name,distanceMetric}` were near-identical boilerplate prose duplicated verbatim
-across every case's IR — long enough (>64 bytes) to trip `verify-w7.ts` C7-11's content-window leak
-scanner as false-positive "leaks" against ordinary non-sealed files. Fixed by folding the case id
-deep enough into every such string that no 64-byte window can land entirely inside shared text.
+*Re-frozen four times*, before any scorer/metrics work landed. The third and fourth fixes both
+target the same C7-11 leak-scan false-positive class from different angles: a case-id *prefix*
+still left long identical prose suffixes (`"...axis in this case; no contention to resolve."`)
+that collided across cases; converging fix was (a) compact, non-indented JSON (pretty-printing
+padded every record with long content-free spans), (b) short case/axis/source-tagged tokens
+instead of prose sentences everywhere, (c) a compact string-array `evidencePointers` shape instead
+of an object array, and (d) dropping decorative `computedStyle` properties
+(`gridTemplateColumns`/`flexDirection`) that no check reads. Verified by reproducing
+`verify-w7.ts`'s exact `sampleWindows()` algorithm against the corrected sealed-case plaintext
+(prepared for re-seal, not yet applied) and every tracked non-sealed file: zero matches.
 
 The first two re-freezes fixed the same underlying issue in two layers: (1) the original generator hardcoded every IR's `provenance[].breakpoint` to `"desktop"`,
 making `verify-w7.ts` C7-4's breakpoint-only field-derangement control mechanically
