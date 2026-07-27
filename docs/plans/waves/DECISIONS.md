@@ -48,3 +48,14 @@ goal-state reviews/):
    C7-16 founder go/no-go.
 
 Founder may veto or amend; surfaced in session summaries when adopted.
+
+## 2026-07-27 — W0 gate escalation: product-surface gate (orchestrator ruling under standing directive)
+
+Three consecutive non-APPROVE verdicts on `scripts/waves/verify-w0.ts` triggered the §6 stop
+rule. Re-plan (consistent with the W7 two-phase precedent; founder may veto): the gate drops all
+probe intermediaries for backup/restore/token criteria and instead invokes the product's own
+surfaces (`od backup`/`od restore` CLI + daemon endpoints — mandatory under UI/CLI parity),
+observing all evidence independently. Pre-implementation, these criteria fail with named missing
+surfaces. Implementation-coupled semantic checks (rotation/revocation behavior) activate when
+the surfaces exist and assert semantics, not status codes. Remaining round-3 findings closed
+mechanically in the same rewrite.
