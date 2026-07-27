@@ -26,16 +26,23 @@ a composer consumes, with every one of these four questions given a field.
 
 ### 1. Source slots (`sourceSlots`)
 
-One entry per reference. A source slot is `{id, breakpoints, evidencePointers}`: the breakpoints
-actually captured for that source, and the DOM-path + breakpoint evidence pointers available to
-ground later directives and provenance against it. A source slot is not the raw capture — it is
+One entry per reference. A source slot is `{id, snapshotIdentity?, breakpoints, evidencePointers}`:
+`snapshotIdentity` (v3+, optional) names which capture session this slot's evidence belongs to —
+addressing the wave brief's "which capture?" ambiguity directly, since a source can in principle be
+re-captured; the breakpoints actually captured for that source; and the evidence pointers available
+to ground later directives and provenance against it. A source slot is not the raw capture — it is
 the addressable surface the rest of the IR can point into. `evidencePointers` is an array of
-compact `"<domPath>@<breakpoint>"` strings; each must correspond to a real node in that source's
-pinned snapshot (see `evals/selector/CORPUS.md` for how the corpus pins snapshots).
+compact string pointers: `"<domPath>@<breakpoint>"` (v1/sealed shape) or
+`"<domPath>@<breakpoint>@<state>"` (v3+ shape, `state ∈ {default, hover, scrolled, loaded}` —
+answering the wave brief's "which state (hover/scrolled/loaded)?" question directly). Each pointer
+must correspond to a real node in that source's pinned snapshot (see `evals/selector/CORPUS.md`).
+`loaded` is enumerated but not yet captured by any case in this corpus — an honest gap, not a
+silent one; `default` and one of `hover`/`scrolled` are captured per role (see
+`evals/selector/scripts/generate-corpus.ts`'s `buildSourceNodes`).
 
 ### 2. Directive parse (`directives`)
 
-Natural language turns into typed claims: `{axis, source, scope, strength}`.
+Natural language turns into typed claims: `{axis, source, scope, strength, breakpoint?}`.
 
 - `axis` is a closed vocabulary: `layout | motion | palette | typography | section | interaction`.
   This is deliberately narrower than free text — an unbounded axis vocabulary means two engineers
@@ -48,25 +55,40 @@ Natural language turns into typed claims: `{axis, source, scope, strength}`.
   element" degenerate case the corpus's quota table requires (`evals/selector/CORPUS.md`), and the
   IR must be able to *express* that failure mode, not just the success path.
 - `strength` is a `[0,1]` weight the parser assigned the claim (confidence, or emphasis inferred
-  from the brief's own language — "mostly," "just," "exactly").
+  from the brief's own language — "mostly," "just," "exactly"). `evals/selector/scorer/index.ts`
+  weights both `directive_claim_coverage` and the per-axis fidelity scores by `strength`, so it is
+  no longer parsed and ignored.
+- `breakpoint` (v3+, optional) scopes the claim to a specific captured viewport, when the brief's
+  ask differs by breakpoint (e.g. "the mobile nav, but the desktop hero"). Omitted means the claim
+  applies wherever its scope resolves. v1 (sealed) directives never carry this field.
 
 ### 3. Constraints (`constraints`)
 
 What must hold post-composition regardless of which sources won which axes: grid integrity,
 contrast minimums (a11y axis), responsive behavior across the case's declared breakpoints. A
-constraint is `{type, rule}` — a named invariant class plus the rule text. Constraints are not
-directives: a directive says what a *specific* source contributed; a constraint says what must be
-true of the *output* no matter which source contributed it.
+constraint is `{type, rule, predicate?}` — a named invariant class, the rule text, and (v3+,
+optional) a `predicate: {property, pattern}` naming a real `computedStyle` key and a regex its
+value must match, making the constraint machine-checkable in principle rather than purely opaque
+prose. `evals/selector/corpus/ir/*.json` (non-sealed) carries a predicate on every constraint;
+whether the scorer actually evaluates it against composed output is a W8 question — this wave
+freezes the checkable FORM, not a new grader axis (S7-3's eleven axes are unchanged). Constraints
+are not directives: a directive says what a *specific* source contributed; a constraint says what
+must be true of the *output* no matter which source contributed it.
 
 ### 4. Conflict resolution (`conflictResolution`)
 
 When two or more sources claim the same axis on overlapping scope, something must arbitrate
 deterministically, and the losing claim must be **recorded, not silently dropped** — this is the
 PRD's explicit correction to a first draft that had no conflict policy at all. Each entry is
-`{axis, winningSource, losingSource?, losingClaim?, rationale?}`. An axis with only one claimant
-still gets a trivial entry (`winningSource` set, no `losingSource`) recording that no contention
-existed — this keeps "no conflict" and "conflict silently unresolved" structurally distinguishable
-in every IR instance, rather than making an empty array do double duty for both.
+`{axis, winningSource, losingSource?, losingClaim?, rationale?, scopeOverlap?}`. An axis with only
+one claimant still gets a trivial entry (`winningSource` set, no `losingSource`) recording that no
+contention existed — this keeps "no conflict" and "conflict silently unresolved" structurally
+distinguishable in every IR instance, rather than making an empty array do double duty for both.
+`scopeOverlap` (v3+, optional) names HOW two claims' scopes overlap for grouping purposes — every
+conflict in this corpus is `"same-role-different-source"` (each source's own distinct domPath for
+the *same semantic role*, not an identical string); a trivial entry gets `"single-claimant"`. This
+is a spec-level clarification of what `resolve-conflicts.ts` already groups by axis on — it does
+not change that grouping algorithm (dual-reviewer-approved; see `F4` in the disposition records).
 
 The resolver (`evals/selector/scorer/resolve-conflicts.ts`) is a pure function over
 `{directives, conflictResolution}`: it groups directive claims by axis, and for any axis with more
@@ -117,6 +139,13 @@ for non-sealed cases, `.enc` — AES-256-CBC, decrypted only by `verify-w7.ts` �
 held-out split). `JSON.parse(JSON.stringify(ir))` must reproduce the identical structure
 (no `Date`, no `Map`/`Set`, no functions, no `undefined` values) — this is checked mechanically by
 `verify-w7.ts` C7-1 over every corpus IR instance, sealed cases included (decrypted first).
+
+**Two shapes, one schema.** The sealed held-out cases (`sealed-marketing-alt`, `sealed-docs-widget`)
+were frozen under corpus v1/v2 and will not be re-sealed — every field added since (`corpusVersion`,
+`snapshotIdentity`, per-pointer `state`, directive `breakpoint`, constraint `predicate`,
+conflict-resolution `scopeOverlap`) is additive and optional in the schema specifically so v1 IR
+instances keep validating unchanged. `corpusVersion` (when present) tells a reader which shape to
+expect; its absence means v1.
 
 ## What the IR does not do
 

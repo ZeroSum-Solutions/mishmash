@@ -11,7 +11,7 @@
       "type": "integer"
     },
     "sourceSlots": {
-      "description": "One entry per reference the user supplied. Each source slot pins an id, the breakpoints captured for it, and the evidence pointers (DOM path + breakpoint) available to ground directives and provenance against it.",
+      "description": "One entry per reference the user supplied. Each source slot pins an id, an optional snapshotIdentity (which capture session this slot's evidence came from), the breakpoints captured for it, and the evidence pointers (DOM path + breakpoint + captured state) available to ground directives and provenance against it.",
       "type": "array",
       "minItems": 1,
       "items": {
@@ -19,12 +19,17 @@
         "required": ["id", "breakpoints", "evidencePointers"],
         "properties": {
           "id": { "type": "string", "minLength": 1 },
+          "snapshotIdentity": {
+            "description": "v3+: identifies the capture session this slot's snapshot data belongs to (e.g. a source+version tag). Optional -- v1 (sealed) source slots do not carry it.",
+            "type": "string",
+            "minLength": 1
+          },
           "breakpoints": {
             "type": "array",
             "items": { "type": "string", "minLength": 1 }
           },
           "evidencePointers": {
-            "description": "Compact '<domPath>@<breakpoint>' strings -- one per (domPath, breakpoint) pair actually captured for this source.",
+            "description": "Compact string pointers, one per captured (domPath, breakpoint[, state]) combination actually captured for this source. v1 (sealed) shape: '<domPath>@<breakpoint>'. v3+ shape: '<domPath>@<breakpoint>@<state>' where state in [default, hover, scrolled, loaded] (see CapturedState in evals/selector/nl-to-ir/parser.ts). Both shapes satisfy the same pattern.",
             "type": "array",
             "items": { "type": "string", "minLength": 1, "pattern": "^.+@.+$" }
           }
@@ -32,7 +37,7 @@
       }
     },
     "directives": {
-      "description": "Typed claims parsed from the user's natural-language brief: {axis, source, scope, strength}. axis addresses WHAT is being adopted, source addresses WHOSE reference, scope addresses WHICH subtree (a domPath, or a whole-document sentinel), strength is a [0,1] confidence/weight the parser assigned to the claim.",
+      "description": "Typed claims parsed from the user's natural-language brief: {axis, source, scope, strength[, breakpoint]}. axis addresses WHAT is being adopted, source addresses WHOSE reference, scope addresses WHICH subtree (a domPath, or a whole-document sentinel), strength is a [0,1] confidence/weight the parser assigned to the claim, breakpoint (v3+, optional) addresses WHICH captured viewport the claim targets when a scope's evidence differs by breakpoint.",
       "type": "array",
       "minItems": 1,
       "items": {
@@ -45,7 +50,12 @@
           },
           "source": { "type": "string", "minLength": 1 },
           "scope": { "type": "string", "minLength": 1 },
-          "strength": { "type": "number", "minimum": 0, "maximum": 1 }
+          "strength": { "type": "number", "minimum": 0, "maximum": 1 },
+          "breakpoint": {
+            "description": "v3+: directive-level breakpoint scoping. Optional -- v1 (sealed) directives do not carry it, meaning 'applies at whichever breakpoint the scope resolves at'.",
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
@@ -57,7 +67,16 @@
         "required": ["type", "rule"],
         "properties": {
           "type": { "type": "string", "minLength": 1 },
-          "rule": { "type": "string", "minLength": 1 }
+          "rule": { "type": "string", "minLength": 1 },
+          "predicate": {
+            "description": "v3+: a machine-checkable predicate over computed styles -- {property: a computedStyle key, pattern: a regex the property's value must match}. Optional -- v1 (sealed) constraints only carry the opaque type/rule tokens.",
+            "type": "object",
+            "required": ["property", "pattern"],
+            "properties": {
+              "property": { "type": "string", "minLength": 1 },
+              "pattern": { "type": "string", "minLength": 1 }
+            }
+          }
         }
       }
     },
@@ -73,7 +92,12 @@
           "winningSource": { "type": "string", "minLength": 1 },
           "losingSource": { "type": "string", "minLength": 1 },
           "losingClaim": { "type": "string" },
-          "rationale": { "type": "string" }
+          "rationale": { "type": "string" },
+          "scopeOverlap": {
+            "description": "v3+: names HOW the competing claims' scopes overlap for grouping purposes -- e.g. 'same-role-different-source' (different literal domPaths, same semantic role/position) or 'single-claimant' (no real contention). Optional -- v1 (sealed) entries do not carry it. Clarifies resolve-conflicts.ts's axis-based grouping at the spec level without changing that grouping algorithm.",
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
