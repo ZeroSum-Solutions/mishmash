@@ -359,14 +359,14 @@
     {
       "elementId": "blog-content-grid-di-0-layout",
       "sourceId": "blog-grid-a",
-      "nodeId": "blog-grid-a-features",
+      "nodeId": "blog-grid-a-features-mobile",
       "domPath": "body > div.blog-grid-a-shell > features.blog-grid-a-features",
       "breakpoint": "mobile"
     },
     {
       "elementId": "blog-content-grid-di-1-palette",
       "sourceId": "blog-flex-b",
-      "nodeId": "blog-flex-b-header",
+      "nodeId": "blog-flex-b-header-desktop",
       "domPath": "body > div.blog-flex-b-shell > header.blog-flex-b-header",
       "breakpoint": "desktop"
     }

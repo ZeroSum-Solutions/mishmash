@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-      "nodeId": "blog-grid-a-header",
+      "nodeId": "blog-grid-a-header-desktop",
       "domPath": "body > div.blog-grid-a-shell > header.blog-grid-a-header",
       "computedStyle": {
         "color": "#331433",
@@ -10,7 +10,7 @@
       }
     },
     {
-      "nodeId": "blog-grid-a-hero",
+      "nodeId": "blog-grid-a-hero-desktop",
       "domPath": "body > div.blog-grid-a-shell > hero.blog-grid-a-hero",
       "computedStyle": {
         "color": "#331433",
@@ -19,7 +19,7 @@
       }
     },
     {
-      "nodeId": "blog-grid-a-hero-heading",
+      "nodeId": "blog-grid-a-hero-heading-desktop",
       "domPath": "body > div.blog-grid-a-shell > hero_heading.blog-grid-a-hero-heading",
       "computedStyle": {
         "color": "#331433",
@@ -28,7 +28,7 @@
       }
     },
     {
-      "nodeId": "blog-grid-a-features",
+      "nodeId": "blog-grid-a-features-desktop",
       "domPath": "body > div.blog-grid-a-shell > features.blog-grid-a-features",
       "computedStyle": {
         "color": "#331433",
@@ -39,7 +39,7 @@
       }
     },
     {
-      "nodeId": "blog-grid-a-feature-item-1",
+      "nodeId": "blog-grid-a-feature-item-1-desktop",
       "domPath": "body > div.blog-grid-a-shell > feature_item_1.blog-grid-a-feature-item-1",
       "computedStyle": {
         "color": "#331433",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "nodeId": "blog-grid-a-feature-item-2",
+      "nodeId": "blog-grid-a-feature-item-2-desktop",
       "domPath": "body > div.blog-grid-a-shell > feature_item_2.blog-grid-a-feature-item-2",
       "computedStyle": {
         "color": "#331433",
@@ -57,7 +57,7 @@
       }
     },
     {
-      "nodeId": "blog-grid-a-cta",
+      "nodeId": "blog-grid-a-cta-desktop",
       "domPath": "body > div.blog-grid-a-shell > cta.blog-grid-a-cta",
       "computedStyle": {
         "color": "#331433",
@@ -66,7 +66,7 @@
       }
     },
     {
-      "nodeId": "blog-grid-a-footer",
+      "nodeId": "blog-grid-a-footer-desktop",
       "domPath": "body > div.blog-grid-a-shell > footer.blog-grid-a-footer",
       "computedStyle": {
         "color": "#331433",
