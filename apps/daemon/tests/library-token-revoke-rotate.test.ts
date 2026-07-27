@@ -78,8 +78,8 @@ async function ingestStatus(origin: string, token: string): Promise<number> {
   return res.status;
 }
 
-describe('library token revoke / rotate', () => {
-  it('revocation takes effect immediately: the revoked token is rejected on its very next use', async () => {
+describe('library token revoke / rotate (C0-6)', () => {
+  it('(C0-6/revoke) revocation takes effect immediately: the revoked token is rejected on its very next use', async () => {
     const origin = extOrigin();
     const token = await mintToken(origin);
     expect(await ingestStatus(origin, token)).toBe(200);
@@ -99,7 +99,7 @@ describe('library token revoke / rotate', () => {
     expect(res.status).toBe(401);
   });
 
-  it('rotation invalidates the prior token AND issues a working new one bound to the same identity', async () => {
+  it('(C0-6/rotate) rotation invalidates the prior token AND issues a working new one bound to the same identity', async () => {
     const origin = extOrigin();
     const oldToken = await mintToken(origin);
     expect(await ingestStatus(origin, oldToken)).toBe(200);

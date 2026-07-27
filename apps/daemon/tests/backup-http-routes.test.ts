@@ -99,7 +99,7 @@ describe('POST /api/backup + POST /api/restore', () => {
     await rm(restoreDir, { recursive: true, force: true });
   });
 
-  it('rejects a cross-origin (non-loopback) backup request', async () => {
+  it('(C0-7) rejects a cross-origin (non-loopback) backup request', async () => {
     const archiveDir = await mkdtemp(path.join(os.tmpdir(), 'od-backup-http-cors-'));
     const res = await fetch(`${baseUrl}/api/backup`, {
       method: 'POST',
