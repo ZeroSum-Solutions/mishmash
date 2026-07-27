@@ -1344,10 +1344,45 @@ async function main(): Promise<void> {
     return { ok: true, hash: sha256Bytes(trimmed) };
   }
 
+  // Round-8 F7 (R8-F1, docs/plans/waves/DECISIONS.md): `commit` is not
+  // provenance-only -- it participates in authorization. An entry is valid
+  // only when ALL THREE hold: (1) syntactically a full 40-char lowercase hex
+  // sha; (2) resolves to a real commit object in THIS repo AND is an
+  // ancestor-or-equal of the evaluated HEAD (rules out fabricated or
+  // foreign/abandoned-branch shas); (3) the source line at entry.file:line
+  // AS OF entry.commit hashes to entry.sourceFingerprint (proves the entry
+  // was genuinely authored against real history, not just a syntactically
+  // valid sha borrowed from somewhere unrelated). This is layered ON TOP of
+  // computeSourceLineFingerprint's current-tree check -- both must pass.
+  type CommitValidationStatus = 'ok' | 'not-hex' | 'unknown-commit' | 'not-ancestor' | 'fingerprint-mismatch-at-commit';
+  function validateEntryCommitBinding(e: UnreachableAllowlistEntry): { status: CommitValidationStatus; detail?: string } {
+    if (!/^[0-9a-f]{40}$/.test(e.commit)) return { status: 'not-hex', detail: `"${e.commit}" is not a full 40-char lowercase hex sha` };
+    const catFile = sh('git', ['cat-file', '-e', `${e.commit}^{commit}`]);
+    if (catFile.status !== 0) return { status: 'unknown-commit', detail: `"${e.commit}" does not resolve to a commit object in this repository` };
+    const ancestorCheck = sh('git', ['merge-base', '--is-ancestor', e.commit, headSha]);
+    if (ancestorCheck.status !== 0) return { status: 'not-ancestor', detail: `"${e.commit}" is not an ancestor-or-equal of the evaluated HEAD (${headSha})` };
+    let textAtCommit: string;
+    try {
+      textAtCommit = readFileAtCommit(e.commit, e.file);
+    } catch (err) {
+      return { status: 'fingerprint-mismatch-at-commit', detail: `could not read ${e.file} at ${e.commit}: ${String(err)}` };
+    }
+    const linesAtCommit = textAtCommit.split('\n');
+    if (!Number.isInteger(e.line) || e.line < 1 || e.line > linesAtCommit.length) {
+      return { status: 'fingerprint-mismatch-at-commit', detail: `line ${e.line} out of range at ${e.commit} (file had ${linesAtCommit.length} lines)` };
+    }
+    const trimmedAtCommit = (linesAtCommit[e.line - 1] ?? '').trim();
+    const hashAtCommit = sha256Bytes(trimmedAtCommit);
+    if (hashAtCommit.toLowerCase() !== e.sourceFingerprint.toLowerCase()) {
+      return { status: 'fingerprint-mismatch-at-commit', detail: `recomputed-at-commit ${hashAtCommit} != declared ${e.sourceFingerprint}` };
+    }
+    return { status: 'ok' };
+  }
+
   await checkCriterion(
     'C0-7',
     'two-pass alias-aware AST extraction (local const aliases, property chains, constant paths) over apps/daemon/src/routes/** + server.ts; unresolvable-path guarded registrations must be explicitly acknowledged as dynamic in the inventory',
-    'inventory row without a live route = fail; guarded live route missing from inventory = fail; an unresolvable-path guarded registration not explicitly marked dynamic in the inventory = fail; every row live-probed; a dynamic row without probePath may skip probing ONLY when authorized by an orchestrator-owned allowlist (--unreachable-allowlist / W0_UNREACHABLE_ALLOWLIST) -- absent/unreadable/invalid allowlist = zero authorized skips (fail-closed); each allowlist entry binds to {file, line, method, path} plus a source-line sha256 fingerprint recomputed from the CURRENT tree (stale fingerprint = hard fail) and must match exactly one claiming row 1:1 (duplicate entries, unused entries, and unauthorized claiming rows are all hard fails); a row\'s free-text "unreachable" string is surfaced in evidence but never authorizes anything; hard-fail when authorizedUnreachable*2 >= totalDynamic (nonempty set, exactly-half included)',
+    'inventory row without a live route = fail; guarded live route missing from inventory = fail; an unresolvable-path guarded registration not explicitly marked dynamic in the inventory = fail; every row live-probed; a dynamic row without probePath may skip probing ONLY when authorized by an orchestrator-owned allowlist (--unreachable-allowlist / W0_UNREACHABLE_ALLOWLIST) -- absent/unreadable/invalid allowlist = zero authorized skips (fail-closed); each allowlist entry binds to {file, line, method, path}, a source-line sha256 fingerprint recomputed from the CURRENT tree, AND a commit that must be (1) a full 40-char lowercase hex sha, (2) a real commit object in this repository that is an ancestor-or-equal of the evaluated HEAD, and (3) the commit the source line was AUTHORED against -- the fingerprint must independently match both the current tree AND `git show <commit>:<file>` at that line; any of these failing makes the entry INVALID, same hard-fail bucket as stale; entries must match exactly one claiming row 1:1 (duplicate entries, unused entries, and unauthorized claiming rows are all hard fails); a row\'s free-text "unreachable" string is surfaced in evidence but never authorizes anything; hard-fail when authorizedUnreachable*2 >= totalDynamic (nonempty set, exactly-half included)',
     async () => {
       const rel = 'apps/daemon/src/security/privileged-routes.json';
       if (!fileExists(rel)) {
@@ -1398,12 +1433,21 @@ async function main(): Promise<void> {
       const duplicateAllowlistEntries = allowlistEntries.filter((e) => (entryKeyCounts.get(entryKey(e)) ?? 0) > 1);
 
       // Staleness: every entry's fingerprint is recomputed from the CURRENT
-      // tree, never trusted from the entry itself.
+      // tree, never trusted from the entry itself. Round-8 F7: commit
+      // binding is validated too (syntactic + real/ancestor + authored-
+      // against fingerprint match) and folded into the SAME hard-fail
+      // bucket as staleness -- an entry with an empty, fabricated, or
+      // foreign/prior-HEAD commit is exactly as invalid as one with a
+      // mismatched current-tree hash.
       const staleAllowlistEntries: { entry: UnreachableAllowlistEntry; reason: string }[] = [];
+      const commitValidationByEntry = new Map<UnreachableAllowlistEntry, { status: CommitValidationStatus; detail?: string }>();
       for (const e of allowlistEntries) {
         const fp = computeSourceLineFingerprint(e.file, e.line);
         if (!fp.ok) staleAllowlistEntries.push({ entry: e, reason: fp.reason ?? 'unresolvable' });
         else if (fp.hash?.toLowerCase() !== e.sourceFingerprint.toLowerCase()) staleAllowlistEntries.push({ entry: e, reason: `fingerprint mismatch: recomputed ${fp.hash} != declared ${e.sourceFingerprint}` });
+        const commitValidation = validateEntryCommitBinding(e);
+        commitValidationByEntry.set(e, commitValidation);
+        if (commitValidation.status !== 'ok') staleAllowlistEntries.push({ entry: e, reason: `commit-binding invalid (${commitValidation.status}): ${commitValidation.detail ?? ''}` });
       }
 
       // 1:1 matching: an entry authorizes a row only when file+line+method+
@@ -1477,6 +1521,7 @@ async function main(): Promise<void> {
           `dynamic rows missing probePath/authorization: ${JSON.stringify(dynamicRowsMissingProbePathOrReason)}; unbound dynamic rows: ${JSON.stringify(dynamicRowsUnbound)}; duplicate-binding dynamic rows: ${JSON.stringify(dynamicRowsDuplicateBinding)}; unacknowledged sites: ${JSON.stringify(unresolvableSitesUnacknowledged)}\n` +
           `allowlistStatus=${allowlistStatus} allowlistPath=${unreachableAllowlistPath ?? '(none)'}\n` +
           `duplicate allowlist entries: ${JSON.stringify(duplicateAllowlistEntries)}\nstale allowlist entries: ${JSON.stringify(staleAllowlistEntries)}\nunused allowlist entries: ${JSON.stringify(unusedAllowlistEntries)}\n` +
+          `per-entry commit-validation status: ${JSON.stringify(allowlistEntries.map((e) => ({ file: e.file, line: e.line, commit: e.commit, ...commitValidationByEntry.get(e) })))}\n` +
           `dynamic row counts: total=${dynamicRows.length} probed=${probedDynamicRows.length} claiming=${claimingRows.length} authorized=${authorizedRows.length} unauthorized=${unauthorizedClaimingRows.length} majorityUnreachable(authorized*2>=total)=${majorityUnreachable}\n` +
           `authorized rows (allowlist-cleared, free text is evidence-only): ${JSON.stringify(authorizedRows.map((r) => ({ method: r.method, path: r.path, file: r.file, line: r.line, freeTextUnreachable: r.unreachable })))}\n` +
           `all claiming rows with free-text unreachable surfaced: ${JSON.stringify(claimingRows.map((r) => ({ method: r.method, path: r.path, file: r.file, line: r.line, freeTextUnreachable: r.unreachable, authorized: authorizedRows.includes(r) })))}\n` +
