@@ -123,17 +123,34 @@ try {
         const crossOriginFailures = [];
         const originLeaks = [];
         const classify = (url) => classifyRequestOrigin(url, { localBase: localServer.baseUrl, originalOrigin: baselineDoc?.origin });
-        const record = (entry, url) => {
-          const kind = classify(url);
-          if (kind === "local") sameOriginFailures.push(entry);
-          else if (kind === "origin-leak") originLeaks.push(entry);
-          else crossOriginFailures.push(entry);
-        };
         page.on("requestfailed", (request) => {
-          record({ url: request.url(), error: request.failure()?.errorText || "" }, request.url());
+          const url = request.url();
+          const entry = { url, error: request.failure()?.errorText || "" };
+          const kind = classify(url);
+          // A failed request can't itself be a "leak" (a leak means the
+          // live origin answered successfully) -- classify local vs.
+          // cross-origin only.
+          if (kind === "local") sameOriginFailures.push(entry);
+          else crossOriginFailures.push(entry);
         });
         page.on("response", (response) => {
-          if (response.status() >= 400) record({ url: response.url(), status: response.status() }, response.url());
+          const url = response.url();
+          const kind = classify(url);
+          // Origin-leak must be checked for EVERY response, not only
+          // failing ones: the common shape is an asset the capture never
+          // downloaded, still absolute after rewrite, loading fine (200)
+          // from the still-live original origin -- a request that never
+          // fails and would otherwise leave `originLeaks` empty even though
+          // the mirror is silently still proxying the live site.
+          if (kind === "origin-leak") {
+            originLeaks.push({ url, status: response.status() });
+            return;
+          }
+          if (response.status() >= 400) {
+            const entry = { url, status: response.status() };
+            if (kind === "local") sameOriginFailures.push(entry);
+            else crossOriginFailures.push(entry);
+          }
         });
 
         await page.goto(`${localServer.baseUrl}/`, { waitUntil: "domcontentloaded", timeout: 60000 });
@@ -205,7 +222,11 @@ for (const check of gate.checks) {
 }
 
 if (!gate.baselineProvided) {
-  console.log("\n(no --baseline supplied: only same-origin-failure, origin-leak, and broken-image checks ran)");
+  // Origin-leak classification needs a recorded original origin
+  // (`baselineDoc.origin`) to compare requests against -- with no
+  // `--baseline`, there is nothing to compare, so that check cannot run
+  // either. Only claim what actually executes.
+  console.log("\n(no --baseline supplied: only same-origin-failure and broken-image checks ran)");
 }
 console.log(`\n${gate.pass ? "✅ PASS" : "✗ FAIL"}: mirror ${gate.pass ? "may" : "may NOT"} be reported complete or served to the user.`);
 

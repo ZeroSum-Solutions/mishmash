@@ -11,6 +11,18 @@
 // That rewrite used to be a "Next:" line printed for a human to action by hand.
 // It is a pipeline stage, not advice, so it lives here and runs automatically.
 //
+// Manifest-driven (round-3 structural fix, N1/N2/N3/F10/F11): when a
+// lib/mirror-manifest.mjs manifest is available (mirror-site.mjs always has
+// one in-memory; the standalone CLI loads `<out>/url-manifest.json` when
+// present), every reference -- absolute, protocol-relative, root-relative,
+// OR document-relative -- is resolved against the OWNING file's own captured
+// source URL and looked up in the manifest directly. Nothing is reversed or
+// reconstructed: the manifest already knows exactly which local file (if
+// any) a given source URL was saved to, including query-hash-disambiguated
+// variants. Without a manifest (an older mirror, or a bare `--site`
+// invocation), only absolute/protocol-relative references are rewritten --
+// an honest reduction in coverage, not a guess.
+//
 // Usage:
 //   node scripts/rewrite-mirror.mjs --out <mirror-dir> [--origin <URL>] [--dry-run]
 //   node scripts/rewrite-mirror.mjs --site <site-dir> --origin <URL>
@@ -25,10 +37,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { collectReferenceCandidates } from "./lib/asset-discovery.mjs";
-
-const includeExt = new Set([".html", ".htm", ".css", ".svg"]);
-const skipDirs = new Set([".git", "node_modules", "dist", "build", "RECON"]);
+import { collectReferenceCandidates, URL_BEARING_ATTRIBUTE_PATTERN } from "./lib/asset-discovery.mjs";
+import { walk as walkFiles } from "./lib/fs-walk.mjs";
+import { loadMirrorManifest } from "./lib/mirror-manifest.mjs";
 
 // `mirror-site.mjs` imports these so the "which local file does this URL mean?"
 // rule has exactly one definition. A second copy would drift, and a drifted copy
@@ -41,9 +52,11 @@ function usage() {
   node scripts/rewrite-mirror.mjs --out <mirror-dir> [--origin <URL>] [--dry-run]
   node scripts/rewrite-mirror.mjs --site <site-dir> --origin <URL> [--dry-run]
 
---out     directory produced by mirror-site.mjs (contains site/ and mirror-manifest.json;
-          --origin is inferred from the manifest when omitted)
+--out     directory produced by mirror-site.mjs (contains site/, mirror-manifest.json,
+          and url-manifest.json; --origin is inferred and the manifest is loaded
+          automatically when present)
 --site    mirrored web root directly, when there is no manifest alongside it
+          (root-/document-relative references are not rewritten in this mode)
 --origin  origin whose absolute URLs become local, e.g. https://example.com
 --dry-run report what would change without writing`);
 }
@@ -94,16 +107,7 @@ function originFromManifest(manifestPath) {
 }
 
 function walk(dir, files = []) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.isDirectory()) {
-      if (!skipDirs.has(entry.name)) walk(path.join(dir, entry.name), files);
-      continue;
-    }
-    if (includeExt.has(path.extname(entry.name).toLowerCase())) {
-      files.push(path.join(dir, entry.name));
-    }
-  }
-  return files;
+  return walkFiles(dir, undefined, undefined, files);
 }
 
 /**
@@ -135,11 +139,14 @@ function withQuerySuffix(pathname, search) {
 }
 
 /**
- * Local path a same-origin URL was mirrored to. The single canonical
- * URL->local-path rule: mirror-site.mjs's capture/persist path and this
- * rewriter must agree on it byte-for-byte, or the same asset resolves to two
- * different local paths depending on which stage computed it -- one of them
- * ends up "missing" and gets refetched from a different, wrong URL.
+ * Local path a same-origin URL "naturally" maps to. This is the seed
+ * `lib/mirror-manifest.mjs`'s `claim()` starts from -- claim() is what
+ * actually assigns and remembers the (possibly disambiguated) path, so this
+ * function alone is NOT the source of truth for "what local file does this
+ * URL mean" once a manifest is in play. It remains directly useful for: (a)
+ * the very first computation a `claim()` call makes, and (b) the no-manifest
+ * fallback path (an older mirror, or a bare `--site` invocation), where
+ * there is nothing better to go on.
  */
 function localPathForUrl(url, hosts) {
   let parsed;
@@ -164,11 +171,11 @@ function localPathForUrl(url, hosts) {
  * Every same-origin path the mirrored files reference: absolute, root-relative,
  * *and* document-relative (`../fonts/Foo.woff2`).
  *
- * `mirror-site.mjs` only downloads what the capture run actually requested, so
- * anything behind a lazy-load, a hover state, or an unused `@font-face` format
- * (`.eot`/`.woff` alternates) is referenced by the markup but absent from disk.
- * Reading the references back off the mirror is what turns those into a
- * fetchable list.
+ * General-purpose analysis helper (kept for standalone/reporting use); the
+ * live capture path in mirror-site.mjs uses
+ * `lib/mirror-manifest.mjs`'s `findMissingSourceUrls` instead, which returns
+ * fetchable absolute source URLs rather than local paths -- see that
+ * module's docblock for why the two must not be conflated.
  *
  * A document-relative reference has no host to check against directly -- it
  * has to be resolved against the URL the *owning* mirrored file was captured
@@ -182,11 +189,11 @@ function localPathForUrl(url, hosts) {
 function collectSameOriginRefs(siteDir, hosts, origin) {
   const refs = new Set();
   // The reference-candidate extraction (attribute values incl. every srcset
-  // candidate, CSS url(), @import) is the same primitive mirror-site.mjs's
-  // recursive fetch rounds use directly on in-memory text -- see
-  // lib/asset-discovery.mjs. Sharing it means the downloader looks for
-  // exactly the references the rewriter will later try to localise, or it
-  // fetches assets nothing points at and misses ones that do.
+  // candidate, CSS url(), @import; HTML values only from URL-bearing
+  // attribute names) is the same primitive mirror-site.mjs's manifest-driven
+  // discovery uses directly on in-memory text -- see lib/asset-discovery.mjs.
+  // Sharing it means this analysis looks for exactly the references the
+  // rewriter will later try to localise.
   for (const file of walk(siteDir)) {
     const text = fs.readFileSync(file, "utf8");
     const ownerRel = path.relative(siteDir, file).split(path.sep).join("/");
@@ -196,20 +203,7 @@ function collectSameOriginRefs(siteDir, hosts, origin) {
         local = localPathForUrl(value, hosts);
       } else if (value.startsWith("/")) {
         local = localPathForUrl(`https://${[...hosts][0]}${value}`, hosts);
-      } else if (origin && value.includes("/")) {
-        // `collectReferenceCandidates` matches every attribute, not an
-        // allowlist of URL-bearing ones (see its own docblock) -- so an
-        // ordinary non-URL unquoted/quoted value (`charset=utf-8`,
-        // `rel=stylesheet`, `height=64`) reaches here too. Every one of
-        // those is a bare word with no `/`, while a genuine document-
-        // relative reference (`../fonts/Foo.woff2`, `./assets/x.png`,
-        // `fonts/Foo.woff2`) always has at least one path separator. `new
-        // URL()` happily "resolves" a bare word into a same-directory
-        // sibling URL too, so without this guard every such attribute value
-        // becomes a phantom "missing asset" the recursive fetch pass then
-        // 404s on. The tradeoff: a bare same-directory filename with no
-        // separator at all (`url(icon.svg)`) is not resolved either -- an
-        // honest gap, not a guess, matching this file's existing discipline.
+      } else if (origin) {
         try {
           const resolved = new URL(value, `${origin}/${ownerRel}`).href;
           local = localPathForUrl(resolved, hosts);
@@ -226,14 +220,51 @@ function collectSameOriginRefs(siteDir, hosts, origin) {
 const stats = { rewritten: 0, notMirrored: 0, filesChanged: 0 };
 const missing = new Map();
 
-function makeRewriter(siteDir, ownerFile, hosts) {
+/**
+ * @param {string} siteDir
+ * @param {string} ownerFile - absolute path of the file being rewritten.
+ * @param {Set<string>} hosts
+ * @param {import('./lib/mirror-manifest.mjs').ReturnType<typeof import('./lib/mirror-manifest.mjs').createMirrorManifest>|null} manifest
+ * @param {string|null} ownerSourceUrl - the URL `ownerFile` was itself captured
+ *   from (from `manifest.reverseGet`), or null if unknown/no manifest.
+ */
+function makeRewriter(siteDir, ownerFile, hosts, manifest, ownerSourceUrl) {
+  const manifestActive = Boolean(manifest && ownerSourceUrl);
+
   return function rewriteRef(raw) {
     const value = raw.trim();
-    // Protocol-relative (`//host/path`) resolves against the page's scheme, so it
-    // is just as remote as an explicit https:// reference.
-    if (!/^(https?:)?\/\//i.test(value)) return raw;
-    const local = localPathForUrl(value, hosts);
-    if (!local) return raw;
+    if (!value || value.startsWith("data:") || value.startsWith("blob:") || value.startsWith("#")) return raw;
+
+    let local = null;
+    let key = value;
+    if (manifestActive) {
+      // Resolves absolute, protocol-relative, root-relative, AND document-
+      // relative references identically -- `new URL()` already handles all
+      // four shapes correctly, so there is no shape-specific branching left
+      // to get wrong (or to reverse) here.
+      let resolved;
+      try {
+        resolved = new URL(value, ownerSourceUrl).href;
+      } catch {
+        return raw;
+      }
+      key = resolved;
+      local = manifest.get(resolved);
+    } else if (/^(https?:)?\/\//i.test(value)) {
+      // No manifest available -- fall back to direct computation for
+      // absolute/protocol-relative references only; a root-/document-
+      // relative one has no owner URL to resolve against here, so it is
+      // left alone (honest gap) rather than guessed.
+      local = localPathForUrl(value, hosts);
+    } else {
+      return raw;
+    }
+
+    if (!local) {
+      stats.notMirrored += 1;
+      missing.set(key, (missing.get(key) ?? 0) + 1);
+      return raw;
+    }
     const target = path.join(siteDir, local);
     if (!fs.existsSync(target)) {
       stats.notMirrored += 1;
@@ -268,40 +299,54 @@ function rewriteSrcset(srcset, rewriteRef) {
     .join(",");
 }
 
-function rewriteText(text, file, rewriteRef) {
+function rewriteText(text, file, rewriteRef, { manifestActive = false } = {}) {
   const isCss = path.extname(file).toLowerCase() === ".css";
   let next = text;
 
   if (!isCss) {
-    // Any attribute, not an allowlist. Themes invent their own lazy-load
-    // attributes (`data-nectar-img-srcset`, `data-lazy-src`, `data-bg`, …) and an
-    // allowlist silently leaves whichever ones it has not met yet pointing at the
-    // origin. Matching every attribute is safe because `rewriteRef` only touches
-    // same-origin URLs whose mirrored file exists.
+    // Only URL-bearing attribute names are touched (see
+    // lib/asset-discovery.mjs's URL_BEARING_ATTRIBUTE_PATTERN) -- an
+    // allowlist-by-suffix rather than a fixed enum, so theme-invented
+    // lazy-load attributes (`data-nectar-img-src`, `data-lazy-srcset`, ...)
+    // are still covered, while ordinary non-URL attributes
+    // (`data-aspect="16/9"`, `charset="utf-8"`) are left untouched.
     next = next.replace(
       /(\s)([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(['"])([\s\S]*?)\3/g,
       (match, space, name, quote, value) => {
-        if (!/(?:https?:)?\/\//i.test(value)) return match;
-        const rewritten = /srcset$/i.test(name)
-          ? rewriteSrcset(value, rewriteRef)
-          : // A value that is not exactly one URL is prose, a CSP list, or inline
-            // CSS. Leave it to the url() pass below rather than corrupting it.
-            /^\s*(?:https?:)?\/\/\S+\s*$/i.test(value)
-            ? rewriteRef(value)
-            : value;
+        if (!URL_BEARING_ATTRIBUTE_PATTERN.test(name)) return match;
+        if (/srcset$/i.test(name)) {
+          const rewritten = rewriteSrcset(value, rewriteRef);
+          return rewritten === value ? match : `${space}${name}=${quote}${rewritten}${quote}`;
+        }
+        // A value that is not exactly one reference token is prose, a CSP
+        // list, or inline CSS. Leave it to the url() pass below rather than
+        // corrupting it.
+        if (/\s/.test(value.trim())) return match;
+        // Without a manifest for this file, only absolute/protocol-relative
+        // values can be resolved (no owner URL to resolve a relative one
+        // against) -- leave root-/document-relative values alone rather
+        // than guess.
+        if (!manifestActive && !/^(?:https?:)?\/\/\S+$/i.test(value.trim())) return match;
+        const rewritten = rewriteRef(value);
         return rewritten === value ? match : `${space}${name}=${quote}${rewritten}${quote}`;
       },
     );
   }
 
-  next = next.replace(/url\(\s*(['"]?)((?:https?:)?\/\/[^'")]+)\1\s*\)/gi, (match, quote, value) => {
+  // CSS url(): eligible regardless of shape (absolute, root-relative,
+  // document-relative, or a bare same-directory filename like `icon.svg`) --
+  // a value inside `url(...)` is unambiguously a resource reference, not
+  // prose, so there is no attribute-name-style discriminator needed here.
+  next = next.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (match, quote, value) => {
+    if (!manifestActive && !/^(?:https?:)?\/\//i.test(value)) return match;
     const rewritten = rewriteRef(value);
     if (rewritten === value) return match;
     const q = quote || "";
     return `url(${q}${rewritten}${q})`;
   });
 
-  next = next.replace(/@import\s+(['"])((?:https?:)?\/\/[^'"]+)\1/gi, (match, quote, value) => {
+  next = next.replace(/@import\s+(['"])([^'"]+)\1/gi, (match, quote, value) => {
+    if (!manifestActive && !/^(?:https?:)?\/\//i.test(value)) return match;
     const rewritten = rewriteRef(value);
     return rewritten === value ? match : `@import ${quote}${rewritten}${quote}`;
   });
@@ -309,12 +354,23 @@ function rewriteText(text, file, rewriteRef) {
   return next;
 }
 
-/** Rewrites every mirrored file in place. Returns the tally for the caller to report. */
-export function rewriteMirror({ siteDir, origin, dryRun = false }) {
+/**
+ * Rewrites every mirrored file in place. Returns the tally for the caller to
+ * report.
+ *
+ * @param {{ siteDir: string, origin: string, manifest?: object|null, dryRun?: boolean }} args
+ *   `manifest` (a `lib/mirror-manifest.mjs` manifest) enables root-/document-
+ *   relative rewriting; without one, only absolute/protocol-relative
+ *   references are rewritten.
+ */
+export function rewriteMirror({ siteDir, origin, manifest = null, dryRun = false }) {
   const hosts = originHosts(origin);
   for (const file of walk(siteDir)) {
     const text = fs.readFileSync(file, "utf8");
-    const next = rewriteText(text, file, makeRewriter(siteDir, file, hosts));
+    const ownerRel = path.relative(siteDir, file).split(path.sep).join("/");
+    const ownerSourceUrl = manifest ? manifest.reverseGet(ownerRel) : null;
+    const rewriteRef = makeRewriter(siteDir, file, hosts, manifest, ownerSourceUrl);
+    const next = rewriteText(text, file, rewriteRef, { manifestActive: Boolean(manifest && ownerSourceUrl) });
     if (next === text) continue;
     stats.filesChanged += 1;
     if (!dryRun) fs.writeFileSync(file, next);
@@ -357,8 +413,22 @@ function main() {
     process.exit(1);
   }
 
+  let manifest = null;
+  if (outRoot) {
+    const manifestPath = path.join(outRoot, "url-manifest.json");
+    if (fs.existsSync(manifestPath)) {
+      try {
+        const json = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+        manifest = loadMirrorManifest(json, { computeLocalPath: localPathForUrl });
+        console.log(`▸ Loaded ${json.length ?? 0} entr(y/ies) from url-manifest.json`);
+      } catch (e) {
+        console.warn(`⚠️ Could not load url-manifest.json (${e.message}); falling back to absolute-URL-only rewriting`);
+      }
+    }
+  }
+
   console.log(`▸ Rewriting absolute ${origin} references to local paths in ${siteDir}`);
-  reportRewrite(rewriteMirror({ siteDir, origin, dryRun: args.dryRun }), origin, args.dryRun);
+  reportRewrite(rewriteMirror({ siteDir, origin, manifest, dryRun: args.dryRun }), origin, args.dryRun);
 }
 
 // Importable as a library (mirror-site.mjs reuses the URL->path rule and the

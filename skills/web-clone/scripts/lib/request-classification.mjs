@@ -3,7 +3,7 @@
 // verify-mirror.mjs run against the local server it just loaded and,
 // optionally, the mirror's original live origin.
 //
-// Two defects this exists to close:
+// Three defects this exists to close:
 //
 // 1. String-prefix matching (`url.startsWith(base)`) is wrong: a verifier
 //    base of `http://127.0.0.1:1234` treats a request to
@@ -13,14 +13,24 @@
 // 2. A same-origin asset the capture never downloaded stays an absolute
 //    reference after mirror-site.mjs's rewrite pass (nothing to rewrite it
 //    to). During verification that reference loads fine from the still-live
-//    original origin, so no request ever fails and the gate would otherwise
-//    report a clean pass on a mirror that is silently still proxying the
-//    live site. Recognizing "this request went to the original origin, not
-//    the local mirror" is what makes that failure visible regardless of its
-//    HTTP status.
+//    original origin -- caller responsibility: this classifier must be
+//    consulted for EVERY response verify-mirror.mjs observes, not only ones
+//    with a failing HTTP status, since a leak that resolves with 200 (the
+//    common case) is the exact scenario this exists to catch.
+// 3. The mirrored site may itself have redirected between its apex and
+//    `www.` host (or vice versa) during capture, and a live origin serves
+//    both host forms too -- comparing hosts after stripping a leading `www.`
+//    (the same aliasing `originHosts()` in rewrite-mirror.mjs already
+//    applies for capture/rewrite) keeps `www.example.com` and
+//    `example.com` recognized as the same origin-leak target instead of
+//    one of them being misclassified as an unrelated cross-origin host.
 //
 // Pure URL parsing -- no fs/network/browser -- unit-testable without
 // Playwright.
+
+function normalizedHost(host) {
+  return host.replace(/^www\./i, "").toLowerCase();
+}
 
 /**
  * @param {string} requestUrl
@@ -28,30 +38,32 @@
  * @returns {"local" | "origin-leak" | "cross-origin" | "invalid"}
  */
 export function classifyRequestOrigin(requestUrl, { localBase, originalOrigin = null }) {
-  let requestOrigin;
+  let requestUrlObj;
   try {
-    requestOrigin = new URL(requestUrl).origin;
+    requestUrlObj = new URL(requestUrl);
   } catch {
     return "invalid";
   }
 
-  let localOrigin;
+  let localUrlObj;
   try {
-    localOrigin = new URL(localBase).origin;
+    localUrlObj = new URL(localBase);
   } catch {
     return "invalid";
   }
 
-  if (requestOrigin === localOrigin) return "local";
+  if (requestUrlObj.origin === localUrlObj.origin) return "local";
 
   if (originalOrigin) {
-    let original;
+    let originalUrlObj;
     try {
-      original = new URL(originalOrigin).origin;
+      originalUrlObj = new URL(originalOrigin);
     } catch {
-      original = null;
+      originalUrlObj = null;
     }
-    if (original && requestOrigin === original) return "origin-leak";
+    if (originalUrlObj && normalizedHost(requestUrlObj.host) === normalizedHost(originalUrlObj.host)) {
+      return "origin-leak";
+    }
   }
 
   return "cross-origin";

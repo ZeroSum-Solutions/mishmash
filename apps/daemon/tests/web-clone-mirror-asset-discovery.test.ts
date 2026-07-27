@@ -126,6 +126,23 @@ describe('collectReferenceCandidates (pure discovery primitive)', () => {
     expect(refs.some((ref) => ref.startsWith('blob:'))).toBe(false);
   });
 
+  // F21/N5 (round-3): the reviewer's exact probe -- a comma-separated
+  // descriptor with NO space after the comma (`"a.png 1x,b.png 2x"`) is valid
+  // srcset per the HTML grammar. An earlier version split only on "comma
+  // followed by whitespace", which silently dropped the second candidate
+  // whenever a theme/minifier omitted the space.
+  it('(F21/N5) splits a comma-with-no-following-space descriptor boundary into both candidates', async () => {
+    const { collectReferenceCandidates } = await loadDiscovery();
+    const html = `<img srcset="a.png 1x,b.png 2x">`;
+
+    const refs = collectReferenceCandidates(html);
+
+    expect(refs).toContain('a.png');
+    expect(refs).toContain('b.png');
+    expect(refs).not.toContain('1x');
+    expect(refs).not.toContain('2x');
+  });
+
   // F22: unquoted attribute values are valid HTML5
   // (`<img data-src=/images/lazy.png>`); a quoted-only regex misses them
   // entirely, silently dropping lazy-loaded images from discovery.
@@ -225,14 +242,23 @@ describe('collectSameOriginRefs (rewrite-mirror.mjs, on-disk integration)', () =
   });
 
   // Regression caught by a live end-to-end smoke test while hardening F7:
-  // `collectReferenceCandidates` matches every attribute value, not a
+  // `collectReferenceCandidates` used to match every attribute value, not a
   // URL-bearing allowlist (charset="utf-8", rel="stylesheet", as="image",
-  // height="64", class="hero", ...). Without a guard, the F7 relative-URL
-  // resolution branch treated every one of those bare, slash-free words as
-  // a "document-relative reference" too (`new URL("utf-8", base)` resolves
-  // just fine as a same-directory sibling), turning ordinary HTML attributes
-  // into phantom "missing assets" that the recursive fetch pass then 404s
-  // on. A genuine relative asset reference always has at least one `/`.
+  // height="64", class="hero", ...). The F7 relative-URL resolution branch
+  // then treated every one of those bare words as a "document-relative
+  // reference" too (`new URL("utf-8", base)` resolves just fine as a
+  // same-directory sibling), turning ordinary HTML attributes into phantom
+  // "missing assets" that the recursive fetch pass then 404s on.
+  //
+  // Round-3 (F7/N4): an earlier fix guarded this by requiring a `/` in the
+  // value -- but that broke a genuine bare-filename CSS reference
+  // (`url(icon.svg)`, see the test below), which has no slash and is still a
+  // real reference. The actual fix is upstream, in asset-discovery.mjs's
+  // `collectReferenceCandidates`: only URL-BEARING ATTRIBUTE NAMES
+  // (src/href/poster/srcset/bg/background, see URL_BEARING_ATTRIBUTE_PATTERN)
+  // produce HTML candidates at all, so `charset`/`rel`/`as`/`class`/`height`
+  // never become candidates in the first place -- there is no slash
+  // heuristic left to apply here.
   it('(F7 regression) does not treat ordinary non-URL attribute values as document-relative references', async () => {
     const { collectSameOriginRefs, originHosts } = await loadRewriteMirror();
     fs.writeFileSync(
@@ -258,6 +284,24 @@ describe('collectSameOriginRefs (rewrite-mirror.mjs, on-disk integration)', () =
     expect(refs).toContain('styles.css');
     expect(refs).toContain('images/preload-only.png');
     expect(refs).toContain('images/logo.png');
+  });
+
+  // F7/N4 (round-3): the reviewer's exact probe -- a bare, slash-free CSS
+  // url() reference (`url(icon.svg)`, a same-directory sibling) must still
+  // resolve. The interim fix for the regression above required a `/` in the
+  // value before attempting relative resolution, which fixed the false
+  // positive but introduced this false negative. CSS url()/@import values are
+  // always eligible regardless of slash content (see
+  // asset-discovery.mjs's collectReferenceCandidates docblock) -- only HTML
+  // attribute values are filtered by attribute name.
+  it('(F7/N4) resolves a bare, slash-free CSS url() reference (a same-directory sibling)', async () => {
+    const { collectSameOriginRefs, originHosts } = await loadRewriteMirror();
+    fs.mkdirSync(path.join(siteDir, 'css'), { recursive: true });
+    fs.writeFileSync(path.join(siteDir, 'css', 'main.css'), `.icon { background: url(icon.svg); }`);
+
+    const refs = [...collectSameOriginRefs(siteDir, originHosts('https://example.com'), 'https://example.com')];
+
+    expect(refs).toContain('css/icon.svg');
   });
 });
 

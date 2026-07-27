@@ -11,6 +11,8 @@
 // Output:
 //   <dir>/site/...                     mirrored same-origin assets (paths preserved; directory URLs saved as index.html)
 //   <dir>/mirror-manifest.json         every request (same-origin + third-party) + its status
+//   <dir>/url-manifest.json            authoritative sourceUrl<->localPath pairs (lib/mirror-manifest.mjs) --
+//                                      rewrite-mirror.mjs loads this for a later standalone re-run
 //   <dir>/own-asset-urls.txt           same-origin asset path manifest
 //   <dir>/third-party.json             third-party hosts + hints for webfont CSS (typekit/google) that needs self-hosting
 //   <dir>/mirror-baseline-metrics.json per-viewport capture-time metrics (scrollWidth/Height, runtime
@@ -21,7 +23,10 @@
 //                                      see lib/gate-decision.mjs's clamp contract.
 // Discipline: never fabricate a path. A same-origin asset is either captured from a
 //       real request or read back off the mirror's own markup; a reference is only
-//       localised once the file it points at exists on disk.
+//       localised once the file it points at exists on disk. The sourceUrl<->localPath
+//       mapping is decided exactly ONCE per URL, in lib/mirror-manifest.mjs, and every
+//       stage (capture, recursive fetch, rewrite) consults that same manifest instead
+//       of independently recomputing or reversing it.
 //       Runs to completion on its own: multi-viewport capture (1440/768/390) with
 //       response-body capture during load -> recursive in-page fetch() rounds for
 //       anything the markup/CSS references but no request ever fired for -> bot-wall
@@ -47,18 +52,14 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { loadPlaywright, launchChromium, maskAutomationSignals } from "./lib/playwright-loader.mjs";
-import {
-  collectSameOriginRefs,
-  localPathForUrl,
-  originHosts,
-  reportRewrite,
-  rewriteMirror,
-} from "./rewrite-mirror.mjs";
+import { localPathForUrl, originHosts, reportRewrite, rewriteMirror } from "./rewrite-mirror.mjs";
 import { clampScrollAnimationOverflow, reportClamp } from "./clamp-scroll-animation-overflow.mjs";
 import { DEFAULT_VIEWPORTS, forceLazyMarkup, steppedScroll, collectRuntimeMetrics } from "./lib/viewport-capture.mjs";
 import { fetchInPage } from "./lib/in-page-fetch.mjs";
 import { looksLikeBotWallBody, looksLikeBotWallResponse, headfulEscalationGuidance } from "./lib/bot-wall.mjs";
 import { startStaticServer } from "./lib/static-server.mjs";
+import { createMirrorManifest, findMissingSourceUrls } from "./lib/mirror-manifest.mjs";
+import { containedPath } from "./lib/safe-path.mjs";
 
 const FETCH_THROTTLE_MS = 140;
 // Safety valve against a pathological reference cycle or discovery bug, NOT
@@ -109,9 +110,21 @@ const outRoot = path.resolve(args.out);
 const siteDir = path.join(outRoot, "site");
 fs.mkdirSync(siteDir, { recursive: true });
 const hosts = originHosts(origin);
+// The single source of truth for sourceUrl<->localPath mapping across every
+// stage of this run -- see lib/mirror-manifest.mjs's docblock.
+const manifest = createMirrorManifest({ computeLocalPath: localPathForUrl });
 
 function isOwnUrl(url) {
-  return url.startsWith(origin + "/") || url === origin || url === origin + "/";
+  // Host-based (apex/www aliased), matching how `hosts` is used everywhere
+  // else in this file (localPathForUrl, manifest.claim) -- a literal
+  // `origin + "/"` string-prefix check would miss a response served from
+  // the aliased host (e.g. the origin redirected apex -> www at the same
+  // path), silently dropping it from capture entirely.
+  try {
+    return hosts.has(new URL(url).host.toLowerCase());
+  } catch {
+    return false;
+  }
 }
 
 const responses = new Map(); // url -> {status, type, ct}
@@ -155,11 +168,34 @@ function persistOwnResponse(resp) {
   // pipeline never reassembles byte ranges, so persisting a range response
   // as if it were the complete file would silently ship a truncated asset
   // (e.g. a video whose first request only asked for the first megabyte).
-  if (status !== 200) return;
+  if (status !== 200) {
+    // A 202/403 whose ONLY challenge signal is the response body itself (no
+    // recognized header) would otherwise be missed entirely here, since
+    // nothing else ever reads a non-2xx body. Read it, check it, move on --
+    // this response is never persisted as an asset either way.
+    const operation = (async () => {
+      try {
+        const body = await resp.body();
+        if (body.length && looksLikeBotWallBody(body.toString("utf8", 0, Math.min(body.length, 4096)))) {
+          botWallHits.push({ url, status, phase: "capture" });
+        }
+      } catch {
+        // Body unavailable for this non-2xx response; nothing more to check.
+      }
+    })();
+    pending.add(operation);
+    operation.finally(() => pending.delete(operation));
+    return;
+  }
 
-  const rel = localPathForUrl(url, hosts);
+  const rel = manifest.claim(url, hosts);
   if (!rel) return;
-  const dest = path.join(siteDir, rel);
+  // N1: every write derived from a (potentially adversarial) captured URL
+  // must be containment-checked before touching the filesystem. An encoded
+  // path segment (`%2e%2e%2f%2e%2e%2f`) decodes into literal ".." components
+  // that `path.join` will happily walk outside `siteDir`.
+  const dest = containedPath(siteDir, rel);
+  if (!dest) return;
 
   // Already have a real (non-empty) copy from an earlier attempt -- this,
   // not `destinationLocks`, is the authoritative "already captured" gate.
@@ -196,6 +232,7 @@ function persistOwnResponse(resp) {
 
 const pw = loadPlaywright();
 const browser = await launchChromium(pw.chromium, { headful: args.headful });
+let mirrorIncomplete = false;
 
 try {
   async function captureViewport(viewport) {
@@ -259,6 +296,12 @@ try {
   // referenced CSS/JS file can reveal further references inside it -- so this
   // keeps going until a round makes no progress, with a total-attempt safety
   // valve (not a round cap) against a pathological reference cycle.
+  //
+  // `findMissingSourceUrls` returns absolute source URLs directly (resolved
+  // from each reference against its owning file's own captured URL via the
+  // manifest) -- never a locally-computed path reconstructed back into a
+  // guessed URL, which is what silently fetched the wrong thing (or nothing)
+  // for a query-bearing or percent-encoded reference in the previous design.
   console.log("▸ Recursive fetch rounds for referenced-but-uncaptured assets");
   const fetchContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
   let totalRefetched = 0;
@@ -273,15 +316,17 @@ try {
     await fetchPage.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
 
     // Materialize a redirect stub for the requested entrypoint when the
-    // origin redirects it elsewhere (e.g. "/" -> "/home/") and nothing was
-    // ever captured AT the requested path -- otherwise a bare GET / against
-    // the served mirror 404s even though the mirror is otherwise complete.
-    const requestedRel = localPathForUrl(args.url, hosts);
-    const landedRel = localPathForUrl(fetchPage.url(), hosts);
+    // origin redirects it elsewhere (e.g. "/" -> "/home/", or an apex<->www
+    // redirect at the same path) and nothing was ever captured AT the
+    // requested path -- otherwise a bare GET / against the served mirror
+    // 404s even though the mirror is otherwise complete. Claiming both URLs
+    // in the manifest also means later discovery/rewrite know about them.
+    const requestedRel = manifest.claim(args.url, hosts);
+    const landedRel = manifest.claim(fetchPage.url(), hosts);
     if (requestedRel && landedRel && requestedRel !== landedRel) {
-      const requestedDest = path.join(siteDir, requestedRel);
-      if (!fs.existsSync(requestedDest)) {
-        const landedDest = path.join(siteDir, landedRel);
+      const requestedDest = containedPath(siteDir, requestedRel);
+      const landedDest = containedPath(siteDir, landedRel);
+      if (requestedDest && landedDest && !fs.existsSync(requestedDest)) {
         let relTarget = path.relative(path.dirname(requestedDest), landedDest).split(path.sep).join("/");
         if (!relTarget.startsWith(".")) relTarget = `./${relTarget}`;
         fs.mkdirSync(path.dirname(requestedDest), { recursive: true });
@@ -294,31 +339,31 @@ try {
     }
 
     for (let round = 1; ; round += 1) {
-      const missing = [...collectSameOriginRefs(siteDir, hosts, origin)].filter(
-        (rel) => !fs.existsSync(path.join(siteDir, rel)),
-      );
-      if (!missing.length) break;
-      console.log(`  round ${round}: ${missing.length} referenced asset(s) missing on disk`);
+      const missingUrls = [...findMissingSourceUrls({ siteDir, hosts, manifest })];
+      if (!missingUrls.length) break;
+      console.log(`  round ${round}: ${missingUrls.length} referenced asset(s) missing`);
       let progress = 0;
-      for (const rel of missing) {
+      for (const missingUrl of missingUrls) {
         if (totalRefetched + refetchFailed.length >= MAX_FETCH_ATTEMPTS) {
           hitSafetyCap = true;
           break;
         }
-        const dest = path.join(siteDir, rel);
-        // Keep the write inside site/ even if a reference contains traversal segments.
-        if (!path.resolve(dest).startsWith(path.resolve(siteDir) + path.sep)) continue;
-        const url = `${origin}/${rel}`;
-        const result = await fetchInPage(fetchPage, url);
+        const rel = manifest.claim(missingUrl, hosts);
+        const dest = rel ? containedPath(siteDir, rel) : null;
+        if (!dest) {
+          refetchFailed.push(`unsafe-or-unmappable-path ${missingUrl}`);
+          continue;
+        }
+        const result = await fetchInPage(fetchPage, missingUrl);
         if (result.ok && result.body?.length) {
           fs.mkdirSync(path.dirname(dest), { recursive: true });
           fs.writeFileSync(dest, result.body);
           totalRefetched += 1;
           progress += 1;
         } else {
-          refetchFailed.push(`${result.error || `HTTP${result.status ?? "?"}`} ${rel}`);
+          refetchFailed.push(`${result.error || `HTTP${result.status ?? "?"}`} ${missingUrl}`);
           if (result.error === "bot-wall-challenge") {
-            botWallHits.push({ url, status: result.status, phase: "recursive-fetch" });
+            botWallHits.push({ url: missingUrl, status: result.status, phase: "recursive-fetch" });
           }
         }
         await fetchPage.waitForTimeout(FETCH_THROTTLE_MS);
@@ -326,13 +371,12 @@ try {
       if (hitSafetyCap || !progress) break;
     }
     if (hitSafetyCap) {
-      const stillMissing = [...collectSameOriginRefs(siteDir, hosts, origin)].filter(
-        (rel) => !fs.existsSync(path.join(siteDir, rel)),
-      );
+      const stillMissing = findMissingSourceUrls({ siteDir, hosts, manifest });
+      mirrorIncomplete = true;
       console.error(
-        `✗ Hit the ${MAX_FETCH_ATTEMPTS}-attempt recursive-fetch safety cap with ${stillMissing.length} ` +
+        `✗ Hit the ${MAX_FETCH_ATTEMPTS}-attempt recursive-fetch safety cap with ${stillMissing.size} ` +
           `referenced asset(s) still missing. This likely means a reference cycle or an unusually deep ` +
-          `asset chain -- do not treat this mirror as complete without investigating.`,
+          `asset chain -- this mirror is INCOMPLETE and must not be treated as done.`,
       );
     }
   } finally {
@@ -345,25 +389,30 @@ try {
   }
 
   // Final tally: same-origin URLs captured vs. actually present on disk.
-  // Redirects (3xx) are excluded -- they are never expected to have a body
-  // of their own (the final landed document/asset is what gets persisted),
-  // so counting them as "should exist as a file" always reports a false
-  // failure for every redirect the capture followed.
+  // Uses the manifest's own assigned path (not a fresh recomputation) so a
+  // URL that was disambiguated (a collision, see lib/mirror-manifest.mjs) is
+  // checked against the file it was ACTUALLY written to, not the "natural"
+  // path a naive recomputation would guess. Redirects (3xx) are excluded --
+  // they are never expected to have a body of their own (the final landed
+  // document/asset is what gets persisted), so counting them as "should
+  // exist as a file" always reports a false failure for every redirect the
+  // capture followed.
   let ok = 0;
   let fail = 0;
   const failed = [];
   for (const [url, meta] of responses) {
     if (!isOwnUrl(url)) continue;
     if (meta.status >= 300 && meta.status < 400) continue;
-    const rel = localPathForUrl(url, hosts);
+    const rel = manifest.get(url);
     if (!rel) continue;
-    const dest = path.join(siteDir, rel);
-    if (fs.existsSync(dest) && fs.statSync(dest).size > 0) ok++;
+    const dest = containedPath(siteDir, rel);
+    if (dest && fs.existsSync(dest) && fs.statSync(dest).size > 0) ok++;
     else {
       fail++;
       failed.push(`HTTP${meta.status} ${rel}`);
     }
   }
+  if (fail > 0) mirrorIncomplete = true;
 
   const all = [...responses.entries()].map(([url, m]) => ({ url, ...m }));
   const ownUrls = all.filter((r) => isOwnUrl(r.url));
@@ -385,10 +434,11 @@ try {
     .filter((u) => /use\.typekit\.net\/[a-z0-9]+\.css|fonts\.googleapis\.com\/css/i.test(u));
 
   fs.writeFileSync(path.join(outRoot, "mirror-manifest.json"), JSON.stringify(all, null, 2));
+  fs.writeFileSync(path.join(outRoot, "url-manifest.json"), JSON.stringify(manifest.toJSON(), null, 2));
   fs.writeFileSync(
     path.join(outRoot, "own-asset-urls.txt"),
     ownUrls
-      .map((r) => localPathForUrl(r.url, hosts))
+      .map((r) => manifest.get(r.url))
       .filter(Boolean)
       .sort()
       .join("\n") + "\n",
@@ -398,7 +448,17 @@ try {
     JSON.stringify({ hosts: thirdHosts, webfont_css_to_selfhost: webfontCss }, null, 2),
   );
 
-  console.log(`✅ Mirror complete: ${ok} succeeded / ${fail} failed -> ${siteDir}`);
+  // A mirror that still has known-missing same-origin assets (the safety
+  // cap was hit, or the final tally found any) must never announce itself
+  // as complete -- that is exactly the gap the mandatory verify-mirror.mjs
+  // gate exists to catch downstream, but the capture step itself should not
+  // print a misleading green checkmark in the meantime.
+  if (mirrorIncomplete) {
+    console.error(`⚠️ Mirror INCOMPLETE: ${ok} succeeded / ${fail} failed -> ${siteDir}`);
+    process.exitCode = 1;
+  } else {
+    console.log(`✅ Mirror complete: ${ok} succeeded / ${fail} failed -> ${siteDir}`);
+  }
   if (failed.length) console.log("  ⚠️ Failed:\n   " + failed.slice(0, 20).join("\n   "));
   console.log(`▸ Third-party hosts: ${thirdHosts.join(", ") || "(none)"}`);
   if (webfontCss.length) {
@@ -413,8 +473,8 @@ try {
   // Point the mirror at its own files. Until this runs, every absolute reference
   // still resolves to the origin, so the mirror silently proxies the live site and
   // breaks the moment that host is unreachable.
-  console.log(`▸ Rewriting absolute ${origin} references to local paths`);
-  reportRewrite(rewriteMirror({ siteDir, origin }), origin, false);
+  console.log(`▸ Rewriting absolute/relative ${origin} references to local paths`);
+  reportRewrite(rewriteMirror({ siteDir, origin, manifest }), origin, false);
 
   // Salient/WPBakery scroll-linked parallax rows on the transform_x movement
   // axis (data-scroll-animation="true" data-scroll-animation-movement=

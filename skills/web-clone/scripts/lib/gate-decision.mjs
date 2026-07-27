@@ -18,7 +18,7 @@
 // `viewports` input by actually serving and loading the mirror.
 
 export const DEFAULT_TOLERANCE = 0.05;
-const REQUIRED_NUMERIC_FIELDS = ["scrollWidth", "scrollHeight"];
+const REQUIRED_NUMERIC_FIELDS = ["scrollWidth", "scrollHeight", "canvasCount", "imageCount", "videoCount"];
 
 /** True when `actual` is within `tolerance` (fractional, default 5%) of `expected`. */
 export function withinTolerance(actual, expected, tolerance = DEFAULT_TOLERANCE) {
@@ -29,12 +29,17 @@ export function withinTolerance(actual, expected, tolerance = DEFAULT_TOLERANCE)
 
 /**
  * Validates a parsed `mirror-baseline-metrics.json` document before it is
- * trusted for gating. Fails closed on: not an object, `metrics` missing/empty/
- * not an array, a metric missing a `viewport.label`, a duplicate label, a
- * non-finite required numeric field, or (when `requiredLabels` is given) a
- * label that document doesn't cover at all -- e.g. a baseline that only
- * captured 1440 would otherwise silently verify just that one viewport while
- * 768/390 pass with no baseline checks ever run against them.
+ * trusted for gating. Fails closed on: not an object, a missing/empty
+ * top-level `origin`, `metrics` missing/empty/not an array, a metric missing
+ * a `viewport.label`, a duplicate label, a missing/non-object `frameworks`,
+ * a non-finite required numeric field (scroll dimensions AND the
+ * canvas/image/video counts -- checking scroll dimensions alone let a
+ * baseline missing `origin`/`frameworks`/every count field validate as
+ * `ok:true`, silently disabling the origin-leak, runtime-global, and count
+ * gates for the whole run), or (when `requiredLabels` is given) a label the
+ * document doesn't cover at all -- e.g. a baseline that only captured 1440
+ * would otherwise silently verify just that one viewport while 768/390 pass
+ * with no baseline checks ever run against them.
  *
  * @param {unknown} baselineDoc - `JSON.parse`d baseline file contents.
  * @param {string[]} [requiredLabels] - viewport labels that must all be present.
@@ -43,6 +48,9 @@ export function withinTolerance(actual, expected, tolerance = DEFAULT_TOLERANCE)
 export function validateBaselineDocument(baselineDoc, requiredLabels = []) {
   if (!baselineDoc || typeof baselineDoc !== "object" || Array.isArray(baselineDoc)) {
     return { ok: false, error: "baseline must be a JSON object" };
+  }
+  if (typeof baselineDoc.origin !== "string" || baselineDoc.origin.length === 0) {
+    return { ok: false, error: "baseline.origin must be a non-empty string (needed for the origin-leak gate)" };
   }
   if (!Array.isArray(baselineDoc.metrics) || baselineDoc.metrics.length === 0) {
     return { ok: false, error: "baseline.metrics must be a non-empty array" };
@@ -56,6 +64,9 @@ export function validateBaselineDocument(baselineDoc, requiredLabels = []) {
     }
     if (byLabel.has(label)) {
       return { ok: false, error: `baseline.metrics contains a duplicate viewport label "${label}"` };
+    }
+    if (typeof metric.frameworks !== "object" || metric.frameworks === null || Array.isArray(metric.frameworks)) {
+      return { ok: false, error: `baseline.metrics[${index}] (viewport "${label}") is missing a frameworks object` };
     }
     for (const field of REQUIRED_NUMERIC_FIELDS) {
       if (!Number.isFinite(metric[field])) {

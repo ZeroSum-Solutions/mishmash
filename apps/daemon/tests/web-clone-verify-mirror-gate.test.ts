@@ -110,14 +110,33 @@ const baselineByLabel: Record<string, Baseline> = {
   },
 };
 
-function validBaselineDoc(overrides: Partial<{ metrics: unknown[] }> = {}) {
+// F2: a complete metric now needs frameworks + all three counts, not just
+// scroll dimensions -- validating scroll dims alone let a baseline missing
+// origin/frameworks/counts pass as `ok:true`, silently disabling those
+// gates. Named so each negative test below can spread this and override
+// JUST the one field it means to break, keeping each test isolated to the
+// specific failure it claims to exercise.
+function completeMetric(label: string, overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    viewport: { label, width: 1440, height: 900, dpr: 1 },
+    scrollWidth: 1440,
+    scrollHeight: 3000,
+    frameworks: { lenis: true, three: false },
+    canvasCount: 2,
+    imageCount: 5,
+    videoCount: 1,
+    ...overrides,
+  };
+}
+
+function validBaselineDoc(overrides: Partial<{ origin: unknown; metrics: unknown[] }> = {}) {
   return {
     capturedAt: '2026-07-27T00:00:00.000Z',
     origin: 'https://example.com',
     metrics: [
-      { viewport: { label: '1440', width: 1440, height: 900, dpr: 1 }, scrollWidth: 1440, scrollHeight: 3000 },
-      { viewport: { label: '768', width: 768, height: 900, dpr: 1 }, scrollWidth: 768, scrollHeight: 3200 },
-      { viewport: { label: '390', width: 390, height: 844, dpr: 2 }, scrollWidth: 390, scrollHeight: 3400 },
+      completeMetric('1440'),
+      completeMetric('768', { viewport: { label: '768', width: 768, height: 900, dpr: 1 }, scrollWidth: 768, scrollHeight: 3200 }),
+      completeMetric('390', { viewport: { label: '390', width: 390, height: 844, dpr: 2 }, scrollWidth: 390, scrollHeight: 3400 }),
     ],
     ...overrides,
   };
@@ -394,7 +413,7 @@ describe('validateBaselineDocument (F2: fail-closed baseline validation)', () =>
     const { validateBaselineDocument } = await loadGateDecision();
 
     const doc = validBaselineDoc({
-      metrics: [{ viewport: { width: 1440, height: 900, dpr: 1 }, scrollWidth: 1440, scrollHeight: 3000 }],
+      metrics: [{ ...completeMetric('1440'), viewport: { width: 1440, height: 900, dpr: 1 } }],
     });
 
     expect(validateBaselineDocument(doc, requiredLabels).ok).toBe(false);
@@ -404,10 +423,7 @@ describe('validateBaselineDocument (F2: fail-closed baseline validation)', () =>
     const { validateBaselineDocument } = await loadGateDecision();
 
     const doc = validBaselineDoc({
-      metrics: [
-        { viewport: { label: '1440' }, scrollWidth: 1440, scrollHeight: 3000 },
-        { viewport: { label: '1440' }, scrollWidth: 1440, scrollHeight: 3000 },
-      ],
+      metrics: [completeMetric('1440'), completeMetric('1440')],
     });
 
     expect(validateBaselineDocument(doc, requiredLabels).ok).toBe(false);
@@ -417,7 +433,7 @@ describe('validateBaselineDocument (F2: fail-closed baseline validation)', () =>
     const { validateBaselineDocument } = await loadGateDecision();
 
     const doc = validBaselineDoc({
-      metrics: [{ viewport: { label: '1440' }, scrollWidth: Number.NaN, scrollHeight: 3000 }],
+      metrics: [completeMetric('1440', { scrollWidth: Number.NaN })],
     });
 
     expect(validateBaselineDocument(doc, requiredLabels).ok).toBe(false);
@@ -429,9 +445,7 @@ describe('validateBaselineDocument (F2: fail-closed baseline validation)', () =>
   it('fails closed when a required viewport label is entirely missing from the baseline', async () => {
     const { validateBaselineDocument } = await loadGateDecision();
 
-    const doc = validBaselineDoc({
-      metrics: [{ viewport: { label: '1440' }, scrollWidth: 1440, scrollHeight: 3000 }],
-    });
+    const doc = validBaselineDoc({ metrics: [completeMetric('1440')] });
 
     const result = validateBaselineDocument(doc, requiredLabels);
 
@@ -442,10 +456,63 @@ describe('validateBaselineDocument (F2: fail-closed baseline validation)', () =>
   it('without requiredLabels, a partial-but-internally-valid baseline is accepted', async () => {
     const { validateBaselineDocument } = await loadGateDecision();
 
-    const doc = validBaselineDoc({
-      metrics: [{ viewport: { label: '1440' }, scrollWidth: 1440, scrollHeight: 3000 }],
-    });
+    const doc = validBaselineDoc({ metrics: [completeMetric('1440')] });
 
     expect(validateBaselineDocument(doc).ok).toBe(true);
+  });
+
+  // F2 (round-3): checking only scroll dimensions let a baseline missing
+  // origin/frameworks/every count field validate as ok:true, silently
+  // disabling the origin-leak, runtime-global, and count gates for the
+  // whole run. These three cases pin that each of those sections is now
+  // actually required.
+  it('(F2) fails closed when top-level origin is missing (disables the origin-leak gate otherwise)', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const doc = validBaselineDoc({ origin: undefined });
+
+    expect(validateBaselineDocument(doc, requiredLabels).ok).toBe(false);
+  });
+
+  it('(F2) fails closed when top-level origin is an empty string', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const doc = validBaselineDoc({ origin: '' });
+
+    expect(validateBaselineDocument(doc, requiredLabels).ok).toBe(false);
+  });
+
+  // All three required labels stay present here -- only the field under test
+  // is broken. Dropping to a single metric (as an earlier draft of this test
+  // did) would ALSO fail the pre-existing requiredLabels check, which passes
+  // even against the round-2 (pre-fix) validator and would make this test a
+  // false-positive red: it would report "ok:false" whether or not the
+  // frameworks/count check under test actually ran.
+  it('(F2) fails closed when a metric is missing its frameworks object', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const doc = validBaselineDoc({
+      metrics: [
+        completeMetric('1440', { frameworks: undefined }),
+        completeMetric('768', { viewport: { label: '768', width: 768, height: 900, dpr: 1 }, scrollWidth: 768, scrollHeight: 3200 }),
+        completeMetric('390', { viewport: { label: '390', width: 390, height: 844, dpr: 2 }, scrollWidth: 390, scrollHeight: 3400 }),
+      ],
+    });
+
+    expect(validateBaselineDocument(doc, requiredLabels).ok).toBe(false);
+  });
+
+  it('(F2) fails closed when a metric is missing a count field (canvasCount)', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const doc = validBaselineDoc({
+      metrics: [
+        completeMetric('1440', { canvasCount: undefined }),
+        completeMetric('768', { viewport: { label: '768', width: 768, height: 900, dpr: 1 }, scrollWidth: 768, scrollHeight: 3200 }),
+        completeMetric('390', { viewport: { label: '390', width: 390, height: 844, dpr: 2 }, scrollWidth: 390, scrollHeight: 3400 }),
+      ],
+    });
+
+    expect(validateBaselineDocument(doc, requiredLabels).ok).toBe(false);
   });
 });
