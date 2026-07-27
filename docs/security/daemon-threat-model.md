@@ -103,18 +103,19 @@ against the current run, not asserted from memory.
   (`docs/plans/waves/leases.json`, W0). See the wave's completion report for
   the full reproduction and file list.
 - **`POST /api/library/pair/confirm` and the zero-config extension
-  allowlist.** `apps/daemon/src/origin-validation.ts`'s
-  `isZeroConfigClipperLibraryRequest` only auto-trusts
+  allowlist — FIXED.** `apps/daemon/src/origin-validation.ts`'s
+  `isZeroConfigClipperLibraryRequest` originally only auto-trusted
   `GET /library/clipper-probe` and `POST/OPTIONS /library/ingest` from an
-  extension-shaped origin; it does not cover `/library/pair/confirm`. In
-  the current tree, a genuine cross-origin `chrome-extension://…` pairing
-  request is rejected by the global `/api` origin gate
-  (`apps/daemon/src/server.ts`) before it ever reaches
-  `registerLibraryRoutes`'s handler — a pre-existing bug, not something this
-  wave introduced or could fix within its write lease (both files are
-  outside it). `[C0-5]`/`[C0-6]` above are verified against the token
-  *binding* logic directly (minting via a loopback-origin'd confirm call
-  that still declares the target extension origin in its request body,
-  since `confirmPairing` reads `extensionOrigin` from the body, not the
-  request's `Origin` header) rather than the end-to-end bootstrap
-  transport, which remains broken. See the wave's completion report.
+  extension-shaped origin, not `/library/pair/confirm` — so a genuine
+  cross-origin `chrome-extension://…` pairing request was rejected by the
+  global `/api` origin gate before it ever reached
+  `registerLibraryRoutes`'s handler, even though the route's own comment
+  always documented the exemption. Closed by a W0 lease amendment
+  (`docs/plans/waves/DECISIONS.md`, 2026-07-27): the allowlist now covers
+  `POST`/`OPTIONS /library/pair/confirm` too, on the same reasoning as
+  `/library/ingest` (an extension-shaped `Origin` header cannot be forged
+  by a web page; the route's real authorization is the short-lived pairing
+  code inside `confirmPairing`, not the origin check). `[C0-5]`/`[C0-6]`
+  above are now verified against the real end-to-end bootstrap transport, not
+  a workaround:
+  `POST /api/library/pair/confirm — real cross-origin bootstrap transport > (C0-5/mint) a genuine not-yet-paired chrome-extension Origin header can mint a token via pair/confirm`.

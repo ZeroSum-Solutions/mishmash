@@ -53,16 +53,17 @@ function extOrigin(): string {
   return `chrome-extension://${Math.random().toString(36).slice(2).padEnd(32, 'a')}`;
 }
 
-// See tests/library-ingest-token-binding.test.ts for why the confirm call
-// itself is loopback-origin'd (a pre-existing, out-of-lease bug in the
-// global /api origin gate blocks the real cross-origin confirm request
-// before it reaches the route).
+// Mints via the REAL cross-origin bootstrap transport -- a genuine
+// not-yet-paired `Origin: chrome-extension://...` header on the confirm
+// call itself. See tests/library-ingest-token-binding.test.ts's dedicated
+// "real cross-origin bootstrap transport" describe block for the direct
+// assertion that this call succeeds (200, not the pre-fix 403).
 async function mintToken(origin: string): Promise<string> {
   const pairRes = await fetch(`${baseUrl}/api/library/pair`, { method: 'POST', headers: { Host: '127.0.0.1' } });
   const { code } = (await pairRes.json()) as { code: string };
   const confirmRes = await fetch(`${baseUrl}/api/library/pair/confirm`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Host: '127.0.0.1' },
+    headers: { 'Content-Type': 'application/json', Origin: origin },
     body: JSON.stringify({ code, extensionOrigin: origin }),
   });
   const body = (await confirmRes.json()) as { token: string };

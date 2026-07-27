@@ -268,8 +268,10 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
   });
 
   // Reachable from the (not-yet-allowlisted) extension origin — gated by the
-  // pairing code. server.ts exempts this exact path from the global origin
-  // middleware. CORS preflight handled below.
+  // pairing code. server.ts's global `/api` origin middleware exempts this
+  // exact path via isZeroConfigClipperLibraryRequest
+  // (apps/daemon/src/origin-validation.ts), the same zero-config bypass
+  // /library/ingest uses. CORS preflight handled below.
   app.options('/api/library/pair/confirm', (req, res) => {
     applyExtensionCors(req, res);
     res.status(204).end();

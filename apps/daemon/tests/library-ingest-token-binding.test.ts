@@ -56,29 +56,18 @@ function extOrigin(): string {
   return `chrome-extension://${Math.random().toString(36).slice(2).padEnd(32, 'a')}`;
 }
 
-// NOTE: the confirm call below is issued WITHOUT an extension-shaped Origin
-// header (loopback instead) -- a PRE-EXISTING bug means the real flow (an
-// actual cross-origin `Origin: chrome-extension://...` request) is rejected
-// by server.ts's global `/api` origin gate before it ever reaches
-// registerLibraryRoutes's `/api/library/pair/confirm` handler:
-// isZeroConfigClipperLibraryRequest() (apps/daemon/src/origin-validation.ts)
-// only zero-config-allowlists GET /library/clipper-probe and
-// POST/OPTIONS /library/ingest, NOT /library/pair/confirm, and the origin
-// isn't yet in the paired-origins allowlist at this point in the flow
-// (that's the whole point of confirming). Both files are outside this
-// wave's write lease, so this cannot be fixed here -- see the wave's
-// completion report. confirmPairing() reads the target extensionOrigin from
-// the JSON BODY, not the request's actual Origin header, so a loopback-
-// origin'd call can still mint a token correctly bound to an extension
-// origin for the purpose of testing the BINDING enforcement this spec
-// exists to cover; it does not exercise the (separately broken) end-to-end
-// bootstrap transport.
+// Mints a token through the REAL cross-origin bootstrap transport: a
+// genuine not-yet-paired `Origin: chrome-extension://...` header on the
+// confirm call itself (previously blocked by a pre-existing bug in the
+// global `/api` origin gate; fixed in origin-validation.ts's
+// isZeroConfigClipperLibraryRequest -- see docs/security/daemon-threat-
+// model.md [C0-5]/[C0-6]).
 async function mintToken(origin: string): Promise<string> {
   const pairRes = await fetch(`${baseUrl}/api/library/pair`, { method: 'POST', headers: { Host: '127.0.0.1' } });
   const { code } = (await pairRes.json()) as { code: string };
   const confirmRes = await fetch(`${baseUrl}/api/library/pair/confirm`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Host: '127.0.0.1' },
+    headers: { 'Content-Type': 'application/json', Origin: origin },
     body: JSON.stringify({ code, extensionOrigin: origin }),
   });
   const body = (await confirmRes.json()) as { token: string };
@@ -96,6 +85,35 @@ async function ingest(origin: string | undefined, token: string | undefined): Pr
   });
   return res.status;
 }
+
+describe('POST /api/library/pair/confirm — real cross-origin bootstrap transport', () => {
+  it('(C0-5/mint) a genuine not-yet-paired chrome-extension Origin header can mint a token via pair/confirm', async () => {
+    const origin = extOrigin();
+    const pairRes = await fetch(`${baseUrl}/api/library/pair`, { method: 'POST', headers: { Host: '127.0.0.1' } });
+    expect(pairRes.status).toBe(200);
+    const { code } = (await pairRes.json()) as { code: string };
+    const confirmRes = await fetch(`${baseUrl}/api/library/pair/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: origin },
+      body: JSON.stringify({ code, extensionOrigin: origin }),
+    });
+    // Before the origin-validation.ts fix, this request never reached
+    // registerLibraryRoutes's handler at all -- the global /api origin gate
+    // rejected it with 403 "Cross-origin requests are not allowed" first.
+    expect(confirmRes.status).toBe(200);
+    const body = (await confirmRes.json()) as { token?: string; label?: string };
+    expect(typeof body.token).toBe('string');
+    expect(body.token!.startsWith('odlt_')).toBe(true);
+  });
+
+  it('OPTIONS preflight for pair/confirm succeeds from a genuine extension origin', async () => {
+    const res = await fetch(`${baseUrl}/api/library/pair/confirm`, {
+      method: 'OPTIONS',
+      headers: { Origin: extOrigin() },
+    });
+    expect(res.status).toBe(204);
+  });
+});
 
 describe('POST /api/library/ingest — capability token identity binding (C0-5/C0-6)', () => {
   it('(C0-5/reject) rejects an unpaired extension origin with no token', async () => {

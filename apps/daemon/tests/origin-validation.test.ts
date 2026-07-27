@@ -543,6 +543,35 @@ describe('isZeroConfigClipperLibraryRequest predicate', () => {
     expect(isZeroConfigClipperLibraryRequest('GET', '/library/assets', 'chrome-extension://abc')).toBe(false);
     expect(isZeroConfigClipperLibraryRequest('GET', '/library/assets/a/raw', 'chrome-extension://abc')).toBe(false);
   });
+
+  // A not-yet-paired extension origin is by definition absent from the
+  // paired-origins allow-list this same middleware otherwise consults, so
+  // without this entry no extension could ever complete its FIRST pairing
+  // over a genuine cross-origin request (W0 lease-amendment fix -- the
+  // pairing code inside confirmPairing is the real authorization here,
+  // this only lets the request reach that check).
+  it('accepts an extension origin on the pairing-confirm path (POST and its OPTIONS preflight)', () => {
+    expect(
+      isZeroConfigClipperLibraryRequest('POST', '/library/pair/confirm', 'chrome-extension://abc'),
+    ).toBe(true);
+    expect(
+      isZeroConfigClipperLibraryRequest('OPTIONS', '/library/pair/confirm', 'chrome-extension://abc'),
+    ).toBe(true);
+    expect(
+      isZeroConfigClipperLibraryRequest('POST', '/library/pair/confirm', 'moz-extension://abc'),
+    ).toBe(true);
+  });
+
+  it('rejects a non-extension origin on the pairing-confirm path', () => {
+    expect(isZeroConfigClipperLibraryRequest('POST', '/library/pair/confirm', 'http://evil.com')).toBe(false);
+    expect(isZeroConfigClipperLibraryRequest('POST', '/library/pair/confirm', undefined)).toBe(false);
+  });
+
+  it('rejects GET on the pairing-confirm path even from an extension origin (only POST/OPTIONS are real methods there)', () => {
+    expect(
+      isZeroConfigClipperLibraryRequest('GET', '/library/pair/confirm', 'chrome-extension://abc'),
+    ).toBe(false);
+  });
 });
 
 describe('origin validation: fail-closed before port resolution', () => {
