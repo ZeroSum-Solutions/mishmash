@@ -2361,7 +2361,7 @@
       "sourceId": "hostile-abs-a",
       "nodeId": "hostile-abs-a-features",
       "domPath": "body > div.hostile-abs-a-shell > features.hostile-abs-a-features",
-      "breakpoint": "desktop"
+      "breakpoint": "mobile"
     },
     {
       "elementId": "hostile-heavy-dom-catalog-di-1-interaction",
