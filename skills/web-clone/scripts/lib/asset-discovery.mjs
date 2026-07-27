@@ -8,7 +8,8 @@
 // as a request, so a mirror's second pass has to find them by reading the
 // references back off already-downloaded text instead. This module is that
 // "what does this text reference" primitive: given raw HTML or CSS text, it
-// enumerates every attribute value (including each candidate inside a
+// enumerates the values of URL-BEARING attributes (allowlisted by name --
+// see `isUrlBearingAttributeName`; including each candidate inside a
 // `srcset`), every `url(...)` (covers CSS `background`/`@font-face src`
 // alike, inline or in a stylesheet), and every `@import` target.
 //
@@ -47,16 +48,29 @@ const CSS_IMPORT_PATTERN = /@import\s+['"]([^'"]+)['"]/gi;
 // token because `<link imagesrcset>` has no separator before the suffix.
 const URL_BEARING_SUFFIX_PATTERN = /(?:^|[-_:])(?:src|href|poster|srcset|imagesrcset|bg|background)$/i;
 // A7: standard URL-carrying attributes whose names do not END in a URL-ish
-// token and so need exact matching: `<object data>`, `<form action>`,
-// `<button formaction>`. Exact -- NOT suffix -- because `data-*`/
+// token and so need exact matching. Exact -- NOT suffix -- because `data-*`/
 // `data-action` style names routinely carry non-URL values (JS hooks,
 // config), and a suffix match would resolve those into phantom missing
 // assets, the precise failure the allowlist above exists to prevent.
-const URL_BEARING_EXACT_PATTERN = /^(?:data|action|formaction)$/i;
+//
+// Two tiers, because "carries a URL" and "is a fetchable resource" are
+// different questions: `<object data>` names bytes a GET can retrieve, but
+// `<form action>`/`<button formaction>` name SUBMISSION endpoints -- a bare
+// GET (no form data) against one commonly 405s/404s, so treating them as
+// missing assets would fail otherwise-complete static mirrors. They are
+// still URL-bearing for the REWRITE pass (localized when the target file
+// exists), just never recursively fetched.
+const RESOURCE_EXACT_PATTERN = /^data$/i;
+const NAVIGATION_EXACT_PATTERN = /^(?:action|formaction)$/i;
 
-/** True when an HTML attribute name plausibly carries a URL reference. */
+/** True when an HTML attribute name plausibly carries a URL reference (resource OR navigation target). */
 export function isUrlBearingAttributeName(name) {
-  return URL_BEARING_SUFFIX_PATTERN.test(name) || URL_BEARING_EXACT_PATTERN.test(name);
+  return URL_BEARING_SUFFIX_PATTERN.test(name) || RESOURCE_EXACT_PATTERN.test(name) || NAVIGATION_EXACT_PATTERN.test(name);
+}
+
+/** True when the attribute's URL names fetchable RESOURCE bytes (excludes form-submission targets). */
+function isFetchableResourceAttributeName(name) {
+  return URL_BEARING_SUFFIX_PATTERN.test(name) || RESOURCE_EXACT_PATTERN.test(name);
 }
 
 /** Non-fetchable/inline schemes: nothing a mirror pass could retrieve or usefully localise. */
@@ -124,13 +138,20 @@ function srcsetCandidates(value) {
  * CSS `url()`/`@import` values are always eligible (unambiguously resource
  * references in that position); HTML attribute values are eligible only
  * from a URL-bearing attribute name (see `isUrlBearingAttributeName`).
+ *
+ * By default only FETCHABLE RESOURCE references are returned -- callers use
+ * this to decide what a mirror is missing, and a form-submission target
+ * (`action`/`formaction`) is not retrievable by the bare GET a recursive
+ * fetch would issue. Pass `includeNavigation: true` to also get navigation
+ * targets (the rewrite-analysis path wants everything it may localize).
  */
-export function collectReferenceCandidates(text) {
+export function collectReferenceCandidates(text, { includeNavigation = false } = {}) {
   const refs = [];
+  const eligible = includeNavigation ? isUrlBearingAttributeName : isFetchableResourceAttributeName;
 
   for (const match of text.matchAll(QUOTED_ATTRIBUTE_PATTERN)) {
     const [, name, , raw] = match;
-    if (!isUrlBearingAttributeName(name)) continue;
+    if (!eligible(name)) continue;
     const candidates = /srcset$/i.test(name) ? srcsetCandidates(raw) : [raw];
     for (const candidate of candidates) {
       const value = candidate.trim();
@@ -145,7 +166,7 @@ export function collectReferenceCandidates(text) {
   // tokenizer as the quoted form; every other unquoted value is one token.
   for (const match of text.matchAll(UNQUOTED_ATTRIBUTE_PATTERN)) {
     const [, name, raw] = match;
-    if (!isUrlBearingAttributeName(name)) continue;
+    if (!eligible(name)) continue;
     const candidates = /srcset$/i.test(name) ? srcsetCandidates(raw ?? "") : [raw ?? ""];
     for (const candidate of candidates) {
       const value = candidate.trim();

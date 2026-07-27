@@ -416,13 +416,23 @@ describe('(A7) URL-bearing attribute coverage: the standard attributes discovery
     expect(refs).toContain('/img/hero-800.png');
   });
 
-  it('(A7) discovers form[action] and button[formaction]', async () => {
+  it('(A7) form[action]/button[formaction] are navigation targets: visible to rewrite analysis, never fetchable assets', async () => {
     const { collectReferenceCandidates } = await loadDiscovery();
-    const refs = collectReferenceCandidates(
-      '<form action="/subscribe.html"><button formaction="/confirm.html">Go</button></form>',
-    );
-    expect(refs).toContain('/subscribe.html');
-    expect(refs).toContain('/confirm.html');
+    const html = '<form action="/subscribe.html"><button formaction="/confirm.html">Go</button></form>';
+
+    // Rewrite-analysis view (includeNavigation): both targets are found, so
+    // the rewriter can localize them when their files exist on disk.
+    const withNav = collectReferenceCandidates(html, { includeNavigation: true });
+    expect(withNav).toContain('/subscribe.html');
+    expect(withNav).toContain('/confirm.html');
+
+    // Fetch view (default, feeds findMissingSourceUrls): a submission
+    // endpoint is not retrievable by a bare GET (commonly 405s), so
+    // treating it as a missing ASSET would fail otherwise-complete static
+    // mirrors under the A1 completion check.
+    const fetchable = collectReferenceCandidates(html);
+    expect(fetchable).not.toContain('/subscribe.html');
+    expect(fetchable).not.toContain('/confirm.html');
   });
 
   it('(A7) discovers xlink:href (SVG 1.x image/use references)', async () => {

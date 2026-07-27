@@ -19,6 +19,10 @@
 
 export const DEFAULT_TOLERANCE = 0.05;
 const REQUIRED_NUMERIC_FIELDS = ["scrollWidth", "scrollHeight", "canvasCount", "imageCount", "videoCount"];
+// The runtime-global flags lib/viewport-capture.mjs's collectRuntimeMetrics
+// ALWAYS writes -- validation requires exactly these (extra keys from a
+// future writer are tolerated; a missing one means "not writer output").
+const REQUIRED_FRAMEWORK_KEYS = ["three", "gsap", "lenis"];
 
 /** True when `actual` is within `tolerance` (fractional, default 5%) of `expected`. */
 export function withinTolerance(actual, expected, tolerance = DEFAULT_TOLERANCE) {
@@ -86,18 +90,20 @@ export function validateBaselineDocument(baselineDoc, requiredLabels = []) {
       return { ok: false, error: `baseline.metrics[${index}] (viewport "${label}") is missing a frameworks object` };
     }
     // A3: the writer (lib/viewport-capture.mjs's collectRuntimeMetrics)
-    // always records the full runtime-global flag set as booleans. An EMPTY
-    // frameworks object passes the shape check above but silently disables
-    // the runtime-global gate (no baseline-true globals to require), and a
-    // non-boolean value means the document was not produced by the writer.
-    const frameworkEntries = Object.entries(metric.frameworks);
-    if (frameworkEntries.length === 0) {
+    // always records the full runtime-global flag set as booleans -- the
+    // EXACT keys below, kept in lockstep with that function (both files
+    // ship together, so drift is a bug, not a compatibility concern). A
+    // baseline missing any writer key was not produced by the writer, and
+    // accepting merely "some boolean object" (`{react:false}`) would
+    // silently disable every intended runtime-global check.
+    const missingFrameworkKeys = REQUIRED_FRAMEWORK_KEYS.filter((key) => !(key in metric.frameworks));
+    if (missingFrameworkKeys.length) {
       return {
         ok: false,
-        error: `baseline.metrics[${index}] (viewport "${label}") has an empty frameworks object -- not writer output; it would silently disable the runtime-global gate`,
+        error: `baseline.metrics[${index}] (viewport "${label}") frameworks is missing writer key(s) ${missingFrameworkKeys.join(", ")} -- not collectRuntimeMetrics output`,
       };
     }
-    const nonBoolean = frameworkEntries.find(([, present]) => typeof present !== "boolean");
+    const nonBoolean = Object.entries(metric.frameworks).find(([, present]) => typeof present !== "boolean");
     if (nonBoolean) {
       return {
         ok: false,

@@ -203,7 +203,12 @@ function collectSameOriginRefs(siteDir, hosts, origin) {
   for (const file of walk(siteDir)) {
     const text = fs.readFileSync(file, "utf8");
     const ownerRel = path.relative(siteDir, file).split(path.sep).join("/");
-    for (const value of collectReferenceCandidates(text)) {
+    // includeNavigation: this is the rewrite-analysis view -- form
+    // action/formaction targets are localizable (when their file exists),
+    // they are just never recursively FETCHED (that is
+    // findMissingSourceUrls's resource-only default; a bare GET against a
+    // submission endpoint commonly 405s and would fail complete mirrors).
+    for (const value of collectReferenceCandidates(text, { includeNavigation: true })) {
       let local = null;
       if (/^(https?:)?\/\//i.test(value)) {
         local = localPathForUrl(value, hosts);
@@ -336,6 +341,25 @@ function rewriteText(text, file, rewriteRef, { manifestActive = false } = {}) {
         if (!manifestActive && !/^(?:https?:)?\/\/\S+$/i.test(value.trim())) return match;
         const rewritten = rewriteRef(value);
         return rewritten === value ? match : `${space}${name}=${quote}${rewritten}${quote}`;
+      },
+    );
+
+    // Unquoted attribute values (A7's rewrite half): discovery tokenizes
+    // them, and capture fetches what they reference, so leaving them
+    // un-rewritten stranded absolute references on the live origin -- both
+    // assets present locally, verify still reporting an origin leak. An
+    // unquoted value cannot contain whitespace, so it is a single reference
+    // token (or, for srcset, comma-separated descriptor-less candidates).
+    // The localized replacement is emitted QUOTED: `./a.png,./b.png` needs
+    // quoting to stay one attribute value, and quoting a formerly unquoted
+    // value is always valid HTML.
+    next = next.replace(
+      /(\s)([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?!['"])([^\s"'=<>`]+)/g,
+      (match, space, name, value) => {
+        if (!isUrlBearingAttributeName(name)) return match;
+        if (!manifestActive && !/^(?:https?:)?\/\/\S+$/i.test(value)) return match;
+        const rewritten = /srcset$/i.test(name) ? rewriteSrcset(value, rewriteRef) : rewriteRef(value);
+        return rewritten === value ? match : `${space}${name}="${rewritten}"`;
       },
     );
   }

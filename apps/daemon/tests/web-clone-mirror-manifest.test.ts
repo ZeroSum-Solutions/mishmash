@@ -15,10 +15,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 //     that `path.join`/`path.resolve` will happily walk outside the mirror
 //     root without this check).
 //   - lib/mirror-manifest.mjs's createMirrorManifest -- the single
-//     sourceUrl<->localPath source of truth, injective by construction (a
-//     colliding "natural" path gets disambiguated with a hash of the raw
-//     url rather than letting a second write silently reuse the first
-//     write's file), plus findMissingSourceUrls/isCaptured, which return
+//     sourceUrl<->localPath source of truth. A colliding "natural" path
+//     gets disambiguated with a hash of the url rather than letting a
+//     second write silently reuse the first write's file (safe for
+//     accidental collisions; deliberately crafted double-collisions are a
+//     documented SKILL.md limitation, not a defended case). Plus
+//     findMissingSourceUrls/isCaptured, which return
 //     fetchable absolute URLs directly (never a locally-computed path
 //     reconstructed back into a guessed URL) and treat a claimed-but-never-
 //     written URL as still missing (retry-able across rounds).
@@ -68,6 +70,12 @@ async function loadRewriteMirror() {
   return (await import(pathToFileURL(rewriteMirrorScriptPath).href)) as {
     localPathForUrl: (url: string, hosts: Set<string>) => string | null;
     originHosts: (origin: string) => Set<string>;
+    rewriteMirror: (args: {
+      siteDir: string;
+      origin: string;
+      manifest?: MirrorManifest | null;
+      dryRun?: boolean;
+    }) => { rewritten: number; notMirrored: number; filesChanged: number };
   };
 }
 
@@ -399,5 +407,66 @@ describe('(A5) filesystem-equivalent local paths must not silently collide', () 
     const nfd = manifest.claim(`https://example.com/${encodeURIComponent('café.png'.normalize('NFD'))}`, hosts)!;
 
     expect(nfc.normalize('NFC').toLowerCase()).not.toBe(nfd.normalize('NFC').toLowerCase());
+  });
+});
+
+// Round-1 review of the close-out (Sol, task-ms2t0izc-rdlyna) finding 2:
+// `toLowerCase()` is not Unicode case folding -- Greek final sigma `ς`
+// lowercases to itself while `Σ` lowercases to `σ`, so `/ΟΣ.png` and
+// `/Ος.png` produced distinct collision keys for what a caseless
+// filesystem folds into one file.
+describe('(A5 round-1) collision keys use Unicode case folding, not toLowerCase()', () => {
+  it('final-sigma and sigma variants of one name get distinct local paths', async () => {
+    const { createMirrorManifest } = await loadMirrorManifest();
+    const { localPathForUrl, originHosts } = await loadRewriteMirror();
+    const hosts = originHosts('https://example.com');
+    const manifest = createMirrorManifest({ computeLocalPath: localPathForUrl });
+
+    const capital = manifest.claim(`https://example.com/${encodeURIComponent('ΟΣ.png')}`, hosts)!;
+    const finalSigma = manifest.claim(`https://example.com/${encodeURIComponent('Ος.png')}`, hosts)!;
+
+    // Case-fold both (upper-then-lower folds ς and σ together, matching the
+    // filesystem's caseless comparison) -- the assigned paths must differ
+    // under THAT equivalence, not merely as raw strings.
+    expect(capital.normalize('NFC').toUpperCase().toLowerCase()).not.toBe(
+      finalSigma.normalize('NFC').toUpperCase().toLowerCase(),
+    );
+  });
+});
+
+// Round-1 review of the close-out (Sol, task-ms2t0izc-rdlyna) finding 4:
+// discovery tokenizes unquoted srcset (A7) and capture fetches both
+// candidates, but the rewrite pass only matched QUOTED attribute values --
+// so the absolute references stayed pointed at the live origin and
+// verification reported an origin leak over a mirror whose assets were all
+// present locally.
+describe('(A7 round-1) rewriteMirror localizes unquoted attribute values, emitting them quoted', () => {
+  it('rewrites an unquoted absolute srcset and quotes the result', async () => {
+    const { createMirrorManifest } = await loadMirrorManifest();
+    const { localPathForUrl, originHosts, rewriteMirror } = await loadRewriteMirror();
+    const hosts = originHosts('https://example.com');
+    const manifest = createMirrorManifest({ computeLocalPath: localPathForUrl });
+    const siteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'web-clone-unquoted-rewrite-'));
+    try {
+      const indexRel = manifest.claim('https://example.com/', hosts)!;
+      const aRel = manifest.claim('https://example.com/img/a.png', hosts)!;
+      const bRel = manifest.claim('https://example.com/img/b.png', hosts)!;
+      fs.mkdirSync(path.join(siteDir, 'img'), { recursive: true });
+      fs.writeFileSync(
+        path.join(siteDir, indexRel),
+        '<!doctype html><html><body><img srcset=https://example.com/img/a.png,https://example.com/img/b.png alt="x"></body></html>',
+      );
+      fs.writeFileSync(path.join(siteDir, aRel), 'png-a');
+      fs.writeFileSync(path.join(siteDir, bRel), 'png-b');
+
+      const result = rewriteMirror({ siteDir, origin: 'https://example.com', manifest });
+
+      const html = fs.readFileSync(path.join(siteDir, indexRel), 'utf8');
+      expect(result.filesChanged).toBe(1);
+      expect(html).not.toContain('https://example.com/img/');
+      expect(html).toMatch(/srcset="[^"]*a\.png[^"]*,[^"]*b\.png[^"]*"/);
+    } finally {
+      fs.rmSync(siteDir, { recursive: true, force: true });
+    }
   });
 });

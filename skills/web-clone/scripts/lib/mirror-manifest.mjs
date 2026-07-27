@@ -51,9 +51,17 @@ function manifestUrlKey(url) {
  * case-insensitive, and APFS normalizes Unicode -- `Images/Logo.png` vs
  * `images/logo.png`, or NFC vs NFD `café.png`, are distinct strings but one
  * single file on disk.
+ *
+ * Case-INSENSITIVITY here means Unicode case folding, not `toLowerCase()`
+ * alone: a filesystem's caseless comparison folds Greek final sigma `ς` and
+ * `σ` together (both fold from `Σ`), while `"ς".toLowerCase()` stays `ς` --
+ * so lowercasing alone would treat `/ΟΣ.png` and `/Ος.png` as distinct keys
+ * for what APFS stores as one file. Upper-then-lower approximates full case
+ * folding for exactly these divergent cases (it also folds `ß` -> `ss`,
+ * matching full folding).
  */
 function fsCollisionKey(localPath) {
-  return localPath.normalize("NFC").toLowerCase();
+  return localPath.normalize("NFC").toUpperCase().toLowerCase();
 }
 
 /**

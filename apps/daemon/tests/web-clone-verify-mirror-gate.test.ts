@@ -121,7 +121,10 @@ function completeMetric(label: string, overrides: Partial<Record<string, unknown
     viewport: { label, width: 1440, height: 900, dpr: 1 },
     scrollWidth: 1440,
     scrollHeight: 3000,
-    frameworks: { lenis: true, three: false },
+    // Writer-shaped: collectRuntimeMetrics always records all three flags,
+    // and validateBaselineDocument now requires them (a "complete" fixture
+    // missing gsap was exactly what the loosened check wrongly accepted).
+    frameworks: { three: false, gsap: false, lenis: true },
     canvasCount: 2,
     imageCount: 5,
     videoCount: 1,
@@ -615,5 +618,51 @@ describe('(A3/CC-5) malformed baselines fail closed with named diagnostics', () 
     );
 
     expect(result.ok).toBe(false);
+  });
+});
+
+// Round-1 review of the close-out (Sol, task-ms2t0izc-rdlyna) finding 1:
+// "any non-empty all-boolean object" still is not writer output -- the
+// writer records exactly {three, gsap, lenis}, so a baseline with
+// `frameworks: {react: false}` must fail closed instead of silently
+// disabling every intended runtime-global check.
+describe('(A3 round-1) frameworks must carry the writer key set, not merely be boolean-valued', () => {
+  const requiredLabels = ['1440'];
+
+  it('rejects a boolean frameworks object missing the writer keys', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const result = validateBaselineDocument(
+      validBaselineDoc({ metrics: [completeMetric('1440', { frameworks: { react: false } })] }),
+      requiredLabels,
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/three|gsap|lenis/);
+  });
+
+  it('rejects a frameworks object missing just one writer key', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const result = validateBaselineDocument(
+      validBaselineDoc({ metrics: [completeMetric('1440', { frameworks: { three: false, lenis: true } })] }),
+      requiredLabels,
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/gsap/);
+  });
+
+  it('accepts writer-shaped frameworks with extra keys (future writer additions tolerated)', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const result = validateBaselineDocument(
+      validBaselineDoc({
+        metrics: [completeMetric('1440', { frameworks: { three: false, gsap: true, lenis: true, pixi: false } })],
+      }),
+      requiredLabels,
+    );
+
+    expect(result.ok).toBe(true);
   });
 });

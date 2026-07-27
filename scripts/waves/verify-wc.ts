@@ -128,27 +128,34 @@ for (const [id, needle, min, assertion] of [
   record(id, `vitest tests matching "${needle}"`, assertion, check.ok, check.evidence);
 }
 
-// CC-7: no unenforced-guarantee claims in the touched scripts; the claims
+// CC-7: no unenforced-guarantee claims in the touched surfaces; the claims
 // list is explicit so this stays mechanical, not a reviewer vibe-check.
+// Round-1 review widened this (Sol finding 5): the sweep must cover docs
+// and test-file prose too, and the patterns must match the claims' actual
+// wording, not just three phrases the author remembered writing.
 const forbiddenClaims: [string, RegExp][] = [
-  ['unqualified injectivity claim', /\bit is injective\b|\binjective:\s/i],
+  ['unqualified injectivity claim', /\bit is injective\b|\binjective:\s|injective by construction/i],
   ['unquoted-srcset impossibility claim', /cannot occur validly/i],
   ['failed-request-cannot-leak claim', /failed request can't itself be a "leak"/i],
+  ['every-attribute-value discovery claim', /enumerates every attribute value/i],
 ];
-const scriptFiles: string[] = [];
-for (const dir of ['skills/web-clone/scripts', 'skills/web-clone/scripts/lib']) {
-  for (const f of fs.readdirSync(path.join(repoRoot, dir))) {
-    if (f.endsWith('.mjs')) scriptFiles.push(path.join(repoRoot, dir, f));
+const sweepFiles: string[] = [path.join(repoRoot, 'skills/web-clone/SKILL.md')];
+for (const dir of ['skills/web-clone/scripts', 'skills/web-clone/scripts/lib', 'skills/web-clone/references']) {
+  const abs = path.join(repoRoot, dir);
+  if (!fs.existsSync(abs)) continue;
+  for (const f of fs.readdirSync(abs)) {
+    if (f.endsWith('.mjs') || f.endsWith('.md')) sweepFiles.push(path.join(abs, f));
   }
 }
+for (const rel of WEB_CLONE_TEST_FILES) sweepFiles.push(path.join(repoRoot, 'apps/daemon', rel));
 const claimHits: string[] = [];
-for (const file of scriptFiles) {
+for (const file of sweepFiles) {
   const text = fs.readFileSync(file, 'utf8');
   for (const [label, pattern] of forbiddenClaims) {
     if (pattern.test(text)) claimHits.push(`${path.relative(repoRoot, file)}: ${label}`);
   }
 }
-record('CC-7', 'claims-list grep over skills/web-clone/scripts/**', 'zero unenforced-guarantee claims remain', claimHits.length === 0, claimHits.join('\n') || 'no forbidden claim patterns matched');
+record('CC-7', 'claims-list grep over skills/web-clone/** (scripts, docs, references) + web-clone tests', 'zero unenforced-guarantee claims remain', claimHits.length === 0, claimHits.join('\n') || `no forbidden claim patterns matched across ${sweepFiles.length} files`);
 
 // CC-8: class-B limitations documented, list frozen at exactly 3 items.
 const skillMd = fs.readFileSync(path.join(repoRoot, 'skills/web-clone/SKILL.md'), 'utf8');
