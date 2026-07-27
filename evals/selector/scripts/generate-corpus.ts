@@ -11,14 +11,33 @@
 //
 // Run: pnpm exec tsx evals/selector/scripts/generate-corpus.ts
 //
-// v3 (deliverable-review fix round 1): ONLY generates the 8 NON-SEALED
-// cases. sealed-marketing-alt / sealed-docs-widget are frozen forever (the
-// orchestrator will not re-seal again -- see the round-1 review response)
-// -- their manifest.json sub-objects are spliced back in VERBATIM from the
-// currently-committed manifest by splicePreservedSealedCases() below, never
-// regenerated, never touched. Genre-specific role vocabularies, captured
-// state, snapshot identity, directive-level breakpoints, and per-constraint
-// predicates are new in v3 and apply to non-sealed cases only -- the schema
+// v4 (deliverable-review fix round 2): ONLY generates the 8 NON-SEALED
+// cases; sealed-marketing-alt / sealed-docs-widget stay frozen forever,
+// spliced back in verbatim by splicePreservedSealedCases() below, same as
+// v3. Three changes this round:
+//
+//   1. F6 (Sol REJECT): genres are now STRUCTURALLY distinct, not just
+//      differently-named -- different slot counts (marketing 7, ecommerce 9,
+//      docs 6, app-dashboard 8), different container counts (marketing/docs
+//      1, ecommerce/app-dashboard 2), genuine parent/child DOM nesting
+//      (ecommerce's trust-badges nests inside reviews-panel; app-dashboard's
+//      data-grid nests inside chart-panel -- both visible as an extra
+//      domPath segment, not a role-name difference), and varied
+//      motion-target counts/placement (docs has 2, everyone else has 1).
+//   2. F2 (Sol REJECT, deliverable side): each case's brief now lives in its
+//      OWN top-level CASE_BRIEFS map, physically separate from CaseSpec
+//      (directives) -- not co-authored inside the same object literal.
+//      manifest.json binds each brief's path + sha256 so it is
+//      freeze-covered, same as everything else in the corpus.
+//   3. N1 (Sol HIGH): containers now render a genuinely DIFFERENT display
+//      value on mobile ('block', stacked) vs desktop (the source's real
+//      layoutKind) -- real, checkable responsive divergence a scorer can
+//      verify, instead of identical computedStyle tagged with different
+//      breakpoint strings.
+//
+// v3 (deliverable-review fix round 1, carried forward unchanged): genre role
+// vocabularies, captured state, snapshot identity, directive-level
+// breakpoints, per-constraint predicates. The schema
 // (docs/specs/selector-composition-ir.schema.json) treats all of it as
 // additive/optional so the sealed cases' v1-shape IR still validates.
 
@@ -87,16 +106,25 @@ interface RoleSpec {
   role: string;
   isContainer: boolean; // carries the layout-system-defining display/position value; gets a 'scrolled' state capture too
   isMotionTarget: boolean; // gets a transitionDuration + a 'hover' state capture
+  // F6: when set, this role's domPath nests INSIDE parentRole's domPath (an
+  // extra real DOM segment, not a cosmetic rename) -- must name another
+  // role in the SAME genre's list.
+  parentRole?: string;
 }
 
-// F6 (both review lanes, REJECT): genres were the same eight-role template
-// relabeled. Each genre now has its OWN role vocabulary (different
-// component names, different information architecture) -- a marketing page
-// does not have a "reviews panel" and a docs page does not have a
-// "price-badge". Only the STRUCTURAL slots every case needs (a container
-// that carries layout evidence, a motion/interaction target) are held in
-// common, via the isContainer/isMotionTarget flags, not the role names.
+// F6 (both review lanes, REJECT -- round 1 fix insufficient per Sol round 2:
+// "GENRE_ROLES only supplies four vocabularies to one generic
+// buildSourceNodes seven-slot template with exactly one container and one
+// motion target per genre. Unique role nouns do not establish structurally
+// distinct information architectures."). Each genre now has a genuinely
+// different SHAPE, not just different names for the same seven-slot
+// template: different slot counts, different container counts, real
+// parent/child DOM nesting for at least one role, and varied motion-target
+// placement -- all visible in the generated domPath/IR structure itself.
 const GENRE_ROLES: Record<Genre, RoleSpec[]> = {
+  // marketing: 7 slots, 1 container, 1 motion target, flat (no nesting) --
+  // the simplest shape, kept as the structural baseline the other three
+  // genres are deliberately built to differ from.
   marketing: [
     { role: 'hero', isContainer: false, isMotionTarget: false },
     { role: 'headline', isContainer: false, isMotionTarget: false },
@@ -106,39 +134,54 @@ const GENRE_ROLES: Record<Genre, RoleSpec[]> = {
     { role: 'pricing-cta', isContainer: false, isMotionTarget: true },
     { role: 'footer-nav', isContainer: false, isMotionTarget: false },
   ],
+  // ecommerce: 9 slots (the largest), 2 independent containers
+  // (reviews-panel, related-products), ONE genuinely nested role
+  // (trust-badges lives INSIDE reviews-panel's DOM subtree -- its domPath
+  // carries an extra real segment, not a different label), 1 motion target.
   ecommerce: [
     { role: 'product-gallery', isContainer: false, isMotionTarget: false },
     { role: 'product-title', isContainer: false, isMotionTarget: false },
     { role: 'price-badge', isContainer: false, isMotionTarget: false },
     { role: 'reviews-panel', isContainer: true, isMotionTarget: false },
+    { role: 'trust-badges', isContainer: false, isMotionTarget: false, parentRole: 'reviews-panel' },
     { role: 'size-selector', isContainer: false, isMotionTarget: false },
     { role: 'add-to-cart', isContainer: false, isMotionTarget: true },
+    { role: 'related-products', isContainer: true, isMotionTarget: false },
     { role: 'shipping-footer', isContainer: false, isMotionTarget: false },
   ],
+  // docs: 6 slots (the leanest), 1 container, TWO motion targets
+  // (callout-box and edit-link -- docs pages have more small interactive
+  // affordances relative to their slot count than any other genre).
   docs: [
     { role: 'sidebar-nav', isContainer: false, isMotionTarget: false },
-    { role: 'breadcrumb-trail', isContainer: false, isMotionTarget: false },
     { role: 'article-title', isContainer: false, isMotionTarget: false },
     { role: 'code-sample', isContainer: false, isMotionTarget: false },
-    { role: 'callout-box', isContainer: false, isMotionTarget: false },
+    { role: 'callout-box', isContainer: false, isMotionTarget: true },
     { role: 'toc-panel', isContainer: true, isMotionTarget: false },
     { role: 'edit-link', isContainer: false, isMotionTarget: true },
   ],
+  // app-dashboard: 8 slots, 2 containers with GENUINE parent/child nesting
+  // (data-grid lives INSIDE chart-panel's DOM subtree -- a real dashboard's
+  // data grid is physically inside its chart/panel region, not a sibling),
+  // 1 motion target.
   'app-dashboard': [
     { role: 'nav-rail', isContainer: false, isMotionTarget: false },
     { role: 'metric-tile', isContainer: false, isMotionTarget: false },
     { role: 'chart-panel', isContainer: true, isMotionTarget: false },
-    { role: 'data-grid', isContainer: false, isMotionTarget: false },
+    { role: 'data-grid', isContainer: true, isMotionTarget: false, parentRole: 'chart-panel' },
     { role: 'filter-controls', isContainer: false, isMotionTarget: true },
     { role: 'alert-banner', isContainer: false, isMotionTarget: false },
     { role: 'user-menu', isContainer: false, isMotionTarget: false },
+    { role: 'export-button', isContainer: false, isMotionTarget: false },
   ],
 };
 
 // Which role each directive axis addresses, per genre -- the axis
 // vocabulary (layout/motion/palette/typography/section/interaction) is
 // shared and frozen (schema enum), but WHICH component realizes each axis
-// is genre-specific, same as a real design system.
+// is genre-specific, same as a real design system. (Documentation of the
+// per-genre convention CASES' directives follow; kept in sync by hand since
+// CaseSpec.directives name roles directly for per-case narrative control.)
 const AXIS_ROLE_BY_GENRE: Record<Genre, Record<DirectiveAxis, string>> = {
   marketing: { layout: 'features-grid', motion: 'pricing-cta', palette: 'hero', typography: 'headline', section: 'features-grid', interaction: 'pricing-cta' },
   ecommerce: { layout: 'reviews-panel', motion: 'add-to-cart', palette: 'price-badge', typography: 'product-title', section: 'reviews-panel', interaction: 'add-to-cart' },
@@ -162,7 +205,17 @@ function motionSignatureFor(presetIndex: number): string {
   return `transition:${transitionDurationFor(presetIndex)}`;
 }
 
-function containerStyleFor(kind: SourceLayoutKind): Record<string, string> {
+// Sol-N1 (deliverable-review fix round 2): a container's display value now
+// genuinely DIFFERS by breakpoint -- 'block' (stacked) on mobile regardless
+// of layoutKind, the source's real grid/flex/absolute-canvas value on
+// desktop. This is real, checkable responsive divergence (the SAME domPath's
+// mobile and desktop captures now carry different computedStyle), not
+// identical style data tagged with two different breakpoint strings. 'block'
+// is still a valid layout-evidence value (LAYOUT_VALUES / the grid-integrity
+// constraint pattern both accept it), so mobile citations remain verifiable
+// evidence -- they are just genuinely, checkably different from desktop's.
+function containerStyleFor(kind: SourceLayoutKind, breakpoint: Breakpoint): Record<string, string> {
+  if (breakpoint === 'mobile') return { display: 'block' };
   if (kind === 'grid') return { display: 'grid' };
   if (kind === 'flex') return { display: 'flex' };
   return { display: 'block', position: 'absolute' };
@@ -182,6 +235,13 @@ interface DirectiveSpec {
   strength: number;
 }
 
+// F2 (deliverable-review fix round 2): CaseSpec no longer carries a `brief`
+// field -- briefs live in the separate CASE_BRIEFS map below, physically
+// apart from directives (Sol round 2: "generate-corpus.ts stores each brief
+// beside its directives in the same CaseSpec and generates both together").
+// This is the MECHANICAL half of the fix (structural separation + manifest
+// binding, below); the deeper authorship-independence question is closed by
+// a separate orchestrator-dispatched audit, not by this generator.
 interface CaseSpec {
   id: string;
   genre: Genre;
@@ -192,20 +252,10 @@ interface CaseSpec {
   degenerate: 'single-source' | 'nonexistent-element-directive' | 'hostile-heavy-dom' | null;
   skip: { reason: 'login-walled' | 'bot-walled'; target: string } | null;
   directives: DirectiveSpec[];
-  brief: string; // F2: independent-in-process NL brief, hand-written, NOT derived from `directives` above
 }
 
 const CORPUS_VERSION = 3;
 
-// F2 (both lanes REJECT): each case's directiveInventory must be grounded in
-// an independent artifact. `brief` below is written FIRST, in free natural
-// language a real user might type, deliberately NOT as a template over
-// {axis,source,role} tuples -- contrast blog-content-grid's brief prose with
-// its `directives` array below and the correspondence is legible but not
-// mechanical. See evals/selector/CORPUS.md's "brief grounding" table for the
-// explicit brief-sentence -> directiveInventory-entry trace, and the
-// standing limitation this does NOT resolve (same author for both
-// artifacts, unlike a real independent-user brief) stated there plainly.
 const CASES: CaseSpec[] = [
   {
     id: 'marketing-hero-grid',
@@ -219,9 +269,6 @@ const CASES: CaseSpec[] = [
     conflict: { axis: 'layout', winningSource: 'mkt-grid-a', losingSource: 'mkt-flex-b' },
     degenerate: null,
     skip: null,
-    brief:
-      "I want the grid features layout from mkt-grid-a -- mkt-flex-b has its own features layout too but I don't want that one, mkt-grid-a's should win. " +
-      "For the rest: use mkt-flex-b's colour palette on the hero, and keep mkt-grid-a's headline typography as-is.",
     directives: [
       { axis: 'layout', source: 'mkt-grid-a', role: 'features-grid', strength: 0.9 },
       { axis: 'layout', source: 'mkt-flex-b', role: 'features-grid', strength: 0.6 },
@@ -241,10 +288,6 @@ const CASES: CaseSpec[] = [
     conflict: { axis: 'palette', winningSource: 'ecom-flex-a', losingSource: 'ecom-grid-b' },
     degenerate: null,
     skip: null,
-    brief:
-      "Use ecom-flex-a's colour palette on the price badge -- I looked at ecom-grid-b's price styling too but I'm going with ecom-flex-a's. " +
-      "Also carry over ecom-grid-b's add-to-cart button motion, keep ecom-flex-a's reviews panel section structure and overall layout, and use " +
-      "ecom-grid-b's product title typography.",
     // 6 directives (even count) -- see the breakpoint-derangement comment on
     // `directiveInventory` below for why an EVEN count matters mechanically,
     // not just for richness.
@@ -269,9 +312,6 @@ const CASES: CaseSpec[] = [
     conflict: { axis: 'typography', winningSource: 'dash-abs-a', losingSource: 'dash-grid-b' },
     degenerate: null,
     skip: null,
-    brief:
-      "Use dash-abs-a's typography on the alert banner -- dash-grid-b had its own competing type treatment there that I'm not choosing. " +
-      "Carry over dash-abs-a's data-grid interaction behaviour too, and its chart panel layout.",
     directives: [
       { axis: 'typography', source: 'dash-abs-a', role: 'alert-banner', strength: 0.9 },
       { axis: 'typography', source: 'dash-grid-b', role: 'alert-banner', strength: 0.55 },
@@ -291,9 +331,6 @@ const CASES: CaseSpec[] = [
     conflict: { axis: 'section', winningSource: 'docs-flex-a', losingSource: 'docs-grid-b' },
     degenerate: null,
     skip: null,
-    brief:
-      "I like docs-flex-a's table-of-contents section structure best -- docs-grid-b organizes its TOC differently and I don't want that version. " +
-      "Use docs-flex-a's overall layout too, and pull the callout box colours from docs-grid-b.",
     directives: [
       { axis: 'section', source: 'docs-flex-a', role: 'toc-panel', strength: 0.8 },
       { axis: 'section', source: 'docs-grid-b', role: 'toc-panel', strength: 0.45 },
@@ -313,7 +350,6 @@ const CASES: CaseSpec[] = [
     conflict: null,
     degenerate: null,
     skip: null,
-    brief: "Use blog-grid-a's features grid layout, and blog-flex-b's hero colour palette. No conflicts here, just those two picks.",
     directives: [
       { axis: 'layout', source: 'blog-grid-a', role: 'features-grid', strength: 0.85 },
       { axis: 'palette', source: 'blog-flex-b', role: 'hero', strength: 0.7 },
@@ -328,7 +364,6 @@ const CASES: CaseSpec[] = [
     conflict: null,
     degenerate: 'single-source',
     skip: { reason: 'bot-walled', target: 'https://example-walled-admin.test/dashboard (Cloudflare-challenged second reference the user asked for; single-source capture proceeded and this skip is recorded rather than silently ignored)' },
-    brief: "Just use land-solo-a for the layout and colour palette. I wanted a second reference to compare against but that site wouldn't let the crawler in.",
     directives: [
       { axis: 'layout', source: 'land-solo-a', role: 'features-grid', strength: 0.8 },
       { axis: 'palette', source: 'land-solo-a', role: 'hero', strength: 0.6 },
@@ -346,9 +381,6 @@ const CASES: CaseSpec[] = [
     conflict: null,
     degenerate: 'nonexistent-element-directive',
     skip: null,
-    brief:
-      "Use phantom-grid-a's reviews panel layout and its product title typography. Also grab the colour palette from phantom-flex-b's promo ribbon " +
-      "banner -- the one that runs across the top of the page above the nav.",
     directives: [
       { axis: 'layout', source: 'phantom-grid-a', role: 'reviews-panel', strength: 0.75 },
       { axis: 'typography', source: 'phantom-grid-a', role: 'product-title', strength: 0.65 },
@@ -370,15 +402,11 @@ const CASES: CaseSpec[] = [
     conflict: null,
     degenerate: 'hostile-heavy-dom',
     skip: null,
-    brief:
-      "This dashboard has a huge data table -- use hostile-abs-a's chart panel layout and hostile-grid-b's data-grid interaction. " +
-      "For the styling, carry over the look of the first ten rows of BOTH catalogs (hostile-abs-a and hostile-grid-b) -- those set the visual tone " +
-      "for the rest of the table, row by row, alternating which source's row styling wins.",
     // Grok-N5: provenance/directives must be PROPORTIONAL to the node-count
     // claim, not 2 claims regardless of size. Generated programmatically
     // below (10 catalog rows x 2 sources = 20 additional claims, cycling
     // through the 6 directive axes) so the "first ten rows of both
-    // catalogs" sentence in the brief above has real referents.
+    // catalogs" sentence in the brief has real referents.
     directives: [
       { axis: 'layout', source: 'hostile-abs-a', role: 'chart-panel', strength: 0.7 },
       { axis: 'interaction', source: 'hostile-grid-b', role: 'data-grid', strength: 0.55 },
@@ -392,6 +420,45 @@ const CASES: CaseSpec[] = [
   },
 ];
 
+// F2 (both lanes REJECT, round 1): each case's directiveInventory must be
+// grounded in an independent artifact. F2 (Sol REJECT, round 2, deliverable
+// side): the brief now lives HERE, in its own top-level map, physically
+// separate from CASES/CaseSpec above -- not generated together in one
+// object literal. Written FIRST, in free natural language a real user might
+// type, deliberately NOT as a template over {axis,source,role} tuples --
+// contrast blog-content-grid's brief prose with its `directives` array above
+// and the correspondence is legible but not mechanical. See
+// evals/selector/CORPUS.md's "brief grounding" table for the explicit
+// brief-sentence -> directiveInventory-entry trace, and the standing
+// limitation this does NOT resolve (same author for both artifacts, unlike a
+// real independent-user brief) stated there plainly -- the deeper
+// independence claim is closed by a separate orchestrator-dispatched audit,
+// not by this file.
+const CASE_BRIEFS: Record<string, string> = {
+  'marketing-hero-grid':
+    "I want the grid features layout from mkt-grid-a -- mkt-flex-b has its own features layout too but I don't want that one, mkt-grid-a's should win. " +
+    "For the rest: use mkt-flex-b's colour palette on the hero, and keep mkt-grid-a's headline typography as-is.",
+  'ecommerce-product-flex':
+    "Use ecom-flex-a's colour palette on the price badge -- I looked at ecom-grid-b's price styling too but I'm going with ecom-flex-a's. " +
+    "Also carry over ecom-grid-b's add-to-cart button motion, keep ecom-flex-a's reviews panel section structure and overall layout, and use " +
+    "ecom-grid-b's product title typography.",
+  'dashboard-canvas-widgets':
+    "Use dash-abs-a's typography on the alert banner -- dash-grid-b had its own competing type treatment there that I'm not choosing. " +
+    "Carry over dash-abs-a's data-grid interaction behaviour too, and its chart panel layout.",
+  'docs-api-reference':
+    "I like docs-flex-a's table-of-contents section structure best -- docs-grid-b organizes its TOC differently and I don't want that version. " +
+    "Use docs-flex-a's overall layout too, and pull the callout box colours from docs-grid-b.",
+  'blog-content-grid': "Use blog-grid-a's features grid layout, and blog-flex-b's hero colour palette. No conflicts here, just those two picks.",
+  'single-source-landing': "Just use land-solo-a for the layout and colour palette. I wanted a second reference to compare against but that site wouldn't let the crawler in.",
+  'phantom-element-directive':
+    "Use phantom-grid-a's reviews panel layout and its product title typography. Also grab the colour palette from phantom-flex-b's promo ribbon " +
+    "banner -- the one that runs across the top of the page above the nav.",
+  'hostile-heavy-dom-catalog':
+    "This dashboard has a huge data table -- use hostile-abs-a's chart panel layout and hostile-grid-b's data-grid interaction. " +
+    "For the styling, carry over the look of the first ten rows of BOTH catalogs (hostile-abs-a and hostile-grid-b) -- those set the visual tone " +
+    "for the rest of the table, row by row, alternating which source's row styling wins.",
+};
+
 function sha256(bytes: Buffer | string): string {
   return crypto.createHash('sha256').update(bytes).digest('hex');
 }
@@ -401,12 +468,22 @@ function canonicalJson(value: unknown): string {
   return `${JSON.stringify(value)}\n`;
 }
 
-function domPathFor(sourceId: string, role: string): string {
+// F6: domPath now reflects the role's REAL structural position -- a role
+// with a `parentRole` nests inside its parent's own domPath (an extra real
+// DOM segment), not a flat sibling with a cosmetic name change. Only one
+// level deep in this corpus's data, but written to walk the parent chain
+// generally rather than assuming exactly one level.
+function domPathFor(sourceId: string, role: string, genre: Genre): string {
   if (role.startsWith('catalog:')) {
     const i = role.slice('catalog:'.length);
     return `body > div.${sourceId}-shell > section.${sourceId}-catalog > div.${sourceId}-item-${i}`;
   }
-  return `body > div.${sourceId}-shell > ${role.replace(/-/g, '_')}.${sourceId}-${role}`;
+  const spec = GENRE_ROLES[genre].find((r) => r.role === role);
+  const segment = `${role.replace(/-/g, '_')}.${sourceId}-${role}`;
+  if (spec?.parentRole) {
+    return `${domPathFor(sourceId, spec.parentRole, genre)} > ${segment}`;
+  }
+  return `body > div.${sourceId}-shell > ${segment}`;
 }
 
 // nodeId is BREAKPOINT-SPECIFIC (a capture is a per-breakpoint session, even
@@ -421,9 +498,9 @@ function buildSourceNodes(genre: Genre, source: SourceSpec, breakpoint: Breakpoi
   const roles = GENRE_ROLES[genre];
   const nodes: SnapshotNode[] = [];
   for (const r of roles) {
-    const domPath = domPathFor(source.id, r.role);
+    const domPath = domPathFor(source.id, r.role, genre);
     const baseStyle: Record<string, string> = { sourceTag: source.id };
-    if (r.isContainer) Object.assign(baseStyle, containerStyleFor(source.layoutKind));
+    if (r.isContainer) Object.assign(baseStyle, containerStyleFor(source.layoutKind, breakpoint));
     if (r.isMotionTarget) baseStyle['transitionDuration'] = transitionDurationFor(source.presetIndex);
     Object.assign(baseStyle, { color: preset.color, backgroundColor: preset.backgroundColor, fontFamily: preset.fontFamily });
     nodes.push({ nodeId: `${source.id}-${r.role}-${breakpoint}-default`, domPath, state: 'default', computedStyle: baseStyle });
@@ -448,7 +525,7 @@ function buildSourceNodes(genre: Genre, source: SourceSpec, breakpoint: Breakpoi
   for (let i = 0; i < extra; i++) {
     nodes.push({
       nodeId: `${source.id}-list-item-${i}-${breakpoint}-default`,
-      domPath: domPathFor(source.id, `catalog:${i}`),
+      domPath: domPathFor(source.id, `catalog:${i}`, genre),
       state: 'default',
       computedStyle: { sourceTag: source.id, display: 'block', color: preset.color, backgroundColor: preset.backgroundColor, fontFamily: preset.fontFamily },
     });
@@ -460,9 +537,9 @@ function buildSourceNodes(genre: Genre, source: SourceSpec, breakpoint: Breakpoi
 // mentions every REAL source id it makes claims about (a cheap, honest,
 // mechanical floor under the hand-written independence -- not a substitute
 // for the human trace table in CORPUS.md).
-function assertBriefMentionsSources(c: CaseSpec): void {
+function assertBriefMentionsSources(c: CaseSpec, brief: string): void {
   for (const s of c.sources) {
-    if (!c.brief.includes(s.id)) throw new Error(`case ${c.id}: brief does not mention source id "${s.id}" -- grounding check failed`);
+    if (!brief.includes(s.id)) throw new Error(`case ${c.id}: brief does not mention source id "${s.id}" -- grounding check failed`);
   }
 }
 
@@ -490,8 +567,13 @@ function main(): void {
   const manifestCases: unknown[] = [];
 
   for (const c of CASES) {
-    assertBriefMentionsSources(c);
-    fs.writeFileSync(path.join(BRIEFS_DIR, `${c.id}.md`), `${c.brief}\n`);
+    const brief = CASE_BRIEFS[c.id];
+    if (brief === undefined) throw new Error(`case ${c.id}: no entry in CASE_BRIEFS`);
+    assertBriefMentionsSources(c, brief);
+    const briefRelPath = `evals/selector/corpus/briefs/${c.id}.md`;
+    const briefContent = `${brief}\n`;
+    fs.writeFileSync(path.join(BRIEFS_DIR, `${c.id}.md`), briefContent);
+    const briefSha256 = sha256(briefContent);
 
     const nodesBySourceByBp: Record<string, Partial<Record<Breakpoint, SnapshotNode[]>>> = {};
     for (const s of c.sources) {
@@ -523,7 +605,7 @@ function main(): void {
     const directiveInventory = c.directives.map((d, i) => ({
       axis: d.axis,
       source: d.source,
-      scope: domPathFor(d.source, d.role),
+      scope: domPathFor(d.source, d.role, c.genre),
       strength: d.strength,
       breakpoint: c.breakpoints[i % c.breakpoints.length]!,
     }));
@@ -561,11 +643,12 @@ function main(): void {
           losingSource: c.conflict.losingSource,
           losingClaim: `${c.id}#${axis}#lost:${c.conflict.losingSource}`,
           rationale: `${c.id}#${axis}#won:${c.conflict.winningSource}#lost:${c.conflict.losingSource}`,
-          // Coordinator item 7: scope-overlap semantics for conflict
-          // grouping, as an IR-SPEC-level clarification -- NOT a change to
-          // resolve-conflicts.ts's actual grouping algorithm (dual-APPROVED
-          // under F4, left untouched). Every conflict in this corpus is two
-          // claims on the SAME axis whose scopes point at each source's own
+          // Coordinator item 7 (round 1) / Sol-N4 (round 2): scope-overlap
+          // semantics for conflict grouping. resolve-conflicts.ts now
+          // genuinely consumes this distinction (role-key-aware grouping,
+          // not axis-alone) rather than treating it as IR-spec-level
+          // documentation only. Every conflict in this corpus is two claims
+          // on the SAME axis whose scopes point at each source's own
           // (different) node for the SAME semantic role -- overlap is
           // role-level, not string-identical domPath.
           scopeOverlap: 'same-role-different-source',
@@ -619,11 +702,17 @@ function main(): void {
       sealed: false,
       irPath: irRelPath,
       irSha256: irHash,
+      // F2 (deliverable-review fix round 2, item 7): bind the brief into the
+      // manifest itself -- path + sha256, same pattern as irPath/irSha256 --
+      // so a brief edit is freeze-covered exactly like an IR edit.
+      briefPath: briefRelPath,
+      briefSha256: briefSha256,
     });
   }
 
   // Splice the 2 preserved sealed cases back in, byte-for-byte from the
-  // manifest as it existed before this run -- never regenerated.
+  // manifest as it existed before this run -- never regenerated. Sealed
+  // cases predate briefPath/briefSha256 and do not gain them here.
   for (const sealedCase of preservedSealedCases) manifestCases.push(sealedCase);
 
   const sealedFraction = Math.round((preservedSealedCases.length / manifestCases.length) * 1000) / 1000;
