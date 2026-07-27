@@ -2899,11 +2899,24 @@ await probe(
 // allowed after it). This closes both named gaps at once: a narrative
 // line elsewhere in the log can no longer masquerade as the result, and a
 // free-floating "exit code: 0" appended without ever following a real
-// "$ <cmd>" line cannot pair at all.
+// "$ <cmd>" line cannot pair at all. F17 (round 7): the pairing logic
+// still classified "expected exit code: 0" itself AS an exit-code-shaped
+// line (the old regex matched it as a SUBSTRING anywhere on the line), so
+// a two-line log with only that narrative line after "$ <cmd>" -- no real
+// result at all -- still paired and passed. EXIT_LINE_RE is now strictly
+// anchored to the WHOLE line: case-sensitive, line-start anchored, no
+// preceding words permitted. "expected exit code: 0" no longer matches
+// the exit-code pattern at all, so it can never pair with anything.
 function terminalExitZero(runLogText: string): { ok: boolean; detail: string } {
   const lines = runLogText.split('\n');
   const CMD_LINE_RE = /^\s*\$\s+(.+?)\s*$/;
-  const EXIT_LINE_RE = /\bexit(?:\s*code)?\s*[:=]?\s*(\d+)\b/i;
+  // F17 (round 7): the previous \bexit(?:\s*code)?...\b pattern matched
+  // "exit code: 0" as a SUBSTRING anywhere on a line -- including inside
+  // narrative prose like "expected exit code: 0", which is not a real
+  // result. Strictly anchored: the ENTIRE line (ignoring only trailing
+  // whitespace) must be exactly "exit code: <digits>", case-sensitive, no
+  // preceding words. "expected exit code: 0" no longer matches at all.
+  const EXIT_LINE_RE = /^exit code: (\d+)\s*$/;
   const pairs: { cmd: string; exitLineIndex: number; code: string }[] = [];
   let pendingCmd: string | null = null;
   let totalExitLines = 0;
@@ -2978,7 +2991,7 @@ const MIN_NO_CHANGE_RATIONALE_LENGTH = 80;
 await probe(
   'C7-15',
   `read ${SPIKE_DOC_PATH} + ${IR_SCHEMA_PATH} + ${SPIKE_RUNLOG_PATH} + ${SPIKE_OUTPUT_PATH}; require ${SPIKE_OUTPUT_PATH} exists, validates against the composition shape (blindInput), has every element resolve into the referenced case's captured snapshots (buildSnapshotsBySource/resolves, same as C7-4), and its sha256 is recorded verbatim in the doc; require ${SPIKE_RUNLOG_PATH} exists, looks like a command transcript, and has a terminal "$ <cmd>"-paired exit code of 0 anchored to the final non-blank content of the log (terminalExitZero); require the case id + output hash + run-log hash all appear together in one paragraph of the doc; enumerate real schema field names; require EVERY substantive insufficiency item to name a real field; require EVERY substantive response item to name a real field OR carry an explicit >=${MIN_NO_CHANGE_RATIONALE_LENGTH}-char no-change rationale`,
-  `${SPIKE_OUTPUT_PATH} exists, parses via blindInput() into a valid {caseId, composition[]} (a bare "{}" fails immediately -- no non-empty caseId), every composition element's (sourceId,nodeId,domPath,breakpoint) RESOLVES against the referenced spike case's real captured snapshots (buildSnapshotsBySource + resolves(), the identical machinery C7-4 uses), and its sha256 is recorded verbatim in ${SPIKE_DOC_PATH}; ${SPIKE_RUNLOG_PATH} exists, contains a recognizable command-invocation line, and terminalExitZero() finds a "$ <cmd>" line paired with the NEXT exit-code-shaped line after it, that pair's code is EXACTLY 0, AND that pair's exit-code line is the true final non-blank content of the log (only trailing whitespace allowed after it) -- an earlier narrative "expected exit code: 0" cannot masquerade as the result if a real, later exit-code line follows it, and a free-floating "exit code: 0" not tied to any "$ <cmd>" line cannot pair at all (F17); the doc contains one paragraph naming the referenced case id, the output hash, AND the run-log hash together (F17: prevents citing a real output hash and a real run-log hash from two unrelated executions); "## Case" names a real corpus case id; EVERY list item under "## IR insufficiencies found" (>=1 item, each >= ${MIN_SPIKE_ITEM_LENGTH} chars) names at least one field name that is enumerated from the ACTUAL committed ${IR_SCHEMA_PATH} (not a fixed token list) -- a generic bullet or a field name in unrelated prose elsewhere in the doc does not count; EVERY list item under "## Responses" (>=1 item, each >= ${MIN_SPIKE_ITEM_LENGTH} chars) EITHER names a real schema field OR is itself >= ${MIN_NO_CHANGE_RATIONALE_LENGTH} chars (an explicit no-change rationale) -- a short token-only response line fails both branches`,
+  `${SPIKE_OUTPUT_PATH} exists, parses via blindInput() into a valid {caseId, composition[]} (a bare "{}" fails immediately -- no non-empty caseId), every composition element's (sourceId,nodeId,domPath,breakpoint) RESOLVES against the referenced spike case's real captured snapshots (buildSnapshotsBySource + resolves(), the identical machinery C7-4 uses), and its sha256 is recorded verbatim in ${SPIKE_DOC_PATH}; ${SPIKE_RUNLOG_PATH} exists, contains a recognizable command-invocation line, and terminalExitZero() finds a "$ <cmd>" line paired with the NEXT line matching the STRICTLY anchored, case-sensitive pattern /^exit code: (\\d+)\\s*$/ (the whole line, ignoring only trailing whitespace -- a narrative line like "expected exit code: 0" does not match at all), that pair's code is EXACTLY 0, AND that pair's exit-code line is the true final non-blank content of the log (F17); the doc contains one paragraph naming the referenced case id, the output hash, AND the run-log hash together (F17: prevents citing a real output hash and a real run-log hash from two unrelated executions); "## Case" names a real corpus case id; EVERY list item under "## IR insufficiencies found" (>=1 item, each >= ${MIN_SPIKE_ITEM_LENGTH} chars) names at least one field name that is enumerated from the ACTUAL committed ${IR_SCHEMA_PATH} (not a fixed token list) -- a generic bullet or a field name in unrelated prose elsewhere in the doc does not count; EVERY list item under "## Responses" (>=1 item, each >= ${MIN_SPIKE_ITEM_LENGTH} chars) EITHER names a real schema field OR is itself >= ${MIN_NO_CHANGE_RATIONALE_LENGTH} chars (an explicit no-change rationale) -- a short token-only response line fails both branches`,
   async () => {
     const text = readText(SPIKE_DOC_PATH);
     if (text === null) return { ok: false, evidence: `missing ${SPIKE_DOC_PATH}` };
