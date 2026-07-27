@@ -43,6 +43,10 @@ export interface CorpusCase {
   sealed: boolean;
   irPath: string;
   irSha256: string;
+  // F2 (deliverable-review fix round 2, item 7): brief binding. Optional --
+  // sealed cases and any pre-v4 manifest entry predate this field.
+  briefPath?: string;
+  briefSha256?: string;
 }
 export interface CorpusManifest {
   version: number;
