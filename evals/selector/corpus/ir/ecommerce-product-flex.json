@@ -378,28 +378,28 @@
     {
       "elementId": "ecommerce-product-flex-di-0-palette",
       "sourceId": "ecom-flex-a",
-      "nodeId": "ecom-flex-a-header",
+      "nodeId": "ecom-flex-a-header-mobile",
       "domPath": "body > div.ecom-flex-a-shell > header.ecom-flex-a-header",
       "breakpoint": "mobile"
     },
     {
       "elementId": "ecommerce-product-flex-di-1-palette",
       "sourceId": "ecom-grid-b",
-      "nodeId": "ecom-grid-b-header",
+      "nodeId": "ecom-grid-b-header-desktop",
       "domPath": "body > div.ecom-grid-b-shell > header.ecom-grid-b-header",
       "breakpoint": "desktop"
     },
     {
       "elementId": "ecommerce-product-flex-di-2-motion",
       "sourceId": "ecom-grid-b",
-      "nodeId": "ecom-grid-b-cta",
+      "nodeId": "ecom-grid-b-cta-mobile",
       "domPath": "body > div.ecom-grid-b-shell > cta.ecom-grid-b-cta",
       "breakpoint": "mobile"
     },
     {
       "elementId": "ecommerce-product-flex-di-3-section",
       "sourceId": "ecom-flex-a",
-      "nodeId": "ecom-flex-a-features",
+      "nodeId": "ecom-flex-a-features-desktop",
       "domPath": "body > div.ecom-flex-a-shell > features.ecom-flex-a-features",
       "breakpoint": "desktop"
     }

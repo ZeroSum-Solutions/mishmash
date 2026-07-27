@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-      "nodeId": "ecom-flex-a-header",
+      "nodeId": "ecom-flex-a-header-desktop",
       "domPath": "body > div.ecom-flex-a-shell > header.ecom-flex-a-header",
       "computedStyle": {
         "color": "#0b3d2e",
@@ -10,7 +10,7 @@
       }
     },
     {
-      "nodeId": "ecom-flex-a-hero",
+      "nodeId": "ecom-flex-a-hero-desktop",
       "domPath": "body > div.ecom-flex-a-shell > hero.ecom-flex-a-hero",
       "computedStyle": {
         "color": "#0b3d2e",
@@ -19,7 +19,7 @@
       }
     },
     {
-      "nodeId": "ecom-flex-a-hero-heading",
+      "nodeId": "ecom-flex-a-hero-heading-desktop",
       "domPath": "body > div.ecom-flex-a-shell > hero_heading.ecom-flex-a-hero-heading",
       "computedStyle": {
         "color": "#0b3d2e",
@@ -28,7 +28,7 @@
       }
     },
     {
-      "nodeId": "ecom-flex-a-features",
+      "nodeId": "ecom-flex-a-features-desktop",
       "domPath": "body > div.ecom-flex-a-shell > features.ecom-flex-a-features",
       "computedStyle": {
         "color": "#0b3d2e",
@@ -39,7 +39,7 @@
       }
     },
     {
-      "nodeId": "ecom-flex-a-feature-item-1",
+      "nodeId": "ecom-flex-a-feature-item-1-desktop",
       "domPath": "body > div.ecom-flex-a-shell > feature_item_1.ecom-flex-a-feature-item-1",
       "computedStyle": {
         "color": "#0b3d2e",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "nodeId": "ecom-flex-a-feature-item-2",
+      "nodeId": "ecom-flex-a-feature-item-2-desktop",
       "domPath": "body > div.ecom-flex-a-shell > feature_item_2.ecom-flex-a-feature-item-2",
       "computedStyle": {
         "color": "#0b3d2e",
@@ -57,7 +57,7 @@
       }
     },
     {
-      "nodeId": "ecom-flex-a-cta",
+      "nodeId": "ecom-flex-a-cta-desktop",
       "domPath": "body > div.ecom-flex-a-shell > cta.ecom-flex-a-cta",
       "computedStyle": {
         "color": "#0b3d2e",
@@ -66,7 +66,7 @@
       }
     },
     {
-      "nodeId": "ecom-flex-a-footer",
+      "nodeId": "ecom-flex-a-footer-desktop",
       "domPath": "body > div.ecom-flex-a-shell > footer.ecom-flex-a-footer",
       "computedStyle": {
         "color": "#0b3d2e",

@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-      "nodeId": "ecom-grid-b-header",
+      "nodeId": "ecom-grid-b-header-desktop",
       "domPath": "body > div.ecom-grid-b-shell > header.ecom-grid-b-header",
       "computedStyle": {
         "color": "#3a0ca3",
@@ -10,7 +10,7 @@
       }
     },
     {
-      "nodeId": "ecom-grid-b-hero",
+      "nodeId": "ecom-grid-b-hero-desktop",
       "domPath": "body > div.ecom-grid-b-shell > hero.ecom-grid-b-hero",
       "computedStyle": {
         "color": "#3a0ca3",
@@ -19,7 +19,7 @@
       }
     },
     {
-      "nodeId": "ecom-grid-b-hero-heading",
+      "nodeId": "ecom-grid-b-hero-heading-desktop",
       "domPath": "body > div.ecom-grid-b-shell > hero_heading.ecom-grid-b-hero-heading",
       "computedStyle": {
         "color": "#3a0ca3",
@@ -28,7 +28,7 @@
       }
     },
     {
-      "nodeId": "ecom-grid-b-features",
+      "nodeId": "ecom-grid-b-features-desktop",
       "domPath": "body > div.ecom-grid-b-shell > features.ecom-grid-b-features",
       "computedStyle": {
         "color": "#3a0ca3",
@@ -39,7 +39,7 @@
       }
     },
     {
-      "nodeId": "ecom-grid-b-feature-item-1",
+      "nodeId": "ecom-grid-b-feature-item-1-desktop",
       "domPath": "body > div.ecom-grid-b-shell > feature_item_1.ecom-grid-b-feature-item-1",
       "computedStyle": {
         "color": "#3a0ca3",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "nodeId": "ecom-grid-b-feature-item-2",
+      "nodeId": "ecom-grid-b-feature-item-2-desktop",
       "domPath": "body > div.ecom-grid-b-shell > feature_item_2.ecom-grid-b-feature-item-2",
       "computedStyle": {
         "color": "#3a0ca3",
@@ -57,7 +57,7 @@
       }
     },
     {
-      "nodeId": "ecom-grid-b-cta",
+      "nodeId": "ecom-grid-b-cta-desktop",
       "domPath": "body > div.ecom-grid-b-shell > cta.ecom-grid-b-cta",
       "computedStyle": {
         "color": "#3a0ca3",
@@ -66,7 +66,7 @@
       }
     },
     {
-      "nodeId": "ecom-grid-b-footer",
+      "nodeId": "ecom-grid-b-footer-desktop",
       "domPath": "body > div.ecom-grid-b-shell > footer.ecom-grid-b-footer",
       "computedStyle": {
         "color": "#3a0ca3",
