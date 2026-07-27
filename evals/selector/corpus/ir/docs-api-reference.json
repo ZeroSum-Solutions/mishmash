@@ -378,28 +378,28 @@
     {
       "elementId": "docs-api-reference-di-0-section",
       "sourceId": "docs-flex-a",
-      "nodeId": "docs-flex-a-features",
+      "nodeId": "docs-flex-a-features-mobile",
       "domPath": "body > div.docs-flex-a-shell > features.docs-flex-a-features",
       "breakpoint": "mobile"
     },
     {
       "elementId": "docs-api-reference-di-1-section",
       "sourceId": "docs-grid-b",
-      "nodeId": "docs-grid-b-features",
+      "nodeId": "docs-grid-b-features-desktop",
       "domPath": "body > div.docs-grid-b-shell > features.docs-grid-b-features",
       "breakpoint": "desktop"
     },
     {
       "elementId": "docs-api-reference-di-2-layout",
       "sourceId": "docs-flex-a",
-      "nodeId": "docs-flex-a-features",
+      "nodeId": "docs-flex-a-features-mobile",
       "domPath": "body > div.docs-flex-a-shell > features.docs-flex-a-features",
       "breakpoint": "mobile"
     },
     {
       "elementId": "docs-api-reference-di-3-palette",
       "sourceId": "docs-grid-b",
-      "nodeId": "docs-grid-b-header",
+      "nodeId": "docs-grid-b-header-desktop",
       "domPath": "body > div.docs-grid-b-shell > header.docs-grid-b-header",
       "breakpoint": "desktop"
     }

@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-      "nodeId": "docs-flex-a-header",
+      "nodeId": "docs-flex-a-header-desktop",
       "domPath": "body > div.docs-flex-a-shell > header.docs-flex-a-header",
       "computedStyle": {
         "color": "#4d2600",
@@ -10,7 +10,7 @@
       }
     },
     {
-      "nodeId": "docs-flex-a-hero",
+      "nodeId": "docs-flex-a-hero-desktop",
       "domPath": "body > div.docs-flex-a-shell > hero.docs-flex-a-hero",
       "computedStyle": {
         "color": "#4d2600",
@@ -19,7 +19,7 @@
       }
     },
     {
-      "nodeId": "docs-flex-a-hero-heading",
+      "nodeId": "docs-flex-a-hero-heading-desktop",
       "domPath": "body > div.docs-flex-a-shell > hero_heading.docs-flex-a-hero-heading",
       "computedStyle": {
         "color": "#4d2600",
@@ -28,7 +28,7 @@
       }
     },
     {
-      "nodeId": "docs-flex-a-features",
+      "nodeId": "docs-flex-a-features-desktop",
       "domPath": "body > div.docs-flex-a-shell > features.docs-flex-a-features",
       "computedStyle": {
         "color": "#4d2600",
@@ -39,7 +39,7 @@
       }
     },
     {
-      "nodeId": "docs-flex-a-feature-item-1",
+      "nodeId": "docs-flex-a-feature-item-1-desktop",
       "domPath": "body > div.docs-flex-a-shell > feature_item_1.docs-flex-a-feature-item-1",
       "computedStyle": {
         "color": "#4d2600",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "nodeId": "docs-flex-a-feature-item-2",
+      "nodeId": "docs-flex-a-feature-item-2-desktop",
       "domPath": "body > div.docs-flex-a-shell > feature_item_2.docs-flex-a-feature-item-2",
       "computedStyle": {
         "color": "#4d2600",
@@ -57,7 +57,7 @@
       }
     },
     {
-      "nodeId": "docs-flex-a-cta",
+      "nodeId": "docs-flex-a-cta-desktop",
       "domPath": "body > div.docs-flex-a-shell > cta.docs-flex-a-cta",
       "computedStyle": {
         "color": "#4d2600",
@@ -66,7 +66,7 @@
       }
     },
     {
-      "nodeId": "docs-flex-a-footer",
+      "nodeId": "docs-flex-a-footer-desktop",
       "domPath": "body > div.docs-flex-a-shell > footer.docs-flex-a-footer",
       "computedStyle": {
         "color": "#4d2600",

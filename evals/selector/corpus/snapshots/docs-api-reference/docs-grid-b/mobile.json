@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-      "nodeId": "docs-grid-b-header",
+      "nodeId": "docs-grid-b-header-mobile",
       "domPath": "body > div.docs-grid-b-shell > header.docs-grid-b-header",
       "computedStyle": {
         "color": "#00332e",
@@ -10,7 +10,7 @@
       }
     },
     {
-      "nodeId": "docs-grid-b-hero",
+      "nodeId": "docs-grid-b-hero-mobile",
       "domPath": "body > div.docs-grid-b-shell > hero.docs-grid-b-hero",
       "computedStyle": {
         "color": "#00332e",
@@ -19,7 +19,7 @@
       }
     },
     {
-      "nodeId": "docs-grid-b-hero-heading",
+      "nodeId": "docs-grid-b-hero-heading-mobile",
       "domPath": "body > div.docs-grid-b-shell > hero_heading.docs-grid-b-hero-heading",
       "computedStyle": {
         "color": "#00332e",
@@ -28,7 +28,7 @@
       }
     },
     {
-      "nodeId": "docs-grid-b-features",
+      "nodeId": "docs-grid-b-features-mobile",
       "domPath": "body > div.docs-grid-b-shell > features.docs-grid-b-features",
       "computedStyle": {
         "color": "#00332e",
@@ -39,7 +39,7 @@
       }
     },
     {
-      "nodeId": "docs-grid-b-feature-item-1",
+      "nodeId": "docs-grid-b-feature-item-1-mobile",
       "domPath": "body > div.docs-grid-b-shell > feature_item_1.docs-grid-b-feature-item-1",
       "computedStyle": {
         "color": "#00332e",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "nodeId": "docs-grid-b-feature-item-2",
+      "nodeId": "docs-grid-b-feature-item-2-mobile",
       "domPath": "body > div.docs-grid-b-shell > feature_item_2.docs-grid-b-feature-item-2",
       "computedStyle": {
         "color": "#00332e",
@@ -57,7 +57,7 @@
       }
     },
     {
-      "nodeId": "docs-grid-b-cta",
+      "nodeId": "docs-grid-b-cta-mobile",
       "domPath": "body > div.docs-grid-b-shell > cta.docs-grid-b-cta",
       "computedStyle": {
         "color": "#00332e",
@@ -66,7 +66,7 @@
       }
     },
     {
-      "nodeId": "docs-grid-b-footer",
+      "nodeId": "docs-grid-b-footer-mobile",
       "domPath": "body > div.docs-grid-b-shell > footer.docs-grid-b-footer",
       "computedStyle": {
         "color": "#00332e",
