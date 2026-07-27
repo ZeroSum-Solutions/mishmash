@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-      "nodeId": "mkt-flex-b-header",
+      "nodeId": "mkt-flex-b-header-mobile",
       "domPath": "body > div.mkt-flex-b-shell > header.mkt-flex-b-header",
       "computedStyle": {
         "color": "#2d1b00",
@@ -10,7 +10,7 @@
       }
     },
     {
-      "nodeId": "mkt-flex-b-hero",
+      "nodeId": "mkt-flex-b-hero-mobile",
       "domPath": "body > div.mkt-flex-b-shell > hero.mkt-flex-b-hero",
       "computedStyle": {
         "color": "#2d1b00",
@@ -19,7 +19,7 @@
       }
     },
     {
-      "nodeId": "mkt-flex-b-hero-heading",
+      "nodeId": "mkt-flex-b-hero-heading-mobile",
       "domPath": "body > div.mkt-flex-b-shell > hero_heading.mkt-flex-b-hero-heading",
       "computedStyle": {
         "color": "#2d1b00",
@@ -28,7 +28,7 @@
       }
     },
     {
-      "nodeId": "mkt-flex-b-features",
+      "nodeId": "mkt-flex-b-features-mobile",
       "domPath": "body > div.mkt-flex-b-shell > features.mkt-flex-b-features",
       "computedStyle": {
         "color": "#2d1b00",
@@ -39,7 +39,7 @@
       }
     },
     {
-      "nodeId": "mkt-flex-b-feature-item-1",
+      "nodeId": "mkt-flex-b-feature-item-1-mobile",
       "domPath": "body > div.mkt-flex-b-shell > feature_item_1.mkt-flex-b-feature-item-1",
       "computedStyle": {
         "color": "#2d1b00",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "nodeId": "mkt-flex-b-feature-item-2",
+      "nodeId": "mkt-flex-b-feature-item-2-mobile",
       "domPath": "body > div.mkt-flex-b-shell > feature_item_2.mkt-flex-b-feature-item-2",
       "computedStyle": {
         "color": "#2d1b00",
@@ -57,7 +57,7 @@
       }
     },
     {
-      "nodeId": "mkt-flex-b-cta",
+      "nodeId": "mkt-flex-b-cta-mobile",
       "domPath": "body > div.mkt-flex-b-shell > cta.mkt-flex-b-cta",
       "computedStyle": {
         "color": "#2d1b00",
@@ -66,7 +66,7 @@
       }
     },
     {
-      "nodeId": "mkt-flex-b-footer",
+      "nodeId": "mkt-flex-b-footer-mobile",
       "domPath": "body > div.mkt-flex-b-shell > footer.mkt-flex-b-footer",
       "computedStyle": {
         "color": "#2d1b00",

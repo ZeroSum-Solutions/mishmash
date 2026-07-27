@@ -378,28 +378,28 @@
     {
       "elementId": "marketing-hero-grid-di-0-layout",
       "sourceId": "mkt-grid-a",
-      "nodeId": "mkt-grid-a-features",
+      "nodeId": "mkt-grid-a-features-mobile",
       "domPath": "body > div.mkt-grid-a-shell > features.mkt-grid-a-features",
       "breakpoint": "mobile"
     },
     {
       "elementId": "marketing-hero-grid-di-1-layout",
       "sourceId": "mkt-flex-b",
-      "nodeId": "mkt-flex-b-features",
+      "nodeId": "mkt-flex-b-features-desktop",
       "domPath": "body > div.mkt-flex-b-shell > features.mkt-flex-b-features",
       "breakpoint": "desktop"
     },
     {
       "elementId": "marketing-hero-grid-di-2-palette",
       "sourceId": "mkt-flex-b",
-      "nodeId": "mkt-flex-b-header",
+      "nodeId": "mkt-flex-b-header-mobile",
       "domPath": "body > div.mkt-flex-b-shell > header.mkt-flex-b-header",
       "breakpoint": "mobile"
     },
     {
       "elementId": "marketing-hero-grid-di-3-typography",
       "sourceId": "mkt-grid-a",
-      "nodeId": "mkt-grid-a-hero-heading",
+      "nodeId": "mkt-grid-a-hero-heading-desktop",
       "domPath": "body > div.mkt-grid-a-shell > hero_heading.mkt-grid-a-hero-heading",
       "breakpoint": "desktop"
     }
