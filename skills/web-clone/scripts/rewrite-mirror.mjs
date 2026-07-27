@@ -296,6 +296,27 @@ function makeRewriter(siteDir, ownerFile, hosts, manifest, ownerSourceUrl) {
   };
 }
 
+/**
+ * Runs `replacer` over only the segments of `text` that lie OUTSIDE quoted
+ * attribute values (`name="..."` / `name='...'`), passing quoted spans
+ * through byte-identical. The span pattern mirrors the semantics of
+ * lib/asset-discovery.mjs's QUOTED_ATTRIBUTE_PATTERN, so what the quoted
+ * rewrite pass treats as one value is exactly what this pass refuses to
+ * look inside.
+ */
+function replaceOutsideQuotedAttributeValues(text, replacer) {
+  const quotedSpan = /\s[a-zA-Z_:][-a-zA-Z0-9_:.]*\s*=\s*(['"])[\s\S]*?\1/g;
+  let out = "";
+  let last = 0;
+  for (const match of text.matchAll(quotedSpan)) {
+    out += replacer(text.slice(last, match.index));
+    out += match[0];
+    last = match.index + match[0].length;
+  }
+  out += replacer(text.slice(last));
+  return out;
+}
+
 function rewriteSrcset(srcset, rewriteRef) {
   return srcset
     .split(",")
@@ -353,14 +374,24 @@ function rewriteText(text, file, rewriteRef, { manifestActive = false } = {}) {
     // The localized replacement is emitted QUOTED: `./a.png,./b.png` needs
     // quoting to stay one attribute value, and quoting a formerly unquoted
     // value is always valid HTML.
-    next = next.replace(
-      /(\s)([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?!['"])([^\s"'=<>`]+)/g,
-      (match, space, name, value) => {
-        if (!isUrlBearingAttributeName(name)) return match;
-        if (!manifestActive && !/^(?:https?:)?\/\/\S+$/i.test(value)) return match;
-        const rewritten = /srcset$/i.test(name) ? rewriteSrcset(value, rewriteRef) : rewriteRef(value);
-        return rewritten === value ? match : `${space}${name}="${rewritten}"`;
-      },
+    //
+    // Applied only OUTSIDE quoted attribute values (round-2 review): the
+    // pattern alone has no tag-boundary awareness, so a `src=https://...`
+    // token INSIDE another quoted value (`data-config="mode=preview
+    // src=https://... note=kept"`) would be rewritten too, injecting quotes
+    // into that value and corrupting the markup. Quoted spans are opaque
+    // prose to this pass -- the quoted pass above already handled every
+    // quoted attribute that is genuinely a URL.
+    next = replaceOutsideQuotedAttributeValues(next, (segment) =>
+      segment.replace(
+        /(\s)([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?!['"])([^\s"'=<>`]+)/g,
+        (match, space, name, value) => {
+          if (!isUrlBearingAttributeName(name)) return match;
+          if (!manifestActive && !/^(?:https?:)?\/\/\S+$/i.test(value)) return match;
+          const rewritten = /srcset$/i.test(name) ? rewriteSrcset(value, rewriteRef) : rewriteRef(value);
+          return rewritten === value ? match : `${space}${name}="${rewritten}"`;
+        },
+      ),
     );
   }
 

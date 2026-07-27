@@ -470,3 +470,39 @@ describe('(A7 round-1) rewriteMirror localizes unquoted attribute values, emitti
     }
   });
 });
+
+// Round-2 review (Sol, task-ms2tn7qr-v562an) sole finding: the unquoted
+// rewrite pass scanned unrestricted text, so a `src=https://...` token
+// INSIDE another quoted attribute value would be rewritten -- injecting
+// quotes into that value and corrupting the markup.
+describe('(A7 round-2) unquoted rewrite must not touch tokens inside quoted attribute values', () => {
+  it('leaves a src= token embedded in a quoted data-config value byte-identical, while still rewriting a real unquoted src', async () => {
+    const { createMirrorManifest } = await loadMirrorManifest();
+    const { localPathForUrl, originHosts, rewriteMirror } = await loadRewriteMirror();
+    const hosts = originHosts('https://example.com');
+    const manifest = createMirrorManifest({ computeLocalPath: localPathForUrl });
+    const siteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'web-clone-quoted-embed-'));
+    try {
+      const indexRel = manifest.claim('https://example.com/', hosts)!;
+      const aRel = manifest.claim('https://example.com/img/a.png', hosts)!;
+      fs.mkdirSync(path.join(siteDir, 'img'), { recursive: true });
+      const embedded = 'data-config="mode=preview src=https://example.com/img/a.png note=kept"';
+      fs.writeFileSync(
+        path.join(siteDir, indexRel),
+        `<!doctype html><html><body><div ${embedded}></div><img src=https://example.com/img/a.png alt="x"></body></html>`,
+      );
+      fs.writeFileSync(path.join(siteDir, aRel), 'png-a');
+
+      rewriteMirror({ siteDir, origin: 'https://example.com', manifest });
+
+      const html = fs.readFileSync(path.join(siteDir, indexRel), 'utf8');
+      // The quoted data-config value is opaque prose to the rewriter --
+      // byte-identical, no injected quotes.
+      expect(html).toContain(embedded);
+      // The genuine unquoted attribute still gets localized and quoted.
+      expect(html).toMatch(/<img src="\.\/img\/a\.png" alt="x">/);
+    } finally {
+      fs.rmSync(siteDir, { recursive: true, force: true });
+    }
+  });
+});
