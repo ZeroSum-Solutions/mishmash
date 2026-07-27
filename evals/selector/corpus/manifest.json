@@ -1,0 +1,668 @@
+{
+  "version": 1,
+  "sealedFraction": 0.2,
+  "cases": [
+    {
+      "id": "marketing-hero-grid",
+      "genre": "marketing",
+      "layoutSystem": "css-grid-first",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "sources": [
+        {
+          "id": "mkt-grid-a",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/marketing-hero-grid/mkt-grid-a/mobile.json",
+              "sha256": "8a57f99435e6e7f7a8c7ef7f8a9bb807c3bad6577b8fa84c283ef34e2b642752",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/marketing-hero-grid/mkt-grid-a/desktop.json",
+              "sha256": "83df2c7c58889cf099c28c6bee09d68c88a166e14298cd7b35b96c3d3dcae8e6",
+              "viewportWidth": 1440
+            }
+          }
+        },
+        {
+          "id": "mkt-flex-b",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/marketing-hero-grid/mkt-flex-b/mobile.json",
+              "sha256": "44d54bc68dc26c0217b2218e4e2dab97d2207282dd1438e6b3f2b51427d8fb24",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/marketing-hero-grid/mkt-flex-b/desktop.json",
+              "sha256": "41dc7ae94c0778297643a1af082d63f131fd4b32ee61768c43f7ef29f710c154",
+              "viewportWidth": 1440
+            }
+          }
+        }
+      ],
+      "directiveInventory": [
+        {
+          "axis": "layout",
+          "source": "mkt-grid-a",
+          "scope": "body > div.mkt-grid-a-shell > features.mkt-grid-a-features",
+          "strength": 0.9
+        },
+        {
+          "axis": "layout",
+          "source": "mkt-flex-b",
+          "scope": "body > div.mkt-flex-b-shell > features.mkt-flex-b-features",
+          "strength": 0.6
+        },
+        {
+          "axis": "palette",
+          "source": "mkt-flex-b",
+          "scope": "body > div.mkt-flex-b-shell > header.mkt-flex-b-header",
+          "strength": 0.8
+        },
+        {
+          "axis": "typography",
+          "source": "mkt-grid-a",
+          "scope": "body > div.mkt-grid-a-shell > hero_heading.mkt-grid-a-hero-heading",
+          "strength": 0.7
+        }
+      ],
+      "conflict": {
+        "axis": "layout",
+        "winningSource": "mkt-grid-a",
+        "losingSource": "mkt-flex-b"
+      },
+      "degenerate": null,
+      "skip": null,
+      "sealed": false,
+      "irPath": "evals/selector/corpus/ir/marketing-hero-grid.json",
+      "irSha256": "fbc08c454807108009f4d2520d20bc877506e71c733c5d4495aa07459f6c9109"
+    },
+    {
+      "id": "ecommerce-product-flex",
+      "genre": "ecommerce",
+      "layoutSystem": "flex-utility",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "sources": [
+        {
+          "id": "ecom-flex-a",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/ecommerce-product-flex/ecom-flex-a/mobile.json",
+              "sha256": "edd6d0c2e5f48b09d02b35893f45a2165dd6cd70b764dc190034da1f1a6c6379",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/ecommerce-product-flex/ecom-flex-a/desktop.json",
+              "sha256": "a0ebcd7abed972127c80e46088dcad1bbd4cdd963a40587924e59d155169a16e",
+              "viewportWidth": 1440
+            }
+          }
+        },
+        {
+          "id": "ecom-grid-b",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/ecommerce-product-flex/ecom-grid-b/mobile.json",
+              "sha256": "af781f55e5358ad6535d5786c1bad6bdc39d9b50b652c2d08649bdd980107f3a",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/ecommerce-product-flex/ecom-grid-b/desktop.json",
+              "sha256": "82ce94a3b4f43d50720bf9e2b7c030f3107b4a16243e8c7e7bf83524f89a43b4",
+              "viewportWidth": 1440
+            }
+          }
+        }
+      ],
+      "directiveInventory": [
+        {
+          "axis": "palette",
+          "source": "ecom-flex-a",
+          "scope": "body > div.ecom-flex-a-shell > header.ecom-flex-a-header",
+          "strength": 0.85
+        },
+        {
+          "axis": "palette",
+          "source": "ecom-grid-b",
+          "scope": "body > div.ecom-grid-b-shell > header.ecom-grid-b-header",
+          "strength": 0.5
+        },
+        {
+          "axis": "motion",
+          "source": "ecom-grid-b",
+          "scope": "body > div.ecom-grid-b-shell > cta.ecom-grid-b-cta",
+          "strength": 0.6
+        },
+        {
+          "axis": "section",
+          "source": "ecom-flex-a",
+          "scope": "body > div.ecom-flex-a-shell > features.ecom-flex-a-features",
+          "strength": 0.7
+        }
+      ],
+      "conflict": {
+        "axis": "palette",
+        "winningSource": "ecom-flex-a",
+        "losingSource": "ecom-grid-b"
+      },
+      "degenerate": null,
+      "skip": null,
+      "sealed": false,
+      "irPath": "evals/selector/corpus/ir/ecommerce-product-flex.json",
+      "irSha256": "c44169ae65c7bfe17f7b2f9ddeedd1040e372c1c3f67f93338e293ef7c1b8329"
+    },
+    {
+      "id": "dashboard-canvas-widgets",
+      "genre": "app-dashboard",
+      "layoutSystem": "absolute-canvas",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "sources": [
+        {
+          "id": "dash-abs-a",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/dashboard-canvas-widgets/dash-abs-a/mobile.json",
+              "sha256": "6c97e0ccb16289b179fcbfd17e4e80c4d50deb25c5b21569b5c68bc996e53d6d",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/dashboard-canvas-widgets/dash-abs-a/desktop.json",
+              "sha256": "3b5d6f32b0450dba27bf8387223477d41d0476ce82d947c2e5449cd1533f47ae",
+              "viewportWidth": 1440
+            }
+          }
+        },
+        {
+          "id": "dash-grid-b",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/dashboard-canvas-widgets/dash-grid-b/mobile.json",
+              "sha256": "e5e94f7fdd363d74cb647b22eee7e80d22e85c4ec4bc5f9d0675436578bdb43b",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/dashboard-canvas-widgets/dash-grid-b/desktop.json",
+              "sha256": "f7fd3f003aaf5ded5c421182aa239a740be075301971f96f0f5594616085c115",
+              "viewportWidth": 1440
+            }
+          }
+        }
+      ],
+      "directiveInventory": [
+        {
+          "axis": "typography",
+          "source": "dash-abs-a",
+          "scope": "body > div.dash-abs-a-shell > hero_heading.dash-abs-a-hero-heading",
+          "strength": 0.9
+        },
+        {
+          "axis": "typography",
+          "source": "dash-grid-b",
+          "scope": "body > div.dash-grid-b-shell > hero_heading.dash-grid-b-hero-heading",
+          "strength": 0.55
+        },
+        {
+          "axis": "interaction",
+          "source": "dash-abs-a",
+          "scope": "body > div.dash-abs-a-shell > cta.dash-abs-a-cta",
+          "strength": 0.75
+        },
+        {
+          "axis": "layout",
+          "source": "dash-abs-a",
+          "scope": "body > div.dash-abs-a-shell > features.dash-abs-a-features",
+          "strength": 0.8
+        }
+      ],
+      "conflict": {
+        "axis": "typography",
+        "winningSource": "dash-abs-a",
+        "losingSource": "dash-grid-b"
+      },
+      "degenerate": null,
+      "skip": null,
+      "sealed": false,
+      "irPath": "evals/selector/corpus/ir/dashboard-canvas-widgets.json",
+      "irSha256": "1db94f1f4d1710fb6c1846214a53bf6bb131c4bf705760d69f9fde16a5b109af"
+    },
+    {
+      "id": "docs-api-reference",
+      "genre": "docs",
+      "layoutSystem": "flex-utility",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "sources": [
+        {
+          "id": "docs-flex-a",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/docs-api-reference/docs-flex-a/mobile.json",
+              "sha256": "082cc2c653902dc7b0d7bd09fcc03aa176f196447b41974d7b39cad96a1949ff",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/docs-api-reference/docs-flex-a/desktop.json",
+              "sha256": "844cb7351753a8457584e71026f2eb0bdbac3553628c654f3f43a8c3803c818a",
+              "viewportWidth": 1440
+            }
+          }
+        },
+        {
+          "id": "docs-grid-b",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/docs-api-reference/docs-grid-b/mobile.json",
+              "sha256": "1294827320691593446a40e429a6fdda9f0684334d00a4fb3d9ff677db6f7464",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/docs-api-reference/docs-grid-b/desktop.json",
+              "sha256": "ee5e5c4d6587ee040dc11b42b5797aa830e236f689505bd4e5f3fda530d58017",
+              "viewportWidth": 1440
+            }
+          }
+        }
+      ],
+      "directiveInventory": [
+        {
+          "axis": "section",
+          "source": "docs-flex-a",
+          "scope": "body > div.docs-flex-a-shell > features.docs-flex-a-features",
+          "strength": 0.8
+        },
+        {
+          "axis": "section",
+          "source": "docs-grid-b",
+          "scope": "body > div.docs-grid-b-shell > features.docs-grid-b-features",
+          "strength": 0.45
+        },
+        {
+          "axis": "layout",
+          "source": "docs-flex-a",
+          "scope": "body > div.docs-flex-a-shell > features.docs-flex-a-features",
+          "strength": 0.65
+        },
+        {
+          "axis": "palette",
+          "source": "docs-grid-b",
+          "scope": "body > div.docs-grid-b-shell > header.docs-grid-b-header",
+          "strength": 0.6
+        }
+      ],
+      "conflict": {
+        "axis": "section",
+        "winningSource": "docs-flex-a",
+        "losingSource": "docs-grid-b"
+      },
+      "degenerate": null,
+      "skip": null,
+      "sealed": false,
+      "irPath": "evals/selector/corpus/ir/docs-api-reference.json",
+      "irSha256": "b0e8086b50a1add2c239c8ec7414aa119a5f8a615d9ffe011ccd8ddc3f0f7f95"
+    },
+    {
+      "id": "blog-content-grid",
+      "genre": "marketing",
+      "layoutSystem": "css-grid-first",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "sources": [
+        {
+          "id": "blog-grid-a",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/blog-content-grid/blog-grid-a/mobile.json",
+              "sha256": "9c2bfb3d9d34cd032def63280d5cf0375c0f978f3eb87e893001bdbd8609a97b",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/blog-content-grid/blog-grid-a/desktop.json",
+              "sha256": "69f6ccb41c5f8df8c17ad05f141acfb5a082949f60503e22323737f9f5f1a5d3",
+              "viewportWidth": 1440
+            }
+          }
+        },
+        {
+          "id": "blog-flex-b",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/blog-content-grid/blog-flex-b/mobile.json",
+              "sha256": "e520efe50500a5e06d0792d68fb449b6621e8b5601ca335dd51c7d7cf954e742",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/blog-content-grid/blog-flex-b/desktop.json",
+              "sha256": "7e343a7d10526c312853533a4cc84f9b2bce57015585ca04a6899a2cc441ee74",
+              "viewportWidth": 1440
+            }
+          }
+        }
+      ],
+      "directiveInventory": [
+        {
+          "axis": "layout",
+          "source": "blog-grid-a",
+          "scope": "body > div.blog-grid-a-shell > features.blog-grid-a-features",
+          "strength": 0.85
+        },
+        {
+          "axis": "palette",
+          "source": "blog-flex-b",
+          "scope": "body > div.blog-flex-b-shell > header.blog-flex-b-header",
+          "strength": 0.7
+        }
+      ],
+      "conflict": null,
+      "degenerate": null,
+      "skip": null,
+      "sealed": false,
+      "irPath": "evals/selector/corpus/ir/blog-content-grid.json",
+      "irSha256": "c1f72af744c1cd33469b9a420dfcfd9a2a449a41903d19f16a72392f784e8b4a"
+    },
+    {
+      "id": "single-source-landing",
+      "genre": "marketing",
+      "layoutSystem": "flex-utility",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "sources": [
+        {
+          "id": "land-solo-a",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/single-source-landing/land-solo-a/mobile.json",
+              "sha256": "9b897e69002a6c53c64783a6b89de06bb420dc00680edaf3f309a8a625a5c599",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/single-source-landing/land-solo-a/desktop.json",
+              "sha256": "57ef8cc878ab47acadbc8c2f6b2491a82f2502cdf1ac00f3c90be1863e6eb10d",
+              "viewportWidth": 1440
+            }
+          }
+        }
+      ],
+      "directiveInventory": [
+        {
+          "axis": "layout",
+          "source": "land-solo-a",
+          "scope": "body > div.land-solo-a-shell > features.land-solo-a-features",
+          "strength": 0.8
+        },
+        {
+          "axis": "palette",
+          "source": "land-solo-a",
+          "scope": "body > div.land-solo-a-shell > header.land-solo-a-header",
+          "strength": 0.6
+        }
+      ],
+      "conflict": null,
+      "degenerate": "single-source",
+      "skip": {
+        "reason": "bot-walled",
+        "target": "https://example-walled-admin.test/dashboard (Cloudflare-challenged second reference the user asked for; single-source capture proceeded and this skip is recorded rather than silently ignored)"
+      },
+      "sealed": false,
+      "irPath": "evals/selector/corpus/ir/single-source-landing.json",
+      "irSha256": "5a2573d82def59004760e93089eeebc2ad12a36d1c0c506422becb0a63666407"
+    },
+    {
+      "id": "phantom-element-directive",
+      "genre": "ecommerce",
+      "layoutSystem": "css-grid-first",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "sources": [
+        {
+          "id": "phantom-grid-a",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/phantom-element-directive/phantom-grid-a/mobile.json",
+              "sha256": "89e3f5ec06b5d5fdaca9c15c8d84f6f085d9e181ea820711066ff8820ae52be9",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/phantom-element-directive/phantom-grid-a/desktop.json",
+              "sha256": "f2b9d5fe944508977c74ec07f4455fc51472d940070ea922c6f1de373cfd5829",
+              "viewportWidth": 1440
+            }
+          }
+        },
+        {
+          "id": "phantom-flex-b",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/phantom-element-directive/phantom-flex-b/mobile.json",
+              "sha256": "17993d1d612fcda08444804fcd6e51960a204591218f1c933a95efe7647742d4",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/phantom-element-directive/phantom-flex-b/desktop.json",
+              "sha256": "bca334052fabbed0414e22e7d370abbdbb1fbeed00ac54000474f8e31ba3f50a",
+              "viewportWidth": 1440
+            }
+          }
+        }
+      ],
+      "directiveInventory": [
+        {
+          "axis": "layout",
+          "source": "phantom-grid-a",
+          "scope": "body > div.phantom-grid-a-shell > features.phantom-grid-a-features",
+          "strength": 0.75
+        },
+        {
+          "axis": "palette",
+          "source": "phantom-flex-b",
+          "scope": "body > div.phantom-flex-b-shell > section.phantom-flex-b-nonexistent-widget-xyz",
+          "strength": 0.5
+        }
+      ],
+      "conflict": null,
+      "degenerate": "nonexistent-element-directive",
+      "skip": null,
+      "sealed": false,
+      "irPath": "evals/selector/corpus/ir/phantom-element-directive.json",
+      "irSha256": "b1f5ad9b66b3fe7698315e0ecad1c24c620940e408adffccaae35a6196f4bc2d"
+    },
+    {
+      "id": "hostile-heavy-dom-catalog",
+      "genre": "app-dashboard",
+      "layoutSystem": "absolute-canvas",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "sources": [
+        {
+          "id": "hostile-abs-a",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/hostile-heavy-dom-catalog/hostile-abs-a/mobile.json",
+              "sha256": "c6f1bf9b44e5bfe56f934aac6d6a65411f51dc42feea8e955b1e27d5e340d831",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/hostile-heavy-dom-catalog/hostile-abs-a/desktop.json",
+              "sha256": "ec1b4201858e194be86ae2172ed8dd1ed30e78a16db79633d482eda239897336",
+              "viewportWidth": 1440
+            }
+          }
+        },
+        {
+          "id": "hostile-grid-b",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/hostile-heavy-dom-catalog/hostile-grid-b/mobile.json",
+              "sha256": "d751e6e8049fd6719a75f6fe8b92c472426168e158fb3fae98cfc8c864e7299c",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/hostile-heavy-dom-catalog/hostile-grid-b/desktop.json",
+              "sha256": "ba6801cc1a2bbefee2520e9dfa804b87846eb49db828d50dd970828384c0022f",
+              "viewportWidth": 1440
+            }
+          }
+        }
+      ],
+      "directiveInventory": [
+        {
+          "axis": "layout",
+          "source": "hostile-abs-a",
+          "scope": "body > div.hostile-abs-a-shell > features.hostile-abs-a-features",
+          "strength": 0.7
+        },
+        {
+          "axis": "interaction",
+          "source": "hostile-grid-b",
+          "scope": "body > div.hostile-grid-b-shell > cta.hostile-grid-b-cta",
+          "strength": 0.55
+        }
+      ],
+      "conflict": null,
+      "degenerate": "hostile-heavy-dom",
+      "skip": null,
+      "sealed": false,
+      "irPath": "evals/selector/corpus/ir/hostile-heavy-dom-catalog.json",
+      "irSha256": "8ed84de494041b4603be29659c04fee61594e9ec5c8265c848030d4e71badc07"
+    },
+    {
+      "id": "sealed-marketing-alt",
+      "genre": "marketing",
+      "layoutSystem": "flex-utility",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "sources": [
+        {
+          "id": "sealed-mkt-a",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/sealed-marketing-alt/sealed-mkt-a/mobile.json.enc",
+              "sha256": "100cf6efda2fd59eede48dc32a1ce63556b766ff584e88da07426d947a0c0b4a",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/sealed-marketing-alt/sealed-mkt-a/desktop.json.enc",
+              "sha256": "98a155938d260b5542f1acfe39a1b3c03d374af3c778e572634faff126bb6829",
+              "viewportWidth": 1440
+            }
+          }
+        },
+        {
+          "id": "sealed-mkt-b",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/sealed-marketing-alt/sealed-mkt-b/mobile.json.enc",
+              "sha256": "dbf2f3bc6bee030c7ac23fd11e81066035844e6aa610ec665bb337c6737d3821",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/sealed-marketing-alt/sealed-mkt-b/desktop.json.enc",
+              "sha256": "b6b2369a577cabff4ce2d3e8fdd2cb7523a5aec83e85bb1a68a644dcb8df1908",
+              "viewportWidth": 1440
+            }
+          }
+        }
+      ],
+      "directiveInventory": [
+        {
+          "axis": "layout",
+          "source": "sealed-mkt-a",
+          "scope": "body > div.sealed-mkt-a-shell > features.sealed-mkt-a-features",
+          "strength": 0.8
+        },
+        {
+          "axis": "palette",
+          "source": "sealed-mkt-b",
+          "scope": "body > div.sealed-mkt-b-shell > header.sealed-mkt-b-header",
+          "strength": 0.65
+        }
+      ],
+      "conflict": null,
+      "degenerate": null,
+      "skip": null,
+      "sealed": true,
+      "irPath": "evals/selector/corpus/ir/sealed-marketing-alt.json.enc",
+      "irSha256": "101eee4a6943bbdc784613985308e971b5eb310eaf6457cd7200c939de860928"
+    },
+    {
+      "id": "sealed-docs-widget",
+      "genre": "docs",
+      "layoutSystem": "absolute-canvas",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "sources": [
+        {
+          "id": "sealed-docs-a",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/sealed-docs-widget/sealed-docs-a/mobile.json.enc",
+              "sha256": "be57ecbc1b0d2c630090dddc0c81a2d706bf707f400d191e29049b689ff2a278",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/sealed-docs-widget/sealed-docs-a/desktop.json.enc",
+              "sha256": "b1ab23443f159320c92c06855869897bac4c049d22d73587b30e0989d56d7a8d",
+              "viewportWidth": 1440
+            }
+          }
+        },
+        {
+          "id": "sealed-docs-b",
+          "snapshots": {
+            "mobile": {
+              "path": "evals/selector/corpus/snapshots/sealed-docs-widget/sealed-docs-b/mobile.json.enc",
+              "sha256": "008b9f4fcbb0d9c1eb6f471010efd800eddb41fbbbd2131af8727750dd408161",
+              "viewportWidth": 390
+            },
+            "desktop": {
+              "path": "evals/selector/corpus/snapshots/sealed-docs-widget/sealed-docs-b/desktop.json.enc",
+              "sha256": "d56efd2b38d0a46d072ad71405e37b8235a64a5d6fc374c8458300d1df5bdaf8",
+              "viewportWidth": 1440
+            }
+          }
+        }
+      ],
+      "directiveInventory": [
+        {
+          "axis": "typography",
+          "source": "sealed-docs-a",
+          "scope": "body > div.sealed-docs-a-shell > hero_heading.sealed-docs-a-hero-heading",
+          "strength": 0.7
+        },
+        {
+          "axis": "interaction",
+          "source": "sealed-docs-b",
+          "scope": "body > div.sealed-docs-b-shell > cta.sealed-docs-b-cta",
+          "strength": 0.6
+        }
+      ],
+      "conflict": null,
+      "degenerate": null,
+      "skip": null,
+      "sealed": true,
+      "irPath": "evals/selector/corpus/ir/sealed-docs-widget.json.enc",
+      "irSha256": "087cf656b0613a149a3007b9b91f7b0d0ebc84c2c36caea1751f46666d79116f"
+    }
+  ]
+}
