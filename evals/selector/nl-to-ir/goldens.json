@@ -1,0 +1,32 @@
+[
+  {
+    "id": "layout-from-grid-source",
+    "nlDirective": "Use the layout from mkt-grid-a for this composition.",
+    "expectedIR": { "axis": "layout", "source": "mkt-grid-a", "scope": "body > div.mkt-grid-a-shell > features.mkt-grid-a-features", "strength": 0.9 }
+  },
+  {
+    "id": "palette-from-flex-source",
+    "nlDirective": "Take the colour palette from mkt-flex-b.",
+    "expectedIR": { "axis": "palette", "source": "mkt-flex-b", "scope": "body > div.mkt-flex-b-shell > header.mkt-flex-b-header", "strength": 0.8 }
+  },
+  {
+    "id": "typography-from-grid-source-heading",
+    "nlDirective": "Borrow the typography styling from mkt-grid-a's hero heading.",
+    "expectedIR": { "axis": "typography", "source": "mkt-grid-a", "scope": "body > div.mkt-grid-a-shell > hero_heading.mkt-grid-a-hero-heading", "strength": 0.7 }
+  },
+  {
+    "id": "motion-from-grid-b-cta",
+    "nlDirective": "Adopt the motion timing used by ecom-grid-b's call-to-action.",
+    "expectedIR": { "axis": "motion", "source": "ecom-grid-b", "scope": "body > div.ecom-grid-b-shell > cta.ecom-grid-b-cta", "strength": 0.6 }
+  },
+  {
+    "id": "section-structure-from-flex-a",
+    "nlDirective": "Keep the section structure from ecom-flex-a.",
+    "expectedIR": { "axis": "section", "source": "ecom-flex-a", "scope": "body > div.ecom-flex-a-shell > features.ecom-flex-a-features", "strength": 0.7 }
+  },
+  {
+    "id": "interaction-from-dash-abs-a-cta",
+    "nlDirective": "Use dash-abs-a's interaction behaviour for the call-to-action.",
+    "expectedIR": { "axis": "interaction", "source": "dash-abs-a", "scope": "body > div.dash-abs-a-shell > cta.dash-abs-a-cta", "strength": 0.75 }
+  }
+]
