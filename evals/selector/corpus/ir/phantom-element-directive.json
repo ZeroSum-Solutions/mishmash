@@ -1,0 +1,385 @@
+{
+  "sourceSlots": [
+    {
+      "id": "phantom-grid-a",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "evidencePointers": [
+        {
+          "domPath": "body > div.phantom-grid-a-shell > header.phantom-grid-a-header",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-grid-a-shell > hero.phantom-grid-a-hero",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-grid-a-shell > hero_heading.phantom-grid-a-hero-heading",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-grid-a-shell > features.phantom-grid-a-features",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "gridTemplateColumns"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-grid-a-shell > feature_item_1.phantom-grid-a-feature-item-1",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-grid-a-shell > feature_item_2.phantom-grid-a-feature-item-2",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-grid-a-shell > cta.phantom-grid-a-cta",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-grid-a-shell > footer.phantom-grid-a-footer",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-grid-a-shell > header.phantom-grid-a-header",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-grid-a-shell > hero.phantom-grid-a-hero",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-grid-a-shell > hero_heading.phantom-grid-a-hero-heading",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-grid-a-shell > features.phantom-grid-a-features",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "gridTemplateColumns"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-grid-a-shell > feature_item_1.phantom-grid-a-feature-item-1",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-grid-a-shell > feature_item_2.phantom-grid-a-feature-item-2",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-grid-a-shell > cta.phantom-grid-a-cta",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-grid-a-shell > footer.phantom-grid-a-footer",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phantom-flex-b",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "evidencePointers": [
+        {
+          "domPath": "body > div.phantom-flex-b-shell > header.phantom-flex-b-header",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-flex-b-shell > hero.phantom-flex-b-hero",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-flex-b-shell > hero_heading.phantom-flex-b-hero-heading",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-flex-b-shell > features.phantom-flex-b-features",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "flexDirection"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-flex-b-shell > feature_item_1.phantom-flex-b-feature-item-1",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-flex-b-shell > feature_item_2.phantom-flex-b-feature-item-2",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-flex-b-shell > cta.phantom-flex-b-cta",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-flex-b-shell > footer.phantom-flex-b-footer",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-flex-b-shell > header.phantom-flex-b-header",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-flex-b-shell > hero.phantom-flex-b-hero",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-flex-b-shell > hero_heading.phantom-flex-b-hero-heading",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-flex-b-shell > features.phantom-flex-b-features",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "flexDirection"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-flex-b-shell > feature_item_1.phantom-flex-b-feature-item-1",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-flex-b-shell > feature_item_2.phantom-flex-b-feature-item-2",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-flex-b-shell > cta.phantom-flex-b-cta",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.phantom-flex-b-shell > footer.phantom-flex-b-footer",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        }
+      ]
+    }
+  ],
+  "directives": [
+    {
+      "axis": "layout",
+      "source": "phantom-grid-a",
+      "scope": "body > div.phantom-grid-a-shell > features.phantom-grid-a-features",
+      "strength": 0.75
+    },
+    {
+      "axis": "palette",
+      "source": "phantom-flex-b",
+      "scope": "body > div.phantom-flex-b-shell > section.phantom-flex-b-nonexistent-widget-xyz",
+      "strength": 0.5
+    }
+  ],
+  "constraints": [
+    {
+      "type": "grid-integrity",
+      "rule": "Grid/flex/absolute containers must not overlap at any declared breakpoint."
+    },
+    {
+      "type": "contrast-minimum",
+      "rule": "Text/background contrast must meet WCAG AA (4.5:1) at every breakpoint."
+    },
+    {
+      "type": "responsive-behavior",
+      "rule": "Every emitted element must have a defined style at each of the case's declared breakpoints."
+    }
+  ],
+  "conflictResolution": [
+    {
+      "axis": "layout",
+      "winningSource": "phantom-grid-a",
+      "rationale": "Single claimant (phantom-grid-a) on the layout axis in this case; no contention to resolve."
+    },
+    {
+      "axis": "palette",
+      "winningSource": "phantom-flex-b",
+      "rationale": "Single claimant (phantom-flex-b) on the palette axis in this case; no contention to resolve."
+    }
+  ],
+  "provenance": [
+    {
+      "elementId": "phantom-element-directive-di-0-layout",
+      "sourceId": "phantom-grid-a",
+      "nodeId": "phantom-grid-a-features",
+      "domPath": "body > div.phantom-grid-a-shell > features.phantom-grid-a-features",
+      "breakpoint": "desktop"
+    }
+  ],
+  "variantAxes": [
+    {
+      "name": "layout-skeleton",
+      "distanceMetric": "jaccard-dissimilarity-of-domPath-set"
+    },
+    {
+      "name": "section-order",
+      "distanceMetric": "fraction-of-positions-differing-in-scope-order"
+    },
+    {
+      "name": "motion-timeline",
+      "distanceMetric": "fraction-of-positions-differing-in-motionSignature"
+    },
+    {
+      "name": "breakpoint-behavior",
+      "distanceMetric": "fraction-of-positions-differing-in-breakpoint-assignment"
+    }
+  ]
+}

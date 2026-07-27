@@ -1,0 +1,79 @@
+{
+  "nodes": [
+    {
+      "nodeId": "phantom-flex-b-header",
+      "domPath": "body > div.phantom-flex-b-shell > header.phantom-flex-b-header",
+      "computedStyle": {
+        "color": "#0e2a4a",
+        "backgroundColor": "#e9f1fb",
+        "fontFamily": "DM Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "phantom-flex-b-hero",
+      "domPath": "body > div.phantom-flex-b-shell > hero.phantom-flex-b-hero",
+      "computedStyle": {
+        "color": "#0e2a4a",
+        "backgroundColor": "#e9f1fb",
+        "fontFamily": "DM Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "phantom-flex-b-hero-heading",
+      "domPath": "body > div.phantom-flex-b-shell > hero_heading.phantom-flex-b-hero-heading",
+      "computedStyle": {
+        "color": "#0e2a4a",
+        "backgroundColor": "#e9f1fb",
+        "fontFamily": "DM Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "phantom-flex-b-features",
+      "domPath": "body > div.phantom-flex-b-shell > features.phantom-flex-b-features",
+      "computedStyle": {
+        "color": "#0e2a4a",
+        "backgroundColor": "#e9f1fb",
+        "fontFamily": "DM Sans, sans-serif",
+        "display": "flex",
+        "flexDirection": "row"
+      }
+    },
+    {
+      "nodeId": "phantom-flex-b-feature-item-1",
+      "domPath": "body > div.phantom-flex-b-shell > feature_item_1.phantom-flex-b-feature-item-1",
+      "computedStyle": {
+        "color": "#0e2a4a",
+        "backgroundColor": "#e9f1fb",
+        "fontFamily": "DM Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "phantom-flex-b-feature-item-2",
+      "domPath": "body > div.phantom-flex-b-shell > feature_item_2.phantom-flex-b-feature-item-2",
+      "computedStyle": {
+        "color": "#0e2a4a",
+        "backgroundColor": "#e9f1fb",
+        "fontFamily": "DM Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "phantom-flex-b-cta",
+      "domPath": "body > div.phantom-flex-b-shell > cta.phantom-flex-b-cta",
+      "computedStyle": {
+        "color": "#0e2a4a",
+        "backgroundColor": "#e9f1fb",
+        "fontFamily": "DM Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "phantom-flex-b-footer",
+      "domPath": "body > div.phantom-flex-b-shell > footer.phantom-flex-b-footer",
+      "computedStyle": {
+        "color": "#0e2a4a",
+        "backgroundColor": "#e9f1fb",
+        "fontFamily": "DM Sans, sans-serif"
+      }
+    }
+  ],
+  "viewportWidth": 1440
+}
