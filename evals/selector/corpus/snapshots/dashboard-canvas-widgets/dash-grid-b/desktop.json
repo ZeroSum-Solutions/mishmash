@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-      "nodeId": "dash-grid-b-header",
+      "nodeId": "dash-grid-b-header-desktop",
       "domPath": "body > div.dash-grid-b-shell > header.dash-grid-b-header",
       "computedStyle": {
         "color": "#123c69",
@@ -10,7 +10,7 @@
       }
     },
     {
-      "nodeId": "dash-grid-b-hero",
+      "nodeId": "dash-grid-b-hero-desktop",
       "domPath": "body > div.dash-grid-b-shell > hero.dash-grid-b-hero",
       "computedStyle": {
         "color": "#123c69",
@@ -19,7 +19,7 @@
       }
     },
     {
-      "nodeId": "dash-grid-b-hero-heading",
+      "nodeId": "dash-grid-b-hero-heading-desktop",
       "domPath": "body > div.dash-grid-b-shell > hero_heading.dash-grid-b-hero-heading",
       "computedStyle": {
         "color": "#123c69",
@@ -28,7 +28,7 @@
       }
     },
     {
-      "nodeId": "dash-grid-b-features",
+      "nodeId": "dash-grid-b-features-desktop",
       "domPath": "body > div.dash-grid-b-shell > features.dash-grid-b-features",
       "computedStyle": {
         "color": "#123c69",
@@ -39,7 +39,7 @@
       }
     },
     {
-      "nodeId": "dash-grid-b-feature-item-1",
+      "nodeId": "dash-grid-b-feature-item-1-desktop",
       "domPath": "body > div.dash-grid-b-shell > feature_item_1.dash-grid-b-feature-item-1",
       "computedStyle": {
         "color": "#123c69",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "nodeId": "dash-grid-b-feature-item-2",
+      "nodeId": "dash-grid-b-feature-item-2-desktop",
       "domPath": "body > div.dash-grid-b-shell > feature_item_2.dash-grid-b-feature-item-2",
       "computedStyle": {
         "color": "#123c69",
@@ -57,7 +57,7 @@
       }
     },
     {
-      "nodeId": "dash-grid-b-cta",
+      "nodeId": "dash-grid-b-cta-desktop",
       "domPath": "body > div.dash-grid-b-shell > cta.dash-grid-b-cta",
       "computedStyle": {
         "color": "#123c69",
@@ -66,7 +66,7 @@
       }
     },
     {
-      "nodeId": "dash-grid-b-footer",
+      "nodeId": "dash-grid-b-footer-desktop",
       "domPath": "body > div.dash-grid-b-shell > footer.dash-grid-b-footer",
       "computedStyle": {
         "color": "#123c69",

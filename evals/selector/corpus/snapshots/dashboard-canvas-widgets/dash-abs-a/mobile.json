@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-      "nodeId": "dash-abs-a-header",
+      "nodeId": "dash-abs-a-header-mobile",
       "domPath": "body > div.dash-abs-a-shell > header.dash-abs-a-header",
       "computedStyle": {
         "color": "#7a1f1f",
@@ -10,7 +10,7 @@
       }
     },
     {
-      "nodeId": "dash-abs-a-hero",
+      "nodeId": "dash-abs-a-hero-mobile",
       "domPath": "body > div.dash-abs-a-shell > hero.dash-abs-a-hero",
       "computedStyle": {
         "color": "#7a1f1f",
@@ -19,7 +19,7 @@
       }
     },
     {
-      "nodeId": "dash-abs-a-hero-heading",
+      "nodeId": "dash-abs-a-hero-heading-mobile",
       "domPath": "body > div.dash-abs-a-shell > hero_heading.dash-abs-a-hero-heading",
       "computedStyle": {
         "color": "#7a1f1f",
@@ -28,7 +28,7 @@
       }
     },
     {
-      "nodeId": "dash-abs-a-features",
+      "nodeId": "dash-abs-a-features-mobile",
       "domPath": "body > div.dash-abs-a-shell > features.dash-abs-a-features",
       "computedStyle": {
         "color": "#7a1f1f",
@@ -39,7 +39,7 @@
       }
     },
     {
-      "nodeId": "dash-abs-a-feature-item-1",
+      "nodeId": "dash-abs-a-feature-item-1-mobile",
       "domPath": "body > div.dash-abs-a-shell > feature_item_1.dash-abs-a-feature-item-1",
       "computedStyle": {
         "color": "#7a1f1f",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "nodeId": "dash-abs-a-feature-item-2",
+      "nodeId": "dash-abs-a-feature-item-2-mobile",
       "domPath": "body > div.dash-abs-a-shell > feature_item_2.dash-abs-a-feature-item-2",
       "computedStyle": {
         "color": "#7a1f1f",
@@ -57,7 +57,7 @@
       }
     },
     {
-      "nodeId": "dash-abs-a-cta",
+      "nodeId": "dash-abs-a-cta-mobile",
       "domPath": "body > div.dash-abs-a-shell > cta.dash-abs-a-cta",
       "computedStyle": {
         "color": "#7a1f1f",
@@ -66,7 +66,7 @@
       }
     },
     {
-      "nodeId": "dash-abs-a-footer",
+      "nodeId": "dash-abs-a-footer-mobile",
       "domPath": "body > div.dash-abs-a-shell > footer.dash-abs-a-footer",
       "computedStyle": {
         "color": "#7a1f1f",

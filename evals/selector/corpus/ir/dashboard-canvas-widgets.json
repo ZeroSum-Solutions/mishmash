@@ -378,28 +378,28 @@
     {
       "elementId": "dashboard-canvas-widgets-di-0-typography",
       "sourceId": "dash-abs-a",
-      "nodeId": "dash-abs-a-hero-heading",
+      "nodeId": "dash-abs-a-hero-heading-mobile",
       "domPath": "body > div.dash-abs-a-shell > hero_heading.dash-abs-a-hero-heading",
       "breakpoint": "mobile"
     },
     {
       "elementId": "dashboard-canvas-widgets-di-1-typography",
       "sourceId": "dash-grid-b",
-      "nodeId": "dash-grid-b-hero-heading",
+      "nodeId": "dash-grid-b-hero-heading-desktop",
       "domPath": "body > div.dash-grid-b-shell > hero_heading.dash-grid-b-hero-heading",
       "breakpoint": "desktop"
     },
     {
       "elementId": "dashboard-canvas-widgets-di-2-interaction",
       "sourceId": "dash-abs-a",
-      "nodeId": "dash-abs-a-cta",
+      "nodeId": "dash-abs-a-cta-mobile",
       "domPath": "body > div.dash-abs-a-shell > cta.dash-abs-a-cta",
       "breakpoint": "mobile"
     },
     {
       "elementId": "dashboard-canvas-widgets-di-3-layout",
       "sourceId": "dash-abs-a",
-      "nodeId": "dash-abs-a-features",
+      "nodeId": "dash-abs-a-features-desktop",
       "domPath": "body > div.dash-abs-a-shell > features.dash-abs-a-features",
       "breakpoint": "desktop"
     }
