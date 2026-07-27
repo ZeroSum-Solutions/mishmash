@@ -143,6 +143,15 @@ The script best-effort prefills fonts/color candidates/framework effect signals 
 
 L4-L6 complex sites should follow `references/complex-playbooks.md`, not the ordinary marketing-site flow.
 
+### Mandatory recipe for the static-mirror path: capture → finish → verify
+
+A clone built via `mirror-site.mjs` is not done until it clears a mechanical gate — a stalled or partial capture must never be reported as a finished clone or served to the user. Three steps, in order, every time:
+
+1. **Capture** — `node scripts/mirror-site.mjs --url <URL> --out <dir>`. Start headless (the default). If a headless run reports a bot-wall signature (a challenge-page body signature such as a "Just a moment" title, or a specific known bot-mitigation response header name — SiteGround's `sg-captcha`, Cloudflare's `cf-mitigated`/`cf-chl-*` — see `lib/bot-wall.mjs`; a bare 403/202 status alone is deliberately NOT treated as sufficient, since ordinary auth failures and legitimate async-accepted responses use those same codes), it prints an explicit escalation instruction: re-run the **exact same command with `--headful` added**. Headful launches a real, visible Chrome (`channel:"chrome"`, `--disable-blink-features=AutomationControlled`, `navigator.webdriver` masked) and retrieves missed assets via genuine in-page `fetch()` — real cookies/fingerprint/Referer are what clears a challenge that already 403'd a headless session. (If real Chrome itself fails to launch, `lib/playwright-loader.mjs` falls back to Playwright's bundled Chromium in headful mode and prints an explicit warning — it never silently claims real Chrome ran when it didn't.) **Never fall back to a plain HTTP re-fetch (`curl`, a bare `fetch`/`axios` script, etc.) for same-origin assets** — that is what got a mirror wholesale 403'd in the incident this hardening responds to; a plain HTTP client is *less* trusted by these bot walls than even a headless browser, let alone a headful in-page fetch.
+2. **Finish** — self-host third-party fonts, strip tracking, per `references/static-mirror.md`'s manual wrap-up. `rewrite-mirror.mjs` (absolute → local references) and `clamp-scroll-animation-overflow.mjs` (scroll-linked overflow) already ran automatically at the end of the capture step; this is the remaining manual work.
+3. **Verify** — `node scripts/verify-mirror.mjs --site <dir>/site --baseline <dir>/mirror-baseline-metrics.json`. **This gate MUST exit 0 before the clone may be reported complete or served to the user.** It serves the mirror on an ephemeral local port, headless-loads it at each captured viewport with a stepped scroll pass, and fails on: any same-origin failed/404 request, any request that leaked back to the mirror's original live origin (the mirror is silently still proxying the live site), any broken image, `scrollWidth`/`scrollHeight` drifting more than 5% from the capture-time baseline, or a runtime global/count (`window.Lenis`, `window.THREE`, canvas/image/video counts) the baseline recorded that the clone doesn't reproduce. A failing gate means the clone is not finished — go back to step 1 or 2, do not report completion around it.
+   **Clamp vs. baseline contract:** the scroll-animation-overflow clamp (step 2) deliberately makes a clamped mirror's `scrollWidth` *different* from the raw live-page baseline — that is the fix working, not drift (a site with this bug reads e.g. `6025px` live/unclamped vs. `~1441px` clamped, at a 1440px viewport). When `mirror-site.mjs` applies the clamp, it re-measures the clamped local mirror once per viewport and records that as `expectedScrollWidth` on the baseline entry; the gate checks a clamped mirror against THAT value instead of the raw baseline. When nothing was clamped, no `expectedScrollWidth` is recorded and the gate checks (and can still fail) against the raw baseline exactly as before. See `lib/gate-decision.mjs`'s docblock for the full contract.
+
 ### Step 4 · Build the project in the current workspace
 
 ```bash
@@ -274,7 +283,10 @@ SSL_CERT_FILE=/etc/ssl/cert.pem gh api repos/<u>/<r> | jq '.license'  # + look f
 - `scripts/recon-site.mjs`: opens the page with Playwright and scrolls the full page, collecting framework/resource/DOM-structure/console errors, computed colors for key sections (`palette`), @font-face rules, and a manifest of actually-loaded fonts/images, plus three tiers of screenshots.
 - `scripts/asset-harvest.mjs`: real browser network stack, scrolls the full page to capture and download every image/font/media asset actually used (including third-party CDN and hotlink-protected assets), generating self-hosted `assets/fonts/fonts.css` @font-face plus an originalUrl->localPath asset manifest.
 - `scripts/network-capture.mjs`: captures XHR/fetch requests and saves JSON/text responses, for SPA/SaaS local fixtures.
-- `scripts/mirror-site.mjs`: real browser, full-page scroll, captures every real request -> mirrors same-origin assets by path (including JS-runtime-fetched `.sog/.buf/.wasm/.riv`/fonts), for a 1:1 faithful clone of static-build sites (Astro/Vite SSG/Hugo). See `references/static-mirror.md`.
+- `scripts/mirror-site.mjs`: real browser, multi-viewport (1440/768/390) full-page scroll, captures every real request and saves response bodies directly during load -> mirrors same-origin assets by path (including JS-runtime-fetched `.sog/.buf/.wasm/.riv`/fonts), for a 1:1 faithful clone of static-build sites (Astro/Vite SSG/Hugo). Runs recursive in-page `fetch()` rounds for assets the markup/CSS references but no request ever fired for, detects bot-wall responses and prints `--headful` escalation guidance, and writes `mirror-baseline-metrics.json` for the `verify-mirror.mjs` gate. See `references/static-mirror.md` and the "Mandatory recipe" section above.
+- `scripts/rewrite-mirror.mjs`: points a mirrored site at its own downloaded assets — rewrites absolute same-origin URLs to local relative paths, but only when the mirrored file actually exists. Runs automatically at the end of `mirror-site.mjs`; also runnable standalone.
+- `scripts/clamp-scroll-animation-overflow.mjs`: scopes a horizontal `overflow-x: clip` to Salient/WPBakery scroll-linked parallax rows (`data-scroll-animation="true" data-scroll-animation-movement="transform_x"`) whose stale in-view flag can inflate a mirrored document's `scrollWidth` far beyond its viewport on first paint. Runs automatically at the end of `mirror-site.mjs`; also runnable standalone.
+- `scripts/verify-mirror.mjs`: the mandatory pass/fail gate for a finished mirror (see "Mandatory recipe" above) — serves the mirror locally, headless-loads it at each captured viewport, and fails on any same-origin resource failure, broken image, `scrollWidth`/`scrollHeight` drift beyond 5% vs the capture-time baseline, or a missing baseline-recorded runtime global/count. Exit 0 only on a full pass.
 - `scripts/route-crawl.mjs`: crawls internal links on the same site, saving screenshots/titles/H1s/structure signals per route, solving the problem of only cloning the homepage of a multi-page site.
 - `scripts/interaction-probe.mjs`: automatically performs scroll, hover, safe click, and canvas drag, saving before/after interaction state, screenshots, network, and console evidence.
 - `scripts/sourcemap-hunt.mjs`: looks for source maps inside JS chunks and saves them when found.
@@ -283,6 +295,28 @@ SSL_CERT_FILE=/etc/ssl/cert.pem gh api repos/<u>/<r> | jq '.license'  # + look f
 - `scripts/audit-clone.mjs`: scans for tracking scripts, original-brand leftovers, leftover Japanese text, TODOs, and external URL risk; with `--recon --strict` also validates font self-hosting/image localization/key-section color exactness verbatim, exiting 2 on a real defect.
 - `scripts/od-preview-rewrite.mjs`: rewrites project-root asset references in HTML/CSS/SVG (e.g. `/reference-assets/main.css`) to relative paths, so Open Design's file preview and exported zip still load assets under nested routes.
 - `scripts/dna-scaffold.mjs`: generates a `design-dna.json` design-identity skeleton from recon JSON (fonts/color candidates/framework effect signals, best-effort prefilled), for use in "visual clone / content overhaul" mode. See `references/design-dna.md`.
+
+## Known limitations (documented, deliberately not built)
+
+Hostile-input hardening on a local tool the operator points at sites they choose. Each entry
+states its precondition — none is reachable from a benign real-world site. This list is frozen
+by the W-C close-out (2026-07-26); adding an entry requires a founder decision, not an agent's
+reclassification of a failing test.
+
+1. **In-root symlinks can redirect a write.** `lib/safe-path.mjs`'s `containedPath()` guards
+   lexically (defeats `..` traversal, including percent-encoded forms) but does not `realpath`
+   the destination. Precondition: a symlinked directory (e.g. `assets/` → elsewhere) already
+   exists inside the mirror root before capture writes into it. The mirror root is created by
+   `mirror-site.mjs` itself, so this requires a deliberately pre-seeded output directory.
+2. **`claim()` disambiguation is not injective against a crafted URL set.** A collision on the
+   natural path widens the suffix 8→16 hex chars without re-checking the widened result.
+   Precondition: an adversary controlling the site's URL structure crafts multiple URLs that
+   collide on both the natural path *and* the short hash — astronomically unlikely for real
+   sites, constructible on purpose.
+3. **A hand-edited `url-manifest.json` is trusted as-authored.** `restore()` accepts persisted
+   entries without re-validating for duplicate or unsafe local paths (writes are still
+   containment-checked at write time). Precondition: the operator (or something with write
+   access to the mirror output directory) edits the manifest between runs.
 
 ## Capability boundary (default stance)
 - **Can do high-fidelity**: static marketing pages, corporate sites, content-driven React/Vue/Next frontends, animated sites where the source is directly available.

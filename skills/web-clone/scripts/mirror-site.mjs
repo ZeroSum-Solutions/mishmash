@@ -4,37 +4,72 @@
 // Principle: for this class of site, the "real source" isn't on GitHub, but the
 //       deployed static assets (HTML + bundle + CSS + runtime-fetched
 //       .sog/.buf/.wasm/.riv/fonts/images) are the ground truth. Use a real browser
-//       to scroll through the whole page, capturing every real request, then mirror
-//       same-origin assets by path.
+//       to scroll through the whole page at multiple viewports, capturing every real
+//       request, then mirror same-origin assets by path.
 // Usage:
-//   node scripts/mirror-site.mjs --url <URL> --out <dir> [--scroll-step 700] [--settle 2500] [--max-ms 90000]
+//   node scripts/mirror-site.mjs --url <URL> --out <dir> [--scroll-step 700] [--settle 2500] [--max-ms 90000] [--headful]
 // Output:
-//   <dir>/site/...                mirrored same-origin assets (paths preserved; directory URLs saved as index.html)
-//   <dir>/mirror-manifest.json    every request (same-origin + third-party) + its status
-//   <dir>/own-asset-urls.txt      same-origin asset path manifest
-//   <dir>/third-party.json        third-party hosts + hints for webfont CSS (typekit/google) that needs self-hosting
+//   <dir>/site/...                     mirrored same-origin assets (paths preserved; directory URLs saved as index.html)
+//   <dir>/mirror-manifest.json         every request (same-origin + third-party) + its status
+//   <dir>/url-manifest.json            authoritative sourceUrl<->localPath pairs (lib/mirror-manifest.mjs) --
+//                                      rewrite-mirror.mjs loads this for a later standalone re-run
+//   <dir>/own-asset-urls.txt           same-origin asset path manifest
+//   <dir>/third-party.json             third-party hosts + hints for webfont CSS (typekit/google) that needs self-hosting
+//   <dir>/mirror-baseline-metrics.json per-viewport capture-time metrics (scrollWidth/Height, runtime
+//                                      globals, canvas/image/video counts) -- feed this to
+//                                      verify-mirror.mjs --baseline once the mirror is finished/rewritten.
+//                                      When the scroll-animation clamp (below) changed anything, this
+//                                      also carries a re-measured `expectedScrollWidth` per viewport --
+//                                      see lib/gate-decision.mjs's clamp contract.
 // Discipline: never fabricate a path. A same-origin asset is either captured from a
 //       real request or read back off the mirror's own markup; a reference is only
-//       localised once the file it points at exists on disk.
-//       Runs to completion on its own: bot-wall detection -> second-pass fetch of
-//       referenced-but-uncaptured assets -> absolute-URL rewrite.
+//       localised once the file it points at exists on disk. The sourceUrl<->localPath
+//       mapping is decided exactly ONCE per URL, in lib/mirror-manifest.mjs, and every
+//       stage (capture, recursive fetch, rewrite) consults that same manifest instead
+//       of independently recomputing or reversing it.
+//       Runs to completion on its own: multi-viewport capture (1440/768/390) with
+//       response-body capture during load -> recursive in-page fetch() rounds for
+//       anything the markup/CSS references but no request ever fired for -> bot-wall
+//       detection (with --headful escalation guidance) -> absolute-URL rewrite ->
+//       scroll-animation overflow clamp.
 //       Third-party CDNs (fonts/wasm/video) are still manual, per third-party.json:
 //       self-host domain-locked fonts (typically Typekit @import) and strip tracking.
 //       Full recipe in references/static-mirror.md.
+//
+// --headful: launches a real, visible Chrome (channel:"chrome",
+//   --disable-blink-features=AutomationControlled, navigator.webdriver masked)
+//   instead of headless, and fetches missed assets via genuine in-page fetch().
+//   Real cookies/fingerprint/Referer are what clears a bot wall that has started
+//   403/202-challenging headless Chrome by fingerprint alone -- see
+//   lib/bot-wall.mjs. A headless run prints explicit re-run guidance the moment
+//   it sees a bot-wall signature; never fall back to a plain HTTP re-fetch for
+//   same-origin assets instead, that is what gets 403'd wholesale. (If real
+//   Chrome itself fails to launch, lib/playwright-loader.mjs falls back to
+//   bundled Chromium in headful mode and prints an explicit warning -- it does
+//   not silently claim real Chrome was used.)
 
-import { loadPlaywright, launchChromium } from "./lib/playwright-loader.mjs";
-import {
-  collectSameOriginRefs,
-  originHosts,
-  reportRewrite,
-  rewriteMirror,
-} from "./rewrite-mirror.mjs";
-import { clampScrollAnimationOverflow, reportClamp } from "./clamp-scroll-animation-overflow.mjs";
 import fs from "node:fs";
 import path from "node:path";
 
+import { loadPlaywright, launchChromium, maskAutomationSignals } from "./lib/playwright-loader.mjs";
+import { localPathForUrl, originHosts, reportRewrite, rewriteMirror } from "./rewrite-mirror.mjs";
+import { clampScrollAnimationOverflow, reportClamp } from "./clamp-scroll-animation-overflow.mjs";
+import { DEFAULT_VIEWPORTS, forceLazyMarkup, steppedScroll, collectRuntimeMetrics } from "./lib/viewport-capture.mjs";
+import { fetchInPage } from "./lib/in-page-fetch.mjs";
+import { looksLikeBotWallBody, looksLikeBotWallResponse, headfulEscalationGuidance } from "./lib/bot-wall.mjs";
+import { startStaticServer } from "./lib/static-server.mjs";
+import { createMirrorManifest, findMissingSourceUrls } from "./lib/mirror-manifest.mjs";
+import { containedPath } from "./lib/safe-path.mjs";
+
+const FETCH_THROTTLE_MS = 140;
+// Safety valve against a pathological reference cycle or discovery bug, NOT
+// a normal-case round cap -- a legitimately deep reference chain (five-plus
+// nested CSS @imports, say) must be allowed to finish, so this only stops a
+// runaway loop, and only after logging loudly (see `hitSafetyCap` below).
+const MAX_FETCH_ATTEMPTS = 200;
+
 function parseArgs(argv) {
-  const o = { url: "", out: "", scrollStep: 700, settle: 2500, maxMs: 90000, help: false };
+  const o = { url: "", out: "", scrollStep: 700, settle: 2500, maxMs: 90000, headful: false, help: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--help" || a === "-h") o.help = true;
@@ -43,6 +78,7 @@ function parseArgs(argv) {
     else if (a === "--scroll-step") o.scrollStep = parseInt(argv[++i] || "700", 10);
     else if (a === "--settle") o.settle = parseInt(argv[++i] || "2500", 10);
     else if (a === "--max-ms") o.maxMs = parseInt(argv[++i] || "90000", 10);
+    else if (a === "--headful") o.headful = true;
   }
   return o;
 }
@@ -50,21 +86,17 @@ function parseArgs(argv) {
 function usage() {
   console.log(`mirror-site.mjs -- full asset mirroring for static-build sites (1:1 faithful clone)
 
-  node scripts/mirror-site.mjs --url <URL> --out <dir> [--scroll-step 700] [--settle 2500] [--max-ms 90000]
+  node scripts/mirror-site.mjs --url <URL> --out <dir> [--scroll-step 700] [--settle 2500] [--max-ms 90000] [--headful]
 
 Applies to: Astro / Vite SSG / Hugo / any site whose client runtime output ships as
 downloadable static assets (including WebGL/Canvas heavy frontends).
 Does not apply to: true server-side rendering / data-driven SPAs (use network-capture.mjs for an API stand-in).
-Recipe and follow-up rewrite steps (self-host fonts/strip tracking/serve) -> references/static-mirror.md`);
-}
-
-// Same-origin asset URL -> local relative path (strip query; directory URLs saved as index.html)
-function urlToLocalPath(u, origin) {
-  let p = u.slice(origin.length);
-  const q = p.indexOf("?");
-  if (q >= 0) p = p.slice(0, q);
-  if (p === "" || p.endsWith("/")) p += "index.html";
-  return p.replace(/^\/+/, "");
+Captures at three viewports (1440/768/390) and runs recursive in-page fetch() rounds
+for assets the markup/CSS references but no request fired for.
+--headful: real visible Chrome + anti-automation masking; re-run with this the moment
+a plain headless run reports a bot-wall signature (see the printed guidance).
+Recipe and follow-up steps (self-host fonts/strip tracking/verify/serve) -> references/static-mirror.md
+Mandatory before reporting a clone complete: node scripts/verify-mirror.mjs --site <dir>/site --baseline <dir>/mirror-baseline-metrics.json`);
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -74,160 +106,475 @@ if (args.help || !args.url || !args.out) {
 }
 
 const origin = new URL(args.url).origin;
-const siteDir = path.join(path.resolve(args.out), "site");
+const outRoot = path.resolve(args.out);
+const siteDir = path.join(outRoot, "site");
 fs.mkdirSync(siteDir, { recursive: true });
+const hosts = originHosts(origin);
+// The single source of truth for sourceUrl<->localPath mapping across every
+// stage of this run -- see lib/mirror-manifest.mjs's docblock.
+const manifest = createMirrorManifest({ computeLocalPath: localPathForUrl });
+
+function isOwnUrl(url) {
+  // Host-based (apex/www aliased), matching how `hosts` is used everywhere
+  // else in this file (localPathForUrl, manifest.claim) -- a literal
+  // `origin + "/"` string-prefix check would miss a response served from
+  // the aliased host (e.g. the origin redirected apex -> www at the same
+  // path), silently dropping it from capture entirely.
+  try {
+    return hosts.has(new URL(url).host.toLowerCase());
+  } catch {
+    return false;
+  }
+}
 
 const responses = new Map(); // url -> {status, type, ct}
-const pw = loadPlaywright();
-const browser = await launchChromium(pw.chromium);
-const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
-const page = await ctx.newPage();
-page.on("response", (resp) => {
-  try {
-    const h = resp.headers();
-    responses.set(resp.url(), { status: resp.status(), type: resp.request().resourceType(), ct: h["content-type"] || "" });
-  } catch {}
-});
+const botWallHits = [];
+const destinationLocks = new Map();
+const pending = new Set();
 
-console.log(`▸ Loading + scrolling through the full page while capturing: ${args.url}`);
-await page.goto(args.url, { waitUntil: "networkidle", timeout: args.maxMs }).catch((e) => console.warn("  goto:", e.message));
-const total = await page.evaluate(() => document.documentElement.scrollHeight);
-for (let y = 0; y <= total; y += args.scrollStep) {
-  await page.evaluate((yy) => window.scrollTo(0, yy), y);
-  await page.waitForTimeout(180);
-}
-await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-await page.waitForTimeout(args.settle);
-await page.evaluate(() => window.scrollTo(0, 0));
-await page.waitForTimeout(1200);
-
-const all = [...responses.entries()].map(([url, m]) => ({ url, ...m }));
-const ownUrls = all.filter((r) => r.url.startsWith(origin + "/") || r.url === origin || r.url === origin + "/");
-
-console.log(`▸ Captured ${all.length} request(s); ${ownUrls.length} same-origin, downloading…`);
-let ok = 0, fail = 0;
-const failed = [];
-for (const r of ownUrls) {
-  const rel = urlToLocalPath(r.url, origin);
-  const dest = path.join(siteDir, rel);
-  try {
-    const resp = await ctx.request.get(r.url); // reuse the browser's network stack (same cookies/TUN/proxy)
-    if (!resp.ok()) { fail++; failed.push(`HTTP${resp.status()} ${rel}`); continue; }
-    const buf = await resp.body();
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.writeFileSync(dest, buf);
-    ok++;
-  } catch (e) {
-    fail++; failed.push(`${e.message} ${rel}`);
-  }
+async function settlePending() {
+  while (pending.size) await Promise.allSettled([...pending]);
 }
 
 /**
- * True when a captured document is an anti-bot interstitial rather than the site.
- *
- * A challenge answers 200 with a redirect stub, so every downstream stage treats
- * it as a successful mirror: the asset count is small but non-zero, the rewrite
- * finds nothing to do, and the run prints "✅ Mirror complete". The clone then
- * renders a blank page and nothing upstream explains why. Naming it here is the
- * difference between a diagnosable failure and a silent one.
+ * Saves a same-origin response's body directly from the load that requested
+ * it, instead of deferring to a separate re-fetch pass afterwards (the
+ * "response-body capture during load" technique). A second, standalone
+ * request for the same URL is strictly less trusted by a bot wall than the
+ * one the real page navigation already made, so the fewer follow-up requests
+ * this needs, the fewer chances to get challenged.
  */
-function looksLikeBotWall(html) {
-  return /sgcaptcha|cf-browser-verification|challenge-platform|__cf_chl|_Incapsula_|<title>\s*Just a moment/i.test(
-    html,
-  );
-}
+function persistOwnResponse(resp) {
+  const url = resp.url();
+  if (!isOwnUrl(url)) return;
+  const status = resp.status();
+  const headers = resp.headers();
+  responses.set(url, { status, type: resp.request().resourceType(), ct: headers["content-type"] || "" });
 
-const rootIndex = path.join(siteDir, "index.html");
-if (fs.existsSync(rootIndex)) {
-  const rootHtml = fs.readFileSync(rootIndex, "utf8");
-  if (looksLikeBotWall(rootHtml) || rootHtml.length < 512) {
-    console.error(
-      `\n✗ The captured page is an anti-bot challenge, not ${origin}.\n` +
-        `  Captured ${rootHtml.length} bytes at site/index.html. Mirroring stopped so this\n` +
-        `  does not get reported as a successful clone.\n` +
-        `  Retry from a browser session that has already cleared the challenge, or from a\n` +
-        `  different network. Nothing under ${siteDir} is usable as-is.`,
-    );
-    await browser.close();
-    process.exit(2);
+  // Classify bot-wall on headers/status for EVERY response, before the
+  // "only 200 is a complete asset" early return below. The most common
+  // real-world challenge shape pairs a 403/202 status with its own header
+  // (see lib/bot-wall.mjs -- the header name is the actual signal, status
+  // alone is not) -- if detection only ran for 200/206 responses, that
+  // header would never even get inspected and `botWallHits` (and the
+  // --headful escalation guidance) would stay empty for the case that
+  // matters most.
+  if (looksLikeBotWallResponse({ status, headers })) {
+    botWallHits.push({ url, status, phase: "capture" });
+    return;
   }
-}
 
-// Second pass: assets the markup references but the capture never requested.
-// A scroll-through only fires what the page actually loads, so lazy-loaded media,
-// hover-state sprites, and unused @font-face formats (.eot/.woff alternates) are
-// named in the HTML/CSS yet absent from disk. Reading the references back off the
-// mirror turns them into a fetchable list. These go through `ctx.request.get` for
-// the same reason the first pass does: the origin may sit behind a bot check that
-// answers a plain HTTP client with a challenge page instead of the asset.
-const binaryExt = /\.(png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf|eot|mp4|webm|mov|m4v|wasm|riv|buf|sog)$/i;
-const hosts = originHosts(origin);
-let refetched = 0;
-const refetchFailed = [];
-for (const rel of collectSameOriginRefs(siteDir, hosts)) {
-  const dest = path.join(siteDir, rel);
-  if (fs.existsSync(dest)) continue;
-  // Keep the write inside site/ even if a reference contains traversal segments.
-  if (!path.resolve(dest).startsWith(path.resolve(siteDir) + path.sep)) continue;
-  try {
-    const resp = await ctx.request.get(`${origin}/${rel}`);
-    if (!resp.ok()) { refetchFailed.push(`HTTP${resp.status()} ${rel}`); continue; }
-    const ct = (resp.headers()["content-type"] || "").toLowerCase();
-    const buf = await resp.body();
-    // A bot-check interstitial answers 200/202 with a few hundred bytes of HTML.
-    // Saving that as `logo.png` would look like a success and render as a broken
-    // image, so treat an HTML body for a binary asset as a failure.
-    if (binaryExt.test(rel) && ct.includes("text/html")) {
-      refetchFailed.push(`challenge-page ${rel}`);
-      continue;
+  // 206 (Partial Content) must not stand in for the whole asset -- this
+  // pipeline never reassembles byte ranges, so persisting a range response
+  // as if it were the complete file would silently ship a truncated asset
+  // (e.g. a video whose first request only asked for the first megabyte).
+  if (status !== 200) {
+    // A 202/403 whose ONLY challenge signal is the response body itself (no
+    // recognized header) would otherwise be missed entirely here, since
+    // nothing else ever reads a non-2xx body. Read it, check it, move on --
+    // this response is never persisted as an asset either way.
+    const operation = (async () => {
+      try {
+        const body = await resp.body();
+        if (body.length && looksLikeBotWallBody(body.toString("utf8", 0, Math.min(body.length, 4096)))) {
+          botWallHits.push({ url, status, phase: "capture" });
+        }
+      } catch {
+        // Body unavailable for this non-2xx response; nothing more to check.
+      }
+    })();
+    pending.add(operation);
+    operation.finally(() => pending.delete(operation));
+    return;
+  }
+
+  const rel = manifest.claim(url, hosts);
+  if (!rel) return;
+  // N1: every write derived from a (potentially adversarial) captured URL
+  // must be containment-checked before touching the filesystem. An encoded
+  // path segment (`%2e%2e%2f%2e%2e%2f`) decodes into literal ".." components
+  // that `path.join` will happily walk outside `siteDir`.
+  const dest = containedPath(siteDir, rel);
+  if (!dest) return;
+
+  // Already have a real (non-empty) copy from an earlier attempt -- this,
+  // not `destinationLocks`, is the authoritative "already captured" gate.
+  // The lock below is only an in-flight dedupe for concurrent 'response'
+  // events within the current pass; it must not permanently block a LATER
+  // viewport's genuine complete response just because an earlier attempt
+  // for the same URL failed, was empty, or was a bot-wall challenge.
+  if (fs.existsSync(dest) && fs.statSync(dest).size > 0) return;
+  if (destinationLocks.has(dest)) return destinationLocks.get(dest);
+
+  const operation = (async () => {
+    try {
+      const body = await resp.body();
+      if (!body.length) return;
+      if (looksLikeBotWallResponse({ status, headers, body: body.toString("utf8", 0, Math.min(body.length, 4096)) })) {
+        botWallHits.push({ url, status, phase: "capture" });
+        return;
+      }
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, body);
+    } catch {
+      // Left unsaved; the final disk-existence pass below reports it as failed.
+    } finally {
+      // Release the lock once this attempt settles, success or not, so a
+      // later pass can retry instead of being permanently skipped.
+      destinationLocks.delete(dest);
     }
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.writeFileSync(dest, buf);
-    refetched++;
-  } catch (e) {
-    refetchFailed.push(`${e.message} ${rel}`);
-  }
-}
-if (refetched || refetchFailed.length) {
-  console.log(`▸ Referenced-but-uncaptured assets: ${refetched} fetched / ${refetchFailed.length} failed`);
-  if (refetchFailed.length) console.log("   " + refetchFailed.slice(0, 12).join("\n   "));
+  })();
+  destinationLocks.set(dest, operation);
+  pending.add(operation);
+  operation.finally(() => pending.delete(operation));
+  return operation;
 }
 
-// Third-party + webfont hints
-const thirdHosts = [...new Set(all.filter((r) => !r.url.startsWith(origin)).map((r) => { try { return new URL(r.url).host; } catch { return r.url; } }))];
-const webfontCss = all.map((r) => r.url).filter((u) => /use\.typekit\.net\/[a-z0-9]+\.css|fonts\.googleapis\.com\/css/i.test(u));
-const outRoot = path.resolve(args.out);
-fs.writeFileSync(path.join(outRoot, "mirror-manifest.json"), JSON.stringify(all, null, 2));
-fs.writeFileSync(path.join(outRoot, "own-asset-urls.txt"), ownUrls.map((r) => urlToLocalPath(r.url, origin)).sort().join("\n") + "\n");
-fs.writeFileSync(path.join(outRoot, "third-party.json"), JSON.stringify({ hosts: thirdHosts, webfont_css_to_selfhost: webfontCss }, null, 2));
+const pw = loadPlaywright();
+const browser = await launchChromium(pw.chromium, { headful: args.headful });
+let mirrorIncomplete = false;
 
-console.log(`✅ Mirror complete: ${ok} succeeded / ${fail} failed -> ${siteDir}`);
-if (failed.length) console.log("  ⚠️ Failed:\n   " + failed.slice(0, 20).join("\n   "));
-console.log(`▸ Third-party hosts: ${thirdHosts.join(", ") || "(none)"}`);
-if (webfontCss.length) console.log(`▸ webfont CSS that needs self-hosting (domain-locked, see static-mirror.md): \n   ${webfontCss.join("\n   ")}`);
-// Point the mirror at its own files. Until this runs, every absolute reference
-// still resolves to the origin, so the mirror silently proxies the live site and
-// breaks the moment that host is unreachable.
-console.log(`▸ Rewriting absolute ${origin} references to local paths`);
-reportRewrite(rewriteMirror({ siteDir, origin }), origin, false);
-
-// Salient/WPBakery scroll-linked parallax rows on the transform_x movement
-// axis (data-scroll-animation="true" data-scroll-animation-movement=
-// "transform_x") can latch a stale in-view flag before the mirror's layout
-// settles, applying a JS transform of several thousand pixels and inflating
-// the served document's scrollWidth. Contain those rows to their own box so a
-// faithful mirror doesn't present a document far wider than its viewport on
-// first paint. See clamp-scroll-animation-overflow.mjs for the full
-// mechanism. This stage runs after everything the mirror needs has already
-// been downloaded and rewritten, so a bug in its regex-based tag matching
-// must not cost the whole mirror -- report it and let the mirror stand as
-// already produced rather than throwing the run away.
-console.log(`▸ Clamping scroll-linked overflow`);
 try {
-  reportClamp(clampScrollAnimationOverflow({ siteDir }), false);
-} catch (e) {
-  console.warn(`⚠️ Clamping scroll-linked overflow failed, leaving the mirror as-is: ${e.message}`);
-}
+  async function captureViewport(viewport) {
+    const context = await browser.newContext({
+      viewport: { width: viewport.width, height: viewport.height },
+      deviceScaleFactor: viewport.dpr,
+    });
+    try {
+      if (args.headful) await maskAutomationSignals(context);
+      const page = await context.newPage();
+      page.on("response", (resp) => {
+        try {
+          persistOwnResponse(resp);
+        } catch {}
+      });
 
-console.log(`▸ Next: self-host third-party fonts + strip tracking -> cd ${siteDir} && python3 -m http.server 8124`);
-await browser.close();
+      console.log(`▸ [${viewport.label}] Loading + scrolling: ${args.url}`);
+      await page
+        .goto(args.url, { waitUntil: "networkidle", timeout: args.maxMs })
+        .catch((e) => console.warn(`  [${viewport.label}] goto:`, e.message));
+      await forceLazyMarkup(page);
+      await steppedScroll(page, viewport, { stepPx: args.scrollStep, settleMs: args.settle });
+      const metrics = await collectRuntimeMetrics(page, viewport);
+      await settlePending();
+      return metrics;
+    } finally {
+      // Guarantees the context (and its page) is released even if
+      // forceLazyMarkup/steppedScroll/collectRuntimeMetrics throws mid-viewport.
+      await context.close().catch(() => {});
+    }
+  }
+
+  const baselineMetrics = [];
+  for (const viewport of DEFAULT_VIEWPORTS) {
+    baselineMetrics.push(await captureViewport(viewport));
+  }
+
+  // Bot-wall hard fail: if the captured homepage is a challenge/interstitial
+  // rather than the real site, every downstream stage would otherwise treat it
+  // as a successful (if small) mirror, and the clone would render a blank page
+  // with nothing upstream explaining why. `process.exit()` here bypasses the
+  // outer try/finally's cleanup (it terminates before a pending async finally
+  // can run), so the browser is closed explicitly before exiting.
+  const rootIndex = path.join(siteDir, "index.html");
+  if (fs.existsSync(rootIndex)) {
+    const rootHtml = fs.readFileSync(rootIndex, "utf8");
+    if (looksLikeBotWallBody(rootHtml) || rootHtml.length < 512) {
+      console.error(
+        `\n✗ The captured page is an anti-bot challenge, not ${origin}.\n` +
+          `  Captured ${rootHtml.length} bytes at site/index.html. Mirroring stopped so this\n` +
+          `  does not get reported as a successful clone.\n\n${headfulEscalationGuidance({ url: args.url })}\n`,
+      );
+      await browser.close().catch(() => {});
+      process.exit(2);
+    }
+  }
+
+  // Recursive fetch rounds: assets the markup/CSS references but no request
+  // ever fired for (lazy media, hover-state sprites, unused @font-face format
+  // alternates). Each round re-scans the mirror's own files -- fetching one
+  // referenced CSS/JS file can reveal further references inside it -- so this
+  // keeps going until a round makes no progress, with a total-attempt safety
+  // valve (not a round cap) against a pathological reference cycle.
+  //
+  // `findMissingSourceUrls` returns absolute source URLs directly (resolved
+  // from each reference against its owning file's own captured URL via the
+  // manifest) -- never a locally-computed path reconstructed back into a
+  // guessed URL, which is what silently fetched the wrong thing (or nothing)
+  // for a query-bearing or percent-encoded reference in the previous design.
+  console.log("▸ Recursive fetch rounds for referenced-but-uncaptured assets");
+  const fetchContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+  let totalRefetched = 0;
+  const refetchFailed = [];
+  let hitSafetyCap = false;
+  try {
+    if (args.headful) await maskAutomationSignals(fetchContext);
+    const fetchPage = await fetchContext.newPage();
+    await fetchPage
+      .goto(args.url, { waitUntil: "domcontentloaded", timeout: args.maxMs })
+      .catch((e) => console.warn("  fetch-round goto:", e.message));
+    await fetchPage.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+
+    // Materialize a redirect stub for the requested entrypoint when the
+    // origin redirects it elsewhere (e.g. "/" -> "/home/", or an apex<->www
+    // redirect at the same path) and nothing was ever captured AT the
+    // requested path -- otherwise a bare GET / against the served mirror
+    // 404s even though the mirror is otherwise complete. Claiming both URLs
+    // in the manifest also means later discovery/rewrite know about them.
+    const requestedRel = manifest.claim(args.url, hosts);
+    const landedRel = manifest.claim(fetchPage.url(), hosts);
+    if (requestedRel && landedRel && requestedRel !== landedRel) {
+      const requestedDest = containedPath(siteDir, requestedRel);
+      const landedDest = containedPath(siteDir, landedRel);
+      if (requestedDest && landedDest && !fs.existsSync(requestedDest)) {
+        let relTarget = path.relative(path.dirname(requestedDest), landedDest).split(path.sep).join("/");
+        if (!relTarget.startsWith(".")) relTarget = `./${relTarget}`;
+        fs.mkdirSync(path.dirname(requestedDest), { recursive: true });
+        fs.writeFileSync(
+          requestedDest,
+          `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=${relTarget}"><link rel="canonical" href="${relTarget}"></head><body>Redirecting to <a href="${relTarget}">${relTarget}</a>…</body></html>\n`,
+        );
+        console.log(`▸ Wrote redirect stub ${requestedRel} -> ${landedRel} (origin redirects the requested entrypoint)`);
+      }
+    }
+
+    for (let round = 1; ; round += 1) {
+      const missingUrls = [...findMissingSourceUrls({ siteDir, hosts, manifest })];
+      if (!missingUrls.length) break;
+      console.log(`  round ${round}: ${missingUrls.length} referenced asset(s) missing`);
+      let progress = 0;
+      for (const missingUrl of missingUrls) {
+        if (totalRefetched + refetchFailed.length >= MAX_FETCH_ATTEMPTS) {
+          hitSafetyCap = true;
+          break;
+        }
+        const rel = manifest.claim(missingUrl, hosts);
+        const dest = rel ? containedPath(siteDir, rel) : null;
+        if (!dest) {
+          refetchFailed.push(`unsafe-or-unmappable-path ${missingUrl}`);
+          continue;
+        }
+        const result = await fetchInPage(fetchPage, missingUrl);
+        if (result.ok && result.body?.length) {
+          fs.mkdirSync(path.dirname(dest), { recursive: true });
+          fs.writeFileSync(dest, result.body);
+          totalRefetched += 1;
+          progress += 1;
+        } else {
+          refetchFailed.push(`${result.error || `HTTP${result.status ?? "?"}`} ${missingUrl}`);
+          if (result.error === "bot-wall-challenge") {
+            botWallHits.push({ url: missingUrl, status: result.status, phase: "recursive-fetch" });
+          }
+        }
+        await fetchPage.waitForTimeout(FETCH_THROTTLE_MS);
+      }
+      if (hitSafetyCap || !progress) break;
+    }
+    // A1: EVERY exit from the loop re-checks what is actually still missing
+    // -- not just the safety-cap path. The no-progress exit (a round where
+    // every remaining fetch failed) used to fall through here silently:
+    // those URLs never appear in `responses` (no browser request ever fired
+    // for a discovery-only reference), so the final tally below cannot see
+    // them either, and the run printed "Mirror complete" with exit 0 over a
+    // mirror that was provably missing referenced same-origin assets.
+    const stillMissing = findMissingSourceUrls({ siteDir, hosts, manifest });
+    if (stillMissing.size) {
+      mirrorIncomplete = true;
+      if (hitSafetyCap) {
+        console.error(
+          `✗ Hit the ${MAX_FETCH_ATTEMPTS}-attempt recursive-fetch safety cap with ${stillMissing.size} ` +
+            `referenced asset(s) still missing. This likely means a reference cycle or an unusually deep ` +
+            `asset chain -- this mirror is INCOMPLETE and must not be treated as done.`,
+        );
+      } else {
+        console.error(
+          `✗ Recursive fetch exhausted with ${stillMissing.size} referenced same-origin asset(s) still ` +
+            `missing (every remaining attempt failed). This mirror is INCOMPLETE and must not be ` +
+            `treated as done:\n   ` +
+            [...stillMissing].slice(0, 12).join("\n   "),
+        );
+      }
+    }
+  } finally {
+    await fetchContext.close().catch(() => {});
+  }
+
+  if (totalRefetched || refetchFailed.length) {
+    console.log(`▸ Referenced-but-uncaptured assets: ${totalRefetched} fetched / ${refetchFailed.length} failed`);
+    if (refetchFailed.length) console.log("   " + refetchFailed.slice(0, 12).join("\n   "));
+  }
+
+  // Final tally: same-origin URLs captured vs. actually present on disk.
+  // Uses the manifest's own assigned path (not a fresh recomputation) so a
+  // URL that was disambiguated (a collision, see lib/mirror-manifest.mjs) is
+  // checked against the file it was ACTUALLY written to, not the "natural"
+  // path a naive recomputation would guess. Redirects (3xx) are excluded --
+  // they are never expected to have a body of their own (the final landed
+  // document/asset is what gets persisted), so counting them as "should
+  // exist as a file" always reports a false failure for every redirect the
+  // capture followed.
+  let ok = 0;
+  let fail = 0;
+  const failed = [];
+  for (const [url, meta] of responses) {
+    if (!isOwnUrl(url)) continue;
+    if (meta.status >= 300 && meta.status < 400) continue;
+    const rel = manifest.get(url);
+    if (!rel) continue;
+    const dest = containedPath(siteDir, rel);
+    if (dest && fs.existsSync(dest) && fs.statSync(dest).size > 0) ok++;
+    else {
+      fail++;
+      failed.push(`HTTP${meta.status} ${rel}`);
+    }
+  }
+  if (fail > 0) mirrorIncomplete = true;
+
+  const all = [...responses.entries()].map(([url, m]) => ({ url, ...m }));
+  const ownUrls = all.filter((r) => isOwnUrl(r.url));
+  const thirdHosts = [
+    ...new Set(
+      all
+        .filter((r) => !isOwnUrl(r.url))
+        .map((r) => {
+          try {
+            return new URL(r.url).host;
+          } catch {
+            return r.url;
+          }
+        }),
+    ),
+  ];
+  const webfontCss = all
+    .map((r) => r.url)
+    .filter((u) => /use\.typekit\.net\/[a-z0-9]+\.css|fonts\.googleapis\.com\/css/i.test(u));
+
+  fs.writeFileSync(path.join(outRoot, "mirror-manifest.json"), JSON.stringify(all, null, 2));
+  fs.writeFileSync(path.join(outRoot, "url-manifest.json"), JSON.stringify(manifest.toJSON(), null, 2));
+  fs.writeFileSync(
+    path.join(outRoot, "own-asset-urls.txt"),
+    ownUrls
+      .map((r) => manifest.get(r.url))
+      .filter(Boolean)
+      .sort()
+      .join("\n") + "\n",
+  );
+  fs.writeFileSync(
+    path.join(outRoot, "third-party.json"),
+    JSON.stringify({ hosts: thirdHosts, webfont_css_to_selfhost: webfontCss }, null, 2),
+  );
+
+  // A mirror that still has known-missing same-origin assets (the safety
+  // cap was hit, or the final tally found any) must never announce itself
+  // as complete -- that is exactly the gap the mandatory verify-mirror.mjs
+  // gate exists to catch downstream, but the capture step itself should not
+  // print a misleading green checkmark in the meantime.
+  if (mirrorIncomplete) {
+    console.error(`⚠️ Mirror INCOMPLETE: ${ok} succeeded / ${fail} failed -> ${siteDir}`);
+    process.exitCode = 1;
+  } else {
+    console.log(`✅ Mirror complete: ${ok} succeeded / ${fail} failed -> ${siteDir}`);
+  }
+  if (failed.length) console.log("  ⚠️ Failed:\n   " + failed.slice(0, 20).join("\n   "));
+  console.log(`▸ Third-party hosts: ${thirdHosts.join(", ") || "(none)"}`);
+  if (webfontCss.length) {
+    console.log(`▸ webfont CSS that needs self-hosting (domain-locked, see static-mirror.md): \n   ${webfontCss.join("\n   ")}`);
+  }
+
+  if (botWallHits.length && !args.headful) {
+    console.warn(`\n${headfulEscalationGuidance({ url: botWallHits[0].url, status: botWallHits[0].status })}\n`);
+    console.warn(`  (${botWallHits.length} bot-wall response(s) seen during capture; the mirror may be missing assets.)\n`);
+  }
+
+  // Point the mirror at its own files. Until this runs, every absolute reference
+  // still resolves to the origin, so the mirror silently proxies the live site and
+  // breaks the moment that host is unreachable.
+  console.log(`▸ Rewriting absolute/relative ${origin} references to local paths`);
+  reportRewrite(rewriteMirror({ siteDir, origin, manifest }), origin, false);
+
+  // Salient/WPBakery scroll-linked parallax rows on the transform_x movement
+  // axis (data-scroll-animation="true" data-scroll-animation-movement=
+  // "transform_x") can latch a stale in-view flag before the mirror's layout
+  // settles, applying a JS transform of several thousand pixels and inflating
+  // the served document's scrollWidth. Contain those rows to their own box so a
+  // faithful mirror doesn't present a document far wider than its viewport on
+  // first paint. See clamp-scroll-animation-overflow.mjs for the full
+  // mechanism. This stage runs after everything the mirror needs has already
+  // been downloaded and rewritten, so a bug in its regex-based tag matching
+  // must not cost the whole mirror -- report it and let the mirror stand as
+  // already produced rather than throwing the run away.
+  console.log(`▸ Clamping scroll-linked overflow`);
+  let clampResult = { clamped: 0, filesChanged: 0 };
+  try {
+    clampResult = clampScrollAnimationOverflow({ siteDir });
+    reportClamp(clampResult, false);
+  } catch (e) {
+    console.warn(`⚠️ Clamping scroll-linked overflow failed, leaving the mirror as-is: ${e.message}`);
+  }
+
+  // The clamp deliberately makes the LOCAL mirror's scrollWidth different
+  // from the raw live-page baseline for sites that need it (that is the fix
+  // working, not drift -- see lib/gate-decision.mjs's clamp contract). When
+  // it changed anything, re-measure the clamped mirror once per viewport and
+  // record that as `expectedScrollWidth`, so verify-mirror.mjs's gate checks
+  // the clone against the clamp's own intended result instead of rejecting
+  // the fix it exists to preserve. When nothing was clamped, no
+  // `expectedScrollWidth` is recorded and the gate falls back to the raw
+  // baseline exactly as before -- a genuinely wide/broken mirror still fails.
+  if (clampResult.clamped > 0) {
+    console.log("▸ Clamp applied -- re-measuring the clamped mirror's own scrollWidth per viewport for the gate baseline");
+    const localServer = await startStaticServer(siteDir);
+    try {
+      for (const metric of baselineMetrics) {
+        const viewport = metric.viewport;
+        const context = await browser.newContext({
+          viewport: { width: viewport.width, height: viewport.height },
+          deviceScaleFactor: viewport.dpr,
+        });
+        try {
+          const page = await context.newPage();
+          await page
+            .goto(`${localServer.baseUrl}/`, { waitUntil: "domcontentloaded", timeout: args.maxMs })
+            .catch(() => {});
+          await page.waitForLoadState("load", { timeout: 45000 }).catch(() => {});
+          await forceLazyMarkup(page);
+          await steppedScroll(page, viewport, { stepPx: args.scrollStep, settleMs: args.settle });
+          const remeasured = await collectRuntimeMetrics(page, viewport);
+          metric.expectedScrollWidth = remeasured.scrollWidth;
+        } finally {
+          await context.close().catch(() => {});
+        }
+      }
+    } finally {
+      await localServer.close();
+    }
+  }
+
+  fs.writeFileSync(
+    path.join(outRoot, "mirror-baseline-metrics.json"),
+    JSON.stringify(
+      {
+        capturedAt: new Date().toISOString(),
+        origin,
+        clampInfo: { clamped: clampResult.clamped, filesChanged: clampResult.filesChanged },
+        metrics: baselineMetrics,
+      },
+      null,
+      2,
+    ),
+  );
+
+  console.log(
+    `▸ Next: serve locally (cd ${siteDir} && python3 -m http.server 8124), then run the mandatory gate:\n` +
+      `   node scripts/verify-mirror.mjs --site ${siteDir} --baseline ${path.join(outRoot, "mirror-baseline-metrics.json")}\n` +
+      `   A clone may not be reported complete or served to the user until that gate exits 0.`,
+  );
+} finally {
+  // Guarantees the browser is closed on every path that reaches here,
+  // including an unexpected throw from anywhere above (a captureViewport
+  // failure, a recursive-fetch error, a filesystem error while writing
+  // manifests). The bot-wall hard-fail branch above already closes the
+  // browser explicitly before calling `process.exit()`, since exiting
+  // bypasses this `finally` (see its comment).
+  await browser.close().catch(() => {});
+}
