@@ -6,6 +6,7 @@ import { runDaemonCliStartup, startDaemonRuntime } from './daemon-startup.js';
 import { runLiveArtifactsMcpServer } from './mcp-live-artifacts-server.js';
 import { runArtifactsCli } from './artifacts-cli.js';
 import { runProjectHandoff } from './handoff-cli.js';
+import { runBackupCli, runRestoreCli } from './backup/cli.js';
 import { runConnectorsToolCli } from './tools-connectors-cli.js';
 import { runDesignSystemsToolCli } from './tools-design-systems-cli.js';
 import { DESIGN_SYSTEMS_USAGE, isDesignSystemsHelpArg } from './cli-help/index.js';
@@ -329,6 +330,22 @@ const PLUGIN_LIST_BOOLEAN_FLAGS = new Set([
   'bundled', 'no-bundled',
 ]);
 
+// `od backup create` / `od restore` -- thin wrappers around backup/cli.ts's
+// exitCode-returning handlers so a failure actually propagates a non-zero
+// process exit. The top-level dispatch below (`await
+// SUBCOMMAND_MAP[first](rest); process.exit(0);`) always exits 0 once the
+// awaited call returns normally, so a handler that only RETURNS an exit
+// code (rather than calling process.exit itself) needs this same shape
+// `runProjectHandoff` already uses at its own call site.
+async function runBackup(args) {
+  const { exitCode } = await runBackupCli(args);
+  if (exitCode !== 0) process.exit(exitCode);
+}
+async function runRestore(args) {
+  const { exitCode } = await runRestoreCli(args);
+  if (exitCode !== 0) process.exit(exitCode);
+}
+
 const SUBCOMMAND_MAP = {
   artifacts: runArtifacts,
   media: runMedia,
@@ -366,6 +383,8 @@ const SUBCOMMAND_MAP = {
   config: runConfig,
   library: runLibrary,
   figma: runFigma,
+  backup: runBackup,
+  restore: runRestore,
 };
 
 const EXPORT_STRING_FLAGS = new Set([
