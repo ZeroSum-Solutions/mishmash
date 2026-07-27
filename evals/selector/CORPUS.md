@@ -1,6 +1,6 @@
 # Selector eval corpus (W7 / S7-2)
 
-**Corpus freeze sha256: 5eabdcab5354791fb97eea434f0d80f4f26e36f518b62cae09f9314a07700396**
+**Corpus freeze sha256: e64388306dbe2baa1670c56dd365d422c52fd6abda10ceee874998caa36ab773**
 
 That hash is `sha256(evals/selector/corpus/manifest.json)` at the commit that freezes this
 document. `scripts/waves/verify-w7.ts` re-hashes the manifest at HEAD and requires an exact match
@@ -43,6 +43,11 @@ cases only, responding to both lanes' deliverable review
 - **Proportional hostile-DOM exercise (Grok-N5).** `hostile-heavy-dom-catalog` now carries 12
   directive claims / 12 provenance entries (up from 2), 10 of them scoped to specific catalog rows
   across both sources — against 236 total captured nodes, not 2 claims regardless of corpus size.
+- **Even-length provenance arrays (mechanical fix).** `ecommerce-product-flex` gained a 6th
+  directive claim (`typography`, `ecom-grid-b`, `product-title`) — its previous 5-claim, 3-vs-2
+  mobile/desktop split mathematically admits NO fixed-point-free rotation (verified by brute
+  force), which made C7-4's breakpoint-only derangement control unconstructible for this one case.
+  `generate-corpus.ts`'s `assertBreakpointRotationDerangeable` now asserts this at generation time.
 - **v3 IR shape (Sol-N4, Grok-N7, item 7).** `snapshotIdentity` per source slot, a `state` dimension
   on evidence pointers (`default`/`hover`/`scrolled` captured; `loaded` enumerated but not yet
   captured — disclosed gap, not silent), directive-level `breakpoint` scoping, `scopeOverlap` on

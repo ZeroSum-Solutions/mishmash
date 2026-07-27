@@ -243,13 +243,18 @@ const CASES: CaseSpec[] = [
     skip: null,
     brief:
       "Use ecom-flex-a's colour palette on the price badge -- I looked at ecom-grid-b's price styling too but I'm going with ecom-flex-a's. " +
-      "Also carry over ecom-grid-b's add-to-cart button motion, and keep ecom-flex-a's reviews panel section structure and overall layout.",
+      "Also carry over ecom-grid-b's add-to-cart button motion, keep ecom-flex-a's reviews panel section structure and overall layout, and use " +
+      "ecom-grid-b's product title typography.",
+    // 6 directives (even count) -- see the breakpoint-derangement comment on
+    // `directiveInventory` below for why an EVEN count matters mechanically,
+    // not just for richness.
     directives: [
       { axis: 'palette', source: 'ecom-flex-a', role: 'price-badge', strength: 0.85 },
       { axis: 'palette', source: 'ecom-grid-b', role: 'price-badge', strength: 0.5 },
       { axis: 'motion', source: 'ecom-grid-b', role: 'add-to-cart', strength: 0.6 },
       { axis: 'section', source: 'ecom-flex-a', role: 'reviews-panel', strength: 0.7 },
       { axis: 'layout', source: 'ecom-flex-a', role: 'reviews-panel', strength: 0.55 },
+      { axis: 'typography', source: 'ecom-grid-b', role: 'product-title', strength: 0.6 },
     ],
   },
   {
@@ -461,6 +466,16 @@ function assertBriefMentionsSources(c: CaseSpec): void {
   }
 }
 
+function assertBreakpointRotationDerangeable(caseId: string, breakpoints: string[]): void {
+  const n = breakpoints.length;
+  if (n < 2) return; // C7-4 skips derangement construction below n=2 anyway
+  for (let shift = 1; shift < n; shift++) {
+    const rotated = breakpoints.map((_, i) => breakpoints[(i + shift) % n]!);
+    if (rotated.every((v, i) => v !== breakpoints[i])) return; // found a fixed-point-free rotation
+  }
+  throw new Error(`case ${caseId}: provenance breakpoint sequence [${breakpoints.join(',')}] admits NO fixed-point-free rotation -- C7-4's breakpoint-only derangement control would be unconstructible`);
+}
+
 function main(): void {
   fs.mkdirSync(SNAPSHOTS_DIR, { recursive: true });
   fs.mkdirSync(IR_DIR, { recursive: true });
@@ -566,6 +581,15 @@ function main(): void {
       if (!node) continue; // phantom / unresolvable claim -- no provenance manufactured
       provenance.push({ elementId: `${c.id}-di-${i}-${d.axis}`, sourceId: d.source, nodeId: node.nodeId, domPath: node.domPath, breakpoint: d.breakpoint });
     }
+    // verify-w7.ts C7-4's breakpoint-only derangement control needs a
+    // fixed-point-free ROTATION of provenance[].breakpoint to exist -- with
+    // only 2 breakpoint values, an ODD-length provenance array where one
+    // value has a majority (e.g. 3-of-5) can make that mathematically
+    // impossible (verified by brute force; see the generator commit history
+    // for the ecommerce-product-flex repro). Assert it at generation time so
+    // a future edit that reintroduces the imbalance fails loudly here, not
+    // silently until the gate runs.
+    assertBreakpointRotationDerangeable(c.id, provenance.map((p) => p.breakpoint));
 
     const variantAxes = [
       { name: `${c.id}#layout-skeleton`, distanceMetric: `${c.id}#jaccard-domPath-set` },
