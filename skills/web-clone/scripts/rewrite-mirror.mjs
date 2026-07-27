@@ -24,6 +24,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { collectReferenceCandidates } from "./lib/asset-discovery.mjs";
+
 const includeExt = new Set([".html", ".htm", ".css", ".svg"]);
 const skipDirs = new Set([".git", "node_modules", "dist", "build", "RECON"]);
 
@@ -145,35 +147,22 @@ function localPathForUrl(url, hosts) {
  */
 function collectSameOriginRefs(siteDir, hosts) {
   const refs = new Set();
-  // Mirrors the generic attribute matching in rewriteText: the downloader must
-  // look for exactly the references the rewriter will later try to localise, or
-  // it fetches assets nothing points at and misses ones that do.
-  const patterns = [
-    /\s([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*['"]([^'"]+)['"]/g,
-    /url\(\s*['"]?([^'")]+)['"]?\s*\)/gi,
-    /@import\s+['"]([^'"]+)['"]/gi,
-  ];
+  // The reference-candidate extraction (attribute values incl. every srcset
+  // candidate, CSS url(), @import) is the same primitive mirror-site.mjs's
+  // recursive fetch rounds use directly on in-memory text -- see
+  // lib/asset-discovery.mjs. Sharing it means the downloader looks for
+  // exactly the references the rewriter will later try to localise, or it
+  // fetches assets nothing points at and misses ones that do.
   for (const file of walk(siteDir)) {
     const text = fs.readFileSync(file, "utf8");
-    for (const pattern of patterns) {
-      const isAttr = pattern.source.startsWith("\\s(");
-      for (const match of text.matchAll(pattern)) {
-        const raw = (isAttr ? match[2] : match[1]) ?? "";
-        const candidates = isAttr && /srcset$/i.test(match[1] ?? "")
-          ? raw.split(",").map((part) => part.trim().split(/\s+/)[0] ?? "")
-          : [raw];
-        for (const candidate of candidates) {
-          const value = candidate.trim();
-          if (!value || value.startsWith("data:") || value.startsWith("#")) continue;
-          let local = null;
-          if (/^(https?:)?\/\//i.test(value)) {
-            local = localPathForUrl(value, hosts);
-          } else if (value.startsWith("/")) {
-            local = localPathForUrl(`https://${[...hosts][0]}${value}`, hosts);
-          }
-          if (local) refs.add(local);
-        }
+    for (const value of collectReferenceCandidates(text)) {
+      let local = null;
+      if (/^(https?:)?\/\//i.test(value)) {
+        local = localPathForUrl(value, hosts);
+      } else if (value.startsWith("/")) {
+        local = localPathForUrl(`https://${[...hosts][0]}${value}`, hosts);
       }
+      if (local) refs.add(local);
     }
   }
   return refs;

@@ -20,25 +20,36 @@ This extends the "real source above all" rule to static sites: **for a static si
 ```bash
 node scripts/mirror-site.mjs \
   --url https://<site>/ \
-  --out current-project-dir
+  --out current-project-dir \
+  [--headful]
 ```
 Output:
 - `<out>/site/…`: mirrored **same-origin** assets (paths preserved; directory URLs saved as `index.html`)
 - `<out>/own-asset-urls.txt`: same-origin asset manifest
 - `<out>/third-party.json`: third-party hosts + hints for **webfont CSS that needs self-hosting** (Typekit/Google)
 - `<out>/mirror-manifest.json`: every request + its status
+- `<out>/mirror-baseline-metrics.json`: per-viewport capture-time metrics (scrollWidth/Height, runtime globals, canvas/image/video counts) — feed this to `verify-mirror.mjs --baseline`
 
-The script uses a real browser to scroll the full page while capturing, and downloads over the browser's own network stack (cookies/TUN/proxy match what the page sees).
+The script captures at three viewports (1440/768/390) using a real browser, scrolling the full page at each and saving response bodies directly during load. `--headful` launches a real, visible Chrome (`channel:"chrome"`, `--disable-blink-features=AutomationControlled`, `navigator.webdriver` masked) instead of headless, and fetches missed assets via genuine in-page `fetch()` — re-run with this the moment a headless run prints a bot-wall escalation notice. **Never fall back to a plain HTTP re-fetch (`curl`, a bare script) for same-origin assets** — that gets 403'd more readily than even a headless browser.
 
 ### What the script now finishes on its own
 
-Three stages used to be printed as a "Next:" line for a human to action, and in practice were often skipped — leaving a mirror whose HTML still pointed at the origin, so it silently proxied the live site and broke offline. They now run automatically at the end of `mirror-site.mjs`:
+These stages used to be printed as a "Next:" line for a human to action, and in practice were often skipped — leaving a mirror whose HTML still pointed at the origin, or was silently incomplete. They now run automatically at the end of `mirror-site.mjs`:
 
-1. **Bot-wall detection.** If the captured `index.html` is a challenge/captcha interstitial, the run stops with exit code 2 instead of reporting a successful clone of a bot wall.
-2. **Second-pass asset fetch.** A scroll-through only downloads what the page actually requests, so lazy-loaded media, hover-state sprites, `srcset` variants the viewport never selected, and unused `@font-face` formats are referenced but absent. The references are read back off the mirror and fetched through the browser's stack. A challenge page returned for a binary asset is rejected rather than saved as a broken image.
+1. **Bot-wall detection.** If the captured `index.html` is a challenge/captcha interstitial, or a response anywhere during capture carries a 403/202 challenge status, a challenge-page body, or a captcha-style header, the run reports it and — for the root document — stops with exit code 2 instead of reporting a successful clone of a bot wall. Either way it prints the `--headful` escalation instruction.
+2. **Recursive asset fetch.** A scroll-through only downloads what the page actually requests, so lazy-loaded media, hover-state sprites, `srcset` variants the viewport never selected, and unused `@font-face` formats are referenced but absent. The references are read back off the mirror (same primitive as `rewrite-mirror.mjs`'s `collectSameOriginRefs`, see `lib/asset-discovery.mjs`) and fetched via genuine in-page `fetch()`, repeating until a round makes no further progress. A challenge page returned for a binary asset is rejected rather than saved as a broken image.
 3. **URL rewrite.** Absolute same-origin references become relative local paths — but only when the mirrored file actually exists, so a missing asset stays an honest remote link instead of a guaranteed 404.
+4. **Scroll-animation overflow clamp.** See `clamp-scroll-animation-overflow.mjs`.
 
 Re-runnable standalone: `node scripts/rewrite-mirror.mjs --out <mirror-dir> [--dry-run]`.
+
+### Verify before calling it done
+
+`mirror-site.mjs` finishing is not the same as the clone being done. After the manual wrap-up below, run the mandatory gate:
+```bash
+node scripts/verify-mirror.mjs --site current-project-dir/site --baseline current-project-dir/mirror-baseline-metrics.json
+```
+This must exit 0 before the clone may be reported complete or served to the user — see SKILL.md's "Mandatory recipe" section.
 
 ## Manual wrap-up after mirroring (to get it running offline, 1:1)
 
@@ -75,7 +86,7 @@ Same-origin assets are handled above. **Third parties still need manual work, pe
 cd current-project-dir/site
 python3 -m http.server 8124      # must run from site/ as the web root, or root-relative paths (/_astro /models …) won't resolve
 ```
-Then follow SKILL.md Step 5: 0 console errors in the browser + `visual-diff.mjs` pixel comparison against the original. For heavy WebGL sites, remember to **scroll to each section for a screenshot** as comparison (a static full-page screenshot won't catch GL frames triggered by scroll).
+This is in addition to, not instead of, `verify-mirror.mjs` above — that gate must already exit 0. Then follow SKILL.md Step 5: 0 console errors in the browser + `visual-diff.mjs` pixel comparison against the original. For heavy WebGL sites, remember to **scroll to each section for a screenshot** as comparison (a static full-page screenshot won't catch GL frames triggered by scroll).
 
 ## Worked example: oryzo.ai (Lusion, L6)
 - 135 same-origin assets (HTML+bundle+CSS + 25x `.buf` geometry/camera-animation files + 2x `.sog` gaussian splats + a sorting wasm + `.riv` + MSDF + fonts + 80+ images)
