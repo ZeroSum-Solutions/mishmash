@@ -73,3 +73,28 @@ pre-seal; the frozen-path invariant was verified intact (zero post-seal touches)
 re-sealing. Ceremony: v2 blobs commit `5abb5e357` (all 10 payloads hash-verified + round-trip
 decrypted), new seal commit `d8caf813d` (SEALED-ACCESS.md v2). v1 plaintext retained in
 orchestrator-owned storage for provenance.
+
+## 2026-07-27 — W0 gate F7 closure: orchestrator unreachable-allowlist (escalation ruling under standing directive)
+
+A fourth consecutive non-APPROVE post-re-plan (findings 13 → 4 → 1 → 1) re-triggered the §6
+stop rule on `scripts/waves/verify-w0.ts`. No author/reviewer disagreement — pure closure design
+for F7 (free-text `unreachable` reasons are filler-gameable; a ≥20-char check accepts twenty
+x's, and with two dynamic rows one skip is exactly half, under the strictly-more-than-half
+majority gate). Founder-delegated GPT-5.6 tiebreaker ruling (verbatim in the wave's goal-state
+`reviews/f7-escalation-ruling.txt`): **Candidate B, ADOPT-WITH-CHANGES** —
+
+1. A dynamic privileged-route row may skip live probing ONLY when an orchestrator-owned,
+   out-of-repo allowlist entry authorizes it. The allowlist path is supplied by the orchestrator
+   at gate run time; **fail-closed** — no allowlist supplied or file absent ⇒ zero skips allowed.
+2. Each entry binds exactly to `{file, line, method, path}`, a source-line fingerprint
+   recomputed from the tree at gate run, and the authoring repository commit. Entries must match
+   unreachable-claiming rows **1:1** — duplicate, stale (fingerprint or row mismatch), or unused
+   entries hard-fail the criterion.
+3. Implementation-authored free text is surfaced as evidence but never authorizes a skip.
+4. Majority gate tightened: hard-fail when unreachable × 2 ≥ total dynamic rows (nonempty set).
+
+Rationale (tiebreaker, compressed): free-text length is evidence formatting, not authorization
+(thresholds-only fails the lazy/opportunistic standard); deleting the category pressures
+invention of fake probe paths; the allowlist extends the already-accepted orchestrator trust
+anchor (approved-copy execution, W7 disposition records). Founder may veto; surfaced in session
+summaries.
