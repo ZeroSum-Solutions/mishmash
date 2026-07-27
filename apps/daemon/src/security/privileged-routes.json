@@ -33,4 +33,5 @@
     "line": 2758,
     "probePath": "/api/diagnostics/export",
     "unreachable": "not unreachable -- DIAGNOSTICS_EXPORT_PATH is imported from @open-design/diagnostics rather than declared as a local string literal in server.ts, so the verifier's single-file AST pass cannot resolve the path text itself even though the route is live; probePath supplies the real, currently-live value (see apps/daemon/src/cli.ts:8407-8419, which fetches this same DIAGNOSTICS_EXPORT_PATH constant) so this row is live-probed exactly like a static row rather than claiming a skip."
-  ]
+  }
+]
