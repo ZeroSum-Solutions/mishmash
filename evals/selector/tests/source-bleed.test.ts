@@ -50,8 +50,13 @@ test('flags a structurally bled element even when the other source name is absen
   assert.deepEqual(result.violatingElementIds, ['e0']);
 });
 
-test('an element with no styleFingerprint at all is judged on domPath membership alone', () => {
+test('an element with correct domPath membership but a missing styleFingerprint is flagged, not scored clean (Sol-N2)', () => {
+  // Sol-N2's repro exactly: a claimed-source element with no fingerprint at
+  // all used to short-circuit to "clean" regardless of what was actually
+  // rendered. Missing evidence is unverifiable, not clean -- domPath
+  // membership alone is no longer sufficient.
   const composition: BleedCompositionElement[] = [{ elementId: 'e0', sourceId: 'site-a', domPath: 'body > header.a' }];
   const result = scoreSourceBleed({ composition, sourceDomPaths, sourceStyleFingerprints });
-  assert.equal(result.bleedCount, 0);
+  assert.equal(result.bleedCount, 1);
+  assert.deepEqual(result.violatingElementIds, ['e0']);
 });

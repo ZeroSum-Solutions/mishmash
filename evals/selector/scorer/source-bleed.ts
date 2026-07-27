@@ -15,6 +15,15 @@
 // present as a string anywhere" (an HTML-comment check) -- see the PRD's own
 // call-out of that exact anti-pattern. Both checks are membership tests
 // against the CLAIMED source's own real captured data.
+//
+// Sol-N2 (deliverable review round 1): styleFingerprint is REQUIRED evidence
+// on a claimed-source element -- a MISSING fingerprint no longer scores as
+// clean. Previously `el.styleFingerprint === undefined` short-circuited
+// styleOk to true, so an element could dodge the fingerprint check entirely
+// just by omitting it (Sol's repro: "submit a claimed-source domPath with no
+// styleFingerprint... source-bleed.ts explicitly treats the missing
+// fingerprint as clean even if non-selected-source styling is present").
+// Missing evidence is unverifiable, and unverifiable is not clean.
 
 export interface BleedCompositionElement {
   elementId: string;
@@ -40,10 +49,17 @@ export function scoreSourceBleed(input: SourceBleedInput): SourceBleedResult {
     const claimedDomPaths = input.sourceDomPaths[el.sourceId] ?? [];
     const domPathOk = claimedDomPaths.includes(el.domPath);
 
+    // Sol-N2: no free pass for omitting the fingerprint. styleOk requires a
+    // NON-EMPTY fingerprint that matches one of the claimed source's real
+    // captured clusters -- a missing fingerprint is unverifiable, not clean.
     const claimedFingerprints = input.sourceStyleFingerprints[el.sourceId] ?? [];
-    const styleOk = el.styleFingerprint === undefined || el.styleFingerprint.length === 0 || claimedFingerprints.includes(el.styleFingerprint);
+    const styleOk = isNonEmpty(el.styleFingerprint) && claimedFingerprints.includes(el.styleFingerprint);
 
     if (!domPathOk || !styleOk) violatingElementIds.push(el.elementId);
   }
   return { bleedCount: violatingElementIds.length, violatingElementIds };
+}
+
+function isNonEmpty(v: string | undefined): v is string {
+  return typeof v === 'string' && v.length > 0;
 }
