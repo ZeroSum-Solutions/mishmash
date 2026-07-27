@@ -19,6 +19,7 @@ export interface DirectiveClaim {
   source: string;
   scope: string;
   strength: number;
+  breakpoint?: string;
 }
 export interface SnapshotRef {
   path: string;
@@ -53,7 +54,23 @@ export interface CapturedNode {
   nodeId: string;
   domPath: string;
   breakpoint: string;
+  state: string;
   computedStyle: Record<string, string>;
+}
+
+// The subset of the IR shape resolve-conflicts.ts needs. loadCaseIR() only
+// ever reads NON-SEALED, plaintext IR files (same constraint as
+// buildSnapshotsBySource below) -- scoreComposition is never exercised
+// against sealed cases.
+export interface CaseIR {
+  directives: Array<{ axis: string; source: string; scope: string; strength: number; breakpoint?: string }>;
+  conflictResolution: Array<{ axis: string; winningSource: string; losingSource?: string }>;
+}
+
+export function loadCaseIR(c: CorpusCase): CaseIR {
+  if (c.sealed) throw new Error(`refusing to read IR for sealed case ${c.id}: no plaintext, no seal key`);
+  const abs = path.join(REPO_ROOT, c.irPath);
+  return JSON.parse(fs.readFileSync(abs, 'utf8')) as CaseIR;
 }
 
 let cachedManifest: CorpusManifest | null = null;
@@ -73,7 +90,7 @@ export function loadCase(caseId: string): CorpusCase {
 }
 
 interface SnapshotDoc {
-  nodes?: Array<{ nodeId: string; domPath: string; computedStyle?: Record<string, string> }>;
+  nodes?: Array<{ nodeId: string; domPath: string; state?: string; computedStyle?: Record<string, string> }>;
 }
 
 // Nodes captured for EVERY source in the case, across ALL of that case's
@@ -89,7 +106,7 @@ export function buildSnapshotsBySource(c: CorpusCase): Record<string, CapturedNo
       const abs = path.join(REPO_ROOT, ref.path);
       const doc = JSON.parse(fs.readFileSync(abs, 'utf8')) as SnapshotDoc;
       for (const n of doc.nodes ?? []) {
-        nodes.push({ nodeId: n.nodeId, domPath: n.domPath, breakpoint: bp, computedStyle: n.computedStyle ?? {} });
+        nodes.push({ nodeId: n.nodeId, domPath: n.domPath, breakpoint: bp, state: n.state ?? 'default', computedStyle: n.computedStyle ?? {} });
       }
     }
     bySource[source.id] = nodes;

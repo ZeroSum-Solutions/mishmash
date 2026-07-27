@@ -3,30 +3,42 @@
 // the 11 axes named in the PRD (S7-3), returning {overall, axes} with every
 // value a finite number in [0,1].
 //
-// The central idea every axis is built on: for each output element, classify
-// how well-GROUNDED it is against the case's own captured snapshot data --
+// v2 (deliverable-review fix round 1): both lanes' convergent finding was
+// that v1's fidelity axes were provenance-MEMBERSHIP proxies -- resolving
+// (nodeId, domPath, breakpoint) against a source's real captured data and
+// stopping there, never reading what the composition actually claims was
+// RENDERED (Sol-N1: "score docs-api-reference using its four IR provenance
+// records as the composition, omit rendered-property evidence... returns
+// overall 0.954545 with ten axes at 1.0"). Every fidelity axis below now
+// reads real evidence FROM the composition (styleFingerprint, motionSignature)
+// and compares it against the CLAIMED source's real captured computedStyle,
+// not just checking that SOME real node resolves:
 //
-//   groundedness 2 -- the element's (nodeId, domPath, breakpoint) resolves
-//                     against the SOURCE it claims (sourceId). Correctly
-//                     attributed, real content.
-//   groundedness 1 -- the same (nodeId, domPath, breakpoint) resolves
-//                     against a DIFFERENT real source in the same case.
-//                     Real content, WRONG attribution (a house-style
-//                     composite, or a directive-axis counterfactual swap).
-//   groundedness 0 -- resolves against no source in the case at all.
-//                     Fabricated / foreign content.
+//   groundedness 2/1/0 (unchanged) -- still the base classification: does
+//     (nodeId, domPath, breakpoint) resolve against the claimed source (2),
+//     a DIFFERENT real source in the case (1), or nothing in the case (0).
+//   evidenceFactor (NEW, per axis) -- given a resolved node, does the
+//     composition's OWN claimed evidence (styleFingerprint for palette/type,
+//     motionSignature for motion, the resolved node's own display/position
+//     for layout/section) actually match reality? A resolved-but-unverified
+//     claim (no styleFingerprint/motionSignature at all) is NOT scored the
+//     same as a verified match -- see Sol-N2 on source-bleed.ts for the twin
+//     fix. This is what lets a composition built from bare provenance
+//     records (Sol-N1's repro) no longer default to 1.0 everywhere.
 //
-// directive_claim_coverage is the only axis that requires groundedness 2
-// specifically AND requires the match to be at the claim's own (source,
-// scope) pair -- this is what makes it collapse on a house-style composite
-// while layout_geometry/palette_fidelity/type_fidelity stay high (they
-// score groundedness 1 as "real, if misattributed", not zero) -- see the PRD
-// S7-3 note on why that axis is the whole point.
+// directive_claim_coverage additionally now (Sol-N3/coordinator item 2):
+// consumes resolve-conflicts.ts's output -- a claim resolve-conflicts.ts
+// declares LOSING at a contested scope earns zero coverage credit for the
+// losing source, regardless of how well it resolves, and every claim
+// (winning or single-claimant) is weighted by its `strength` rather than
+// counted 1-for-1 (Grok-N8: strength was parsed and then ignored).
 
-import { buildSnapshotsBySource, loadCase, type CapturedNode } from './corpus-loader.ts';
+import { buildSnapshotsBySource, loadCase, loadCaseIR, type CapturedNode } from './corpus-loader.ts';
+import { scoreDiversity, type DiversityElement } from './diversity.ts';
+import { resolveConflicts } from './resolve-conflicts.ts';
 import { scoreSourceBleed, type BleedCompositionElement } from './source-bleed.ts';
 
-export const SCORER_VERSION = '1.0.0';
+export const SCORER_VERSION = '2.0.0';
 
 export interface CompositionElement {
   elementId: string;
@@ -71,11 +83,25 @@ function avg(values: readonly number[]): number {
   return values.length === 0 ? 0 : values.reduce((a, b) => a + b, 0) / values.length;
 }
 
+// Strength-weighted average -- Grok-N8: directive `strength` is consumed,
+// not stored and ignored. Falls back to a plain average when every weight
+// is zero (degenerate input), never divides by zero.
+function weightedAvg(pairs: ReadonlyArray<{ score: number; weight: number }>): number {
+  const totalWeight = pairs.reduce((sum, p) => sum + Math.max(0, p.weight), 0);
+  if (totalWeight <= 0) return avg(pairs.map((p) => p.score));
+  return pairs.reduce((sum, p) => sum + p.score * Math.max(0, p.weight), 0) / totalWeight;
+}
+
 type Groundedness = 0 | 1 | 2;
 
 interface GradedElement {
   el: CompositionElement;
   groundedness: Groundedness;
+  // The node the element ACTUALLY resolves to (under its claimed source if
+  // groundedness 2, under whichever other real source if groundedness 1,
+  // undefined if groundedness 0) -- this is the "ground truth" evidenceFactor
+  // formulas below compare the composition's claimed evidence against.
+  resolvedNode: CapturedNode | undefined;
 }
 
 function groundScore(g: Groundedness): number {
@@ -84,19 +110,92 @@ function groundScore(g: Groundedness): number {
   return 0.15;
 }
 
+function findNode(nodes: CapturedNode[], el: { nodeId: string; domPath: string; breakpoint: string }): CapturedNode | undefined {
+  return nodes.find((n) => n.nodeId === el.nodeId && n.domPath === el.domPath && n.breakpoint === el.breakpoint);
+}
+
 function gradeComposition(composition: CompositionElement[], bySource: Record<string, CapturedNode[]>): GradedElement[] {
   return composition.map((el) => {
     const claimedNodes = bySource[el.sourceId] ?? [];
-    const matchesClaimed = claimedNodes.some((n) => n.nodeId === el.nodeId && n.domPath === el.domPath && n.breakpoint === el.breakpoint);
-    if (matchesClaimed) return { el, groundedness: 2 as const };
+    const claimedMatch = findNode(claimedNodes, el);
+    if (claimedMatch) return { el, groundedness: 2 as const, resolvedNode: claimedMatch };
     for (const [sourceId, nodes] of Object.entries(bySource)) {
       if (sourceId === el.sourceId) continue;
-      if (nodes.some((n) => n.nodeId === el.nodeId && n.domPath === el.domPath && n.breakpoint === el.breakpoint)) {
-        return { el, groundedness: 1 as const };
-      }
+      const match = findNode(nodes, el);
+      if (match) return { el, groundedness: 1 as const, resolvedNode: match };
     }
-    return { el, groundedness: 0 as const };
+    return { el, groundedness: 0 as const, resolvedNode: undefined };
   });
+}
+
+// --- palette/type evidence: styleFingerprint format is "<color>|<backgroundColor>|<fontFamily>",
+// the SAME convention verify-w7.ts's own styleFingerprintOf() and this
+// corpus's snapshot data use (only present keys joined by "|", in that key
+// order). Every corpus node carries all three keys, so a 3-part fingerprint
+// is the expected shape; anything else (missing, or a different arity) is
+// treated as unverifiable, per Sol-N2 -- never silently "clean".
+function parseFingerprint(fp: string | undefined): { color: string | undefined; backgroundColor: string | undefined; fontFamily: string | undefined } | null {
+  if (fp === undefined || fp.length === 0) return null;
+  const parts = fp.split('|');
+  if (parts.length !== 3) return null;
+  return { color: parts[0], backgroundColor: parts[1], fontFamily: parts[2] };
+}
+
+const EVIDENCE_VERIFIED = 1.0;
+const EVIDENCE_UNVERIFIABLE = 0.55; // claim present but no evidence to check it against, or evidence field omitted entirely
+const EVIDENCE_MISMATCH = 0.25; // evidence present and contradicts the real captured data
+const EVIDENCE_ABSENT_NODE = 0.1; // no resolved node at all (groundedness 0) -- nothing to verify against
+
+function paletteEvidenceFactor(el: CompositionElement, node: CapturedNode | undefined): number {
+  if (!node) return EVIDENCE_ABSENT_NODE;
+  const parsed = parseFingerprint(el.styleFingerprint);
+  if (!parsed) return EVIDENCE_UNVERIFIABLE;
+  const realColor = node.computedStyle['color'];
+  const realBg = node.computedStyle['backgroundColor'];
+  if (parsed.color === realColor && parsed.backgroundColor === realBg) return EVIDENCE_VERIFIED;
+  return EVIDENCE_MISMATCH;
+}
+
+function typeEvidenceFactor(el: CompositionElement, node: CapturedNode | undefined): number {
+  if (!node) return EVIDENCE_ABSENT_NODE;
+  const parsed = parseFingerprint(el.styleFingerprint);
+  if (!parsed) return EVIDENCE_UNVERIFIABLE;
+  const realFont = node.computedStyle['fontFamily'];
+  if (parsed.fontFamily === realFont) return EVIDENCE_VERIFIED;
+  return EVIDENCE_MISMATCH;
+}
+
+// Sol-N1: layout/section fidelity must read real display/position evidence,
+// not just confirm SOME node resolved. A resolved node whose computedStyle
+// carries no genuine layout-defining value (display or position, from the
+// closed set real containers in this corpus use) is weak evidence even
+// though it "resolved" -- e.g. a claim pointed at a plain content role
+// instead of the case's actual layout container.
+const LAYOUT_VALUES = new Set(['grid', 'flex', 'block']);
+const POSITION_VALUES = new Set(['absolute', 'fixed', 'sticky']);
+function layoutEvidenceFactor(node: CapturedNode | undefined): number {
+  if (!node) return EVIDENCE_ABSENT_NODE;
+  const display = node.computedStyle['display'];
+  const position = node.computedStyle['position'];
+  if ((display && LAYOUT_VALUES.has(display)) || (position && POSITION_VALUES.has(position))) return EVIDENCE_VERIFIED;
+  return EVIDENCE_UNVERIFIABLE;
+}
+
+// Sol-N1/Grok-N1: motion_timing validates motionSignature against REAL
+// snapshot-derived transition evidence -- the convention this corpus's
+// generator uses is motionSignature === `transition:${transitionDuration}`
+// for whichever node the claim resolves to. An arbitrary/unvalidated label
+// (verify-w7.ts's own synthetic fixtures use fixed strings like
+// "timeline-a"/"timeline-b"/"timeline-c", which validate against nothing)
+// no longer scores as verified motion evidence -- that is the explicit
+// point of this fix, not an oversight: "unvalidated free-form labels may
+// not score."
+function motionEvidenceFactor(el: CompositionElement, node: CapturedNode | undefined): number {
+  if (!node) return EVIDENCE_ABSENT_NODE;
+  if (el.motionSignature === undefined || el.motionSignature.length === 0) return EVIDENCE_MISMATCH;
+  const realDuration = node.computedStyle['transitionDuration'];
+  if (!realDuration) return EVIDENCE_UNVERIFIABLE; // claim made, but this node carries no transition evidence to check it against
+  return el.motionSignature === `transition:${realDuration}` ? EVIDENCE_VERIFIED : EVIDENCE_MISMATCH;
 }
 
 // #rrggbb -> WCAG relative luminance -> contrast ratio, normalized to
@@ -123,13 +222,11 @@ function contrastRatio(hexA: string, hexB: string): number | null {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-function computeA11y(graded: GradedElement[], bySource: Record<string, CapturedNode[]>): number {
+function computeA11y(graded: GradedElement[]): number {
   const ratios: number[] = [];
   for (const g of graded) {
-    const nodes = bySource[g.el.sourceId] ?? Object.values(bySource).flat();
-    const node = nodes.find((n) => n.nodeId === g.el.nodeId && n.domPath === g.el.domPath) ?? Object.values(bySource).flat().find((n) => n.nodeId === g.el.nodeId && n.domPath === g.el.domPath);
-    const color = node?.computedStyle['color'];
-    const bg = node?.computedStyle['backgroundColor'];
+    const color = g.resolvedNode?.computedStyle['color'];
+    const bg = g.resolvedNode?.computedStyle['backgroundColor'];
     if (!color || !bg) continue;
     const ratio = contrastRatio(color, bg);
     if (ratio === null) continue;
@@ -138,54 +235,74 @@ function computeA11y(graded: GradedElement[], bySource: Record<string, CapturedN
   return ratios.length > 0 ? avg(ratios) : 0.7;
 }
 
-// Single-composition structural richness proxy. Genuine pairwise variant
-// diversity (comparing THIS composition against sibling variants) is
-// diversity.ts's job, exercised directly by verify-w7.ts C7-8 with real
-// trios -- scoreComposition only ever sees one composition at a time, so
-// this axis instead measures how much internal structural variety the
-// composition itself carries across the same four pre-registered
-// dimensions (distinct skeleton roots, distinct motion signatures, distinct
-// breakpoints, non-monotonic ordering), bounded to [0,1]. A future variant
-// SELECTION step (W8) that wants genuine pairwise diversity calls
-// scoreDiversity([...variants]) directly, not this axis.
-function computeSelfDiversityProxy(composition: CompositionElement[]): number {
-  if (composition.length === 0) return 0;
-  const distinctDomPaths = new Set(composition.map((e) => e.domPath)).size;
-  const distinctMotion = new Set(composition.map((e) => e.motionSignature ?? '')).size;
-  const distinctBreakpoints = new Set(composition.map((e) => e.breakpoint)).size;
-  const n = composition.length;
-  const richness = (distinctDomPaths / n + distinctMotion / Math.max(1, n) + distinctBreakpoints / Math.max(1, n)) / 3;
-  return clamp01(richness);
-}
-
-export function scoreComposition(input: ScoringInput): ScoringResult {
+export function scoreComposition(input: ScoringInput, siblings?: CompositionElement[][]): ScoringResult {
   const c = loadCase(input.caseId);
   const bySource = buildSnapshotsBySource(c);
   const graded = gradeComposition(input.composition, bySource);
+  const ir = loadCaseIR(c);
 
-  // directive_claim_coverage -- every IR claim must resolve to attributed
-  // evidence at the CLAIMED source and CLAIMED scope specifically.
-  let coverageHits = 0;
-  for (const claim of c.directiveInventory) {
-    const match = graded.find((g) => g.el.domPath === claim.scope && g.el.sourceId === claim.source);
-    if (match && match.groundedness === 2) coverageHits++;
+  // Sol-N3/coordinator item 2: consume resolveConflicts' output. A claim
+  // resolve-conflicts.ts declares LOSING at a contested axis earns zero
+  // directive_claim_coverage for the losing source -- the winner still can.
+  // resolve-conflicts.ts's core grouping/selection algorithm is untouched
+  // (dual-APPROVED under F4); this only reads its output.
+  const conflictResult = resolveConflicts({ directives: ir.directives, conflictResolution: ir.conflictResolution });
+  const losingClaimKeys = new Set(conflictResult.losingClaims.map((lc) => `${lc.axis}::${lc.losingSource}`));
+  function isLosingClaim(claim: { axis: string; source: string }): boolean {
+    return losingClaimKeys.has(`${claim.axis}::${claim.source}`);
   }
-  const directive_claim_coverage = c.directiveInventory.length > 0 ? coverageHits / c.directiveInventory.length : graded.length > 0 ? avg(graded.map((g) => (g.groundedness === 2 ? 1 : 0))) : 0;
 
-  function axisScoreFor(axis: DirectiveAxis): number {
+  // directive_claim_coverage -- every NON-LOSING IR claim must resolve to
+  // attributed evidence at the CLAIMED source and CLAIMED scope
+  // specifically, weighted by strength. A losing claim contributes ZERO
+  // regardless of how well it resolves (it lost; the user's request was to
+  // honor the WINNER at that scope) and does not count in the denominator
+  // either -- coverage measures "were the claims that should have won,
+  // honored," not "were all claims, including declared losers, honored."
+  const coveragePairs: Array<{ score: number; weight: number }> = [];
+  for (const claim of c.directiveInventory) {
+    if (isLosingClaim(claim)) continue;
+    const match = graded.find((g) => g.el.domPath === claim.scope && g.el.sourceId === claim.source);
+    const hit = !!match && match.groundedness === 2;
+    coveragePairs.push({ score: hit ? 1 : 0, weight: claim.strength });
+  }
+  const directive_claim_coverage = coveragePairs.length > 0 ? weightedAvg(coveragePairs) : graded.length > 0 ? avg(graded.map((g) => (g.groundedness === 2 ? 1 : 0))) : 0;
+
+  // Per-axis fidelity: strength-weighted average of groundScore(groundedness)
+  // * evidenceFactor(claim, resolvedNode) over every directiveInventory claim
+  // on that axis (losing claims INCLUDED here -- a losing claim can still be
+  // genuinely well-rendered; fidelity measures rendering quality, coverage
+  // measures directive obedience, and conflating them was never the ask).
+  // Falls back to a case-wide groundedness average when the case has no
+  // claim on that axis at all.
+  function axisScoreFor(axis: DirectiveAxis, evidenceFactor: (el: CompositionElement, node: CapturedNode | undefined) => number): number {
     const claims = c.directiveInventory.filter((d) => d.axis === axis);
     if (claims.length === 0) {
       return graded.length > 0 ? avg(graded.map((g) => groundScore(g.groundedness))) : 0.5;
     }
-    const scores = claims.map((claim) => {
+    const pairs = claims.map((claim) => {
       const match = graded.find((g) => g.el.domPath === claim.scope);
-      return match ? groundScore(match.groundedness) : 0.1;
+      const score = match ? groundScore(match.groundedness) * evidenceFactor(match.el, match.resolvedNode) : EVIDENCE_ABSENT_NODE;
+      return { score: clamp01(score), weight: claim.strength };
     });
-    return avg(scores);
+    return weightedAvg(pairs);
+  }
+
+  // Grok-N1: responsiveness is now ITS OWN measurement over per-breakpoint
+  // evidence -- fraction of the case's declared breakpoints for which the
+  // composition has at least one element that genuinely resolves (real
+  // content, groundedness >= 1) AT that breakpoint. Previously this was
+  // wired to axisScoreFor('interaction'), which measures interaction
+  // directives, not viewport/breakpoint behavior -- a plain bug, not a
+  // naming choice.
+  function computeResponsiveness(): number {
+    if (c.breakpoints.length === 0) return 0.5;
+    const covered = c.breakpoints.filter((bp) => graded.some((g) => g.el.breakpoint === bp && g.groundedness >= 1));
+    return covered.length / c.breakpoints.length;
   }
 
   const broken_assets = graded.length > 0 ? avg(graded.map((g) => (g.groundedness > 0 ? 1 : 0))) : 1;
-  const a11y = computeA11y(graded, bySource);
+  const a11y = computeA11y(graded);
 
   const sourceDomPaths: Record<string, string[]> = {};
   const sourceStyleFingerprints: Record<string, string[]> = {};
@@ -194,7 +311,7 @@ export function scoreComposition(input: ScoringInput): ScoringResult {
     const fps = new Set<string>();
     for (const n of nodes) {
       const parts = ['color', 'backgroundColor', 'fontFamily'].map((k) => n.computedStyle[k]).filter((v): v is string => typeof v === 'string' && v.length > 0);
-      if (parts.length > 0) fps.add(parts.join('|'));
+      if (parts.length === 3) fps.add(parts.join('|'));
     }
     sourceStyleFingerprints[sourceId] = [...fps];
   }
@@ -206,18 +323,34 @@ export function scoreComposition(input: ScoringInput): ScoringResult {
   const bleedResult = scoreSourceBleed({ composition: bleedInput, sourceDomPaths, sourceStyleFingerprints });
   const source_bleed = input.composition.length > 0 ? clamp01(1 - bleedResult.bleedCount / input.composition.length) : 1;
 
-  // Real cross-variant diversity lives in diversity.ts's scoreDiversity(),
-  // exercised directly against real trios by verify-w7.ts C7-8. This axis
-  // is the single-composition proxy described above computeSelfDiversityProxy.
-  const structural_variant_diversity = computeSelfDiversityProxy(input.composition);
+  // Grok-N2: structural_variant_diversity now calls the REAL pairwise trio
+  // metric (diversity.ts's scoreDiversity), not a single-composition
+  // richness proxy. scoreComposition only ever sees ONE composition unless
+  // the caller supplies `siblings` (peer variants to compare against); with
+  // no siblings, scoreDiversity([composition]) correctly returns 0 by
+  // construction (its own <2-compositions early return) -- an honest "not
+  // measured, no peers available," not a self-graded proxy score.
+  const diversityElements: DiversityElement[] = input.composition.map((el) => {
+    const out: DiversityElement = { elementId: el.elementId, domPath: el.domPath, breakpoint: el.breakpoint };
+    if (el.motionSignature !== undefined) out.motionSignature = el.motionSignature;
+    return out;
+  });
+  const siblingElements: DiversityElement[][] = (siblings ?? []).map((comp) =>
+    comp.map((el) => {
+      const out: DiversityElement = { elementId: el.elementId, domPath: el.domPath, breakpoint: el.breakpoint };
+      if (el.motionSignature !== undefined) out.motionSignature = el.motionSignature;
+      return out;
+    }),
+  );
+  const structural_variant_diversity = scoreDiversity([diversityElements, ...siblingElements]).score;
 
   const axes: ScoringResult['axes'] = {
-    layout_geometry: clamp01(axisScoreFor('layout')),
-    palette_fidelity: clamp01(axisScoreFor('palette')),
-    type_fidelity: clamp01(axisScoreFor('typography')),
-    motion_timing: clamp01(axisScoreFor('motion')),
-    section_identity: clamp01(axisScoreFor('section')),
-    responsiveness: clamp01(axisScoreFor('interaction')),
+    layout_geometry: clamp01(axisScoreFor('layout', (_el, node) => layoutEvidenceFactor(node))),
+    palette_fidelity: clamp01(axisScoreFor('palette', paletteEvidenceFactor)),
+    type_fidelity: clamp01(axisScoreFor('typography', typeEvidenceFactor)),
+    motion_timing: clamp01(axisScoreFor('motion', motionEvidenceFactor)),
+    section_identity: clamp01(axisScoreFor('section', (_el, node) => layoutEvidenceFactor(node))),
+    responsiveness: clamp01(computeResponsiveness()),
     broken_assets: clamp01(broken_assets),
     a11y: clamp01(a11y),
     source_bleed: clamp01(source_bleed),
