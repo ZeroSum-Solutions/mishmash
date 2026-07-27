@@ -31,6 +31,7 @@
         "apps/daemon/tests/web-clone-*.test.ts"
       ],
       "note": "Owns `pnpm guard` and the daemon test tree for Burst 1. W-C may not touch guard. cli.ts + origin-validation.ts added by 2026-07-27 lease-amendment ruling (DECISIONS.md): PRD-mandated SUBCOMMAND_MAP wiring + pair/confirm mint-path fix; no concurrent wave holds either file."
+    },
     "W7": {
       "slug": "mishmash-w7-selector-foundations",
       "allow": [
