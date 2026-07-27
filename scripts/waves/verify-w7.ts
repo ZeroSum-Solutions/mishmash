@@ -513,6 +513,18 @@ const DIRECTIVE_AXIS_TO_SCORER_AXIS: Record<DirectiveAxis, ScorerAxis> = {
 // not merely "> 0" (which a denormalized 5e-324 would satisfy).
 const MIN_MEANINGFUL_THRESHOLD = 0.05;
 
+// C7-12 amendment: the orchestrator-pinned, frozen value of sha256(floors.json)
+// as approved for this wave. The range/finiteness checks below (F12) prove
+// the floors are individually sane; they do NOT prove the floors file as a
+// whole hasn't been edited to a different-but-still-individually-sane set of
+// numbers since being frozen (loop:eval-gate, VERIFICATION-CONTRACT.md S6:
+// "Scorer version is pinned in the manifest ... a threshold change requires
+// a founder decision record"). This is a hard content-equality pin,
+// independent of and additional to the range checks -- a mismatch is a hard
+// fail with both hashes surfaced in evidence, regardless of whether the new
+// content would otherwise pass the range checks.
+const APPROVED_FLOORS_SHA256 = '15701d8a345d34bec14e08a9ac987ed8c3ab03523cd6a51849f8c2ec9eca7965';
+
 function loadManifest(): { manifest: CorpusManifest | null; error: string | null } {
   if (!exists(MANIFEST_PATH)) return { manifest: null, error: `${MANIFEST_PATH} does not exist` };
   const parsed = readJson<CorpusManifest>(MANIFEST_PATH);
@@ -2592,12 +2604,17 @@ await probe(
 // =============================================================================
 // C7-12 -- absolute floors frozen and non-vacuous. F12: a floor must be
 // >= a NAMED epsilon (0.05), not merely "> 0" (a denormalized 5e-324
-// satisfies ">0" but is functionally zero).
+// satisfies ">0" but is functionally zero). Amendment: ALSO pinned by exact
+// content hash against APPROVED_FLOORS_SHA256 -- the range checks alone
+// cannot catch a threshold edit that lands on a different-but-still-sane
+// number (e.g. quietly loosening a floor from 0.35 to 0.20, both
+// individually valid). A mismatch is a hard fail regardless of range
+// validity, with both hashes surfaced in evidence.
 // =============================================================================
 await probe(
   'C7-12',
-  `read ${FLOORS_PATH}; assert version + all 11 axis floors present, finite, and >= the named epsilon ${MIN_MEANINGFUL_THRESHOLD}; assert counterfactualMinDelta >= ${MIN_MEANINGFUL_THRESHOLD}; record its sha256`,
-  `${FLOORS_PATH} has a numeric "version", a "floors" object with a FINITE numeric entry >= ${MIN_MEANINGFUL_THRESHOLD} (named epsilon, and <= 1) for every axis in [${REQUIRED_AXES.join(', ')}] -- a floor of 0, or a denormalized near-zero positive number, is vacuous and fails -- and a finite numeric "counterfactualMinDelta" >= ${MIN_MEANINGFUL_THRESHOLD}; its sha256 is recorded so a later silent edit is detectable by hash drift`,
+  `read ${FLOORS_PATH}; assert version + all 11 axis floors present, finite, and >= the named epsilon ${MIN_MEANINGFUL_THRESHOLD}; assert counterfactualMinDelta >= ${MIN_MEANINGFUL_THRESHOLD}; compute its sha256 and assert it EXACTLY equals the orchestrator-pinned frozen value`,
+  `${FLOORS_PATH} has a numeric "version", a "floors" object with a FINITE numeric entry >= ${MIN_MEANINGFUL_THRESHOLD} (named epsilon, and <= 1) for every axis in [${REQUIRED_AXES.join(', ')}] -- a floor of 0, or a denormalized near-zero positive number, is vacuous and fails -- and a finite numeric "counterfactualMinDelta" >= ${MIN_MEANINGFUL_THRESHOLD}; ADDITIONALLY, sha256(${FLOORS_PATH}) must EXACTLY equal the orchestrator-pinned frozen value ${APPROVED_FLOORS_SHA256} -- a mismatch is a hard fail (both hashes surfaced in evidence) independent of whether the range checks above pass, since range validity alone cannot detect a threshold edited to a different-but-still-individually-sane number`,
   async () => {
     const raw = readText(FLOORS_PATH);
     if (raw === null) return { ok: false, evidence: `missing ${FLOORS_PATH}` };
@@ -2611,11 +2628,16 @@ await probe(
     });
     const deltaOk = typeof parsed.counterfactualMinDelta === 'number' && Number.isFinite(parsed.counterfactualMinDelta) && parsed.counterfactualMinDelta >= MIN_MEANINGFUL_THRESHOLD;
     const hash = crypto.createHash('sha256').update(raw).digest('hex');
-    const ok = bad.length === 0 && deltaOk;
+    const pinnedMatch = hash.toLowerCase() === APPROVED_FLOORS_SHA256.toLowerCase();
+    const ok = bad.length === 0 && deltaOk && pinnedMatch;
+    const detailParts: string[] = [];
+    if (bad.length > 0) detailParts.push(`axes below epsilon/out-of-range/non-finite: ${bad.join(', ')}`);
+    if (!deltaOk) detailParts.push('counterfactualMinDelta must be finite and >= epsilon');
+    if (!pinnedMatch) detailParts.push(`sha256(${FLOORS_PATH}) (${hash}) does not match the orchestrator-pinned frozen value (${APPROVED_FLOORS_SHA256}) -- floors.json was edited after freezing`);
     return {
       ok,
-      evidence: `version=${parsed.version}\nfloors=${JSON.stringify(parsed.floors, null, 2)}\ncounterfactualMinDelta=${parsed.counterfactualMinDelta}\nepsilon=${MIN_MEANINGFUL_THRESHOLD}\nsha256=${hash}`,
-      detail: ok ? undefined : `axes below epsilon/out-of-range/non-finite: ${bad.join(', ')}${deltaOk ? '' : '; counterfactualMinDelta must be finite and >= epsilon'}`,
+      evidence: `version=${parsed.version}\nfloors=${JSON.stringify(parsed.floors, null, 2)}\ncounterfactualMinDelta=${parsed.counterfactualMinDelta}\nepsilon=${MIN_MEANINGFUL_THRESHOLD}\nsha256(actual)=${hash}\nsha256(pinned)=${APPROVED_FLOORS_SHA256}\npinnedMatch=${pinnedMatch}`,
+      detail: ok ? undefined : detailParts.join('; '),
     };
   },
 );
