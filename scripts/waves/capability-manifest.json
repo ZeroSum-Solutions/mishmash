@@ -1,0 +1,339 @@
+[
+  {
+    "capability": "artifacts",
+    "uiEntryPoint": "Chat composer file-attach / live-artifact creation flow",
+    "cliArgs": ["artifacts", "create", "--name", "w0-manifest-check.html", "--input", "package.json", "--project", "<nonceProjectId>"],
+    "httpMethod": "POST",
+    "httpPath": "/api/projects/:id/files",
+    "outputSchema": "{ ok: true, ...artifact create response }",
+    "parityApplicable": true,
+    "reason": "Only sub-verb is a non-idempotent file-creating write (apps/daemon/src/artifacts-cli.ts); safe under a fresh per-run project id since a nonce project is created new each gate run."
+  },
+  {
+    "capability": "media",
+    "uiEntryPoint": "Home / project media-generation surface",
+    "cliArgs": ["media", "generate", "--surface", "image", "--model", "gpt-image-2", "--project", "<nonceProjectId>", "--prompt", "w0 manifest check"],
+    "httpMethod": "POST",
+    "httpPath": "/api/projects/:id/media/generate",
+    "outputSchema": "media generate task response",
+    "parityApplicable": true,
+    "reason": "Only sub-verbs are generate (real paid provider call) and wait (needs a prior real taskId) -- apps/daemon/src/cli.ts:1040-1191. No credential-free read-only verb exists."
+  },
+  {
+    "capability": "mcp",
+    "uiEntryPoint": "Settings > MCP servers install flow",
+    "cliArgs": ["mcp", "install", "cursor", "--print", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/mcp/install-info",
+    "outputSchema": "{ ok, agent, kind, configPath, preview, message }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "amr",
+    "uiEntryPoint": "Settings > AMR / Vela account status",
+    "cliArgs": ["amr", "status", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/integrations/vela/status",
+    "outputSchema": "{ loggedIn, profile, user, account?, wallet }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "message-center",
+    "uiEntryPoint": "Home notification / message-center bell",
+    "cliArgs": ["message-center", "list", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/integrations/vela/message-center/*splat",
+    "outputSchema": "{ messages: [...], nextCursor?, unreadCount? }",
+    "parityApplicable": true,
+    "reason": "Registered as a wildcard catch-all (app.all('/api/integrations/vela/message-center/*splat', ...), apps/daemon/src/routes/vela.ts:424) proxying to a real Vela API gated on a configured VELA_CONTROL_KEY / logged-in AMR account; 401s without one. httpPath is the literal registered pattern (the concrete /messages suffix is not itself a separate Express route registration)."
+  },
+  {
+    "capability": "research",
+    "uiEntryPoint": "Chat research tool surface",
+    "cliArgs": ["research", "search", "--query", "w0 manifest check"],
+    "httpMethod": "POST",
+    "httpPath": "/api/research/search",
+    "outputSchema": "{ query, summary, sources: [...], provider, depth, fetchedAt }",
+    "parityApplicable": true,
+    "reason": "Only sub-verb, hard-gated on a configured TAVILY_API_KEY / OD_TAVILY_API_KEY (apps/daemon/src/research/index.ts); no credential-free verb exists."
+  },
+  {
+    "capability": "plugin",
+    "uiEntryPoint": "Plugins marketplace / installed-plugins panel",
+    "cliArgs": ["plugin", "list", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/plugins",
+    "outputSchema": "{ total, plugins: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "ui",
+    "uiEntryPoint": "GenUI inline form/choice/confirmation surfaces in chat",
+    "cliArgs": ["ui", "list", "--project", "<nonceProjectId>", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/projects/:projectId/genui",
+    "outputSchema": "{ projectId, surfaces: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "marketplace",
+    "uiEntryPoint": "Plugins > marketplace sources panel",
+    "cliArgs": ["marketplace", "list", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/marketplaces",
+    "outputSchema": "{ marketplaces: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "share",
+    "uiEntryPoint": "Home / project share menu",
+    "cliArgs": ["share", "open-design", "--json"],
+    "httpMethod": "POST",
+    "httpPath": "/api/social-share",
+    "outputSchema": "{ kind, locale, url, title, text, copyText, githubRepoUrl, platforms: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "brand",
+    "uiEntryPoint": "Brand library panel",
+    "cliArgs": ["brand", "list", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/brands",
+    "outputSchema": "{ brands: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "brands",
+    "uiEntryPoint": "Brand library panel",
+    "cliArgs": ["brands", "list", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/brands",
+    "outputSchema": "{ brands: [...] }",
+    "parityApplicable": true,
+    "reason": "Alias of `brand` in SUBCOMMAND_MAP (both map to runBrand); listed separately per set-equality against SUBCOMMAND_MAP keys."
+  },
+  {
+    "capability": "project",
+    "uiEntryPoint": "Home project list / EntryNavRail",
+    "cliArgs": ["project", "list", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/projects",
+    "outputSchema": "{ projects: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "automation",
+    "uiEntryPoint": "Automations tab",
+    "cliArgs": ["automation", "list", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/routines",
+    "outputSchema": "{ routines: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "automations",
+    "uiEntryPoint": "Automations tab",
+    "cliArgs": ["automations", "list", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/routines",
+    "outputSchema": "{ routines: [...] }",
+    "parityApplicable": true,
+    "reason": "Alias of `automation` in SUBCOMMAND_MAP (both map to runAutomation); listed separately per set-equality against SUBCOMMAND_MAP keys."
+  },
+  {
+    "capability": "memory",
+    "uiEntryPoint": "Memory panel",
+    "cliArgs": ["memory", "tree", "list", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/memory/tree",
+    "outputSchema": "{ enabled, rootDir, tree: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "run",
+    "uiEntryPoint": "Run history / chat run status",
+    "cliArgs": ["run", "list", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/runs",
+    "outputSchema": "{ runs: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "files",
+    "uiEntryPoint": "Design Files panel",
+    "cliArgs": ["files", "list", "<nonceProjectId>", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/projects/:id/files",
+    "outputSchema": "{ files: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "templates",
+    "uiEntryPoint": "Home Templates surface",
+    "cliArgs": ["templates", "list", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/templates",
+    "outputSchema": "{ templates: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "conversation",
+    "uiEntryPoint": "Chat conversation switcher",
+    "cliArgs": ["conversation", "list", "<nonceProjectId>"],
+    "httpMethod": "GET",
+    "httpPath": "/api/projects/:id/conversations",
+    "outputSchema": "{ conversations: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "chat",
+    "uiEntryPoint": "Chat pane 'new side chat'",
+    "cliArgs": ["chat", "new", "--project", "<nonceProjectId>", "--json"],
+    "httpMethod": "POST",
+    "httpPath": "/api/projects/:id/conversations",
+    "outputSchema": "{ conversation: { id, title, sessionMode, createdAt } }",
+    "parityApplicable": true,
+    "reason": "Only sub-verb is a real (but credential-free, non-LLM) write that creates a conversation row; no read-only verb exists (apps/daemon/src/cli.ts:7403-7469)."
+  },
+  {
+    "capability": "deploy",
+    "uiEntryPoint": "Project deploy button",
+    "cliArgs": ["deploy", "<nonceProjectId>", "--file", "index.html", "--json"],
+    "httpMethod": "POST",
+    "httpPath": "/api/projects/:id/deploy",
+    "outputSchema": "deploy result envelope",
+    "parityApplicable": true,
+    "reason": "No sub-verb dispatch at all -- the whole command is a real Vercel/Cloudflare deploy (apps/daemon/src/cli.ts:10320-10401, deploy.ts:71). No credential-free/idempotent form exists; provider config lives server-side."
+  },
+  {
+    "capability": "daemon",
+    "uiEntryPoint": "Settings > About daemon status",
+    "cliArgs": ["daemon", "status", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/daemon/status",
+    "outputSchema": "{ ok, version, bindHost, port, dataDir, sandboxMode, pid, installedPlugins }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "atoms",
+    "uiEntryPoint": "Home Templates / atoms catalogue",
+    "cliArgs": ["atoms", "list", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/atoms",
+    "outputSchema": "{ atoms: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "skills",
+    "uiEntryPoint": "Settings > Skills panel",
+    "cliArgs": ["skills", "list", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/skills",
+    "outputSchema": "{ skills: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "design-systems",
+    "uiEntryPoint": "Design systems library panel",
+    "cliArgs": ["design-systems", "list", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/design-systems",
+    "outputSchema": "{ designSystems: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "craft",
+    "uiEntryPoint": "Design systems craft-rules panel",
+    "cliArgs": ["craft", "list", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/craft",
+    "outputSchema": "{ craft: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "diagnostics",
+    "uiEntryPoint": "Settings > About > Export diagnostics",
+    "cliArgs": ["diagnostics", "export", "--output", ".w0-manifest-check-diagnostics.zip", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/diagnostics/export",
+    "outputSchema": "{ path, sizeBytes }",
+    "parityApplicable": true,
+    "reason": "The HTTP response body is a binary zip, not JSON; --json shapes the CLI's own stdout summary after writing the file locally."
+  },
+  {
+    "capability": "export",
+    "uiEntryPoint": "Project export (PDF/image/PPTX) menu",
+    "cliArgs": ["export", "index.html", "--project", "<nonceProjectId>", "--format", "pdf", "--out", ".w0-manifest-check-export.pdf", "--json"],
+    "httpMethod": "POST",
+    "httpPath": "/api/projects/:id/export/pdf-image",
+    "outputSchema": "{ ok: true, path, out, bytes, format }",
+    "parityApplicable": true,
+    "reason": "No list/status/dry-run verb exists; requires a real project + HTML file and the desktop runtime's bundled Chromium for rasterization."
+  },
+  {
+    "capability": "status",
+    "uiEntryPoint": "Settings > About daemon status",
+    "cliArgs": ["status", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/daemon/status",
+    "outputSchema": "{ ok, version, bindHost, port, dataDir, sandboxMode, pid, installedPlugins }",
+    "parityApplicable": true,
+    "reason": "Alias of `od daemon status` (apps/daemon/src/cli.ts:8361-8364)."
+  },
+  {
+    "capability": "version",
+    "uiEntryPoint": "Settings > About version string",
+    "cliArgs": ["version", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/version",
+    "outputSchema": "{ version: { version, channel, packaged, platform, arch } }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "whats-new",
+    "uiEntryPoint": "Home 'what's new' highlight card",
+    "cliArgs": ["whats-new", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/whats-new",
+    "outputSchema": "{ version, id, content: { title, body, linkUrl? } | null }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "doctor",
+    "uiEntryPoint": "Settings > About health-check action",
+    "cliArgs": ["doctor", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/daemon/status",
+    "outputSchema": "{ daemon, plugins: [...], skills: [...], designSystems: [...], atoms: [...], issues: [...] }",
+    "parityApplicable": true,
+    "reason": "Composite health check with no single 1:1 HTTP endpoint (apps/daemon/src/cli.ts:8510-8600) -- calls /api/daemon/status as its anchor/first step plus several more GETs and per-plugin POSTs. httpPath names the anchor call; the CLI's full JSON output is a superset built from multiple endpoints, not identical to any one response body."
+  },
+  {
+    "capability": "config",
+    "uiEntryPoint": "Settings panel (all preference surfaces)",
+    "cliArgs": ["config", "list"],
+    "httpMethod": "GET",
+    "httpPath": "/api/app-config",
+    "outputSchema": "app-config's inner `config` object (free-form settings)",
+    "parityApplicable": true
+  },
+  {
+    "capability": "library",
+    "uiEntryPoint": "OD Library grid",
+    "cliArgs": ["library", "list", "--json"],
+    "httpMethod": "GET",
+    "httpPath": "/api/library/assets",
+    "outputSchema": "{ assets: [...] }",
+    "parityApplicable": true
+  },
+  {
+    "capability": "figma",
+    "uiEntryPoint": "Design Files > Import from Figma",
+    "cliArgs": ["figma", "import", "--project", "<nonceProjectId>", "--file", "fixtures/w0-manifest-check.fig", "--json"],
+    "httpMethod": "POST",
+    "httpPath": "/api/projects/:id/figma/import",
+    "outputSchema": "{ label, snapshotDir, inventory: {...}, suggestedPrompt }",
+    "parityApplicable": true,
+    "reason": "Only sub-verb; the offline --file path needs no Figma API token but requires a real local .fig file and creates a real snapshot dir in the target project (non-idempotent within one project, safe under a fresh nonce project per run)."
+  }
+]
