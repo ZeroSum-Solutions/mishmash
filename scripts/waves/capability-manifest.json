@@ -2,338 +2,959 @@
   {
     "capability": "artifacts",
     "uiEntryPoint": "Chat composer file-attach / live-artifact creation flow",
-    "cliArgs": ["artifacts", "create", "--name", "w0-manifest-check.html", "--input", "package.json", "--project", "<nonceProjectId>"],
+    "cliArgs": [
+      "artifacts",
+      "create",
+      "--name",
+      "w0-manifest-check.html",
+      "--input",
+      "package.json",
+      "--project",
+      "<nonceProjectId>"
+    ],
     "httpMethod": "POST",
     "httpPath": "/api/projects/:id/files",
     "outputSchema": "{ ok: true, ...artifact create response }",
     "parityApplicable": true,
-    "reason": "Only sub-verb is a non-idempotent file-creating write (apps/daemon/src/artifacts-cli.ts); safe under a fresh per-run project id since a nonce project is created new each gate run."
+    "reason": "Only sub-verb is a non-idempotent file-creating write (apps/daemon/src/artifacts-cli.ts); safe under a fresh per-run project id since a nonce project is created new each gate run.",
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ]
   },
   {
     "capability": "media",
     "uiEntryPoint": "Home / project media-generation surface",
-    "cliArgs": ["media", "generate", "--surface", "image", "--model", "gpt-image-2", "--project", "<nonceProjectId>", "--prompt", "w0 manifest check"],
+    "cliArgs": [
+      "media",
+      "generate",
+      "--surface",
+      "image",
+      "--model",
+      "gpt-image-2",
+      "--project",
+      "<nonceProjectId>",
+      "--prompt",
+      "w0 manifest check"
+    ],
     "httpMethod": "POST",
     "httpPath": "/api/projects/:id/media/generate",
     "outputSchema": "media generate task response",
     "parityApplicable": true,
-    "reason": "Only sub-verbs are generate (real paid provider call) and wait (needs a prior real taskId) -- apps/daemon/src/cli.ts:1040-1191. No credential-free read-only verb exists."
+    "reason": "Only sub-verbs are generate (real paid provider call) and wait (needs a prior real taskId) -- apps/daemon/src/cli.ts:1040-1191. No credential-free read-only verb exists.",
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ]
   },
   {
     "capability": "mcp",
     "uiEntryPoint": "Settings > MCP servers install flow",
-    "cliArgs": ["mcp", "install", "cursor", "--print", "--json"],
+    "cliArgs": [
+      "mcp",
+      "install",
+      "cursor",
+      "--print",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/mcp/install-info",
     "outputSchema": "{ ok, agent, kind, configPath, preview, message }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/mcp/install-info"
+    ]
   },
   {
     "capability": "amr",
     "uiEntryPoint": "Settings > AMR / Vela account status",
-    "cliArgs": ["amr", "status", "--json"],
+    "cliArgs": [
+      "amr",
+      "status",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/integrations/vela/status",
     "outputSchema": "{ loggedIn, profile, user, account?, wallet }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/integrations/vela/message-center/messages",
+      "GET /api/integrations/vela/status",
+      "GET /api/integrations/vela/wallet:param",
+      "POST /api/integrations/vela/message-center/messages/:param/read",
+      "POST /api/integrations/vela/message-center/read-all"
+    ]
   },
   {
     "capability": "message-center",
     "uiEntryPoint": "Home notification / message-center bell",
-    "cliArgs": ["message-center", "list", "--json"],
+    "cliArgs": [
+      "message-center",
+      "list",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/integrations/vela/message-center/*splat",
     "outputSchema": "{ messages: [...], nextCursor?, unreadCount? }",
     "parityApplicable": true,
-    "reason": "Registered as a wildcard catch-all (app.all('/api/integrations/vela/message-center/*splat', ...), apps/daemon/src/routes/vela.ts:424) proxying to a real Vela API gated on a configured VELA_CONTROL_KEY / logged-in AMR account; 401s without one. httpPath is the literal registered pattern (the concrete /messages suffix is not itself a separate Express route registration)."
+    "reason": "Registered as a wildcard catch-all (app.all('/api/integrations/vela/message-center/*splat', ...), apps/daemon/src/routes/vela.ts:424) proxying to a real Vela API gated on a configured VELA_CONTROL_KEY / logged-in AMR account; 401s without one. httpPath is the literal registered pattern (the concrete /messages suffix is not itself a separate Express route registration).",
+    "knownNamespaceRoutes": [
+      "GET /api/integrations/vela/message-center/messages",
+      "GET /api/integrations/vela/status",
+      "GET /api/integrations/vela/wallet:param",
+      "POST /api/integrations/vela/message-center/messages/:param/read",
+      "POST /api/integrations/vela/message-center/read-all"
+    ]
   },
   {
     "capability": "research",
     "uiEntryPoint": "Chat research tool surface",
-    "cliArgs": ["research", "search", "--query", "w0 manifest check"],
+    "cliArgs": [
+      "research",
+      "search",
+      "--query",
+      "w0 manifest check"
+    ],
     "httpMethod": "POST",
     "httpPath": "/api/research/search",
     "outputSchema": "{ query, summary, sources: [...], provider, depth, fetchedAt }",
     "parityApplicable": true,
-    "reason": "Only sub-verb, hard-gated on a configured TAVILY_API_KEY / OD_TAVILY_API_KEY (apps/daemon/src/research/index.ts); no credential-free verb exists."
+    "reason": "Only sub-verb, hard-gated on a configured TAVILY_API_KEY / OD_TAVILY_API_KEY (apps/daemon/src/research/index.ts); no credential-free verb exists.",
+    "knownNamespaceRoutes": []
   },
   {
     "capability": "plugin",
     "uiEntryPoint": "Plugins marketplace / installed-plugins panel",
-    "cliArgs": ["plugin", "list", "--json"],
+    "cliArgs": [
+      "plugin",
+      "list",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/plugins",
     "outputSchema": "{ total, plugins: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/applied-plugins/:param",
+      "GET /api/applied-plugins/:param/canon",
+      "GET /api/plugins",
+      "GET /api/plugins/:param",
+      "GET /api/plugins/:param/doctor",
+      "GET /api/plugins/events/stats",
+      "POST /api/applied-plugins/export",
+      "POST /api/plugins/:param/apply",
+      "POST /api/plugins/:param/doctor",
+      "POST /api/plugins/events/purge"
+    ]
   },
   {
     "capability": "ui",
     "uiEntryPoint": "GenUI inline form/choice/confirmation surfaces in chat",
-    "cliArgs": ["ui", "list", "--project", "<nonceProjectId>", "--json"],
+    "cliArgs": [
+      "ui",
+      "list",
+      "--project",
+      "<nonceProjectId>",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/projects/:projectId/genui",
     "outputSchema": "{ projectId, surfaces: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ]
   },
   {
     "capability": "marketplace",
     "uiEntryPoint": "Plugins > marketplace sources panel",
-    "cliArgs": ["marketplace", "list", "--json"],
+    "cliArgs": [
+      "marketplace",
+      "list",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/marketplaces",
     "outputSchema": "{ marketplaces: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/marketplaces",
+      "GET /api/marketplaces/:param",
+      "GET /api/marketplaces/:param/plugins",
+      "POST /api/marketplaces"
+    ]
   },
   {
     "capability": "share",
     "uiEntryPoint": "Home / project share menu",
-    "cliArgs": ["share", "open-design", "--json"],
+    "cliArgs": [
+      "share",
+      "open-design",
+      "--json"
+    ],
     "httpMethod": "POST",
     "httpPath": "/api/social-share",
     "outputSchema": "{ kind, locale, url, title, text, copyText, githubRepoUrl, platforms: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "POST /api/social-share"
+    ]
   },
   {
     "capability": "brand",
     "uiEntryPoint": "Brand library panel",
-    "cliArgs": ["brand", "list", "--json"],
+    "cliArgs": [
+      "brand",
+      "list",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/brands",
     "outputSchema": "{ brands: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/brands/:param",
+      "GET /api/brands",
+      "GET /api/brands/:param",
+      "POST /api/brands",
+      "POST /api/brands/:param/continue-extraction",
+      "POST /api/brands/:param/extract-from-html",
+      "POST /api/brands/:param/finalize",
+      "POST /api/brands/:param/preview"
+    ]
   },
   {
     "capability": "brands",
     "uiEntryPoint": "Brand library panel",
-    "cliArgs": ["brands", "list", "--json"],
+    "cliArgs": [
+      "brands",
+      "list",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/brands",
     "outputSchema": "{ brands: [...] }",
     "parityApplicable": true,
-    "reason": "Alias of `brand` in SUBCOMMAND_MAP (both map to runBrand); listed separately per set-equality against SUBCOMMAND_MAP keys."
+    "reason": "Alias of `brand` in SUBCOMMAND_MAP (both map to runBrand); listed separately per set-equality against SUBCOMMAND_MAP keys.",
+    "knownNamespaceRoutes": [
+      "DELETE /api/brands/:param",
+      "GET /api/brands",
+      "GET /api/brands/:param",
+      "POST /api/brands",
+      "POST /api/brands/:param/continue-extraction",
+      "POST /api/brands/:param/extract-from-html",
+      "POST /api/brands/:param/finalize",
+      "POST /api/brands/:param/preview"
+    ]
   },
   {
     "capability": "project",
     "uiEntryPoint": "Home project list / EntryNavRail",
-    "cliArgs": ["project", "list", "--json"],
+    "cliArgs": [
+      "project",
+      "list",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/projects",
     "outputSchema": "{ projects: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/editors",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/import/folder",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ]
   },
   {
     "capability": "automation",
     "uiEntryPoint": "Automations tab",
-    "cliArgs": ["automation", "list", "--json"],
+    "cliArgs": [
+      "automation",
+      "list",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/routines",
     "outputSchema": "{ routines: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/routines/:param",
+      "GET /api/automation-proposals/:param",
+      "GET /api/automation-proposals:param",
+      "GET /api/automation-source-packets/:param",
+      "GET /api/automation-source-packets:param",
+      "GET /api/automation-templates",
+      "GET /api/automation-templates/:param",
+      "GET /api/routines",
+      "GET /api/routines/:param",
+      "GET /api/routines/:param/runs",
+      "PATCH /api/routines/:param",
+      "POST /api/automation-ingestions",
+      "POST /api/automation-proposals/:param/:param",
+      "POST /api/routines",
+      "POST /api/routines/:param/run",
+      "POST /api/routines/:param/runs/:param/crystallize"
+    ]
   },
   {
     "capability": "automations",
     "uiEntryPoint": "Automations tab",
-    "cliArgs": ["automations", "list", "--json"],
+    "cliArgs": [
+      "automations",
+      "list",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/routines",
     "outputSchema": "{ routines: [...] }",
     "parityApplicable": true,
-    "reason": "Alias of `automation` in SUBCOMMAND_MAP (both map to runAutomation); listed separately per set-equality against SUBCOMMAND_MAP keys."
+    "reason": "Alias of `automation` in SUBCOMMAND_MAP (both map to runAutomation); listed separately per set-equality against SUBCOMMAND_MAP keys.",
+    "knownNamespaceRoutes": [
+      "DELETE /api/routines/:param",
+      "GET /api/automation-proposals/:param",
+      "GET /api/automation-proposals:param",
+      "GET /api/automation-source-packets/:param",
+      "GET /api/automation-source-packets:param",
+      "GET /api/automation-templates",
+      "GET /api/automation-templates/:param",
+      "GET /api/routines",
+      "GET /api/routines/:param",
+      "GET /api/routines/:param/runs",
+      "PATCH /api/routines/:param",
+      "POST /api/automation-ingestions",
+      "POST /api/automation-proposals/:param/:param",
+      "POST /api/routines",
+      "POST /api/routines/:param/run",
+      "POST /api/routines/:param/runs/:param/crystallize"
+    ]
   },
   {
     "capability": "memory",
     "uiEntryPoint": "Memory panel",
-    "cliArgs": ["memory", "tree", "list", "--json"],
+    "cliArgs": [
+      "memory",
+      "tree",
+      "list",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/memory/tree",
     "outputSchema": "{ enabled, rootDir, tree: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/memory/verifications",
+      "GET /api/memory",
+      "GET /api/memory/:param",
+      "GET /api/memory/tree",
+      "GET /api/memory/verifications",
+      "PATCH /api/memory/config",
+      "PATCH /api/memory/tree/:param",
+      "POST /api/memory",
+      "POST /api/memory/rules/suggest",
+      "PUT /api/memory/:param"
+    ]
   },
   {
     "capability": "run",
     "uiEntryPoint": "Run history / chat run status",
-    "cliArgs": ["run", "list", "--json"],
+    "cliArgs": [
+      "run",
+      "list",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/runs",
     "outputSchema": "{ runs: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/runs/:param",
+      "GET /api/runs/:param/events",
+      "GET /api/runs/:param/result-package",
+      "POST /api/runs",
+      "POST /api/runs/:param/cancel"
+    ]
   },
   {
     "capability": "files",
     "uiEntryPoint": "Design Files panel",
-    "cliArgs": ["files", "list", "<nonceProjectId>", "--json"],
+    "cliArgs": [
+      "files",
+      "list",
+      "<nonceProjectId>",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/projects/:id/files",
     "outputSchema": "{ files: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ]
   },
   {
     "capability": "templates",
     "uiEntryPoint": "Home Templates surface",
-    "cliArgs": ["templates", "list", "--json"],
+    "cliArgs": [
+      "templates",
+      "list",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/templates",
     "outputSchema": "{ templates: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/templates/:param",
+      "GET /api/templates",
+      "POST /api/templates"
+    ]
   },
   {
     "capability": "conversation",
     "uiEntryPoint": "Chat conversation switcher",
-    "cliArgs": ["conversation", "list", "<nonceProjectId>"],
+    "cliArgs": [
+      "conversation",
+      "list",
+      "<nonceProjectId>"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/projects/:id/conversations",
     "outputSchema": "{ conversations: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/conversations/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ]
   },
   {
     "capability": "chat",
     "uiEntryPoint": "Chat pane 'new side chat'",
-    "cliArgs": ["chat", "new", "--project", "<nonceProjectId>", "--json"],
+    "cliArgs": [
+      "chat",
+      "new",
+      "--project",
+      "<nonceProjectId>",
+      "--json"
+    ],
     "httpMethod": "POST",
     "httpPath": "/api/projects/:id/conversations",
     "outputSchema": "{ conversation: { id, title, sessionMode, createdAt } }",
     "parityApplicable": true,
-    "reason": "Only sub-verb is a real (but credential-free, non-LLM) write that creates a conversation row; no read-only verb exists (apps/daemon/src/cli.ts:7403-7469)."
+    "reason": "Only sub-verb is a real (but credential-free, non-LLM) write that creates a conversation row; no read-only verb exists (apps/daemon/src/cli.ts:7403-7469).",
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ]
   },
   {
     "capability": "deploy",
     "uiEntryPoint": "Project deploy button",
-    "cliArgs": ["deploy", "<nonceProjectId>", "--file", "index.html", "--json"],
+    "cliArgs": [
+      "deploy",
+      "<nonceProjectId>",
+      "--file",
+      "index.html",
+      "--json"
+    ],
     "httpMethod": "POST",
     "httpPath": "/api/projects/:id/deploy",
     "outputSchema": "deploy result envelope",
     "parityApplicable": true,
-    "reason": "No sub-verb dispatch at all -- the whole command is a real Vercel/Cloudflare deploy (apps/daemon/src/cli.ts:10320-10401, deploy.ts:71). No credential-free/idempotent form exists; provider config lives server-side."
+    "reason": "No sub-verb dispatch at all -- the whole command is a real Vercel/Cloudflare deploy (apps/daemon/src/cli.ts:10320-10401, deploy.ts:71). No credential-free/idempotent form exists; provider config lives server-side.",
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ]
   },
   {
     "capability": "daemon",
     "uiEntryPoint": "Settings > About daemon status",
-    "cliArgs": ["daemon", "status", "--json"],
+    "cliArgs": [
+      "daemon",
+      "status",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/daemon/status",
     "outputSchema": "{ ok, version, bindHost, port, dataDir, sandboxMode, pid, installedPlugins }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/daemon/db",
+      "GET /api/daemon/status",
+      "POST /api/daemon/db/vacuum",
+      "POST /api/daemon/shutdown"
+    ]
   },
   {
     "capability": "atoms",
     "uiEntryPoint": "Home Templates / atoms catalogue",
-    "cliArgs": ["atoms", "list", "--json"],
+    "cliArgs": [
+      "atoms",
+      "list",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/atoms",
     "outputSchema": "{ atoms: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/atoms",
+      "GET /api/atoms/:param"
+    ]
   },
   {
     "capability": "skills",
     "uiEntryPoint": "Settings > Skills panel",
-    "cliArgs": ["skills", "list", "--json"],
+    "cliArgs": [
+      "skills",
+      "list",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/skills",
     "outputSchema": "{ skills: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/skills"
+    ]
   },
   {
     "capability": "design-systems",
     "uiEntryPoint": "Design systems library panel",
-    "cliArgs": ["design-systems", "list", "--json"],
+    "cliArgs": [
+      "design-systems",
+      "list",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/design-systems",
     "outputSchema": "{ designSystems: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/design-systems",
+      "GET /api/design-systems/:param/archive",
+      "PATCH /api/design-systems/:param",
+      "POST /api/design-systems/:param/token-contract/rebuild-jobs"
+    ]
   },
   {
     "capability": "craft",
     "uiEntryPoint": "Design systems craft-rules panel",
-    "cliArgs": ["craft", "list", "--json"],
+    "cliArgs": [
+      "craft",
+      "list",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/craft",
     "outputSchema": "{ craft: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": []
   },
   {
     "capability": "diagnostics",
     "uiEntryPoint": "Settings > About > Export diagnostics",
-    "cliArgs": ["diagnostics", "export", "--output", ".w0-manifest-check-diagnostics.zip", "--json"],
+    "cliArgs": [
+      "diagnostics",
+      "export",
+      "--output",
+      ".w0-manifest-check-diagnostics.zip",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/diagnostics/export",
     "outputSchema": "{ path, sizeBytes }",
     "parityApplicable": true,
-    "reason": "The HTTP response body is a binary zip, not JSON; --json shapes the CLI's own stdout summary after writing the file locally."
+    "reason": "The HTTP response body is a binary zip, not JSON; --json shapes the CLI's own stdout summary after writing the file locally.",
+    "knownNamespaceRoutes": []
   },
   {
     "capability": "export",
     "uiEntryPoint": "Project export (PDF/image/PPTX) menu",
-    "cliArgs": ["export", "index.html", "--project", "<nonceProjectId>", "--format", "pdf", "--out", ".w0-manifest-check-export.pdf", "--json"],
+    "cliArgs": [
+      "export",
+      "index.html",
+      "--project",
+      "<nonceProjectId>",
+      "--format",
+      "pdf",
+      "--out",
+      ".w0-manifest-check-export.pdf",
+      "--json"
+    ],
     "httpMethod": "POST",
     "httpPath": "/api/projects/:id/export/pdf-image",
     "outputSchema": "{ ok: true, path, out, bytes, format }",
     "parityApplicable": true,
-    "reason": "No list/status/dry-run verb exists; requires a real project + HTML file and the desktop runtime's bundled Chromium for rasterization."
+    "reason": "No list/status/dry-run verb exists; requires a real project + HTML file and the desktop runtime's bundled Chromium for rasterization.",
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ]
   },
   {
     "capability": "status",
     "uiEntryPoint": "Settings > About daemon status",
-    "cliArgs": ["status", "--json"],
+    "cliArgs": [
+      "status",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/daemon/status",
     "outputSchema": "{ ok, version, bindHost, port, dataDir, sandboxMode, pid, installedPlugins }",
     "parityApplicable": true,
-    "reason": "Alias of `od daemon status` (apps/daemon/src/cli.ts:8361-8364)."
+    "reason": "Alias of `od daemon status` (apps/daemon/src/cli.ts:8361-8364).",
+    "knownNamespaceRoutes": [
+      "GET /api/daemon/db",
+      "GET /api/daemon/status",
+      "POST /api/daemon/db/vacuum",
+      "POST /api/daemon/shutdown"
+    ]
   },
   {
     "capability": "version",
     "uiEntryPoint": "Settings > About version string",
-    "cliArgs": ["version", "--json"],
+    "cliArgs": [
+      "version",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/version",
     "outputSchema": "{ version: { version, channel, packaged, platform, arch } }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/version"
+    ]
   },
   {
     "capability": "whats-new",
     "uiEntryPoint": "Home 'what's new' highlight card",
-    "cliArgs": ["whats-new", "--json"],
+    "cliArgs": [
+      "whats-new",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/whats-new",
     "outputSchema": "{ version, id, content: { title, body, linkUrl? } | null }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/whats-new"
+    ]
   },
   {
     "capability": "doctor",
     "uiEntryPoint": "Settings > About health-check action",
-    "cliArgs": ["doctor", "--json"],
+    "cliArgs": [
+      "doctor",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/daemon/status",
     "outputSchema": "{ daemon, plugins: [...], skills: [...], designSystems: [...], atoms: [...], issues: [...] }",
     "parityApplicable": true,
-    "reason": "Composite health check with no single 1:1 HTTP endpoint (apps/daemon/src/cli.ts:8510-8600) -- calls /api/daemon/status as its anchor/first step plus several more GETs and per-plugin POSTs. httpPath names the anchor call; the CLI's full JSON output is a superset built from multiple endpoints, not identical to any one response body."
+    "reason": "Composite health check with no single 1:1 HTTP endpoint (apps/daemon/src/cli.ts:8510-8600) -- calls /api/daemon/status as its anchor/first step plus several more GETs and per-plugin POSTs. httpPath names the anchor call; the CLI's full JSON output is a superset built from multiple endpoints, not identical to any one response body.",
+    "knownNamespaceRoutes": [
+      "GET /api/daemon/db",
+      "GET /api/daemon/status",
+      "POST /api/daemon/db/vacuum",
+      "POST /api/daemon/shutdown"
+    ]
   },
   {
     "capability": "config",
     "uiEntryPoint": "Settings panel (all preference surfaces)",
-    "cliArgs": ["config", "list"],
+    "cliArgs": [
+      "config",
+      "list"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/app-config",
     "outputSchema": "app-config's inner `config` object (free-form settings)",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/app-config",
+      "PUT /api/app-config"
+    ]
   },
   {
     "capability": "library",
     "uiEntryPoint": "OD Library grid",
-    "cliArgs": ["library", "list", "--json"],
+    "cliArgs": [
+      "library",
+      "list",
+      "--json"
+    ],
     "httpMethod": "GET",
     "httpPath": "/api/library/assets",
     "outputSchema": "{ assets: [...] }",
-    "parityApplicable": true
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/library/assets/:param",
+      "GET /api/library/assets/:param",
+      "GET /api/library/assets/:param/figma",
+      "GET /api/library/assets:param",
+      "POST /api/library/assets/:param/apply",
+      "POST /api/library/assets/:param/edit-as-page",
+      "POST /api/library/ingest",
+      "POST /api/library/pair",
+      "POST /api/library/sync"
+    ]
   },
   {
     "capability": "figma",
     "uiEntryPoint": "Design Files > Import from Figma",
-    "cliArgs": ["figma", "import", "--project", "<nonceProjectId>", "--file", "fixtures/w0-manifest-check.fig", "--json"],
+    "cliArgs": [
+      "figma",
+      "import",
+      "--project",
+      "<nonceProjectId>",
+      "--file",
+      "fixtures/w0-manifest-check.fig",
+      "--json"
+    ],
     "httpMethod": "POST",
     "httpPath": "/api/projects/:id/figma/import",
     "outputSchema": "{ label, snapshotDir, inventory: {...}, suggestedPrompt }",
     "parityApplicable": true,
-    "reason": "Only sub-verb; the offline --file path needs no Figma API token but requires a real local .fig file and creates a real snapshot dir in the target project (non-idempotent within one project, safe under a fresh nonce project per run)."
+    "reason": "Only sub-verb; the offline --file path needs no Figma API token but requires a real local .fig file and creates a real snapshot dir in the target project (non-idempotent within one project, safe under a fresh nonce project per run).",
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ]
+  },
+  {
+    "capability": "backup",
+    "uiEntryPoint": "None -- no web UI surface exists for backup/restore as of this wave; CLI (`od backup create`) and HTTP (`POST /api/backup`, loopback-only) are the only surfaces. Known gap against AGENTS.md \"Capability exposure (UI/CLI dual-track)\"; closing it needs apps/web, which is outside this wave's write lease.",
+    "cliArgs": [
+      "backup",
+      "create",
+      "--out",
+      "<tmpArchivePath>"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/backup",
+    "outputSchema": "{ ok: true, archivePath: string, classes: string[] }",
+    "parityApplicable": true,
+    "reason": "od backup create (apps/daemon/src/backup/cli.ts) calls the engine (create.ts) directly against the resolved data directory instead of issuing an HTTP request, so a backup can be taken even when the daemon isn't running; cli.ts therefore has no fetch() call into this namespace and knownNamespaceRoutes is empty by construction.",
+    "knownNamespaceRoutes": []
+  },
+  {
+    "capability": "restore",
+    "uiEntryPoint": "None -- no web UI surface exists for backup/restore as of this wave; CLI (`od restore`) and HTTP (`POST /api/restore`, loopback-only) are the only surfaces. Known gap against AGENTS.md \"Capability exposure (UI/CLI dual-track)\"; closing it needs apps/web, which is outside this wave's write lease.",
+    "cliArgs": [
+      "restore",
+      "--archive",
+      "<tmpArchivePath>"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/restore",
+    "outputSchema": "{ ok: true, restoredClasses: string[], destination: string }",
+    "parityApplicable": true,
+    "reason": "od restore (apps/daemon/src/backup/cli.ts) calls the engine (restore.ts) directly against the resolved data directory instead of issuing an HTTP request, so a restore can run even when the daemon isn't running; cli.ts therefore has no fetch() call into this namespace and knownNamespaceRoutes is empty by construction. Also refuses to run against a data dir that already holds a payload, so it is not safely re-runnable in a shared live-probe loop -- another reason this capability stays out of any live-sample probe.",
+    "knownNamespaceRoutes": []
   }
 ]
