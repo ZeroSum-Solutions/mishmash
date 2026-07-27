@@ -1,6 +1,6 @@
 # Selector eval corpus (W7 / S7-2)
 
-**Corpus freeze sha256: 16daa9099172849e7c3ce07c60ae3e1dc1d8b68c077a86d3dab98ba75dd8fc2a**
+**Corpus freeze sha256: f79661c38371b294c632d6900c6660416255cb59011dcc824e72eaa764236a8c**
 
 That hash is `sha256(evals/selector/corpus/manifest.json)` at the commit that freezes this
 document. `scripts/waves/verify-w7.ts` re-hashes the manifest at HEAD and requires an exact match
@@ -8,8 +8,13 @@ document. `scripts/waves/verify-w7.ts` re-hashes the manifest at HEAD and requir
 is the point: everything downstream (per-case IR instances, the scorer's population/counterfactual
 controls) is built against this exact, pinned manifest state.
 
-*Re-frozen twice*, before any scorer/metrics work landed, fixing the same underlying issue in two
-layers: (1) the original generator hardcoded every IR's `provenance[].breakpoint` to `"desktop"`,
+*Re-frozen three times*, before any scorer/metrics work landed. The third fix: `constraints[].rule`
+and `variantAxes[].{name,distanceMetric}` were near-identical boilerplate prose duplicated verbatim
+across every case's IR — long enough (>64 bytes) to trip `verify-w7.ts` C7-11's content-window leak
+scanner as false-positive "leaks" against ordinary non-sealed files. Fixed by folding the case id
+deep enough into every such string that no 64-byte window can land entirely inside shared text.
+
+The first two re-freezes fixed the same underlying issue in two layers: (1) the original generator hardcoded every IR's `provenance[].breakpoint` to `"desktop"`,
 making `verify-w7.ts` C7-4's breakpoint-only field-derangement control mechanically
 unconstructible (no fixed-point-free permutation exists over an all-identical array); (2) even
 after varying the recorded breakpoint per entry, `nodeId`/`domPath` were shared verbatim across

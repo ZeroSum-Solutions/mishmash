@@ -77,7 +77,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/marketing-hero-grid.json",
-      "irSha256": "16eae352dea1804a7ffc60ed1930d41e2e38beb830ae87b7b8f8ac692fb6ee72"
+      "irSha256": "18535a8b00c10153a54acb13381cf98dc1ec72a8fff321ecc4b65986df1f8834"
     },
     {
       "id": "ecommerce-product-flex",
@@ -154,7 +154,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/ecommerce-product-flex.json",
-      "irSha256": "bc8fa6f1c1ddb5a8aef92abee703e0b4500fb464d86999b7f41a5da2d49a8391"
+      "irSha256": "c2cee88ea78d0427106446e2dbf9b1d9c11bfbdf57d02f998807fd4eb1cad204"
     },
     {
       "id": "dashboard-canvas-widgets",
@@ -231,7 +231,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/dashboard-canvas-widgets.json",
-      "irSha256": "c6dcae20d3d702808df1aceaedb29dfa7eaef754b63ae534c3fab78de883b063"
+      "irSha256": "a55a4cbf8862cd94e1cd1322132f9fdb317edd68c49c454e5f58a0411ae06532"
     },
     {
       "id": "docs-api-reference",
@@ -308,7 +308,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/docs-api-reference.json",
-      "irSha256": "0ff3755d25e7c3f9f52c92f583724ab303f0600592f0154d96a1f9eb69f4b089"
+      "irSha256": "a543cb29d2085c9ff861382c506adcb24db06d669a6ce99db00c749b7b6960ad"
     },
     {
       "id": "blog-content-grid",
@@ -369,7 +369,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/blog-content-grid.json",
-      "irSha256": "a4ee81f451246c742733d2eed36d1f7b4a2c7308c7172977e64b3f07a62f7b5d"
+      "irSha256": "44531d21cae53203d7f245c0f4b4d02ad9d91eb72775b4e011a19d783ff0ba79"
     },
     {
       "id": "single-source-landing",
@@ -418,7 +418,7 @@
       },
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/single-source-landing.json",
-      "irSha256": "e6b2ad4468e1ffae9aa96d1901771aba4650248c6bfce467c8b82839763fc50d"
+      "irSha256": "7408bbfdac4cdcad6a9d1334f9cff813f57b769f1751b9089eca7c75ac17c576"
     },
     {
       "id": "phantom-element-directive",
@@ -485,7 +485,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/phantom-element-directive.json",
-      "irSha256": "53740c61a1798daaf2d2213751bcc083d58c7279ce9914db1c9607792f74ff84"
+      "irSha256": "1c304b8c3ad34615aa5a18e529fee7f1b52235e2d705da7b60884aa84c1dda1e"
     },
     {
       "id": "hostile-heavy-dom-catalog",
@@ -546,7 +546,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/hostile-heavy-dom-catalog.json",
-      "irSha256": "c02feccc9180905f6ffcfd9d6768d0d720a9e0ad2e594930170d6d1e84bd756f"
+      "irSha256": "27c6d6d1d92070c0b7b8ef21ca49a61966cfdf6968fcf880fdb9c860351af483"
     },
     {
       "id": "sealed-marketing-alt",
