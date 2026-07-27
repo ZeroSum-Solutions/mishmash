@@ -202,14 +202,14 @@
     {
       "elementId": "single-source-landing-di-0-layout",
       "sourceId": "land-solo-a",
-      "nodeId": "land-solo-a-features",
+      "nodeId": "land-solo-a-features-mobile",
       "domPath": "body > div.land-solo-a-shell > features.land-solo-a-features",
       "breakpoint": "mobile"
     },
     {
       "elementId": "single-source-landing-di-1-palette",
       "sourceId": "land-solo-a",
-      "nodeId": "land-solo-a-header",
+      "nodeId": "land-solo-a-header-desktop",
       "domPath": "body > div.land-solo-a-shell > header.land-solo-a-header",
       "breakpoint": "desktop"
     }

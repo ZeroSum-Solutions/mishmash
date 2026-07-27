@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-      "nodeId": "land-solo-a-header",
+      "nodeId": "land-solo-a-header-desktop",
       "domPath": "body > div.land-solo-a-shell > header.land-solo-a-header",
       "computedStyle": {
         "color": "#1c1c1c",
@@ -10,7 +10,7 @@
       }
     },
     {
-      "nodeId": "land-solo-a-hero",
+      "nodeId": "land-solo-a-hero-desktop",
       "domPath": "body > div.land-solo-a-shell > hero.land-solo-a-hero",
       "computedStyle": {
         "color": "#1c1c1c",
@@ -19,7 +19,7 @@
       }
     },
     {
-      "nodeId": "land-solo-a-hero-heading",
+      "nodeId": "land-solo-a-hero-heading-desktop",
       "domPath": "body > div.land-solo-a-shell > hero_heading.land-solo-a-hero-heading",
       "computedStyle": {
         "color": "#1c1c1c",
@@ -28,7 +28,7 @@
       }
     },
     {
-      "nodeId": "land-solo-a-features",
+      "nodeId": "land-solo-a-features-desktop",
       "domPath": "body > div.land-solo-a-shell > features.land-solo-a-features",
       "computedStyle": {
         "color": "#1c1c1c",
@@ -39,7 +39,7 @@
       }
     },
     {
-      "nodeId": "land-solo-a-feature-item-1",
+      "nodeId": "land-solo-a-feature-item-1-desktop",
       "domPath": "body > div.land-solo-a-shell > feature_item_1.land-solo-a-feature-item-1",
       "computedStyle": {
         "color": "#1c1c1c",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "nodeId": "land-solo-a-feature-item-2",
+      "nodeId": "land-solo-a-feature-item-2-desktop",
       "domPath": "body > div.land-solo-a-shell > feature_item_2.land-solo-a-feature-item-2",
       "computedStyle": {
         "color": "#1c1c1c",
@@ -57,7 +57,7 @@
       }
     },
     {
-      "nodeId": "land-solo-a-cta",
+      "nodeId": "land-solo-a-cta-desktop",
       "domPath": "body > div.land-solo-a-shell > cta.land-solo-a-cta",
       "computedStyle": {
         "color": "#1c1c1c",
@@ -66,7 +66,7 @@
       }
     },
     {
-      "nodeId": "land-solo-a-footer",
+      "nodeId": "land-solo-a-footer-desktop",
       "domPath": "body > div.land-solo-a-shell > footer.land-solo-a-footer",
       "computedStyle": {
         "color": "#1c1c1c",
