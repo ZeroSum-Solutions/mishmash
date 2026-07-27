@@ -361,7 +361,7 @@
       "sourceId": "blog-grid-a",
       "nodeId": "blog-grid-a-features",
       "domPath": "body > div.blog-grid-a-shell > features.blog-grid-a-features",
-      "breakpoint": "desktop"
+      "breakpoint": "mobile"
     },
     {
       "elementId": "blog-content-grid-di-1-palette",
