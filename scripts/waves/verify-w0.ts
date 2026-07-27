@@ -354,14 +354,25 @@ function findSubcommandHandlerEntryPoint(cliPath: string, subcommandNamePattern:
   // Defined locally in cli.ts itself.
   return cliPath;
 }
+// Round-4 F2: full transitive closure over local imports (BFS), not a
+// one-hop check -- a real .backup()/VACUUM INTO call several modules deep
+// in the actual import graph must count; a call in a file that merely
+// happens to sit in the same directory but is never imported (directly or
+// transitively) from the handler must not.
 function backupCallReachableFrom(entry: string): { ok: boolean; reachableFiles: string[] } {
   const reachable = new Set<string>([entry]);
-  const entryDir = path.dirname(entry);
-  for (const spec of localImportSpecifiers(entry)) {
-    const resolved = resolveLocalImport(entry, spec);
-    if (resolved) reachable.add(resolved);
+  const queue: string[] = [entry];
+  const MAX_FILES = 200; // bounded traversal, generous for this repo's module sizes
+  while (queue.length > 0 && reachable.size < MAX_FILES) {
+    const current = queue.shift()!;
+    for (const spec of localImportSpecifiers(current)) {
+      const resolved = resolveLocalImport(current, spec);
+      if (resolved && !reachable.has(resolved)) {
+        reachable.add(resolved);
+        queue.push(resolved);
+      }
+    }
   }
-  void entryDir;
   const reachableFiles = [...reachable];
   return { ok: reachableFiles.some((f) => fileHasRealSqliteBackupCall(f)), reachableFiles };
 }
@@ -581,29 +592,43 @@ async function main(): Promise<void> {
       if (add.status !== 0) {
         runResult = { ok: false, evidence: `git worktree add failed: ${add.stdout}` };
       } else {
-        for (const link of ['node_modules', 'apps/daemon/node_modules', 'apps/web/node_modules']) {
-          const src = path.join(repoRoot, link);
-          const dst = path.join(worktreeDir, link);
-          if (fs.existsSync(src) && !fs.existsSync(dst)) {
-            try { fs.mkdirSync(path.dirname(dst), { recursive: true }); fs.symlinkSync(src, dst, 'dir'); } catch { /* best effort */ }
+        // Round-4 F5: a wholesale node_modules symlink lets nested
+        // @open-design/* resolution walk back through the shared
+        // node_modules into the LIVE (HEAD-state) packages/apps, defeating
+        // parent-red at every nesting level below the root re-point. Run a
+        // real, store-cached `pnpm install --offline` in the worktree so
+        // every @open-design/* package resolves to baseCommit code at
+        // every level. Falls back to the old per-level symlink re-pointing
+        // only if the offline install genuinely cannot work (e.g. a store
+        // miss for a dependency added between baseCommit and HEAD).
+        // A freshly created worktree carries its own untrusted mise.toml
+        // (mise trust is a per-directory grant); without trusting it first,
+        // the mise-shimmed `pnpm` binary refuses to run and the offline
+        // install would silently no-op rather than genuinely installing.
+        sh('mise', ['trust', worktreeDir], { timeoutMs: 30_000 });
+        const install = sh('pnpm', ['install', '--offline'], { cwd: worktreeDir, timeoutMs: 5 * 60_000 });
+        if (install.status !== 0) {
+          for (const link of ['node_modules', 'apps/daemon/node_modules', 'apps/web/node_modules']) {
+            const src = path.join(repoRoot, link);
+            const dst = path.join(worktreeDir, link);
+            if (fs.existsSync(src) && !fs.existsSync(dst)) {
+              try { fs.mkdirSync(path.dirname(dst), { recursive: true }); fs.symlinkSync(src, dst, 'dir'); } catch { /* best effort */ }
+            }
           }
-        }
-        // Re-point first-party workspace package symlinks at the
-        // WORKTREE's own checked-out sources (pinned to baseCommit)
-        // instead of letting them resolve back through the shared
-        // node_modules symlink to the live HEAD-state packages/apps.
-        const scopeDir = path.join(worktreeDir, 'node_modules', '@open-design');
-        if (fs.existsSync(scopeDir)) {
-          for (const entry of fs.readdirSync(scopeDir)) {
-            const linkPath = path.join(scopeDir, entry);
-            let isSymlink = false;
-            try { isSymlink = fs.lstatSync(linkPath).isSymbolicLink(); } catch { /* ignore */ }
-            if (!isSymlink) continue;
-            const worktreePkg = path.join(worktreeDir, 'packages', entry);
-            const worktreeApp = path.join(worktreeDir, 'apps', entry);
-            const target = fs.existsSync(worktreePkg) ? worktreePkg : fs.existsSync(worktreeApp) ? worktreeApp : null;
-            if (target) {
-              try { fs.unlinkSync(linkPath); fs.symlinkSync(target, linkPath, 'dir'); } catch { /* best effort */ }
+          for (const scoped of ['node_modules/@open-design', 'apps/daemon/node_modules/@open-design', 'apps/web/node_modules/@open-design']) {
+            const scopeDir = path.join(worktreeDir, scoped);
+            if (!fs.existsSync(scopeDir)) continue;
+            for (const entry of fs.readdirSync(scopeDir)) {
+              const linkPath = path.join(scopeDir, entry);
+              let isSymlink = false;
+              try { isSymlink = fs.lstatSync(linkPath).isSymbolicLink(); } catch { /* ignore */ }
+              if (!isSymlink) continue;
+              const worktreePkg = path.join(worktreeDir, 'packages', entry);
+              const worktreeApp = path.join(worktreeDir, 'apps', entry);
+              const target = fs.existsSync(worktreePkg) ? worktreePkg : fs.existsSync(worktreeApp) ? worktreeApp : null;
+              if (target) {
+                try { fs.unlinkSync(linkPath); fs.symlinkSync(target, linkPath, 'dir'); } catch { /* best effort */ }
+              }
             }
           }
         }
@@ -624,7 +649,7 @@ async function main(): Promise<void> {
         const genuineAssertionFailure =
           namedHits.length > 0 &&
           namedHits.every((a) => a.status === 'failed' && !(a.failureMessages ?? []).some((m) => INVALID_FAILURE_CLASS.test(m)));
-        runResult = { ok: genuineAssertionFailure, evidence: `worktree=${worktreeDir}\nfiles=${relFiles.join(', ')}\nparent=${baseCommit}\nexit=${run.status}\nnamed hits: ${JSON.stringify(namedHits)}\ngenuineAssertionFailure=${genuineAssertionFailure}\n${run.stdout.slice(-3000)}` };
+        runResult = { ok: genuineAssertionFailure, evidence: `worktree=${worktreeDir}\noffline-install exit=${install.status}\nfiles=${relFiles.join(', ')}\nparent=${baseCommit}\nexit=${run.status}\nnamed hits: ${JSON.stringify(namedHits)}\ngenuineAssertionFailure=${genuineAssertionFailure}\n${run.stdout.slice(-3000)}` };
       }
     } finally {
       sh('git', ['worktree', 'remove', '--force', worktreeDir]);
@@ -669,9 +694,28 @@ async function main(): Promise<void> {
     return { sourceDir, projects };
   }
 
+  // Round-4 F1/F2: bytes-on-disk are not enough -- a restore that drops the
+  // projects TABLE while leaving loose files intact must fail. Queries the
+  // restored app.sqlite directly for every seeded project id, requires the
+  // surviving-row count to be >= the seeded count (a vacuously-empty
+  // restored table is a fail, not a pass), and only samples files that
+  // belong to a row that actually survived.
   async function verifyProjectFilesViaHttp(dataDir: string, fixture: SeededFixture, sampleMin: number): Promise<{ ok: boolean; sampled: number; mismatches: string[]; problems: string[] }> {
     const problems: string[] = [];
-    const allFiles = fixture.projects.flatMap((p) => p.files.map((f) => ({ projectId: p.id, ...f })));
+    const dbPath = path.join(dataDir, 'app.sqlite');
+    const survivingIds = new Set<string>();
+    if (fs.existsSync(dbPath)) {
+      for (const p of fixture.projects) {
+        const row = sh('sqlite3', [dbPath, `SELECT id FROM projects WHERE id = '${p.id.replace(/'/g, "''")}';`]);
+        if (row.status === 0 && row.stdout.trim() === p.id) survivingIds.add(p.id);
+      }
+    } else {
+      problems.push(`restored app.sqlite not found at ${dbPath} -- cannot verify project row survival`);
+    }
+    if (survivingIds.size < fixture.projects.length) {
+      problems.push(`restored project row count (${survivingIds.size}) is below the seeded count (${fixture.projects.length}) -- project records were lost`);
+    }
+    const allFiles = fixture.projects.filter((p) => survivingIds.has(p.id)).flatMap((p) => p.files.map((f) => ({ projectId: p.id, ...f })));
     const sample = allFiles.slice(0, Math.max(sampleMin, Math.min(allFiles.length, 50)));
     const mismatches: string[] = [];
     let daemon: BootedDaemon | null = null;
@@ -691,7 +735,7 @@ async function main(): Promise<void> {
     } finally {
       if (daemon) await daemon.kill();
     }
-    if (sample.length < sampleMin) problems.push(`only ${sample.length} files available to sample (need >=${sampleMin})`);
+    if (sample.length < sampleMin) problems.push(`only ${sample.length} files bound to surviving project rows available to sample (need >=${sampleMin})`);
     if (mismatches.length > 0) problems.push(`${mismatches.length}/${sample.length} sampled files mismatched via HTTP raw fetch`);
     return { ok: problems.length === 0, sampled: sample.length, mismatches, problems };
   }
@@ -699,7 +743,7 @@ async function main(): Promise<void> {
   // Reads the archive's own on-disk manifest.json directly -- the sole
   // source of archive contents (round-3 F4: archiveContents self-report
   // eliminated entirely). Rejects path escapes.
-  function readArchiveIndex(archivePath: string): { ok: boolean; classes: { class: string; relPath: string; absPath: string | null }[]; problems: string[] } {
+  function readArchiveIndex(archivePath: string): { ok: boolean; classes: { class: string; relPath: string; absPath: string | null; isDirectory: boolean }[]; problems: string[] } {
     const manifestPath = path.join(archivePath, 'manifest.json');
     if (!fs.existsSync(manifestPath)) return { ok: false, classes: [], problems: [`archive manifest missing: ${manifestPath}`] };
     let raw: { class: string; relPath: string }[];
@@ -717,14 +761,29 @@ async function main(): Promise<void> {
       seen.add(entry.class);
       const normalized = typeof entry.relPath === 'string' ? path.normalize(entry.relPath) : '';
       const resolved = path.resolve(archivePath, normalized);
-      const withinRoot = resolved === archiveRootReal || resolved.startsWith(`${archiveRootReal}${path.sep}`);
+      // Round-4 F4: lstat the entry itself -- a symlink is rejected
+      // outright, regardless of where it points. realpath (which fully
+      // resolves every symlinked path SEGMENT, not just the leaf) is what
+      // decides containment, since a lexical path.resolve never dereferences
+      // a symlinked intermediate directory and would wrongly accept one that
+      // escapes the archive root.
+      let lst: fs.Stats | null = null;
+      try { lst = fs.lstatSync(resolved); } catch { lst = null; }
+      if (!lst) {
+        problems.push(`class "${entry.class}" claims relPath "${entry.relPath}" but it does not exist inside the archive`);
+        return { class: entry.class, relPath: entry.relPath, absPath: null, isDirectory: false };
+      }
+      if (lst.isSymbolicLink()) {
+        problems.push(`class "${entry.class}" relPath "${entry.relPath}" is a symlink -- rejected outright`);
+        return { class: entry.class, relPath: entry.relPath, absPath: null, isDirectory: false };
+      }
+      const realResolved = fs.realpathSync(resolved);
+      const withinRoot = realResolved === archiveRootReal || realResolved.startsWith(`${archiveRootReal}${path.sep}`);
       if (!withinRoot) {
         problems.push(`class "${entry.class}" relPath "${entry.relPath}" escapes the archive root -- rejected`);
-        return { class: entry.class, relPath: entry.relPath, absPath: null };
+        return { class: entry.class, relPath: entry.relPath, absPath: null, isDirectory: false };
       }
-      const existsOnDisk = fs.existsSync(resolved);
-      if (!existsOnDisk) problems.push(`class "${entry.class}" claims relPath "${entry.relPath}" but it does not exist inside the archive`);
-      return { class: entry.class, relPath: entry.relPath, absPath: existsOnDisk ? resolved : null };
+      return { class: entry.class, relPath: entry.relPath, absPath: resolved, isDirectory: lst.isDirectory() };
     });
     return { ok: problems.length === 0, classes, problems };
   }
@@ -738,26 +797,63 @@ async function main(): Promise<void> {
 
   await checkCriterion(
     'C0-1',
-    `OD_DATA_DIR=<verifier-owned source> node ${odBinPath} backup create --out <archivePath> --json; OD_DATA_DIR=<verifier-owned fresh root> node ${odBinPath} restore --archive <archivePath> --json`,
-    'verifier seeds real projects+files via the daemon\'s own HTTP API, invokes the real od backup/restore CLI, and independently runs PRAGMA integrity_check, >=20 file HTTP round-trip comparisons, and an asset fetch against a daemon it boots on the restored root -- fails "product surface missing: od backup"/"od restore" until those subcommands exist',
+    `OD_DATA_DIR=<verifier-owned source> node ${odBinPath} backup create --out <archivePath> --json; OD_DATA_DIR=<verifier-owned fresh root> node ${odBinPath} restore --archive <archivePath> --json; independently, the daemon's live HTTP route inventory is searched for backup/restore-shaped routes and each is called`,
+    'verifier seeds real projects+files via the daemon\'s own HTTP API, invokes the real od backup/restore CLI, independently discovers+calls any HTTP backup/restore surface (mandatory shared-HTTP UI/CLI parity architecture), and independently runs PRAGMA integrity_check, >=20 file HTTP round-trip comparisons, and an asset fetch against a daemon it boots on the restored root -- fails "product surface missing: od backup"/"od restore" until those CLI subcommands exist, and fails "HTTP surface missing: ..." until the shared HTTP surface exists; both failure classes can be reported from the same run',
     async () => {
       const fixture = await seedRealSourceFixture();
       c01Fixture = fixture;
+      const problems: string[] = [];
+
+      // Round-4 F32: the escalation architecture requires SHARED CLI+HTTP
+      // surfaces, not a CLI-only implementation hidden behind OD_DATA_DIR.
+      // Discover any backup/restore-shaped live route and CALL it --
+      // discovery alone (a route existing but never invoked) is not
+      // sufficient. Runs BEFORE the CLI early-returns below so a single
+      // run reports both missing-surface classes together.
+      let httpBackupRoute: { method: string; path: string } | undefined;
+      let httpRestoreRoute: { method: string; path: string } | undefined;
+      let httpBackupCallStatus = -1;
+      let httpRestoreCallStatus = -1;
+      const discoveryDaemon = await bootDaemonForProbing(fixture.sourceDir);
+      try {
+        httpBackupRoute = discoveryDaemon.routeInventory.find((r) => /backup/i.test(r.path));
+        httpRestoreRoute = discoveryDaemon.routeInventory.find((r) => /restore/i.test(r.path));
+        if (httpBackupRoute) {
+          const init: RequestInit = { method: httpBackupRoute.method, headers: { 'Content-Type': 'application/json' } };
+          if (httpBackupRoute.method !== 'GET' && httpBackupRoute.method !== 'DELETE') init.body = JSON.stringify({});
+          const res = await fetch(`${discoveryDaemon.url}${httpBackupRoute.path}`, init).catch(() => null);
+          httpBackupCallStatus = res?.status ?? -1;
+        }
+        if (httpRestoreRoute) {
+          const init: RequestInit = { method: httpRestoreRoute.method, headers: { 'Content-Type': 'application/json' } };
+          if (httpRestoreRoute.method !== 'GET' && httpRestoreRoute.method !== 'DELETE') init.body = JSON.stringify({});
+          const res = await fetch(`${discoveryDaemon.url}${httpRestoreRoute.path}`, init).catch(() => null);
+          httpRestoreCallStatus = res?.status ?? -1;
+        }
+      } finally {
+        await discoveryDaemon.kill();
+      }
+      if (!httpBackupRoute) problems.push('HTTP surface missing: POST /api/backup');
+      else if (httpBackupCallStatus < 200 || httpBackupCallStatus >= 500) problems.push(`HTTP backup route ${httpBackupRoute.method} ${httpBackupRoute.path} did not respond acceptably when called (status=${httpBackupCallStatus})`);
+      if (!httpRestoreRoute) problems.push('HTTP surface missing: POST /api/restore');
+      else if (httpRestoreCallStatus < 200 || httpRestoreCallStatus >= 500) problems.push(`HTTP restore route ${httpRestoreRoute.method} ${httpRestoreRoute.path} did not respond acceptably when called (status=${httpRestoreCallStatus})`);
+
       const archiveDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-archive-'));
       const archivePath = path.join(archiveDir, 'archive');
       const backupRun = odCli(['backup', 'create', '--out', archivePath, '--json'], odDataEnv(fixture.sourceDir));
       if (backupRun.status !== 0) {
-        record('C0-1', '', '', false, backupRun.stdout, { detail: 'product surface missing: od backup', exitCode: backupRun.status });
+        problems.push('product surface missing: od backup');
+        record('C0-1', '', '', false, backupRun.stdout, { detail: problems.join('; '), exitCode: backupRun.status });
         return;
       }
       c01ArchivePath = archivePath;
       const restoreDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-restore-'));
       const restoreRun = odCli(['restore', '--archive', archivePath, '--json'], odDataEnv(restoreDir));
       if (restoreRun.status !== 0) {
-        record('C0-1', '', '', false, restoreRun.stdout, { detail: 'product surface missing: od restore', exitCode: restoreRun.status });
+        problems.push('product surface missing: od restore');
+        record('C0-1', '', '', false, restoreRun.stdout, { detail: problems.join('; '), exitCode: restoreRun.status });
         return;
       }
-      const problems: string[] = [];
       const dbPath = path.join(restoreDir, 'app.sqlite');
       let integrityOutput = '';
       if (fs.existsSync(dbPath)) {
@@ -772,7 +868,7 @@ async function main(): Promise<void> {
       const archiveIndex = readArchiveIndex(archivePath);
       problems.push(...archiveIndex.problems);
       const ok = problems.length === 0;
-      record('C0-1', '', '', ok, JSON.stringify({ integrityOutput, httpCheck, archiveIndex }, null, 2), { detail: ok ? undefined : problems.join('; '), exitCode: Math.max(backupRun.status, restoreRun.status) });
+      record('C0-1', '', '', ok, JSON.stringify({ integrityOutput, httpCheck, archiveIndex, httpBackupRoute, httpRestoreRoute, httpBackupCallStatus, httpRestoreCallStatus }, null, 2), { detail: ok ? undefined : problems.join('; '), exitCode: Math.max(backupRun.status, restoreRun.status) });
     },
   );
 
@@ -791,12 +887,36 @@ async function main(): Promise<void> {
       let stdout = '';
       child.stdout?.on('data', (c: Buffer) => (stdout += c.toString('utf8')));
       let writerWrites = 0;
+      let fileUploadsDuringBackup = 0;
       const writerStart = Date.now();
       const writerInterval = setInterval(() => {
         const r = sh('sqlite3', [dbPath, `UPDATE projects SET updated_at = ${Date.now()} WHERE id = (SELECT id FROM projects LIMIT 1);`]);
         if (r.status === 0) writerWrites++;
       }, 25);
+      // Round-4 F2: the writer loop must ALSO upload real project FILES
+      // during the backup window, not just mutate SQLite rows, since
+      // "atomic under concurrent mutation" covers the file store too.
+      let backupChildRunning = true;
+      const fileUploadLoop = (async () => {
+        const uploadDaemon = await bootDaemonForProbing(fixture.sourceDir).catch(() => null);
+        if (!uploadDaemon) return;
+        try {
+          const targetProject = fixture.projects[1] ?? fixture.projects[0]!;
+          while (backupChildRunning) {
+            const name = `w0-concurrent-upload-${fileUploadsDuringBackup}-${crypto.randomBytes(4).toString('hex')}.txt`;
+            const form = new FormData();
+            form.append('files', new Blob([`concurrent-write-${fileUploadsDuringBackup}`], { type: 'text/plain' }), name);
+            const res = await fetch(`${uploadDaemon.url}/api/projects/${targetProject.id}/upload`, { method: 'POST', body: form }).catch(() => null);
+            if (res?.status === 200) fileUploadsDuringBackup++;
+            await new Promise((r) => setTimeout(r, 40));
+          }
+        } finally {
+          await uploadDaemon.kill();
+        }
+      })();
       const exitCode: number = await new Promise((resolve) => child.on('exit', (code) => resolve(code ?? 1)));
+      backupChildRunning = false;
+      await fileUploadLoop;
       clearInterval(writerInterval);
       const writerDurationMs = Date.now() - writerStart;
 
@@ -837,8 +957,13 @@ async function main(): Promise<void> {
           const markerCheck = await verifyProjectFilesViaHttp(restoreDir, { sourceDir: fixture.sourceDir, projects: [{ id: markerProject.id, files: [{ name: markerName, content: 'post-backup-marker' }] }] }, 1);
           if (markerCheck.mismatches.length === 0) problems.push('post-backup marker file IS present in the restored snapshot -- restore includes writes newer than the backup');
           // Row-to-file referential consistency: every restored project row
-          // must resolve to a real, fetchable file.
+          // must resolve to a real, fetchable file. Round-4 F2: a
+          // vacuously-empty restored projects table must FAIL, not pass by
+          // having nothing to iterate.
           const restoredProjectIds = sh('sqlite3', [restoredDbPath, 'SELECT id FROM projects;']).stdout.trim().split('\n').filter(Boolean);
+          if (restoredProjectIds.length < fixture.projects.length) {
+            problems.push(`restored project count (${restoredProjectIds.length}) is below the seeded count (${fixture.projects.length}) -- vacuous-empty restore is a fail, not a pass`);
+          }
           let daemon: BootedDaemon | null = null;
           const orphanRows: string[] = [];
           try {
@@ -858,6 +983,7 @@ async function main(): Promise<void> {
       }
       if (writerWrites < 10) problems.push(`writer loop only achieved ${writerWrites} real DB updates (want >=10)`);
       if (writerDurationMs < 300) problems.push(`writer loop ran only ${writerDurationMs}ms`);
+      if (fileUploadsDuringBackup < 1) problems.push('no real file uploads occurred during the backup window (want >=1)');
 
       const cliPath = path.join(repoRoot, 'apps/daemon/src/cli.ts');
       const entry = findSubcommandHandlerEntryPoint(cliPath, /^backup$/i);
@@ -867,7 +993,7 @@ async function main(): Promise<void> {
       else if (!reach.ok) problems.push(`no real .backup(...)/VACUUM INTO call reachable from the SUBCOMMAND_MAP "backup" handler (checked: ${reach.reachableFiles.join(', ')})`);
 
       const ok = problems.length === 0;
-      record('C0-2', '', '', ok, JSON.stringify({ before, after, writerWrites, writerDurationMs, entry, reach }, null, 2), { detail: ok ? undefined : problems.join('; '), exitCode });
+      record('C0-2', '', '', ok, JSON.stringify({ before, after, writerWrites, writerDurationMs, fileUploadsDuringBackup, entry, reach }, null, 2), { detail: ok ? undefined : problems.join('; '), exitCode });
     },
   );
 
@@ -890,11 +1016,28 @@ async function main(): Promise<void> {
       const dbEntry = archiveIndex.classes.find((c) => c.class === 'sqlite-database' && c.absPath);
       const projectsEntry = archiveIndex.classes.find((c) => c.class === 'projects-dir' && c.absPath);
       const manifestPath = path.join(archivePath, 'manifest.json');
+      // Round-4 F33: an archive-index entry may legitimately be a
+      // directory (e.g. projects-dir). Select a real CONTAINED FILE to
+      // byte-flip -- never fs.readFileSync a directory.
+      function pickFileWithin(absPath: string, isDirectory: boolean): string | null {
+        if (!isDirectory) return absPath;
+        let found: string | null = null;
+        (function walk(dir: string): void {
+          if (found) return;
+          for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            if (found) return;
+            const full = path.join(dir, entry.name);
+            if (entry.isDirectory()) walk(full);
+            else if (entry.isFile()) { found = full; return; }
+          }
+        })(absPath);
+        return found;
+      }
       const targets: { kind: string; absPath: string }[] = [
-        ...(dbEntry?.absPath ? [{ kind: 'sqlite-database', absPath: dbEntry.absPath }] : []),
-        ...(projectsEntry?.absPath ? [{ kind: 'projects-dir', absPath: projectsEntry.absPath }] : []),
+        ...(dbEntry?.absPath ? [{ kind: 'sqlite-database', absPath: pickFileWithin(dbEntry.absPath, dbEntry.isDirectory) }] : []),
+        ...(projectsEntry?.absPath ? [{ kind: 'projects-dir', absPath: pickFileWithin(projectsEntry.absPath, projectsEntry.isDirectory) }] : []),
         { kind: 'manifest-entry', absPath: manifestPath },
-      ];
+      ].filter((t): t is { kind: string; absPath: string } => t.absPath !== null);
       const distinctPaths = new Set(targets.map((t) => t.absPath));
       const perTarget: { kind: string; ok: boolean; exit: number }[] = [];
       for (const { kind, absPath } of targets) {
@@ -904,6 +1047,12 @@ async function main(): Promise<void> {
           fs.cpSync(archivePath, corruptedArchive, { recursive: true });
           const relInArchive = path.relative(archivePath, absPath);
           const targetFile = path.join(corruptedArchive, relInArchive);
+          // lstat before read -- never operate on a directory or a symlink.
+          const targetLstat = fs.lstatSync(targetFile);
+          if (targetLstat.isDirectory() || targetLstat.isSymbolicLink()) {
+            perTarget.push({ kind, ok: false, exit: -1 });
+            continue;
+          }
           const buf = fs.readFileSync(targetFile);
           const offset = Math.floor(buf.length / 2);
           const before = buf[offset];
@@ -1029,39 +1178,51 @@ async function main(): Promise<void> {
   );
 
   // Round-3 F6: rotation/revocation must assert SEMANTICS, not status codes.
-  await checkCriterion('C0-6', 'live HTTP: replay tested against the real pairing surface; revocation/rotation, when their endpoints exist, must prove the OLD token is rejected and (for rotation) a NEW token is accepted -- a 204 no-op cannot pass', 'suite-title matches are never sufficient; endpoints fail with "endpoint missing: <which>" until they exist; once they exist, semantics are asserted', async () => {
+  await checkCriterion('C0-6', 'live HTTP: replay tested against the real pairing surface; revocation and rotation are tested on SEPARATE tokens from independent pairings (never chained on the same token); each must prove the OLD token is rejected and, for rotation, a NEW token is accepted -- a 204 no-op cannot pass', 'suite-title matches are never sufficient; endpoints fail with "endpoint missing: <which>" until they exist; once they exist, semantics are asserted per-token, not chained', async () => {
     let daemon: BootedDaemon | null = null;
     let replayOk = false, replayDetail = '';
     let revocationEndpoint: { method: string; path: string } | undefined;
     let rotationEndpoint: { method: string; path: string } | undefined;
     let revocationOk = false, rotationOk = false;
+    // Round-4 F6: mint an INDEPENDENT token via its own pair/confirm flow.
+    // Chaining revoke-then-rotate (or vice versa) on one token makes the two
+    // semantics mutually exclusive for a CORRECT implementation.
+    async function mintToken(url: string): Promise<{ token: string | undefined; ext: string }> {
+      const pairRes = await fetch(`${url}/api/library/pair`, { method: 'POST', headers: { Host: '127.0.0.1' } });
+      const pairBody = (await pairRes.json()) as { code?: string };
+      const ext = crypto.randomBytes(16).toString('hex');
+      const confirmRes = await fetch(`${url}/api/library/pair/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: `chrome-extension://${ext}` }, body: JSON.stringify({ code: pairBody.code, extensionOrigin: `chrome-extension://${ext}` }) });
+      const confirmBody = (await confirmRes.json()) as { token?: string };
+      return { token: confirmBody.token, ext };
+    }
     try {
       daemon = await bootDaemonForProbing();
-      const pairRes = await fetch(`${daemon.url}/api/library/pair`, { method: 'POST', headers: { Host: '127.0.0.1' } });
-      const pairBody = (await pairRes.json()) as { code?: string };
-      const extA = crypto.randomBytes(16).toString('hex');
-      const confirmRes = await fetch(`${daemon.url}/api/library/pair/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: `chrome-extension://${extA}` }, body: JSON.stringify({ code: pairBody.code, extensionOrigin: `chrome-extension://${extA}` }) });
-      const confirmBody = (await confirmRes.json()) as { token?: string };
+      const replaySrc = await mintToken(daemon.url);
       const extB = crypto.randomBytes(16).toString('hex');
-      const replayRes = await fetch(`${daemon.url}/api/library/ingest`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: `chrome-extension://${extB}`, Authorization: confirmBody.token ? `Bearer ${confirmBody.token}` : '' }, body: JSON.stringify({ dataUrl: 'data:text/plain;base64,dzAtdmVyaWZpZXI=', filename: 'w0-verifier-replay-probe.txt' }) });
+      const replayRes = await fetch(`${daemon.url}/api/library/ingest`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: `chrome-extension://${extB}`, Authorization: replaySrc.token ? `Bearer ${replaySrc.token}` : '' }, body: JSON.stringify({ dataUrl: 'data:text/plain;base64,dzAtdmVyaWZpZXI=', filename: 'w0-verifier-replay-probe.txt' }) });
       replayOk = replayRes.status === 401 || replayRes.status === 403;
       replayDetail = `replay status=${replayRes.status}`;
 
       revocationEndpoint = daemon.routeInventory.find((r) => /library/i.test(r.path) && (/revoke/i.test(r.path) || (r.method === 'DELETE' && /token/i.test(r.path))));
       rotationEndpoint = daemon.routeInventory.find((r) => /library/i.test(r.path) && /rotate/i.test(r.path));
       if (revocationEndpoint) {
-        await fetch(`${daemon.url}${revocationEndpoint.path}`, { method: revocationEndpoint.method, headers: { Authorization: confirmBody.token ? `Bearer ${confirmBody.token}` : '' } });
-        const postRevokeRes = await fetch(`${daemon.url}/api/library/ingest`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: `chrome-extension://${extA}`, Authorization: confirmBody.token ? `Bearer ${confirmBody.token}` : '' }, body: JSON.stringify({ dataUrl: 'data:text/plain;base64,dzAtdmVyaWZpZXI=', filename: 'w0-verifier-post-revoke.txt' }) });
+        // Token B: used ONLY for the revocation lifecycle.
+        const revokeSrc = await mintToken(daemon.url);
+        await fetch(`${daemon.url}${revocationEndpoint.path}`, { method: revocationEndpoint.method, headers: { Authorization: revokeSrc.token ? `Bearer ${revokeSrc.token}` : '' } });
+        const postRevokeRes = await fetch(`${daemon.url}/api/library/ingest`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: `chrome-extension://${revokeSrc.ext}`, Authorization: revokeSrc.token ? `Bearer ${revokeSrc.token}` : '' }, body: JSON.stringify({ dataUrl: 'data:text/plain;base64,dzAtdmVyaWZpZXI=', filename: 'w0-verifier-post-revoke.txt' }) });
         revocationOk = postRevokeRes.status === 401 || postRevokeRes.status === 403;
       }
       if (rotationEndpoint) {
-        const rotateRes = await fetch(`${daemon.url}${rotationEndpoint.path}`, { method: rotationEndpoint.method, headers: { Authorization: confirmBody.token ? `Bearer ${confirmBody.token}` : '' } });
+        // Token C: an INDEPENDENT mint used ONLY for the rotation lifecycle
+        // -- never the token that was just revoked above.
+        const rotateSrc = await mintToken(daemon.url);
+        const rotateRes = await fetch(`${daemon.url}${rotationEndpoint.path}`, { method: rotationEndpoint.method, headers: { Authorization: rotateSrc.token ? `Bearer ${rotateSrc.token}` : '' } });
         const rotateBody = (await rotateRes.json().catch(() => ({}))) as { token?: string };
-        const oldTokenRes = await fetch(`${daemon.url}/api/library/ingest`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: `chrome-extension://${extA}`, Authorization: confirmBody.token ? `Bearer ${confirmBody.token}` : '' }, body: JSON.stringify({ dataUrl: 'data:text/plain;base64,dzAtdmVyaWZpZXI=', filename: 'w0-verifier-old-token-post-rotate.txt' }) });
+        const oldTokenRes = await fetch(`${daemon.url}/api/library/ingest`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: `chrome-extension://${rotateSrc.ext}`, Authorization: rotateSrc.token ? `Bearer ${rotateSrc.token}` : '' }, body: JSON.stringify({ dataUrl: 'data:text/plain;base64,dzAtdmVyaWZpZXI=', filename: 'w0-verifier-old-token-post-rotate.txt' }) });
         const oldTokenRejected = oldTokenRes.status === 401 || oldTokenRes.status === 403;
         let newTokenAccepted = false;
         if (rotateBody.token) {
-          const newTokenRes = await fetch(`${daemon.url}/api/library/ingest`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: `chrome-extension://${extA}`, Authorization: `Bearer ${rotateBody.token}` }, body: JSON.stringify({ dataUrl: 'data:text/plain;base64,dzAtdmVyaWZpZXI=', filename: 'w0-verifier-new-token-post-rotate.txt' }) });
+          const newTokenRes = await fetch(`${daemon.url}/api/library/ingest`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: `chrome-extension://${rotateSrc.ext}`, Authorization: `Bearer ${rotateBody.token}` }, body: JSON.stringify({ dataUrl: 'data:text/plain;base64,dzAtdmVyaWZpZXI=', filename: 'w0-verifier-new-token-post-rotate.txt' }) });
           newTokenAccepted = newTokenRes.status === 200;
         }
         rotationOk = oldTokenRejected && newTokenAccepted;
@@ -1084,11 +1245,11 @@ async function main(): Promise<void> {
         record('C0-7', '', '', false, '', { detail: `missing: ${rel}` });
         return;
       }
-      let routes: { method: string; path: string; dynamic?: boolean }[] = [];
+      let routes: { method: string; path: string; dynamic?: boolean; file?: string; line?: number; probePath?: string }[] = [];
       try {
         const raw = JSON.parse(readRepoFile(rel));
         if (!Array.isArray(raw)) throw new Error('top-level value must be an array');
-        routes = raw as { method: string; path: string; dynamic?: boolean }[];
+        routes = raw as { method: string; path: string; dynamic?: boolean; file?: string; line?: number; probePath?: string }[];
       } catch (err) {
         record('C0-7', '', '', false, '', { detail: `invalid JSON: ${String(err)}` });
         return;
@@ -1097,8 +1258,19 @@ async function main(): Promise<void> {
       const dedupKeys = new Set(validRows.map((r) => `${r.method} ${r.path}`));
       const { guarded, unresolvable } = staticRequireLocalDaemonRequestRoutesAndDynamics();
       const baselineKeys = new Set(guarded.map((b) => `${b.method} ${b.path}`));
-      const acknowledgedDynamicCount = validRows.filter((r) => r.dynamic === true).length;
-      const dynamicUnacknowledged = acknowledgedDynamicCount < unresolvable.length;
+      // Round-4 F7: a dynamic row is no longer acknowledged by COUNT alone --
+      // it must bind to a specific {file, line} unresolvable-guard site
+      // discovered by the AST pass, matched 1:1. A dynamic row with no
+      // matching site, or a site with no matching row, both fail. This
+      // closes the "any unrelated dynamic:true row satisfies the count"
+      // gaming vector.
+      const dynamicRows = validRows.filter((r) => r.dynamic === true);
+      const siteKey = (s: { file: string; line: number }) => `${s.file}:${s.line}`;
+      const unresolvableKeys = new Set(unresolvable.map(siteKey));
+      const dynamicRowKeys = dynamicRows.map((r) => (typeof r.file === 'string' && typeof r.line === 'number' ? `${r.file}:${r.line}` : null));
+      const dynamicRowsUnbound = dynamicRows.filter((r, i) => dynamicRowKeys[i] === null || !unresolvableKeys.has(dynamicRowKeys[i] as string));
+      const boundRowKeys = new Set(dynamicRowKeys.filter((k): k is string => k !== null));
+      const unresolvableSitesUnacknowledged = unresolvable.filter((s) => !boundRowKeys.has(siteKey(s)));
 
       let daemon: BootedDaemon | null = null;
       const liveResults: { method: string; path: string; status: number }[] = [];
@@ -1106,12 +1278,17 @@ async function main(): Promise<void> {
       try {
         daemon = await bootDaemonForProbing();
         liveRouteKeys = new Set(daemon.routeInventory.map((r) => `${r.method} ${r.path}`));
-        for (const row of validRows.filter((r) => !r.dynamic)) {
+        // Static rows are probed by their declared path. A dynamic row that
+        // supplies a concrete probePath (a real, live-observed instance of
+        // the computed path) is probed the same way -- acknowledgement
+        // alone is not enough if the row also claims to know a real path.
+        for (const row of validRows.filter((r) => !r.dynamic || typeof r.probePath === 'string')) {
+          const probePath = row.dynamic ? (row.probePath as string) : row.path;
           try {
-            const res = await fetch(`${daemon.url}${row.path.replace(/:[a-zA-Z]+/g, 'w0-verifier-probe-id')}`, { method: row.method, headers: { Host: '127.0.0.1' } });
-            liveResults.push({ method: row.method, path: row.path, status: res.status });
+            const res = await fetch(`${daemon.url}${probePath.replace(/:[a-zA-Z]+/g, 'w0-verifier-probe-id')}`, { method: row.method, headers: { Host: '127.0.0.1' } });
+            liveResults.push({ method: row.method, path: probePath, status: res.status });
           } catch {
-            liveResults.push({ method: row.method, path: row.path, status: -1 });
+            liveResults.push({ method: row.method, path: probePath, status: -1 });
           }
         }
       } finally {
@@ -1122,12 +1299,12 @@ async function main(): Promise<void> {
       const guardedRoutesMissingFromInventory = guarded.filter((b) => !dedupKeys.has(`${b.method} ${b.path}`));
       const iteration = needleReport('(C0-7/route)', Math.max(validRows.length, 1));
       const control = needleReport('(C0-7/control)', 1);
-      const ok = validRows.length >= 1 && validRows.length === routes.length && dedupKeys.size === validRows.length && inventoryRowsNotLive.length === 0 && guardedRoutesMissingFromInventory.length === 0 && !dynamicUnacknowledged && iteration.ok && control.ok && liveRejectedAll;
+      const ok = validRows.length >= 1 && validRows.length === routes.length && dedupKeys.size === validRows.length && inventoryRowsNotLive.length === 0 && guardedRoutesMissingFromInventory.length === 0 && dynamicRowsUnbound.length === 0 && unresolvableSitesUnacknowledged.length === 0 && iteration.ok && control.ok && liveRejectedAll;
       record('C0-7', '', '', ok,
         `inventory rows: ${routes.length}\nAST guarded baseline: ${guarded.length}; missing: ${JSON.stringify(guardedRoutesMissingFromInventory)}\n` +
-          `unresolvable-path guarded registrations: ${JSON.stringify(unresolvable)}; acknowledged as dynamic in inventory: ${acknowledgedDynamicCount}\n` +
+          `unresolvable-path guarded registrations: ${JSON.stringify(unresolvable)}; dynamic rows: ${JSON.stringify(dynamicRows)}; unbound dynamic rows: ${JSON.stringify(dynamicRowsUnbound)}; unacknowledged sites: ${JSON.stringify(unresolvableSitesUnacknowledged)}\n` +
           `inventory rows without a live route: ${JSON.stringify(inventoryRowsNotLive)}\nlive probe: ${JSON.stringify(liveResults)}\n-- per-route --\n${iteration.evidence}\n-- control --\n${control.evidence}`,
-        { detail: ok ? undefined : `rows=${validRows.length} unique=${dedupKeys.size} inventoryRowsNotLive=${inventoryRowsNotLive.length} guardedMissing=${guardedRoutesMissingFromInventory.length} dynamicUnacknowledged=${dynamicUnacknowledged} iterationOk=${iteration.ok} controlOk=${control.ok} liveRejectedAll=${liveRejectedAll}` });
+        { detail: ok ? undefined : `rows=${validRows.length} unique=${dedupKeys.size} inventoryRowsNotLive=${inventoryRowsNotLive.length} guardedMissing=${guardedRoutesMissingFromInventory.length} dynamicRowsUnbound=${dynamicRowsUnbound.length} unresolvableSitesUnacknowledged=${unresolvableSitesUnacknowledged.length} iterationOk=${iteration.ok} controlOk=${control.ok} liveRejectedAll=${liveRejectedAll}` });
       void baselineKeys;
     },
   );
@@ -1196,65 +1373,124 @@ async function main(): Promise<void> {
       if (Math.abs(p50 - s.p50) > 0.01) problems.push(`scenario "${s.name}": stated p50 ${s.p50} != recomputed ${p50}`);
       if (Math.abs(p95 - s.p95) > 0.01) problems.push(`scenario "${s.name}": stated p95 ${s.p95} != recomputed ${p95}`);
     }
+    // Round-4 F9: a path+size manifest can be satisfied by swapping in a
+    // "tiny unrelated directory" whose own path/size list is then hashed and
+    // declared -- self-consistent but unrepresentative. Two independent
+    // hardenings: (1) the fingerprint is now CONTENT-addressed (sha256 of
+    // actual file bytes, not just names/sizes) over every file up to a
+    // deterministic cap; (2) a minimum real-byte-size floor rules out a
+    // trivial substitute corpus regardless of what the declared hash says.
+    const MIN_CORPUS_BYTES = 100_000_000; // 100MB floor -- rules out "tiny unrelated directory" swaps
+    const MAX_HASHED_FILES = 3000; // deterministic sample cap for hashing runtime
     let corpusOk = false;
+    let corpusTotalBytes = 0;
     if (!baseline.corpus?.path || !baseline.corpus?.sha256) {
       problems.push('missing corpus.path/corpus.sha256');
     } else if (fs.existsSync(baseline.corpus.path)) {
-      const manifestLines: string[] = [];
+      const allFiles: { rel: string; abs: string; size: number }[] = [];
       (function walk(dir: string, base: string): void {
         for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
           const full = path.join(dir, entry.name);
           if (entry.isDirectory()) walk(full, base);
-          else manifestLines.push(`${path.relative(base, full)}:${fs.statSync(full).size}`);
+          else {
+            const size = fs.statSync(full).size;
+            allFiles.push({ rel: path.relative(base, full), abs: full, size });
+            corpusTotalBytes += size;
+          }
         }
       })(baseline.corpus.path, baseline.corpus.path);
-      if (manifestLines.length === 0) problems.push('corpus.path is an empty store -- not declared/documented as intentionally empty');
-      const recomputedCorpusHash = sha256Bytes(manifestLines.sort().join('\n'));
+      if (allFiles.length === 0) problems.push('corpus.path is an empty store -- not declared/documented as intentionally empty');
+      if (corpusTotalBytes < MIN_CORPUS_BYTES) problems.push(`corpus total size ${corpusTotalBytes} bytes is below the ${MIN_CORPUS_BYTES}-byte scale floor -- not a real scale-baseline corpus`);
+      allFiles.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
+      const sampled = allFiles.length <= MAX_HASHED_FILES ? allFiles : allFiles.filter((_, i) => i % Math.ceil(allFiles.length / MAX_HASHED_FILES) === 0);
+      const contentPairs = sampled.map((f) => `${f.rel}:${sha256File(f.abs)}`);
+      const recomputedCorpusHash = sha256Bytes(contentPairs.join('\n'));
       if (recomputedCorpusHash !== baseline.corpus.sha256) problems.push(`corpus fingerprint mismatch: recomputed ${recomputedCorpusHash.slice(0, 12)} != stated ${baseline.corpus.sha256.slice(0, 12)}`);
-      else corpusOk = true;
+      else if (allFiles.length > 0 && corpusTotalBytes >= MIN_CORPUS_BYTES) corpusOk = true;
     } else {
       problems.push(`corpus.path "${baseline.corpus.path}" does not exist`);
     }
 
+    // Round-4 F9: the required R8 protocol is a discarded warmup pass
+    // followed by >=5 TIMED repetitions, with p50/p95 recomputed from those
+    // live observations -- not a single unwarmed sample compared against
+    // author-fabricated baseline samples.
+    const R8_WARMUP_ITERATIONS = 1;
+    const R8_REPETITIONS = 5;
+    function percentile(sortedAsc: number[], frac: number): number {
+      return sortedAsc[Math.min(sortedAsc.length - 1, Math.floor(sortedAsc.length * frac))] ?? 0;
+    }
     const SCENARIOS = ['cold-start', 'project-list', 'designs-tab-fan-out', 'memory-high-water', 'search'];
-    const smoke: Record<string, { valueMs: number | null; httpOk: boolean }> = {};
+    const smoke: Record<string, { samplesMs: number[]; p50: number; p95: number; httpOkAll: boolean }> = {};
     if (corpusOk) {
-      let daemon: BootedDaemon | null = null;
       try {
-        const t0 = Date.now();
-        daemon = await bootDaemonForProbing(baseline.corpus.path);
-        smoke['cold-start'] = { valueMs: Date.now() - t0, httpOk: true };
-        const t1 = Date.now();
-        const listRes = await fetch(`${daemon.url}/api/projects`).catch(() => null);
-        smoke['project-list'] = { valueMs: listRes ? Date.now() - t1 : null, httpOk: !!listRes && listRes.ok };
-        const fanoutRoute = daemon.routeInventory.find((r) => r.method === 'GET' && /projects\/:[a-zA-Z]+\/files/i.test(r.path));
-        if (fanoutRoute) {
-          const t2 = Date.now();
-          const res = await fetch(`${daemon.url}${fanoutRoute.path.replace(/:[a-zA-Z]+/g, 'w0-verifier-smoke-id')}`).catch(() => null);
-          smoke['designs-tab-fan-out'] = { valueMs: Date.now() - t2, httpOk: !!res && res.ok };
-        } else smoke['designs-tab-fan-out'] = { valueMs: null, httpOk: false };
-        if (daemon.pid) {
-          const rssSamples: number[] = [];
-          for (let i = 0; i < 10; i++) {
-            const r = sh('ps', ['-o', 'rss=', '-p', String(daemon.pid)]);
-            const n = Number(r.stdout.trim());
-            if (Number.isFinite(n)) rssSamples.push(n);
-            await fetch(`${daemon.url}/api/health`).catch(() => null);
+        // cold-start: each repetition is a genuinely fresh daemon process
+        // (warmup boot discarded, priming OS/module caches; 5 timed boots).
+        const coldSamples: number[] = [];
+        let coldHttpOkAll = true;
+        for (let i = 0; i < R8_WARMUP_ITERATIONS + R8_REPETITIONS; i++) {
+          const t0 = Date.now();
+          const d = await bootDaemonForProbing(baseline.corpus.path);
+          const elapsed = Date.now() - t0;
+          await d.kill();
+          if (i >= R8_WARMUP_ITERATIONS) coldSamples.push(elapsed);
+        }
+        smoke['cold-start'] = { samplesMs: coldSamples, p50: percentile([...coldSamples].sort((a, b) => a - b), 0.5), p95: percentile([...coldSamples].sort((a, b) => a - b), 0.95), httpOkAll: coldHttpOkAll };
+
+        // Remaining scenarios share one long-lived daemon; each does its own
+        // warmup-then-5-reps loop against it.
+        const daemon = await bootDaemonForProbing(baseline.corpus.path);
+        try {
+          const fanoutRoute = daemon.routeInventory.find((r) => r.method === 'GET' && /projects\/:[a-zA-Z]+\/files/i.test(r.path));
+          const searchRoute = daemon.routeInventory.find((r) => /search/i.test(r.path));
+
+          async function timedRun(fn: () => Promise<boolean>): Promise<{ samplesMs: number[]; httpOkAll: boolean }> {
+            for (let w = 0; w < R8_WARMUP_ITERATIONS; w++) await fn().catch(() => false);
+            const samples: number[] = [];
+            let okAll = true;
+            for (let i = 0; i < R8_REPETITIONS; i++) {
+              const t0 = Date.now();
+              const ok = await fn().catch(() => false);
+              samples.push(Date.now() - t0);
+              if (!ok) okAll = false;
+            }
+            return { samplesMs: samples, httpOkAll: okAll };
           }
-          smoke['memory-high-water'] = { valueMs: rssSamples.length ? Math.max(...rssSamples) : null, httpOk: rssSamples.length > 0 };
-        } else smoke['memory-high-water'] = { valueMs: null, httpOk: false };
-        const searchRoute = daemon.routeInventory.find((r) => /search/i.test(r.path));
-        if (searchRoute) {
-          const t3 = Date.now();
-          const init: RequestInit = { method: searchRoute.method, headers: { 'Content-Type': 'application/json' } };
-          if (searchRoute.method === 'POST') init.body = JSON.stringify({ query: 'w0-verifier-smoke' });
-          const res = await fetch(`${daemon.url}${searchRoute.path}`, init).catch(() => null);
-          smoke['search'] = { valueMs: Date.now() - t3, httpOk: !!res && res.ok };
-        } else smoke['search'] = { valueMs: null, httpOk: false };
+
+          const listRun = await timedRun(async () => { const r = await fetch(`${daemon.url}/api/projects`).catch(() => null); return !!r && r.ok; });
+          smoke['project-list'] = { ...listRun, p50: percentile([...listRun.samplesMs].sort((a, b) => a - b), 0.5), p95: percentile([...listRun.samplesMs].sort((a, b) => a - b), 0.95) };
+
+          if (fanoutRoute) {
+            const fanoutRun = await timedRun(async () => { const r = await fetch(`${daemon.url}${fanoutRoute.path.replace(/:[a-zA-Z]+/g, 'w0-verifier-smoke-id')}`).catch(() => null); return !!r && r.ok; });
+            smoke['designs-tab-fan-out'] = { ...fanoutRun, p50: percentile([...fanoutRun.samplesMs].sort((a, b) => a - b), 0.5), p95: percentile([...fanoutRun.samplesMs].sort((a, b) => a - b), 0.95) };
+          } else smoke['designs-tab-fan-out'] = { samplesMs: [], p50: 0, p95: 0, httpOkAll: false };
+
+          if (daemon.pid) {
+            const rssSamples: number[] = [];
+            for (let i = 0; i < R8_WARMUP_ITERATIONS + R8_REPETITIONS; i++) {
+              const r = sh('ps', ['-o', 'rss=', '-p', String(daemon.pid)]);
+              const n = Number(r.stdout.trim());
+              if (Number.isFinite(n) && i >= R8_WARMUP_ITERATIONS) rssSamples.push(n);
+              await fetch(`${daemon.url}/api/health`).catch(() => null);
+            }
+            const sortedRss = [...rssSamples].sort((a, b) => a - b);
+            smoke['memory-high-water'] = { samplesMs: rssSamples, p50: percentile(sortedRss, 0.5), p95: percentile(sortedRss, 0.95), httpOkAll: rssSamples.length > 0 };
+          } else smoke['memory-high-water'] = { samplesMs: [], p50: 0, p95: 0, httpOkAll: false };
+
+          if (searchRoute) {
+            const searchRun = await timedRun(async () => {
+              const init: RequestInit = { method: searchRoute.method, headers: { 'Content-Type': 'application/json' } };
+              if (searchRoute.method === 'POST') init.body = JSON.stringify({ query: 'w0-verifier-smoke' });
+              const r = await fetch(`${daemon.url}${searchRoute.path}`, init).catch(() => null);
+              return !!r && r.ok;
+            });
+            smoke['search'] = { ...searchRun, p50: percentile([...searchRun.samplesMs].sort((a, b) => a - b), 0.5), p95: percentile([...searchRun.samplesMs].sort((a, b) => a - b), 0.95) };
+          } else smoke['search'] = { samplesMs: [], p50: 0, p95: 0, httpOkAll: false };
+        } finally {
+          await daemon.kill();
+        }
       } catch (err) {
         problems.push(`live scenario smoke run threw: ${String(err)}`);
-      } finally {
-        if (daemon) await daemon.kill();
       }
     } else {
       problems.push('scenarios not re-executed: corpus binding failed (missing scenario = fail)');
@@ -1262,13 +1498,13 @@ async function main(): Promise<void> {
     for (const name of SCENARIOS) {
       const observed = smoke[name];
       const baselineScenario = scenarioByName.get(name);
-      if (!observed || observed.valueMs === null) { problems.push(`scenario "${name}": could not be re-executed`); continue; }
-      if (name !== 'memory-high-water' && !observed.httpOk) { problems.push(`scenario "${name}": HTTP response was not 2xx`); continue; }
+      if (!observed || observed.samplesMs.length < R8_REPETITIONS) { problems.push(`scenario "${name}": could not be re-executed with >=${R8_REPETITIONS} timed repetitions`); continue; }
+      if (name !== 'memory-high-water' && !observed.httpOkAll) { problems.push(`scenario "${name}": at least one repetition's HTTP response was not 2xx`); continue; }
       if (!baselineScenario) { problems.push(`scenario "${name}": no committed baseline entry`); continue; }
       const band = Math.min(baselineScenario.toleranceBandPct ?? 50, 50);
       const lower = baselineScenario.p50 * (1 - band / 100);
       const upper = baselineScenario.p50 * (1 + band / 100);
-      if (!(observed.valueMs >= lower && observed.valueMs <= upper)) problems.push(`scenario "${name}": observed ${observed.valueMs}ms outside [${lower.toFixed(1)}, ${upper.toFixed(1)}]`);
+      if (!(observed.p50 >= lower && observed.p50 <= upper)) problems.push(`scenario "${name}": recomputed live p50 ${observed.p50}ms outside [${lower.toFixed(1)}, ${upper.toFixed(1)}]`);
     }
     const mdText = readRepoFile(mdRel);
     if (!/peak[\s\S]{0,20}RSS/i.test(mdText)) problems.push('markdown prose missing a peak RSS mention');
@@ -1285,6 +1521,32 @@ async function main(): Promise<void> {
     if (Array.isArray(v)) return v.length > 0 ? deepKeyStructure(v[0], `${prefix}[]`) : [`${prefix}[]`];
     if (v && typeof v === 'object') return Object.keys(v as object).sort().flatMap((k) => deepKeyStructure((v as Record<string, unknown>)[k], prefix ? `${prefix}.${k}` : k));
     return [prefix];
+  }
+  // Round-4 F11: full recursive VALUE equality (not just key-shape) --
+  // proves the CLI and HTTP surface reached the same handler/state rather
+  // than two independently-shaped stubs that happen to share a key skeleton.
+  function deepValueEqual(a: unknown, b: unknown): boolean {
+    if (a === b) return true;
+    if (typeof a !== typeof b) return false;
+    if (Array.isArray(a) || Array.isArray(b)) {
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+      return a.every((v, i) => deepValueEqual(v, b[i]));
+    }
+    if (a && b && typeof a === 'object' && typeof b === 'object') {
+      const ak = Object.keys(a as object).sort();
+      const bk = Object.keys(b as object).sort();
+      if (JSON.stringify(ak) !== JSON.stringify(bk)) return false;
+      return ak.every((k) => deepValueEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+    }
+    return false;
+  }
+  function corruptValues(v: unknown): unknown {
+    if (typeof v === 'string') return `${v}-w0-corrupted`;
+    if (typeof v === 'number') return v + 1234567;
+    if (typeof v === 'boolean') return !v;
+    if (Array.isArray(v)) return v.map(corruptValues);
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v as object).map(([k, vv]) => [k, corruptValues(vv)]));
+    return v;
   }
   function validateManifestRowShape(e: unknown): string[] {
     const problems: string[] = [];
@@ -1321,9 +1583,12 @@ async function main(): Promise<void> {
     const manifestCapSet = new Set(capNames);
     const subcommandSet = new Set(subcommandKeys);
     const missingSubcommands = subcommandKeys.filter((k) => !manifestCapSet.has(k));
-    const extraNonSubcommandCaps = capNames.filter((c) => !subcommandSet.has(c) && subcommandKeys.some((k) => c.includes(k)) === false);
-    void extraNonSubcommandCaps; // extra capabilities beyond the CLI universe are fine; only exact SUBCOMMAND_MAP coverage is required
+    // Round-4 F10: TRUE set equality -- a manifest capability name that is
+    // not itself a SUBCOMMAND_MAP key fails, same as a missing key. This
+    // closes the "pad the applicable floor with fake rows" gaming vector.
+    const extraCapabilities = capNames.filter((c) => !subcommandSet.has(c));
     if (missingSubcommands.length > 0) problems.push(`SUBCOMMAND_MAP keys with no exact-name manifest entry: ${missingSubcommands.join(', ')}`);
+    if (extraCapabilities.length > 0) problems.push(`manifest capabilities not in SUBCOMMAND_MAP (set equality violated): ${extraCapabilities.join(', ')}`);
 
     const applicable = manifest.filter((e) => e.parityApplicable);
     const notApplicableWithoutReason = manifest.filter((e) => !e.parityApplicable && !e.reason?.trim());
@@ -1353,10 +1618,15 @@ async function main(): Promise<void> {
 
       const shuffled = [...applicable].sort(() => Math.random() - 0.5);
       const sample = shuffled.length <= 3 ? shuffled : shuffled.slice(0, 3);
+      // Round-4 F11: every sample is bound to a value-level check, not just
+      // project-scoped ones -- and captured cliJson/httpBody feed the red
+      // control below so it exercises the SAME comparator on real data.
+      const capturedSamples: { capability: string; cliOk: boolean; httpOk: boolean; cliJson: unknown; httpBody: unknown }[] = [];
       for (const entry of sample) {
-        // Round-3 F11: value-level nonce check when the capability's route
-        // is project-scoped -- proves the CLI reaches the SAME handler
-        // (static JSON can't know a value the verifier just created).
+        // Value-level nonce check when the capability's route is
+        // project/resource-scoped -- proves the CLI reaches the SAME
+        // handler (static JSON can't know a value the verifier just
+        // created).
         const isProjectScoped = /:projectId|:id/i.test(entry.httpPath) || entry.cliArgs.some((a) => a === nonce || /project/i.test(a));
         let nonceCheck: { attempted: boolean; ok: boolean } = { attempted: false, ok: false };
         let cliStdout = '', cliOk = false;
@@ -1377,22 +1647,35 @@ async function main(): Promise<void> {
         if (isProjectScoped) {
           nonceCheck = { attempted: true, ok: cliOk && httpOk && cliStdout.includes(nonce) && httpText.includes(nonce) };
         }
-        const cliShape = cliOk ? deepKeyStructure((() => { try { return JSON.parse(cliStdout); } catch { return null; } })()) : [];
-        const httpShape = httpOk ? deepKeyStructure(httpBody) : [];
-        const shapeMatches = cliOk && httpOk && JSON.stringify(cliShape) === JSON.stringify(httpShape);
-        const entryOk = nonceCheck.attempted ? nonceCheck.ok : shapeMatches;
-        sampleResults.push({ capability: entry.capability, ok: entryOk, detail: `nonceAttempted=${nonceCheck.attempted} nonceOk=${nonceCheck.ok} shapeMatches=${shapeMatches} cliOk=${cliOk} httpOk=${httpOk}` });
+        const cliJson = cliOk ? (() => { try { return JSON.parse(cliStdout); } catch { return null; } })() : null;
+        // Round-4 F11: for capabilities NOT bound by a nonce, require full
+        // recursive VALUE equality between the CLI and HTTP payloads, not
+        // merely a matching key shape -- a list-shaped capability must
+        // contain the nonce resource in BOTH surfaces' lists (covered by
+        // deepValueEqual over the whole array), and a pure-info capability
+        // must match byte-for-byte on values.
+        const valueEqual = cliOk && httpOk && deepValueEqual(cliJson, httpBody);
+        const entryOk = nonceCheck.attempted ? nonceCheck.ok : valueEqual;
+        capturedSamples.push({ capability: entry.capability, cliOk, httpOk, cliJson, httpBody });
+        sampleResults.push({ capability: entry.capability, ok: entryOk, detail: `nonceAttempted=${nonceCheck.attempted} nonceOk=${nonceCheck.ok} valueEqual=${valueEqual} cliOk=${cliOk} httpOk=${httpOk}` });
       }
 
-      const stubPath = path.join(proofDir, `.w0-red-control-stub-${crypto.randomBytes(4).toString('hex')}.mjs`);
-      fs.writeFileSync(stubPath, "#!/usr/bin/env node\nconsole.log(JSON.stringify({ ok: true }));\n");
-      const cliRun = await execFileAsync('node', [stubPath], { timeout: 30_000 }).catch((e: { stdout?: string }) => ({ stdout: e.stdout ?? '' }));
-      const cliKeys = deepKeyStructure((() => { try { return JSON.parse(cliRun.stdout); } catch { return null; } })());
-      const httpRes = await fetch(`${daemon.url}/api/health`);
-      const httpKeys = deepKeyStructure(await httpRes.json());
-      redControlOk = JSON.stringify(cliKeys) !== JSON.stringify(httpKeys);
-      redControlDetail = `cliKeys=${JSON.stringify(cliKeys)} httpKeys=${JSON.stringify(httpKeys)}`;
-      try { fs.unlinkSync(stubPath); } catch { /* best effort */ }
+      // Round-4 F11: the red control now exercises the SAME comparator used
+      // above (deepValueEqual), on a shape-IDENTICAL but value-CORRUPTED
+      // pair built from a real captured sample -- proving discrimination is
+      // on values, not key shape. A stub-vs-/api/health comparison could
+      // pass or fail for reasons unrelated to value binding.
+      const controlBasis = capturedSamples.find((s) => s.cliOk && s.httpOk && s.cliJson !== null && s.httpBody !== null);
+      if (controlBasis) {
+        const corrupted = corruptValues(controlBasis.httpBody);
+        const shapeStillMatches = JSON.stringify(deepKeyStructure(controlBasis.cliJson)) === JSON.stringify(deepKeyStructure(corrupted));
+        const valueCheckRejectsIt = !deepValueEqual(controlBasis.cliJson, corrupted);
+        redControlOk = shapeStillMatches && valueCheckRejectsIt;
+        redControlDetail = `basis=${controlBasis.capability} shapeStillMatches=${shapeStillMatches} valueCheckRejectsIt=${valueCheckRejectsIt}`;
+      } else {
+        redControlOk = false;
+        redControlDetail = 'no captured sample produced both a real CLI JSON value and a real HTTP JSON value to build a red control from';
+      }
     } finally {
       if (daemon) await daemon.kill();
     }
@@ -1402,9 +1685,17 @@ async function main(): Promise<void> {
     });
   });
 
-  // Round-3 F13: mutate a REAL manifest row (remove its cliArgs) rather than
-  // adding a synthetic one.
-  await checkCriterion('C0-11', 'verifier mutates a COPY of the real committed manifest -- removes cliArgs from one real applicable capability -- runs pnpm guard, requires the failure to name that specific capability', 'guard must fail and attribute the failure to the real capability whose CLI form was removed; reverts and re-runs guard expecting a clean pass', () => {
+  // Round-3 F13 (manifest-schema half): mutate a REAL manifest row (remove
+  // its cliArgs) rather than adding a synthetic one.
+  // Round-4 F13 (source-surface half): a schema-only mutation can never
+  // prove guard detects a REAL unmanifested UI/CLI/HTTP capability -- a
+  // guard that only validates manifest.json's own internal shape would
+  // stay green forever against actual source-level drift. Fixture #2
+  // writes a REAL route registration file into apps/daemon/src/routes/
+  // (following the exact export/registration shape every other file in
+  // that directory uses) that is absent from the manifest, and requires
+  // guard to name it.
+  await checkCriterion('C0-11', 'two independent guard-defeat fixtures: (1) verifier mutates a COPY of the real committed manifest -- removes cliArgs from one real applicable capability; (2) verifier drops a REAL new route-registration source file into apps/daemon/src/routes/ that is absent from the manifest', 'guard must fail and attribute EACH fixture failure by name (capability / route path); both fixtures are reverted and guard must pass cleanly with a clean git tree afterward', () => {
     if (!fileExists(capabilityManifestRel)) { record('C0-11', '', '', false, '', { detail: `missing: ${capabilityManifestRel}` }); return; }
     const manifestAbs = path.join(repoRoot, capabilityManifestRel);
     const original = fs.readFileSync(manifestAbs, 'utf8');
@@ -1428,13 +1719,49 @@ async function main(): Promise<void> {
     }
     if (!targetCapability) return;
     const attributed = brokenStdout.includes(targetCapability);
+
+    // Fixture 2: a REAL, statically-discoverable route registration with no
+    // manifest row anywhere.
+    const fixtureRoutePath = '/api/w0-parity-fixture';
+    const fixtureRelPath = 'apps/daemon/src/routes/w0-parity-fixture-probe.ts';
+    const fixtureAbsPath = path.join(repoRoot, fixtureRelPath);
+    let fixtureBrokenExit = 1, fixtureBrokenStdout = '', fixtureAttributed = false, fixtureCleanedUp = false;
+    try {
+      fs.writeFileSync(
+        fixtureAbsPath,
+        [
+          "import type { Express } from 'express';",
+          '',
+          '// Round-4 W0 verifier fixture -- proves guard detects a real, unmanifested',
+          '// route registration. Written and deleted entirely by verify-w0.ts C0-11;',
+          '// never intended to be wired into server.ts or committed.',
+          `export function registerW0ParityFixtureProbeRoutes(app: Express): void {`,
+          `  app.get('${fixtureRoutePath}', (_req, res) => {`,
+          "    res.json({ ok: true });",
+          '  });',
+          '}',
+          '',
+        ].join('\n'),
+      );
+      const fixtureRun = sh('pnpm', ['guard'], { timeoutMs: 20 * 60_000 });
+      fixtureBrokenExit = fixtureRun.status;
+      fixtureBrokenStdout = fixtureRun.stdout;
+      fixtureAttributed = fixtureBrokenStdout.includes(fixtureRoutePath) || fixtureBrokenStdout.includes('w0-parity-fixture-probe');
+    } finally {
+      try { fs.unlinkSync(fixtureAbsPath); } catch { /* best effort */ }
+      fixtureCleanedUp = !fs.existsSync(fixtureAbsPath);
+    }
+
     const revertedRun = sh('pnpm', ['guard'], { timeoutMs: 20 * 60_000 });
     const revertedExit = revertedRun.status;
-    const treeClean = sh('git', ['status', '--porcelain', '--', capabilityManifestRel]).stdout.trim().length === 0;
-    const ok = brokenExit !== 0 && attributed && revertedExit === 0 && revertedCleanly && treeClean;
-    record('C0-11', '', '', ok, `target=${targetCapability} brokenExit=${brokenExit} attributed=${attributed} revertedExit=${revertedExit} revertedCleanly=${revertedCleanly} treeClean=${treeClean}\n${brokenStdout.slice(-2000)}`, {
-      detail: ok ? undefined : `target=${targetCapability} brokenExit=${brokenExit} attributed=${attributed} revertedExit=${revertedExit} revertedCleanly=${revertedCleanly} treeClean=${treeClean}`,
-    });
+    const treeClean = sh('git', ['status', '--porcelain', '--', capabilityManifestRel, fixtureRelPath]).stdout.trim().length === 0;
+    const ok = brokenExit !== 0 && attributed && fixtureBrokenExit !== 0 && fixtureAttributed && fixtureCleanedUp && revertedExit === 0 && revertedCleanly && treeClean;
+    record('C0-11', '', '', ok,
+      `target=${targetCapability} brokenExit=${brokenExit} attributed=${attributed}\n` +
+        `fixtureRoute=${fixtureRoutePath} fixtureBrokenExit=${fixtureBrokenExit} fixtureAttributed=${fixtureAttributed} fixtureCleanedUp=${fixtureCleanedUp}\n` +
+        `revertedExit=${revertedExit} revertedCleanly=${revertedCleanly} treeClean=${treeClean}\n${brokenStdout.slice(-1500)}\n--fixture--\n${fixtureBrokenStdout.slice(-1500)}`,
+      { detail: ok ? undefined : `target=${targetCapability} brokenExit=${brokenExit} attributed=${attributed} fixtureBrokenExit=${fixtureBrokenExit} fixtureAttributed=${fixtureAttributed} fixtureCleanedUp=${fixtureCleanedUp} revertedExit=${revertedExit} revertedCleanly=${revertedCleanly} treeClean=${treeClean}` },
+    );
   });
 
   // =======================================================================
@@ -1452,8 +1779,12 @@ async function main(): Promise<void> {
     const dataRows = tableRows.slice(1);
     const unknownRows = dataRows.filter((r) => !CATEGORIES.some((c) => r.toLowerCase().includes(c.toLowerCase())));
 
+    // Round-4 F14: count distinct OCCURRENCE SITES (file:line), not distinct
+    // matched lexemes -- adding 100 more `.od/` sites must move the count.
+    // A Set keyed on the matched substring collapses every identical
+    // occurrence to one, making the count effectively binary.
     function grepCountRepoWide(pattern: RegExp): number {
-      const seen = new Set<string>();
+      const sites = new Set<string>();
       (function walk(dir: string): void {
         for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
           if (['node_modules', '.git', 'dist', '.tmp', '.next'].includes(entry.name) || entry.name.startsWith('.')) continue;
@@ -1462,11 +1793,14 @@ async function main(): Promise<void> {
           else if (/\.(ts|tsx|md|json)$/.test(entry.name)) {
             let t = '';
             try { t = fs.readFileSync(full, 'utf8'); } catch { continue; }
-            for (const m of t.matchAll(pattern)) seen.add(m[0]);
+            for (const m of t.matchAll(pattern)) {
+              const line = t.slice(0, m.index ?? 0).split('\n').length;
+              sites.add(`${full}:${line}`);
+            }
           }
         }
       })(repoRoot);
-      return seen.size;
+      return sites.size;
     }
     const liveCounts: Record<string, number> = {
       '.od/': grepCountRepoWide(/\.od\//g),
