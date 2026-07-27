@@ -1,0 +1,79 @@
+{
+  "nodes": [
+    {
+      "nodeId": "docs-flex-a-header",
+      "domPath": "body > div.docs-flex-a-shell > header.docs-flex-a-header",
+      "computedStyle": {
+        "color": "#4d2600",
+        "backgroundColor": "#fff0d9",
+        "fontFamily": "Source Serif Pro, serif"
+      }
+    },
+    {
+      "nodeId": "docs-flex-a-hero",
+      "domPath": "body > div.docs-flex-a-shell > hero.docs-flex-a-hero",
+      "computedStyle": {
+        "color": "#4d2600",
+        "backgroundColor": "#fff0d9",
+        "fontFamily": "Source Serif Pro, serif"
+      }
+    },
+    {
+      "nodeId": "docs-flex-a-hero-heading",
+      "domPath": "body > div.docs-flex-a-shell > hero_heading.docs-flex-a-hero-heading",
+      "computedStyle": {
+        "color": "#4d2600",
+        "backgroundColor": "#fff0d9",
+        "fontFamily": "Source Serif Pro, serif"
+      }
+    },
+    {
+      "nodeId": "docs-flex-a-features",
+      "domPath": "body > div.docs-flex-a-shell > features.docs-flex-a-features",
+      "computedStyle": {
+        "color": "#4d2600",
+        "backgroundColor": "#fff0d9",
+        "fontFamily": "Source Serif Pro, serif",
+        "display": "flex",
+        "flexDirection": "row"
+      }
+    },
+    {
+      "nodeId": "docs-flex-a-feature-item-1",
+      "domPath": "body > div.docs-flex-a-shell > feature_item_1.docs-flex-a-feature-item-1",
+      "computedStyle": {
+        "color": "#4d2600",
+        "backgroundColor": "#fff0d9",
+        "fontFamily": "Source Serif Pro, serif"
+      }
+    },
+    {
+      "nodeId": "docs-flex-a-feature-item-2",
+      "domPath": "body > div.docs-flex-a-shell > feature_item_2.docs-flex-a-feature-item-2",
+      "computedStyle": {
+        "color": "#4d2600",
+        "backgroundColor": "#fff0d9",
+        "fontFamily": "Source Serif Pro, serif"
+      }
+    },
+    {
+      "nodeId": "docs-flex-a-cta",
+      "domPath": "body > div.docs-flex-a-shell > cta.docs-flex-a-cta",
+      "computedStyle": {
+        "color": "#4d2600",
+        "backgroundColor": "#fff0d9",
+        "fontFamily": "Source Serif Pro, serif"
+      }
+    },
+    {
+      "nodeId": "docs-flex-a-footer",
+      "domPath": "body > div.docs-flex-a-shell > footer.docs-flex-a-footer",
+      "computedStyle": {
+        "color": "#4d2600",
+        "backgroundColor": "#fff0d9",
+        "fontFamily": "Source Serif Pro, serif"
+      }
+    }
+  ],
+  "viewportWidth": 1440
+}

@@ -1,0 +1,425 @@
+{
+  "sourceSlots": [
+    {
+      "id": "docs-flex-a",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "evidencePointers": [
+        {
+          "domPath": "body > div.docs-flex-a-shell > header.docs-flex-a-header",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-flex-a-shell > hero.docs-flex-a-hero",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-flex-a-shell > hero_heading.docs-flex-a-hero-heading",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-flex-a-shell > features.docs-flex-a-features",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "flexDirection"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-flex-a-shell > feature_item_1.docs-flex-a-feature-item-1",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-flex-a-shell > feature_item_2.docs-flex-a-feature-item-2",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-flex-a-shell > cta.docs-flex-a-cta",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-flex-a-shell > footer.docs-flex-a-footer",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-flex-a-shell > header.docs-flex-a-header",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-flex-a-shell > hero.docs-flex-a-hero",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-flex-a-shell > hero_heading.docs-flex-a-hero-heading",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-flex-a-shell > features.docs-flex-a-features",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "flexDirection"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-flex-a-shell > feature_item_1.docs-flex-a-feature-item-1",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-flex-a-shell > feature_item_2.docs-flex-a-feature-item-2",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-flex-a-shell > cta.docs-flex-a-cta",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-flex-a-shell > footer.docs-flex-a-footer",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "docs-grid-b",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "evidencePointers": [
+        {
+          "domPath": "body > div.docs-grid-b-shell > header.docs-grid-b-header",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-grid-b-shell > hero.docs-grid-b-hero",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-grid-b-shell > hero_heading.docs-grid-b-hero-heading",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-grid-b-shell > features.docs-grid-b-features",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "gridTemplateColumns"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-grid-b-shell > feature_item_1.docs-grid-b-feature-item-1",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-grid-b-shell > feature_item_2.docs-grid-b-feature-item-2",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-grid-b-shell > cta.docs-grid-b-cta",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-grid-b-shell > footer.docs-grid-b-footer",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-grid-b-shell > header.docs-grid-b-header",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-grid-b-shell > hero.docs-grid-b-hero",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-grid-b-shell > hero_heading.docs-grid-b-hero-heading",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-grid-b-shell > features.docs-grid-b-features",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "gridTemplateColumns"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-grid-b-shell > feature_item_1.docs-grid-b-feature-item-1",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-grid-b-shell > feature_item_2.docs-grid-b-feature-item-2",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-grid-b-shell > cta.docs-grid-b-cta",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.docs-grid-b-shell > footer.docs-grid-b-footer",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        }
+      ]
+    }
+  ],
+  "directives": [
+    {
+      "axis": "section",
+      "source": "docs-flex-a",
+      "scope": "body > div.docs-flex-a-shell > features.docs-flex-a-features",
+      "strength": 0.8
+    },
+    {
+      "axis": "section",
+      "source": "docs-grid-b",
+      "scope": "body > div.docs-grid-b-shell > features.docs-grid-b-features",
+      "strength": 0.45
+    },
+    {
+      "axis": "layout",
+      "source": "docs-flex-a",
+      "scope": "body > div.docs-flex-a-shell > features.docs-flex-a-features",
+      "strength": 0.65
+    },
+    {
+      "axis": "palette",
+      "source": "docs-grid-b",
+      "scope": "body > div.docs-grid-b-shell > header.docs-grid-b-header",
+      "strength": 0.6
+    }
+  ],
+  "constraints": [
+    {
+      "type": "grid-integrity",
+      "rule": "Grid/flex/absolute containers must not overlap at any declared breakpoint."
+    },
+    {
+      "type": "contrast-minimum",
+      "rule": "Text/background contrast must meet WCAG AA (4.5:1) at every breakpoint."
+    },
+    {
+      "type": "responsive-behavior",
+      "rule": "Every emitted element must have a defined style at each of the case's declared breakpoints."
+    }
+  ],
+  "conflictResolution": [
+    {
+      "axis": "section",
+      "winningSource": "docs-flex-a",
+      "losingSource": "docs-grid-b",
+      "losingClaim": "section claim from docs-grid-b superseded by docs-flex-a",
+      "rationale": "Both docs-flex-a and docs-grid-b claimed the section axis on overlapping scope; docs-flex-a takes precedence per the frozen corpus ground truth for this case."
+    },
+    {
+      "axis": "layout",
+      "winningSource": "docs-flex-a",
+      "rationale": "Single claimant (docs-flex-a) on the layout axis in this case; no contention to resolve."
+    },
+    {
+      "axis": "palette",
+      "winningSource": "docs-grid-b",
+      "rationale": "Single claimant (docs-grid-b) on the palette axis in this case; no contention to resolve."
+    }
+  ],
+  "provenance": [
+    {
+      "elementId": "docs-api-reference-di-0-section",
+      "sourceId": "docs-flex-a",
+      "nodeId": "docs-flex-a-features",
+      "domPath": "body > div.docs-flex-a-shell > features.docs-flex-a-features",
+      "breakpoint": "desktop"
+    },
+    {
+      "elementId": "docs-api-reference-di-1-section",
+      "sourceId": "docs-grid-b",
+      "nodeId": "docs-grid-b-features",
+      "domPath": "body > div.docs-grid-b-shell > features.docs-grid-b-features",
+      "breakpoint": "desktop"
+    },
+    {
+      "elementId": "docs-api-reference-di-2-layout",
+      "sourceId": "docs-flex-a",
+      "nodeId": "docs-flex-a-features",
+      "domPath": "body > div.docs-flex-a-shell > features.docs-flex-a-features",
+      "breakpoint": "desktop"
+    },
+    {
+      "elementId": "docs-api-reference-di-3-palette",
+      "sourceId": "docs-grid-b",
+      "nodeId": "docs-grid-b-header",
+      "domPath": "body > div.docs-grid-b-shell > header.docs-grid-b-header",
+      "breakpoint": "desktop"
+    }
+  ],
+  "variantAxes": [
+    {
+      "name": "layout-skeleton",
+      "distanceMetric": "jaccard-dissimilarity-of-domPath-set"
+    },
+    {
+      "name": "section-order",
+      "distanceMetric": "fraction-of-positions-differing-in-scope-order"
+    },
+    {
+      "name": "motion-timeline",
+      "distanceMetric": "fraction-of-positions-differing-in-motionSignature"
+    },
+    {
+      "name": "breakpoint-behavior",
+      "distanceMetric": "fraction-of-positions-differing-in-breakpoint-assignment"
+    }
+  ]
+}
