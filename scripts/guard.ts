@@ -1349,6 +1349,368 @@ async function checkRemovedWorkflows(): Promise<boolean> {
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Capability manifest / CLI parity (C0-11)
+//
+// scripts/waves/capability-manifest.json documents, per SUBCOMMAND_MAP
+// capability, a representative UI entry point, CLI invocation, HTTP
+// endpoint, and a `knownNamespaceRoutes` snapshot: every `/api/<namespace>/...`
+// route reachable through a static fetch() call in apps/daemon/src/cli.ts
+// whose namespace (first path segment after `/api/`) matches the manifest
+// row's own httpPath namespace. Per the 2026-07-27 W0 gate-adjudication
+// ruling (docs/plans/waves/DECISIONS.md), this check is a deterministic,
+// static, same-tree-in/same-verdict-out comparison against that committed
+// snapshot -- it deliberately does NOT run the random live-sample value
+// probe or require raw payload byte-equality (that design was ruled a gate
+// defect and is being replaced separately, outside this check). This check
+// never boots a daemon and never makes a network call.
+//
+// It validates three things:
+//   (a) shape        -- every manifest row has the required fields, with the
+//                        required types.
+//   (b) CLI parity    -- the manifest's capability set is exactly the
+//                        SUBCOMMAND_MAP key set (both-direction deltas named).
+//   (c) route parity  -- every route cli.ts's static fetch() scan finds,
+//                        grouped by namespace, is a subset of the committed
+//                        knownNamespaceRoutes for that namespace (a route in
+//                        a namespace the manifest doesn't cover at all, or a
+//                        new route inside an already-covered namespace,
+//                        fails by name).
+// ---------------------------------------------------------------------------
+
+const capabilityManifestPath = path.join(repoRoot, "scripts/waves/capability-manifest.json");
+const capabilityManifestCliSourcePath = path.join(repoRoot, "apps/daemon/src/cli.ts");
+
+type CapabilityManifestRow = {
+  capability: string;
+  uiEntryPoint: string;
+  cliArgs: string[];
+  httpMethod: string;
+  httpPath: string;
+  outputSchema: string;
+  parityApplicable: boolean;
+  reason?: string;
+  knownNamespaceRoutes: string[];
+};
+
+const CAPABILITY_MANIFEST_REQUIRED_STRING_FIELDS = [
+  "capability",
+  "uiEntryPoint",
+  "httpMethod",
+  "httpPath",
+  "outputSchema",
+] as const;
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+/**
+ * Validates a single capability-manifest row's shape. Returns a (possibly
+ * empty) list of human-readable violations; never throws, so a malformed
+ * tree still gets a complete report instead of stopping at the first bad
+ * row.
+ */
+function validateCapabilityManifestRowShape(row: unknown, index: number): string[] {
+  if (row === null || typeof row !== "object" || Array.isArray(row)) {
+    return [`capability-manifest.json[${index}] must be a JSON object (found ${Array.isArray(row) ? "array" : typeof row})`];
+  }
+
+  const record = row as Record<string, unknown>;
+  const capabilityName = typeof record.capability === "string" && record.capability !== "" ? record.capability : undefined;
+  const label = (field: string) =>
+    `capability-manifest.json[${index}]${capabilityName ? ` (capability: "${capabilityName}")` : ""}.${field}`;
+
+  const violations: string[] = [];
+  for (const field of CAPABILITY_MANIFEST_REQUIRED_STRING_FIELDS) {
+    if (typeof record[field] !== "string" || record[field] === "") {
+      violations.push(`${label(field)} must be a non-empty string`);
+    }
+  }
+  if (!isStringArray(record.cliArgs) || record.cliArgs.length === 0) {
+    violations.push(`${label("cliArgs")} must be a non-empty string array`);
+  }
+  if (typeof record.parityApplicable !== "boolean") {
+    violations.push(`${label("parityApplicable")} must be a boolean`);
+  }
+  if (record.reason !== undefined && typeof record.reason !== "string") {
+    violations.push(`${label("reason")} must be a string when present`);
+  }
+  if (!isStringArray(record.knownNamespaceRoutes)) {
+    violations.push(`${label("knownNamespaceRoutes")} must be a string array`);
+  }
+
+  return violations;
+}
+
+/**
+ * Parses `const SUBCOMMAND_MAP = { ... }` out of apps/daemon/src/cli.ts and
+ * returns its property-name keys (sorted). Only ever reads keys -- it does
+ * not evaluate the object -- so it works without importing daemon runtime
+ * code into the guard process. Throws if the declaration can't be found,
+ * since that means the extraction's structural assumption no longer holds.
+ */
+function extractSubcommandMapKeysFromCliSource(source: string): string[] {
+  const sourceFile = ts.createSourceFile(
+    capabilityManifestCliSourcePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  let objectLiteral: ts.ObjectLiteralExpression | undefined;
+
+  const visit = (node: ts.Node): void => {
+    if (objectLiteral) return;
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === "SUBCOMMAND_MAP" &&
+      node.initializer &&
+      ts.isObjectLiteralExpression(node.initializer)
+    ) {
+      objectLiteral = node.initializer;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+
+  if (!objectLiteral) {
+    throw new Error(`could not find "const SUBCOMMAND_MAP = { ... }" in ${toRepositoryPath(capabilityManifestCliSourcePath)}`);
+  }
+
+  const keys: string[] = [];
+  for (const prop of objectLiteral.properties) {
+    if (!ts.isPropertyAssignment(prop) && !ts.isShorthandPropertyAssignment(prop)) continue;
+    if (ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name)) keys.push(prop.name.text);
+  }
+  return keys.sort();
+}
+
+/**
+ * Flattens a fetch() URL argument (string literal, template literal, or a
+ * `+`-concatenation of literals and expressions) into a single string.
+ * Every non-literal interpolation (`${...}`) becomes the literal marker
+ * " PARAM " -- stable, and never collides with real path text since no
+ * daemon route segment contains a space.
+ */
+function flattenFetchCallArgText(node: ts.Expression): string {
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+  if (ts.isTemplateExpression(node)) {
+    let out = node.head.text;
+    for (const span of node.templateSpans) out += ` PARAM ${span.literal.text}`;
+    return out;
+  }
+  if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    return flattenFetchCallArgText(node.left) + flattenFetchCallArgText(node.right);
+  }
+  if (ts.isParenthesizedExpression(node)) return flattenFetchCallArgText(node.expression);
+  return " PARAM ";
+}
+
+/**
+ * Normalizes flattened fetch() URL text into a `/api/...` path with every
+ * interpolated segment collapsed to `:param`, dropping any query string.
+ * Returns null when the flattened text has no `/api/` substring at all
+ * (fetch calls to non-API URLs are not daemon routes and are out of scope).
+ */
+function normalizeApiPathFromFlatText(flatText: string): string | null {
+  const apiIndex = flatText.indexOf("/api/");
+  if (apiIndex === -1) return null;
+  let rest = flatText.slice(apiIndex);
+  const queryIndex = rest.indexOf("?");
+  if (queryIndex !== -1) rest = rest.slice(0, queryIndex);
+  return rest.split(" PARAM ").join(":param");
+}
+
+function fetchCallMethod(args: readonly ts.Expression[]): string {
+  const opts = args[1];
+  if (args.length < 2 || !opts || !ts.isObjectLiteralExpression(opts)) return "GET";
+  for (const prop of opts.properties) {
+    if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name) && prop.name.text === "method") {
+      return ts.isStringLiteral(prop.initializer) ? prop.initializer.text.toUpperCase() : "DYNAMIC";
+    }
+  }
+  return "GET";
+}
+
+function apiNamespaceFromPath(apiPath: string): string | null {
+  const match = /^\/api\/([^/]+)/.exec(apiPath);
+  return match?.[1] ?? null;
+}
+
+/**
+ * Statically scans a source file's fetch() calls for `/api/...` URLs and
+ * groups them by namespace (the path segment right after `/api/`) into
+ * `"METHOD /api/normalized/path"` strings. This is the same algorithm used
+ * to seed each manifest row's committed `knownNamespaceRoutes` snapshot, so
+ * re-running it live and diffing against that snapshot is a
+ * same-tree-in/same-verdict-out check: both sides are normalized into sets,
+ * so there is no ordering sensitivity.
+ */
+function extractCliApiRoutesByNamespace(source: string): Map<string, Set<string>> {
+  const sourceFile = ts.createSourceFile(
+    capabilityManifestCliSourcePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const byNamespace = new Map<string, Set<string>>();
+
+  const visit = (node: ts.Node): void => {
+    const firstArg = ts.isCallExpression(node) ? node.arguments[0] : undefined;
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "fetch" &&
+      firstArg
+    ) {
+      const flat = flattenFetchCallArgText(firstArg);
+      const normalized = normalizeApiPathFromFlatText(flat);
+      const namespace = normalized ? apiNamespaceFromPath(normalized) : null;
+      if (normalized && namespace) {
+        const method = fetchCallMethod(node.arguments);
+        if (!byNamespace.has(namespace)) byNamespace.set(namespace, new Set());
+        byNamespace.get(namespace)!.add(`${method} ${normalized}`);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return byNamespace;
+}
+
+type CapabilityManifestParityResult = {
+  ok: boolean;
+  errors: string[];
+};
+
+/**
+ * Pure core of the capability-manifest / CLI parity check: takes the parsed
+ * manifest JSON, the live SUBCOMMAND_MAP key set, and the live
+ * namespace -> route-set map (all produced by static analysis, no I/O
+ * inside this function), and returns every violation found. Kept separate
+ * from the async wrapper below so it is unit-testable without touching the
+ * filesystem or re-parsing TypeScript.
+ */
+function checkCapabilityManifestParityCore(
+  manifestRaw: unknown,
+  subcommandKeys: readonly string[],
+  liveNamespaceRoutes: ReadonlyMap<string, ReadonlySet<string>>,
+): CapabilityManifestParityResult {
+  const errors: string[] = [];
+
+  if (!Array.isArray(manifestRaw)) {
+    return { ok: false, errors: ["capability-manifest.json must be a top-level JSON array"] };
+  }
+
+  // (a) shape
+  const rows: CapabilityManifestRow[] = [];
+  manifestRaw.forEach((row, index) => {
+    const violations = validateCapabilityManifestRowShape(row, index);
+    if (violations.length > 0) {
+      errors.push(...violations);
+    } else {
+      rows.push(row as CapabilityManifestRow);
+    }
+  });
+
+  // (b) CLI-set parity -- only over rows that passed shape validation (a
+  // row with an unusable `capability` field already failed shape
+  // validation above and would otherwise show up as a spurious delta too).
+  const manifestCapabilities = new Set(rows.map((row) => row.capability));
+  const cliCapabilities = new Set(subcommandKeys);
+
+  const missingFromManifest = [...cliCapabilities].filter((key) => !manifestCapabilities.has(key)).sort();
+  const missingFromCli = [...manifestCapabilities].filter((key) => !cliCapabilities.has(key)).sort();
+
+  if (missingFromManifest.length > 0) {
+    errors.push(
+      `capability-manifest.json is missing a row for SUBCOMMAND_MAP capabilities: ${missingFromManifest.join(", ")}`,
+    );
+  }
+  if (missingFromCli.length > 0) {
+    errors.push(
+      `capability-manifest.json has rows for capabilities no longer in SUBCOMMAND_MAP: ${missingFromCli.join(", ")}`,
+    );
+  }
+
+  // (c) attributable unmanifested route detection -- only over rows that
+  // passed shape validation. The baseline is keyed by each committed
+  // route's OWN namespace (not the hosting row's httpPath namespace):
+  // a capability's cli.ts code frequently reaches multiple namespaces (e.g.
+  // "plugin" also calls /api/applied-plugins/...), and documenting those
+  // extra routes on the capability row that actually owns the call site is
+  // more honest than forcing a namespace to only ever be covered by a row
+  // whose own representative httpPath happens to share it.
+  const manifestNamespaceBaseline = new Map<string, Set<string>>();
+  for (const row of rows) {
+    for (const route of row.knownNamespaceRoutes) {
+      const routePath = route.slice(route.indexOf(" ") + 1);
+      const namespace = apiNamespaceFromPath(routePath);
+      if (!namespace) continue;
+      if (!manifestNamespaceBaseline.has(namespace)) manifestNamespaceBaseline.set(namespace, new Set());
+      manifestNamespaceBaseline.get(namespace)?.add(route);
+    }
+  }
+
+  const unmanifested: string[] = [];
+  for (const [namespace, liveRoutes] of liveNamespaceRoutes) {
+    const baseline = manifestNamespaceBaseline.get(namespace);
+    for (const route of liveRoutes) {
+      if (!baseline || !baseline.has(route)) {
+        unmanifested.push(
+          baseline
+            ? `${route} (namespace "${namespace}" is manifested, but this route is not in its committed knownNamespaceRoutes)`
+            : `${route} (namespace "${namespace}" has no capability-manifest.json row at all)`,
+        );
+      }
+    }
+  }
+  if (unmanifested.length > 0) {
+    errors.push(
+      `apps/daemon/src/cli.ts reaches ${unmanifested.length} route(s) not covered by any committed capability-manifest.json knownNamespaceRoutes snapshot:\n  - ${unmanifested.sort().join("\n  - ")}`,
+    );
+  }
+
+  return { ok: errors.length === 0, errors };
+}
+
+async function checkCapabilityManifestParity(): Promise<boolean> {
+  const [manifestSource, cliSource] = await Promise.all([
+    readFile(capabilityManifestPath, "utf8"),
+    readFile(capabilityManifestCliSourcePath, "utf8"),
+  ]);
+
+  let manifestRaw: unknown;
+  try {
+    manifestRaw = JSON.parse(manifestSource);
+  } catch (error) {
+    console.error(
+      `Capability manifest parity check failed: ${toRepositoryPath(capabilityManifestPath)} is not valid JSON.`,
+    );
+    console.error(error);
+    return false;
+  }
+
+  const subcommandKeys = extractSubcommandMapKeysFromCliSource(cliSource);
+  const liveNamespaceRoutes = extractCliApiRoutesByNamespace(cliSource);
+  const result = checkCapabilityManifestParityCore(manifestRaw, subcommandKeys, liveNamespaceRoutes);
+
+  if (!result.ok) {
+    console.error("Capability manifest parity check failed:");
+    for (const error of result.errors) console.error(`- ${error}`);
+    return false;
+  }
+
+  console.log(
+    `Capability manifest parity check passed: ${subcommandKeys.length} SUBCOMMAND_MAP capabilities match capability-manifest.json 1:1, and every cli.ts-reachable /api/ route stays inside its committed knownNamespaceRoutes snapshot.`,
+  );
+  return true;
+}
+
 const checks: GuardCheck[] = [
   { name: "residual JavaScript", run: checkResidualJavaScript },
   { name: "package dependency specs", run: checkPackageDependencySpecs },
@@ -1376,6 +1738,7 @@ const checks: GuardCheck[] = [
   { name: "design system A2 defaults parity", run: checkDesignSystemA2DefaultsParity },
   { name: "design system flag parity", run: checkDesignSystemFlagParity },
   { name: "design system component manifest extraction", run: checkComponentsManifestExtraction },
+  { name: "capability manifest parity", run: checkCapabilityManifestParity },
 ];
 
 async function runChecks(): Promise<boolean> {
