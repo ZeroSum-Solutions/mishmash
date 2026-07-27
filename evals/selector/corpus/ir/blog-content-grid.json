@@ -9,151 +9,67 @@
       "evidencePointers": [
         {
           "domPath": "body > div.blog-grid-a-shell > header.blog-grid-a-header",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.blog-grid-a-shell > hero.blog-grid-a-hero",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.blog-grid-a-shell > hero_heading.blog-grid-a-hero-heading",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.blog-grid-a-shell > features.blog-grid-a-features",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily",
-            "display",
-            "gridTemplateColumns"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.blog-grid-a-shell > feature_item_1.blog-grid-a-feature-item-1",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.blog-grid-a-shell > feature_item_2.blog-grid-a-feature-item-2",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.blog-grid-a-shell > cta.blog-grid-a-cta",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.blog-grid-a-shell > footer.blog-grid-a-footer",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.blog-grid-a-shell > header.blog-grid-a-header",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.blog-grid-a-shell > hero.blog-grid-a-hero",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.blog-grid-a-shell > hero_heading.blog-grid-a-hero-heading",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.blog-grid-a-shell > features.blog-grid-a-features",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily",
-            "display",
-            "gridTemplateColumns"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.blog-grid-a-shell > feature_item_1.blog-grid-a-feature-item-1",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.blog-grid-a-shell > feature_item_2.blog-grid-a-feature-item-2",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.blog-grid-a-shell > cta.blog-grid-a-cta",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.blog-grid-a-shell > footer.blog-grid-a-footer",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         }
       ]
     },
@@ -166,151 +82,67 @@
       "evidencePointers": [
         {
           "domPath": "body > div.blog-flex-b-shell > header.blog-flex-b-header",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.blog-flex-b-shell > hero.blog-flex-b-hero",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.blog-flex-b-shell > hero_heading.blog-flex-b-hero-heading",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.blog-flex-b-shell > features.blog-flex-b-features",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily",
-            "display",
-            "flexDirection"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.blog-flex-b-shell > feature_item_1.blog-flex-b-feature-item-1",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.blog-flex-b-shell > feature_item_2.blog-flex-b-feature-item-2",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.blog-flex-b-shell > cta.blog-flex-b-cta",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.blog-flex-b-shell > footer.blog-flex-b-footer",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.blog-flex-b-shell > header.blog-flex-b-header",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.blog-flex-b-shell > hero.blog-flex-b-hero",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.blog-flex-b-shell > hero_heading.blog-flex-b-hero-heading",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.blog-flex-b-shell > features.blog-flex-b-features",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily",
-            "display",
-            "flexDirection"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.blog-flex-b-shell > feature_item_1.blog-flex-b-feature-item-1",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.blog-flex-b-shell > feature_item_2.blog-flex-b-feature-item-2",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.blog-flex-b-shell > cta.blog-flex-b-cta",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.blog-flex-b-shell > footer.blog-flex-b-footer",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         }
       ]
     }
@@ -331,16 +163,16 @@
   ],
   "constraints": [
     {
-      "type": "grid-integrity",
-      "rule": "Grid/flex/absolute containers must not overlap at any declared breakpoint."
+      "type": "blog-content-grid-grid-integrity",
+      "rule": "blog-content-grid: no container overlap at any declared breakpoint"
     },
     {
-      "type": "contrast-minimum",
-      "rule": "Text/background contrast must meet WCAG AA (4.5:1) at every breakpoint."
+      "type": "blog-content-grid-contrast-minimum",
+      "rule": "blog-content-grid: text/background contrast >= WCAG AA 4.5:1 at every breakpoint"
     },
     {
-      "type": "responsive-behavior",
-      "rule": "Every emitted element must have a defined style at each of the case's declared breakpoints."
+      "type": "blog-content-grid-responsive-behavior",
+      "rule": "blog-content-grid: every emitted element has a defined style at each declared breakpoint"
     }
   ],
   "conflictResolution": [
@@ -373,20 +205,20 @@
   ],
   "variantAxes": [
     {
-      "name": "layout-skeleton",
-      "distanceMetric": "jaccard-dissimilarity-of-domPath-set"
+      "name": "blog-content-grid:layout-skeleton",
+      "distanceMetric": "blog-content-grid: see diversity-axes.json#layout-skeleton"
     },
     {
-      "name": "section-order",
-      "distanceMetric": "fraction-of-positions-differing-in-scope-order"
+      "name": "blog-content-grid:section-order",
+      "distanceMetric": "blog-content-grid: see diversity-axes.json#section-order"
     },
     {
-      "name": "motion-timeline",
-      "distanceMetric": "fraction-of-positions-differing-in-motionSignature"
+      "name": "blog-content-grid:motion-timeline",
+      "distanceMetric": "blog-content-grid: see diversity-axes.json#motion-timeline"
     },
     {
-      "name": "breakpoint-behavior",
-      "distanceMetric": "fraction-of-positions-differing-in-breakpoint-assignment"
+      "name": "blog-content-grid:breakpoint-behavior",
+      "distanceMetric": "blog-content-grid: see diversity-axes.json#breakpoint-behavior"
     }
   ]
 }
