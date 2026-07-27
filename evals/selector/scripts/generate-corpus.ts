@@ -258,8 +258,14 @@ const CASES: CaseSpec[] = [
     degenerate: 'nonexistent-element-directive',
     skip: null,
     sealed: false,
-    directives: [{ axis: 'layout', source: 'phantom-grid-a', role: 'features', strength: 0.75 }],
-    // the phantom (unresolvable) directive is appended separately below
+    directives: [
+      { axis: 'layout', source: 'phantom-grid-a', role: 'features', strength: 0.75 },
+      { axis: 'typography', source: 'phantom-grid-a', role: 'hero-heading', strength: 0.65 },
+    ],
+    // the phantom (unresolvable) directive is appended separately below, on
+    // a DIFFERENT axis ('palette') so it never collides with the two real
+    // claims above and never manufactures a false 2-claimant "conflict" on
+    // an axis this case does not declare one for.
   },
   {
     id: 'hostile-heavy-dom-catalog',
@@ -445,12 +451,20 @@ function main(): void {
     // provenance: one resolvable entry per directiveInventory claim whose
     // scope corresponds to a REAL captured node. The phantom claim (if any)
     // deliberately gets no provenance entry -- there is no real evidence to
-    // point at, which is the entire point of the degenerate case.
+    // point at, which is the entire point of the degenerate case. Breakpoint
+    // is ALTERNATED across entries (not a single hardcoded value) -- every
+    // role node exists at every declared breakpoint, so this stays
+    // resolvable, and it is what makes a breakpoint-only field derangement
+    // control constructible at all (a uniform breakpoint value across every
+    // entry has no fixed-point-free permutation).
     const provenance: Array<{ elementId: string; sourceId: string; nodeId: string; domPath: string; breakpoint: string }> = [];
+    let provenanceIndex = 0;
     for (const [i, d] of directiveInventory.entries()) {
       const node = nodesBySource[d.source]?.find((n) => n.domPath === d.scope);
       if (!node) continue; // phantom / unresolvable claim -- no provenance manufactured
-      provenance.push({ elementId: `${c.id}-di-${i}-${d.axis}`, sourceId: d.source, nodeId: node.nodeId, domPath: node.domPath, breakpoint: 'desktop' });
+      const bp = c.breakpoints[provenanceIndex % c.breakpoints.length]!;
+      provenanceIndex++;
+      provenance.push({ elementId: `${c.id}-di-${i}-${d.axis}`, sourceId: d.source, nodeId: node.nodeId, domPath: node.domPath, breakpoint: bp });
     }
 
     const variantAxes = [
