@@ -380,7 +380,7 @@
       "sourceId": "ecom-flex-a",
       "nodeId": "ecom-flex-a-header",
       "domPath": "body > div.ecom-flex-a-shell > header.ecom-flex-a-header",
-      "breakpoint": "desktop"
+      "breakpoint": "mobile"
     },
     {
       "elementId": "ecommerce-product-flex-di-1-palette",
@@ -394,7 +394,7 @@
       "sourceId": "ecom-grid-b",
       "nodeId": "ecom-grid-b-cta",
       "domPath": "body > div.ecom-grid-b-shell > cta.ecom-grid-b-cta",
-      "breakpoint": "desktop"
+      "breakpoint": "mobile"
     },
     {
       "elementId": "ecommerce-product-flex-di-3-section",
