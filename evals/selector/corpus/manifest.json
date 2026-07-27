@@ -77,7 +77,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/marketing-hero-grid.json",
-      "irSha256": "fbc08c454807108009f4d2520d20bc877506e71c733c5d4495aa07459f6c9109"
+      "irSha256": "8b3f62ce7fcc314904fef3a01ef4be42be3cf781480152536ed51710d00f1efd"
     },
     {
       "id": "ecommerce-product-flex",
@@ -154,7 +154,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/ecommerce-product-flex.json",
-      "irSha256": "c44169ae65c7bfe17f7b2f9ddeedd1040e372c1c3f67f93338e293ef7c1b8329"
+      "irSha256": "59e5892f309544109bfb341c3db56bbfdc8e57f84eb42ab2a9223e21e941960d"
     },
     {
       "id": "dashboard-canvas-widgets",
@@ -231,7 +231,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/dashboard-canvas-widgets.json",
-      "irSha256": "1db94f1f4d1710fb6c1846214a53bf6bb131c4bf705760d69f9fde16a5b109af"
+      "irSha256": "c0ef796084c144cb9364bd5ce14a7e32ebf2457adc8724ffa7f5f57e77a52e88"
     },
     {
       "id": "docs-api-reference",
@@ -308,7 +308,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/docs-api-reference.json",
-      "irSha256": "b0e8086b50a1add2c239c8ec7414aa119a5f8a615d9ffe011ccd8ddc3f0f7f95"
+      "irSha256": "8056456f6e5040c7ff6bf9d85858a1605ed79d2ca77fec3ffff58931e21b7194"
     },
     {
       "id": "blog-content-grid",
@@ -369,7 +369,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/blog-content-grid.json",
-      "irSha256": "c1f72af744c1cd33469b9a420dfcfd9a2a449a41903d19f16a72392f784e8b4a"
+      "irSha256": "f776c324ca2eaca06a0818244f7ac57ab4e155b273a566d710c7efe6e58be218"
     },
     {
       "id": "single-source-landing",
@@ -418,7 +418,7 @@
       },
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/single-source-landing.json",
-      "irSha256": "5a2573d82def59004760e93089eeebc2ad12a36d1c0c506422becb0a63666407"
+      "irSha256": "272901f00f296080d25d1118a0c7e52f22ca962733396db02d3e89d579d9cd58"
     },
     {
       "id": "phantom-element-directive",
@@ -468,6 +468,12 @@
           "strength": 0.75
         },
         {
+          "axis": "typography",
+          "source": "phantom-grid-a",
+          "scope": "body > div.phantom-grid-a-shell > hero_heading.phantom-grid-a-hero-heading",
+          "strength": 0.65
+        },
+        {
           "axis": "palette",
           "source": "phantom-flex-b",
           "scope": "body > div.phantom-flex-b-shell > section.phantom-flex-b-nonexistent-widget-xyz",
@@ -479,7 +485,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/phantom-element-directive.json",
-      "irSha256": "b1f5ad9b66b3fe7698315e0ecad1c24c620940e408adffccaae35a6196f4bc2d"
+      "irSha256": "5fc9dbb2543f677009251c44e68bd66854db9126ed80d6087696d8f1875ca565"
     },
     {
       "id": "hostile-heavy-dom-catalog",
@@ -540,7 +546,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/hostile-heavy-dom-catalog.json",
-      "irSha256": "8ed84de494041b4603be29659c04fee61594e9ec5c8265c848030d4e71badc07"
+      "irSha256": "ad3ee8ab076087b50a8f307ebd0877a479cdf6725e5759445652c69f6ed5959c"
     },
     {
       "id": "sealed-marketing-alt",

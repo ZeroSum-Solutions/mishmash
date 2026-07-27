@@ -1,12 +1,23 @@
 # Selector eval corpus (W7 / S7-2)
 
-**Corpus freeze sha256: 12b109dff6728b62835fad2ed9504eb68aa91dc45552bbebd68785c7c73da77f**
+**Corpus freeze sha256: 09a184b4afefbe964eca6ae8118992be447bfa55346b4923edfb7ad7a1f4f2c8**
 
 That hash is `sha256(evals/selector/corpus/manifest.json)` at the commit that freezes this
 document. `scripts/waves/verify-w7.ts` re-hashes the manifest at HEAD and requires an exact match
 — if the manifest changes after this point, the freeze hash goes stale and the gate fails, which
 is the point: everything downstream (per-case IR instances, the scorer's population/counterfactual
 controls) is built against this exact, pinned manifest state.
+
+*Re-frozen once*, before any scorer/metrics work landed: the original generator hardcoded every
+IR's `provenance[].breakpoint` to `"desktop"`, which made `verify-w7.ts` C7-4's breakpoint-only
+field-derangement control mechanically unconstructible (no fixed-point-free permutation exists
+over an all-identical array). Fixed by alternating breakpoint per provenance entry
+(`evals/selector/scripts/generate-corpus.ts`); every **non-sealed** case's IR was regenerated and
+re-committed. The two sealed cases' ciphertext was already committed and is frozen under the
+verifier's own frozen-path rule (F18) — their `manifest.json` entries intentionally still record
+the **original** (pre-fix) `irSha256`, matching the ciphertext that is actually sealed. Those two
+cases will fail C7-4's breakpoint-derangement control until a founder-authorized re-seal lands;
+see the milestone report to the orchestrator for the corrected plaintext, already prepared.
 
 ## Provenance of the data
 
