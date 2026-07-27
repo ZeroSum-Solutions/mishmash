@@ -1,0 +1,2392 @@
+{
+  "sourceSlots": [
+    {
+      "id": "hostile-abs-a",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "evidencePointers": [
+        {
+          "domPath": "body > div.hostile-abs-a-shell > header.hostile-abs-a-header",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > hero.hostile-abs-a-hero",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > hero_heading.hostile-abs-a-hero-heading",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > features.hostile-abs-a-features",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "position"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > feature_item_1.hostile-abs-a-feature-item-1",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > feature_item_2.hostile-abs-a-feature-item-2",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > cta.hostile-abs-a-cta",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > footer.hostile-abs-a-footer",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-0",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-1",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-2",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-3",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-4",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-5",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-6",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-7",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-8",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-9",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-10",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-11",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-12",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-13",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-14",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-15",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-16",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-17",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-18",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-19",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-20",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-21",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-22",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-23",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-24",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-25",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-26",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-27",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-28",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-29",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-30",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-31",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-32",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-33",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-34",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-35",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-36",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-37",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-38",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-39",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-40",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-41",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-42",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-43",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-44",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-45",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-46",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-47",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-48",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-49",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > header.hostile-abs-a-header",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > hero.hostile-abs-a-hero",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > hero_heading.hostile-abs-a-hero-heading",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > features.hostile-abs-a-features",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "position"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > feature_item_1.hostile-abs-a-feature-item-1",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > feature_item_2.hostile-abs-a-feature-item-2",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > cta.hostile-abs-a-cta",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > footer.hostile-abs-a-footer",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-0",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-1",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-2",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-3",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-4",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-5",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-6",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-7",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-8",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-9",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-10",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-11",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-12",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-13",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-14",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-15",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-16",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-17",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-18",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-19",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-20",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-21",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-22",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-23",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-24",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-25",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-26",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-27",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-28",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-29",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-30",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-31",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-32",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-33",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-34",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-35",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-36",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-37",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-38",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-39",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-40",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-41",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-42",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-43",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-44",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-45",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-46",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-47",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-48",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-49",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hostile-grid-b",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "evidencePointers": [
+        {
+          "domPath": "body > div.hostile-grid-b-shell > header.hostile-grid-b-header",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > hero.hostile-grid-b-hero",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > hero_heading.hostile-grid-b-hero-heading",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > features.hostile-grid-b-features",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "gridTemplateColumns"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > feature_item_1.hostile-grid-b-feature-item-1",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > feature_item_2.hostile-grid-b-feature-item-2",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > cta.hostile-grid-b-cta",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > footer.hostile-grid-b-footer",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-0",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-1",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-2",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-3",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-4",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-5",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-6",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-7",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-8",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-9",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-10",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-11",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-12",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-13",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-14",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-15",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-16",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-17",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-18",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-19",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-20",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-21",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-22",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-23",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-24",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-25",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-26",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-27",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-28",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-29",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-30",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-31",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-32",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-33",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-34",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-35",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-36",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-37",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-38",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-39",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-40",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-41",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-42",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-43",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-44",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-45",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-46",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-47",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-48",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-49",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > header.hostile-grid-b-header",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > hero.hostile-grid-b-hero",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > hero_heading.hostile-grid-b-hero-heading",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > features.hostile-grid-b-features",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "gridTemplateColumns"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > feature_item_1.hostile-grid-b-feature-item-1",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > feature_item_2.hostile-grid-b-feature-item-2",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > cta.hostile-grid-b-cta",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > footer.hostile-grid-b-footer",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-0",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-1",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-2",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-3",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-4",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-5",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-6",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-7",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-8",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-9",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-10",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-11",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-12",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-13",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-14",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-15",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-16",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-17",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-18",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-19",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-20",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-21",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-22",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-23",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-24",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-25",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-26",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-27",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-28",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-29",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-30",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-31",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-32",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-33",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-34",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-35",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-36",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-37",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-38",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-39",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-40",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-41",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-42",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-43",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-44",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-45",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-46",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-47",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-48",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        },
+        {
+          "domPath": "body > div.hostile-grid-b-shell > section.hostile-grid-b-catalog > div.hostile-grid-b-item-49",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display"
+          ]
+        }
+      ]
+    }
+  ],
+  "directives": [
+    {
+      "axis": "layout",
+      "source": "hostile-abs-a",
+      "scope": "body > div.hostile-abs-a-shell > features.hostile-abs-a-features",
+      "strength": 0.7
+    },
+    {
+      "axis": "interaction",
+      "source": "hostile-grid-b",
+      "scope": "body > div.hostile-grid-b-shell > cta.hostile-grid-b-cta",
+      "strength": 0.55
+    }
+  ],
+  "constraints": [
+    {
+      "type": "grid-integrity",
+      "rule": "Grid/flex/absolute containers must not overlap at any declared breakpoint."
+    },
+    {
+      "type": "contrast-minimum",
+      "rule": "Text/background contrast must meet WCAG AA (4.5:1) at every breakpoint."
+    },
+    {
+      "type": "responsive-behavior",
+      "rule": "Every emitted element must have a defined style at each of the case's declared breakpoints."
+    }
+  ],
+  "conflictResolution": [
+    {
+      "axis": "layout",
+      "winningSource": "hostile-abs-a",
+      "rationale": "Single claimant (hostile-abs-a) on the layout axis in this case; no contention to resolve."
+    },
+    {
+      "axis": "interaction",
+      "winningSource": "hostile-grid-b",
+      "rationale": "Single claimant (hostile-grid-b) on the interaction axis in this case; no contention to resolve."
+    }
+  ],
+  "provenance": [
+    {
+      "elementId": "hostile-heavy-dom-catalog-di-0-layout",
+      "sourceId": "hostile-abs-a",
+      "nodeId": "hostile-abs-a-features",
+      "domPath": "body > div.hostile-abs-a-shell > features.hostile-abs-a-features",
+      "breakpoint": "desktop"
+    },
+    {
+      "elementId": "hostile-heavy-dom-catalog-di-1-interaction",
+      "sourceId": "hostile-grid-b",
+      "nodeId": "hostile-grid-b-cta",
+      "domPath": "body > div.hostile-grid-b-shell > cta.hostile-grid-b-cta",
+      "breakpoint": "desktop"
+    }
+  ],
+  "variantAxes": [
+    {
+      "name": "layout-skeleton",
+      "distanceMetric": "jaccard-dissimilarity-of-domPath-set"
+    },
+    {
+      "name": "section-order",
+      "distanceMetric": "fraction-of-positions-differing-in-scope-order"
+    },
+    {
+      "name": "motion-timeline",
+      "distanceMetric": "fraction-of-positions-differing-in-motionSignature"
+    },
+    {
+      "name": "breakpoint-behavior",
+      "distanceMetric": "fraction-of-positions-differing-in-breakpoint-assignment"
+    }
+  ]
+}

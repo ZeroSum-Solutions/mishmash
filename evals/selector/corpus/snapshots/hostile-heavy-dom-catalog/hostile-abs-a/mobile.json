@@ -1,0 +1,579 @@
+{
+  "nodes": [
+    {
+      "nodeId": "hostile-abs-a-header",
+      "domPath": "body > div.hostile-abs-a-shell > header.hostile-abs-a-header",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-hero",
+      "domPath": "body > div.hostile-abs-a-shell > hero.hostile-abs-a-hero",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-hero-heading",
+      "domPath": "body > div.hostile-abs-a-shell > hero_heading.hostile-abs-a-hero-heading",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-features",
+      "domPath": "body > div.hostile-abs-a-shell > features.hostile-abs-a-features",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block",
+        "position": "absolute"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-feature-item-1",
+      "domPath": "body > div.hostile-abs-a-shell > feature_item_1.hostile-abs-a-feature-item-1",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-feature-item-2",
+      "domPath": "body > div.hostile-abs-a-shell > feature_item_2.hostile-abs-a-feature-item-2",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-cta",
+      "domPath": "body > div.hostile-abs-a-shell > cta.hostile-abs-a-cta",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-footer",
+      "domPath": "body > div.hostile-abs-a-shell > footer.hostile-abs-a-footer",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-0",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-0",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-1",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-1",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-2",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-2",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-3",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-3",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-4",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-4",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-5",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-5",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-6",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-6",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-7",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-7",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-8",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-8",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-9",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-9",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-10",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-10",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-11",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-11",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-12",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-12",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-13",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-13",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-14",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-14",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-15",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-15",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-16",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-16",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-17",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-17",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-18",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-18",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-19",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-19",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-20",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-20",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-21",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-21",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-22",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-22",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-23",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-23",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-24",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-24",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-25",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-25",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-26",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-26",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-27",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-27",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-28",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-28",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-29",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-29",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-30",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-30",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-31",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-31",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-32",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-32",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-33",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-33",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-34",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-34",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-35",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-35",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-36",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-36",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-37",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-37",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-38",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-38",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-39",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-39",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-40",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-40",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-41",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-41",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-42",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-42",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-43",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-43",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-44",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-44",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-45",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-45",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-46",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-46",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-47",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-47",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-48",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-48",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    },
+    {
+      "nodeId": "hostile-abs-a-list-item-49",
+      "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-49",
+      "computedStyle": {
+        "color": "#2a0e4a",
+        "backgroundColor": "#f1e9fb",
+        "fontFamily": "Karla, sans-serif",
+        "display": "block"
+      }
+    }
+  ],
+  "viewportWidth": 390
+}
