@@ -1,6 +1,6 @@
 {
   "scorerVersion": "1.0.0",
   "floorsVersion": 1,
-  "corpusVersion": 1,
+  "corpusVersion": 2,
   "note": "Pins evals/selector/scorer/index.ts's SCORER_VERSION, evals/selector/floors.json's version, and evals/selector/corpus/manifest.json's version together. verify-w7.ts C7-13 cross-checks all three against the live values -- a version bump in any one file without a matching bump here fails the gate."
 }
