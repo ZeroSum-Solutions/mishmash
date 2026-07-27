@@ -26,7 +26,7 @@ the counting script below to reproduce any number.
 | MCP server names | `` /\bSERVER_NAME\s*[:=]\s*['"`][\w-]+['"`]/g `` | 4 | Declared `SERVER_NAME` constants that name an MCP server (e.g. the live-artifacts MCP server, the `od mcp` tool surface). |
 | Project JSON keys | `/\bmetadata\.\w+\b/g` | 827 | `metadata.<key>` accesses against the project/asset metadata JSON blob (`metadata.baseDir`, `metadata.kind`, `metadata.odLibraryAssetId`, …) — the shape a stored project record's JSON column commits to. |
 | Connector credential fields | `` /\b(clientId|clientSecret|apiKey|accessToken|refreshToken)\b/g `` | 1577 | Field names used by the connector credential store (`connectors/credentials.json`) and OAuth/token flows throughout routes, MCP config, and library tokens. |
-| Sidecar stamp fields | `` /\b(app|mode|namespace|ipc|source)\s*:/g `` | 3918 | The five sidecar process-stamp fields (`app`, `mode`, `namespace`, `ipc`, `source` — see root `AGENTS.md` "Sidecar process stamps must have exactly five fields") wherever they appear as an object-literal key across the codebase. |
+| Sidecar stamp fields | `` /\b(app|mode|namespace|ipc|source)\s*:/g `` | 3920 | The five sidecar process-stamp fields (`app`, `mode`, `namespace`, `ipc`, `source` — see root `AGENTS.md` "Sidecar process stamps must have exactly five fields") wherever they appear as an object-literal key across the codebase. |
 
 ## Blast-radius notes (inventory only — no migration executed)
 
