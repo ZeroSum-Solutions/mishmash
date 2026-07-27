@@ -1729,15 +1729,27 @@ function loadBlindedFixture(relDir: string, manifest: CorpusManifest): { ok: tru
 
 // =============================================================================
 // C7-6 -- grader discriminates on a population, not an example. F7: the
-// "wrong" population is now VERIFIER-BUILT by mutating real faithful
-// compositions (cross-case attribution swap), removing the implementer from
-// authoring ground truth entirely; implementer-provided fixtures (if any)
-// remain non-load-bearing extras reported alongside.
+// "wrong" population is VERIFIER-BUILT by mutating real faithful
+// compositions two ways, BOTH load-bearing: a cross-case attribution swap
+// (every sourceId replaced with a source id foreign to the case entirely)
+// AND a within-case attribution swap (houseStyleComposition -- every
+// sourceId replaced with a DIFFERENT source id belonging to the SAME case,
+// on the SAME real nodes, groundedness intact). Sol's F7 rejection was
+// specific: "C7-6 still replaces every sourceId with a foreign-case
+// identifier for its load-bearing wrong population; the new within-case
+// fixtures are explicitly additional and non-load-bearing" -- the within-
+// case swap is the harder discrimination (misattributed-but-real content
+// scores meaningfully higher than genuinely absent content, per floors.json's
+// own documented house-style semantics), so it is now REQUIRED to separate,
+// not merely reported. The committed implementer fixtures under
+// ${POPULATION_DIR}/{wrong,faithful}/*-within-case (if present) are ALSO
+// promoted to load-bearing, since they match this exact definition; any
+// OTHER implementer fixture remains an additional, non-load-bearing signal.
 // =============================================================================
 await probe(
   'C7-6',
-  `dynamic-import ${SCORER_INDEX_PATH}; for >=5 eligible corpus cases build a real faithfulComposition (verifier-built, "faithful" population) and a cross-case-attribution-swapped mutation of it (verifier-built, "wrong" population -- every element's sourceId replaced with a source id belonging to a DIFFERENT case entirely); score both populations and assert zero distribution overlap; also score any implementer-provided fixtures under ${POPULATION_DIR} as an additional, non-load-bearing check`,
-  `>=5 corpus cases (non-sealed, non-skip, directiveInventory-resolvable) each yield a faithful composition and a cross-case-mutated "wrong" counterpart (every sourceId replaced by a source id foreign to that case); scoreComposition(input).overall in [0,1] (F12) for all 10; max(wrong scores) < min(faithful scores); implementer fixtures under ${POPULATION_DIR}/{wrong,faithful} (if present) must also be corpus-derived + blinded + mutually unique and are scored as an additional, non-load-bearing signal; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above): ${dispositionPath('F7')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F7 finding -- until it exists this criterion fails with "reviewer disposition records missing"; ${PHASE2_TRUST_BOUNDARY_NOTE}`,
+  `dynamic-import ${SCORER_INDEX_PATH}; for >=5 eligible corpus cases build a real faithfulComposition (verifier-built, "faithful" population), a cross-case-attribution-swapped mutation (verifier-built "wrong" population, foreign-case sourceId), AND a within-case-attribution-swapped mutation (verifier-built "wrong" population, houseStyleComposition -- in-case sourceId swap on real nodes); score all populations and assert zero distribution overlap for BOTH the cross-case and within-case pairs; also score implementer-provided fixtures under ${POPULATION_DIR} -- "*-within-case"-named pairs are load-bearing (must also separate), any other fixture remains an additional, non-load-bearing signal`,
+  `>=5 corpus cases (non-sealed, non-skip, directiveInventory-resolvable) each yield a faithful composition, a cross-case-mutated "wrong" counterpart (every sourceId replaced by a source id foreign to that case), and (for >=3 multi-source cases) a within-case-mutated "wrong" counterpart (every sourceId replaced by a DIFFERENT in-case source id, via houseStyleComposition -- same real nodes, groundedness intact, the harder discrimination); scoreComposition(input).overall in [0,1] (F12) for all populations; max(cross-case wrong scores) < min(faithful scores) AND max(within-case wrong scores) < min(within-case faithful scores) -- BOTH load-bearing; implementer fixtures under ${POPULATION_DIR}/{wrong,faithful} (if present) must also be corpus-derived + blinded + mutually unique -- pairs whose directory name contains "within-case" are LOAD-BEARING (must independently separate the same way), any other implementer fixture is scored as an additional, non-load-bearing signal; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above): ${dispositionPath('F7')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F7 finding -- until it exists this criterion fails with "reviewer disposition records missing"; ${PHASE2_TRUST_BOUNDARY_NOTE}`,
   async () => withReviewerDisposition('F7', async () => {
     const { manifest, error } = loadManifest();
     if (!manifest) return { ok: false, evidence: `cannot run: ${error}` };
@@ -1796,14 +1808,61 @@ await probe(
     const minFaithful = Math.min(...faithfulScores);
     const separated = maxWrong < minFaithful;
 
-    // Additional, non-load-bearing: implementer fixtures, if provided.
+    // LOAD-BEARING (item 2 amendment, Sol F7): the within-case wrong
+    // population -- every element's sourceId swapped to a DIFFERENT source
+    // WITHIN THE SAME CASE (houseStyleComposition), on the SAME real nodes,
+    // groundedness intact. This is the harder discrimination Sol's rejection
+    // named -- distinguishing "wrong source, still this case's own real
+    // content" from "wrong source, a different case entirely" -- and is now
+    // required to separate, not merely reported alongside.
+    const withinCaseEligible = eligible.filter((c) => c.sources.length >= 2);
+    if (withinCaseEligible.length < 3) {
+      return { ok: false, evidence: [...lines, `only ${withinCaseEligible.length} eligible multi-source cases for within-case wrong-population construction, need >=3`].join('\n') };
+    }
+    const withinFaithfulScores: number[] = [];
+    const withinWrongScores: number[] = [];
+    const withinLines: string[] = [];
+    const withinErrors: string[] = [];
+    for (const c of withinCaseEligible.slice(0, 8)) {
+      const faithful = faithfulComposition(c)!;
+      const wrong = houseStyleComposition(c)!;
+      const diffCount = faithful.filter((el, i) => el.sourceId !== wrong[i]!.sourceId).length;
+      if (diffCount !== faithful.length) {
+        withinErrors.push(`${c.id}: within-case swap only changed ${diffCount}/${faithful.length} elements' sourceId -- not a genuine full swap`);
+        continue;
+      }
+      // eslint-disable-next-line no-await-in-loop
+      const fResult = await scoreOne(c.id, faithful);
+      // eslint-disable-next-line no-await-in-loop
+      const wResult = await scoreOne(c.id, wrong);
+      if (fResult.errors.length > 0 || wResult.errors.length > 0) {
+        withinErrors.push(`${c.id} within-case: faithful=[${fResult.errors.join('; ')}] wrong=[${wResult.errors.join('; ')}]`);
+        continue;
+      }
+      withinFaithfulScores.push(fResult.score);
+      withinWrongScores.push(wResult.score);
+      withinLines.push(`${c.id} within-case faithful=${fResult.score.toFixed(3)} wrong=${wResult.score.toFixed(3)}`);
+    }
+    if (withinFaithfulScores.length < 3) withinErrors.push(`only ${withinFaithfulScores.length} valid verifier-built within-case "faithful" scores, need >=3`);
+    if (withinWrongScores.length < 3) withinErrors.push(`only ${withinWrongScores.length} valid verifier-built within-case "wrong" scores, need >=3`);
+    if (withinErrors.length > 0) return { ok: false, evidence: [...lines, ...withinLines, ...withinErrors].join('\n') };
+    const withinMaxWrong = Math.max(...withinWrongScores);
+    const withinMinFaithful = Math.min(...withinFaithfulScores);
+    const withinSeparated = withinMaxWrong < withinMinFaithful;
+
+    // Implementer fixtures: "*-within-case"-named pairs are LOAD-BEARING
+    // (they match the exact definition above and the committed fixtures
+    // under evals/selector/fixtures/population/{wrong,faithful}/*-within-case
+    // are the concrete artifacts Sol's finding named); any other fixture
+    // remains an additional, non-load-bearing signal.
     const seenHashes = new Map<string, string>();
     const fixtureLines: string[] = [];
-    const scoreImplementerGroup = async (subdir: 'wrong' | 'faithful'): Promise<number> => {
+    const scoreImplementerGroup = async (subdir: 'wrong' | 'faithful'): Promise<{ count: number; withinCaseScores: Map<string, number> }> => {
       const dir = abs(path.join(POPULATION_DIR, subdir));
+      const withinCaseScores = new Map<string, number>();
       if (!fs.existsSync(dir)) {
         fixtureLines.push(`${subdir}: no implementer fixtures present (not required)`);
-        return 0;
+        return { count: 0, withinCaseScores };
       }
       let count = 0;
       for (const entry of fs.readdirSync(dir)) {
@@ -1822,21 +1881,53 @@ await probe(
         // eslint-disable-next-line no-await-in-loop
         const out = (await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)(loaded.input)) as { overall?: unknown; axes?: unknown };
         const re = scoreRangeErrors(out);
-        fixtureLines.push(`${relDir}: score=${re.length === 0 ? (out.overall as number).toFixed(3) : `INVALID (${re.join('; ')})`}`);
+        const isLoadBearing = entry.includes('within-case');
+        fixtureLines.push(`${relDir}: score=${re.length === 0 ? (out.overall as number).toFixed(3) : `INVALID (${re.join('; ')})`}${isLoadBearing ? ' [LOAD-BEARING: within-case]' : ''}`);
+        if (re.length === 0 && isLoadBearing) withinCaseScores.set(entry, out.overall as number);
         count++;
       }
-      return count;
+      return { count, withinCaseScores };
     };
-    const implementerWrongCount = await scoreImplementerGroup('wrong');
-    const implementerFaithfulCount = await scoreImplementerGroup('faithful');
+    const implementerWrong = await scoreImplementerGroup('wrong');
+    const implementerFaithful = await scoreImplementerGroup('faithful');
 
+    // Pair up matching entry names present in BOTH wrong/ and faithful/ --
+    // each such pair must independently separate (this wrong < this
+    // faithful), same bar as the verifier-constructed check above.
+    const implementerWithinCaseErrors: string[] = [];
+    for (const [name, wrongScore] of implementerWrong.withinCaseScores) {
+      const faithfulScore = implementerFaithful.withinCaseScores.get(name);
+      if (faithfulScore === undefined) {
+        implementerWithinCaseErrors.push(`${name}: load-bearing within-case wrong fixture has no matching faithful fixture of the same name to compare against`);
+        continue;
+      }
+      if (!(wrongScore < faithfulScore)) {
+        implementerWithinCaseErrors.push(`${name}: implementer within-case wrong (${wrongScore.toFixed(3)}) did not score below implementer within-case faithful (${faithfulScore.toFixed(3)})`);
+      }
+    }
+    for (const name of implementerFaithful.withinCaseScores.keys()) {
+      if (!implementerWrong.withinCaseScores.has(name)) {
+        implementerWithinCaseErrors.push(`${name}: load-bearing within-case faithful fixture has no matching wrong fixture of the same name to compare against`);
+      }
+    }
+
+    const ok = separated && withinSeparated && implementerWithinCaseErrors.length === 0;
     const evidence = [
       ...lines,
-      `verifier-built: wrong max=${maxWrong.toFixed(3)} faithful min=${minFaithful.toFixed(3)} separated=${separated}`,
-      `implementer fixtures (additional, non-load-bearing): wrong=${implementerWrongCount} faithful=${implementerFaithfulCount}`,
+      `verifier-built cross-case: wrong max=${maxWrong.toFixed(3)} faithful min=${minFaithful.toFixed(3)} separated=${separated}`,
+      ...withinLines,
+      `verifier-built within-case (LOAD-BEARING): wrong max=${withinMaxWrong.toFixed(3)} faithful min=${withinMinFaithful.toFixed(3)} separated=${withinSeparated}`,
+      `implementer fixtures: wrong=${implementerWrong.count} faithful=${implementerFaithful.count} (non-"within-case" entries are additional/non-load-bearing; "within-case" entries are LOAD-BEARING and must separate)`,
       ...fixtureLines,
+      `implementer within-case pairs: ${implementerWrong.withinCaseScores.size} wrong / ${implementerFaithful.withinCaseScores.size} faithful, errors=${implementerWithinCaseErrors.length === 0 ? 'none' : implementerWithinCaseErrors.join(' | ')}`,
     ].join('\n');
-    return { ok: separated, evidence, detail: separated ? undefined : 'verifier-built score distributions overlap' };
+    return {
+      ok,
+      evidence,
+      detail: ok
+        ? undefined
+        : `separated(cross-case)=${separated} separated(within-case, LOAD-BEARING)=${withinSeparated} implementerWithinCaseErrors=${implementerWithinCaseErrors.length}`,
+    };
   }),
 );
 
