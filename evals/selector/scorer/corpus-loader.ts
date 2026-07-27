@@ -62,13 +62,29 @@ export interface CapturedNode {
   computedStyle: Record<string, string>;
 }
 
-// The subset of the IR shape resolve-conflicts.ts needs. loadCaseIR() only
-// ever reads NON-SEALED, plaintext IR files (same constraint as
-// buildSnapshotsBySource below) -- scoreComposition is never exercised
-// against sealed cases.
+export interface ConstraintPredicate {
+  property: string;
+  pattern: string;
+}
+export interface CaseConstraint {
+  type: string;
+  rule: string;
+  predicate?: ConstraintPredicate;
+}
+
+// The subset of the IR shape resolve-conflicts.ts / scorer/index.ts need.
+// loadCaseIR() only ever reads NON-SEALED, plaintext IR files (same
+// constraint as buildSnapshotsBySource below) -- scoreComposition is never
+// exercised against sealed cases.
 export interface CaseIR {
   directives: Array<{ axis: string; source: string; scope: string; strength: number; breakpoint?: string }>;
   conflictResolution: Array<{ axis: string; winningSource: string; losingSource?: string }>;
+  // Sol-N4/Grok constraints_unscored (deliverable-review fix round 2):
+  // constraints were generated (generate-corpus.ts) but never loaded or
+  // evaluated by anything. Optional -- sealed v1-shape IR predates this
+  // field, but scoreComposition never reads sealed IR anyway.
+  constraints?: CaseConstraint[];
+  provenance: Array<{ elementId: string; sourceId: string; nodeId: string; domPath: string; breakpoint: string }>;
 }
 
 export function loadCaseIR(c: CorpusCase): CaseIR {
