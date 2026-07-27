@@ -1,0 +1,79 @@
+{
+  "nodes": [
+    {
+      "nodeId": "mkt-flex-b-header",
+      "domPath": "body > div.mkt-flex-b-shell > header.mkt-flex-b-header",
+      "computedStyle": {
+        "color": "#2d1b00",
+        "backgroundColor": "#fff4e0",
+        "fontFamily": "Georgia, serif"
+      }
+    },
+    {
+      "nodeId": "mkt-flex-b-hero",
+      "domPath": "body > div.mkt-flex-b-shell > hero.mkt-flex-b-hero",
+      "computedStyle": {
+        "color": "#2d1b00",
+        "backgroundColor": "#fff4e0",
+        "fontFamily": "Georgia, serif"
+      }
+    },
+    {
+      "nodeId": "mkt-flex-b-hero-heading",
+      "domPath": "body > div.mkt-flex-b-shell > hero_heading.mkt-flex-b-hero-heading",
+      "computedStyle": {
+        "color": "#2d1b00",
+        "backgroundColor": "#fff4e0",
+        "fontFamily": "Georgia, serif"
+      }
+    },
+    {
+      "nodeId": "mkt-flex-b-features",
+      "domPath": "body > div.mkt-flex-b-shell > features.mkt-flex-b-features",
+      "computedStyle": {
+        "color": "#2d1b00",
+        "backgroundColor": "#fff4e0",
+        "fontFamily": "Georgia, serif",
+        "display": "flex",
+        "flexDirection": "row"
+      }
+    },
+    {
+      "nodeId": "mkt-flex-b-feature-item-1",
+      "domPath": "body > div.mkt-flex-b-shell > feature_item_1.mkt-flex-b-feature-item-1",
+      "computedStyle": {
+        "color": "#2d1b00",
+        "backgroundColor": "#fff4e0",
+        "fontFamily": "Georgia, serif"
+      }
+    },
+    {
+      "nodeId": "mkt-flex-b-feature-item-2",
+      "domPath": "body > div.mkt-flex-b-shell > feature_item_2.mkt-flex-b-feature-item-2",
+      "computedStyle": {
+        "color": "#2d1b00",
+        "backgroundColor": "#fff4e0",
+        "fontFamily": "Georgia, serif"
+      }
+    },
+    {
+      "nodeId": "mkt-flex-b-cta",
+      "domPath": "body > div.mkt-flex-b-shell > cta.mkt-flex-b-cta",
+      "computedStyle": {
+        "color": "#2d1b00",
+        "backgroundColor": "#fff4e0",
+        "fontFamily": "Georgia, serif"
+      }
+    },
+    {
+      "nodeId": "mkt-flex-b-footer",
+      "domPath": "body > div.mkt-flex-b-shell > footer.mkt-flex-b-footer",
+      "computedStyle": {
+        "color": "#2d1b00",
+        "backgroundColor": "#fff4e0",
+        "fontFamily": "Georgia, serif"
+      }
+    }
+  ],
+  "viewportWidth": 390
+}

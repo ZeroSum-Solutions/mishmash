@@ -1,0 +1,79 @@
+{
+  "nodes": [
+    {
+      "nodeId": "mkt-grid-a-header",
+      "domPath": "body > div.mkt-grid-a-shell > header.mkt-grid-a-header",
+      "computedStyle": {
+        "color": "#1a1a2e",
+        "backgroundColor": "#f5f5fa",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    {
+      "nodeId": "mkt-grid-a-hero",
+      "domPath": "body > div.mkt-grid-a-shell > hero.mkt-grid-a-hero",
+      "computedStyle": {
+        "color": "#1a1a2e",
+        "backgroundColor": "#f5f5fa",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    {
+      "nodeId": "mkt-grid-a-hero-heading",
+      "domPath": "body > div.mkt-grid-a-shell > hero_heading.mkt-grid-a-hero-heading",
+      "computedStyle": {
+        "color": "#1a1a2e",
+        "backgroundColor": "#f5f5fa",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    {
+      "nodeId": "mkt-grid-a-features",
+      "domPath": "body > div.mkt-grid-a-shell > features.mkt-grid-a-features",
+      "computedStyle": {
+        "color": "#1a1a2e",
+        "backgroundColor": "#f5f5fa",
+        "fontFamily": "Inter, sans-serif",
+        "display": "grid",
+        "gridTemplateColumns": "repeat(3, 1fr)"
+      }
+    },
+    {
+      "nodeId": "mkt-grid-a-feature-item-1",
+      "domPath": "body > div.mkt-grid-a-shell > feature_item_1.mkt-grid-a-feature-item-1",
+      "computedStyle": {
+        "color": "#1a1a2e",
+        "backgroundColor": "#f5f5fa",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    {
+      "nodeId": "mkt-grid-a-feature-item-2",
+      "domPath": "body > div.mkt-grid-a-shell > feature_item_2.mkt-grid-a-feature-item-2",
+      "computedStyle": {
+        "color": "#1a1a2e",
+        "backgroundColor": "#f5f5fa",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    {
+      "nodeId": "mkt-grid-a-cta",
+      "domPath": "body > div.mkt-grid-a-shell > cta.mkt-grid-a-cta",
+      "computedStyle": {
+        "color": "#1a1a2e",
+        "backgroundColor": "#f5f5fa",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    {
+      "nodeId": "mkt-grid-a-footer",
+      "domPath": "body > div.mkt-grid-a-shell > footer.mkt-grid-a-footer",
+      "computedStyle": {
+        "color": "#1a1a2e",
+        "backgroundColor": "#f5f5fa",
+        "fontFamily": "Inter, sans-serif"
+      }
+    }
+  ],
+  "viewportWidth": 390
+}
