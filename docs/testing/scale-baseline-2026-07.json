@@ -1,0 +1,55 @@
+{
+  "version": "1.0.0",
+  "corpus": {
+    "path": "/Users/zero-suminc./.cache/mishmash-w0-scale-corpus",
+    "sha256": "b6f59161e986abde8471a556ac40767a27543e347a7cbc2de18465c7eb728e06",
+    "isRealStoreSnapshot": true,
+    "realStoreFingerprint": "read-only cp -R snapshot of the operator's live ~/projects/mishmash/.od data root taken 2026-07-27 for this wave, 2675 files / 1124656223 bytes (~1.07GB) -- the real store the PRD's NM-27C names, not synthetic filler. Never opened by a writable daemon; the live daemon at ~/projects/mishmash was never touched."
+  },
+  "machine": {
+    "fingerprint": "Devins-MacBook-Pro.local-darwin-arm64-16cpu"
+  },
+  "warmup": {
+    "iterations": 1
+  },
+  "nonRegressionCeiling": 25,
+  "minimumImprovementThreshold": 10,
+  "scenarios": [
+    {
+      "name": "cold-start",
+      "samplesMs": [1371, 1320, 1318, 1316, 1326],
+      "p50": 1320,
+      "p95": 1371,
+      "toleranceBandPct": 40
+    },
+    {
+      "name": "project-list",
+      "samplesMs": [23, 22, 21, 21, 20],
+      "p50": 21,
+      "p95": 23,
+      "toleranceBandPct": 40
+    },
+    {
+      "name": "designs-tab-fan-out",
+      "samplesMs": [3, 2, 1, 1, 1],
+      "p50": 1,
+      "p95": 3,
+      "toleranceBandPct": 50
+    },
+    {
+      "name": "memory-high-water",
+      "samplesMs": [130848, 130848, 130848, 130848, 130848],
+      "p50": 130848,
+      "p95": 130848,
+      "toleranceBandPct": 25
+    },
+    {
+      "name": "search",
+      "samplesMs": [1, 1, 0, 1, 1],
+      "p50": 1,
+      "p95": 1,
+      "toleranceBandPct": 50,
+      "note": "KNOWN GATE-LEVEL ISSUE -- see docs/testing/scale-baseline-2026-07.md 'Known issue: search scenario'. daemon.routeInventory's first /search/i match is POST /api/xai/search (an X.AI/Grok-credentialed search endpoint), which 401s with no XAI credentials configured -- the correct, expected state for a clean environment. Timings recorded are for the 401 response itself, not a functioning search."
+    }
+  ]
+}
