@@ -39,7 +39,7 @@ const rewriteMirrorScriptPath = path.join(
 
 async function loadDiscovery() {
   return (await import(pathToFileURL(discoveryScriptPath).href)) as {
-    collectReferenceCandidates: (text: string) => string[];
+    collectReferenceCandidates: (text: string, options?: { includeNavigation?: boolean }) => string[];
   };
 }
 

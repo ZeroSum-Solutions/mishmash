@@ -506,3 +506,62 @@ describe('(A7 round-2) unquoted rewrite must not touch tokens inside quoted attr
     }
   });
 });
+
+// Confirmation-pass probes (Sol, task-ms2u05gz-z1auq4): the quoted-span mask
+// must also treat framework-syntax attribute names and HTML comments as
+// opaque. Both probes reproduced real corruption/miss cases against the
+// first mask.
+describe('(A7 confirmation) mask covers framework-name attributes and HTML comments', () => {
+  it('leaves a src= token inside a framework-syntax quoted attribute (@config="...") byte-identical', async () => {
+    const { createMirrorManifest } = await loadMirrorManifest();
+    const { localPathForUrl, originHosts, rewriteMirror } = await loadRewriteMirror();
+    const hosts = originHosts('https://example.com');
+    const manifest = createMirrorManifest({ computeLocalPath: localPathForUrl });
+    const siteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'web-clone-at-attr-'));
+    try {
+      const indexRel = manifest.claim('https://example.com/', hosts)!;
+      const aRel = manifest.claim('https://example.com/img/a.png', hosts)!;
+      fs.mkdirSync(path.join(siteDir, 'img'), { recursive: true });
+      const embedded = '@config="mode src=https://example.com/img/a.png rest"';
+      fs.writeFileSync(
+        path.join(siteDir, indexRel),
+        `<!doctype html><html><body><div ${embedded}></div></body></html>`,
+      );
+      fs.writeFileSync(path.join(siteDir, aRel), 'png-a');
+
+      rewriteMirror({ siteDir, origin: 'https://example.com', manifest });
+
+      expect(fs.readFileSync(path.join(siteDir, indexRel), 'utf8')).toContain(embedded);
+    } finally {
+      fs.rmSync(siteDir, { recursive: true, force: true });
+    }
+  });
+
+  it('an unmatched quote inside an HTML comment does not swallow a later genuine unquoted src', async () => {
+    const { createMirrorManifest } = await loadMirrorManifest();
+    const { localPathForUrl, originHosts, rewriteMirror } = await loadRewriteMirror();
+    const hosts = originHosts('https://example.com');
+    const manifest = createMirrorManifest({ computeLocalPath: localPathForUrl });
+    const siteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'web-clone-comment-span-'));
+    try {
+      const indexRel = manifest.claim('https://example.com/', hosts)!;
+      const aRel = manifest.claim('https://example.com/img/a.png', hosts)!;
+      fs.mkdirSync(path.join(siteDir, 'img'), { recursive: true });
+      fs.writeFileSync(
+        path.join(siteDir, indexRel),
+        '<!doctype html><html><body><!-- config="draft --><img src=https://example.com/img/a.png alt="x"></body></html>',
+      );
+      fs.writeFileSync(path.join(siteDir, aRel), 'png-a');
+
+      rewriteMirror({ siteDir, origin: 'https://example.com', manifest });
+
+      const html = fs.readFileSync(path.join(siteDir, indexRel), 'utf8');
+      // The comment is opaque and byte-identical; the img AFTER it still
+      // gets localized instead of being swallowed by a phantom quoted span.
+      expect(html).toContain('<!-- config="draft -->');
+      expect(html).toMatch(/<img src="\.\/img\/a\.png" alt="x">/);
+    } finally {
+      fs.rmSync(siteDir, { recursive: true, force: true });
+    }
+  });
+});

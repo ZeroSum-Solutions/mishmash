@@ -298,17 +298,26 @@ function makeRewriter(siteDir, ownerFile, hosts, manifest, ownerSourceUrl) {
 
 /**
  * Runs `replacer` over only the segments of `text` that lie OUTSIDE quoted
- * attribute values (`name="..."` / `name='...'`), passing quoted spans
- * through byte-identical. The span pattern mirrors the semantics of
- * lib/asset-discovery.mjs's QUOTED_ATTRIBUTE_PATTERN, so what the quoted
- * rewrite pass treats as one value is exactly what this pass refuses to
- * look inside.
+ * attribute values (`name="..."` / `name='...'`) and OUTSIDE HTML comments,
+ * passing those spans through byte-identical.
+ *
+ * The mask is deliberately MORE generous than the rewrite passes' own
+ * attribute-name pattern (confirmation review): the span's name may be any
+ * delimiter-free token, so framework syntaxes (`@config="..."`,
+ * `:src="..."`, `x-on:click="..."`) are opaque here even though no rewrite
+ * pass would ever touch them by name -- a `src=https://...` token INSIDE
+ * such a value must not be rewritten. Comments are masked for the same
+ * reason: an unmatched quote inside one would otherwise open a span that
+ * swallows real markup after it. This asymmetry is safe in exactly one
+ * direction: an over-wide mask can only leave an unquoted reference
+ * un-rewritten (verify-mirror then fails loudly with an origin leak); it
+ * can never inject quotes into a value.
  */
 function replaceOutsideQuotedAttributeValues(text, replacer) {
-  const quotedSpan = /\s[a-zA-Z_:][-a-zA-Z0-9_:.]*\s*=\s*(['"])[\s\S]*?\1/g;
+  const opaqueSpan = /<!--[\s\S]*?-->|\s[^\s"'=<>`]+\s*=\s*(['"])[\s\S]*?\1/g;
   let out = "";
   let last = 0;
-  for (const match of text.matchAll(quotedSpan)) {
+  for (const match of text.matchAll(opaqueSpan)) {
     out += replacer(text.slice(last, match.index));
     out += match[0];
     last = match.index + match[0].length;
