@@ -1,0 +1,79 @@
+{
+  "nodes": [
+    {
+      "nodeId": "land-solo-a-header",
+      "domPath": "body > div.land-solo-a-shell > header.land-solo-a-header",
+      "computedStyle": {
+        "color": "#1c1c1c",
+        "backgroundColor": "#f2f2f2",
+        "fontFamily": "Work Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "land-solo-a-hero",
+      "domPath": "body > div.land-solo-a-shell > hero.land-solo-a-hero",
+      "computedStyle": {
+        "color": "#1c1c1c",
+        "backgroundColor": "#f2f2f2",
+        "fontFamily": "Work Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "land-solo-a-hero-heading",
+      "domPath": "body > div.land-solo-a-shell > hero_heading.land-solo-a-hero-heading",
+      "computedStyle": {
+        "color": "#1c1c1c",
+        "backgroundColor": "#f2f2f2",
+        "fontFamily": "Work Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "land-solo-a-features",
+      "domPath": "body > div.land-solo-a-shell > features.land-solo-a-features",
+      "computedStyle": {
+        "color": "#1c1c1c",
+        "backgroundColor": "#f2f2f2",
+        "fontFamily": "Work Sans, sans-serif",
+        "display": "flex",
+        "flexDirection": "row"
+      }
+    },
+    {
+      "nodeId": "land-solo-a-feature-item-1",
+      "domPath": "body > div.land-solo-a-shell > feature_item_1.land-solo-a-feature-item-1",
+      "computedStyle": {
+        "color": "#1c1c1c",
+        "backgroundColor": "#f2f2f2",
+        "fontFamily": "Work Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "land-solo-a-feature-item-2",
+      "domPath": "body > div.land-solo-a-shell > feature_item_2.land-solo-a-feature-item-2",
+      "computedStyle": {
+        "color": "#1c1c1c",
+        "backgroundColor": "#f2f2f2",
+        "fontFamily": "Work Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "land-solo-a-cta",
+      "domPath": "body > div.land-solo-a-shell > cta.land-solo-a-cta",
+      "computedStyle": {
+        "color": "#1c1c1c",
+        "backgroundColor": "#f2f2f2",
+        "fontFamily": "Work Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "land-solo-a-footer",
+      "domPath": "body > div.land-solo-a-shell > footer.land-solo-a-footer",
+      "computedStyle": {
+        "color": "#1c1c1c",
+        "backgroundColor": "#f2f2f2",
+        "fontFamily": "Work Sans, sans-serif"
+      }
+    }
+  ],
+  "viewportWidth": 390
+}

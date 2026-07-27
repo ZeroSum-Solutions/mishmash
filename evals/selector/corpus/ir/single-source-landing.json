@@ -1,0 +1,235 @@
+{
+  "sourceSlots": [
+    {
+      "id": "land-solo-a",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "evidencePointers": [
+        {
+          "domPath": "body > div.land-solo-a-shell > header.land-solo-a-header",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.land-solo-a-shell > hero.land-solo-a-hero",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.land-solo-a-shell > hero_heading.land-solo-a-hero-heading",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.land-solo-a-shell > features.land-solo-a-features",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "flexDirection"
+          ]
+        },
+        {
+          "domPath": "body > div.land-solo-a-shell > feature_item_1.land-solo-a-feature-item-1",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.land-solo-a-shell > feature_item_2.land-solo-a-feature-item-2",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.land-solo-a-shell > cta.land-solo-a-cta",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.land-solo-a-shell > footer.land-solo-a-footer",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.land-solo-a-shell > header.land-solo-a-header",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.land-solo-a-shell > hero.land-solo-a-hero",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.land-solo-a-shell > hero_heading.land-solo-a-hero-heading",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.land-solo-a-shell > features.land-solo-a-features",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "flexDirection"
+          ]
+        },
+        {
+          "domPath": "body > div.land-solo-a-shell > feature_item_1.land-solo-a-feature-item-1",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.land-solo-a-shell > feature_item_2.land-solo-a-feature-item-2",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.land-solo-a-shell > cta.land-solo-a-cta",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.land-solo-a-shell > footer.land-solo-a-footer",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        }
+      ]
+    }
+  ],
+  "directives": [
+    {
+      "axis": "layout",
+      "source": "land-solo-a",
+      "scope": "body > div.land-solo-a-shell > features.land-solo-a-features",
+      "strength": 0.8
+    },
+    {
+      "axis": "palette",
+      "source": "land-solo-a",
+      "scope": "body > div.land-solo-a-shell > header.land-solo-a-header",
+      "strength": 0.6
+    }
+  ],
+  "constraints": [
+    {
+      "type": "grid-integrity",
+      "rule": "Grid/flex/absolute containers must not overlap at any declared breakpoint."
+    },
+    {
+      "type": "contrast-minimum",
+      "rule": "Text/background contrast must meet WCAG AA (4.5:1) at every breakpoint."
+    },
+    {
+      "type": "responsive-behavior",
+      "rule": "Every emitted element must have a defined style at each of the case's declared breakpoints."
+    }
+  ],
+  "conflictResolution": [
+    {
+      "axis": "layout",
+      "winningSource": "land-solo-a",
+      "rationale": "Single claimant (land-solo-a) on the layout axis in this case; no contention to resolve."
+    },
+    {
+      "axis": "palette",
+      "winningSource": "land-solo-a",
+      "rationale": "Single claimant (land-solo-a) on the palette axis in this case; no contention to resolve."
+    }
+  ],
+  "provenance": [
+    {
+      "elementId": "single-source-landing-di-0-layout",
+      "sourceId": "land-solo-a",
+      "nodeId": "land-solo-a-features",
+      "domPath": "body > div.land-solo-a-shell > features.land-solo-a-features",
+      "breakpoint": "desktop"
+    },
+    {
+      "elementId": "single-source-landing-di-1-palette",
+      "sourceId": "land-solo-a",
+      "nodeId": "land-solo-a-header",
+      "domPath": "body > div.land-solo-a-shell > header.land-solo-a-header",
+      "breakpoint": "desktop"
+    }
+  ],
+  "variantAxes": [
+    {
+      "name": "layout-skeleton",
+      "distanceMetric": "jaccard-dissimilarity-of-domPath-set"
+    },
+    {
+      "name": "section-order",
+      "distanceMetric": "fraction-of-positions-differing-in-scope-order"
+    },
+    {
+      "name": "motion-timeline",
+      "distanceMetric": "fraction-of-positions-differing-in-motionSignature"
+    },
+    {
+      "name": "breakpoint-behavior",
+      "distanceMetric": "fraction-of-positions-differing-in-breakpoint-assignment"
+    }
+  ]
+}
