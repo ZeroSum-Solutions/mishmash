@@ -89,9 +89,16 @@ let repoRoot: string;
 let reuseSuiteCache: boolean;
 let proofDir: string;
 let ts: typeof TypeScriptModule;
+// Round-7 F7 closure (docs/plans/waves/DECISIONS.md "W0 gate F7 closure",
+// Candidate B ADOPT-WITH-CHANGES): the orchestrator-owned unreachable
+// allowlist path is supplied at gate run time, never hardcoded here. Flag
+// wins over env; neither supplied is a valid, fail-closed configuration
+// (the authorized-skip set is simply empty), not an init error.
+let unreachableAllowlistPath: string | undefined;
 try {
   repoRoot = path.resolve(argValue('--repo') ?? process.cwd());
   reuseSuiteCache = argv.includes('--reuse-suite-cache');
+  unreachableAllowlistPath = argValue('--unreachable-allowlist') ?? process.env.W0_UNREACHABLE_ALLOWLIST;
   proofDir = path.join(os.homedir(), '.claude', 'goal-state', 'mishmash-w0-substrate', 'proof');
   fs.mkdirSync(proofDir, { recursive: true });
   ts = createRequire(path.join(repoRoot, 'package.json'))('typescript');
@@ -1278,10 +1285,69 @@ async function main(): Promise<void> {
     record('C0-6', '', '', ok, JSON.stringify({ replayOk, revocationEndpoint, revocationOk, rotationEndpoint, rotationOk }, null, 2), { detail: ok ? undefined : detail.join('; ') });
   });
 
+  // Round-7 F7 closure (docs/plans/waves/DECISIONS.md "W0 gate F7 closure",
+  // Candidate B ADOPT-WITH-CHANGES, binding): free text is evidence-only and
+  // never authorizes a probing skip. The ONLY authorization mechanism is an
+  // orchestrator-owned, out-of-repo allowlist supplied at gate run time via
+  // --unreachable-allowlist or W0_UNREACHABLE_ALLOWLIST (flag wins). FAIL
+  // CLOSED: absent/unreadable/unparsable/malformed => authorized-skip set is
+  // EMPTY, never inferred or defaulted from anything in-repo.
+  interface UnreachableAllowlistEntry { file: string; line: number; method: string; path: string; sourceFingerprint: string; commit: string }
+  type AllowlistStatus = 'absent' | 'unreadable' | 'invalid' | `loaded:${number}`;
+  function loadUnreachableAllowlist(): { entries: UnreachableAllowlistEntry[]; status: AllowlistStatus } {
+    if (!unreachableAllowlistPath) return { entries: [], status: 'absent' };
+    let raw: string;
+    try {
+      raw = fs.readFileSync(unreachableAllowlistPath, 'utf8');
+    } catch {
+      return { entries: [], status: 'unreadable' };
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return { entries: [], status: 'invalid' };
+    }
+    if (!Array.isArray(parsed)) return { entries: [], status: 'invalid' };
+    const entries: UnreachableAllowlistEntry[] = [];
+    for (const e of parsed) {
+      const valid =
+        isRecord(e) &&
+        typeof e.file === 'string' &&
+        typeof e.line === 'number' &&
+        typeof e.method === 'string' &&
+        typeof e.path === 'string' &&
+        typeof e.sourceFingerprint === 'string' &&
+        typeof e.commit === 'string';
+      if (!valid) return { entries: [], status: 'invalid' }; // any malformed entry invalidates the WHOLE file -- fail closed, not partial-trust
+      entries.push(e as unknown as UnreachableAllowlistEntry);
+    }
+    return { entries, status: `loaded:${entries.length}` };
+  }
+  // sourceFingerprint binds an entry to the EXACT current-tree source line at
+  // {file, line}: lowercase hex sha256 of the trimmed line text, recomputed
+  // at gate run (never trusted from the entry or cached). File missing, line
+  // out of range, or hash mismatch is a STALE entry -- a hard fail, since a
+  // stale entry means the entry no longer describes what it claims to.
+  function computeSourceLineFingerprint(relFile: string, line: number): { ok: boolean; hash: string | null; reason?: string } {
+    const abs = path.join(repoRoot, relFile);
+    if (!fs.existsSync(abs)) return { ok: false, hash: null, reason: 'file missing' };
+    let text: string;
+    try {
+      text = fs.readFileSync(abs, 'utf8');
+    } catch (err) {
+      return { ok: false, hash: null, reason: `unreadable: ${String(err)}` };
+    }
+    const lines = text.split('\n');
+    if (!Number.isInteger(line) || line < 1 || line > lines.length) return { ok: false, hash: null, reason: `line ${line} out of range (file has ${lines.length} lines)` };
+    const trimmed = (lines[line - 1] ?? '').trim();
+    return { ok: true, hash: sha256Bytes(trimmed) };
+  }
+
   await checkCriterion(
     'C0-7',
     'two-pass alias-aware AST extraction (local const aliases, property chains, constant paths) over apps/daemon/src/routes/** + server.ts; unresolvable-path guarded registrations must be explicitly acknowledged as dynamic in the inventory',
-    'inventory row without a live route = fail; guarded live route missing from inventory = fail; an unresolvable-path guarded registration not explicitly marked dynamic in the inventory = fail; every row live-probed; a dynamic row\'s "unreachable" escape requires a non-whitespace reason string of >=20 characters (empty/whitespace/trivial strings do not count as a reason) and every unreachable row\'s {file, line, reason} plus a probed-vs-unreachable count is surfaced in the evidence; more than half of a nonempty dynamic-row set being unreachable is itself a fail -- majority-unreachable is a smell that needs a human, not a silent pass',
+    'inventory row without a live route = fail; guarded live route missing from inventory = fail; an unresolvable-path guarded registration not explicitly marked dynamic in the inventory = fail; every row live-probed; a dynamic row without probePath may skip probing ONLY when authorized by an orchestrator-owned allowlist (--unreachable-allowlist / W0_UNREACHABLE_ALLOWLIST) -- absent/unreadable/invalid allowlist = zero authorized skips (fail-closed); each allowlist entry binds to {file, line, method, path} plus a source-line sha256 fingerprint recomputed from the CURRENT tree (stale fingerprint = hard fail) and must match exactly one claiming row 1:1 (duplicate entries, unused entries, and unauthorized claiming rows are all hard fails); a row\'s free-text "unreachable" string is surfaced in evidence but never authorizes anything; hard-fail when authorizedUnreachable*2 >= totalDynamic (nonempty set, exactly-half included)',
     async () => {
       const rel = 'apps/daemon/src/security/privileged-routes.json';
       if (!fileExists(rel)) {
@@ -1305,36 +1371,57 @@ async function main(): Promise<void> {
       // it must bind to a specific {file, line} unresolvable-guard site
       // discovered by the AST pass. Round-5 F7: the binding must be a
       // strict 1:1 BIJECTION (two rows on one site = fail, same as a site
-      // with no row), and every dynamic row must additionally supply either
-      // a live-probable probePath OR an explicit "unreachable" reason --
-      // a row with file/line but neither is unbound, full stop, and can no
-      // longer silently escape both inventory validation and live probing.
+      // with no row).
       const dynamicRows = validRows.filter((r) => r.dynamic === true);
       const siteKey = (s: { file: string; line: number }) => `${s.file}:${s.line}`;
       const unresolvableKeys = new Set(unresolvable.map(siteKey));
       const dynamicRowKeys = dynamicRows.map((r) => (typeof r.file === 'string' && typeof r.line === 'number' ? `${r.file}:${r.line}` : null));
-      // Round-6 F7: "unreachable" is not an escape hatch for a blank string.
-      // The reason must be a real, non-whitespace explanation of >=20
-      // characters -- "" or "  " no longer count as acknowledgement, and a
-      // row that supplies neither a live-probable probePath nor a genuine
-      // reason is unbound just like a row with neither field at all.
-      const MIN_UNREACHABLE_REASON_LENGTH = 20;
-      const hasValidUnreachableReason = (r: { unreachable?: string }): boolean => typeof r.unreachable === 'string' && r.unreachable.trim().length >= MIN_UNREACHABLE_REASON_LENGTH;
-      const dynamicRowsMissingProbePathOrReason = dynamicRows.filter((r) => typeof r.probePath !== 'string' && !hasValidUnreachableReason(r));
       const dynamicRowsUnbound = dynamicRows.filter((r, i) => dynamicRowKeys[i] === null || !unresolvableKeys.has(dynamicRowKeys[i] as string));
       const keyCounts = new Map<string, number>();
       for (const k of dynamicRowKeys) if (k !== null) keyCounts.set(k, (keyCounts.get(k) ?? 0) + 1);
       const dynamicRowsDuplicateBinding = dynamicRows.filter((r, i) => dynamicRowKeys[i] !== null && (keyCounts.get(dynamicRowKeys[i] as string) ?? 0) > 1);
       const boundRowKeys = new Set(dynamicRowKeys.filter((k): k is string => k !== null));
       const unresolvableSitesUnacknowledged = unresolvable.filter((s) => !boundRowKeys.has(siteKey(s)));
-      // Round-6 F7: probed vs unreachable, both surfaced as an explicit
-      // count so an all-unreachable inventory is visible on its face, and a
-      // majority-unreachable inventory (a real smell -- the whole point of
-      // dynamic acknowledgement is that MOST guarded registrations should be
-      // statically resolvable or live-probable) is itself a hard fail.
+
+      // Round-7 F7: allowlist-based authorization. A "claiming" row is a
+      // dynamic row with no probePath -- it needs authorization to skip
+      // probing. probedDynamicRows (has probePath) never need the allowlist.
       const probedDynamicRows = dynamicRows.filter((r) => typeof r.probePath === 'string');
-      const unreachableDynamicRows = dynamicRows.filter((r) => typeof r.probePath !== 'string' && hasValidUnreachableReason(r));
-      const majorityUnreachable = dynamicRows.length > 0 && unreachableDynamicRows.length > dynamicRows.length / 2;
+      const claimingRows = dynamicRows.filter((r) => typeof r.probePath !== 'string');
+      const { entries: allowlistEntries, status: allowlistStatus } = loadUnreachableAllowlist();
+
+      // Duplicate entries: two entries on the same {file, line} are
+      // ambiguous (which one governs the source fingerprint?) -- hard fail.
+      const entryKey = (e: UnreachableAllowlistEntry) => `${e.file}:${e.line}`;
+      const entryKeyCounts = new Map<string, number>();
+      for (const e of allowlistEntries) entryKeyCounts.set(entryKey(e), (entryKeyCounts.get(entryKey(e)) ?? 0) + 1);
+      const duplicateAllowlistEntries = allowlistEntries.filter((e) => (entryKeyCounts.get(entryKey(e)) ?? 0) > 1);
+
+      // Staleness: every entry's fingerprint is recomputed from the CURRENT
+      // tree, never trusted from the entry itself.
+      const staleAllowlistEntries: { entry: UnreachableAllowlistEntry; reason: string }[] = [];
+      for (const e of allowlistEntries) {
+        const fp = computeSourceLineFingerprint(e.file, e.line);
+        if (!fp.ok) staleAllowlistEntries.push({ entry: e, reason: fp.reason ?? 'unresolvable' });
+        else if (fp.hash?.toLowerCase() !== e.sourceFingerprint.toLowerCase()) staleAllowlistEntries.push({ entry: e, reason: `fingerprint mismatch: recomputed ${fp.hash} != declared ${e.sourceFingerprint}` });
+      }
+
+      // 1:1 matching: an entry authorizes a row only when file+line+method+
+      // path ALL match (row method+path is already globally unique via
+      // dedupKeys, so at most one row can match a given entry this way).
+      const rowMatchesEntry = (r: { file?: string; line?: number; method: string; path: string }, e: UnreachableAllowlistEntry) => r.file === e.file && r.line === e.line && r.method === e.method && r.path === e.path;
+      const authorizedRows = claimingRows.filter((r) => allowlistEntries.some((e) => rowMatchesEntry(r, e)));
+      const unauthorizedClaimingRows = claimingRows.filter((r) => !allowlistEntries.some((e) => rowMatchesEntry(r, e)));
+      const unusedAllowlistEntries = allowlistEntries.filter((e) => !claimingRows.some((r) => rowMatchesEntry(r, e)));
+      // An unauthorized claiming row is functionally the same failure class
+      // as a row with neither probePath nor authorization -- it cannot be
+      // probed and it is not allowlist-cleared, so it is "missing" either way.
+      const dynamicRowsMissingProbePathOrReason = unauthorizedClaimingRows;
+
+      // Round-7 F7: majority gate now counts AUTHORIZED-unreachable rows
+      // only (free text carries no weight), and the ruling is >= not > --
+      // exactly-half (e.g. 1 of 2) now also hard-fails.
+      const majorityUnreachable = dynamicRows.length > 0 && authorizedRows.length * 2 >= dynamicRows.length;
 
       let daemon: BootedDaemon | null = null;
       const liveResults: { method: string; path: string; status: number }[] = [];
@@ -1346,11 +1433,10 @@ async function main(): Promise<void> {
         // supplies a concrete probePath (a real, live-observed instance of
         // the computed path) is probed the SAME live 401/403 rejection set
         // as static rows -- acknowledgement alone is not enough if the row
-        // also claims to know a real path. Dynamic rows with an
-        // "unreachable" reason instead of a probePath are legitimately
-        // excluded from live probing (that is the point of the reason
-        // field), but never both-absent -- that case is caught above as
-        // dynamicRowsMissingProbePathOrReason.
+        // also claims to know a real path. Only allowlist-AUTHORIZED
+        // claiming rows are legitimately excluded from live probing;
+        // unauthorized claiming rows are excluded from probing too (there is
+        // no path to probe) but are caught by dynamicRowsMissingProbePathOrReason above.
         for (const row of validRows.filter((r) => !r.dynamic || typeof r.probePath === 'string')) {
           const probePath = row.dynamic ? (row.probePath as string) : row.path;
           try {
@@ -1378,6 +1464,9 @@ async function main(): Promise<void> {
         dynamicRowsUnbound.length === 0 &&
         dynamicRowsDuplicateBinding.length === 0 &&
         unresolvableSitesUnacknowledged.length === 0 &&
+        duplicateAllowlistEntries.length === 0 &&
+        staleAllowlistEntries.length === 0 &&
+        unusedAllowlistEntries.length === 0 &&
         !majorityUnreachable &&
         iteration.ok &&
         control.ok &&
@@ -1385,11 +1474,14 @@ async function main(): Promise<void> {
       record('C0-7', '', '', ok,
         `inventory rows: ${routes.length}\nAST guarded baseline: ${guarded.length}; missing: ${JSON.stringify(guardedRoutesMissingFromInventory)}\n` +
           `unresolvable-path guarded registrations: ${JSON.stringify(unresolvable)}; dynamic rows: ${JSON.stringify(dynamicRows)}\n` +
-          `dynamic rows missing probePath/unreachable(>=${MIN_UNREACHABLE_REASON_LENGTH} chars): ${JSON.stringify(dynamicRowsMissingProbePathOrReason)}; unbound dynamic rows: ${JSON.stringify(dynamicRowsUnbound)}; duplicate-binding dynamic rows: ${JSON.stringify(dynamicRowsDuplicateBinding)}; unacknowledged sites: ${JSON.stringify(unresolvableSitesUnacknowledged)}\n` +
-          `dynamic row counts: total=${dynamicRows.length} probed=${probedDynamicRows.length} unreachable=${unreachableDynamicRows.length} majorityUnreachable=${majorityUnreachable}\n` +
-          `unreachable dynamic rows (reasons surfaced): ${JSON.stringify(unreachableDynamicRows.map((r) => ({ method: r.method, path: r.path, file: r.file, line: r.line, reason: r.unreachable })))}\n` +
+          `dynamic rows missing probePath/authorization: ${JSON.stringify(dynamicRowsMissingProbePathOrReason)}; unbound dynamic rows: ${JSON.stringify(dynamicRowsUnbound)}; duplicate-binding dynamic rows: ${JSON.stringify(dynamicRowsDuplicateBinding)}; unacknowledged sites: ${JSON.stringify(unresolvableSitesUnacknowledged)}\n` +
+          `allowlistStatus=${allowlistStatus} allowlistPath=${unreachableAllowlistPath ?? '(none)'}\n` +
+          `duplicate allowlist entries: ${JSON.stringify(duplicateAllowlistEntries)}\nstale allowlist entries: ${JSON.stringify(staleAllowlistEntries)}\nunused allowlist entries: ${JSON.stringify(unusedAllowlistEntries)}\n` +
+          `dynamic row counts: total=${dynamicRows.length} probed=${probedDynamicRows.length} claiming=${claimingRows.length} authorized=${authorizedRows.length} unauthorized=${unauthorizedClaimingRows.length} majorityUnreachable(authorized*2>=total)=${majorityUnreachable}\n` +
+          `authorized rows (allowlist-cleared, free text is evidence-only): ${JSON.stringify(authorizedRows.map((r) => ({ method: r.method, path: r.path, file: r.file, line: r.line, freeTextUnreachable: r.unreachable })))}\n` +
+          `all claiming rows with free-text unreachable surfaced: ${JSON.stringify(claimingRows.map((r) => ({ method: r.method, path: r.path, file: r.file, line: r.line, freeTextUnreachable: r.unreachable, authorized: authorizedRows.includes(r) })))}\n` +
           `inventory rows without a live route: ${JSON.stringify(inventoryRowsNotLive)}\nlive probe: ${JSON.stringify(liveResults)}\n-- per-route --\n${iteration.evidence}\n-- control --\n${control.evidence}`,
-        { detail: ok ? undefined : `rows=${validRows.length} unique=${dedupKeys.size} inventoryRowsNotLive=${inventoryRowsNotLive.length} guardedMissing=${guardedRoutesMissingFromInventory.length} dynamicRowsMissingProbePathOrReason=${dynamicRowsMissingProbePathOrReason.length} dynamicRowsUnbound=${dynamicRowsUnbound.length} dynamicRowsDuplicateBinding=${dynamicRowsDuplicateBinding.length} unresolvableSitesUnacknowledged=${unresolvableSitesUnacknowledged.length} dynamicRowCounts(total=${dynamicRows.length},probed=${probedDynamicRows.length},unreachable=${unreachableDynamicRows.length}) majorityUnreachable=${majorityUnreachable} iterationOk=${iteration.ok} controlOk=${control.ok} liveRejectedAll=${liveRejectedAll}` });
+        { detail: ok ? undefined : `rows=${validRows.length} unique=${dedupKeys.size} inventoryRowsNotLive=${inventoryRowsNotLive.length} guardedMissing=${guardedRoutesMissingFromInventory.length} dynamicRowsMissingProbePathOrReason=${dynamicRowsMissingProbePathOrReason.length} dynamicRowsUnbound=${dynamicRowsUnbound.length} dynamicRowsDuplicateBinding=${dynamicRowsDuplicateBinding.length} unresolvableSitesUnacknowledged=${unresolvableSitesUnacknowledged.length} allowlistStatus=${allowlistStatus} duplicateAllowlistEntries=${duplicateAllowlistEntries.length} staleAllowlistEntries=${staleAllowlistEntries.length} unusedAllowlistEntries=${unusedAllowlistEntries.length} dynamicRowCounts(total=${dynamicRows.length},probed=${probedDynamicRows.length},claiming=${claimingRows.length},authorized=${authorizedRows.length}) majorityUnreachable=${majorityUnreachable} iterationOk=${iteration.ok} controlOk=${control.ok} liveRejectedAll=${liveRejectedAll}` });
       void baselineKeys;
     },
   );
