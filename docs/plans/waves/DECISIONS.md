@@ -137,3 +137,33 @@ W0's allow list gains exactly two entries — `apps/daemon/src/cli.ts` (one-line
 wiring) and `apps/daemon/src/origin-validation.ts` (minimal allowlist addition of
 `pair/confirm`, restoring the behavior `library.ts` already documents). Both changes remain
 subject to adversarial review like all wave work. Founder may veto.
+
+## 2026-07-27 — W0 gate adjudication: C0-7/C0-10 GATE-DEFECT, C0-11 IMPLEMENTATION-DUTY (reviewer-of-record ruling)
+
+The W0 implementation agent stopped on three structural conflicts with the sealed gate instead
+of working around them. GPT-5.6 Sol (the gate's reviewer of record) adjudicated by reading the
+gate source and the in-repo evidence: **C0-7 = GATE-DEFECT (BLOCKER)** — the gate demanded
+origin-less rejection while its own C0-1 chain (and the local CLI) require origin-less success;
+amendment scope: the live-rejection probe sends an explicitly hostile browser Origin, plus a
+separate origin-less local-success canary; no shared-middleware rewrite. **C0-10 = GATE-DEFECT
+(BLOCKER)** — the gate's live-sample probe sent no POST bodies, could not represent
+Express-`.all()` routes, and byte-compared legitimately reshaped/unordered output; amendment
+scope: schema carries equivalent HTTP bodies, ALL registration + concrete probe method/path,
+and declared canonicalizers/comparators; implementation duty survives only where the schema
+explicitly declares ordered output. **C0-11 = IMPLEMENTATION-DUTY (BLOCKER)** — a deterministic
+`pnpm guard` check (manifest shape + CLI-set parity + attributable unmanifested-route
+detection), NOT the random live sampler, which would false-fail ~84% for unrelated changes.
+Amendments go through the standard reviewed-amendment procedure with re-pin. Founder may veto.
+
+## 2026-07-27 — W7 F9 stop-rule escalation: one scoped round authorized (tiebreaker ruling)
+
+Decision-round outcome at `8373e1d83`: Grok approved all five pinned findings; Sol approved
+F2/F6/F7/F8 and rejected F9 (evidence gate not axis-specific: arbitrary non-empty
+motionSignature cleared coverage at 0.707 without style evidence; same root as still-open N1;
+N4's scopeOverlap/state partially open). Dispositions F2/F4/F6/F7/F8 are written (dual-approved
+with receipts). The stop rule fired (third consecutive Sol non-APPROVE, fix-round cap
+consumed); the founder-delegated tiebreaker ruled **Option A**: exactly one additional round
+limited to (1) per-axis evidence-kind requirements in the scorer, (2) scopeOverlap-aware
+conflict grouping, (3) explicit captured-state matching; both lanes then confirm ONLY those
+items; F9 is disposed only on dual APPROVE; any non-APPROVE or out-of-scope finding goes
+directly to the founder with no further implementation rounds. Founder may veto.
