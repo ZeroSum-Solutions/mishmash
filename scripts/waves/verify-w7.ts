@@ -918,14 +918,35 @@ function sampleWindows(buf: Buffer, windowSize = 64, count = 5): Buffer[] {
 // nothing to key off and every element is genuinely resolvable (or
 // deliberately not, by construction).
 // =============================================================================
-function findRealNode(c: CorpusCase, sourceId: string, domPath: string): { nodeId: string; breakpoint: string } | null {
+// findRealNode: resolves a (source, domPath) pair to a REAL captured node.
+// C7-9 breakpoint-resolution quirk (enabling-item amendment): round <=6
+// always returned the FIRST breakpoint whose snapshot happened to contain
+// the domPath, ignoring the claim's OWN breakpoint field entirely (v4 added
+// a per-claim `breakpoint` to directiveInventory -- see nonSealedFreezeOrdering's
+// header comment for the brief-binding context that introduced it). That
+// blind first-match is scorer/index.ts's own documented reason for
+// BREAKPOINT_MISMATCH_CREDIT: "the SEALED verify-w7.ts's own
+// faithfulComposition() helper ... resolves every element's breakpoint via
+// 'first breakpoint where the domPath's snapshot happens to contain it,'
+// which does NOT track directiveInventory's own per-claim breakpoint field."
+// preferredBreakpoint, when supplied and present in the source's own
+// captured breakpoints, is tried FIRST -- so a faithful composition now cites
+// evidence at the breakpoint the claim actually asked for, not whichever one
+// sorts first. Sealed (v1-shape) claims carry no breakpoint field, so they
+// fall back to the original first-match behavior, unchanged.
+function findRealNode(c: CorpusCase, sourceId: string, domPath: string, preferredBreakpoint?: string): { nodeId: string; breakpoint: string; computedStyle: Record<string, string> } | null {
   const source = c.sources.find((s) => s.id === sourceId);
   if (!source) return null;
-  for (const [bp, ref] of Object.entries(source.snapshots)) {
+  const allBreakpoints = Object.keys(source.snapshots);
+  const orderedBreakpoints =
+    preferredBreakpoint !== undefined && allBreakpoints.includes(preferredBreakpoint) ? [preferredBreakpoint, ...allBreakpoints.filter((bp) => bp !== preferredBreakpoint)] : allBreakpoints;
+  for (const bp of orderedBreakpoints) {
+    const ref = source.snapshots[bp];
+    if (!ref) continue;
     const loaded = loadSnapshotDoc(ref, c.sealed, `${c.id}-${sourceId}-${bp}`);
     if (!loaded.ok) continue;
     const node = (loaded.doc.nodes ?? []).find((n) => n.domPath === domPath);
-    if (node) return { nodeId: node.nodeId, breakpoint: bp };
+    if (node) return { nodeId: node.nodeId, breakpoint: bp, computedStyle: node.computedStyle ?? {} };
   }
   return null;
 }
@@ -936,12 +957,31 @@ function findRealNode(c: CorpusCase, sourceId: string, domPath: string): { nodeI
 // null if any directive's scope doesn't resolve against its own claimed
 // source (e.g. a degenerate "nonexistent-element-directive" case -- not a
 // usable case for building a faithful control).
+//
+// Enabling-item amendment: round <=6 set a fixed, arbitrary motionSignature
+// ('timeline-a') on EVERY element and never set styleFingerprint at all --
+// scorer/index.ts documents this as the reason its own palette/typography
+// coverage bar has to be deliberately looser than "=== VERIFIED" ("the
+// SEALED verify-w7.ts's own faithfulComposition()/houseStyleComposition()
+// test builders ... NEVER set styleFingerprint, only motionSignature").
+// Every element now carries a REAL styleFingerprint built from its resolved
+// node's own captured computedStyle (styleFingerprintOf -- every corpus node
+// carries the full 3-key color/backgroundColor/fontFamily triple, verified
+// against all 510 non-sealed snapshot nodes), and a REAL motionSignature
+// (`transition:<ms>ms`, scorer/index.ts's own evidence convention) only when
+// the resolved node genuinely carries a captured transitionDuration -- never
+// a fabricated value standing in for absent evidence.
 function faithfulComposition(c: CorpusCase): CompositionElement[] | null {
   const elements: CompositionElement[] = [];
   for (const [i, d] of c.directiveInventory.entries()) {
-    const real = findRealNode(c, d.source, d.scope);
+    const real = findRealNode(c, d.source, d.scope, d.breakpoint);
     if (!real) return null;
-    elements.push({ elementId: `di-${i}-${d.axis}`, sourceId: d.source, domPath: d.scope, nodeId: real.nodeId, breakpoint: real.breakpoint, motionSignature: 'timeline-a' });
+    const el: CompositionElement = { elementId: `di-${i}-${d.axis}`, sourceId: d.source, domPath: d.scope, nodeId: real.nodeId, breakpoint: real.breakpoint };
+    const fp = styleFingerprintOf(real.computedStyle);
+    if (fp) el.styleFingerprint = fp;
+    const duration = real.computedStyle['transitionDuration'];
+    if (duration) el.motionSignature = `transition:${duration}`;
+    elements.push(el);
   }
   return elements;
 }
