@@ -25,3 +25,26 @@ run. Severity/scope changes cite these records per `VERIFICATION-CONTRACT.md` §
   founder instruction before this program run started; recorded in
   `~/.claude/goal-state/mishmash-wc-clone-closeout/run.log.md`. W-C-only — every other wave
   still lands after W0 per `GLOBAL-GOAL.md` rule 1.
+
+## 2026-07-27 — W7 gate escalation: two-phase gate (orchestrator ruling under standing directive)
+
+Three consecutive non-APPROVE verdicts on `scripts/waves/verify-w7.ts` triggered the
+`VERIFICATION-CONTRACT.md` §6 stop rule. Resolution adopted via the founder's delegated
+decision procedure (GPT-5.6 lane tiebreaker, ADOPT-WITH-CHANGES; verbatim record in the wave's
+goal-state reviews/):
+
+1. **Preflight gate** — scoped mechanical fix (F11/F13/F14/F16/F17/F18/F19), re-reviewed, then
+   pinned as an approved out-of-repo copy. Preflight authorizes W7 implementation to start; it
+   cannot declare W7 complete.
+2. **Completion gate** — C7-2/3/5/6/7/8/9 additionally require commit-bound reviewer records at
+   `docs/specs/selector-reviews/<finding>-disposition.json` in which one Sol-lane and one
+   Grok-lane review each explicitly dispose findings F2/F4/F6/F7/F8/F9 (verbatim text) with
+   APPROVE. Structural checks remain necessary-but-insufficient. Severity stays reviewer-owned;
+   nothing was closed by fiat.
+3. **F18** (contradiction between seal content-binding and freeze-descendant ancestry) confirmed
+   real; corrected to: sealed blob content equals `sealCommit^` content and its defining commit
+   precedes the seal commit.
+4. **W8** starts only after the final approved-copy gate pass, both reviewer approvals, and the
+   C7-16 founder go/no-go.
+
+Founder may veto or amend; surfaced in session summaries when adopted.
