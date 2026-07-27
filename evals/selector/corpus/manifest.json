@@ -16,12 +16,12 @@
           "snapshots": {
             "mobile": {
               "path": "evals/selector/corpus/snapshots/marketing-hero-grid/mkt-grid-a/mobile.json",
-              "sha256": "8a57f99435e6e7f7a8c7ef7f8a9bb807c3bad6577b8fa84c283ef34e2b642752",
+              "sha256": "cdb273a3530952167aaca9c817428d171c88c06a3789f0da8d86f09fb403ee24",
               "viewportWidth": 390
             },
             "desktop": {
               "path": "evals/selector/corpus/snapshots/marketing-hero-grid/mkt-grid-a/desktop.json",
-              "sha256": "83df2c7c58889cf099c28c6bee09d68c88a166e14298cd7b35b96c3d3dcae8e6",
+              "sha256": "e1bad6f5f3c15e56005db7c4ce2819d432b0049eb89b2a2a6b3887f229db7f04",
               "viewportWidth": 1440
             }
           }
@@ -31,12 +31,12 @@
           "snapshots": {
             "mobile": {
               "path": "evals/selector/corpus/snapshots/marketing-hero-grid/mkt-flex-b/mobile.json",
-              "sha256": "44d54bc68dc26c0217b2218e4e2dab97d2207282dd1438e6b3f2b51427d8fb24",
+              "sha256": "6f7448031bc1c72c1caba695dc19ae39df89eb128bdf68eb4f5fcd7e49ab4397",
               "viewportWidth": 390
             },
             "desktop": {
               "path": "evals/selector/corpus/snapshots/marketing-hero-grid/mkt-flex-b/desktop.json",
-              "sha256": "41dc7ae94c0778297643a1af082d63f131fd4b32ee61768c43f7ef29f710c154",
+              "sha256": "5d85f58477664f3671739cd4f41330e7f84802582e5ccf3e3fba7be722cc540e",
               "viewportWidth": 1440
             }
           }
@@ -77,7 +77,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/marketing-hero-grid.json",
-      "irSha256": "8b3f62ce7fcc314904fef3a01ef4be42be3cf781480152536ed51710d00f1efd"
+      "irSha256": "16eae352dea1804a7ffc60ed1930d41e2e38beb830ae87b7b8f8ac692fb6ee72"
     },
     {
       "id": "ecommerce-product-flex",
@@ -93,12 +93,12 @@
           "snapshots": {
             "mobile": {
               "path": "evals/selector/corpus/snapshots/ecommerce-product-flex/ecom-flex-a/mobile.json",
-              "sha256": "edd6d0c2e5f48b09d02b35893f45a2165dd6cd70b764dc190034da1f1a6c6379",
+              "sha256": "c350096cf7dbbd172a0e7b07d3c49a5a066a08c603edb7627371c6be3e32229a",
               "viewportWidth": 390
             },
             "desktop": {
               "path": "evals/selector/corpus/snapshots/ecommerce-product-flex/ecom-flex-a/desktop.json",
-              "sha256": "a0ebcd7abed972127c80e46088dcad1bbd4cdd963a40587924e59d155169a16e",
+              "sha256": "5a4a74ca83dd3b74b5583ef4be8c3bc08e97d1bc07f2edede70e92cfda0b5e70",
               "viewportWidth": 1440
             }
           }
@@ -108,12 +108,12 @@
           "snapshots": {
             "mobile": {
               "path": "evals/selector/corpus/snapshots/ecommerce-product-flex/ecom-grid-b/mobile.json",
-              "sha256": "af781f55e5358ad6535d5786c1bad6bdc39d9b50b652c2d08649bdd980107f3a",
+              "sha256": "461c07265a0b8eefe8c41f7689843f4434d32d77095c528862c6929dc63e50af",
               "viewportWidth": 390
             },
             "desktop": {
               "path": "evals/selector/corpus/snapshots/ecommerce-product-flex/ecom-grid-b/desktop.json",
-              "sha256": "82ce94a3b4f43d50720bf9e2b7c030f3107b4a16243e8c7e7bf83524f89a43b4",
+              "sha256": "6c0f0193c0f01a250a1f475c66c4579f3d5edc654f462c0fa890c503a204ac12",
               "viewportWidth": 1440
             }
           }
@@ -154,7 +154,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/ecommerce-product-flex.json",
-      "irSha256": "59e5892f309544109bfb341c3db56bbfdc8e57f84eb42ab2a9223e21e941960d"
+      "irSha256": "bc8fa6f1c1ddb5a8aef92abee703e0b4500fb464d86999b7f41a5da2d49a8391"
     },
     {
       "id": "dashboard-canvas-widgets",
@@ -170,12 +170,12 @@
           "snapshots": {
             "mobile": {
               "path": "evals/selector/corpus/snapshots/dashboard-canvas-widgets/dash-abs-a/mobile.json",
-              "sha256": "6c97e0ccb16289b179fcbfd17e4e80c4d50deb25c5b21569b5c68bc996e53d6d",
+              "sha256": "e699848b7d63c9f9e54be6dfa5354e85e16435c03969085a8ab21f8be33360a6",
               "viewportWidth": 390
             },
             "desktop": {
               "path": "evals/selector/corpus/snapshots/dashboard-canvas-widgets/dash-abs-a/desktop.json",
-              "sha256": "3b5d6f32b0450dba27bf8387223477d41d0476ce82d947c2e5449cd1533f47ae",
+              "sha256": "b11c5c05206ea8a0fcfa175ab2d98fe68c415a51f067e4d2260d36e61e9a3fbd",
               "viewportWidth": 1440
             }
           }
@@ -185,12 +185,12 @@
           "snapshots": {
             "mobile": {
               "path": "evals/selector/corpus/snapshots/dashboard-canvas-widgets/dash-grid-b/mobile.json",
-              "sha256": "e5e94f7fdd363d74cb647b22eee7e80d22e85c4ec4bc5f9d0675436578bdb43b",
+              "sha256": "7091d46df759a3ce9e6e7f0fdfa5647ac4ae0173b3ec2111eb7c5710702d6198",
               "viewportWidth": 390
             },
             "desktop": {
               "path": "evals/selector/corpus/snapshots/dashboard-canvas-widgets/dash-grid-b/desktop.json",
-              "sha256": "f7fd3f003aaf5ded5c421182aa239a740be075301971f96f0f5594616085c115",
+              "sha256": "b459f2492876e130ade79277b51b78d0f8d74fc3201dbdafef0fec6fae170b7c",
               "viewportWidth": 1440
             }
           }
@@ -231,7 +231,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/dashboard-canvas-widgets.json",
-      "irSha256": "c0ef796084c144cb9364bd5ce14a7e32ebf2457adc8724ffa7f5f57e77a52e88"
+      "irSha256": "c6dcae20d3d702808df1aceaedb29dfa7eaef754b63ae534c3fab78de883b063"
     },
     {
       "id": "docs-api-reference",
@@ -247,12 +247,12 @@
           "snapshots": {
             "mobile": {
               "path": "evals/selector/corpus/snapshots/docs-api-reference/docs-flex-a/mobile.json",
-              "sha256": "082cc2c653902dc7b0d7bd09fcc03aa176f196447b41974d7b39cad96a1949ff",
+              "sha256": "74f1b3494ff2f9d56ef37193a4bfb3eb5d39a8475563000d6c0f291e8fd2d644",
               "viewportWidth": 390
             },
             "desktop": {
               "path": "evals/selector/corpus/snapshots/docs-api-reference/docs-flex-a/desktop.json",
-              "sha256": "844cb7351753a8457584e71026f2eb0bdbac3553628c654f3f43a8c3803c818a",
+              "sha256": "3ae961999f4bb53b1e93cbb10672c94a8f821d49b75b20dc75f171f4473617de",
               "viewportWidth": 1440
             }
           }
@@ -262,12 +262,12 @@
           "snapshots": {
             "mobile": {
               "path": "evals/selector/corpus/snapshots/docs-api-reference/docs-grid-b/mobile.json",
-              "sha256": "1294827320691593446a40e429a6fdda9f0684334d00a4fb3d9ff677db6f7464",
+              "sha256": "3fcc1420cbb319980ba591c50b029efb216a2b370a975d1e73c8c614c9090b27",
               "viewportWidth": 390
             },
             "desktop": {
               "path": "evals/selector/corpus/snapshots/docs-api-reference/docs-grid-b/desktop.json",
-              "sha256": "ee5e5c4d6587ee040dc11b42b5797aa830e236f689505bd4e5f3fda530d58017",
+              "sha256": "90e0c164a5a4014ddfb4f6c803049dc87e2b4b25c2ccec433e677f9b75c42852",
               "viewportWidth": 1440
             }
           }
@@ -308,7 +308,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/docs-api-reference.json",
-      "irSha256": "8056456f6e5040c7ff6bf9d85858a1605ed79d2ca77fec3ffff58931e21b7194"
+      "irSha256": "0ff3755d25e7c3f9f52c92f583724ab303f0600592f0154d96a1f9eb69f4b089"
     },
     {
       "id": "blog-content-grid",
@@ -324,12 +324,12 @@
           "snapshots": {
             "mobile": {
               "path": "evals/selector/corpus/snapshots/blog-content-grid/blog-grid-a/mobile.json",
-              "sha256": "9c2bfb3d9d34cd032def63280d5cf0375c0f978f3eb87e893001bdbd8609a97b",
+              "sha256": "25f86acf4b81df210126f4d1cb490ee2d2ac99ba4698bd0e0d171f2dda2aa853",
               "viewportWidth": 390
             },
             "desktop": {
               "path": "evals/selector/corpus/snapshots/blog-content-grid/blog-grid-a/desktop.json",
-              "sha256": "69f6ccb41c5f8df8c17ad05f141acfb5a082949f60503e22323737f9f5f1a5d3",
+              "sha256": "b4ed04ca73c4519039f5de353dcad39c20123adba2aa79963608a2c609a44543",
               "viewportWidth": 1440
             }
           }
@@ -339,12 +339,12 @@
           "snapshots": {
             "mobile": {
               "path": "evals/selector/corpus/snapshots/blog-content-grid/blog-flex-b/mobile.json",
-              "sha256": "e520efe50500a5e06d0792d68fb449b6621e8b5601ca335dd51c7d7cf954e742",
+              "sha256": "27dc0acd7d27496fc2cfe553adcbf74106ba1cd71a642a749324accec2c3df58",
               "viewportWidth": 390
             },
             "desktop": {
               "path": "evals/selector/corpus/snapshots/blog-content-grid/blog-flex-b/desktop.json",
-              "sha256": "7e343a7d10526c312853533a4cc84f9b2bce57015585ca04a6899a2cc441ee74",
+              "sha256": "81b532e119f089af2ed2c61da8350ddfab942425b24d4d48d48a4bb6e2c6af3a",
               "viewportWidth": 1440
             }
           }
@@ -369,7 +369,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/blog-content-grid.json",
-      "irSha256": "f776c324ca2eaca06a0818244f7ac57ab4e155b273a566d710c7efe6e58be218"
+      "irSha256": "a4ee81f451246c742733d2eed36d1f7b4a2c7308c7172977e64b3f07a62f7b5d"
     },
     {
       "id": "single-source-landing",
@@ -385,12 +385,12 @@
           "snapshots": {
             "mobile": {
               "path": "evals/selector/corpus/snapshots/single-source-landing/land-solo-a/mobile.json",
-              "sha256": "9b897e69002a6c53c64783a6b89de06bb420dc00680edaf3f309a8a625a5c599",
+              "sha256": "06b51e95d278a07bd0897429e55f21345dfece313afdd833d76af599ca2c5f66",
               "viewportWidth": 390
             },
             "desktop": {
               "path": "evals/selector/corpus/snapshots/single-source-landing/land-solo-a/desktop.json",
-              "sha256": "57ef8cc878ab47acadbc8c2f6b2491a82f2502cdf1ac00f3c90be1863e6eb10d",
+              "sha256": "9337e3c0ae1df1fd4dc09eb9bc43f924ebdf61018f82364aaf4f59cdf68a5930",
               "viewportWidth": 1440
             }
           }
@@ -418,7 +418,7 @@
       },
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/single-source-landing.json",
-      "irSha256": "272901f00f296080d25d1118a0c7e52f22ca962733396db02d3e89d579d9cd58"
+      "irSha256": "e6b2ad4468e1ffae9aa96d1901771aba4650248c6bfce467c8b82839763fc50d"
     },
     {
       "id": "phantom-element-directive",
@@ -434,12 +434,12 @@
           "snapshots": {
             "mobile": {
               "path": "evals/selector/corpus/snapshots/phantom-element-directive/phantom-grid-a/mobile.json",
-              "sha256": "89e3f5ec06b5d5fdaca9c15c8d84f6f085d9e181ea820711066ff8820ae52be9",
+              "sha256": "6cbdd0b46492b89af6834cfb8ebc9db93e762164c69241967f3b6456f0af3f6b",
               "viewportWidth": 390
             },
             "desktop": {
               "path": "evals/selector/corpus/snapshots/phantom-element-directive/phantom-grid-a/desktop.json",
-              "sha256": "f2b9d5fe944508977c74ec07f4455fc51472d940070ea922c6f1de373cfd5829",
+              "sha256": "83b9a937c63797ddb7d9ae09501968d14ad7b3bfb3bf5f38d2e6c46342aae051",
               "viewportWidth": 1440
             }
           }
@@ -449,12 +449,12 @@
           "snapshots": {
             "mobile": {
               "path": "evals/selector/corpus/snapshots/phantom-element-directive/phantom-flex-b/mobile.json",
-              "sha256": "17993d1d612fcda08444804fcd6e51960a204591218f1c933a95efe7647742d4",
+              "sha256": "e9ba6d41020c515f8a1e48d96631f737ab30b0fe5a60413cd2a4bad7733dd243",
               "viewportWidth": 390
             },
             "desktop": {
               "path": "evals/selector/corpus/snapshots/phantom-element-directive/phantom-flex-b/desktop.json",
-              "sha256": "bca334052fabbed0414e22e7d370abbdbb1fbeed00ac54000474f8e31ba3f50a",
+              "sha256": "c356cc038759310a6ff57ef2b2e30fca989ccc1f04184856d4896a16cbd3ea71",
               "viewportWidth": 1440
             }
           }
@@ -485,7 +485,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/phantom-element-directive.json",
-      "irSha256": "5fc9dbb2543f677009251c44e68bd66854db9126ed80d6087696d8f1875ca565"
+      "irSha256": "53740c61a1798daaf2d2213751bcc083d58c7279ce9914db1c9607792f74ff84"
     },
     {
       "id": "hostile-heavy-dom-catalog",
@@ -501,12 +501,12 @@
           "snapshots": {
             "mobile": {
               "path": "evals/selector/corpus/snapshots/hostile-heavy-dom-catalog/hostile-abs-a/mobile.json",
-              "sha256": "c6f1bf9b44e5bfe56f934aac6d6a65411f51dc42feea8e955b1e27d5e340d831",
+              "sha256": "e9ff2ee5e252e059d75e850db7ecc8cdd9915c188fb305b77e3a845ef394d2b8",
               "viewportWidth": 390
             },
             "desktop": {
               "path": "evals/selector/corpus/snapshots/hostile-heavy-dom-catalog/hostile-abs-a/desktop.json",
-              "sha256": "ec1b4201858e194be86ae2172ed8dd1ed30e78a16db79633d482eda239897336",
+              "sha256": "f4ec19ed4c3899b99c956839cd5cded35d691e1f9395738f5bd97d1d0ac83d15",
               "viewportWidth": 1440
             }
           }
@@ -516,12 +516,12 @@
           "snapshots": {
             "mobile": {
               "path": "evals/selector/corpus/snapshots/hostile-heavy-dom-catalog/hostile-grid-b/mobile.json",
-              "sha256": "d751e6e8049fd6719a75f6fe8b92c472426168e158fb3fae98cfc8c864e7299c",
+              "sha256": "829d7508b658a85312b6025d35ba2b092638d9861791d73ac34c369d2a423fcf",
               "viewportWidth": 390
             },
             "desktop": {
               "path": "evals/selector/corpus/snapshots/hostile-heavy-dom-catalog/hostile-grid-b/desktop.json",
-              "sha256": "ba6801cc1a2bbefee2520e9dfa804b87846eb49db828d50dd970828384c0022f",
+              "sha256": "dee0d7c171a2ef0afd0ca808dda197fe66e3bb206ef939eeca4256df57782f3d",
               "viewportWidth": 1440
             }
           }
@@ -546,7 +546,7 @@
       "skip": null,
       "sealed": false,
       "irPath": "evals/selector/corpus/ir/hostile-heavy-dom-catalog.json",
-      "irSha256": "ad3ee8ab076087b50a8f307ebd0877a479cdf6725e5759445652c69f6ed5959c"
+      "irSha256": "c02feccc9180905f6ffcfd9d6768d0d720a9e0ad2e594930170d6d1e84bd756f"
     },
     {
       "id": "sealed-marketing-alt",

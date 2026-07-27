@@ -1,6 +1,6 @@
 # Selector eval corpus (W7 / S7-2)
 
-**Corpus freeze sha256: 09a184b4afefbe964eca6ae8118992be447bfa55346b4923edfb7ad7a1f4f2c8**
+**Corpus freeze sha256: 16daa9099172849e7c3ce07c60ae3e1dc1d8b68c077a86d3dab98ba75dd8fc2a**
 
 That hash is `sha256(evals/selector/corpus/manifest.json)` at the commit that freezes this
 document. `scripts/waves/verify-w7.ts` re-hashes the manifest at HEAD and requires an exact match
@@ -8,16 +8,21 @@ document. `scripts/waves/verify-w7.ts` re-hashes the manifest at HEAD and requir
 is the point: everything downstream (per-case IR instances, the scorer's population/counterfactual
 controls) is built against this exact, pinned manifest state.
 
-*Re-frozen once*, before any scorer/metrics work landed: the original generator hardcoded every
-IR's `provenance[].breakpoint` to `"desktop"`, which made `verify-w7.ts` C7-4's breakpoint-only
-field-derangement control mechanically unconstructible (no fixed-point-free permutation exists
-over an all-identical array). Fixed by alternating breakpoint per provenance entry
-(`evals/selector/scripts/generate-corpus.ts`); every **non-sealed** case's IR was regenerated and
-re-committed. The two sealed cases' ciphertext was already committed and is frozen under the
-verifier's own frozen-path rule (F18) — their `manifest.json` entries intentionally still record
-the **original** (pre-fix) `irSha256`, matching the ciphertext that is actually sealed. Those two
-cases will fail C7-4's breakpoint-derangement control until a founder-authorized re-seal lands;
-see the milestone report to the orchestrator for the corrected plaintext, already prepared.
+*Re-frozen twice*, before any scorer/metrics work landed, fixing the same underlying issue in two
+layers: (1) the original generator hardcoded every IR's `provenance[].breakpoint` to `"desktop"`,
+making `verify-w7.ts` C7-4's breakpoint-only field-derangement control mechanically
+unconstructible (no fixed-point-free permutation exists over an all-identical array); (2) even
+after varying the recorded breakpoint per entry, `nodeId`/`domPath` were shared verbatim across
+both breakpoints' snapshot files, so the "wrong" breakpoint still validly resolved and the
+derangement control kept passing 100% instead of 0%. Fixed by (1) alternating breakpoint per
+provenance entry and (2) making `nodeId` breakpoint-specific
+(`evals/selector/scripts/generate-corpus.ts`); every **non-sealed** case's IR and snapshots were
+regenerated and re-committed. The two sealed cases' ciphertext was already committed and is frozen
+under the verifier's own frozen-path rule (F18) — their `manifest.json` entries intentionally still
+record the **original** (pre-fix) hashes, matching the ciphertext that is actually sealed. Those
+two cases will fail C7-4's breakpoint-derangement control until a founder-authorized re-seal lands
+with corrected plaintext (already prepared and handed off; see the milestone report to the
+orchestrator).
 
 ## Provenance of the data
 
