@@ -24,6 +24,20 @@
 // styleFingerprint... source-bleed.ts explicitly treats the missing
 // fingerprint as clean even if non-selected-source styling is present").
 // Missing evidence is unverifiable, and unverifiable is not clean.
+//
+// Sol-N2 (deliverable-review fix round 2): the round-1 fingerprint check was
+// SOURCE-WIDE, not region-bound -- `sourceStyleFingerprints[sourceId]` is a
+// flat list of every fingerprint that source has ANYWHERE, so a fingerprint
+// the claimed source genuinely has at a DIFFERENT region (a different
+// domPath) passed as clean even though it does not belong at THIS domPath.
+// `sourceRegionFingerprints` (NEW, optional, additive) supplies the real
+// per-(source,domPath) mapping so the check can require the fingerprint to
+// match the claimed source AT THE CLAIMED REGION specifically. Optional and
+// additive so a caller that doesn't supply it (the sealed gate's own C7-7
+// check, which is not being amended this round) keeps the exact round-1
+// source-wide behavior unchanged -- this is a strictly STRONGER check
+// layered on top, not a replacement, activated only when the richer mapping
+// is actually supplied.
 
 export interface BleedCompositionElement {
   elementId: string;
@@ -36,6 +50,10 @@ export interface SourceBleedInput {
   composition: BleedCompositionElement[];
   sourceDomPaths: Record<string, string[]>;
   sourceStyleFingerprints: Record<string, string[]>;
+  // sourceId -> domPath -> the fingerprint THAT source genuinely renders AT
+  // that specific domPath. Optional: when omitted, styleOk falls back to the
+  // round-1 source-wide membership check.
+  sourceRegionFingerprints?: Record<string, Record<string, string>>;
 }
 
 export interface SourceBleedResult {
@@ -49,11 +67,25 @@ export function scoreSourceBleed(input: SourceBleedInput): SourceBleedResult {
     const claimedDomPaths = input.sourceDomPaths[el.sourceId] ?? [];
     const domPathOk = claimedDomPaths.includes(el.domPath);
 
-    // Sol-N2: no free pass for omitting the fingerprint. styleOk requires a
-    // NON-EMPTY fingerprint that matches one of the claimed source's real
-    // captured clusters -- a missing fingerprint is unverifiable, not clean.
-    const claimedFingerprints = input.sourceStyleFingerprints[el.sourceId] ?? [];
-    const styleOk = isNonEmpty(el.styleFingerprint) && claimedFingerprints.includes(el.styleFingerprint);
+    // Sol-N2 (round 1): no free pass for omitting the fingerprint. styleOk
+    // requires a NON-EMPTY fingerprint -- a missing fingerprint is
+    // unverifiable, not clean.
+    const hasFingerprint = isNonEmpty(el.styleFingerprint);
+
+    // Sol-N2 (round 2): when a region-bound mapping is supplied, require the
+    // fingerprint to match AT THE CLAIMED domPath specifically -- a
+    // fingerprint the source has genuinely captured at a DIFFERENT domPath
+    // is bleed, even though it would pass the source-wide list check.
+    // Falls back to the source-wide (round-1) check when no region mapping
+    // is supplied for this source at all (backward-compatible default).
+    const regionMap = input.sourceRegionFingerprints?.[el.sourceId];
+    let styleOk: boolean;
+    if (hasFingerprint && regionMap && Object.prototype.hasOwnProperty.call(regionMap, el.domPath)) {
+      styleOk = el.styleFingerprint === regionMap[el.domPath];
+    } else {
+      const claimedFingerprints = input.sourceStyleFingerprints[el.sourceId] ?? [];
+      styleOk = hasFingerprint && claimedFingerprints.includes(el.styleFingerprint!);
+    }
 
     if (!domPathOk || !styleOk) violatingElementIds.push(el.elementId);
   }

@@ -60,3 +60,37 @@ test('an element with correct domPath membership but a missing styleFingerprint 
   assert.equal(result.bleedCount, 1);
   assert.deepEqual(result.violatingElementIds, ['e0']);
 });
+
+test('a fingerprint the claimed source genuinely has at a DIFFERENT region is region-bound bleed, not clean (Sol-N2, round 2)', () => {
+  // site-a really renders '#111111|...' at header AND a SECOND, distinct
+  // fingerprint '#333333|...' at its footer. An element claims sourceId
+  // site-a, domPath = header, but supplies the footer's fingerprint --
+  // source-wide membership alone (sourceStyleFingerprints['site-a'] now
+  // contains BOTH real fingerprints) would call this clean, since the
+  // fingerprint genuinely belongs to site-a SOMEWHERE. sourceRegionFingerprints
+  // makes the check region-bound: site-a's REAL fingerprint at header is
+  // '#111111|...', not '#333333|...', so this is bleed.
+  const twoFingerprintSourceStyleFingerprints: Record<string, string[]> = {
+    'site-a': ['#111111|#eeeeee|Inter, sans-serif', '#333333|#cccccc|Inter, sans-serif'],
+    'site-b': ['#222222|#dddddd|Georgia, serif'],
+  };
+  const sourceRegionFingerprints: Record<string, Record<string, string>> = {
+    'site-a': {
+      'body > header.a': '#111111|#eeeeee|Inter, sans-serif',
+      'body > footer.a': '#333333|#cccccc|Inter, sans-serif',
+    },
+    'site-b': { 'body > header.b': '#222222|#dddddd|Georgia, serif' },
+  };
+  const composition: BleedCompositionElement[] = [{ elementId: 'e0', sourceId: 'site-a', domPath: 'body > header.a', styleFingerprint: '#333333|#cccccc|Inter, sans-serif' }];
+
+  // Without the region mapping: source-wide membership alone reports clean
+  // (the fingerprint IS one of site-a's real fingerprints, just not at this
+  // domPath) -- this is the exact gap Sol-N2 (round 2) flagged.
+  const withoutRegionMap = scoreSourceBleed({ composition, sourceDomPaths, sourceStyleFingerprints: twoFingerprintSourceStyleFingerprints });
+  assert.equal(withoutRegionMap.bleedCount, 0);
+
+  // With the region mapping supplied: the same input is caught as bleed.
+  const withRegionMap = scoreSourceBleed({ composition, sourceDomPaths, sourceStyleFingerprints: twoFingerprintSourceStyleFingerprints, sourceRegionFingerprints });
+  assert.equal(withRegionMap.bleedCount, 1);
+  assert.deepEqual(withRegionMap.violatingElementIds, ['e0']);
+});
