@@ -1,0 +1,79 @@
+{
+  "nodes": [
+    {
+      "nodeId": "ecom-flex-a-header",
+      "domPath": "body > div.ecom-flex-a-shell > header.ecom-flex-a-header",
+      "computedStyle": {
+        "color": "#0b3d2e",
+        "backgroundColor": "#e6f7f0",
+        "fontFamily": "Roboto, sans-serif"
+      }
+    },
+    {
+      "nodeId": "ecom-flex-a-hero",
+      "domPath": "body > div.ecom-flex-a-shell > hero.ecom-flex-a-hero",
+      "computedStyle": {
+        "color": "#0b3d2e",
+        "backgroundColor": "#e6f7f0",
+        "fontFamily": "Roboto, sans-serif"
+      }
+    },
+    {
+      "nodeId": "ecom-flex-a-hero-heading",
+      "domPath": "body > div.ecom-flex-a-shell > hero_heading.ecom-flex-a-hero-heading",
+      "computedStyle": {
+        "color": "#0b3d2e",
+        "backgroundColor": "#e6f7f0",
+        "fontFamily": "Roboto, sans-serif"
+      }
+    },
+    {
+      "nodeId": "ecom-flex-a-features",
+      "domPath": "body > div.ecom-flex-a-shell > features.ecom-flex-a-features",
+      "computedStyle": {
+        "color": "#0b3d2e",
+        "backgroundColor": "#e6f7f0",
+        "fontFamily": "Roboto, sans-serif",
+        "display": "flex",
+        "flexDirection": "row"
+      }
+    },
+    {
+      "nodeId": "ecom-flex-a-feature-item-1",
+      "domPath": "body > div.ecom-flex-a-shell > feature_item_1.ecom-flex-a-feature-item-1",
+      "computedStyle": {
+        "color": "#0b3d2e",
+        "backgroundColor": "#e6f7f0",
+        "fontFamily": "Roboto, sans-serif"
+      }
+    },
+    {
+      "nodeId": "ecom-flex-a-feature-item-2",
+      "domPath": "body > div.ecom-flex-a-shell > feature_item_2.ecom-flex-a-feature-item-2",
+      "computedStyle": {
+        "color": "#0b3d2e",
+        "backgroundColor": "#e6f7f0",
+        "fontFamily": "Roboto, sans-serif"
+      }
+    },
+    {
+      "nodeId": "ecom-flex-a-cta",
+      "domPath": "body > div.ecom-flex-a-shell > cta.ecom-flex-a-cta",
+      "computedStyle": {
+        "color": "#0b3d2e",
+        "backgroundColor": "#e6f7f0",
+        "fontFamily": "Roboto, sans-serif"
+      }
+    },
+    {
+      "nodeId": "ecom-flex-a-footer",
+      "domPath": "body > div.ecom-flex-a-shell > footer.ecom-flex-a-footer",
+      "computedStyle": {
+        "color": "#0b3d2e",
+        "backgroundColor": "#e6f7f0",
+        "fontFamily": "Roboto, sans-serif"
+      }
+    }
+  ],
+  "viewportWidth": 390
+}

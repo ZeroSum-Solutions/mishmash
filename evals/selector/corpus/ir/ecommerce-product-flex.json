@@ -1,0 +1,425 @@
+{
+  "sourceSlots": [
+    {
+      "id": "ecom-flex-a",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "evidencePointers": [
+        {
+          "domPath": "body > div.ecom-flex-a-shell > header.ecom-flex-a-header",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-flex-a-shell > hero.ecom-flex-a-hero",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-flex-a-shell > hero_heading.ecom-flex-a-hero-heading",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-flex-a-shell > features.ecom-flex-a-features",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "flexDirection"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-flex-a-shell > feature_item_1.ecom-flex-a-feature-item-1",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-flex-a-shell > feature_item_2.ecom-flex-a-feature-item-2",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-flex-a-shell > cta.ecom-flex-a-cta",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-flex-a-shell > footer.ecom-flex-a-footer",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-flex-a-shell > header.ecom-flex-a-header",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-flex-a-shell > hero.ecom-flex-a-hero",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-flex-a-shell > hero_heading.ecom-flex-a-hero-heading",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-flex-a-shell > features.ecom-flex-a-features",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "flexDirection"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-flex-a-shell > feature_item_1.ecom-flex-a-feature-item-1",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-flex-a-shell > feature_item_2.ecom-flex-a-feature-item-2",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-flex-a-shell > cta.ecom-flex-a-cta",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-flex-a-shell > footer.ecom-flex-a-footer",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ecom-grid-b",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "evidencePointers": [
+        {
+          "domPath": "body > div.ecom-grid-b-shell > header.ecom-grid-b-header",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-grid-b-shell > hero.ecom-grid-b-hero",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-grid-b-shell > hero_heading.ecom-grid-b-hero-heading",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-grid-b-shell > features.ecom-grid-b-features",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "gridTemplateColumns"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-grid-b-shell > feature_item_1.ecom-grid-b-feature-item-1",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-grid-b-shell > feature_item_2.ecom-grid-b-feature-item-2",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-grid-b-shell > cta.ecom-grid-b-cta",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-grid-b-shell > footer.ecom-grid-b-footer",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-grid-b-shell > header.ecom-grid-b-header",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-grid-b-shell > hero.ecom-grid-b-hero",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-grid-b-shell > hero_heading.ecom-grid-b-hero-heading",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-grid-b-shell > features.ecom-grid-b-features",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "gridTemplateColumns"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-grid-b-shell > feature_item_1.ecom-grid-b-feature-item-1",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-grid-b-shell > feature_item_2.ecom-grid-b-feature-item-2",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-grid-b-shell > cta.ecom-grid-b-cta",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.ecom-grid-b-shell > footer.ecom-grid-b-footer",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        }
+      ]
+    }
+  ],
+  "directives": [
+    {
+      "axis": "palette",
+      "source": "ecom-flex-a",
+      "scope": "body > div.ecom-flex-a-shell > header.ecom-flex-a-header",
+      "strength": 0.85
+    },
+    {
+      "axis": "palette",
+      "source": "ecom-grid-b",
+      "scope": "body > div.ecom-grid-b-shell > header.ecom-grid-b-header",
+      "strength": 0.5
+    },
+    {
+      "axis": "motion",
+      "source": "ecom-grid-b",
+      "scope": "body > div.ecom-grid-b-shell > cta.ecom-grid-b-cta",
+      "strength": 0.6
+    },
+    {
+      "axis": "section",
+      "source": "ecom-flex-a",
+      "scope": "body > div.ecom-flex-a-shell > features.ecom-flex-a-features",
+      "strength": 0.7
+    }
+  ],
+  "constraints": [
+    {
+      "type": "grid-integrity",
+      "rule": "Grid/flex/absolute containers must not overlap at any declared breakpoint."
+    },
+    {
+      "type": "contrast-minimum",
+      "rule": "Text/background contrast must meet WCAG AA (4.5:1) at every breakpoint."
+    },
+    {
+      "type": "responsive-behavior",
+      "rule": "Every emitted element must have a defined style at each of the case's declared breakpoints."
+    }
+  ],
+  "conflictResolution": [
+    {
+      "axis": "palette",
+      "winningSource": "ecom-flex-a",
+      "losingSource": "ecom-grid-b",
+      "losingClaim": "palette claim from ecom-grid-b superseded by ecom-flex-a",
+      "rationale": "Both ecom-flex-a and ecom-grid-b claimed the palette axis on overlapping scope; ecom-flex-a takes precedence per the frozen corpus ground truth for this case."
+    },
+    {
+      "axis": "motion",
+      "winningSource": "ecom-grid-b",
+      "rationale": "Single claimant (ecom-grid-b) on the motion axis in this case; no contention to resolve."
+    },
+    {
+      "axis": "section",
+      "winningSource": "ecom-flex-a",
+      "rationale": "Single claimant (ecom-flex-a) on the section axis in this case; no contention to resolve."
+    }
+  ],
+  "provenance": [
+    {
+      "elementId": "ecommerce-product-flex-di-0-palette",
+      "sourceId": "ecom-flex-a",
+      "nodeId": "ecom-flex-a-header",
+      "domPath": "body > div.ecom-flex-a-shell > header.ecom-flex-a-header",
+      "breakpoint": "desktop"
+    },
+    {
+      "elementId": "ecommerce-product-flex-di-1-palette",
+      "sourceId": "ecom-grid-b",
+      "nodeId": "ecom-grid-b-header",
+      "domPath": "body > div.ecom-grid-b-shell > header.ecom-grid-b-header",
+      "breakpoint": "desktop"
+    },
+    {
+      "elementId": "ecommerce-product-flex-di-2-motion",
+      "sourceId": "ecom-grid-b",
+      "nodeId": "ecom-grid-b-cta",
+      "domPath": "body > div.ecom-grid-b-shell > cta.ecom-grid-b-cta",
+      "breakpoint": "desktop"
+    },
+    {
+      "elementId": "ecommerce-product-flex-di-3-section",
+      "sourceId": "ecom-flex-a",
+      "nodeId": "ecom-flex-a-features",
+      "domPath": "body > div.ecom-flex-a-shell > features.ecom-flex-a-features",
+      "breakpoint": "desktop"
+    }
+  ],
+  "variantAxes": [
+    {
+      "name": "layout-skeleton",
+      "distanceMetric": "jaccard-dissimilarity-of-domPath-set"
+    },
+    {
+      "name": "section-order",
+      "distanceMetric": "fraction-of-positions-differing-in-scope-order"
+    },
+    {
+      "name": "motion-timeline",
+      "distanceMetric": "fraction-of-positions-differing-in-motionSignature"
+    },
+    {
+      "name": "breakpoint-behavior",
+      "distanceMetric": "fraction-of-positions-differing-in-breakpoint-assignment"
+    }
+  ]
+}
