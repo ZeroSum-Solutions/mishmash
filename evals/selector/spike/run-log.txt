@@ -1,0 +1,15 @@
+S7-5 feasibility spike -- run transcript
+Case: marketing-hero-grid
+Command: pnpm exec tsx evals/selector/spike/compose.ts
+
+$ pnpm exec tsx evals/selector/spike/compose.ts
+[spike] loading corpus manifest for case "marketing-hero-grid"
+[spike] loading IR for case "marketing-hero-grid"
+[spike] 4 directive claim(s) to compose
+[spike] RESOLVED directive 0 (layout) -> mkt-grid-a / mkt-grid-a-features-desktop @ desktop
+[spike] RESOLVED directive 1 (layout) -> mkt-flex-b / mkt-flex-b-features-desktop @ desktop
+[spike] RESOLVED directive 2 (palette) -> mkt-flex-b / mkt-flex-b-header-desktop @ desktop
+[spike] RESOLVED directive 3 (typography) -> mkt-grid-a / mkt-grid-a-hero-heading-desktop @ desktop
+[spike] wrote 4 composed element(s) to evals/selector/spike/composed-output.json
+[spike] done
+exit code: 0
