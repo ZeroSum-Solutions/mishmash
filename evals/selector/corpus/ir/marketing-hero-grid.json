@@ -380,7 +380,7 @@
       "sourceId": "mkt-grid-a",
       "nodeId": "mkt-grid-a-features",
       "domPath": "body > div.mkt-grid-a-shell > features.mkt-grid-a-features",
-      "breakpoint": "desktop"
+      "breakpoint": "mobile"
     },
     {
       "elementId": "marketing-hero-grid-di-1-layout",
@@ -394,7 +394,7 @@
       "sourceId": "mkt-flex-b",
       "nodeId": "mkt-flex-b-header",
       "domPath": "body > div.mkt-flex-b-shell > header.mkt-flex-b-header",
-      "breakpoint": "desktop"
+      "breakpoint": "mobile"
     },
     {
       "elementId": "marketing-hero-grid-di-3-typography",
