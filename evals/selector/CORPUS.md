@@ -1,6 +1,6 @@
 # Selector eval corpus (W7 / S7-2)
 
-**Corpus freeze sha256: 4772ebbf1becac624cfa63099f9b1f003662663ad9cc0a4b0ae619ecf665df12**
+**Corpus freeze sha256: df57bcfc8b8540bd3eb93eb136df7189a53837dc2b7169318014fe5b4bea3f3b**
 
 That hash is `sha256(evals/selector/corpus/manifest.json)` at the commit that freezes this
 document. `scripts/waves/verify-w7.ts` re-hashes the manifest at HEAD and requires an exact match
@@ -8,7 +8,16 @@ document. `scripts/waves/verify-w7.ts` re-hashes the manifest at HEAD and requir
 is the point: everything downstream (per-case IR instances, the scorer's population/counterfactual
 controls) is built against this exact, pinned manifest state.
 
-*Re-frozen four times*, before any scorer/metrics work landed. The third and fourth fixes both
+*Re-frozen five times.* The fifth: after the orchestrator re-sealed `sealed-marketing-alt` and
+`sealed-docs-widget` with the corrected v2 plaintext (`manifest.version` bumped 1 → 2, matching
+`eval-manifest.json.corpusVersion`), `manifest.json`'s sealed-case hashes were updated to match the
+now-actually-sealed ciphertext, which requires a fresh freeze; every non-sealed case's IR now also
+carries an informational `corpusVersion: 2` field so its own commit is a real, git-visible content
+change (a re-freeze that didn't touch non-sealed IR content would leave those commits *preceding*,
+not descending from, the new freeze point — see `docs/specs/selector-composition-ir.schema.json`'s
+`corpusVersion` property).
+
+The third and fourth fixes both
 target the same C7-11 leak-scan false-positive class from different angles: a case-id *prefix*
 still left long identical prose suffixes (`"...axis in this case; no contention to resolve."`)
 that collided across cases; converging fix was (a) compact, non-indented JSON (pretty-printing
