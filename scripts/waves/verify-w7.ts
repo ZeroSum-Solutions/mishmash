@@ -408,6 +408,10 @@ interface DirectiveClaim {
   source: string;
   scope: string;
   strength: number;
+  // v4 (brief binding): non-sealed cases' claims carry the breakpoint the
+  // brief actually asked for. Sealed (v1-shape) cases' claims predate this
+  // field and omit it -- see findRealNode()'s preferredBreakpoint fallback.
+  breakpoint?: string;
 }
 interface SnapshotRef {
   path: string;
@@ -431,6 +435,11 @@ interface CorpusCase {
   sealed: boolean;
   irPath: string;
   irSha256: string;
+  // v4 brief binding (F2): non-sealed cases record their independent
+  // natural-language brief's path + content hash. Sealed (v1-shape) cases
+  // predate this and have neither -- see nonSealedFreezeOrdering() (C7-2).
+  briefPath?: string;
+  briefSha256?: string;
 }
 interface CorpusManifest {
   version: number;
@@ -624,11 +633,66 @@ function latestCommitTouching(relPath: string): string | null {
   return /^[0-9a-f]{40}$/i.test(sha) ? sha : null;
 }
 
-function strictDescendant(ancestorRev: string, descendantRev: string): { ok: boolean; detail: string } {
-  if (ancestorRev === descendantRev) return { ok: false, detail: `same commit (${ancestorRev}) -- not a strict descendant` };
-  const check = sh('git', ['merge-base', '--is-ancestor', ancestorRev, descendantRev]);
-  if (check.status !== 0) return { ok: false, detail: `${ancestorRev} is NOT an ancestor of ${descendantRev}` };
-  return { ok: true, detail: `${descendantRev} strictly descends from ${ancestorRev}` };
+// C7-2 freeze-anchor amendment (dual GATE-DEFECT ruling, Sol + Grok): a
+// SINGLE global "latest commit touching CORPUS.md" (round <=6) or
+// manifest.json cannot correctly anchor freeze ordering for this corpus,
+// because it was built incrementally across v1..v4 generator runs, each
+// regenerating only a SUBSET of the 8 non-sealed cases while manifest.json
+// (one file) and CORPUS.md (one file) each accumulate the latest state on
+// every touch. A later, wholly unrelated correction to CORPUS.md's prose, or
+// to ANY other case's data, moves that single global anchor forward and
+// retroactively fails the ordering check for cases whose IR legitimately
+// predates the correction -- confirmed against the actual current history:
+// CORPUS.md's latest touch (e5f5db0a4) postdates three cases' IR commits
+// (marketing-hero-grid, blog-content-grid, single-source-landing all sit at
+// their v3 commits), which is unsatisfiable by honest history, not a real
+// gap.
+//
+// Fix: bind each non-sealed case's freeze anchor to ITS OWN brief file
+// (evals/selector/corpus/briefs/<id>.md -- CORPUS.md's v4 "Brief binding"
+// fix already records each case's briefPath+briefSha256 in manifest.json).
+// A brief is individually git-tracked, so its own latest-touch commit is
+// immune to edits of any OTHER case's brief, CORPUS.md prose, or unrelated
+// manifest fields -- "content-equality binding to an explicit named anchor"
+// (Sol) at the right granularity, not global commit-ordering topology.
+// Ordering is ANCESTOR-OR-EQUAL, not strict descendant ("same-commit allow
+// ... is the honest fix," Grok): this corpus's own generator deterministically
+// writes a case's brief and its IR in the SAME commit (verified: every one
+// of the 8 non-sealed cases has briefCommit === irCommit or briefCommit an
+// ancestor of irCommit) -- requiring strictly-after made ordinary compliant
+// generation unsatisfiable, which was the root defect. What remains
+// genuinely enforced: brief content is hash-bound to what the manifest
+// declares (drift undetectable-by-edit is closed), and a LATER edit to only
+// THIS case's own brief (after its IR was authored) still correctly fails
+// -- forcing re-verification of that one case, not cascading to the other
+// nine. Authorship-independence (same session writes both artifacts) is
+// explicitly out of scope for this mechanical check, per CORPUS.md's v4
+// section -- that property is closed by a separate orchestrator-dispatched
+// independent audit agent, not by commit topology.
+function nonSealedFreezeOrdering(c: CorpusCase): { ok: boolean; detail: string } {
+  if (!isNonEmptyString(c.briefPath)) {
+    return { ok: false, detail: 'non-sealed case has no briefPath recorded in the manifest -- cannot bind a per-case freeze anchor' };
+  }
+  if (!isNonEmptyString(c.briefSha256) || !/^[0-9a-f]{64}$/i.test(c.briefSha256)) {
+    return { ok: false, detail: `non-sealed case has no valid 64-hex briefSha256 recorded in the manifest (got ${JSON.stringify(c.briefSha256)}) -- cannot content-bind the freeze anchor` };
+  }
+  const actualBriefHash = sha256File(c.briefPath);
+  if (!actualBriefHash) return { ok: false, detail: `cannot read/hash brief at ${c.briefPath}` };
+  if (actualBriefHash.toLowerCase() !== c.briefSha256.toLowerCase()) {
+    return { ok: false, detail: `brief at ${c.briefPath} has drifted from the manifest's recorded briefSha256 (manifest=${c.briefSha256} actual=${actualBriefHash}) -- ground truth changed without a re-freeze` };
+  }
+  const briefCommit = latestCommitTouching(c.briefPath);
+  if (!briefCommit) return { ok: false, detail: `could not resolve a git commit for ${c.briefPath}` };
+  const irCommit = latestCommitTouching(c.irPath);
+  if (!irCommit) return { ok: false, detail: `could not resolve a git commit for ${c.irPath}` };
+  if (briefCommit === irCommit) {
+    return { ok: true, detail: `brief content-bound (${c.briefSha256.slice(0, 12)}...); brief and IR co-committed at ${briefCommit} (same-commit allowed)` };
+  }
+  const anc = sh('git', ['merge-base', '--is-ancestor', briefCommit, irCommit]);
+  if (anc.status !== 0) {
+    return { ok: false, detail: `brief commit ${briefCommit} is neither the IR commit ${irCommit} nor an ancestor of it -- this case's own brief was touched after its own IR, so its freeze anchor no longer precedes it` };
+  }
+  return { ok: true, detail: `brief content-bound (${c.briefSha256.slice(0, 12)}...); brief commit ${briefCommit} precedes IR commit ${irCommit}` };
 }
 
 // F18 fix (gate-scope ruling, round 3): a SEALED payload's history proof is
@@ -1143,24 +1207,21 @@ await probe(
 
 // =============================================================================
 // C7-2 -- IR expresses every corpus directive: the directiveInventory ground
-// truth is bound to a CORPUS-FREEZE COMMIT recorded in CORPUS.md (F2), all
-// FOUR claim fields (axis/source/scope/strength) are cross-checked. F18
-// (round 3, gate-scope ruling): non-sealed cases' IR must be a STRICT
-// DESCENDANT of the freeze commit (inventory precedes IR); sealed cases are
-// EXEMPT from that check and instead require their ciphertext to be
-// content-bound to, and defined by a commit that PRECEDES, the seal commit
-// -- requiring both directions on the same case was the contradiction F18
-// found real, since ordinary compliant history (capture, then seal later)
-// cannot satisfy "descends from seal" at all. F18 (round 5): the backward-
-// only defining-commit search cannot detect a post-seal touch that reverts
-// the payload back to its original bytes, so sealedPayloadPrecedesSeal now
-// additionally requires ZERO commits strictly after the seal commit to
-// touch the sealed path at all (frozen-path rule).
+// truth is bound to per-case, content-equality freeze anchors (F2, amended
+// per the dual GATE-DEFECT ruling -- see nonSealedFreezeOrdering() above for
+// the full rationale), all FOUR claim fields (axis/source/scope/strength)
+// are cross-checked. Non-sealed cases bind to their OWN brief file
+// (content-hash + same-commit-or-ancestor to the IR); sealed cases keep the
+// F18 seal-relative proof unchanged (content-bound to, and defined by a
+// commit that PRECEDES, the seal commit, with zero post-seal touches --
+// frozen-path rule). CORPUS.md's aggregate "Corpus freeze sha256" line is
+// still checked as a whole-manifest drift detector, but no longer supplies
+// the per-case ordering anchor.
 // =============================================================================
 await probe(
   'C7-2',
-  `read the corpus-freeze hash line in ${CORPUS_MD_PATH}; resolve the freeze commit (latest commit touching ${CORPUS_MD_PATH}); for every case, cross-check directiveInventory (all 4 fields) against ir.directives; for NON-SEALED cases require the IR commit to be a STRICT DESCENDANT of the freeze commit; for SEALED cases require the ciphertext to be content-bound to, and its defining commit to PRECEDE (be an ancestor of, not descend from), the seal commit, AND require zero commits strictly after the seal commit to touch the sealed path (frozen-path rule)`,
-  `${CORPUS_MD_PATH} contains a line "Corpus freeze sha256: <hex>" equal to sha256(${MANIFEST_PATH}) at HEAD (proving the manifest has not silently changed since the stated freeze); every case's directiveInventory entry (axis in [${DIRECTIVE_AXES.join('/')}], source a real source id, scope non-empty, strength in [0,1]) has a matching ir.directives entry on ALL FOUR fields (axis+source+scope+strength, exact); for non-sealed cases, the commit that last-touched the IR file must be a STRICT descendant of the corpus-freeze commit (same-commit or ancestor-only fails); for SEALED cases (F18-corrected), the current ciphertext must equal the blob at the seal commit's parent AND the commit that defines that content must be an ANCESTOR of (precede) the seal commit AND git log <sealCommit>..HEAD -- <path> must be EMPTY (frozen-path rule -- a legitimate re-seal is a new seal commit + founder decision record, not a same-seal-era touch; this closes the revert-after-seal repro where a post-seal tamper is reverted back to the pre-seal bytes) -- no descend-from requirement applies to sealed payloads; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above): ${dispositionPath('F2')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F2 finding -- until it exists this criterion fails with "reviewer disposition records missing"; ${PHASE2_TRUST_BOUNDARY_NOTE}`,
+  `read the corpus-freeze hash line in ${CORPUS_MD_PATH} (whole-manifest drift check); for every case, cross-check directiveInventory (all 4 fields) against ir.directives; for NON-SEALED cases, content-bind the case's own brief (briefSha256) and require its commit to be the SAME AS OR AN ANCESTOR OF the case's IR commit (nonSealedFreezeOrdering); for SEALED cases require the ciphertext to be content-bound to, and its defining commit to PRECEDE (be an ancestor of, not descend from), the seal commit, AND require zero commits strictly after the seal commit to touch the sealed path (frozen-path rule)`,
+  `${CORPUS_MD_PATH} contains a line "Corpus freeze sha256: <hex>" equal to sha256(${MANIFEST_PATH}) at HEAD (proving the manifest has not silently changed since the stated freeze -- a whole-manifest drift check, informational for per-case ordering); every case's directiveInventory entry (axis in [${DIRECTIVE_AXES.join('/')}], source a real source id, scope non-empty, strength in [0,1]) has a matching ir.directives entry on ALL FOUR fields (axis+source+scope+strength, exact); for NON-SEALED cases (freeze-anchor amendment, dual GATE-DEFECT ruling): the case's own briefPath/briefSha256 must be present in the manifest, the brief file's current content must hash-match briefSha256 exactly, and the commit that last touched that brief file must be the SAME COMMIT AS, OR A GIT ANCESTOR OF, the commit that last touched the case's IR file (same-commit allowed -- content-equality binding to this per-case, explicitly-named anchor, not a single global commit's ancestry topology); for SEALED cases (F18-corrected, unchanged) the current ciphertext must equal the blob at the seal commit's parent AND the commit that defines that content must be an ANCESTOR of (precede) the seal commit AND git log <sealCommit>..HEAD -- <path> must be EMPTY (frozen-path rule -- a legitimate re-seal is a new seal commit + founder decision record, not a same-seal-era touch) -- no descend-from requirement applies to sealed payloads; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above): ${dispositionPath('F2')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F2 finding -- until it exists this criterion fails with "reviewer disposition records missing"; ${PHASE2_TRUST_BOUNDARY_NOTE}`,
   async () => withReviewerDisposition('F2', async () => {
     const corpusMdText = readText(CORPUS_MD_PATH);
     if (corpusMdText === null) return { ok: false, evidence: `missing ${CORPUS_MD_PATH}` };
@@ -1171,8 +1232,6 @@ await probe(
     if (freezeLineMatch[1]!.toLowerCase() !== manifestHash.toLowerCase()) {
       return { ok: false, evidence: `${CORPUS_MD_PATH}'s stated freeze hash (${freezeLineMatch[1]}) does not match the current ${MANIFEST_PATH} content hash (${manifestHash}) -- manifest changed since the stated freeze` };
     }
-    const freezeCommit = latestCommitTouching(CORPUS_MD_PATH);
-    if (!freezeCommit) return { ok: false, evidence: `could not resolve a git commit for ${CORPUS_MD_PATH} (uncommitted?)` };
 
     const { manifest, error } = loadManifest();
     if (!manifest) return { ok: false, evidence: `cannot check coverage: ${error}` };
@@ -1180,7 +1239,7 @@ await probe(
 
     const sealCommit = latestCommitTouching(SEALED_ACCESS_PATH);
 
-    const lines: string[] = [`freeze commit: ${freezeCommit} (hash-verified against current manifest)`, `seal commit: ${sealCommit ?? '(none/unresolved)'}`];
+    const lines: string[] = [`manifest hash-verified against ${CORPUS_MD_PATH}'s freeze line: ${manifestHash}`, `seal commit: ${sealCommit ?? '(none/unresolved)'}`, `per-case freeze anchors: non-sealed cases bind to their own brief (nonSealedFreezeOrdering); sealed cases bind to the seal commit (sealedPayloadPrecedesSeal)`];
     let failures = 0;
     for (const c of manifest.cases) {
       const loaded = loadCaseIRBytes(c);
@@ -1222,18 +1281,14 @@ await probe(
         continue;
       }
 
-      // F18 (gate-scope ruling): sealed and non-sealed cases now take
-      // DIFFERENT, non-contradictory ordering proofs. Non-sealed cases keep
-      // the freeze-descendant check (IR must come AFTER the frozen ground
-      // truth). Sealed cases are EXEMPT from freeze-descendant ancestry --
-      // instead their ciphertext must be content-bound to, and its defining
-      // commit must PRECEDE, the seal commit (sealedPayloadPrecedesSeal).
-      // Applying both directions to the same case is exactly the
-      // contradiction round 3 found real: ordinary compliant history
-      // (capture first, seal later) cannot be both a descendant of the
-      // freeze commit and pre-date the seal commit's parent when freeze and
-      // seal are unrelated anchors -- so sealed cases rely solely on the
-      // seal-relative proof.
+      // F18 (gate-scope ruling) + freeze-anchor amendment: sealed and
+      // non-sealed cases take DIFFERENT, non-contradictory ordering proofs.
+      // Sealed cases are EXEMPT from any brief-based check (they predate
+      // brief binding and have neither briefPath nor briefSha256) -- their
+      // ciphertext must instead be content-bound to, and its defining commit
+      // must PRECEDE, the seal commit (sealedPayloadPrecedesSeal), unchanged
+      // from prior rounds. Non-sealed cases use nonSealedFreezeOrdering's
+      // per-case brief anchor (see its doc comment for the full rationale).
       if (c.sealed) {
         if (!c.irPath.endsWith('.enc')) {
           failures++;
@@ -1253,19 +1308,13 @@ await probe(
         }
         lines.push(`${c.id}: directiveInventory expressed (4/4 fields); sealed payload precedes the seal commit ${sealCommit} (${precedence.detail})`);
       } else {
-        const irCommit = latestCommitTouching(c.irPath);
-        if (!irCommit) {
+        const ordering = nonSealedFreezeOrdering(c);
+        if (!ordering.ok) {
           failures++;
-          lines.push(`${c.id}: could not resolve a git commit for ${c.irPath}`);
+          lines.push(`${c.id}: ${ordering.detail}`);
           continue;
         }
-        const freezeOrdering = strictDescendant(freezeCommit, irCommit);
-        if (!freezeOrdering.ok) {
-          failures++;
-          lines.push(`${c.id}: IR commit ${irCommit} is not a strict descendant of the freeze commit ${freezeCommit} (${freezeOrdering.detail}) -- directiveInventory does not provably precede the IR`);
-          continue;
-        }
-        lines.push(`${c.id}: directiveInventory expressed (4/4 fields); IR (${irCommit}) strictly descends from freeze (${freezeCommit})`);
+        lines.push(`${c.id}: directiveInventory expressed (4/4 fields); ${ordering.detail}`);
       }
     }
     return { ok: failures === 0, evidence: lines.join('\n'), detail: failures > 0 ? `${failures}/${manifest.cases.length} cases failed directive-inventory coverage, freeze ordering, or seal precedence` : undefined };
