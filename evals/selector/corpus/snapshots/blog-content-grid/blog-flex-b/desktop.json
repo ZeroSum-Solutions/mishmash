@@ -1,0 +1,79 @@
+{
+  "nodes": [
+    {
+      "nodeId": "blog-flex-b-header",
+      "domPath": "body > div.blog-flex-b-shell > header.blog-flex-b-header",
+      "computedStyle": {
+        "color": "#264d00",
+        "backgroundColor": "#f0f9e0",
+        "fontFamily": "Fira Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "blog-flex-b-hero",
+      "domPath": "body > div.blog-flex-b-shell > hero.blog-flex-b-hero",
+      "computedStyle": {
+        "color": "#264d00",
+        "backgroundColor": "#f0f9e0",
+        "fontFamily": "Fira Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "blog-flex-b-hero-heading",
+      "domPath": "body > div.blog-flex-b-shell > hero_heading.blog-flex-b-hero-heading",
+      "computedStyle": {
+        "color": "#264d00",
+        "backgroundColor": "#f0f9e0",
+        "fontFamily": "Fira Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "blog-flex-b-features",
+      "domPath": "body > div.blog-flex-b-shell > features.blog-flex-b-features",
+      "computedStyle": {
+        "color": "#264d00",
+        "backgroundColor": "#f0f9e0",
+        "fontFamily": "Fira Sans, sans-serif",
+        "display": "flex",
+        "flexDirection": "row"
+      }
+    },
+    {
+      "nodeId": "blog-flex-b-feature-item-1",
+      "domPath": "body > div.blog-flex-b-shell > feature_item_1.blog-flex-b-feature-item-1",
+      "computedStyle": {
+        "color": "#264d00",
+        "backgroundColor": "#f0f9e0",
+        "fontFamily": "Fira Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "blog-flex-b-feature-item-2",
+      "domPath": "body > div.blog-flex-b-shell > feature_item_2.blog-flex-b-feature-item-2",
+      "computedStyle": {
+        "color": "#264d00",
+        "backgroundColor": "#f0f9e0",
+        "fontFamily": "Fira Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "blog-flex-b-cta",
+      "domPath": "body > div.blog-flex-b-shell > cta.blog-flex-b-cta",
+      "computedStyle": {
+        "color": "#264d00",
+        "backgroundColor": "#f0f9e0",
+        "fontFamily": "Fira Sans, sans-serif"
+      }
+    },
+    {
+      "nodeId": "blog-flex-b-footer",
+      "domPath": "body > div.blog-flex-b-shell > footer.blog-flex-b-footer",
+      "computedStyle": {
+        "color": "#264d00",
+        "backgroundColor": "#f0f9e0",
+        "fontFamily": "Fira Sans, sans-serif"
+      }
+    }
+  ],
+  "viewportWidth": 1440
+}

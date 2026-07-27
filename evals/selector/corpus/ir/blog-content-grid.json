@@ -1,0 +1,392 @@
+{
+  "sourceSlots": [
+    {
+      "id": "blog-grid-a",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "evidencePointers": [
+        {
+          "domPath": "body > div.blog-grid-a-shell > header.blog-grid-a-header",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-grid-a-shell > hero.blog-grid-a-hero",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-grid-a-shell > hero_heading.blog-grid-a-hero-heading",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-grid-a-shell > features.blog-grid-a-features",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "gridTemplateColumns"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-grid-a-shell > feature_item_1.blog-grid-a-feature-item-1",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-grid-a-shell > feature_item_2.blog-grid-a-feature-item-2",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-grid-a-shell > cta.blog-grid-a-cta",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-grid-a-shell > footer.blog-grid-a-footer",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-grid-a-shell > header.blog-grid-a-header",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-grid-a-shell > hero.blog-grid-a-hero",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-grid-a-shell > hero_heading.blog-grid-a-hero-heading",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-grid-a-shell > features.blog-grid-a-features",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "gridTemplateColumns"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-grid-a-shell > feature_item_1.blog-grid-a-feature-item-1",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-grid-a-shell > feature_item_2.blog-grid-a-feature-item-2",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-grid-a-shell > cta.blog-grid-a-cta",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-grid-a-shell > footer.blog-grid-a-footer",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "blog-flex-b",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "evidencePointers": [
+        {
+          "domPath": "body > div.blog-flex-b-shell > header.blog-flex-b-header",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-flex-b-shell > hero.blog-flex-b-hero",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-flex-b-shell > hero_heading.blog-flex-b-hero-heading",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-flex-b-shell > features.blog-flex-b-features",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "flexDirection"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-flex-b-shell > feature_item_1.blog-flex-b-feature-item-1",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-flex-b-shell > feature_item_2.blog-flex-b-feature-item-2",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-flex-b-shell > cta.blog-flex-b-cta",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-flex-b-shell > footer.blog-flex-b-footer",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-flex-b-shell > header.blog-flex-b-header",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-flex-b-shell > hero.blog-flex-b-hero",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-flex-b-shell > hero_heading.blog-flex-b-hero-heading",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-flex-b-shell > features.blog-flex-b-features",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "flexDirection"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-flex-b-shell > feature_item_1.blog-flex-b-feature-item-1",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-flex-b-shell > feature_item_2.blog-flex-b-feature-item-2",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-flex-b-shell > cta.blog-flex-b-cta",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.blog-flex-b-shell > footer.blog-flex-b-footer",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        }
+      ]
+    }
+  ],
+  "directives": [
+    {
+      "axis": "layout",
+      "source": "blog-grid-a",
+      "scope": "body > div.blog-grid-a-shell > features.blog-grid-a-features",
+      "strength": 0.85
+    },
+    {
+      "axis": "palette",
+      "source": "blog-flex-b",
+      "scope": "body > div.blog-flex-b-shell > header.blog-flex-b-header",
+      "strength": 0.7
+    }
+  ],
+  "constraints": [
+    {
+      "type": "grid-integrity",
+      "rule": "Grid/flex/absolute containers must not overlap at any declared breakpoint."
+    },
+    {
+      "type": "contrast-minimum",
+      "rule": "Text/background contrast must meet WCAG AA (4.5:1) at every breakpoint."
+    },
+    {
+      "type": "responsive-behavior",
+      "rule": "Every emitted element must have a defined style at each of the case's declared breakpoints."
+    }
+  ],
+  "conflictResolution": [
+    {
+      "axis": "layout",
+      "winningSource": "blog-grid-a",
+      "rationale": "Single claimant (blog-grid-a) on the layout axis in this case; no contention to resolve."
+    },
+    {
+      "axis": "palette",
+      "winningSource": "blog-flex-b",
+      "rationale": "Single claimant (blog-flex-b) on the palette axis in this case; no contention to resolve."
+    }
+  ],
+  "provenance": [
+    {
+      "elementId": "blog-content-grid-di-0-layout",
+      "sourceId": "blog-grid-a",
+      "nodeId": "blog-grid-a-features",
+      "domPath": "body > div.blog-grid-a-shell > features.blog-grid-a-features",
+      "breakpoint": "desktop"
+    },
+    {
+      "elementId": "blog-content-grid-di-1-palette",
+      "sourceId": "blog-flex-b",
+      "nodeId": "blog-flex-b-header",
+      "domPath": "body > div.blog-flex-b-shell > header.blog-flex-b-header",
+      "breakpoint": "desktop"
+    }
+  ],
+  "variantAxes": [
+    {
+      "name": "layout-skeleton",
+      "distanceMetric": "jaccard-dissimilarity-of-domPath-set"
+    },
+    {
+      "name": "section-order",
+      "distanceMetric": "fraction-of-positions-differing-in-scope-order"
+    },
+    {
+      "name": "motion-timeline",
+      "distanceMetric": "fraction-of-positions-differing-in-motionSignature"
+    },
+    {
+      "name": "breakpoint-behavior",
+      "distanceMetric": "fraction-of-positions-differing-in-breakpoint-assignment"
+    }
+  ]
+}
