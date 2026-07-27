@@ -1939,10 +1939,35 @@ function rotateArray<T>(arr: T[], shift: number): T[] {
   return arr.map((_, i) => arr[(i + shift) % n]!);
 }
 
+// C7-8 semantic-trio amendment (Sol F8 rejection: "C7-8 itself uses
+// timeline-a/b/c"). scoreDiversity's motion axis (evals/selector/scorer/
+// diversity.ts, verifiedMotionDiffFraction) only counts a position as
+// genuinely distinct when BOTH sides parse as `transition:<ms>ms` AND the
+// durations differ -- an arbitrary label like 'timeline-a' parses as
+// nothing and contributes zero distinctness regardless of how different the
+// raw strings look. Scans every one of the case's own sources' captured
+// snapshots for REAL transitionDuration values (present on each genre's
+// motion-target role) so the motion-timeline trio can be built from
+// genuinely captured, differing evidence instead of synthetic labels.
+function collectRealTransitionDurations(c: CorpusCase): string[] {
+  const durations = new Set<string>();
+  for (const source of c.sources) {
+    for (const [bp, ref] of Object.entries(source.snapshots)) {
+      const loaded = loadSnapshotDoc(ref, c.sealed, `${c.id}-${source.id}-${bp}`);
+      if (!loaded.ok) continue;
+      for (const n of loaded.doc.nodes ?? []) {
+        const d = n.computedStyle?.['transitionDuration'];
+        if (d) durations.add(d);
+      }
+    }
+  }
+  return [...durations];
+}
+
 await probe(
   'C7-8',
-  `read ${DIVERSITY_AXES_PATH}; dynamic-import ${DIVERSITY_PATH}; build 4 INDEPENDENT axis-isolated trios from a real faithful composition (section order permuted alone / domPath-skeleton varied alone / motionSignature varied alone / breakpoint varied alone) plus the identical-trio control; call scoreDiversity directly on all 5; ALSO run the implementer test suite as an additional, non-load-bearing check`,
-  `${DIVERSITY_AXES_PATH} freezes >=4 pre-registered axes (layout-skeleton/section-order/motion-timeline/breakpoint-behavior); ${DIVERSITY_PATH} exports scoreDiversity(compositions[]): {score}, a finite number in [0,1] (F12); the fully-identical trio scores < floors.structural_variant_diversity; EACH of the 4 axis-isolated trios (holding every other axis fixed) independently scores >= that floor -- a scorer testing only "any change" or only 2 of the 4 axes fails at least one isolated case; ${DIVERSITY_TEST_PATH} additionally passes with named recolor-only/class-names-only control cases; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above -- C7-7 and C7-8 share the F8 disposition, which historically covered both bleed and diversity semantics): ${dispositionPath('F8')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F8 finding -- until it exists this criterion fails with "reviewer disposition records missing"; ${PHASE2_TRUST_BOUNDARY_NOTE}`,
+  `read ${DIVERSITY_AXES_PATH}; dynamic-import ${DIVERSITY_PATH}; build 4 INDEPENDENT axis-isolated trios from a real faithful composition (section order permuted alone / domPath-skeleton varied alone / motionSignature varied alone using REAL captured transitionDuration evidence / breakpoint varied alone) plus the identical-trio control AND a label-only motion negative control; call scoreDiversity directly on all 6; ALSO run the implementer test suite as an additional, non-load-bearing check`,
+  `${DIVERSITY_AXES_PATH} freezes >=4 pre-registered axes (layout-skeleton/section-order/motion-timeline/breakpoint-behavior); ${DIVERSITY_PATH} exports scoreDiversity(compositions[]): {score}, a finite number in [0,1] (F12); the fully-identical trio scores < floors.structural_variant_diversity; EACH of the 4 axis-isolated trios (holding every other axis fixed) independently scores >= that floor -- a scorer testing only "any change" or only 2 of the 4 axes fails at least one isolated case; the motion-timeline trio is built from >=3 DISTINCT REAL transitionDuration values captured somewhere in the case's own sources (motionSignature shaped "transition:<ms>ms", ${DIVERSITY_PATH}'s own evidence convention), not arbitrary labels; a SEPARATE label-only negative control (motionSignature literally 'timeline-a'/'timeline-b'/'timeline-c', varied alone) must score BELOW the floor -- an unparseable label carries zero verified motion evidence and the gate fails if this does not stay below floor; ${DIVERSITY_TEST_PATH} additionally passes with named recolor-only/class-names-only control cases; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above -- C7-7 and C7-8 share the F8 disposition, which historically covered both bleed and diversity semantics): ${dispositionPath('F8')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F8 finding -- until it exists this criterion fails with "reviewer disposition records missing"; ${PHASE2_TRUST_BOUNDARY_NOTE}`,
   async () => withReviewerDisposition('F8', async () => {
     const axes = readJson<{ axes?: Array<{ name: string }> }>(DIVERSITY_AXES_PATH);
     if (axes === null || !Array.isArray(axes.axes)) return { ok: false, evidence: `missing or invalid ${DIVERSITY_AXES_PATH}` };
@@ -1967,7 +1992,29 @@ await probe(
     const identicalTrio = [base, base.map((e) => ({ ...e })), base.map((e) => ({ ...e }))];
     const sectionOrderTrio = [base, rotateArray(base, 1), [...base].reverse()];
     const skeletonTrio = [base, base.map((e) => ({ ...e, domPath: `${e.domPath}#skeleton-b` })), base.map((e) => ({ ...e, domPath: `${e.domPath}#skeleton-c` }))];
-    const motionTrio = [base.map((e) => ({ ...e, motionSignature: 'timeline-a' })), base.map((e) => ({ ...e, motionSignature: 'timeline-b' })), base.map((e) => ({ ...e, motionSignature: 'timeline-c' }))];
+
+    // C7-8 semantic-trio amendment: the motion-timeline trio must carry REAL
+    // evidence (collectRealTransitionDurations, defined above) -- >=3
+    // distinct captured transitionDuration values, each composition in the
+    // trio uniformly claiming one of them, so verifiedMotionDiffFraction
+    // (diversity.ts) genuinely parses and differentiates every pairwise
+    // comparison across the whole element array, not just one label string
+    // that happens to differ. A label-only negative control (the ORIGINAL
+    // round-<=6 construction) is scored separately below and must land BELOW
+    // the floor, proving the scorer actually rejects unverifiable labels
+    // rather than merely never having been asked to.
+    const realDurations = collectRealTransitionDurations(c);
+    if (realDurations.length < 3) {
+      return { ok: false, evidence: `case ${c.id} has only ${realDurations.length} distinct real captured transitionDuration value(s) (found: ${JSON.stringify(realDurations)}) -- need >=3 to build a semantically-backed motion-timeline trio` };
+    }
+    const [rd1, rd2, rd3] = realDurations;
+    const motionTrio = [
+      base.map((e) => ({ ...e, motionSignature: `transition:${rd1}` })),
+      base.map((e) => ({ ...e, motionSignature: `transition:${rd2}` })),
+      base.map((e) => ({ ...e, motionSignature: `transition:${rd3}` })),
+    ];
+    const labelOnlyMotionTrio = [base.map((e) => ({ ...e, motionSignature: 'timeline-a' })), base.map((e) => ({ ...e, motionSignature: 'timeline-b' })), base.map((e) => ({ ...e, motionSignature: 'timeline-c' }))];
+
     const [bpA, bpB] = c.breakpoints;
     const breakpointTrio = [base.map((e) => ({ ...e, breakpoint: bpA! })), base.map((e) => ({ ...e, breakpoint: bpB! })), base.map((e, i) => ({ ...e, breakpoint: c.breakpoints[(i + 1) % c.breakpoints.length]! }))];
 
@@ -1981,8 +2028,9 @@ await probe(
       { label: 'identical (expect below floor)', result: await call(identicalTrio), expectBelow: true },
       { label: 'section-order-only (expect >= floor)', result: await call(sectionOrderTrio), expectBelow: false },
       { label: 'layout-skeleton-only (expect >= floor)', result: await call(skeletonTrio), expectBelow: false },
-      { label: 'motion-timeline-only (expect >= floor)', result: await call(motionTrio), expectBelow: false },
+      { label: `motion-timeline-only, real evidence (durations=${rd1}/${rd2}/${rd3}, expect >= floor)`, result: await call(motionTrio), expectBelow: false },
       { label: 'breakpoint-behavior-only (expect >= floor)', result: await call(breakpointTrio), expectBelow: false },
+      { label: 'motion-timeline-label-only NEGATIVE CONTROL (timeline-a/b/c, expect BELOW floor)', result: await call(labelOnlyMotionTrio), expectBelow: true },
     ];
     const lines: string[] = [];
     let failures = 0;
