@@ -1804,7 +1804,59 @@ async function main(): Promise<void> {
   // C0-10 / C0-11 -- round-3 F10/F11/F13.
   // =======================================================================
   const capabilityManifestRel = 'scripts/waves/capability-manifest.json';
-  interface CapabilityManifestEntry { capability: string; uiEntryPoint: string; cliArgs: string[]; httpMethod: string; httpPath: string; outputSchema: string; parityApplicable: boolean; reason?: string }
+  // Round-9 C0-10 amendment (docs/plans/waves/DECISIONS.md "W0 gate
+  // adjudication", GPT-5.6 Sol reviewer-of-record, GATE-DEFECT): the old
+  // schema sent no POST bodies, could not represent an Express `.all()`
+  // registration (message-center), and byte-compared legitimately
+  // reshaped/unordered output. Schema additions below; DATA population for
+  // rows that need them is implementer duty, not this amendment -- a row
+  // that needs a declaration and lacks one fails with the declaration named.
+  interface ValueComparisonSpec {
+    mode: 'exact' | 'unordered-array' | 'composite' | 'binary';
+    sortKey?: string; // unordered-array: property to sort array-of-objects by (omitted => sort by JSON.stringify)
+    fields?: string[]; // composite: REQUIRED non-empty set of top-level keys to compare; other keys ignored
+    encoding?: 'base64' | 'hex'; // binary: how the string value is encoded (default base64); compared as decoded bytes (hex-canonicalized)
+  }
+  interface CapabilityManifestEntry {
+    capability: string; uiEntryPoint: string; cliArgs: string[]; httpMethod: string; httpPath: string; outputSchema: string; parityApplicable: boolean; reason?: string;
+    probeMethod?: string; // REQUIRED concrete verb (GET|POST|PUT|PATCH|DELETE|OPTIONS) when httpMethod === 'ALL' -- you cannot literally send an "ALL" HTTP request
+    probePath?: string; // optional concrete path for the live sample fetch; defaults to httpPath when absent
+    probeBody?: unknown; // optional equivalent HTTP request body for POST/PUT/PATCH capabilities; the string '<nonceProjectId>' anywhere in its structure is substituted with the run's nonce, mirroring cliArgs
+    valueComparison?: ValueComparisonSpec; // optional per-row canonicalizer; defaults to exact/ordered (unrelaxed) when absent -- this is the preserved implementation duty
+  }
+  const VALID_HTTP_METHODS = /^(GET|POST|PUT|PATCH|DELETE|OPTIONS|ALL)$/;
+  const VALID_CONCRETE_METHODS = /^(GET|POST|PUT|PATCH|DELETE|OPTIONS)$/;
+  const VALID_VALUE_COMPARISON_MODES = ['exact', 'unordered-array', 'composite', 'binary'];
+  // Nonce placeholder substitution for probeBody, mirroring the existing
+  // '<nonceProjectId>' convention already used for cliArgs.
+  function substituteNoncePlaceholder(value: unknown, nonce: string): unknown {
+    if (value === '<nonceProjectId>') return nonce;
+    if (Array.isArray(value)) return value.map((v) => substituteNoncePlaceholder(v, nonce));
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value as object).map(([k, v]) => [k, substituteNoncePlaceholder(v, nonce)]));
+    return value;
+  }
+  // Canonicalizes a value per a row's DECLARED comparator before
+  // deepValueEqual runs. Absent spec (or mode='exact') is a no-op --
+  // value-parity stays a REAL, unrelaxed, ordered check by default. Only an
+  // EXPLICIT declaration relaxes the comparison, and only in the declared way.
+  function canonicalizeForComparison(v: unknown, spec: ValueComparisonSpec | undefined): unknown {
+    if (!spec || spec.mode === 'exact') return v;
+    if (spec.mode === 'unordered-array') {
+      if (!Array.isArray(v)) return v; // not actually an array -- let deepValueEqual fail naturally
+      const sortKeyOf = (item: unknown): string => (spec.sortKey && isRecord(item) ? String((item as Record<string, unknown>)[spec.sortKey as string]) : JSON.stringify(item));
+      return [...v].sort((a, b) => { const ka = sortKeyOf(a), kb = sortKeyOf(b); return ka < kb ? -1 : ka > kb ? 1 : 0; });
+    }
+    if (spec.mode === 'composite') {
+      if (!isRecord(v)) return v;
+      const fields = spec.fields ?? [];
+      return Object.fromEntries(fields.map((f) => [f, (v as Record<string, unknown>)[f]]));
+    }
+    if (spec.mode === 'binary') {
+      if (typeof v !== 'string') return v;
+      try { return Buffer.from(v, spec.encoding ?? 'base64').toString('hex'); } catch { return v; }
+    }
+    return v;
+  }
   function deepKeyStructure(v: unknown, prefix = ''): string[] {
     if (Array.isArray(v)) return v.length > 0 ? deepKeyStructure(v[0], `${prefix}[]`) : [`${prefix}[]`];
     if (v && typeof v === 'object') return Object.keys(v as object).sort().flatMap((k) => deepKeyStructure((v as Record<string, unknown>)[k], prefix ? `${prefix}.${k}` : k));
@@ -1842,15 +1894,40 @@ async function main(): Promise<void> {
     if (typeof e.capability !== 'string' || !e.capability.trim()) problems.push('missing/empty capability');
     if (typeof e.uiEntryPoint !== 'string') problems.push('missing uiEntryPoint');
     if (!Array.isArray(e.cliArgs) || !e.cliArgs.every((a) => typeof a === 'string')) problems.push('cliArgs must be a string[]');
-    if (typeof e.httpMethod !== 'string' || !/^(GET|POST|PUT|PATCH|DELETE|OPTIONS)$/.test(e.httpMethod)) problems.push('invalid httpMethod');
+    if (typeof e.httpMethod !== 'string' || !VALID_HTTP_METHODS.test(e.httpMethod)) problems.push('invalid httpMethod');
     if (typeof e.httpPath !== 'string' || !e.httpPath.startsWith('/')) problems.push('httpPath must start with /');
     if (typeof e.outputSchema !== 'string') problems.push('missing outputSchema');
     if (typeof e.parityApplicable !== 'boolean') problems.push('parityApplicable must be boolean');
     if (e.parityApplicable === false && !(typeof e.reason === 'string' && e.reason.trim())) problems.push('parityApplicable=false requires a reason');
+    // Round-9 C0-10 amendment: ALL-method rows need a concrete probeMethod
+    // (you cannot literally issue an HTTP request with method "ALL"); this
+    // is the missing declaration named when a row needs it and lacks it.
+    if (e.httpMethod === 'ALL' && !(typeof e.probeMethod === 'string' && VALID_CONCRETE_METHODS.test(e.probeMethod))) {
+      problems.push('httpMethod=ALL requires a concrete probeMethod (GET|POST|PUT|PATCH|DELETE|OPTIONS) declared for live probing');
+    }
+    if (e.probeMethod !== undefined && !(typeof e.probeMethod === 'string' && VALID_CONCRETE_METHODS.test(e.probeMethod))) {
+      problems.push('probeMethod must be a concrete HTTP method (GET|POST|PUT|PATCH|DELETE|OPTIONS) when present');
+    }
+    if (e.probePath !== undefined && !(typeof e.probePath === 'string' && e.probePath.startsWith('/'))) problems.push('probePath must start with / when present');
+    if (e.valueComparison !== undefined) {
+      if (!isRecord(e.valueComparison)) {
+        problems.push('valueComparison must be an object when present');
+      } else {
+        const vc = e.valueComparison;
+        if (typeof vc.mode !== 'string' || !VALID_VALUE_COMPARISON_MODES.includes(vc.mode)) {
+          problems.push(`valueComparison.mode must be one of ${VALID_VALUE_COMPARISON_MODES.join('|')}`);
+        }
+        if (vc.mode === 'composite' && (!Array.isArray(vc.fields) || vc.fields.length === 0 || !vc.fields.every((f) => typeof f === 'string'))) {
+          problems.push('valueComparison mode=composite requires a non-empty fields: string[] declaration (missing declaration)');
+        }
+        if (vc.sortKey !== undefined && typeof vc.sortKey !== 'string') problems.push('valueComparison.sortKey must be a string when present');
+        if (vc.encoding !== undefined && vc.encoding !== 'base64' && vc.encoding !== 'hex') problems.push('valueComparison.encoding must be "base64" or "hex" when present');
+      }
+    }
     return problems;
   }
 
-  await checkCriterion('C0-10', 'SUBCOMMAND_MAP capability ids must be SET-EQUAL (exact, no substring) to manifest capability names; full structural validation of ALL rows; live sampled invocations use a nonce-bearing value check, not shape-only', 'set-equal capability ids, unique rows, every row structurally valid; sample invocations prove the CLI reaches the manifest\'s SAME handler via a nonce value, not just matching key shapes; randomized red control must fail for a genuine mismatch', async () => {
+  await checkCriterion('C0-10', 'SUBCOMMAND_MAP capability ids must be SET-EQUAL (exact, no substring) to manifest capability names; full structural validation of ALL rows; live sampled invocations use a nonce-bearing value check, not shape-only, with equivalent HTTP bodies and declared canonicalizers where needed', 'set-equal capability ids, unique rows, every row structurally valid; httpMethod may be a concrete verb or the literal "ALL" (Express .all() registrations), in which case a concrete probeMethod is REQUIRED for live probing; probeBody, when declared, is sent as the sample fetch\'s JSON body with \'<nonceProjectId>\' substitution; a row\'s declared valueComparison (unordered-array/composite/binary) canonicalizes BOTH surfaces before comparison -- absent or mode=exact stays a REAL, unrelaxed, ordered byte-level check (the preserved implementation duty); a row that needs a declaration and lacks one fails on that row with the missing declaration named; sample invocations prove the CLI reaches the manifest\'s SAME handler via a nonce value, not just matching key shapes; randomized red control exercises the SAME canonicalizer as its basis row and must still fail for a genuine mismatch', async () => {
     if (!fileExists(capabilityManifestRel)) { record('C0-10', '', '', false, '', { detail: `missing: ${capabilityManifestRel}` }); return; }
     let manifest: CapabilityManifestEntry[] = [];
     try {
@@ -1891,6 +1968,11 @@ async function main(): Promise<void> {
     try {
       daemon = await bootDaemonForProbing();
       const liveRouteKeys = new Set(daemon.routeInventory.map((r) => `${r.method} ${r.path}`));
+      // Round-9 C0-10 amendment: httpMethod='ALL' matches an Express
+      // `.all()` registration's route-inventory entry directly (recorded as
+      // method 'ALL' by installRouteRegistrationGuard) -- no special-casing
+      // needed here, it is checked with the exact same equality as any
+      // other method now that the schema permits the literal value 'ALL'.
       for (const e of applicable) if (!liveRouteKeys.has(`${e.httpMethod} ${e.httpPath}`)) problems.push(`capability "${e.capability}": ${e.httpMethod} ${e.httpPath} is not a registered route`);
 
       const nonce = `w0-nonce-${crypto.randomBytes(8).toString('hex')}`;
@@ -1909,7 +1991,9 @@ async function main(): Promise<void> {
       // Round-4 F11: every sample is bound to a value-level check, not just
       // project-scoped ones -- and captured cliJson/httpBody feed the red
       // control below so it exercises the SAME comparator on real data.
-      const capturedSamples: { capability: string; cliOk: boolean; httpOk: boolean; cliJson: unknown; httpBody: unknown }[] = [];
+      // Round-9: captured samples also retain the entry's valueComparison
+      // spec so the red control canonicalizes identically to the real check.
+      const capturedSamples: { capability: string; cliOk: boolean; httpOk: boolean; cliJson: unknown; httpBody: unknown; valueComparison: ValueComparisonSpec | undefined }[] = [];
       for (const entry of sample) {
         // Value-level nonce check when the capability's route is
         // project/resource-scoped -- proves the CLI reaches the SAME
@@ -1926,8 +2010,22 @@ async function main(): Promise<void> {
         } catch { cliOk = false; }
         let httpOk = false, httpBody: unknown = null, httpText = '';
         try {
-          const httpPath = entry.httpPath.replace(/:projectId|:id/i, nonce);
-          const res = await fetch(`${daemon.url}${httpPath}`, { method: entry.httpMethod });
+          // Round-9 C0-10 amendment: httpMethod='ALL' cannot itself be sent
+          // as a request method -- probeMethod (structurally required for
+          // ALL rows) supplies the concrete verb. probePath overrides
+          // httpPath when the declared route needs a different concrete
+          // instance to probe. probeBody supplies an equivalent HTTP body
+          // (with '<nonceProjectId>' substitution) for POST/PUT/PATCH rows
+          // that need one -- the old probe never sent a body at all.
+          const effectiveMethod = entry.httpMethod === 'ALL' ? (entry.probeMethod as string) : entry.httpMethod;
+          const rawPath = entry.probePath ?? entry.httpPath;
+          const httpPath = rawPath.replace(/:projectId|:id/i, nonce);
+          const init: RequestInit = { method: effectiveMethod };
+          if (entry.probeBody !== undefined) {
+            init.headers = { 'Content-Type': 'application/json' };
+            init.body = JSON.stringify(substituteNoncePlaceholder(entry.probeBody, nonce));
+          }
+          const res = await fetch(`${daemon.url}${httpPath}`, init);
           httpText = await res.clone().text();
           httpBody = await res.json().catch(() => null);
           httpOk = res.ok;
@@ -1941,11 +2039,15 @@ async function main(): Promise<void> {
         // merely a matching key shape -- a list-shaped capability must
         // contain the nonce resource in BOTH surfaces' lists (covered by
         // deepValueEqual over the whole array), and a pure-info capability
-        // must match byte-for-byte on values.
-        const valueEqual = cliOk && httpOk && deepValueEqual(cliJson, httpBody);
+        // must match byte-for-byte on values. Round-9: canonicalized per the
+        // row's DECLARED valueComparison first -- absent/exact stays a real,
+        // unrelaxed, ordered check (the preserved implementation duty).
+        const canonicalCli = canonicalizeForComparison(cliJson, entry.valueComparison);
+        const canonicalHttp = canonicalizeForComparison(httpBody, entry.valueComparison);
+        const valueEqual = cliOk && httpOk && deepValueEqual(canonicalCli, canonicalHttp);
         const entryOk = nonceCheck.attempted ? nonceCheck.ok : valueEqual;
-        capturedSamples.push({ capability: entry.capability, cliOk, httpOk, cliJson, httpBody });
-        sampleResults.push({ capability: entry.capability, ok: entryOk, detail: `nonceAttempted=${nonceCheck.attempted} nonceOk=${nonceCheck.ok} valueEqual=${valueEqual} cliOk=${cliOk} httpOk=${httpOk}` });
+        capturedSamples.push({ capability: entry.capability, cliOk, httpOk, cliJson, httpBody, valueComparison: entry.valueComparison });
+        sampleResults.push({ capability: entry.capability, ok: entryOk, detail: `nonceAttempted=${nonceCheck.attempted} nonceOk=${nonceCheck.ok} valueEqual=${valueEqual} valueComparisonMode=${entry.valueComparison?.mode ?? 'exact(default)'} cliOk=${cliOk} httpOk=${httpOk}` });
       }
 
       // Round-4 F11: the red control now exercises the SAME comparator used
@@ -1956,10 +2058,18 @@ async function main(): Promise<void> {
       const controlBasis = capturedSamples.find((s) => s.cliOk && s.httpOk && s.cliJson !== null && s.httpBody !== null);
       if (controlBasis) {
         const corrupted = corruptValues(controlBasis.httpBody);
+        // shapeStillMatches is deliberately checked on the RAW (uncanonicalized)
+        // pair -- it proves corruptValues() only mutated leaf values, not
+        // structure. The discrimination check below uses the SAME
+        // canonicalization the basis capability's real sample used, so a
+        // row declaring e.g. unordered-array/composite/binary gets a red
+        // control that is honest about what that mode actually compares.
         const shapeStillMatches = JSON.stringify(deepKeyStructure(controlBasis.cliJson)) === JSON.stringify(deepKeyStructure(corrupted));
-        const valueCheckRejectsIt = !deepValueEqual(controlBasis.cliJson, corrupted);
+        const canonicalCliForControl = canonicalizeForComparison(controlBasis.cliJson, controlBasis.valueComparison);
+        const canonicalCorrupted = canonicalizeForComparison(corrupted, controlBasis.valueComparison);
+        const valueCheckRejectsIt = !deepValueEqual(canonicalCliForControl, canonicalCorrupted);
         redControlOk = shapeStillMatches && valueCheckRejectsIt;
-        redControlDetail = `basis=${controlBasis.capability} shapeStillMatches=${shapeStillMatches} valueCheckRejectsIt=${valueCheckRejectsIt}`;
+        redControlDetail = `basis=${controlBasis.capability} valueComparisonMode=${controlBasis.valueComparison?.mode ?? 'exact(default)'} shapeStillMatches=${shapeStillMatches} valueCheckRejectsIt=${valueCheckRejectsIt}`;
       } else {
         redControlOk = false;
         redControlDetail = 'no captured sample produced both a real CLI JSON value and a real HTTP JSON value to build a red control from';
