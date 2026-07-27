@@ -323,6 +323,12 @@
       "strength": 0.75
     },
     {
+      "axis": "typography",
+      "source": "phantom-grid-a",
+      "scope": "body > div.phantom-grid-a-shell > hero_heading.phantom-grid-a-hero-heading",
+      "strength": 0.65
+    },
+    {
       "axis": "palette",
       "source": "phantom-flex-b",
       "scope": "body > div.phantom-flex-b-shell > section.phantom-flex-b-nonexistent-widget-xyz",
@@ -350,6 +356,11 @@
       "rationale": "Single claimant (phantom-grid-a) on the layout axis in this case; no contention to resolve."
     },
     {
+      "axis": "typography",
+      "winningSource": "phantom-grid-a",
+      "rationale": "Single claimant (phantom-grid-a) on the typography axis in this case; no contention to resolve."
+    },
+    {
       "axis": "palette",
       "winningSource": "phantom-flex-b",
       "rationale": "Single claimant (phantom-flex-b) on the palette axis in this case; no contention to resolve."
@@ -361,6 +372,13 @@
       "sourceId": "phantom-grid-a",
       "nodeId": "phantom-grid-a-features",
       "domPath": "body > div.phantom-grid-a-shell > features.phantom-grid-a-features",
+      "breakpoint": "mobile"
+    },
+    {
+      "elementId": "phantom-element-directive-di-1-typography",
+      "sourceId": "phantom-grid-a",
+      "nodeId": "phantom-grid-a-hero-heading",
+      "domPath": "body > div.phantom-grid-a-shell > hero_heading.phantom-grid-a-hero-heading",
       "breakpoint": "desktop"
     }
   ],
