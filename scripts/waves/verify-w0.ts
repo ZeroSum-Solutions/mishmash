@@ -1582,7 +1582,11 @@ async function main(): Promise<void> {
       const lostWebTests = baseWebTests.filter((f) => !headWebTests.has(f));
 
       const diffResult = sh('git', ['diff', '--name-only', `${baseCommit}...HEAD`]);
-      const changedFiles = diffResult.status === 0 ? diffResult.stdout.trim().split('\n').filter(Boolean) : [];
+      // F18: a failed diff must never be silently read as "nothing changed"
+      // -- that would leave the banned-marker scan vacuously unscanned while
+      // the rest of C0-14 still passes.
+      const diffCommandOk = diffResult.status === 0;
+      const changedFiles = diffCommandOk ? diffResult.stdout.trim().split('\n').filter(Boolean) : [];
       const bannedStatuses = new Set(['skipped', 'todo', 'pending']);
       function bannedInFile(suite: { data: SuiteJson | null }, absPath: string): AssertionResult[] {
         const tr = suite.data?.testResults.find((t) => t.name === absPath);
@@ -1602,6 +1606,7 @@ async function main(): Promise<void> {
         typecheckExitZero: typecheck.status === 0,
         daemonSuiteRanCleanly: daemonSuite.runResult.status === 0 && (daemonSuite.data?.numFailedTests ?? 1) === 0,
         webSuiteRanCleanly: webSuite.runResult.status === 0 && (webSuite.data?.numFailedTests ?? 1) === 0,
+        diffCommandOk,
         noNewBannedStatuses: newBannedHits.length === 0,
         noLostDaemonTests: lostDaemonTests.length === 0,
         noLostWebTests: lostWebTests.length === 0,
@@ -1615,6 +1620,7 @@ async function main(): Promise<void> {
         `guard exit=${guard.status}\ntypecheck exit=${typecheck.status}\n` +
           `daemon suite: exit=${daemonSuite.runResult.status} failed=${daemonSuite.data?.numFailedTests ?? 'unknown'} passed=${daemonSuite.data?.numPassedTests ?? 'unknown'}\n` +
           `web suite: exit=${webSuite.runResult.status} failed=${webSuite.data?.numFailedTests ?? 'unknown'} passed=${webSuite.data?.numPassedTests ?? 'unknown'}\n` +
+          `diff command ok=${diffCommandOk}\n` +
           `changed test files with new skipped/todo/pending: ${newBannedHits.join(', ') || 'none'}\n` +
           `lost daemon test files (vs baseCommit, web-clone excluded): ${lostDaemonTests.join(', ') || 'none'}\n` +
           `lost web test files (vs baseCommit): ${lostWebTests.join(', ') || 'none'}\n` +
