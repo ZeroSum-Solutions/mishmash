@@ -1,6 +1,6 @@
 # Selector eval corpus (W7 / S7-2)
 
-**Corpus freeze sha256: e64388306dbe2baa1670c56dd365d422c52fd6abda10ceee874998caa36ab773**
+**Corpus freeze sha256: 6e699a6105b99d44e2f4b8770d19bf51448e9ca284056c9551ed3af001bbd78e**
 
 That hash is `sha256(evals/selector/corpus/manifest.json)` at the commit that freezes this
 document. `scripts/waves/verify-w7.ts` re-hashes the manifest at HEAD and requires an exact match
@@ -9,6 +9,38 @@ is the point: everything downstream (per-case IR instances, the scorer's populat
 controls) is built against this exact, pinned manifest state.
 
 ## Revision history
+
+**v4 (deliverable-review fix round 2, corpus side).** Three fixes bundled into one regen of the 8
+non-sealed cases (sealed cases untouched, spliced back in verbatim as always):
+
+- **Genuinely distinct genre structure, not just distinct names (Sol REJECT on F6, round 2).** v3's
+  genre vocabularies were four differently-NAMED instances of the same seven-slot template with
+  exactly one container and one motion target each — "unique role nouns do not establish
+  structurally distinct information architectures," per the review. Genres now differ in shape:
+  `marketing` stays the 7-slot/1-container/1-motion-target baseline; `ecommerce` is 9 slots/2
+  containers with `trust-badges` genuinely NESTED inside `reviews-panel`'s own DOM subtree (an extra
+  real domPath segment, not a relabel); `docs` is 6 slots (the leanest) with 2 motion targets; `app-
+  dashboard` is 8 slots/2 containers with `data-grid` nested inside `chart-panel`. See the Quota
+  table below for the full per-genre role lists.
+- **Real per-breakpoint divergence (Sol HIGH on N1, prerequisite for the round-2 scorer rewrite).**
+  Every container role now renders `display: block` (stacked) on `mobile` regardless of its
+  `layoutSystem`, and its real `layoutSystem` value on `desktop` — the SAME domPath's mobile and
+  desktop captures genuinely differ now, checkable evidence of responsive behavior, not identical
+  `computedStyle` tagged with two different breakpoint strings.
+- **Brief binding (Sol REJECT on F2, deliverable side, round 2).** Briefs moved out of
+  `generate-corpus.ts`'s `CaseSpec` (where they lived beside `directives` in the same object) into a
+  separate top-level `CASE_BRIEFS` map. `manifest.json` now records each non-sealed case's
+  `briefPath` + `briefSha256`, freeze-covering brief content exactly the way `irPath`/`irSha256`
+  already cover the IR — a brief edit is now visible to the freeze hash, same as an IR edit. This is
+  the MECHANICAL half of the fix; the deeper authorship-independence question (same session writes
+  both artifacts) is explicitly out of scope this round, closed instead by a separate
+  orchestrator-dispatched independent audit agent.
+
+**Known residual, declared not hidden:** both review lanes ruled the C7-2 freeze-commit-ordering
+mechanical gap (see the git-ancestry note in the round-1 fix-round history) a GATE-DEFECT, not a
+deliverable-side defect — it is being amended on the verifier side, not fixed here. `manifest.json`'s
+hash is kept current above regardless (that half of C7-2's check is unaffected by the ordering
+issue).
 
 **v3 (deliverable-review fix round 1).** The sealed held-out split is DONE and STABLE: the v2
 re-seal completed (seal commits `5abb5e357`/`d8caf813d`), and `sealed-marketing-alt` /
@@ -90,15 +122,21 @@ corpus's own captured data, not asserted by label. `transitionDuration` is what
 against (`transition:<duration>`) — an arbitrary free-form label no longer scores as validated
 motion evidence.
 
+**v4 addition (Sol-N1, round 2):** a container role's `display` value is no longer identical across
+breakpoints — `mobile` always captures `block` (stacked) regardless of the source's declared
+`layoutSystem`, while `desktop` captures the real `grid`/`flex`/`absolute` value. The SAME domPath's
+mobile and desktop nodes genuinely differ, so a scorer can verify real responsive divergence instead
+of trusting a breakpoint string tag on otherwise-identical data.
+
 ## Quota table (S7-2)
 
 | Dimension | Minimum | Actual |
 |---|---|---|
 | Layout systems | ≥3 distinct | 3: `css-grid-first`, `flex-utility`, `absolute-canvas` — each backed by a real captured `display`/`position` value |
-| Page genres | ≥4, structurally distinct | 4, each with its OWN role vocabulary (no shared role names): `marketing` (hero/headline/subheadline/testimonial/features-grid/pricing-cta/footer-nav), `ecommerce` (product-gallery/product-title/price-badge/reviews-panel/size-selector/add-to-cart/shipping-footer), `docs` (sidebar-nav/breadcrumb-trail/article-title/code-sample/callout-box/toc-panel/edit-link), `app-dashboard` (nav-rail/metric-tile/chart-panel/data-grid/filter-controls/alert-banner/user-menu) |
+| Page genres | ≥4, structurally distinct | 4, each with its OWN role vocabulary AND its own structural shape (no shared role names, no shared slot/container/motion-target count — see "Genuinely distinct genre structure" above): `marketing` — 7 slots, 1 container, 1 motion target, flat (hero/headline/subheadline/testimonial/features-grid/pricing-cta/footer-nav); `ecommerce` — 9 slots, 2 containers, 1 role genuinely NESTED (`trust-badges` inside `reviews-panel`), 1 motion target (product-gallery/product-title/price-badge/reviews-panel/**trust-badges (nested)**/size-selector/add-to-cart/related-products/shipping-footer); `docs` — 6 slots (leanest), 1 container, 2 motion targets (sidebar-nav/article-title/code-sample/**callout-box (motion)**/toc-panel/**edit-link (motion)**); `app-dashboard` — 8 slots, 2 containers, 1 role genuinely NESTED (`data-grid` inside `chart-panel`), 1 motion target (nav-rail/metric-tile/chart-panel/**data-grid (nested)**/filter-controls/alert-banner/user-menu/export-button) |
 | Breakpoints scored | ≥2 per case | 2 per case (`mobile` @ 390px, `desktop` @ 1440px) for every non-skip case; every source has a pinned snapshot at every declared breakpoint |
 | Conflict pairs | ≥3 | 4 (`marketing-hero-grid` on `layout`, `ecommerce-product-flex` on `palette`, `dashboard-canvas-widgets` on `typography`, `docs-api-reference` on `section`) — each cross-referenced against that case's own IR `conflictResolution` record, each with `scopeOverlap: "same-role-different-source"` |
-| Degenerate cases | n=1 source; nonexistent-element directive; hostile/heavy DOM | 3: `single-source-landing` (1 source), `phantom-element-directive` (a directive scoped to a domPath — a "promo ribbon" the brief asks for — that resolves to no captured node in the ecommerce role vocabulary), `hostile-heavy-dom-catalog` (236 captured nodes, 12 directive claims / 12 provenance entries proportional to that size) |
+| Degenerate cases | n=1 source; nonexistent-element directive; hostile/heavy DOM | 3: `single-source-landing` (1 source), `phantom-element-directive` (a directive scoped to a domPath — a "promo ribbon" the brief asks for — that resolves to no captured node in the ecommerce role vocabulary), `hostile-heavy-dom-catalog` (244 captured nodes as of v4's app-dashboard structural changes, 12 directive claims / 12 provenance entries proportional to that size) |
 | Documented skips | ≥1 | 1: `single-source-landing` also documents a bot-walled companion target (`skip.reason = "bot-walled"`) that was attempted and explicitly not captured, rather than silently ignored |
 
 ## Held-out split
