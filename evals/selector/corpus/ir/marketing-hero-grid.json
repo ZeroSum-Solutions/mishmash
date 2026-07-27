@@ -9,151 +9,67 @@
       "evidencePointers": [
         {
           "domPath": "body > div.mkt-grid-a-shell > header.mkt-grid-a-header",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.mkt-grid-a-shell > hero.mkt-grid-a-hero",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.mkt-grid-a-shell > hero_heading.mkt-grid-a-hero-heading",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.mkt-grid-a-shell > features.mkt-grid-a-features",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily",
-            "display",
-            "gridTemplateColumns"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.mkt-grid-a-shell > feature_item_1.mkt-grid-a-feature-item-1",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.mkt-grid-a-shell > feature_item_2.mkt-grid-a-feature-item-2",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.mkt-grid-a-shell > cta.mkt-grid-a-cta",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.mkt-grid-a-shell > footer.mkt-grid-a-footer",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.mkt-grid-a-shell > header.mkt-grid-a-header",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.mkt-grid-a-shell > hero.mkt-grid-a-hero",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.mkt-grid-a-shell > hero_heading.mkt-grid-a-hero-heading",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.mkt-grid-a-shell > features.mkt-grid-a-features",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily",
-            "display",
-            "gridTemplateColumns"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.mkt-grid-a-shell > feature_item_1.mkt-grid-a-feature-item-1",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.mkt-grid-a-shell > feature_item_2.mkt-grid-a-feature-item-2",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.mkt-grid-a-shell > cta.mkt-grid-a-cta",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.mkt-grid-a-shell > footer.mkt-grid-a-footer",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         }
       ]
     },
@@ -166,151 +82,67 @@
       "evidencePointers": [
         {
           "domPath": "body > div.mkt-flex-b-shell > header.mkt-flex-b-header",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.mkt-flex-b-shell > hero.mkt-flex-b-hero",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.mkt-flex-b-shell > hero_heading.mkt-flex-b-hero-heading",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.mkt-flex-b-shell > features.mkt-flex-b-features",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily",
-            "display",
-            "flexDirection"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.mkt-flex-b-shell > feature_item_1.mkt-flex-b-feature-item-1",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.mkt-flex-b-shell > feature_item_2.mkt-flex-b-feature-item-2",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.mkt-flex-b-shell > cta.mkt-flex-b-cta",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.mkt-flex-b-shell > footer.mkt-flex-b-footer",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.mkt-flex-b-shell > header.mkt-flex-b-header",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.mkt-flex-b-shell > hero.mkt-flex-b-hero",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.mkt-flex-b-shell > hero_heading.mkt-flex-b-hero-heading",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.mkt-flex-b-shell > features.mkt-flex-b-features",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily",
-            "display",
-            "flexDirection"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.mkt-flex-b-shell > feature_item_1.mkt-flex-b-feature-item-1",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.mkt-flex-b-shell > feature_item_2.mkt-flex-b-feature-item-2",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.mkt-flex-b-shell > cta.mkt-flex-b-cta",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.mkt-flex-b-shell > footer.mkt-flex-b-footer",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         }
       ]
     }
@@ -343,16 +175,16 @@
   ],
   "constraints": [
     {
-      "type": "grid-integrity",
-      "rule": "Grid/flex/absolute containers must not overlap at any declared breakpoint."
+      "type": "marketing-hero-grid-grid-integrity",
+      "rule": "marketing-hero-grid: no container overlap at any declared breakpoint"
     },
     {
-      "type": "contrast-minimum",
-      "rule": "Text/background contrast must meet WCAG AA (4.5:1) at every breakpoint."
+      "type": "marketing-hero-grid-contrast-minimum",
+      "rule": "marketing-hero-grid: text/background contrast >= WCAG AA 4.5:1 at every breakpoint"
     },
     {
-      "type": "responsive-behavior",
-      "rule": "Every emitted element must have a defined style at each of the case's declared breakpoints."
+      "type": "marketing-hero-grid-responsive-behavior",
+      "rule": "marketing-hero-grid: every emitted element has a defined style at each declared breakpoint"
     }
   ],
   "conflictResolution": [
@@ -406,20 +238,20 @@
   ],
   "variantAxes": [
     {
-      "name": "layout-skeleton",
-      "distanceMetric": "jaccard-dissimilarity-of-domPath-set"
+      "name": "marketing-hero-grid:layout-skeleton",
+      "distanceMetric": "marketing-hero-grid: see diversity-axes.json#layout-skeleton"
     },
     {
-      "name": "section-order",
-      "distanceMetric": "fraction-of-positions-differing-in-scope-order"
+      "name": "marketing-hero-grid:section-order",
+      "distanceMetric": "marketing-hero-grid: see diversity-axes.json#section-order"
     },
     {
-      "name": "motion-timeline",
-      "distanceMetric": "fraction-of-positions-differing-in-motionSignature"
+      "name": "marketing-hero-grid:motion-timeline",
+      "distanceMetric": "marketing-hero-grid: see diversity-axes.json#motion-timeline"
     },
     {
-      "name": "breakpoint-behavior",
-      "distanceMetric": "fraction-of-positions-differing-in-breakpoint-assignment"
+      "name": "marketing-hero-grid:breakpoint-behavior",
+      "distanceMetric": "marketing-hero-grid: see diversity-axes.json#breakpoint-behavior"
     }
   ]
 }
