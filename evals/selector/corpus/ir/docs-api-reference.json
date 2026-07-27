@@ -380,7 +380,7 @@
       "sourceId": "docs-flex-a",
       "nodeId": "docs-flex-a-features",
       "domPath": "body > div.docs-flex-a-shell > features.docs-flex-a-features",
-      "breakpoint": "desktop"
+      "breakpoint": "mobile"
     },
     {
       "elementId": "docs-api-reference-di-1-section",
@@ -394,7 +394,7 @@
       "sourceId": "docs-flex-a",
       "nodeId": "docs-flex-a-features",
       "domPath": "body > div.docs-flex-a-shell > features.docs-flex-a-features",
-      "breakpoint": "desktop"
+      "breakpoint": "mobile"
     },
     {
       "elementId": "docs-api-reference-di-3-palette",
