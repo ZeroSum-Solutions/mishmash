@@ -2163,6 +2163,13 @@ await probe(
 // leakage and key perms, while same-user out-of-repo access to the key or
 // proof directory is an orchestration invariant, not something file
 // permissions can enforce, and is declared as such rather than disguised.
+// F18 (round 6, confirmed real): both the IR check and the per-source
+// per-breakpoint snapshot check below now call sealedPayloadPrecedesSeal
+// (the FULL check: content-binding + defining-commit-precedes-seal + empty
+// post-seal touch history) instead of the weaker contentBoundBeforeSeal --
+// the reviewer's repro left a sealed IR untouched but tampered and then
+// reverted a sealed SNAPSHOT after the seal, which passed under content-
+// binding alone since HEAD's bytes end up identical to the pre-seal blob.
 // =============================================================================
 const SEAL_ACCESS_BOUNDARY = {
   mechanicallyVerified: [
@@ -2194,8 +2201,8 @@ const SEAL_ACCESS_BOUNDARY = {
 
 await probe(
   'C7-11',
-  `read ${SEALED_ACCESS_PATH}; decrypt every sealed case's IR + snapshot blobs and hash-check against the manifest's recorded plaintext hashes; content-bind every sealed .enc file to the git blob at the seal commit's parent; scan every git-tracked file under evals/ for content-window leakage of any sealed plaintext; verify seal.key is mode 0600`,
-  `${SEALED_ACCESS_PATH} names every sealed case id, records its plaintext irSha256, and states an access-control statement; manifest.sealedFraction matches the actual sealed fraction within 0.02; every sealed path ends in ".enc"; decrypting + re-hashing yields exactly the manifest's recorded plaintext hash; the CURRENT ciphertext of every sealed .enc file equals sha256(git show <sealCommit>^:<path>) -- a payload swapped in or after the seal commit fails (F3); a content-window scan (5 x 64-byte windows per sealed plaintext, plus base64/hex encodings of each window and a base64-full-payload prefix, F11) finds NO match in any git-tracked evals/ file other than the .enc blobs themselves; ${SEAL_KEY_PATH} is mode 0600; the manifest records the explicit orchestration-invariant boundary statement above (R7) alongside the mechanical results; R7 BOUNDARY (F11, round 5 -- declared, not mechanically closed): ${SEAL_ACCESS_BOUNDARY.deliberateEvasionBoundary}`,
+  `read ${SEALED_ACCESS_PATH}; decrypt every sealed case's IR + snapshot blobs and hash-check against the manifest's recorded plaintext hashes; apply the FULL sealedPayloadPrecedesSeal check (content-bound to the seal commit's parent blob + defining commit precedes the seal + EMPTY post-seal touch history) to every sealed .enc path -- IR AND every snapshot; scan every git-tracked file under evals/ for content-window leakage of any sealed plaintext; verify seal.key is mode 0600`,
+  `${SEALED_ACCESS_PATH} names every sealed case id, records its plaintext irSha256, and states an access-control statement; manifest.sealedFraction matches the actual sealed fraction within 0.02; every sealed path ends in ".enc"; decrypting + re-hashing yields exactly the manifest's recorded plaintext hash; EVERY sealed .enc path -- the case's irPath AND every one of its sources' per-breakpoint snapshot paths, not just the IR -- passes the FULL sealedPayloadPrecedesSeal check: current ciphertext equals sha256(git show <sealCommit>^:<path>) (F3), the defining commit precedes (is an ancestor of) the seal commit, AND git log <sealCommit>..HEAD -- <path> is EMPTY (F18, round 6: closes the gap where a sealed SNAPSHOT tampered post-seal and then reverted to its pre-seal bytes passed under content-binding alone); a content-window scan (5 x 64-byte windows per sealed plaintext, plus base64/hex encodings of each window and a base64-full-payload prefix, F11) finds NO match in any git-tracked evals/ file other than the .enc blobs themselves; ${SEAL_KEY_PATH} is mode 0600; the manifest records the explicit orchestration-invariant boundary statement above (R7) alongside the mechanical results; R7 BOUNDARY (F11, round 5 -- declared, not mechanically closed): ${SEAL_ACCESS_BOUNDARY.deliberateEvasionBoundary}`,
   async () => {
     const text = readText(SEALED_ACCESS_PATH);
     if (text === null) return { ok: false, evidence: `missing ${SEALED_ACCESS_PATH}` };
@@ -2235,7 +2242,15 @@ await probe(
             plaintextBuffers.push({ label: `${c.id}/ir`, bytes: decrypted.bytes });
           }
         }
-        const binding = contentBoundBeforeSeal(sealCommit, c.irPath);
+        // F18 (round 6): every sealed payload path -- IR here, snapshots
+        // below -- must get the FULL sealedPayloadPrecedesSeal check
+        // (content-binding + defining-commit-precedes-seal + EMPTY
+        // post-seal touch history), not the weaker content-binding-only
+        // contentBoundBeforeSeal. Content-binding alone cannot detect a
+        // post-seal tamper-then-revert (HEAD ends up byte-identical to the
+        // pre-seal blob again while two commits touched the path after the
+        // seal).
+        const binding = sealedPayloadPrecedesSeal(sealCommit, c.irPath);
         if (!binding.ok) {
           contentBindingFailures++;
           lines.push(`${c.id}/ir: ${binding.detail}`);
@@ -2266,7 +2281,13 @@ await probe(
               plaintextBuffers.push({ label, bytes: decrypted.bytes });
             }
           }
-          const binding = contentBoundBeforeSeal(sealCommit, ref.path);
+          // F18 (round 6, confirmed real): this was the actual gap --
+          // sealed SNAPSHOTS only ever got contentBoundBeforeSeal (content
+          // equality alone), so a snapshot tampered post-seal and then
+          // reverted to its sealCommit^ bytes passed unconditionally.
+          // sealedPayloadPrecedesSeal additionally requires zero commits
+          // strictly after the seal to touch this exact snapshot path.
+          const binding = sealedPayloadPrecedesSeal(sealCommit, ref.path);
           if (!binding.ok) {
             contentBindingFailures++;
             lines.push(`${label}: ${binding.detail}`);
@@ -2578,6 +2599,7 @@ function checkParseSignatureAst(ts: typeof import('typescript'), parserSourceTex
   let paramTypeNodes: (import('typescript').TypeNode | undefined)[] = [];
   let returnTypeNode: import('typescript').TypeNode | undefined;
   const missingAnnotations: string[] = [];
+  let signatureSource = 'function declaration';
 
   if (parseFunctionDecls.length === 1) {
     const fn = parseFunctionDecls[0]!;
@@ -2590,13 +2612,68 @@ function checkParseSignatureAst(ts: typeof import('typescript'), parserSourceTex
     });
   } else {
     const decl = parseVarDecls[0]!;
-    if (decl.type && ts.isFunctionTypeNode(decl.type)) {
-      paramTypeNodes = decl.type.parameters.map((p) => p.type);
-      returnTypeNode = decl.type.type;
-      decl.type.parameters.forEach((p, i) => {
-        if (!p.type) missingAnnotations.push(`parameter ${i}`);
-      });
-      if (!returnTypeNode) missingAnnotations.push('return type');
+
+    // F14 (round 6): reject an `as`-cast on the initializer outright -- a
+    // cast (`(impl) as SomeWiderType`, `impl as any`, ...) can smuggle a
+    // type looser than what the implementation actually is, and this probe
+    // has no way to know the cast is "safe" without a full type-checker
+    // program (out of scope here; a bare rejection is the sound default).
+    if (decl.initializer) {
+      let unwrapped: import('typescript').Expression = decl.initializer;
+      while (ts.isParenthesizedExpression(unwrapped)) unwrapped = unwrapped.expression;
+      if (ts.isAsExpression(unwrapped) || ts.isTypeAssertionExpression(unwrapped)) {
+        return {
+          ok: false,
+          detail: `"const parse" in ${parserPath}'s initializer contains an "as"-cast (${unwrapped.getText(sourceFile)}) -- a cast that could smuggle a wider/looser type than the real implementation is rejected outright`,
+        };
+      }
+    }
+
+    // F14 (round 6): the DECLARED TYPE, when present, is authoritative --
+    // round 5's bug fell through to inspecting only the initializer's own
+    // signature whenever the declared type wasn't a bare FunctionTypeNode,
+    // silently ignoring an overload-bearing type-literal annotation (the
+    // reviewer's exact repro: `const parse: {(input:any):any;
+    // (input:string):CompositionIR} = function(input:string):
+    // CompositionIR{...}`). Anything this probe cannot structurally
+    // resolve is now a REJECT, never a silent fall-through to the
+    // initializer.
+    if (decl.type) {
+      if (ts.isFunctionTypeNode(decl.type)) {
+        paramTypeNodes = decl.type.parameters.map((p) => p.type);
+        returnTypeNode = decl.type.type;
+        decl.type.parameters.forEach((p, i) => {
+          if (!p.type) missingAnnotations.push(`parameter ${i}`);
+        });
+        if (!returnTypeNode) missingAnnotations.push('return type');
+        signatureSource = 'declared function-type annotation';
+      } else if (ts.isTypeLiteralNode(decl.type)) {
+        const callSignatures = decl.type.members.filter((m) => ts.isCallSignatureDeclaration(m));
+        if (callSignatures.length !== 1) {
+          return {
+            ok: false,
+            detail: `"const parse" in ${parserPath}'s declared type literal (${decl.type.getText(sourceFile)}) has ${callSignatures.length} call signature(s) -- exactly one is required; an overload-bearing callable type literal is rejected outright regardless of what the initializer implements`,
+          };
+        }
+        // Any "any" ANYWHERE in the declared type literal fails it, not
+        // merely within the one call signature selected below.
+        if (collectAnyKeywordNodes(ts, decl.type).length > 0) {
+          return { ok: false, detail: `"any" type node(s) found somewhere in "const parse"'s declared type literal in ${parserPath}: ${decl.type.getText(sourceFile)}` };
+        }
+        const sig = callSignatures[0] as import('typescript').CallSignatureDeclaration;
+        paramTypeNodes = sig.parameters.map((p) => p.type);
+        returnTypeNode = sig.type;
+        sig.parameters.forEach((p, i) => {
+          if (!p.type) missingAnnotations.push(`parameter ${i}`);
+        });
+        if (!returnTypeNode) missingAnnotations.push('return type');
+        signatureSource = 'declared type-literal call signature';
+      } else {
+        return {
+          ok: false,
+          detail: `"const parse" in ${parserPath} has a declared type annotation (${decl.type.getText(sourceFile)}) this AST probe cannot structurally resolve (not a bare function type or an object type literal) -- rejected rather than silently falling back to the initializer`,
+        };
+      }
     } else if (decl.initializer && (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))) {
       const fn = decl.initializer;
       paramTypeNodes = fn.parameters.map((p) => p.type);
@@ -2605,8 +2682,9 @@ function checkParseSignatureAst(ts: typeof import('typescript'), parserSourceTex
         if (!p.type) missingAnnotations.push(`parameter ${i}`);
       });
       if (!returnTypeNode) missingAnnotations.push('return type');
+      signatureSource = 'initializer (no declared type annotation)';
     } else {
-      return { ok: false, detail: `"const parse" in ${parserPath} is neither a function-type annotation nor a function/arrow-function initializer this AST probe can inspect` };
+      return { ok: false, detail: `"const parse" in ${parserPath} is neither a function-type/type-literal annotation nor a function/arrow-function initializer this AST probe can inspect` };
     }
   }
 
@@ -2625,7 +2703,7 @@ function checkParseSignatureAst(ts: typeof import('typescript'), parserSourceTex
 
   return {
     ok: true,
-    detail: `exactly one call signature for "parse" in ${parserPath} (${parseFunctionDecls.length} function decl, ${parseVarDecls.length} const decl), no "any" type node anywhere in its parameter/return types`,
+    detail: `exactly one call signature for "parse" in ${parserPath} via ${signatureSource} (${parseFunctionDecls.length} function decl, ${parseVarDecls.length} const decl), no "any" type node anywhere in its parameter/return types or (for a type-literal annotation) anywhere in the declared type`,
   };
 }
 
@@ -2809,6 +2887,65 @@ await probe(
   },
 );
 
+// F17 (round 6): a naive "does the file contain an exit-code-shaped
+// substring equal to 0" check is defeated by an earlier NARRATIVE line
+// ("expected exit code: 0") that the first-match regex finds before the
+// real, terminal, non-zero result. terminalExitZero() pairs each "$ <cmd>"
+// line with the NEXT exit-code-shaped line after it (only the first such
+// line following a command pairs with it -- a further stray exit-code-
+// shaped line before the next command is left unpaired) and requires the
+// LAST such pair's code to be 0 AND that pair's exit-code line to be the
+// true final non-blank content of the log (only trailing whitespace
+// allowed after it). This closes both named gaps at once: a narrative
+// line elsewhere in the log can no longer masquerade as the result, and a
+// free-floating "exit code: 0" appended without ever following a real
+// "$ <cmd>" line cannot pair at all.
+function terminalExitZero(runLogText: string): { ok: boolean; detail: string } {
+  const lines = runLogText.split('\n');
+  const CMD_LINE_RE = /^\s*\$\s+(.+?)\s*$/;
+  const EXIT_LINE_RE = /\bexit(?:\s*code)?\s*[:=]?\s*(\d+)\b/i;
+  const pairs: { cmd: string; exitLineIndex: number; code: string }[] = [];
+  let pendingCmd: string | null = null;
+  let totalExitLines = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const cmdMatch = CMD_LINE_RE.exec(line);
+    if (cmdMatch) {
+      pendingCmd = cmdMatch[1]!;
+      continue;
+    }
+    const exitMatch = EXIT_LINE_RE.exec(line);
+    if (exitMatch) {
+      totalExitLines++;
+      if (pendingCmd !== null) {
+        pairs.push({ cmd: pendingCmd, exitLineIndex: i, code: exitMatch[1]! });
+        pendingCmd = null; // only the first exit-code line after a command pairs with it
+      }
+    }
+  }
+  if (pairs.length === 0) {
+    return { ok: false, detail: `no "$ <cmd>" line is paired with a following exit-code-shaped line (${totalExitLines} exit-code-shaped line(s) found, none tied to an executed command)` };
+  }
+  const lastPair = pairs[pairs.length - 1]!;
+  if (lastPair.code !== '0') {
+    return { ok: false, detail: `last command/exit-code pair ("$ ${lastPair.cmd}" -> exit code ${lastPair.code}) is not 0` };
+  }
+  let lastNonBlankLineIndex = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i]!.trim().length > 0) {
+      lastNonBlankLineIndex = i;
+      break;
+    }
+  }
+  if (lastPair.exitLineIndex !== lastNonBlankLineIndex) {
+    return {
+      ok: false,
+      detail: `winning pair's exit-code line ("${lines[lastPair.exitLineIndex]}") is not the final non-blank content of the log (found ${totalExitLines} exit-code-shaped line(s) total; content follows the paired result at line ${lastPair.exitLineIndex + 1}, log ends at line ${lastNonBlankLineIndex + 1})`,
+    };
+  }
+  return { ok: true, detail: `"$ ${lastPair.cmd}" -> exit code 0, anchored as the final content of the log (${totalExitLines} exit-code-shaped line(s) total, ${pairs.length} paired to a command)` };
+}
+
 // =============================================================================
 // C7-15 -- feasibility spike documented with EXECUTED evidence (F17): a real
 // composed-output artifact must exist with its hash recorded in the doc;
@@ -2831,15 +2968,17 @@ await probe(
 // have every element's provenance RESOLVE into the referenced spike case's
 // own captured snapshots via the same resolves()/buildSnapshotsBySource()
 // machinery C7-4 uses -- an empty `{}` fails at the very first structural
-// check by construction.
+// check by construction. F17 (round 6): the exit-code check is replaced
+// with terminalExitZero() above -- see its comment for the pairing +
+// end-of-log anchoring it now requires.
 // =============================================================================
 const MIN_SPIKE_ITEM_LENGTH = 40;
 const MIN_NO_CHANGE_RATIONALE_LENGTH = 80;
 
 await probe(
   'C7-15',
-  `read ${SPIKE_DOC_PATH} + ${IR_SCHEMA_PATH} + ${SPIKE_RUNLOG_PATH} + ${SPIKE_OUTPUT_PATH}; require ${SPIKE_OUTPUT_PATH} exists, validates against the composition shape (blindInput), has every element resolve into the referenced case's captured snapshots (buildSnapshotsBySource/resolves, same as C7-4), and its sha256 is recorded verbatim in the doc; require ${SPIKE_RUNLOG_PATH} exists, looks like a command transcript, and records exit code EXACTLY 0; require the case id + output hash + run-log hash all appear together in one paragraph of the doc; enumerate real schema field names; require EVERY substantive insufficiency item to name a real field; require EVERY substantive response item to name a real field OR carry an explicit >=${MIN_NO_CHANGE_RATIONALE_LENGTH}-char no-change rationale`,
-  `${SPIKE_OUTPUT_PATH} exists, parses via blindInput() into a valid {caseId, composition[]} (a bare "{}" fails immediately -- no non-empty caseId), every composition element's (sourceId,nodeId,domPath,breakpoint) RESOLVES against the referenced spike case's real captured snapshots (buildSnapshotsBySource + resolves(), the identical machinery C7-4 uses), and its sha256 is recorded verbatim in ${SPIKE_DOC_PATH}; ${SPIKE_RUNLOG_PATH} exists, contains a recognizable command-invocation line, and records exit code EXACTLY 0 (F17: causal evidence the spike actually SUCCEEDED, not merely that some output file and some log exist); the doc contains one paragraph naming the referenced case id, the output hash, AND the run-log hash together (F17: prevents citing a real output hash and a real run-log hash from two unrelated executions); "## Case" names a real corpus case id; EVERY list item under "## IR insufficiencies found" (>=1 item, each >= ${MIN_SPIKE_ITEM_LENGTH} chars) names at least one field name that is enumerated from the ACTUAL committed ${IR_SCHEMA_PATH} (not a fixed token list) -- a generic bullet or a field name in unrelated prose elsewhere in the doc does not count; EVERY list item under "## Responses" (>=1 item, each >= ${MIN_SPIKE_ITEM_LENGTH} chars) EITHER names a real schema field OR is itself >= ${MIN_NO_CHANGE_RATIONALE_LENGTH} chars (an explicit no-change rationale) -- a short token-only response line fails both branches`,
+  `read ${SPIKE_DOC_PATH} + ${IR_SCHEMA_PATH} + ${SPIKE_RUNLOG_PATH} + ${SPIKE_OUTPUT_PATH}; require ${SPIKE_OUTPUT_PATH} exists, validates against the composition shape (blindInput), has every element resolve into the referenced case's captured snapshots (buildSnapshotsBySource/resolves, same as C7-4), and its sha256 is recorded verbatim in the doc; require ${SPIKE_RUNLOG_PATH} exists, looks like a command transcript, and has a terminal "$ <cmd>"-paired exit code of 0 anchored to the final non-blank content of the log (terminalExitZero); require the case id + output hash + run-log hash all appear together in one paragraph of the doc; enumerate real schema field names; require EVERY substantive insufficiency item to name a real field; require EVERY substantive response item to name a real field OR carry an explicit >=${MIN_NO_CHANGE_RATIONALE_LENGTH}-char no-change rationale`,
+  `${SPIKE_OUTPUT_PATH} exists, parses via blindInput() into a valid {caseId, composition[]} (a bare "{}" fails immediately -- no non-empty caseId), every composition element's (sourceId,nodeId,domPath,breakpoint) RESOLVES against the referenced spike case's real captured snapshots (buildSnapshotsBySource + resolves(), the identical machinery C7-4 uses), and its sha256 is recorded verbatim in ${SPIKE_DOC_PATH}; ${SPIKE_RUNLOG_PATH} exists, contains a recognizable command-invocation line, and terminalExitZero() finds a "$ <cmd>" line paired with the NEXT exit-code-shaped line after it, that pair's code is EXACTLY 0, AND that pair's exit-code line is the true final non-blank content of the log (only trailing whitespace allowed after it) -- an earlier narrative "expected exit code: 0" cannot masquerade as the result if a real, later exit-code line follows it, and a free-floating "exit code: 0" not tied to any "$ <cmd>" line cannot pair at all (F17); the doc contains one paragraph naming the referenced case id, the output hash, AND the run-log hash together (F17: prevents citing a real output hash and a real run-log hash from two unrelated executions); "## Case" names a real corpus case id; EVERY list item under "## IR insufficiencies found" (>=1 item, each >= ${MIN_SPIKE_ITEM_LENGTH} chars) names at least one field name that is enumerated from the ACTUAL committed ${IR_SCHEMA_PATH} (not a fixed token list) -- a generic bullet or a field name in unrelated prose elsewhere in the doc does not count; EVERY list item under "## Responses" (>=1 item, each >= ${MIN_SPIKE_ITEM_LENGTH} chars) EITHER names a real schema field OR is itself >= ${MIN_NO_CHANGE_RATIONALE_LENGTH} chars (an explicit no-change rationale) -- a short token-only response line fails both branches`,
   async () => {
     const text = readText(SPIKE_DOC_PATH);
     if (text === null) return { ok: false, evidence: `missing ${SPIKE_DOC_PATH}` };
@@ -2860,15 +2999,25 @@ await probe(
     const runLogText = readText(SPIKE_RUNLOG_PATH);
     if (runLogText === null) return { ok: false, evidence: `missing ${SPIKE_RUNLOG_PATH} -- causal evidence the spike executed end to end (a command transcript with exit code) is required` };
     const looksLikeCommandTranscript = /^\s*[$#>]\s*\S+/m.test(runLogText) || /\b(npx|pnpm|node|tsx|npm)\b/.test(runLogText);
-    const exitCodeMatch = /\bexit(?:\s*code)?\s*[:=]?\s*(\d+)\b/i.exec(runLogText);
-    if (!looksLikeCommandTranscript || !exitCodeMatch) {
-      return { ok: false, evidence: `${SPIKE_RUNLOG_PATH} does not look like a command transcript with an exit code (looksLikeCommandTranscript=${looksLikeCommandTranscript}, exitCodeMatch=${!!exitCodeMatch})` };
+    if (!looksLikeCommandTranscript) {
+      return { ok: false, evidence: `${SPIKE_RUNLOG_PATH} does not look like a command transcript (no "$ <cmd>"/"# <cmd>"/">" prompt line and no recognizable tool invocation)` };
     }
-    // F17 (round 5): a run-log claiming a non-zero exit is not causal
-    // evidence of a SUCCESSFUL spike run -- round 4's repro committed
-    // "exit code: 1" and passed anyway.
-    if (exitCodeMatch[1] !== '0') {
-      return { ok: false, evidence: `${SPIKE_RUNLOG_PATH} records exit code ${exitCodeMatch[1]}, not 0 -- a non-zero exit is not causal evidence of a successful spike run` };
+    // F17 (round 6): round 5's exitCodeMatch took the FIRST exit-code-shaped
+    // substring anywhere in the file -- the repro embeds "expected exit
+    // code: 0" (a narrative line, not a real result) BEFORE the real,
+    // terminal "exit code: 1", and the first-match regex reported success.
+    // terminalExitZero() instead pairs each "$ <cmd>" line with the NEXT
+    // exit-code-shaped line after it (only the first such line pairs; a
+    // later stray exit-code-shaped line is left unpaired), requires the
+    // LAST such pair's code to be 0, AND requires that pair's exit-code
+    // line to be the true final non-blank content of the log (only
+    // trailing whitespace allowed after it) -- so an extra line appended
+    // after a legitimate 0 (like the repro's trailing "exit code: 1", or a
+    // free-floating "exit code: 0" not actually tied to any "$ <cmd>")
+    // fails outright.
+    const terminalExit = terminalExitZero(runLogText);
+    if (!terminalExit.ok) {
+      return { ok: false, evidence: `${SPIKE_RUNLOG_PATH} does not have a terminal, command-paired "exit code: 0" as its final content: ${terminalExit.detail}` };
     }
     const runLogHash = sha256File(SPIKE_RUNLOG_PATH);
     if (!runLogHash || !text.includes(runLogHash)) {
@@ -2965,7 +3114,7 @@ await probe(
 
     return {
       ok: problems.length === 0,
-      evidence: `composed-output hash recorded: yes (${outputHash})\ncomposed-output shape + provenance: ${composedOutputSummary}\nrun-log (${SPIKE_RUNLOG_PATH}) hash recorded: yes (${runLogHash}), transcript+exit-code-0 shape OK\ncase id + output hash + run-log hash cross-referenced in one paragraph: ${crossReferenced}\nschema fields enumerated: ${schemaFields.size}\ncase section: ${caseSection.slice(0, 200)}\ninsufficiency items: ${insufficiencyItems.length} (field-grounded: ${insufficiencyItems.length - insuffFieldProblems.length})\nresponse items: ${responseItems.length} (valid: ${responseItems.length - responseProblems.length})\nreferenced case exists in manifest: ${caseExists}`,
+      evidence: `composed-output hash recorded: yes (${outputHash})\ncomposed-output shape + provenance: ${composedOutputSummary}\nrun-log (${SPIKE_RUNLOG_PATH}) hash recorded: yes (${runLogHash}), terminal exit-code pairing: ${terminalExit.detail}\ncase id + output hash + run-log hash cross-referenced in one paragraph: ${crossReferenced}\nschema fields enumerated: ${schemaFields.size}\ncase section: ${caseSection.slice(0, 200)}\ninsufficiency items: ${insufficiencyItems.length} (field-grounded: ${insufficiencyItems.length - insuffFieldProblems.length})\nresponse items: ${responseItems.length} (valid: ${responseItems.length - responseProblems.length})\nreferenced case exists in manifest: ${caseExists}`,
       detail: problems.length > 0 ? problems.join('; ') : undefined,
     };
   },
