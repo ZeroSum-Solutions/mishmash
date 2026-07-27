@@ -9,151 +9,67 @@
       "evidencePointers": [
         {
           "domPath": "body > div.docs-flex-a-shell > header.docs-flex-a-header",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.docs-flex-a-shell > hero.docs-flex-a-hero",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.docs-flex-a-shell > hero_heading.docs-flex-a-hero-heading",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.docs-flex-a-shell > features.docs-flex-a-features",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily",
-            "display",
-            "flexDirection"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.docs-flex-a-shell > feature_item_1.docs-flex-a-feature-item-1",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.docs-flex-a-shell > feature_item_2.docs-flex-a-feature-item-2",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.docs-flex-a-shell > cta.docs-flex-a-cta",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.docs-flex-a-shell > footer.docs-flex-a-footer",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.docs-flex-a-shell > header.docs-flex-a-header",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.docs-flex-a-shell > hero.docs-flex-a-hero",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.docs-flex-a-shell > hero_heading.docs-flex-a-hero-heading",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.docs-flex-a-shell > features.docs-flex-a-features",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily",
-            "display",
-            "flexDirection"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.docs-flex-a-shell > feature_item_1.docs-flex-a-feature-item-1",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.docs-flex-a-shell > feature_item_2.docs-flex-a-feature-item-2",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.docs-flex-a-shell > cta.docs-flex-a-cta",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.docs-flex-a-shell > footer.docs-flex-a-footer",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         }
       ]
     },
@@ -166,151 +82,67 @@
       "evidencePointers": [
         {
           "domPath": "body > div.docs-grid-b-shell > header.docs-grid-b-header",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.docs-grid-b-shell > hero.docs-grid-b-hero",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.docs-grid-b-shell > hero_heading.docs-grid-b-hero-heading",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.docs-grid-b-shell > features.docs-grid-b-features",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily",
-            "display",
-            "gridTemplateColumns"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.docs-grid-b-shell > feature_item_1.docs-grid-b-feature-item-1",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.docs-grid-b-shell > feature_item_2.docs-grid-b-feature-item-2",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.docs-grid-b-shell > cta.docs-grid-b-cta",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.docs-grid-b-shell > footer.docs-grid-b-footer",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.docs-grid-b-shell > header.docs-grid-b-header",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.docs-grid-b-shell > hero.docs-grid-b-hero",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.docs-grid-b-shell > hero_heading.docs-grid-b-hero-heading",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.docs-grid-b-shell > features.docs-grid-b-features",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily",
-            "display",
-            "gridTemplateColumns"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.docs-grid-b-shell > feature_item_1.docs-grid-b-feature-item-1",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.docs-grid-b-shell > feature_item_2.docs-grid-b-feature-item-2",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.docs-grid-b-shell > cta.docs-grid-b-cta",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.docs-grid-b-shell > footer.docs-grid-b-footer",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         }
       ]
     }
@@ -343,16 +175,16 @@
   ],
   "constraints": [
     {
-      "type": "grid-integrity",
-      "rule": "Grid/flex/absolute containers must not overlap at any declared breakpoint."
+      "type": "docs-api-reference-grid-integrity",
+      "rule": "docs-api-reference: no container overlap at any declared breakpoint"
     },
     {
-      "type": "contrast-minimum",
-      "rule": "Text/background contrast must meet WCAG AA (4.5:1) at every breakpoint."
+      "type": "docs-api-reference-contrast-minimum",
+      "rule": "docs-api-reference: text/background contrast >= WCAG AA 4.5:1 at every breakpoint"
     },
     {
-      "type": "responsive-behavior",
-      "rule": "Every emitted element must have a defined style at each of the case's declared breakpoints."
+      "type": "docs-api-reference-responsive-behavior",
+      "rule": "docs-api-reference: every emitted element has a defined style at each declared breakpoint"
     }
   ],
   "conflictResolution": [
@@ -406,20 +238,20 @@
   ],
   "variantAxes": [
     {
-      "name": "layout-skeleton",
-      "distanceMetric": "jaccard-dissimilarity-of-domPath-set"
+      "name": "docs-api-reference:layout-skeleton",
+      "distanceMetric": "docs-api-reference: see diversity-axes.json#layout-skeleton"
     },
     {
-      "name": "section-order",
-      "distanceMetric": "fraction-of-positions-differing-in-scope-order"
+      "name": "docs-api-reference:section-order",
+      "distanceMetric": "docs-api-reference: see diversity-axes.json#section-order"
     },
     {
-      "name": "motion-timeline",
-      "distanceMetric": "fraction-of-positions-differing-in-motionSignature"
+      "name": "docs-api-reference:motion-timeline",
+      "distanceMetric": "docs-api-reference: see diversity-axes.json#motion-timeline"
     },
     {
-      "name": "breakpoint-behavior",
-      "distanceMetric": "fraction-of-positions-differing-in-breakpoint-assignment"
+      "name": "docs-api-reference:breakpoint-behavior",
+      "distanceMetric": "docs-api-reference: see diversity-axes.json#breakpoint-behavior"
     }
   ]
 }
