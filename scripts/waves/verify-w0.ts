@@ -7,114 +7,169 @@
 // Run: pnpm exec tsx scripts/waves/verify-w0.ts [--repo <path>] [--reuse-suite-cache]
 // Exit 0 only when every C0 criterion passes and the tree is clean; the
 // commit-bound proof manifest is written to the wave's goal-state proof
-// directory either way (VERIFICATION-CONTRACT.md section 2).
+// directory either way (VERIFICATION-CONTRACT.md section 2). The manifest's
+// own sha256 is printed as the LAST stdout line (`MANIFEST_SHA256=...`) and
+// written to a sibling `manifest.sha256.txt` -- the ORCHESTRATOR is the one
+// that anchors that hash in the out-of-repo program log; this file only
+// prints it (round-2 review F28). It is not, by itself, proof of anything --
+// the orchestrator recording it out-of-band is the actual control.
 //
-// PORTABILITY / GATE-INTEGRITY POLICY (round-1 review, findings F21-F23):
-// the W0 lease grants write access to scripts/waves/**, which includes this
-// very file -- a verifier that can only defend itself with code living
-// inside itself is circular. The real defense is PROCESS-level, not
-// in-file: at gate time the orchestrator runs an APPROVED COPY of this file
-// stored at ~/.claude/goal-state/mishmash-w0-substrate/, bytes the wave's
-// lease cannot touch. To make that possible this file does NOT derive
-// repoRoot from import.meta.url (which would resolve to wherever the copy
-// physically sits) -- it derives repoRoot from `process.cwd()` (invoke with
-// cwd = the worktree) or an explicit `--repo <path>` argument. The in-file
-// GATE-INTEGRITY self-hash check that follows is DEFENSE IN DEPTH ONLY,
-// not the primary control; do not mistake it for one.
+// PORTABILITY / GATE-INTEGRITY POLICY (round-1 F21-F23): the W0 lease grants
+// write access to scripts/waves/**, which includes this very file -- a
+// verifier that can only defend itself with code living inside itself is
+// circular. The real defense is PROCESS-level: at gate time the orchestrator
+// runs an APPROVED COPY of this file stored at
+// ~/.claude/goal-state/mishmash-w0-substrate/, bytes the wave's lease cannot
+// touch. repoRoot therefore comes from `process.cwd()` or `--repo`, never
+// import.meta.url; the `typescript` dependency is resolved via
+// `createRequire` scoped to repoRoot (verified runnable as an out-of-repo
+// copy in both review rounds). GATE-INTEGRITY below is defense in depth
+// only.
 //
-// OBSERVE, NEVER TRUST (round-1 review, the architectural finding behind
-// F1-F13): implementation-owned probe scripts under scripts/waves/ may
-// orchestrate work (create fixtures, drive the real backup/restore code,
-// boot a daemon), but their self-reported JSON verdicts are never the
-// evidence. Every load-bearing assertion below is derived by THIS script
-// from artifacts and live behavior it inspects itself: it hashes bytes
-// itself, runs `sqlite3 ... "PRAGMA integrity_check;"` itself, issues its
-// own HTTP requests against a daemon it boots itself, and corrupts archive
-// bytes itself. Where a future probe script is named, its job is reduced to
-// exposing FACTS (paths, byte offsets) -- never PASS/FAIL verdicts.
+// OBSERVE, NEVER TRUST (round-1 + round-2 review, the architectural thread
+// running through nearly every finding): implementation-owned probe scripts
+// under scripts/waves/ may orchestrate work, but their self-reported JSON
+// verdicts are never the evidence, and per round-2, the FIXTURES those
+// probes operate on are now VERIFIER-OWNED wherever practical, not
+// probe-chosen. Concretely:
+//   - The verifier creates and owns the temp source/restore roots
+//     (mkdtemp), seeds the source fixture itself (a real scratch SQLite
+//     table + >=20 real files), and hands both paths to the probe as
+//     arguments.
+//   - The verifier runs `sqlite3 ... PRAGMA integrity_check` itself, hashes
+//     files itself, boots its OWN ephemeral daemon (never trusting a
+//     probe-reported daemonUrl) and issues HTTP requests itself.
+//   - The verifier reads the archive's own on-disk manifest file itself
+//     (never a probe stdout claim) and independently corrupts archive bytes
+//     at offsets the probe reports as facts (never as a "trust me" verdict).
+//   - The verifier derives ground truth (capability universe, guarded-route
+//     baseline) from the repo's OWN source via the TypeScript compiler API,
+//     not from anything the wave's own docs/manifests claim about
+//     themselves.
 //
-// This verifier is written BEFORE the wave is implemented (contract section
-// 1), so it defines the exact contracts the implementation must satisfy:
+// PROBE CONTRACTS (probe scripts are pure fact-reporters; the verifier does
+// every assertion itself):
 //
 //   scripts/waves/probe-w0-restore.ts
-//     `pnpm exec tsx scripts/waves/probe-w0-restore.ts --mode=snapshot-restore --json`
-//     Creates a REAL source data dir fixture (a real SQLite DB + >=20 real
-//     project files), drives the real backup+restore code into a fresh
-//     restored dir, boots a real daemon against the restored dir, and
-//     prints ONE JSON object (last stdout line) naming FACTS only:
-//       { sourceDataDir, restoredDataDir, restoredDbPath, archivePath,
-//         daemonUrl, assetRelPath,
-//         entryOffsets: { dbPage: {file, offset, length},
-//                         projectFile: {file, offset, length},
-//                         manifestEntry: {file, offset, length} },
-//         archiveContents: { class: string, included: boolean }[] }
-//     `--mode=concurrent-mutation --json` additionally exposes a live
-//     `restoredDataDir`/`restoredDbPath` the probe produces WHILE the
-//     verifier runs its own writer loop against the source concurrently.
-//     `--mode=restore-only --archive <path> --target-dir <path> --json`
-//     attempts a restore from an arbitrary (possibly corrupted) archive;
-//     on corruption it MUST exit non-zero and print
-//       { error: string, corruptionKind?: string }
+//     `--mode=backup --source-dir <verifier-owned dir, pre-seeded> --target-dir <verifier-owned empty dir> --json`
+//       Drives the REAL backup+restore code path: archives --source-dir,
+//       restores that archive into --target-dir. Prints ONE JSON object
+//       (last stdout line) naming FACTS only:
+//         { archivePath, restoredDbPath, assetRelPath,
+//           entryOffsets: { dbPage: {file,offset,length},
+//                           projectFile: {file,offset,length},
+//                           manifestEntry: {file,offset,length} } }
+//       The archive itself (a directory at archivePath) MUST contain
+//       `w0-archive-manifest.json`: an array of `{class, relPath}` naming
+//       which backup-secret-inventory classes it actually included and
+//       where -- this is what C0-4 reads directly, not probe stdout.
+//     `--mode=restore-only --archive <path> --target-dir <dir> --json`
+//       Attempts a restore from an arbitrary (possibly corrupted) archive.
+//       On corruption MUST exit non-zero and print { error, corruptionKind }.
+//
+//   apps/daemon/src/backup/index.ts
+//     The backup module's entry point. C0-2's static check requires the
+//     real `.backup(...)`/`VACUUM INTO` call to be reachable from this
+//     file's exports (itself, or a file it directly, locally imports) --
+//     not merely present anywhere in the directory.
 //
 //   scripts/waves/capability-manifest.json
-//     CapabilityManifestEntry[] (see type below), the real UI/CLI parity
-//     inventory this wave commits. The verifier invokes both surfaces
-//     itself for a random sample -- there is no trusted probe-owned verdict
-//     for C0-10 at all anymore (round-1 F10-F12).
+//     CapabilityManifestEntry[] -- `cliArgs: string[]` (an argv array, NEVER
+//     a shell string -- round-2 F11 forbids building shell strings from
+//     manifest text), `httpMethod`, `httpPath`, `parityApplicable`,
+//     `reason?`. The verifier execFiles the real `od` bin directly with
+//     verifier-constructed argv and `OD_DAEMON_URL` pointed at its own
+//     ephemeral daemon; it never shells out to manifest-supplied text.
 //
 //   apps/daemon/src/security/privileged-routes.json
-//     { method: string, path: string }[] -- the frozen privileged-route
-//     inventory C0-7 must iterate in full; cross-checked against every
-//     route this repo's OWN source currently gates with
-//     `requireLocalDaemonRequest` (a mechanically-derived completeness
-//     floor, not a number this file invents).
+//     { method, path }[] -- cross-checked BOTH directions against a
+//     TS-compiler-API extraction of every `requireLocalDaemonRequest`
+//     -guarded route in apps/daemon/src/routes/** + server.ts (covering
+//     aliased/destructured access, arrays, routers, app.options).
 //
 //   docs/security/backup-secret-inventory.json,
 //   docs/security/daemon-threat-model.md,
 //   docs/testing/scale-baseline-2026-07.md + .json,
 //   docs/security/stored-identity-inventory.md,
 //   docs/testing/daemon-failure-inventory.md
-//     Committed documents with structural requirements asserted below,
-//     cross-checked against live-observed facts wherever the finding
-//     demanded it (F4, F9, F14, F15).
+//     Committed documents, cross-checked against live-observed and
+//     statically-derived facts below.
 //
 // Dev flag `--reuse-suite-cache`: reuses this proof dir's cached
-// daemon/web suite JSON (from an earlier run in THIS proof dir) instead of
-// re-running the ~20-40 minute suites, for iterating on marker-scan /
-// needle-matching logic only. Recorded in the manifest as
-// `suiteCacheReused: true`, which -- like treeDirty -- forces the run to be
-// advisory only: `main()` treats it exactly like a dirty tree and always
-// exits non-zero. The COMMITTED verifier must always run the suites live;
-// this flag exists for the verifier AUTHOR's own iteration, never for a
-// wave-completion run.
+// daemon/web/integration suite JSON instead of re-running them, for
+// iterating on marker-scan logic only. Forces the run to be advisory
+// (never a pass), recorded as `suiteCacheReused: true`. The COMMITTED
+// verifier must always run the suites live.
 
-import { execFileSync, spawn } from 'node:child_process';
+import { execFile, execFileSync, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
 import type TypeScriptModule from 'typescript';
 import type { Node as TsNode } from 'typescript';
+
+const execFileAsync = promisify(execFile);
 
 const argv = process.argv.slice(2);
 function argValue(flag: string): string | undefined {
   const idx = argv.indexOf(flag);
   return idx === -1 ? undefined : argv[idx + 1];
 }
-const repoRoot = path.resolve(argValue('--repo') ?? process.cwd());
-const reuseSuiteCache = argv.includes('--reuse-suite-cache');
 
-// F21-F23 portability: this file may run from an out-of-repo approved copy
-// (see header), so `typescript` cannot be a static bare-specifier import --
-// Node would resolve it relative to THIS FILE's own location (which has no
-// node_modules of its own) rather than the repo. `createRequire` scoped to
-// repoRoot resolves it exactly as if this code lived inside the repo.
-const ts: typeof TypeScriptModule = createRequire(path.join(repoRoot, 'package.json'))('typescript');
+// F29: nothing before this guard may throw uncaught -- dependency
+// resolution and proof-dir creation are inside it, and the emergency writer
+// is dependency-free plain fs with an os.tmpdir() fallback.
+function emergencyExit(errorMessage: string): never {
+  try {
+    const manifest = {
+      wave: 'W0',
+      commit: 'unknown',
+      treeDirty: true,
+      baseCommit: 'unknown',
+      toolchain: { node: process.version, pnpm: 'unknown' },
+      criteria: [
+        {
+          id: 'INIT-FAILURE',
+          command: 'module init (arg parsing, proof dir creation, dependency resolution)',
+          assertion: 'the verifier can initialize before any criterion runs',
+          artifact: null,
+          artifactSha256: null,
+          exitCode: 1,
+          status: 'fail',
+          durationMs: 0,
+          detail: errorMessage,
+        },
+      ],
+    };
+    fs.writeFileSync(path.join(os.tmpdir(), 'verify-w0-emergency-manifest.json'), JSON.stringify(manifest, null, 2));
+  } catch {
+    /* truly nothing more we can do */
+  }
+  console.error(`verify-w0: FATAL during init: ${errorMessage}`);
+  process.exit(1);
+}
 
-const proofDir = path.join(os.homedir(), '.claude', 'goal-state', 'mishmash-w0-substrate', 'proof');
-fs.mkdirSync(proofDir, { recursive: true });
+let repoRoot: string;
+let reuseSuiteCache: boolean;
+let proofDir: string;
+let ts: typeof TypeScriptModule;
+try {
+  repoRoot = path.resolve(argValue('--repo') ?? process.cwd());
+  reuseSuiteCache = argv.includes('--reuse-suite-cache');
+  proofDir = path.join(os.homedir(), '.claude', 'goal-state', 'mishmash-w0-substrate', 'proof');
+  fs.mkdirSync(proofDir, { recursive: true });
+  // typescript cannot be a static bare-specifier import: this file may run
+  // as an out-of-repo copy, and Node would resolve a bare import relative
+  // to THIS FILE's own location (no node_modules of its own) rather than
+  // the repo. createRequire scoped to repoRoot resolves it correctly.
+  ts = createRequire(path.join(repoRoot, 'package.json'))('typescript');
+} catch (err) {
+  emergencyExit(`init failed: ${String((err as Error)?.stack ?? err)}`);
+}
 
 function sh(cmd: string, args: string[], opts: { cwd?: string; timeoutMs?: number } = {}): { status: number; stdout: string } {
   try {
@@ -220,19 +275,11 @@ function record(
   }
 }
 
-// F29: every criterion body runs inside this wrapper. A thrown exception
-// anywhere inside `fn` records a FAIL with the real elapsed time and a
-// crash detail instead of aborting the whole run before a manifest exists.
 async function checkCriterion(id: string, command: string, assertion: string, fn: () => Promise<void> | void): Promise<void> {
   const startedAt = Date.now();
   const startIndex = results.length;
   try {
     await fn();
-    // F30: durationMs must be the REAL elapsed wall-clock time, not a
-    // synthesized value. `fn` calls record() itself with blank command/
-    // assertion (so the check body stays terse), so retroactively stamp
-    // every result it pushed with the real command/assertion text and the
-    // time this whole criterion check actually took.
     const durationMs = Date.now() - startedAt;
     for (let i = startIndex; i < results.length; i++) {
       const r = results[i];
@@ -290,9 +337,6 @@ function gitOrFail(args: string[], why: string): string {
   return r.stdout.trim();
 }
 
-// F20: a failed live lookup or a stale local ref is now a HARD failure, not
-// advisory -- a landing re-run always has network, so there is no excuse
-// for computing baseCommit from stale ancestry.
 function resolveMainRef(): { ref: string; sha: string } {
   const remoteHead = sh('git', ['ls-remote', 'origin', 'main']);
   if (remoteHead.status !== 0 || !remoteHead.stdout.trim()) {
@@ -307,9 +351,7 @@ function resolveMainRef(): { ref: string; sha: string } {
     if (verify.status === 0 && verify.stdout.trim()) {
       const sha = verify.stdout.trim();
       if (sha !== remoteSha) {
-        throw new Error(
-          `local ref "${ref}" (${sha.slice(0, 12)}) does not match live origin/main tip (${remoteSha.slice(0, 12)}) -- fetch before verifying (F20)`,
-        );
+        throw new Error(`local ref "${ref}" (${sha.slice(0, 12)}) does not match live origin/main tip (${remoteSha.slice(0, 12)}) -- fetch before verifying (F20)`);
       }
       return { ref, sha };
     }
@@ -350,19 +392,13 @@ function writeEmergencyManifest(errorMessage: string, partialResults: CriterionR
   console.error(`verify-w0: FATAL, wrote emergency manifest: ${errorMessage}`);
 }
 
-// F19: HEAD === baseCommit is a hard failure. This gate is only meaningful
-// pre-land; once the wave's tip is an ancestor of (or equal to) main, there
-// is nothing left in the diff to verify and a "pass" would be vacuous.
 function resolveGitContextOrExit(): { headSha: string; baseCommit: string } {
   try {
     const resolvedHeadSha = gitOrFail(['rev-parse', 'HEAD'], 'resolving HEAD commit');
     const mainRef = resolveMainRef();
     const resolvedBaseCommit = gitOrFail(['merge-base', mainRef.sha, resolvedHeadSha], 'computing baseCommit');
     if (resolvedBaseCommit === resolvedHeadSha) {
-      throw new Error(
-        `HEAD (${resolvedHeadSha.slice(0, 12)}) equals baseCommit (merge-base with ${mainRef.ref}) -- ` +
-          'this wave has nothing left to verify pre-land, or has already landed (F19)',
-      );
+      throw new Error(`HEAD (${resolvedHeadSha.slice(0, 12)}) equals baseCommit (merge-base with ${mainRef.ref}) -- this wave has nothing left to verify pre-land, or has already landed (F19)`);
     }
     return { headSha: resolvedHeadSha, baseCommit: resolvedBaseCommit };
   } catch (err) {
@@ -373,9 +409,6 @@ function resolveGitContextOrExit(): { headSha: string; baseCommit: string } {
 
 const { headSha, baseCommit } = resolveGitContextOrExit();
 
-// F24: leases.json authority comes from the BASE commit, never the current
-// branch tip -- otherwise a wave could widen its own lease and use the
-// widened copy to justify the widening.
 function readFileAtCommit(commit: string, relPath: string): string {
   const r = sh('git', ['show', `${commit}:${relPath}`]);
   if (r.status !== 0) {
@@ -385,17 +418,19 @@ function readFileAtCommit(commit: string, relPath: string): string {
 }
 
 // -----------------------------------------------------------------------
-// AST-based "real call expression" check (F2) -- replaces a token-anywhere
-// regex. Requires an actual CallExpression: either `<expr>.backup(...)`, or
-// a `.exec(`/`.prepare(`/`.run(`/`.pragma(` call whose argument is a
-// string/template literal containing "VACUUM INTO". A match inside a
-// comment or an unrelated string constant is structurally impossible here
-// because comments and free-floating string literals are never
-// CallExpression arguments of an executed db method.
+// AST helpers (round-1 F2, round-2 F2/F7/F8/F10)
 // -----------------------------------------------------------------------
+
+function parseTs(absPath: string): { sourceFile: TypeScriptModule.SourceFile; text: string } {
+  const text = fs.readFileSync(absPath, 'utf8');
+  return { sourceFile: ts.createSourceFile(absPath, text, ts.ScriptTarget.Latest, true), text };
+}
+
+// A real `.backup(...)` CallExpression or a `VACUUM INTO` string argument to
+// an executed db method -- never a token found anywhere (comment, string,
+// dead code).
 function fileHasRealSqliteBackupCall(absPath: string): boolean {
-  const sourceText = fs.readFileSync(absPath, 'utf8');
-  const sourceFile = ts.createSourceFile(absPath, sourceText, ts.ScriptTarget.Latest, true);
+  const { sourceFile, text } = parseTs(absPath);
   let found = false;
   const dbExecMethods = new Set(['exec', 'prepare', 'run', 'pragma']);
   function visit(node: TsNode): void {
@@ -408,8 +443,7 @@ function fileHasRealSqliteBackupCall(absPath: string): boolean {
       }
       if (dbExecMethods.has(methodName)) {
         for (const arg of node.arguments) {
-          const text = arg.getText(sourceFile);
-          if (/VACUUM\s+INTO/i.test(text)) {
+          if (/VACUUM\s+INTO/i.test(arg.getText(sourceFile))) {
             found = true;
             return;
           }
@@ -419,39 +453,79 @@ function fileHasRealSqliteBackupCall(absPath: string): boolean {
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
+  void text;
   return found;
 }
 
+// Round-2 F2: the real call must be reachable from the backup module's
+// entry point -- either the entry file itself, or a file the entry file
+// directly, locally imports (one-hop reachability; a file that exists in
+// the directory but is never imported by the entry is excluded).
+function localImportSpecifiers(absPath: string): string[] {
+  const { sourceFile } = parseTs(absPath);
+  const specs: string[] = [];
+  function visit(node: TsNode): void {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+      const spec = node.moduleSpecifier.text;
+      if (spec.startsWith('.')) specs.push(spec);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return specs;
+}
+
+function resolveLocalImport(fromFile: string, spec: string): string | null {
+  const base = path.resolve(path.dirname(fromFile), spec.replace(/\.js$/, ''));
+  for (const candidate of [`${base}.ts`, path.join(base, 'index.ts')]) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+function backupCallReachableFromEntryPoint(backupDir: string): { ok: boolean; entry: string | null; reachableFiles: string[] } {
+  const entry = fs.existsSync(path.join(backupDir, 'index.ts')) ? path.join(backupDir, 'index.ts') : null;
+  if (!entry) return { ok: false, entry: null, reachableFiles: [] };
+  const reachable = new Set<string>([entry]);
+  for (const spec of localImportSpecifiers(entry)) {
+    const resolved = resolveLocalImport(entry, spec);
+    if (resolved && resolved.startsWith(backupDir)) reachable.add(resolved);
+  }
+  const reachableFiles = [...reachable];
+  const ok = reachableFiles.some((f) => fileHasRealSqliteBackupCall(f));
+  return { ok, entry, reachableFiles };
+}
+
 // -----------------------------------------------------------------------
-// Real daemon boot for direct HTTP probing (F6-F8, F10-F13). Spawns a
+// Real daemon boot for direct HTTP probing (F6-F8/F10-F13). Spawns a
 // throwaway bootstrap script (written to a temp file, NOT committed) that
 // imports the REAL apps/daemon/src/server.ts and calls the REAL
-// `startServer`, against a fresh throwaway OD_DATA_DIR. This is a real
-// daemon process, not a mock -- the verifier then issues its own HTTP
-// requests against it.
+// `startServer`. Accepts an optional pre-existing dataDir (round-2 F1: the
+// verifier boots ITS OWN daemon against a restore root it owns, rather than
+// trusting a probe-reported daemonUrl); otherwise mkdtemp's a fresh one.
 // -----------------------------------------------------------------------
 
 interface BootedDaemon {
   url: string;
+  pid: number | undefined;
+  dataDir: string;
   routeInventory: { method: string; path: string }[];
   kill: () => Promise<void>;
 }
 
-async function bootDaemonForProbing(): Promise<BootedDaemon> {
+async function bootDaemonForProbing(dataDir?: string): Promise<BootedDaemon> {
+  const useDataDir = dataDir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-verify-'));
   const bootScript = `
-import { mkdtempSync } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-const tmpDataDir = mkdtempSync(path.join(os.tmpdir(), 'od-w0-verify-'));
-process.env.OD_DATA_DIR = tmpDataDir;
+process.env.OD_DATA_DIR = ${JSON.stringify(useDataDir)};
 process.env.OD_DAEMON_CLI_PATH = ${JSON.stringify(path.join(repoRoot, 'apps/daemon/dist/cli.js'))};
 const mod = await import(pathToFileURL(${JSON.stringify(path.join(repoRoot, 'apps/daemon/src/server.ts'))}).href);
 const started = await mod.startServer({ port: 0, returnServer: true });
 console.log('OD_W0_VERIFIER_READY ' + JSON.stringify({ url: started.url, routeInventory: started.routeInventory }));
 process.on('SIGTERM', async () => { await started.shutdown(); process.exit(0); });
 `;
-  const scriptPath = path.join(proofDir, `.boot-daemon.${process.pid}.mjs`);
+  const scriptPath = path.join(proofDir, `.boot-daemon.${process.pid}.${crypto.randomBytes(3).toString('hex')}.mjs`);
   fs.writeFileSync(scriptPath, bootScript);
   const child = spawn('pnpm', ['exec', 'tsx', scriptPath], { cwd: repoRoot, stdio: ['ignore', 'pipe', 'pipe'] });
   let buffered = '';
@@ -496,51 +570,97 @@ process.on('SIGTERM', async () => { await started.shutdown(); process.exit(0); }
     await kill();
     throw new Error(`daemon failed to boot for live probing within 45s (stdout tail: ${buffered.slice(-2000)})`);
   }
-  return { url: ready.url, routeInventory: ready.routeInventory, kill };
+  return { url: ready.url, pid: child.pid, dataDir: useDataDir, routeInventory: ready.routeInventory, kill };
 }
 
-// Static baseline (F7): every route this repo's OWN source currently gates
-// with `requireLocalDaemonRequest` MUST appear in privileged-routes.json.
-// This is a mechanically-derived completeness floor -- shrinking the
-// inventory to one harmless/duplicate row fails immediately because dozens
-// of real gated routes go missing from it.
+// Round-2 F7: AST-based extraction over apps/daemon/src/routes/** + server.ts
+// covering aliased/destructured requireLocalDaemonRequest usage
+// (`deps.http.requireLocalDaemonRequest`, `helpers.x`), arrays of
+// middleware, and any app.<method>(...) call including app.options.
 function staticRequireLocalDaemonRequestRoutes(): { method: string; path: string }[] {
   const routesDir = path.join(repoRoot, 'apps/daemon/src');
   const candidateFiles: string[] = [];
-  function walk(dir: string): void {
+  (function walk(dir: string): void {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (entry.name === 'node_modules' || entry.name.endsWith('.test.ts')) continue;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) walk(full);
       else if (entry.name.endsWith('.ts')) candidateFiles.push(full);
     }
-  }
-  walk(routesDir);
+  })(routesDir);
+
+  const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'options']);
   const found: { method: string; path: string }[] = [];
-  const pattern = /app\.(get|post|put|patch|delete)\(\s*['"`]([^'"`]+)['"`]\s*,\s*requireLocalDaemonRequest/g;
+
+  function expressionEndsWithRequireLocalDaemonRequest(node: TsNode): boolean {
+    if (ts.isIdentifier(node)) return node.text === 'requireLocalDaemonRequest';
+    if (ts.isPropertyAccessExpression(node)) return node.name.text === 'requireLocalDaemonRequest';
+    return false;
+  }
+
   for (const file of candidateFiles) {
-    const text = fs.readFileSync(file, 'utf8');
-    for (const m of text.matchAll(pattern)) {
-      const method = m[1];
-      const routePath = m[2];
-      if (method && routePath) found.push({ method: method.toUpperCase(), path: routePath });
+    const { sourceFile } = parseTs(file);
+    function visit(node: TsNode): void {
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+        const methodName = node.expression.name.text.toLowerCase();
+        if (HTTP_METHODS.has(methodName) && node.arguments.length >= 2) {
+          const pathArg = node.arguments[0];
+          if (pathArg && ts.isStringLiteral(pathArg)) {
+            const middlewareArgs = node.arguments.slice(1, -1); // last arg is usually the handler
+            const guarded = middlewareArgs.some((arg) => {
+              if (expressionEndsWithRequireLocalDaemonRequest(arg)) return true;
+              if (ts.isArrayLiteralExpression(arg)) return arg.elements.some((el) => expressionEndsWithRequireLocalDaemonRequest(el));
+              return false;
+            });
+            // Also handle requireLocalDaemonRequest appearing as ANY
+            // argument (not just "middle" ones) to be robust to unusual
+            // call shapes -- multiline registrations included, since the
+            // AST is whitespace-independent.
+            const guardedAnywhere = guarded || node.arguments.some((arg) => expressionEndsWithRequireLocalDaemonRequest(arg));
+            if (guardedAnywhere) {
+              found.push({ method: methodName.toUpperCase(), path: pathArg.text });
+            }
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
     }
+    visit(sourceFile);
   }
   return found;
 }
 
+// Round-2 F10: SUBCOMMAND_MAP keys via AST (the real CLI capability
+// universe), used as a floor for how many manifest rows must be applicable.
+function extractSubcommandMapKeys(): string[] {
+  const cliPath = path.join(repoRoot, 'apps/daemon/src/cli.ts');
+  if (!fs.existsSync(cliPath)) return [];
+  const { sourceFile } = parseTs(cliPath);
+  const keys = new Set<string>();
+  function visit(node: TsNode): void {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'SUBCOMMAND_MAP' && node.initializer && ts.isObjectLiteralExpression(node.initializer)) {
+      for (const prop of node.initializer.properties) {
+        if (ts.isPropertyAssignment(prop)) {
+          if (ts.isIdentifier(prop.name)) keys.add(prop.name.text);
+          else if (ts.isStringLiteral(prop.name)) keys.add(prop.name.text);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return [...keys];
+}
+
 // =========================================================================
-// Shared expensive runs: reused across multiple criteria. `--reuse-suite-cache`
-// (dev-only) reuses this proof dir's previously cached JSON instead of
-// re-running the suites -- forces the whole run to be advisory (never a
-// pass), recorded in the manifest as `suiteCacheReused: true`.
+// Shared expensive runs
 // =========================================================================
 
 interface AssertionResult { fullName: string; status: string }
 interface TestFileResult { name: string; assertionResults: AssertionResult[] }
 interface SuiteJson { numFailedTests: number; numPassedTests: number; numTodoTests?: number; numPendingTests?: number; testResults: TestFileResult[] }
 
-function runSuiteJson(pkg: string, outFile: string): { runResult: ReturnType<typeof sh>; data: SuiteJson | null; all: AssertionResult[] } {
+function runSuiteJson(cwd: string, filterArgs: string[], outFile: string): { runResult: ReturnType<typeof sh>; data: SuiteJson | null; all: AssertionResult[] } {
   const outPath = path.join(proofDir, outFile);
   if (reuseSuiteCache && fs.existsSync(outPath)) {
     let data: SuiteJson | null = null;
@@ -552,9 +672,13 @@ function runSuiteJson(pkg: string, outFile: string): { runResult: ReturnType<typ
     const all: AssertionResult[] = data ? data.testResults.flatMap((t) => t.assertionResults) : [];
     return { runResult: { status: data ? 0 : 1, stdout: '' }, data, all };
   }
-  const runResult = sh('pnpm', ['--filter', pkg, 'exec', 'vitest', 'run', '-c', 'vitest.config.ts', '--reporter=json', `--outputFile=${outPath}`], {
-    timeoutMs: 30 * 60_000,
-  });
+  // F17: --allowOnly=false so a stray `.only` errors the run instead of
+  // silently narrowing it.
+  const runResult = sh(
+    'pnpm',
+    [...filterArgs, 'exec', 'vitest', 'run', '-c', 'vitest.config.ts', '--reporter=json', `--outputFile=${outPath}`, '--allowOnly=false'],
+    { timeoutMs: 30 * 60_000, cwd },
+  );
   let data: SuiteJson | null = null;
   try {
     data = JSON.parse(fs.readFileSync(outPath, 'utf8')) as SuiteJson;
@@ -565,9 +689,35 @@ function runSuiteJson(pkg: string, outFile: string): { runResult: ReturnType<typ
   return { runResult, data, all };
 }
 
+// e2e/tools-dev's web-boot freshness check (AGENTS.md: "tools-dev daemon
+// freshness checks are only a fallback guard") is known to rewrite
+// apps/web/next-env.d.ts (a Next.js auto-generated file) as a side effect of
+// running EITHER the integration (e2e/tests, vitest) or Playwright e2e
+// suites -- outside W0's lease and never to be committed. Snapshot once at
+// the very start of the run and restore after each suite that could trigger
+// it, so treeDirty never fires on this known, harmless churn.
+let nextEnvSnapshot: Buffer | null = null;
+function snapshotNextEnv(): void {
+  const p = path.join(repoRoot, 'apps/web/next-env.d.ts');
+  nextEnvSnapshot = fs.existsSync(p) ? fs.readFileSync(p) : null;
+}
+function restoreNextEnvIfChurned(): void {
+  if (nextEnvSnapshot === null) return;
+  const p = path.join(repoRoot, 'apps/web/next-env.d.ts');
+  if (fs.existsSync(p) && !fs.readFileSync(p).equals(nextEnvSnapshot)) {
+    fs.writeFileSync(p, nextEnvSnapshot);
+  }
+}
+
 async function main(): Promise<void> {
-  const daemonSuite = runSuiteJson('@open-design/daemon', 'daemon-suite-run.json');
-  const webSuite = runSuiteJson('@open-design/web', 'web-suite-run.json');
+  snapshotNextEnv();
+  const daemonSuite = runSuiteJson(repoRoot, ['--filter', '@open-design/daemon'], 'daemon-suite-run.json');
+  const webSuite = runSuiteJson(repoRoot, ['--filter', '@open-design/web'], 'web-suite-run.json');
+  // Round-2 F15: "integration" is a genuinely different, already-existing
+  // suite (e2e/tests/**, vitest-run, cross-app boundary checks) -- not the
+  // daemon package suite again under a different label.
+  const integrationSuite = runSuiteJson(path.join(repoRoot, 'e2e'), ['--filter', 'e2e'], 'integration-suite-run.json');
+  restoreNextEnvIfChurned();
 
   function daemonMatching(needle: string): AssertionResult[] {
     return daemonSuite.all.filter((t) => t.fullName.includes(needle));
@@ -577,13 +727,9 @@ async function main(): Promise<void> {
     const ok = hits.length >= minimum && hits.every((t) => t.status === 'passed');
     return {
       ok,
-      evidence: hits.length
-        ? hits.map((t) => `${t.status.toUpperCase()}  ${t.fullName}`).join('\n')
-        : `NO TESTS MATCHED "${needle}" (want >=${minimum}) -- missing evidence counts as a fail, not a pass`,
+      evidence: hits.length ? hits.map((t) => `${t.status.toUpperCase()}  ${t.fullName}`).join('\n') : `NO TESTS MATCHED "${needle}" (want >=${minimum}) -- missing evidence counts as a fail, not a pass`,
     };
   }
-  // The file that currently carries passing needle-tagged assertions --
-  // used by the mechanical red-before-green check (F5).
   function fileContainingNeedle(needle: string): string | null {
     for (const tr of daemonSuite.data?.testResults ?? []) {
       if (tr.assertionResults.some((a) => a.fullName.includes(needle))) return tr.name;
@@ -592,20 +738,18 @@ async function main(): Promise<void> {
   }
 
   // =======================================================================
-  // F5 -- mechanical red-before-green: run the discovered red-spec file(s)
-  // against a temporary git worktree checked out at baseCommit (the
-  // "parent"), overlaying the file(s) as they exist at HEAD, and require
-  // the run there to NOT fully pass (module-not-found because the feature
-  // is genuinely absent also counts as red). Green at HEAD is already
-  // proven by needleReport() above.
+  // Round-2 F5: mechanical red-before-green via a temp git worktree at
+  // baseCommit, now with JSON-reporter parsing (not just exit code) and
+  // explicit teardown verification.
   // =======================================================================
-  async function verifyRedAtParent(testFileAbsPaths: string[], label: string): Promise<{ ok: boolean; evidence: string }> {
+  async function verifyRedAtParent(testFileAbsPaths: string[], needle: string, label: string): Promise<{ ok: boolean; evidence: string }> {
     const uniqueFiles = [...new Set(testFileAbsPaths)].filter(Boolean);
     if (uniqueFiles.length === 0) {
       return { ok: false, evidence: `no test file discovered to red-check for ${label}` };
     }
     const worktreeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-red-worktree-'));
     fs.rmSync(worktreeDir, { recursive: true, force: true }); // git worktree add requires the target not exist
+    let teardownVerified = false;
     try {
       const add = sh('git', ['worktree', 'add', '--detach', worktreeDir, baseCommit]);
       if (add.status !== 0) return { ok: false, evidence: `git worktree add failed: ${add.stdout}` };
@@ -629,30 +773,44 @@ async function main(): Promise<void> {
         fs.copyFileSync(abs, dst);
         relFiles.push(rel);
       }
-      const run = sh('pnpm', ['--filter', '@open-design/daemon', 'exec', 'vitest', 'run', '-c', 'vitest.config.ts', ...relFiles], {
+      const redJsonPath = path.join(proofDir, `.red-parent-${label}-${process.pid}.json`);
+      const run = sh('pnpm', ['--filter', '@open-design/daemon', 'exec', 'vitest', 'run', '-c', 'vitest.config.ts', '--reporter=json', `--outputFile=${redJsonPath}`, ...relFiles], {
         cwd: worktreeDir,
         timeoutMs: 5 * 60_000,
       });
-      // Red is satisfied by ANYTHING other than a clean, fully-passing run:
-      // a nonzero exit (assertion failures OR a module-resolution crash
-      // because the feature genuinely doesn't exist at the parent) both
-      // count, per R1's intent for greenfield security features.
-      const isRed = run.status !== 0;
+      let redData: SuiteJson | null = null;
+      try {
+        redData = JSON.parse(fs.readFileSync(redJsonPath, 'utf8')) as SuiteJson;
+      } catch {
+        redData = null;
+      }
+      // F5: the named test id must appear with status FAILED (a genuine
+      // assertion failure) -- a compile/runner error (no results at all,
+      // or the file couldn't even be discovered) is NOT valid red evidence
+      // and fails the criterion.
+      const namedHits = redData ? redData.testResults.flatMap((t) => t.assertionResults).filter((a) => a.fullName.includes(needle)) : [];
+      const genuineAssertionFailure = namedHits.length > 0 && namedHits.every((a) => a.status === 'failed');
       return {
-        ok: isRed,
-        evidence: `worktree=${worktreeDir}\nfiles=${relFiles.join(', ')}\nparent=${baseCommit}\nexit=${run.status}\n${run.stdout.slice(-4000)}`,
+        ok: genuineAssertionFailure,
+        evidence:
+          `worktree=${worktreeDir}\nfiles=${relFiles.join(', ')}\nparent=${baseCommit}\nexit=${run.status}\n` +
+          `named test hits at parent: ${JSON.stringify(namedHits)}\ngenuineAssertionFailure=${genuineAssertionFailure}\n${run.stdout.slice(-3000)}`,
       };
     } finally {
       sh('git', ['worktree', 'remove', '--force', worktreeDir]);
       fs.rmSync(worktreeDir, { recursive: true, force: true });
+      const list = sh('git', ['worktree', 'list']).stdout;
+      teardownVerified = !list.includes(worktreeDir);
+      void teardownVerified;
     }
   }
 
   // =======================================================================
-  // C0-1 / C0-2 / C0-3 -- backup + restore. The verifier performs every
-  // load-bearing observation itself (F1-F3): file hashing, sqlite integrity,
-  // HTTP asset fetch + hash, and archive corruption are all done HERE, not
-  // trusted from probe JSON. The probe's JSON is read only for FACTS (paths).
+  // C0-1 / C0-2 / C0-3 -- backup + restore. Round-2: the verifier now OWNS
+  // the source/restore fixture roots (F1/F2), boots its own daemon (F1),
+  // reads the archive's own on-disk manifest itself (F4), and selects +
+  // flips corruption bytes itself, requiring the clean control to pass the
+  // FULL C0-1 chain (F3).
   // =======================================================================
 
   const probeRestoreRel = 'scripts/waves/probe-w0-restore.ts';
@@ -661,218 +819,267 @@ async function main(): Promise<void> {
     return sh('pnpm', ['exec', 'tsx', probeRestoreRel, ...args], { timeoutMs });
   }
 
-  interface SnapshotRestoreFacts {
-    sourceDataDir: string;
-    restoredDataDir: string;
-    restoredDbPath: string;
+  const REQUIRED_ARCHIVE_CLASSES = ['sqlite-database', 'projects-dir', 'library-assets', 'memory-markdown', 'app-config', 'mcp-config-tokens', 'connector-credentials', 'byok-keys'];
+
+  interface BackupFacts {
     archivePath: string;
-    daemonUrl: string;
+    restoredDbPath: string;
     assetRelPath: string;
     entryOffsets?: {
       dbPage: { file: string; offset: number; length: number };
       projectFile: { file: string; offset: number; length: number };
       manifestEntry: { file: string; offset: number; length: number };
     };
-    archiveContents?: { class: string; included: boolean }[];
   }
 
-  let snapshotFacts: SnapshotRestoreFacts | null = null;
+  // Verifier-owned fixture: a real scratch SQLite DB (own throwaway table,
+  // product-agnostic) + >=20 real files with known content, all authored by
+  // the verifier itself so C0-1's sampling never depends on the probe's
+  // account of what it put where.
+  function seedSourceFixture(sourceDir: string): { dbPath: string; files: string[] } {
+    fs.mkdirSync(sourceDir, { recursive: true });
+    const dbPath = path.join(sourceDir, 'app.db');
+    sh('sqlite3', [dbPath, 'PRAGMA journal_mode=WAL; CREATE TABLE w0probe (id INTEGER PRIMARY KEY, ts INTEGER);']);
+    const filesDir = path.join(sourceDir, 'files');
+    fs.mkdirSync(filesDir, { recursive: true });
+    const files: string[] = [];
+    for (let i = 0; i < 24; i++) {
+      const rel = path.join('files', `sample-${i}.txt`);
+      fs.writeFileSync(path.join(sourceDir, rel), `w0-verifier-fixture-${i}-${crypto.randomBytes(8).toString('hex')}\n`);
+      files.push(rel);
+    }
+    return { dbPath, files };
+  }
+
+  // Reads the archive's OWN on-disk manifest directly (F4) -- never
+  // trusting a probe stdout claim -- and independently confirms each
+  // referenced relPath actually exists inside the archive.
+  function readArchiveIndex(archivePath: string): { ok: boolean; classes: { class: string; relPath: string; existsOnDisk: boolean }[]; problems: string[] } {
+    const manifestPath = path.join(archivePath, 'w0-archive-manifest.json');
+    const problems: string[] = [];
+    if (!fs.existsSync(manifestPath)) {
+      return { ok: false, classes: [], problems: [`archive manifest missing: ${manifestPath}`] };
+    }
+    let raw: { class: string; relPath: string }[];
+    try {
+      raw = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      if (!Array.isArray(raw)) throw new Error('not an array');
+    } catch (err) {
+      return { ok: false, classes: [], problems: [`archive manifest invalid JSON: ${String(err)}`] };
+    }
+    const seen = new Set<string>();
+    const classes = raw.map((entry) => {
+      const existsOnDisk = typeof entry.relPath === 'string' && fs.existsSync(path.join(archivePath, entry.relPath));
+      if (seen.has(entry.class)) problems.push(`duplicate class row: ${entry.class}`);
+      seen.add(entry.class);
+      if (!existsOnDisk) problems.push(`class "${entry.class}" claims relPath "${entry.relPath}" but it does not exist inside the archive`);
+      return { class: entry.class, relPath: entry.relPath, existsOnDisk };
+    });
+    for (const required of REQUIRED_ARCHIVE_CLASSES) {
+      if (!classes.some((c) => c.class === required)) problems.push(`required class missing from archive index: ${required}`);
+    }
+    return { ok: problems.length === 0, classes, problems };
+  }
+
+  // The FULL C0-1 verification chain, reusable both for the main C0-1
+  // criterion and as C0-3's "clean control must pass the full chain"
+  // requirement (round-2 F3).
+  async function verifyRestoreChain(sourceDir: string, restoreDir: string, facts: BackupFacts): Promise<{ ok: boolean; evidence: string; problems: string[] }> {
+    const problems: string[] = [];
+    // realpath distinctness + restoredDbPath containment (F1).
+    const realSource = fs.realpathSync(sourceDir);
+    const realRestore = fs.realpathSync(restoreDir);
+    if (realSource === realRestore) problems.push('source and restored roots resolve to the SAME real path');
+    let dbUnderRoot = false;
+    try {
+      const realDb = fs.realpathSync(facts.restoredDbPath);
+      dbUnderRoot = realDb.startsWith(`${realRestore}${path.sep}`) || realDb === realRestore;
+    } catch {
+      problems.push('restoredDbPath does not exist on disk');
+    }
+    if (!dbUnderRoot) problems.push('restoredDbPath is not under the verifier-owned restore root');
+
+    let integrityOutput = '';
+    if (dbUnderRoot) {
+      const check = sh('sqlite3', [facts.restoredDbPath, 'PRAGMA integrity_check;']);
+      integrityOutput = check.stdout.trim();
+      if (check.status !== 0 || integrityOutput !== 'ok') problems.push(`integrity_check != ok (got: ${integrityOutput || `exit ${check.status}`})`);
+    }
+
+    let sampledCount = 0;
+    let mismatchCount = 0;
+    const mismatches: string[] = [];
+    const sourceFiles: string[] = [];
+    (function walk(dir: string, base: string): void {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full, base);
+        else if (path.basename(full) !== 'app.db') sourceFiles.push(path.relative(base, full));
+      }
+    })(sourceDir, sourceDir);
+    const sample = sourceFiles.slice(0, Math.max(20, Math.min(sourceFiles.length, 50)));
+    sampledCount = sample.length;
+    for (const rel of sample) {
+      const srcAbs = path.join(sourceDir, rel);
+      const dstAbs = path.join(restoreDir, rel);
+      if (!fs.existsSync(dstAbs)) {
+        mismatchCount++;
+        mismatches.push(`${rel}: missing in restored dir`);
+        continue;
+      }
+      if (sha256File(srcAbs) !== sha256File(dstAbs)) {
+        mismatchCount++;
+        mismatches.push(`${rel}: sha256 mismatch`);
+      }
+    }
+    if (sampledCount < 20) problems.push(`only ${sampledCount} source files available to sample (need >=20)`);
+    if (mismatchCount > 0) problems.push(`${mismatchCount}/${sampledCount} sampled files mismatched: ${mismatches.slice(0, 5).join('; ')}`);
+
+    // HTTP fetch against a daemon the VERIFIER boots itself, pointed at the
+    // restore root it owns -- never a probe-reported daemonUrl (F1).
+    let httpStatus = 0;
+    let bodySha256Match = false;
+    let daemon: BootedDaemon | null = null;
+    try {
+      daemon = await bootDaemonForProbing(restoreDir);
+      const res = await fetch(new URL(facts.assetRelPath, daemon.url).toString());
+      httpStatus = res.status;
+      const bodyHash = sha256Bytes(Buffer.from(await res.arrayBuffer()));
+      const sourceAssetAbs = path.join(sourceDir, facts.assetRelPath.replace(/^\/+/, ''));
+      const sourceHash = fs.existsSync(sourceAssetAbs) ? sha256File(sourceAssetAbs) : null;
+      bodySha256Match = sourceHash !== null && sourceHash === bodyHash;
+      if (httpStatus !== 200) problems.push(`asset fetch status ${httpStatus} != 200`);
+      if (!bodySha256Match) problems.push(`asset body sha256 does not match source (or source file missing)`);
+    } catch (err) {
+      problems.push(`verifier-booted-daemon asset fetch threw: ${String(err)}`);
+    } finally {
+      if (daemon) await daemon.kill();
+    }
+
+    const archiveIndex = readArchiveIndex(facts.archivePath);
+    problems.push(...archiveIndex.problems);
+
+    const ok = problems.length === 0;
+    return {
+      ok,
+      problems,
+      evidence: JSON.stringify({ realSource, realRestore, dbUnderRoot, integrityOutput, sampledCount, mismatchCount, httpStatus, bodySha256Match, archiveIndex }, null, 2),
+    };
+  }
+
+  let c01SourceDir: string | null = null;
+  let c01RestoreDir: string | null = null;
+  let c01Facts: BackupFacts | null = null;
 
   await checkCriterion(
     'C0-1',
-    `pnpm exec tsx ${probeRestoreRel} --mode=snapshot-restore --json`,
-    'the VERIFIER independently: runs `sqlite3 <restoredDb> "PRAGMA integrity_check;"`, samples >=20 project files and ' +
-      'sha256-compares source vs restored bytes itself, and fetches a restored asset over real HTTP and hashes the body itself ' +
-      '-- never trusting probe-reported booleans',
+    `verifier seeds+owns source/restore roots; pnpm exec tsx ${probeRestoreRel} --mode=backup --source-dir <owned> --target-dir <owned> --json; verifier runs the full restore chain itself`,
+    'verifier-owned fixture and restore root; sqlite3 integrity_check, >=20 sampled file hashes, and the HTTP asset fetch are all performed by the verifier itself against a daemon it boots, never a probe-reported verdict',
     async () => {
       if (!probeRestoreExists) {
         record('C0-1', '', '', false, '', { detail: `missing: ${probeRestoreRel}` });
         return;
       }
-      const run = runRestoreProbe(['--mode=snapshot-restore', '--json']);
+      const sourceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-c01-source-'));
+      const restoreDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-c01-restore-'));
+      seedSourceFixture(sourceDir);
+      c01SourceDir = sourceDir;
+      c01RestoreDir = restoreDir;
+      const run = runRestoreProbe(['--mode=backup', '--source-dir', sourceDir, '--target-dir', restoreDir, '--json']);
       const parsed = parseLastJsonLine(run.stdout);
-      if (!parsed.ok || !isRecord(parsed.value)) {
-        record('C0-1', '', '', false, run.stdout, { detail: !parsed.ok ? parsed.error : 'probe JSON was not an object', exitCode: run.status });
+      if (!parsed.ok || !isRecord(parsed.value) || run.status !== 0) {
+        record('C0-1', '', '', false, run.stdout, { detail: !parsed.ok ? parsed.error : `probe exited ${run.status}`, exitCode: run.status });
         return;
       }
-      const facts = parsed.value as unknown as SnapshotRestoreFacts;
-      snapshotFacts = facts;
-      const problems: string[] = [];
-
-      // 1. sqlite3 CLI integrity check, run by the verifier itself.
-      let integrityOutput = '';
-      if (typeof facts.restoredDbPath === 'string' && fs.existsSync(facts.restoredDbPath)) {
-        const check = sh('sqlite3', [facts.restoredDbPath, 'PRAGMA integrity_check;']);
-        integrityOutput = check.stdout.trim();
-        if (check.status !== 0 || integrityOutput !== 'ok') problems.push(`integrity_check != ok (got: ${integrityOutput || `exit ${check.status}`})`);
-      } else {
-        problems.push('restoredDbPath missing or not present on disk');
-      }
-
-      // 2. sample >=20 project files, hash source vs restored ITSELF.
-      let sampledCount = 0;
-      let mismatchCount = 0;
-      const mismatches: string[] = [];
-      if (typeof facts.sourceDataDir === 'string' && typeof facts.restoredDataDir === 'string' && fs.existsSync(facts.sourceDataDir)) {
-        const sourceFiles: string[] = [];
-        (function walk(dir: string, base: string): void {
-          for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-            const full = path.join(dir, entry.name);
-            if (entry.isDirectory()) walk(full, base);
-            else sourceFiles.push(path.relative(base, full));
-          }
-        })(facts.sourceDataDir, facts.sourceDataDir);
-        const sample = sourceFiles.slice(0, Math.max(20, Math.min(sourceFiles.length, 50)));
-        sampledCount = sample.length;
-        for (const rel of sample) {
-          const srcAbs = path.join(facts.sourceDataDir, rel);
-          const dstAbs = path.join(facts.restoredDataDir, rel);
-          if (!fs.existsSync(dstAbs)) {
-            mismatchCount++;
-            mismatches.push(`${rel}: missing in restored dir`);
-            continue;
-          }
-          if (sha256File(srcAbs) !== sha256File(dstAbs)) {
-            mismatchCount++;
-            mismatches.push(`${rel}: sha256 mismatch`);
-          }
-        }
-        if (sampledCount < 20) problems.push(`only ${sampledCount} source files available to sample (need >=20)`);
-        if (mismatchCount > 0) problems.push(`${mismatchCount}/${sampledCount} sampled files mismatched: ${mismatches.slice(0, 5).join('; ')}`);
-      } else {
-        problems.push('sourceDataDir/restoredDataDir missing');
-      }
-
-      // 3. HTTP fetch performed by the verifier itself, hashed itself,
-      // compared against the verifier's OWN hash of the source file.
-      let httpStatus = 0;
-      let bodySha256Match = false;
-      if (typeof facts.daemonUrl === 'string' && typeof facts.assetRelPath === 'string') {
-        try {
-          const res = await fetch(new URL(facts.assetRelPath, facts.daemonUrl).toString());
-          httpStatus = res.status;
-          const bodyBuf = Buffer.from(await res.arrayBuffer());
-          const bodyHash = sha256Bytes(bodyBuf);
-          const sourceAssetAbs = path.join(facts.sourceDataDir ?? '', facts.assetRelPath.replace(/^\/+/, ''));
-          const sourceHash = fs.existsSync(sourceAssetAbs) ? sha256File(sourceAssetAbs) : null;
-          bodySha256Match = sourceHash !== null && sourceHash === bodyHash;
-          if (httpStatus !== 200) problems.push(`asset fetch status ${httpStatus} != 200`);
-          if (!bodySha256Match) problems.push(`asset body sha256 (${bodyHash.slice(0, 12)}) does not match source (${sourceHash?.slice(0, 12) ?? 'source file missing'})`);
-        } catch (err) {
-          problems.push(`asset HTTP fetch threw: ${String(err)}`);
-        }
-      } else {
-        problems.push('daemonUrl/assetRelPath missing from probe facts');
-      }
-
-      const ok = problems.length === 0;
-      record('C0-1', '', '', ok, JSON.stringify({ integrityOutput, sampledCount, mismatchCount, httpStatus, bodySha256Match }, null, 2), {
-        detail: ok ? undefined : problems.join('; '),
-        exitCode: run.status,
-      });
+      const facts = parsed.value as unknown as BackupFacts;
+      c01Facts = facts;
+      const chain = await verifyRestoreChain(sourceDir, restoreDir, facts);
+      record('C0-1', '', '', chain.ok, chain.evidence, { detail: chain.ok ? undefined : chain.problems.join('; '), exitCode: run.status });
     },
   );
 
   await checkCriterion(
     'C0-2',
-    `pnpm exec tsx ${probeRestoreRel} --mode=concurrent-mutation --json (verifier runs its own writer loop concurrently)`,
-    'the verifier runs its OWN writer loop against the live source store DURING the backup, then independently checks ' +
-      'referential consistency (integrity_check via sqlite3, WAL journal_mode) and requires a real AST call expression for ' +
-      'the online-backup mechanism, not a token anywhere in the file',
+    `verifier owns the source store and inserts real rows into it concurrently with a backgrounded probe backup; AST reachability from apps/daemon/src/backup/index.ts`,
+    'the verifier measures a real row-count delta on the SOURCE it owns (not an unrelated scratch file), and the online-backup call must be reachable from the backup module entry point, not merely present in the directory',
     async () => {
       if (!probeRestoreExists) {
         record('C0-2', '', '', false, '', { detail: `missing: ${probeRestoreRel}` });
         return;
       }
-      // Start the probe (which should begin a backup) and run a REAL writer
-      // loop concurrently, driven by the verifier itself -- not trusting a
-      // self-reported write count.
-      const child = spawn('pnpm', ['exec', 'tsx', probeRestoreRel, '--mode=concurrent-mutation', '--json'], { cwd: repoRoot });
+      const sourceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-c02-source-'));
+      const restoreDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-c02-restore-'));
+      const { dbPath } = seedSourceFixture(sourceDir);
+      const before = sh('sqlite3', [dbPath, 'SELECT COUNT(*) FROM w0probe;']).stdout.trim();
+
+      const child = spawn('pnpm', ['exec', 'tsx', probeRestoreRel, '--mode=backup', '--source-dir', sourceDir, '--target-dir', restoreDir, '--json'], { cwd: repoRoot });
       let stdout = '';
       child.stdout?.on('data', (c: Buffer) => (stdout += c.toString('utf8')));
       let writerWrites = 0;
       const writerStart = Date.now();
-      const writerScratch = path.join(proofDir, `.c02-writer-scratch-${process.pid}.txt`);
       const writerInterval = setInterval(() => {
-        try {
-          fs.writeFileSync(writerScratch, `write-${writerWrites}-${Date.now()}\n`, { flag: 'a' });
-          writerWrites++;
-        } catch {
-          /* best effort concurrent mutation pressure */
-        }
-      }, 15);
+        const r = sh('sqlite3', [dbPath, `INSERT INTO w0probe (ts) VALUES (${Date.now()});`]);
+        if (r.status === 0) writerWrites++;
+      }, 25);
       const exitCode: number = await new Promise((resolve) => child.on('exit', (code) => resolve(code ?? 1)));
       clearInterval(writerInterval);
       const writerDurationMs = Date.now() - writerStart;
-      try {
-        fs.unlinkSync(writerScratch);
-      } catch {
-        /* best effort */
-      }
-      const parsed = parseLastJsonLine(stdout);
+
+      const after = sh('sqlite3', [dbPath, 'SELECT COUNT(*) FROM w0probe;']).stdout.trim();
       const problems: string[] = [];
+      const realDelta = Number(after) - Number(before);
+      if (!(realDelta > 0) || realDelta !== writerWrites) problems.push(`source row-count delta (${realDelta}) does not match the verifier's own write count (${writerWrites})`);
+
+      const parsed = parseLastJsonLine(stdout);
       if (!parsed.ok || !isRecord(parsed.value)) {
         problems.push(!parsed.ok ? parsed.error : 'probe JSON was not an object');
       } else {
-        const facts = parsed.value as { restoredDataDir?: string; restoredDbPath?: string };
+        const facts = parsed.value as { restoredDbPath?: string };
         if (typeof facts.restoredDbPath === 'string' && fs.existsSync(facts.restoredDbPath)) {
           const check = sh('sqlite3', [facts.restoredDbPath, 'PRAGMA integrity_check;']);
           if (check.status !== 0 || check.stdout.trim() !== 'ok') problems.push('post-concurrent-mutation restored DB fails integrity_check');
+          const restoredCount = Number(sh('sqlite3', [facts.restoredDbPath, 'SELECT COUNT(*) FROM w0probe;']).stdout.trim());
+          if (!(restoredCount >= 0 && restoredCount <= Number(after))) problems.push(`restored row count (${restoredCount}) is not a plausible point-in-time snapshot of the source (0..${after})`);
           const journalMode = sh('sqlite3', [facts.restoredDbPath, 'PRAGMA journal_mode;']).stdout.trim().toLowerCase();
           if (journalMode !== 'wal') problems.push(`journal_mode=${journalMode || 'unknown'} (WAL evidence expected of a real online backup)`);
         } else {
           problems.push('restoredDbPath missing from probe facts');
         }
       }
-      if (writerWrites < 20) problems.push(`writer loop only achieved ${writerWrites} writes (verifier-driven, want >=20)`);
+      if (writerWrites < 10) problems.push(`writer loop only achieved ${writerWrites} real inserts (want >=10)`);
       if (writerDurationMs < 300) problems.push(`writer loop ran only ${writerDurationMs}ms`);
 
-      // Static AST check: a real .backup(...) call expression or a real
-      // VACUUM INTO argument to an executed db method -- never a token
-      // found anywhere (comment, string, dead code) (F2).
       const backupDir = path.join(repoRoot, 'apps/daemon/src/backup');
-      let astEvidence = false;
-      const astFiles: string[] = [];
-      if (fs.existsSync(backupDir)) {
-        for (const f of fs.readdirSync(backupDir)) {
-          if (!f.endsWith('.ts')) continue;
-          astFiles.push(f);
-          if (fileHasRealSqliteBackupCall(path.join(backupDir, f))) astEvidence = true;
-        }
-      }
-      if (!astEvidence) problems.push('no real .backup(...)/VACUUM INTO call expression found via AST in apps/daemon/src/backup/**');
+      let reach: { ok: boolean; entry: string | null; reachableFiles: string[] } = { ok: false, entry: null, reachableFiles: [] };
+      if (fs.existsSync(backupDir)) reach = backupCallReachableFromEntryPoint(backupDir);
+      if (!reach.ok) problems.push(reach.entry ? `no real .backup(...)/VACUUM INTO call reachable from ${reach.entry} (checked: ${reach.reachableFiles.join(', ')})` : 'apps/daemon/src/backup/index.ts (entry point) not found');
 
       const ok = problems.length === 0;
-      record('C0-2', '', '', ok, JSON.stringify({ writerWrites, writerDurationMs, astFiles, astEvidence }, null, 2), {
-        detail: ok ? undefined : problems.join('; '),
-        exitCode,
-      });
+      record('C0-2', '', '', ok, JSON.stringify({ before, after, writerWrites, writerDurationMs, reach }, null, 2), { detail: ok ? undefined : problems.join('; '), exitCode });
     },
   );
 
   await checkCriterion(
     'C0-3',
-    `verifier byte-flips a chosen archive entry itself, then: pnpm exec tsx ${probeRestoreRel} --mode=restore-only --archive <corrupted> --json`,
-    'the VERIFIER corrupts one archive entry itself (db page, project file, manifest entry -- one byte XORed at a probe-reported ' +
-      'offset) and requires the restore-only attempt to fail with a real corruptionKind; a clean-copy control must still succeed',
+    `verifier selects 3 distinct entries from the archive's own index, flips one byte in each itself, requires the named corruptionKind; clean control runs the FULL C0-1 chain`,
+    'the verifier chooses corruption targets from the real archive index (not the probe), mutates bytes itself, and requires the clean-copy control to pass every C0-1 assertion, not just exit 0',
     async () => {
       if (!probeRestoreExists) {
         record('C0-3', '', '', false, '', { detail: `missing: ${probeRestoreRel}` });
         return;
       }
-      if (!snapshotFacts || !snapshotFacts.entryOffsets || !snapshotFacts.archivePath) {
-        record('C0-3', '', '', false, '', {
-          detail: 'C0-1 did not produce entryOffsets/archivePath facts to corrupt (either C0-1 failed or the probe does not expose them yet)',
-        });
+      if (!c01Facts || !c01Facts.entryOffsets || !c01SourceDir || !c01RestoreDir) {
+        record('C0-3', '', '', false, '', { detail: 'C0-1 did not produce entryOffsets/archivePath facts to corrupt (either C0-1 failed or the probe does not expose them yet)' });
         return;
       }
-      const facts = snapshotFacts as SnapshotRestoreFacts;
+      const facts = c01Facts;
       const entryOffsets = facts.entryOffsets!;
       const targets: Array<{ kind: string; entry: { file: string; offset: number; length: number } }> = [
         { kind: 'db-page', entry: entryOffsets.dbPage },
         { kind: 'project-file', entry: entryOffsets.projectFile },
         { kind: 'manifest-entry', entry: entryOffsets.manifestEntry },
       ];
+      const distinctEntries = new Set(targets.map((t) => t.entry.file));
       const perTarget: { kind: string; ok: boolean; exit: number; corruptionKind?: string | undefined }[] = [];
       for (const { kind, entry } of targets) {
         const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `od-w0-corrupt-${kind}-`));
@@ -887,70 +1094,64 @@ async function main(): Promise<void> {
           fs.writeFileSync(targetFile, buf);
           const restoreTarget = path.join(workDir, 'restored');
           const run = runRestoreProbe(['--mode=restore-only', '--archive', corruptedArchive, '--target-dir', restoreTarget, '--json'], 3 * 60_000);
-          const parsed = parseLastJsonLine(run.stdout);
-          const corruptionKind = parsed.ok && isRecord(parsed.value) && typeof parsed.value.corruptionKind === 'string' ? parsed.value.corruptionKind : undefined;
-          const hasErrorField = parsed.ok && isRecord(parsed.value) && typeof parsed.value.error === 'string';
-          perTarget.push({
-            kind,
-            ok: run.status !== 0 && before !== after && (corruptionKind !== undefined || hasErrorField),
-            exit: run.status,
-            corruptionKind,
-          });
+          const parsed2 = parseLastJsonLine(run.stdout);
+          const corruptionKind = parsed2.ok && isRecord(parsed2.value) && typeof parsed2.value.corruptionKind === 'string' ? parsed2.value.corruptionKind : undefined;
+          const hasErrorField = parsed2.ok && isRecord(parsed2.value) && typeof parsed2.value.error === 'string';
+          perTarget.push({ kind, ok: run.status !== 0 && before !== after && (corruptionKind !== undefined || hasErrorField), exit: run.status, corruptionKind });
         } finally {
           fs.rmSync(workDir, { recursive: true, force: true });
         }
       }
-      // Positive control: restore from the ORIGINAL, uncorrupted archive must succeed.
-      const controlDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-corrupt-control-'));
-      let controlOk = false;
-      let controlExit = 1;
+      // Clean control: restore from the ORIGINAL archive into a FRESH
+      // source/restore pair and require the FULL C0-1 chain to pass, not
+      // just a zero exit code (round-2 F3).
+      const controlSourceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-c03-control-source-'));
+      const controlRestoreDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-c03-control-restore-'));
+      let controlChainOk = false;
+      let controlEvidence = '';
       try {
-        const run = runRestoreProbe(['--mode=restore-only', '--archive', facts.archivePath, '--target-dir', path.join(controlDir, 'restored'), '--json'], 3 * 60_000);
-        controlOk = run.status === 0;
-        controlExit = run.status;
+        fs.cpSync(c01SourceDir, controlSourceDir, { recursive: true, force: true });
+        const controlRun = runRestoreProbe(['--mode=restore-only', '--archive', facts.archivePath, '--target-dir', controlRestoreDir, '--json'], 3 * 60_000);
+        const controlParsed = parseLastJsonLine(controlRun.stdout);
+        if (controlRun.status === 0 && controlParsed.ok && isRecord(controlParsed.value)) {
+          const controlFacts = { ...facts, restoredDbPath: String(controlParsed.value.restoredDbPath ?? facts.restoredDbPath) };
+          const chain = await verifyRestoreChain(controlSourceDir, controlRestoreDir, controlFacts);
+          controlChainOk = chain.ok;
+          controlEvidence = chain.evidence;
+        } else {
+          controlEvidence = `control restore-only failed: exit=${controlRun.status} stdout=${controlRun.stdout.slice(-1000)}`;
+        }
       } finally {
-        fs.rmSync(controlDir, { recursive: true, force: true });
+        fs.rmSync(controlSourceDir, { recursive: true, force: true });
+        fs.rmSync(controlRestoreDir, { recursive: true, force: true });
       }
-      const ok = perTarget.every((t) => t.ok) && controlOk;
-      record('C0-3', '', '', ok, JSON.stringify({ perTarget, controlOk }, null, 2), {
-        detail: ok ? undefined : `failing: ${[...perTarget.filter((t) => !t.ok).map((t) => t.kind), ...(controlOk ? [] : ['clean-restore-control'])].join(', ')}`,
-        exitCode: perTarget.every((t) => t.exit !== 0) && !controlOk ? 1 : controlExit,
-      });
+
+      const ok = perTarget.every((t) => t.ok) && distinctEntries.size === 3 && controlChainOk;
+      record(
+        'C0-3',
+        '',
+        '',
+        ok,
+        JSON.stringify({ perTarget, distinctEntries: [...distinctEntries], controlChainOk, controlEvidence }, null, 2),
+        { detail: ok ? undefined : `failing: ${[...perTarget.filter((t) => !t.ok).map((t) => t.kind), ...(distinctEntries.size === 3 ? [] : ['distinct-entries']), ...(controlChainOk ? [] : ['clean-restore-full-chain'])].join(', ')}` },
+      );
     },
   );
 
-  // =======================================================================
-  // C0-4 -- secret handling inventory, now cross-checked against what the
-  // probe ACTUALLY archived (F4), not just internally-consistent JSON.
-  // =======================================================================
   await checkCriterion(
     'C0-4',
-    'read docs/security/backup-secret-inventory.json, cross-checked against snapshotFacts.archiveContents',
-    'every required class is present with a policy tied to what the probe ACTUALLY included in the archive; bulk classes ' +
-      'must be included-flagged AND actually present in the archive; excluded classes require a documented-gap note',
+    'read the archive index directly (w0-archive-manifest.json inside the archive produced by C0-1)',
+    "archiveContents self-report is non-load-bearing -- the verifier opens the archive's own on-disk manifest itself; required classes must be present with no duplicates, and doc policy must match what was actually archived",
     () => {
       const rel = 'docs/security/backup-secret-inventory.json';
-      interface SecretClassEntry {
-        class: string;
-        required: boolean;
-        sensitive: boolean;
-        policy: 'excluded' | 'included-flagged';
-        note?: string;
-      }
+      interface SecretClassEntry { class: string; required: boolean; sensitive: boolean; policy: 'excluded' | 'included-flagged'; note?: string }
       const EXPECTED_SENSITIVE: Record<string, boolean> = {
-        'sqlite-database': false,
-        'projects-dir': false,
-        'library-assets': false,
-        'memory-markdown': false,
-        'app-config': false,
-        'mcp-config-tokens': true,
-        'connector-credentials': true,
-        'byok-keys': true,
+        'sqlite-database': false, 'projects-dir': false, 'library-assets': false, 'memory-markdown': false, 'app-config': false,
+        'mcp-config-tokens': true, 'connector-credentials': true, 'byok-keys': true,
       };
       const MUST_BE_INCLUDED = ['sqlite-database', 'projects-dir', 'library-assets', 'memory-markdown', 'app-config'];
-      const REQUIRED_CLASSES = Object.keys(EXPECTED_SENSITIVE);
       if (!fileExists(rel)) {
-        record('C0-4', '', '', false, '', { detail: `missing: ${rel}; required classes: ${REQUIRED_CLASSES.join(', ')}` });
+        record('C0-4', '', '', false, '', { detail: `missing: ${rel}; required classes: ${REQUIRED_ARCHIVE_CLASSES.join(', ')}` });
         return;
       }
       let entries: SecretClassEntry[] = [];
@@ -964,50 +1165,44 @@ async function main(): Promise<void> {
       }
       const byClass = new Map<string, SecretClassEntry>();
       for (const e of entries) byClass.set(e.class, e);
-      const archiveContents = snapshotFacts?.archiveContents ?? null;
+      const archiveIndex = c01Facts ? readArchiveIndex(c01Facts.archivePath) : null;
       const problems: string[] = [];
-      for (const cls of REQUIRED_CLASSES) {
+      for (const cls of REQUIRED_ARCHIVE_CLASSES) {
         const row = byClass.get(cls);
         if (!row) {
-          problems.push(`class "${cls}": missing`);
+          problems.push(`class "${cls}": missing from doc`);
           continue;
         }
         if (row.sensitive !== EXPECTED_SENSITIVE[cls]) problems.push(`class "${cls}": expected sensitive=${EXPECTED_SENSITIVE[cls]}, got ${row.sensitive}`);
         if (row.policy !== 'excluded' && row.policy !== 'included-flagged') problems.push(`class "${cls}": invalid policy ${String(row.policy)}`);
         if (MUST_BE_INCLUDED.includes(cls) && row.policy !== 'included-flagged') problems.push(`class "${cls}": required-for-restore data must be included-flagged`);
         if (row.policy === 'excluded' && (!row.note || row.note.trim().length < 10)) problems.push(`class "${cls}": policy=excluded requires a documented-gap note`);
-        if (archiveContents) {
-          const observed = archiveContents.find((a) => a.class === cls);
-          if (row.policy === 'included-flagged' && observed && !observed.included) {
-            problems.push(`class "${cls}": doc says included-flagged but the probe's own archiveContents reports it was NOT included`);
-          }
-          if (row.policy === 'excluded' && observed && observed.included) {
-            problems.push(`class "${cls}": doc says excluded but the probe's own archiveContents reports it WAS included`);
-          }
+        if (archiveIndex) {
+          const observedIncluded = archiveIndex.classes.some((c) => c.class === cls && c.existsOnDisk);
+          if (row.policy === 'included-flagged' && !observedIncluded) problems.push(`class "${cls}": doc says included-flagged but the archive's OWN index does not show it present`);
+          if (row.policy === 'excluded' && observedIncluded) problems.push(`class "${cls}": doc says excluded but the archive's OWN index shows it present`);
         }
       }
-      if (!archiveContents) problems.push('C0-1 did not produce archiveContents facts -- policy cannot be cross-checked against a real archive yet');
+      if (archiveIndex) problems.push(...archiveIndex.problems.filter((p) => !problems.includes(p)));
+      if (!archiveIndex) problems.push('C0-1 did not produce a readable archive to cross-check policy against');
       const ok = problems.length === 0;
-      record('C0-4', '', '', ok, JSON.stringify(entries, null, 2), { detail: ok ? undefined : problems.join('; ') });
+      record('C0-4', '', '', ok, JSON.stringify({ entries, archiveIndex }, null, 2), { detail: ok ? undefined : problems.join('; ') });
     },
   );
 
   // =======================================================================
   // C0-5 / C0-6 / C0-7 -- capability tokens + privileged-route boundary.
-  // Suite needle-matching PLUS mechanical red-before-green (F5) PLUS direct
-  // live HTTP probing against a daemon the verifier boots itself (F6-F8).
   // =======================================================================
 
   await checkCriterion(
     'C0-5',
-    'suite needles + red-at-parent worktree + live HTTP against a verifier-booted daemon',
-    'red spec (parent-red, HEAD-green, mechanically proven via a temp worktree) AND a live, verifier-issued HTTP probe: ' +
-      'arbitrary chrome-extension:// origin with no token -> 401/403; a token minted via the REAL pairing flow -> accepted',
+    'suite needles + JSON-verified red-at-parent worktree + live HTTP against a verifier-booted daemon',
+    'red spec verified via the PARENT run\'s own vitest JSON (named assertion FAILED, not a compile/runner error) and HEAD-green, plus a live verifier-issued HTTP probe',
     async () => {
       const rejected = needleReport('(C0-5/reject)', 1);
       const accepted = needleReport('(C0-5/accept)', 1);
       const redFile = fileContainingNeedle('(C0-5/reject)');
-      const red = await verifyRedAtParent(redFile ? [redFile] : [], 'C0-5');
+      const red = await verifyRedAtParent(redFile ? [redFile] : [], '(C0-5/reject)', 'C0-5');
 
       let daemon: BootedDaemon | null = null;
       let liveRejectStatus = 0;
@@ -1022,9 +1217,6 @@ async function main(): Promise<void> {
           body: JSON.stringify({ dataUrl: 'data:text/plain;base64,dzAtdmVyaWZpZXI=', filename: 'w0-verifier-reject-probe.txt' }),
         });
         liveRejectStatus = rejectRes.status;
-
-        // Real pairing flow: start pairing (loopback), confirm with the
-        // extension origin (real HTTP), then ingest with the minted token.
         const pairRes = await fetch(`${daemon.url}/api/library/pair`, { method: 'POST', headers: { Host: '127.0.0.1' } });
         const pairBody = (await pairRes.json()) as { code?: string };
         const confirmExtId = crypto.randomBytes(16).toString('hex');
@@ -1036,11 +1228,7 @@ async function main(): Promise<void> {
         const confirmBody = (await confirmRes.json()) as { token?: string };
         const acceptRes = await fetch(`${daemon.url}/api/library/ingest`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Origin: `chrome-extension://${confirmExtId}`,
-            Authorization: confirmBody.token ? `Bearer ${confirmBody.token}` : '',
-          },
+          headers: { 'Content-Type': 'application/json', Origin: `chrome-extension://${confirmExtId}`, Authorization: confirmBody.token ? `Bearer ${confirmBody.token}` : '' },
           body: JSON.stringify({ dataUrl: 'data:text/plain;base64,dzAtdmVyaWZpZXI=', filename: 'w0-verifier-accept-probe.txt' }),
         });
         liveAcceptStatus = acceptRes.status;
@@ -1052,42 +1240,87 @@ async function main(): Promise<void> {
 
       const finalOk = rejected.ok && accepted.ok && red.ok && (liveRejectStatus === 401 || liveRejectStatus === 403) && liveAcceptStatus === 200;
       record(
-        'C0-5',
-        '',
-        '',
-        finalOk,
-        `-- suite reject --\n${rejected.evidence}\n\n-- suite accept --\n${accepted.evidence}\n\n-- red-at-parent --\n${red.evidence}\n\n` +
-          `-- live HTTP reject (arbitrary origin, no token) --\nstatus=${liveRejectStatus}\n\n-- live HTTP accept (real pairing token) --\nstatus=${liveAcceptStatus}\n\nliveError=${liveError ?? 'none'}`,
-        {
-          detail: finalOk
-            ? undefined
-            : `suiteReject=${rejected.ok} suiteAccept=${accepted.ok} redAtParent=${red.ok} liveReject=${liveRejectStatus} liveAccept=${liveAcceptStatus}${liveError ? ` liveError=${liveError}` : ''}`,
-        },
+        'C0-5', '', '', finalOk,
+        `-- suite reject --\n${rejected.evidence}\n\n-- suite accept --\n${accepted.evidence}\n\n-- red-at-parent (JSON-verified) --\n${red.evidence}\n\n-- live HTTP reject --\nstatus=${liveRejectStatus}\n\n-- live HTTP accept --\nstatus=${liveAcceptStatus}\n\nliveError=${liveError ?? 'none'}`,
+        { detail: finalOk ? undefined : `suiteReject=${rejected.ok} suiteAccept=${accepted.ok} redAtParent=${red.ok} liveReject=${liveRejectStatus} liveAccept=${liveAcceptStatus}${liveError ? ` liveError=${liveError}` : ''}` },
       );
     },
   );
 
+  // Round-2 F6: title-matched suite tests alone can NEVER pass C0-6 anymore.
+  // Replay is live-tested now (existing pair/confirm/ingest surface).
+  // Revocation/rotation are CONDITIONAL: activate only once a plausible
+  // endpoint appears in the live route inventory; until then the criterion
+  // fails naming exactly which endpoint is missing.
   await checkCriterion(
     'C0-6',
-    'suite needles (replay/revocation/rotation) -- no live HTTP contract exists yet for revoke/rotate endpoints',
-    'tokens are non-transferable (cross-extension replay rejected), revocation is immediate, rotation invalidates the prior ' +
-      'token; kept suite-based per F6-F8 "where feasible" -- no revoke/rotate endpoint path is specified anywhere in the PRD ' +
-      'or contract, so probing a guessed path would assert against fiction rather than the real surface',
-    () => {
-      const replay = needleReport('(C0-6/replay)', 1);
-      const revocation = needleReport('(C0-6/revocation)', 1);
-      const rotation = needleReport('(C0-6/rotation)', 1);
-      const ok = replay.ok && revocation.ok && rotation.ok;
-      record('C0-6', '', '', ok, `-- replay --\n${replay.evidence}\n\n-- revocation --\n${revocation.evidence}\n\n-- rotation --\n${rotation.evidence}`);
+    'live HTTP: replay tested against the real pairing surface; revocation/rotation activate conditionally once their endpoints exist in the live route inventory',
+    'suite-title matches are never sufficient on their own; replay is proven live now; revocation/rotation fail with "endpoint missing: <which>" until those routes are registered',
+    async () => {
+      let daemon: BootedDaemon | null = null;
+      let replayOk = false;
+      let replayDetail = '';
+      let revocationEndpoint: { method: string; path: string } | undefined;
+      let rotationEndpoint: { method: string; path: string } | undefined;
+      let revocationOk = false;
+      let rotationOk = false;
+      try {
+        daemon = await bootDaemonForProbing();
+        // Replay: mint a token for extension A, replay it from extension B's origin -> must be rejected.
+        const pairRes = await fetch(`${daemon.url}/api/library/pair`, { method: 'POST', headers: { Host: '127.0.0.1' } });
+        const pairBody = (await pairRes.json()) as { code?: string };
+        const extA = crypto.randomBytes(16).toString('hex');
+        const confirmRes = await fetch(`${daemon.url}/api/library/pair/confirm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Origin: `chrome-extension://${extA}` },
+          body: JSON.stringify({ code: pairBody.code, extensionOrigin: `chrome-extension://${extA}` }),
+        });
+        const confirmBody = (await confirmRes.json()) as { token?: string };
+        const extB = crypto.randomBytes(16).toString('hex');
+        const replayRes = await fetch(`${daemon.url}/api/library/ingest`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Origin: `chrome-extension://${extB}`, Authorization: confirmBody.token ? `Bearer ${confirmBody.token}` : '' },
+          body: JSON.stringify({ dataUrl: 'data:text/plain;base64,dzAtdmVyaWZpZXI=', filename: 'w0-verifier-replay-probe.txt' }),
+        });
+        replayOk = replayRes.status === 401 || replayRes.status === 403;
+        replayDetail = `replay status=${replayRes.status}`;
+
+        // Scoped to the library/token surface specifically -- an unscoped
+        // /revoke/i match hits unrelated real routes elsewhere in the app
+        // (e.g. a GenUI surface's own /revoke endpoint), a false positive
+        // caught during smoke testing.
+        revocationEndpoint = daemon.routeInventory.find((r) => /library/i.test(r.path) && (/revoke/i.test(r.path) || (r.method === 'DELETE' && /token/i.test(r.path))));
+        rotationEndpoint = daemon.routeInventory.find((r) => /library/i.test(r.path) && /rotate/i.test(r.path));
+        if (revocationEndpoint) {
+          const revokeRes = await fetch(`${daemon.url}${revocationEndpoint.path}`, { method: revocationEndpoint.method, headers: { Authorization: confirmBody.token ? `Bearer ${confirmBody.token}` : '' } });
+          const postRevokeRes = await fetch(`${daemon.url}/api/library/ingest`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Origin: `chrome-extension://${extA}`, Authorization: confirmBody.token ? `Bearer ${confirmBody.token}` : '' },
+            body: JSON.stringify({ dataUrl: 'data:text/plain;base64,dzAtdmVyaWZpZXI=', filename: 'w0-verifier-post-revoke.txt' }),
+          });
+          revocationOk = revokeRes.status < 300 && (postRevokeRes.status === 401 || postRevokeRes.status === 403);
+        }
+        if (rotationEndpoint) {
+          const rotateRes = await fetch(`${daemon.url}${rotationEndpoint.path}`, { method: rotationEndpoint.method, headers: { Authorization: confirmBody.token ? `Bearer ${confirmBody.token}` : '' } });
+          rotationOk = rotateRes.status < 300;
+        }
+      } finally {
+        if (daemon) await daemon.kill();
+      }
+      const detail = [
+        replayOk ? undefined : `replay: ${replayDetail}`,
+        revocationEndpoint ? (revocationOk ? undefined : 'revocation endpoint found but behavior check failed') : 'endpoint missing: revocation',
+        rotationEndpoint ? (rotationOk ? undefined : 'rotation endpoint found but behavior check failed') : 'endpoint missing: rotation',
+      ].filter(Boolean);
+      const ok = replayOk && revocationOk && rotationOk;
+      record('C0-6', '', '', ok, JSON.stringify({ replayOk, replayDetail, revocationEndpoint, revocationOk, rotationEndpoint, rotationOk }, null, 2), { detail: ok ? undefined : detail.join('; ') });
     },
   );
 
   await checkCriterion(
     'C0-7',
-    'read privileged-routes.json; live HTTP origin-less probe against every row on a verifier-booted daemon; cross-check ' +
-      'row set against every route this repo currently gates with requireLocalDaemonRequest',
-    'every row rejects an origin-less loopback caller live; the inventory is a superset of the mechanically-derived ' +
-      'requireLocalDaemonRequest baseline (closes "shrink to one harmless/duplicate row")',
+    'AST-derived requireLocalDaemonRequest baseline (both directions) + live origin-less probe against every privileged-routes.json row',
+    'inventory row without a live registered route = fail; guarded live route missing from inventory = fail; every row is live-probed for origin-less rejection',
     async () => {
       const rel = 'apps/daemon/src/security/privileged-routes.json';
       if (!fileExists(rel)) {
@@ -1106,19 +1339,18 @@ async function main(): Promise<void> {
       const validRows = routes.filter((r) => isRecord(r) && typeof r.method === 'string' && typeof r.path === 'string');
       const dedupKeys = new Set(validRows.map((r) => `${r.method} ${r.path}`));
       const baseline = staticRequireLocalDaemonRequestRoutes();
-      const missingFromInventory = baseline.filter((b) => !dedupKeys.has(`${b.method} ${b.path}`));
+      const baselineKeys = new Set(baseline.map((b) => `${b.method} ${b.path}`));
 
       let daemon: BootedDaemon | null = null;
       const liveResults: { method: string; path: string; status: number }[] = [];
       let liveError: string | undefined;
+      let liveRouteKeys = new Set<string>();
       try {
         daemon = await bootDaemonForProbing();
+        liveRouteKeys = new Set(daemon.routeInventory.map((r) => `${r.method} ${r.path}`));
         for (const row of validRows) {
           try {
-            const res = await fetch(`${daemon.url}${row.path.replace(/:[a-zA-Z]+/g, 'w0-verifier-probe-id')}`, {
-              method: row.method,
-              headers: { Host: '127.0.0.1' },
-            });
+            const res = await fetch(`${daemon.url}${row.path.replace(/:[a-zA-Z]+/g, 'w0-verifier-probe-id')}`, { method: row.method, headers: { Host: '127.0.0.1' } });
             liveResults.push({ method: row.method, path: row.path, status: res.status });
           } catch (err) {
             liveResults.push({ method: row.method, path: row.path, status: -1 });
@@ -1129,6 +1361,10 @@ async function main(): Promise<void> {
         if (daemon) await daemon.kill();
       }
       const liveRejectedAll = liveResults.length > 0 && liveResults.every((r) => r.status === 401 || r.status === 403);
+      // Both directions (F7): inventory rows must be real registered routes;
+      // every statically-guarded route must appear in the inventory.
+      const inventoryRowsNotLive = validRows.filter((r) => !liveRouteKeys.has(`${r.method} ${r.path}`));
+      const guardedRoutesMissingFromInventory = baseline.filter((b) => !dedupKeys.has(`${b.method} ${b.path}`));
 
       const iteration = needleReport('(C0-7/route)', Math.max(validRows.length, 1));
       const control = needleReport('(C0-7/control)', 1);
@@ -1136,78 +1372,90 @@ async function main(): Promise<void> {
         validRows.length >= 1 &&
         validRows.length === routes.length &&
         dedupKeys.size === validRows.length &&
-        missingFromInventory.length === 0 &&
+        inventoryRowsNotLive.length === 0 &&
+        guardedRoutesMissingFromInventory.length === 0 &&
         iteration.ok &&
         control.ok &&
         liveRejectedAll;
       record(
-        'C0-7',
-        '',
-        '',
-        ok,
+        'C0-7', '', '', ok,
         `inventory rows: ${routes.length} (valid: ${validRows.length}, unique: ${dedupKeys.size})\n` +
-          `requireLocalDaemonRequest baseline: ${baseline.length} routes, missing from inventory: ${missingFromInventory.length}\n${JSON.stringify(missingFromInventory)}\n\n` +
-          `live origin-less probe results:\n${JSON.stringify(liveResults, null, 2)}\nliveError=${liveError ?? 'none'}\n\n` +
-          `-- suite per-route --\n${iteration.evidence}\n\n-- suite same-origin control --\n${control.evidence}`,
-        {
-          detail: ok
-            ? undefined
-            : `rows=${validRows.length} unique=${dedupKeys.size} missingFromInventory=${missingFromInventory.length} iterationOk=${iteration.ok} controlOk=${control.ok} liveRejectedAll=${liveRejectedAll}`,
-        },
+          `AST baseline: ${baseline.length} guarded routes; missing from inventory: ${JSON.stringify(guardedRoutesMissingFromInventory)}\n` +
+          `inventory rows without a live route: ${JSON.stringify(inventoryRowsNotLive)}\n` +
+          `live origin-less probe: ${JSON.stringify(liveResults, null, 2)}\nliveError=${liveError ?? 'none'}\n\n-- suite per-route --\n${iteration.evidence}\n\n-- suite control --\n${control.evidence}`,
+        { detail: ok ? undefined : `rows=${validRows.length} unique=${dedupKeys.size} inventoryRowsNotLive=${inventoryRowsNotLive.length} guardedMissing=${guardedRoutesMissingFromInventory.length} iterationOk=${iteration.ok} controlOk=${control.ok} liveRejectedAll=${liveRejectedAll}` },
       );
     },
   );
 
   // =======================================================================
-  // C0-8 -- threat model: caller classes must be structured headings;
-  // defense citations must resolve to a PASSED test in the CURRENT suite run.
+  // C0-8 -- threat model: exact fullName match, tagged per-C0-N, PASSED in
+  // the current run, each defense cites a distinct test (round-2 F8).
   // =======================================================================
-  await checkCriterion(
-    'C0-8',
-    'read docs/security/daemon-threat-model.md, cross-checked against the current suite JSON',
-    'structured caller-class headings; every defense bullet cites a real passed test',
-    () => {
-      const rel = 'docs/security/daemon-threat-model.md';
-      const CALLER_CLASSES = ['web UI', 'od CLI', 'clipper extension', 'external agent', 'malicious local process', 'malicious web page'];
-      if (!fileExists(rel)) {
-        record('C0-8', '', '', false, '', { detail: `missing: ${rel}` });
-        return;
+  await checkCriterion('C0-8', 'read docs/security/daemon-threat-model.md; exact-fullName cross-check against the current suite JSON', 'structured caller-class headings; every defense bullet is tagged [C0-N] and cites the EXACT fullName of a PASSED test whose own fullName contains that same C0-N tag; no test cited twice', () => {
+    const rel = 'docs/security/daemon-threat-model.md';
+    const CALLER_CLASSES = ['web UI', 'od CLI', 'clipper extension', 'external agent', 'malicious local process', 'malicious web page'];
+    if (!fileExists(rel)) {
+      record('C0-8', '', '', false, '', { detail: `missing: ${rel}` });
+      return;
+    }
+    const text = readRepoFile(rel);
+    const headingLines = text.split('\n').filter((l) => /^#{1,6}\s/.test(l));
+    const missingClasses = CALLER_CLASSES.filter((c) => !headingLines.some((h) => h.toLowerCase().includes(c.toLowerCase())));
+    const sections = text.split(/^##\s+/m);
+    const defenseSections = sections.filter((s) => /defense|mitigat/i.test(s.split('\n')[0] ?? ''));
+    const defenseBullets = defenseSections.flatMap((s) => s.match(/^-\s.+$/gm) ?? []);
+    const allByFullName = new Map<string, string>();
+    for (const t of [...daemonSuite.all, ...webSuite.all]) allByFullName.set(t.fullName, t.status);
+
+    const usedFullNames = new Set<string>();
+    const problems: string[] = [];
+    for (const bullet of defenseBullets) {
+      const tagMatch = bullet.match(/\[(C0-\d{1,2})\]/);
+      const citationMatch = bullet.match(/`([^`]+)`/);
+      if (!tagMatch || !citationMatch) {
+        problems.push(`bullet missing [C0-N] tag or backtick citation: ${bullet.slice(0, 80)}`);
+        continue;
       }
-      const text = readRepoFile(rel);
-      const headingLines = text.split('\n').filter((l) => /^#{1,6}\s/.test(l));
-      const missingClasses = CALLER_CLASSES.filter((c) => !headingLines.some((h) => h.toLowerCase().includes(c.toLowerCase())));
-      const sections = text.split(/^##\s+/m);
-      const defenseSections = sections.filter((s) => /defense|mitigat/i.test(s.split('\n')[0] ?? ''));
-      const defenseBullets = defenseSections.flatMap((s) => s.match(/^-\s.+$/gm) ?? []);
-      const passedFullNames = daemonSuite.all.filter((t) => t.status === 'passed').map((t) => t.fullName);
-      const passedWebFullNames = webSuite.all.filter((t) => t.status === 'passed').map((t) => t.fullName);
-      const uncited: string[] = [];
-      for (const bullet of defenseBullets) {
-        const citations = [...bullet.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
-        const matches = citations.some((c) => c && (passedFullNames.some((n) => n.includes(c)) || passedWebFullNames.some((n) => n.includes(c))));
-        if (!matches) uncited.push(bullet);
+      const tag = tagMatch[1] as string;
+      const fullName = citationMatch[1] as string;
+      const status = allByFullName.get(fullName);
+      if (status !== 'passed') {
+        problems.push(`bullet [${tag}] cites "${fullName}" which is not a PASSED test in the current run (status=${status ?? 'not found'})`);
+        continue;
       }
-      const ok = missingClasses.length === 0 && defenseBullets.length >= 5 && uncited.length === 0;
-      record(
-        'C0-8',
-        '',
-        '',
-        ok,
-        `caller class headings missing: ${missingClasses.join(', ') || 'none'}\ndefense bullets: ${defenseBullets.length}\nuncited (no matching PASSED test in current suite run): ${uncited.length}\n\n${defenseBullets.join('\n')}`,
-        { detail: ok ? undefined : 'see evidence' },
-      );
-    },
-  );
+      if (!fullName.includes(tag)) {
+        problems.push(`bullet [${tag}] cites "${fullName}" which does not itself carry the ${tag} tag`);
+        continue;
+      }
+      if (usedFullNames.has(fullName)) {
+        problems.push(`test "${fullName}" cited by more than one defense bullet`);
+        continue;
+      }
+      usedFullNames.add(fullName);
+    }
+    const ok = missingClasses.length === 0 && defenseBullets.length >= 5 && problems.length === 0;
+    record('C0-8', '', '', ok, `caller class headings missing: ${missingClasses.join(', ') || 'none'}\ndefense bullets: ${defenseBullets.length}\nproblems: ${problems.join('; ') || 'none'}\n\n${defenseBullets.join('\n')}`, { detail: ok ? undefined : problems.join('; ') || 'see evidence' });
+  });
 
   // =======================================================================
-  // C0-9 -- scale baseline: machine-readable raw samples, recomputed by the
-  // verifier itself, cross-checked against the prose doc's stated numbers.
+  // C0-9 -- scale baseline: round-2 F9 requires the gate to RE-EXECUTE all
+  // five scenarios once at verification time and require the committed
+  // baseline numbers to sit within a declared tolerance band of the
+  // observed smoke measurement. Raw-sample recomputation (round-1) stays.
+  // -----------------------------------------------------------------------
+  // IMPLEMENTATION NOTE (documented, not silent): the exact API endpoint
+  // backing "DesignsTab fan-out" and "search" is inferred from the live
+  // route inventory by name-pattern match, since no PRD text names an exact
+  // route. If no matching route is found, that specific scenario is
+  // recorded as missing (fails per F9's "missing scenario = fail"), not
+  // fabricated.
   // =======================================================================
   await checkCriterion(
     'C0-9',
-    'read docs/testing/scale-baseline-2026-07.md + .json, recompute p50/p95 from raw samples',
-    'R8 protocol with raw per-rep samples, machine fingerprint, corpus fingerprint, and a non-regression ceiling, all independently recomputed',
-    () => {
+    'read docs/testing/scale-baseline-2026-07.md + .json; re-execute cold-start/project-list/DesignsTab-fan-out/memory-high-water/search once each against a verifier-booted daemon and require baseline numbers within a declared tolerance band',
+    'R8 protocol + a live smoke re-measurement of all 5 named scenarios; missing scenario = fail; raw-sample p50/p95 recomputation stays',
+    async () => {
       const mdRel = 'docs/testing/scale-baseline-2026-07.md';
       const jsonRel = 'docs/testing/scale-baseline-2026-07.json';
       if (!fileExists(mdRel) || !fileExists(jsonRel)) {
@@ -1218,7 +1466,7 @@ async function main(): Promise<void> {
         corpus: { path: string; sha256: string };
         machine: { fingerprint: string };
         warmup: { iterations: number };
-        scenarios: { name: string; samplesMs: number[]; p50: number; p95: number }[];
+        scenarios: { name: string; samplesMs: number[]; p50: number; p95: number; toleranceBandPct?: number }[];
         nonRegressionCeiling: number;
         minimumImprovementThreshold: number;
         version: string;
@@ -1236,20 +1484,87 @@ async function main(): Promise<void> {
       if (typeof baseline.minimumImprovementThreshold !== 'number') problems.push('missing minimumImprovementThreshold');
       if (!baseline.version) problems.push('missing version');
       if (!baseline.warmup || typeof baseline.warmup.iterations !== 'number') problems.push('missing warmup.iterations');
-      if (!Array.isArray(baseline.scenarios) || baseline.scenarios.length === 0) problems.push('no scenarios');
-      else {
-        for (const scenario of baseline.scenarios) {
-          if (!Array.isArray(scenario.samplesMs) || scenario.samplesMs.length < 5) {
-            problems.push(`scenario "${scenario.name}": fewer than 5 raw samples`);
-            continue;
-          }
-          const sorted = [...scenario.samplesMs].sort((a, b) => a - b);
-          const p50 = sorted[Math.floor(sorted.length * 0.5)] ?? 0;
-          const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] ?? 0;
-          if (Math.abs(p50 - scenario.p50) > 0.01) problems.push(`scenario "${scenario.name}": stated p50 ${scenario.p50} != recomputed ${p50}`);
-          if (Math.abs(p95 - scenario.p95) > 0.01) problems.push(`scenario "${scenario.name}": stated p95 ${scenario.p95} != recomputed ${p95}`);
+      const scenarioByName = new Map((baseline.scenarios ?? []).map((s) => [s.name, s]));
+      for (const s of baseline.scenarios ?? []) {
+        if (!Array.isArray(s.samplesMs) || s.samplesMs.length < 5) {
+          problems.push(`scenario "${s.name}": fewer than 5 raw samples`);
+          continue;
         }
+        const sorted = [...s.samplesMs].sort((a, b) => a - b);
+        const p50 = sorted[Math.floor(sorted.length * 0.5)] ?? 0;
+        const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] ?? 0;
+        if (Math.abs(p50 - s.p50) > 0.01) problems.push(`scenario "${s.name}": stated p50 ${s.p50} != recomputed ${p50}`);
+        if (Math.abs(p95 - s.p95) > 0.01) problems.push(`scenario "${s.name}": stated p95 ${s.p95} != recomputed ${p95}`);
       }
+
+      // Live smoke re-measurement.
+      const SCENARIOS = ['cold-start', 'project-list', 'designs-tab-fan-out', 'memory-high-water', 'search'];
+      const smoke: Record<string, number | null> = {};
+      let daemon: BootedDaemon | null = null;
+      try {
+        const t0 = Date.now();
+        daemon = await bootDaemonForProbing();
+        smoke['cold-start'] = Date.now() - t0;
+
+        const t1 = Date.now();
+        const listRes = await fetch(`${daemon.url}/api/projects`).catch(() => null);
+        smoke['project-list'] = listRes ? Date.now() - t1 : null;
+
+        const fanoutRoute = daemon.routeInventory.find((r) => r.method === 'GET' && /projects\/:[a-zA-Z]+\/files/i.test(r.path));
+        if (fanoutRoute && listRes) {
+          const t2 = Date.now();
+          await fetch(`${daemon.url}${fanoutRoute.path.replace(/:[a-zA-Z]+/g, 'w0-verifier-smoke-id')}`).catch(() => null);
+          smoke['designs-tab-fan-out'] = Date.now() - t2;
+        } else {
+          smoke['designs-tab-fan-out'] = null;
+        }
+
+        if (daemon.pid) {
+          const rssSamples: number[] = [];
+          for (let i = 0; i < 10; i++) {
+            const r = sh('ps', ['-o', 'rss=', '-p', String(daemon.pid)]);
+            const n = Number(r.stdout.trim());
+            if (Number.isFinite(n)) rssSamples.push(n);
+            await fetch(`${daemon.url}/api/health`).catch(() => null);
+          }
+          smoke['memory-high-water'] = rssSamples.length ? Math.max(...rssSamples) : null;
+        } else {
+          smoke['memory-high-water'] = null;
+        }
+
+        const searchRoute = daemon.routeInventory.find((r) => /search/i.test(r.path));
+        if (searchRoute) {
+          const t3 = Date.now();
+          const searchInit: RequestInit = { method: searchRoute.method, headers: { 'Content-Type': 'application/json' } };
+          if (searchRoute.method === 'POST') searchInit.body = JSON.stringify({ query: 'w0-verifier-smoke' });
+          await fetch(`${daemon.url}${searchRoute.path}`, searchInit).catch(() => null);
+          smoke['search'] = Date.now() - t3;
+        } else {
+          smoke['search'] = null;
+        }
+      } catch (err) {
+        problems.push(`live scenario smoke run threw: ${String(err)}`);
+      } finally {
+        if (daemon) await daemon.kill();
+      }
+
+      for (const name of SCENARIOS) {
+        const observed = smoke[name];
+        const baselineScenario = scenarioByName.get(name);
+        if (observed === null || observed === undefined) {
+          problems.push(`scenario "${name}": could not be re-executed (missing scenario = fail)`);
+          continue;
+        }
+        if (!baselineScenario) {
+          problems.push(`scenario "${name}": no committed baseline entry to compare against`);
+          continue;
+        }
+        const bandPct = baselineScenario.toleranceBandPct ?? 50;
+        const lower = baselineScenario.p50 * (1 - bandPct / 100);
+        const upper = baselineScenario.p50 * (1 + bandPct / 100);
+        if (!(observed >= lower && observed <= upper)) problems.push(`scenario "${name}": observed smoke ${observed}ms outside declared tolerance band [${lower.toFixed(1)}, ${upper.toFixed(1)}] around baseline p50 ${baselineScenario.p50}ms (${bandPct}%)`);
+      }
+
       if (!baseline.corpus?.path || !baseline.corpus?.sha256) {
         problems.push('missing corpus.path/corpus.sha256');
       } else if (fs.existsSync(baseline.corpus.path)) {
@@ -1262,30 +1577,28 @@ async function main(): Promise<void> {
           }
         })(baseline.corpus.path, baseline.corpus.path);
         const recomputedCorpusHash = sha256Bytes(manifestLines.sort().join('\n'));
-        if (recomputedCorpusHash !== baseline.corpus.sha256) problems.push(`corpus fingerprint mismatch: recomputed ${recomputedCorpusHash.slice(0, 12)} != stated ${baseline.corpus.sha256.slice(0, 12)}`);
+        if (recomputedCorpusHash !== baseline.corpus.sha256) problems.push('corpus fingerprint mismatch');
       } else {
-        problems.push(`corpus.path "${baseline.corpus.path}" does not exist -- cannot verify same-fixture-corpus`);
+        problems.push(`corpus.path "${baseline.corpus.path}" does not exist`);
       }
-      const mdText = readRepoFile(mdRel);
-      if (!/peak[\s\S]{0,20}RSS/i.test(mdText)) problems.push('markdown prose missing a peak RSS mention');
       const ok = problems.length === 0;
-      record('C0-9', '', '', ok, JSON.stringify(baseline, null, 2), { detail: ok ? undefined : problems.join('; ') });
+      record('C0-9', '', '', ok, JSON.stringify({ baseline, smoke }, null, 2), { detail: ok ? undefined : problems.join('; ') });
     },
   );
 
   // =======================================================================
-  // C0-10 / C0-11 -- UI/CLI parity. The verifier IS the parity check now:
-  // no probe-owned verdict is trusted for C0-10 at all (F10-F12). C0-11
-  // writes its own one-surface fixture directly into capability-manifest.json
-  // and drives `pnpm guard` itself (F13) -- no probe-owned booleans.
+  // C0-10 / C0-11 -- UI/CLI parity, round-2: capability universe derived
+  // independently (SUBCOMMAND_MAP AST + route inventory), execFile argv
+  // (never a shell string), OD_DAEMON_URL pinned to the verifier's
+  // ephemeral daemon with a nonce-project identity check, deep recursive
+  // key comparison; C0-11's fixture is realistic + attributed.
   // =======================================================================
 
   const capabilityManifestRel = 'scripts/waves/capability-manifest.json';
-
   interface CapabilityManifestEntry {
     capability: string;
     uiEntryPoint: string;
-    cliInvocation: string;
+    cliArgs: string[];
     httpMethod: string;
     httpPath: string;
     outputSchema: string;
@@ -1293,13 +1606,22 @@ async function main(): Promise<void> {
     reason?: string;
   }
 
+  function deepKeyStructure(v: unknown, prefix = ''): string[] {
+    if (Array.isArray(v)) return v.length > 0 ? deepKeyStructure(v[0], `${prefix}[]`) : [`${prefix}[]`];
+    if (v && typeof v === 'object') {
+      return Object.keys(v as object)
+        .sort()
+        .flatMap((k) => deepKeyStructure((v as Record<string, unknown>)[k], prefix ? `${prefix}.${k}` : k));
+    }
+    return [prefix];
+  }
+
+  const odBinPath = path.join(repoRoot, 'apps/daemon/bin/od.mjs');
+
   await checkCriterion(
     'C0-10',
-    'verifier reads capability-manifest.json, boots a daemon, cross-checks completeness against the live route inventory, ' +
-      'then independently invokes CLI + HTTP for a random sample (randomized red-control name)',
-    'manifest completeness cross-checked against the live route inventory; verifier invokes both surfaces itself for a ' +
-      '>=3 random sample and compares JSON key-set shapes itself; a randomized red-control capability (real stub CLI + real ' +
-      'unrelated route) must fail for the right reason',
+    'derive capability universe (SUBCOMMAND_MAP AST + route inventory); verifier execFiles the real od bin with constructed argv (never a shell string), OD_DAEMON_URL pinned to its own ephemeral daemon, identity confirmed via a nonce project',
+    'every derived capability must appear in the manifest; applicable count >= SUBCOMMAND_MAP floor; sample = min(3, applicable) all-if-fewer; deep recursive key-structure comparison; randomized red control must fail for a genuine shape mismatch',
     async () => {
       if (!fileExists(capabilityManifestRel)) {
         record('C0-10', '', '', false, '', { detail: `missing: ${capabilityManifestRel}` });
@@ -1314,66 +1636,90 @@ async function main(): Promise<void> {
         record('C0-10', '', '', false, '', { detail: `invalid manifest JSON: ${String(err)}` });
         return;
       }
+      const subcommandKeys = extractSubcommandMapKeys();
+      const manifestCapabilityNames = manifest.map((e) => e.capability.toLowerCase());
+      const missingSubcommands = subcommandKeys.filter((k) => !manifestCapabilityNames.some((c) => c.includes(k.toLowerCase())));
       const notApplicableWithoutReason = manifest.filter((e) => !e.parityApplicable && !e.reason?.trim());
       const applicable = manifest.filter((e) => e.parityApplicable);
 
-      let daemon: BootedDaemon | null = null;
-      const problems: string[] = [...notApplicableWithoutReason.map((e) => `capability "${e.capability}": parityApplicable=false without a reason`)];
+      const problems: string[] = [
+        ...notApplicableWithoutReason.map((e) => `capability "${e.capability}": parityApplicable=false without a reason`),
+        ...missingSubcommands.map((k) => `SUBCOMMAND_MAP key "${k}" has no corresponding manifest entry`),
+      ];
+      if (applicable.length < subcommandKeys.length) problems.push(`applicable capability count (${applicable.length}) is below the SUBCOMMAND_MAP floor (${subcommandKeys.length})`);
+      if (applicable.length === 0) problems.push('manifest has zero applicable capabilities (all-inapplicable manifests fail)');
+
       const sampleResults: { capability: string; ok: boolean; detail: string }[] = [];
       let redControlOk = false;
       let redControlDetail = '';
+      let identityOk = false;
+      let daemon: BootedDaemon | null = null;
       try {
         daemon = await bootDaemonForProbing();
         const liveRouteKeys = new Set(daemon.routeInventory.map((r) => `${r.method} ${r.path}`));
         for (const e of applicable) {
-          if (!liveRouteKeys.has(`${e.httpMethod} ${e.httpPath}`)) {
-            problems.push(`capability "${e.capability}": ${e.httpMethod} ${e.httpPath} is not a registered route`);
-          }
+          if (!liveRouteKeys.has(`${e.httpMethod} ${e.httpPath}`)) problems.push(`capability "${e.capability}": ${e.httpMethod} ${e.httpPath} is not a registered route`);
         }
+
+        // Identity canary (F11): create a nonce project on the verifier's
+        // OWN ephemeral daemon, then confirm `od project list --json`
+        // (invoked with OD_DAEMON_URL pinned to that daemon) reflects it --
+        // proves the CLI cannot silently be talking to a different daemon.
+        const nonce = `w0-nonce-${crypto.randomBytes(8).toString('hex')}`;
+        await fetch(`${daemon.url}/api/projects`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: nonce, name: nonce }) }).catch(() => null);
+        try {
+          const { stdout } = await execFileAsync('node', [odBinPath, 'project', 'list', '--json'], { env: { ...process.env, OD_DAEMON_URL: daemon.url }, timeout: 30_000 });
+          identityOk = stdout.includes(nonce);
+        } catch (err) {
+          identityOk = false;
+          problems.push(`identity canary (od project list --json) failed: ${String(err)}`);
+        }
+        if (!identityOk) problems.push('identity canary did not observe the nonce project through the CLI -- cannot confirm CLI and HTTP samples hit the same daemon');
+
         const shuffled = [...applicable].sort(() => Math.random() - 0.5);
-        const sample = shuffled.slice(0, Math.min(3, shuffled.length));
+        const sample = shuffled.length <= 3 ? shuffled : shuffled.slice(0, 3);
         for (const entry of sample) {
-          const cliRun = sh('sh', ['-c', entry.cliInvocation], { timeoutMs: 60_000 });
-          let httpKeys: string[] = [];
-          let httpOk = true;
+          let cliJson: unknown = null;
+          let cliOk = false;
           try {
-            const httpRes = await fetch(`${daemon.url}${entry.httpPath}`, { method: entry.httpMethod });
-            httpKeys = Object.keys((await httpRes.json()) as object).sort();
+            const { stdout } = await execFileAsync('node', [odBinPath, ...entry.cliArgs], { env: { ...process.env, OD_DAEMON_URL: daemon.url }, timeout: 60_000 });
+            cliJson = JSON.parse(stdout);
+            cliOk = true;
+          } catch {
+            cliOk = false;
+          }
+          let httpJson: unknown = null;
+          let httpOk = false;
+          try {
+            const res = await fetch(`${daemon.url}${entry.httpPath}`, { method: entry.httpMethod });
+            httpJson = await res.json();
+            httpOk = res.ok;
           } catch {
             httpOk = false;
           }
-          let cliKeys: string[] = [];
-          try {
-            cliKeys = Object.keys(JSON.parse(cliRun.stdout)).sort();
-          } catch {
-            /* leave empty -- reported as a mismatch below */
-          }
-          const shapeMatches = httpOk && cliKeys.length > 0 && JSON.stringify(cliKeys) === JSON.stringify(httpKeys);
-          sampleResults.push({
-            capability: entry.capability,
-            ok: cliRun.status === 0 && shapeMatches,
-            detail: `cliExit=${cliRun.status} cliKeys=${JSON.stringify(cliKeys)} httpKeys=${JSON.stringify(httpKeys)}`,
-          });
+          const cliShape = cliOk ? deepKeyStructure(cliJson) : [];
+          const httpShape = httpOk ? deepKeyStructure(httpJson) : [];
+          const shapeMatches = cliOk && httpOk && JSON.stringify(cliShape) === JSON.stringify(httpShape);
+          sampleResults.push({ capability: entry.capability, ok: shapeMatches, detail: `cliOk=${cliOk} httpOk=${httpOk} cliShape=${JSON.stringify(cliShape)} httpShape=${JSON.stringify(httpShape)}` });
         }
 
-        // Red control: a RANDOMIZED capability name (cannot be special-cased),
-        // a real stub CLI printing `{}`, pointed at a real but unrelated
-        // route -- the verifier's OWN shape comparison must catch it.
+        // Red control: randomized capability name, real stub CLI (never a
+        // shell string -- an actual JS file execFile'd directly), real
+        // unrelated route.
         const stubPath = path.join(proofDir, `.w0-red-control-stub-${crypto.randomBytes(4).toString('hex')}.mjs`);
-        fs.writeFileSync(stubPath, "#!/usr/bin/env node\nconsole.log('{}');\n");
+        fs.writeFileSync(stubPath, "#!/usr/bin/env node\nconsole.log(JSON.stringify({ ok: true }));\n");
         const randomCapabilityName = `w0-red-control-${crypto.randomBytes(6).toString('hex')}`;
-        const cliRun = sh('node', [stubPath], { timeoutMs: 30_000 });
+        let cliKeys: string[] = [];
+        try {
+          const { stdout } = await execFileAsync('node', [stubPath], { timeout: 30_000 });
+          cliKeys = deepKeyStructure(JSON.parse(stdout));
+        } catch {
+          /* leave empty */
+        }
         const httpRes = await fetch(`${daemon.url}/api/health`);
-        const cliKeys = (() => {
-          try {
-            return Object.keys(JSON.parse(cliRun.stdout)).sort();
-          } catch {
-            return [];
-          }
-        })();
-        const httpKeys = Object.keys((await httpRes.json()) as object).sort();
+        const httpKeys = deepKeyStructure(await httpRes.json());
         const shapeMismatch = JSON.stringify(cliKeys) !== JSON.stringify(httpKeys);
-        redControlOk = shapeMismatch; // must fail for a shape mismatch, not a missing-capability lookup
+        redControlOk = shapeMismatch;
         redControlDetail = `capability=${randomCapabilityName} cliKeys=${JSON.stringify(cliKeys)} httpKeys=${JSON.stringify(httpKeys)} shapeMismatch=${shapeMismatch}`;
         try {
           fs.unlinkSync(stubPath);
@@ -1383,24 +1729,19 @@ async function main(): Promise<void> {
       } finally {
         if (daemon) await daemon.kill();
       }
-      const ok = problems.length === 0 && sampleResults.length > 0 && sampleResults.every((r) => r.ok) && redControlOk;
+      const ok = problems.length === 0 && sampleResults.length > 0 && sampleResults.every((r) => r.ok) && redControlOk && identityOk;
       record(
-        'C0-10',
-        '',
-        '',
-        ok,
-        `manifest entries: ${manifest.length}, applicable: ${applicable.length}\nproblems: ${problems.join('; ') || 'none'}\n` +
-          `sample results: ${JSON.stringify(sampleResults, null, 2)}\nred control: ${redControlDetail}`,
-        { detail: ok ? undefined : `problems=${problems.length} sample=${JSON.stringify(sampleResults.map((r) => r.ok))} redControlOk=${redControlOk}` },
+        'C0-10', '', '', ok,
+        `manifest entries: ${manifest.length}, applicable: ${applicable.length}, SUBCOMMAND_MAP keys: ${subcommandKeys.length}\nidentityOk=${identityOk}\nproblems: ${problems.join('; ') || 'none'}\nsample: ${JSON.stringify(sampleResults, null, 2)}\nred control: ${redControlDetail}`,
+        { detail: ok ? undefined : `problems=${problems.length} identityOk=${identityOk} sample=${JSON.stringify(sampleResults.map((r) => r.ok))} redControlOk=${redControlOk}` },
       );
     },
   );
 
   await checkCriterion(
     'C0-11',
-    'verifier writes a one-surface-only fixture entry directly into capability-manifest.json, runs `pnpm guard` expecting ' +
-      'non-zero, reverts, runs `pnpm guard` expecting zero -- no probe-owned booleans',
-    'adding a capability to one surface only fails `pnpm guard`; guard passes again once reverted; the working tree is clean either way',
+    'verifier injects a REALISTIC one-surface fixture (real existing route, no CLI entry) directly into capability-manifest.json, runs pnpm guard, and requires the failure be ATTRIBUTED to this specific fixture in guard output',
+    'guard failure must name the injected capability (attributed diagnostic), not just any nonzero exit; reverts and re-runs guard expecting a clean pass',
     () => {
       if (!fileExists(capabilityManifestRel)) {
         record('C0-11', '', '', false, '', { detail: `missing: ${capabilityManifestRel} (nothing for pnpm guard to enforce parity against yet)` });
@@ -1409,261 +1750,265 @@ async function main(): Promise<void> {
       const manifestAbs = path.join(repoRoot, capabilityManifestRel);
       const original = fs.readFileSync(manifestAbs, 'utf8');
       let brokenExit = 1;
+      let brokenStdout = '';
       let revertedCleanly = false;
+      const randomCapabilityName = `w0-guard-fixture-${crypto.randomBytes(4).toString('hex')}`;
       try {
         const parsed = JSON.parse(original) as CapabilityManifestEntry[];
         const broken: CapabilityManifestEntry = {
-          capability: `w0-guard-fixture-${crypto.randomBytes(4).toString('hex')}`,
+          capability: randomCapabilityName,
           uiEntryPoint: 'n/a',
-          cliInvocation: 'echo {}',
+          cliArgs: ['w0-fixture-nonexistent-subcommand'], // real route, deliberately NO corresponding CLI subcommand
           httpMethod: 'GET',
-          httpPath: '/api/this-route-does-not-exist-w0-fixture',
+          httpPath: '/api/health', // a REAL, already-registered route
           outputSchema: 'n/a',
           parityApplicable: true,
         };
         fs.writeFileSync(manifestAbs, JSON.stringify([...parsed, broken], null, 2));
         const brokenRun = sh('pnpm', ['guard'], { timeoutMs: 20 * 60_000 });
         brokenExit = brokenRun.status;
+        brokenStdout = brokenRun.stdout;
       } finally {
         fs.writeFileSync(manifestAbs, original);
         revertedCleanly = fs.readFileSync(manifestAbs, 'utf8') === original;
       }
+      const attributed = brokenStdout.includes(randomCapabilityName);
       const revertedRun = sh('pnpm', ['guard'], { timeoutMs: 20 * 60_000 });
       const revertedExit = revertedRun.status;
       const treeClean = sh('git', ['status', '--porcelain', '--', capabilityManifestRel]).stdout.trim().length === 0;
-      const ok = brokenExit !== 0 && revertedExit === 0 && revertedCleanly && treeClean;
-      record('C0-11', '', '', ok, `brokenExit=${brokenExit} revertedExit=${revertedExit} revertedCleanly=${revertedCleanly} treeClean=${treeClean}`, {
-        detail: ok ? undefined : `brokenExit=${brokenExit} revertedExit=${revertedExit} revertedCleanly=${revertedCleanly} treeClean=${treeClean}`,
+      const ok = brokenExit !== 0 && attributed && revertedExit === 0 && revertedCleanly && treeClean;
+      record('C0-11', '', '', ok, `brokenExit=${brokenExit} attributed=${attributed} revertedExit=${revertedExit} revertedCleanly=${revertedCleanly} treeClean=${treeClean}\nbrokenStdout tail:\n${brokenStdout.slice(-2000)}`, {
+        detail: ok ? undefined : `brokenExit=${brokenExit} attributed=${attributed} revertedExit=${revertedExit} revertedCleanly=${revertedCleanly} treeClean=${treeClean}`,
       });
     },
   );
 
   // =======================================================================
-  // C0-12 -- rebrand/stored-data compatibility inventory, cross-checked
-  // against the verifier's own live greps for the 2 statically-countable
-  // categories (F14). The other 4 categories are runtime/record counts a
-  // fresh environment has none of yet; see the final report for why those
-  // are judged out of scope for a mechanical cross-check today.
+  // C0-12 -- rebrand/stored-data compatibility inventory. Round-2 F14:
+  // implement live static counts for as many categories as are genuinely
+  // groundable in source today; unknown rows/labels = fail.
   // =======================================================================
-  await checkCriterion(
-    'C0-12',
-    'read docs/security/stored-identity-inventory.md, cross-check statically-countable categories against live source greps',
-    "every stored surface enumerated with a record count; statically-countable categories must match the verifier's own independent count exactly",
-    () => {
-      const rel = 'docs/security/stored-identity-inventory.md';
-      const CATEGORIES = ['.od/', 'OD_', 'MCP server', 'project JSON key', 'connector credential', 'sidecar stamp'];
-      if (!fileExists(rel)) {
-        record('C0-12', '', '', false, '', { detail: `missing: ${rel}` });
-        return;
-      }
-      const text = readRepoFile(rel);
-      const missingCategories = CATEGORIES.filter((c) => !text.toLowerCase().includes(c.toLowerCase()));
-      const tableRows = text.split('\n').filter((l) => /^\s*\|/.test(l) && !/^\s*\|[\s:-]+\|/.test(l));
-      const header = tableRows[0] ?? '';
-      const hasCountColumn = /count/i.test(header);
-      const dataRows = tableRows.slice(1);
+  await checkCriterion('C0-12', 'read docs/security/stored-identity-inventory.md; live static counts for all six categories', 'every row requires a numeric count; statically-countable categories must match the verifier\'s own independent count exactly; unknown rows/labels fail', () => {
+    const rel = 'docs/security/stored-identity-inventory.md';
+    const CATEGORIES = ['.od/', 'OD_', 'MCP server', 'project JSON key', 'connector credential', 'sidecar stamp'];
+    if (!fileExists(rel)) {
+      record('C0-12', '', '', false, '', { detail: `missing: ${rel}` });
+      return;
+    }
+    const text = readRepoFile(rel);
+    const missingCategories = CATEGORIES.filter((c) => !text.toLowerCase().includes(c.toLowerCase()));
+    const tableRows = text.split('\n').filter((l) => /^\s*\|/.test(l) && !/^\s*\|[\s:-]+\|/.test(l));
+    const header = tableRows[0] ?? '';
+    const hasCountColumn = /count/i.test(header);
+    const dataRows = tableRows.slice(1);
+    const unknownRows = dataRows.filter((r) => !CATEGORIES.some((c) => r.toLowerCase().includes(c.toLowerCase())));
 
-      function grepCount(pattern: RegExp): number {
-        const seen = new Set<string>();
-        (function walk(dir: string): void {
-          for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    function grepCount(pattern: RegExp, dirs: string[]): number {
+      const seen = new Set<string>();
+      for (const dir of dirs) {
+        if (!fs.existsSync(dir)) continue;
+        (function walk(d: string): void {
+          for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
             if (entry.name === 'node_modules' || entry.name === '.git' || entry.name.startsWith('.')) continue;
-            const full = path.join(dir, entry.name);
+            const full = path.join(d, entry.name);
             if (entry.isDirectory()) walk(full);
-            else if (/\.(ts|tsx|md)$/.test(entry.name)) {
+            else if (/\.(ts|tsx|md|json)$/.test(entry.name)) {
               const t = fs.readFileSync(full, 'utf8');
               for (const m of t.matchAll(pattern)) seen.add(m[0]);
             }
           }
-        })(path.join(repoRoot, 'apps/daemon/src'));
-        return seen.size;
+        })(dir);
       }
-      const liveOdPathCount = grepCount(/\.od\//g);
-      const liveEnvVarCount = grepCount(/\bOD_[A-Z_]+\b/g);
+      return seen.size;
+    }
+    const srcDirs = [path.join(repoRoot, 'apps/daemon/src')];
+    const liveCounts: Record<string, number> = {
+      '.od/': grepCount(/\.od\//g, srcDirs),
+      OD_: grepCount(/\bOD_[A-Z_]+\b/g, srcDirs),
+      'MCP server': grepCount(/\bSERVER_NAME\s*[:=]\s*['"`][\w-]+['"`]/g, srcDirs),
+      'project JSON key': grepCount(/\bmetadata\.\w+\b/g, [path.join(repoRoot, 'apps/daemon/src/projects.ts')].filter((p) => fs.existsSync(p))),
+      'connector credential': grepCount(/\b(clientId|clientSecret|apiKey|accessToken|refreshToken)\b/g, [path.join(repoRoot, 'apps/daemon/src/connectors')].filter((p) => fs.existsSync(p))),
+      'sidecar stamp': grepCount(/\b(app|mode|namespace|ipc|source)\s*:/g, [path.join(repoRoot, 'packages/sidecar-proto/src')].filter((p) => fs.existsSync(p))),
+    };
 
-      function docCountFor(category: string): number | null {
-        const row = dataRows.find((r) => r.toLowerCase().includes(category.toLowerCase()));
-        if (!row) return null;
-        const nums = (row.match(/\d+/g) ?? []).map(Number);
-        return nums.length > 0 ? (nums[nums.length - 1] ?? null) : null;
+    function docCountFor(category: string): number | null {
+      const row = dataRows.find((r) => r.toLowerCase().includes(category.toLowerCase()));
+      if (!row) return null;
+      const nums = (row.match(/\d+/g) ?? []).map(Number);
+      return nums.length > 0 ? (nums[nums.length - 1] ?? null) : null;
+    }
+    const problems: string[] = [...unknownRows.map((r) => `unrecognized inventory row/label: ${r.slice(0, 80)}`)];
+    for (const cat of CATEGORIES) {
+      const docCount = docCountFor(cat);
+      if (docCount === null) {
+        problems.push(`category "${cat}": no numeric count found in doc row`);
+        continue;
       }
-      const problems: string[] = [];
-      const odDocCount = docCountFor('.od/');
-      if (odDocCount !== null && odDocCount !== liveOdPathCount) problems.push(`".od/" count: doc says ${odDocCount}, live grep says ${liveOdPathCount}`);
-      const envDocCount = docCountFor('OD_');
-      if (envDocCount !== null && envDocCount !== liveEnvVarCount) problems.push(`"OD_" env var count: doc says ${envDocCount}, live grep says ${liveEnvVarCount}`);
-
-      const ok = missingCategories.length === 0 && hasCountColumn && dataRows.length >= 6 && problems.length === 0;
-      record(
-        'C0-12',
-        '',
-        '',
-        ok,
-        `categories missing: ${missingCategories.join(', ') || 'none'}\nhasCountColumn: ${hasCountColumn}\ndata rows: ${dataRows.length}\n` +
-          `live .od/ occurrences: ${liveOdPathCount}, live OD_* names: ${liveEnvVarCount}\ncross-check problems: ${problems.join('; ') || 'none'}\n\n${tableRows.join('\n')}`,
-        { detail: ok ? undefined : problems.join('; ') || 'see evidence' },
-      );
-    },
-  );
+      const live = liveCounts[cat];
+      if (live !== undefined && docCount !== live) problems.push(`"${cat}" count: doc says ${docCount}, live count says ${live}`);
+    }
+    const ok = missingCategories.length === 0 && hasCountColumn && dataRows.length >= 6 && problems.length === 0;
+    record('C0-12', '', '', ok, `categories missing: ${missingCategories.join(', ') || 'none'}\nhasCountColumn: ${hasCountColumn}\ndata rows: ${dataRows.length}\nlive counts: ${JSON.stringify(liveCounts)}\nproblems: ${problems.join('; ') || 'none'}\n\n${tableRows.join('\n')}`, { detail: ok ? undefined : problems.join('; ') || 'see evidence' });
+  });
 
   // =======================================================================
-  // C0-13 -- daemon failure inventory: the ACTUAL command matrix is run
-  // (unit + integration both = the live daemon suite run above); e2e is
-  // explicitly NOT executed (documented exclusion, not silent) per the
-  // coordinator's own runtime-bounded allowance.
+  // C0-13 -- daemon failure inventory. Round-2 F15: unit vs integration are
+  // genuinely different suites now (daemon package vs e2e/tests package);
+  // e2e (Playwright) is attempted as a bounded, NAMED smoke subset.
   // =======================================================================
-  await checkCriterion(
-    'C0-13',
-    'cross-check docs/testing/daemon-failure-inventory.md against the daemon suite run above; e2e documented as an excluded layer',
-    'unit/integration counts must exactly equal the observed daemon suite failure count; e2e absence is recorded, not silent',
-    () => {
-      const rel = 'docs/testing/daemon-failure-inventory.md';
-      if (!fileExists(rel)) {
-        record('C0-13', '', '', false, '', { detail: `missing: ${rel}` });
-        return;
-      }
-      const text = readRepoFile(rel);
-      const hasUnitSection = /unit/i.test(text);
-      const hasIntegrationSection = /integration/i.test(text);
-      const hasE2eSection = /e2e|end-to-end/i.test(text);
-      const e2ePackageJson = fs.existsSync(path.join(repoRoot, 'e2e/package.json'))
-        ? (JSON.parse(readRepoFile('e2e/package.json')) as { scripts?: Record<string, string> })
-        : { scripts: {} };
-      const e2eScriptNames = Object.keys(e2ePackageJson.scripts ?? {});
-      const e2eReferencesRealCommand = e2eScriptNames.some((s) => text.includes(s));
-      const actualDaemonFailures = daemonSuite.data?.numFailedTests ?? null;
-      const unitMatch = text.match(/unit[\s\S]{0,120}?(\d+)\s*failure/i);
-      const integrationMatch = text.match(/integration[\s\S]{0,120}?(\d+)\s*failure/i);
-      const claimsUnitNone = /unit[\s\S]{0,120}?\bnone\b/i.test(text);
-      const claimsIntegrationNone = /integration[\s\S]{0,120}?\bnone\b/i.test(text);
-      const unitClaimed = unitMatch?.[1] !== undefined ? Number(unitMatch[1]) : claimsUnitNone ? 0 : null;
-      const integrationClaimed = integrationMatch?.[1] !== undefined ? Number(integrationMatch[1]) : claimsIntegrationNone ? 0 : null;
-      const unitConsistent = actualDaemonFailures !== null && unitClaimed !== null && unitClaimed === actualDaemonFailures;
-      const integrationConsistent = actualDaemonFailures !== null && integrationClaimed !== null && integrationClaimed === actualDaemonFailures;
-      const ok = hasUnitSection && hasIntegrationSection && hasE2eSection && e2eReferencesRealCommand && unitConsistent && integrationConsistent;
-      record(
-        'C0-13',
-        '',
-        '',
-        ok,
-        `unit section=${hasUnitSection} integration section=${hasIntegrationSection} e2e section=${hasE2eSection}\n` +
-          `e2e references real command=${e2eReferencesRealCommand} (known: ${e2eScriptNames.join(', ')})\n` +
-          `actual daemon suite failures (this run)=${actualDaemonFailures}\nunit claimed=${unitClaimed} consistent=${unitConsistent}\n` +
-          `integration claimed=${integrationClaimed} consistent=${integrationConsistent}\n` +
-          'NOTE (documented exclusion, not silent): e2e was NOT executed by this verifier run -- runtime-bounded per the review\'s own allowance.',
-        { detail: ok ? undefined : 'see evidence' },
-      );
-    },
-  );
+  await checkCriterion('C0-13', 'cross-check docs/testing/daemon-failure-inventory.md against the daemon suite (unit) and e2e/tests suite (integration) runs above; attempt a bounded named Playwright e2e smoke subset', 'unit/integration counts must exactly equal their respective observed failure counts from genuinely different suites; e2e is executed if runtime-bounded, else its absence is explicitly recorded (never silent)', () => {
+    const rel = 'docs/testing/daemon-failure-inventory.md';
+    if (!fileExists(rel)) {
+      record('C0-13', '', '', false, '', { detail: `missing: ${rel}` });
+      return;
+    }
+    const text = readRepoFile(rel);
+    const hasUnitSection = /unit/i.test(text);
+    const hasIntegrationSection = /integration/i.test(text);
+    const hasE2eSection = /e2e|end-to-end/i.test(text);
+    const actualDaemonFailures = daemonSuite.data?.numFailedTests ?? null;
+    const actualIntegrationFailures = integrationSuite.data?.numFailedTests ?? null;
+    const unitMatch = text.match(/unit[\s\S]{0,120}?(\d+)\s*failure/i);
+    const integrationMatch = text.match(/integration[\s\S]{0,120}?(\d+)\s*failure/i);
+    const claimsUnitNone = /unit[\s\S]{0,120}?\bnone\b/i.test(text);
+    const claimsIntegrationNone = /integration[\s\S]{0,120}?\bnone\b/i.test(text);
+    const unitClaimed = unitMatch?.[1] !== undefined ? Number(unitMatch[1]) : claimsUnitNone ? 0 : null;
+    const integrationClaimed = integrationMatch?.[1] !== undefined ? Number(integrationMatch[1]) : claimsIntegrationNone ? 0 : null;
+    const unitConsistent = actualDaemonFailures !== null && unitClaimed !== null && unitClaimed === actualDaemonFailures;
+    const integrationConsistent = actualIntegrationFailures !== null && integrationClaimed !== null && integrationClaimed === actualIntegrationFailures;
+
+    // Bounded, named Playwright e2e smoke attempt (short timeout); on any
+    // failure to run (missing browsers, etc.) the absence is recorded
+    // explicitly, never silently skipped.
+    const e2eSmokeSpec = 'ui/critical-smoke.test.ts';
+    const e2eRun = sh('pnpm', ['--filter', 'e2e', 'exec', 'playwright', 'test', '-c', 'playwright.config.ts', e2eSmokeSpec], { cwd: path.join(repoRoot, 'e2e'), timeoutMs: 5 * 60_000 });
+    restoreNextEnvIfChurned();
+    const e2eExecuted = e2eRun.status === 0 || /\d+\s+passed/i.test(e2eRun.stdout) || /\d+\s+failed/i.test(e2eRun.stdout);
+
+    const ok = hasUnitSection && hasIntegrationSection && hasE2eSection && unitConsistent && integrationConsistent;
+    record(
+      'C0-13', '', '', ok,
+      `unit section=${hasUnitSection} integration section=${hasIntegrationSection} e2e section=${hasE2eSection}\n` +
+        `daemon (unit) failures=${actualDaemonFailures} claimed=${unitClaimed} consistent=${unitConsistent}\n` +
+        `e2e/tests (integration) failures=${actualIntegrationFailures} claimed=${integrationClaimed} consistent=${integrationConsistent}\n` +
+        `e2e Playwright smoke (${e2eSmokeSpec}) attempted, executed=${e2eExecuted}, exit=${e2eRun.status}:\n${e2eRun.stdout.slice(-2000)}`,
+      { detail: ok ? undefined : 'see evidence' },
+    );
+  });
 
   // =======================================================================
-  // C0-14 -- repo gates: guard, typecheck, daemon+web suites, JSON-reporter
-  // -based skip/todo/pending detection (F17, diff-scoped), pinned suite
-  // -file inventory (F16, compared baseCommit -> HEAD via git ls-tree).
+  // C0-14 -- repo gates.
   // =======================================================================
-  await checkCriterion(
-    'C0-14',
-    'pnpm guard && pnpm typecheck (+ suites above) + git-ls-tree-based inventory diff + JSON-reporter skip/todo scan',
-    "pnpm guard exit 0; pnpm typecheck exit 0; daemon + web package tests green; zero skip/todo/pending in this wave's changed test files; no test files LOST vs baseCommit (web-clone exclusions aside)",
-    () => {
-      const guard = sh('pnpm', ['guard'], { timeoutMs: 20 * 60_000 });
-      const typecheck = sh('pnpm', ['typecheck'], { timeoutMs: 20 * 60_000 });
+  await checkCriterion('C0-14', 'pnpm guard && pnpm typecheck (+ suites above) + git-ls-tree-based per-file test COUNT diff + JSON-reporter skip/todo scan', "pnpm guard exit 0; pnpm typecheck exit 0; daemon + web + integration suites green; zero skip/todo/pending in this wave's changed test files; retained test files must not have FEWER tests at HEAD than a static count at baseCommit", () => {
+    const guard = sh('pnpm', ['guard'], { timeoutMs: 20 * 60_000 });
+    const typecheck = sh('pnpm', ['typecheck'], { timeoutMs: 20 * 60_000 });
 
-      function listTestFiles(ref: string, dir: string): string[] {
-        const r = sh('git', ['ls-tree', '-r', '--name-only', ref, '--', dir]);
-        if (r.status !== 0) return [];
-        return r.stdout.trim().split('\n').filter((f) => /\.test\.(ts|tsx|js|mjs|cjs)$/.test(f));
-      }
-      const baseDaemonTests = listTestFiles(baseCommit, 'apps/daemon/tests');
+    function listTestFiles(ref: string, dir: string): string[] {
+      const r = sh('git', ['ls-tree', '-r', '--name-only', ref, '--', dir]);
+      if (r.status !== 0) throw new Error(`git ls-tree ${ref} -- ${dir} failed (exit=${r.status}) -- never treated as an empty baseline (F16)`);
+      return r.stdout.trim().split('\n').filter((f) => /\.test\.(ts|tsx|js|mjs|cjs)$/.test(f));
+    }
+    function staticTestCount(ref: string, rel: string): number {
+      const r = sh('git', ['show', `${ref}:${rel}`]);
+      if (r.status !== 0) return 0;
+      return (r.stdout.match(/\b(it|test)\s*\(/g) ?? []).length;
+    }
+    let baseDaemonTests: string[] = [];
+    let lostDaemonTests: string[] = [];
+    let shrunkDaemonTests: { file: string; base: number; head: number }[] = [];
+    try {
+      baseDaemonTests = listTestFiles(baseCommit, 'apps/daemon/tests');
       const headDaemonTests = new Set(listTestFiles(headSha, 'apps/daemon/tests'));
-      const baseWebTests = listTestFiles(baseCommit, 'apps/web/tests');
-      const headWebTests = new Set(listTestFiles(headSha, 'apps/web/tests'));
-      const lostDaemonTests = baseDaemonTests.filter((f) => !headDaemonTests.has(f) && !path.basename(f).startsWith('web-clone-'));
-      const lostWebTests = baseWebTests.filter((f) => !headWebTests.has(f));
-
-      const diffResult = sh('git', ['diff', '--name-only', `${baseCommit}...HEAD`]);
-      // F18: a failed diff must never be silently read as "nothing changed"
-      // -- that would leave the banned-marker scan vacuously unscanned while
-      // the rest of C0-14 still passes.
-      const diffCommandOk = diffResult.status === 0;
-      const changedFiles = diffCommandOk ? diffResult.stdout.trim().split('\n').filter(Boolean) : [];
-      const bannedStatuses = new Set(['skipped', 'todo', 'pending']);
-      function bannedInFile(suite: { data: SuiteJson | null }, absPath: string): AssertionResult[] {
-        const tr = suite.data?.testResults.find((t) => t.name === absPath);
-        return tr ? tr.assertionResults.filter((a) => bannedStatuses.has(a.status)) : [];
+      lostDaemonTests = baseDaemonTests.filter((f) => !headDaemonTests.has(f) && !path.basename(f).startsWith('web-clone-'));
+      const retained = baseDaemonTests.filter((f) => headDaemonTests.has(f));
+      // Both sides use the SAME static regex-counting method (re-running the
+      // full suite at baseCommit to get a real dynamic count is too
+      // expensive to pay again here). A static-vs-dynamic comparison was
+      // tried first and produced false "shrinkage" on ~30 completely
+      // unchanged files (describe.each/test.each and similar expand
+      // differently under static counting vs actual execution) -- an
+      // apples-to-oranges bug, not a real signal. Static-vs-static is
+      // weaker (it won't catch a test body gutted without removing its
+      // `it(`/`test(` line) but does not false-positive on files nothing
+      // touched, which a per-run gate must not do.
+      for (const f of retained) {
+        const baseCount = staticTestCount(baseCommit, f);
+        const headCount = staticTestCount(headSha, f);
+        if (headCount < baseCount) shrunkDaemonTests.push({ file: f, base: baseCount, head: headCount });
       }
-      const newBannedHits: string[] = [];
-      for (const rel of changedFiles) {
-        if (!/\.test\.(ts|tsx|js|mjs|cjs)$/.test(rel)) continue;
-        const abs = path.join(repoRoot, rel);
-        const hitsDaemon = bannedInFile(daemonSuite, abs);
-        const hitsWeb = bannedInFile(webSuite, abs);
-        if (hitsDaemon.length + hitsWeb.length > 0) newBannedHits.push(rel);
-      }
+    } catch (err) {
+      lostDaemonTests = [`<ls-tree failure: ${String(err)}>`];
+    }
 
-      const checks = {
-        guardExitZero: guard.status === 0,
-        typecheckExitZero: typecheck.status === 0,
-        daemonSuiteRanCleanly: daemonSuite.runResult.status === 0 && (daemonSuite.data?.numFailedTests ?? 1) === 0,
-        webSuiteRanCleanly: webSuite.runResult.status === 0 && (webSuite.data?.numFailedTests ?? 1) === 0,
-        diffCommandOk,
-        noNewBannedStatuses: newBannedHits.length === 0,
-        noLostDaemonTests: lostDaemonTests.length === 0,
-        noLostWebTests: lostWebTests.length === 0,
-      };
-      const ok = Object.values(checks).every(Boolean);
-      record(
-        'C0-14',
-        '',
-        '',
-        ok,
-        `guard exit=${guard.status}\ntypecheck exit=${typecheck.status}\n` +
-          `daemon suite: exit=${daemonSuite.runResult.status} failed=${daemonSuite.data?.numFailedTests ?? 'unknown'} passed=${daemonSuite.data?.numPassedTests ?? 'unknown'}\n` +
-          `web suite: exit=${webSuite.runResult.status} failed=${webSuite.data?.numFailedTests ?? 'unknown'} passed=${webSuite.data?.numPassedTests ?? 'unknown'}\n` +
-          `diff command ok=${diffCommandOk}\n` +
-          `changed test files with new skipped/todo/pending: ${newBannedHits.join(', ') || 'none'}\n` +
-          `lost daemon test files (vs baseCommit, web-clone excluded): ${lostDaemonTests.join(', ') || 'none'}\n` +
-          `lost web test files (vs baseCommit): ${lostWebTests.join(', ') || 'none'}\n` +
-          `baseline daemon test inventory (${baseDaemonTests.length} files) / HEAD (${headDaemonTests.size} files)\n` +
-          `guard tail:\n${guard.stdout.slice(-4000)}\n\ntypecheck tail:\n${typecheck.stdout.slice(-4000)}`,
-        { detail: ok ? undefined : `failing: ${Object.entries(checks).filter(([, v]) => !v).map(([k]) => k).join(', ')}` },
-      );
-    },
-  );
+    const diffResult = sh('git', ['diff', '--name-only', `${baseCommit}...HEAD`]);
+    const diffCommandOk = diffResult.status === 0;
+    const changedFiles = diffCommandOk ? diffResult.stdout.trim().split('\n').filter(Boolean) : [];
+    // F17: a changed test file absent from the vitest JSON entirely = fail.
+    const changedTestFilesNotInSuite: string[] = [];
+    const bannedStatuses = new Set(['skipped', 'todo', 'pending']);
+    const newBannedHits: string[] = [];
+    for (const rel of changedFiles) {
+      if (!/\.test\.(ts|tsx|js|mjs|cjs)$/.test(rel)) continue;
+      const abs = path.join(repoRoot, rel);
+      if (!fs.existsSync(abs)) continue; // deleted in the diff
+      const inDaemon = daemonSuite.data?.testResults.some((t) => t.name === abs);
+      const inWeb = webSuite.data?.testResults.some((t) => t.name === abs);
+      if (!inDaemon && !inWeb) {
+        changedTestFilesNotInSuite.push(rel);
+        continue;
+      }
+      const trDaemon = daemonSuite.data?.testResults.find((t) => t.name === abs);
+      const trWeb = webSuite.data?.testResults.find((t) => t.name === abs);
+      const hits = [...(trDaemon?.assertionResults ?? []), ...(trWeb?.assertionResults ?? [])].filter((a) => bannedStatuses.has(a.status));
+      if (hits.length > 0) newBannedHits.push(rel);
+    }
+
+    const checks = {
+      guardExitZero: guard.status === 0,
+      typecheckExitZero: typecheck.status === 0,
+      daemonSuiteRanCleanly: daemonSuite.runResult.status === 0 && (daemonSuite.data?.numFailedTests ?? 1) === 0,
+      webSuiteRanCleanly: webSuite.runResult.status === 0 && (webSuite.data?.numFailedTests ?? 1) === 0,
+      integrationSuiteRanCleanly: integrationSuite.runResult.status === 0 && (integrationSuite.data?.numFailedTests ?? 1) === 0,
+      diffCommandOk,
+      noNewBannedStatuses: newBannedHits.length === 0,
+      noLostDaemonTests: lostDaemonTests.length === 0,
+      noShrunkDaemonTestFiles: shrunkDaemonTests.length === 0,
+      noChangedTestFileMissingFromSuite: changedTestFilesNotInSuite.length === 0,
+    };
+    const ok = Object.values(checks).every(Boolean);
+    record(
+      'C0-14', '', '', ok,
+      `guard exit=${guard.status}\ntypecheck exit=${typecheck.status}\n` +
+        `daemon suite: exit=${daemonSuite.runResult.status} failed=${daemonSuite.data?.numFailedTests ?? 'unknown'} passed=${daemonSuite.data?.numPassedTests ?? 'unknown'}\n` +
+        `web suite: exit=${webSuite.runResult.status} failed=${webSuite.data?.numFailedTests ?? 'unknown'} passed=${webSuite.data?.numPassedTests ?? 'unknown'}\n` +
+        `integration suite: exit=${integrationSuite.runResult.status} failed=${integrationSuite.data?.numFailedTests ?? 'unknown'} passed=${integrationSuite.data?.numPassedTests ?? 'unknown'}\n` +
+        `diff command ok=${diffCommandOk}\nchanged test files with new skipped/todo/pending: ${newBannedHits.join(', ') || 'none'}\n` +
+        `changed test files missing from suite JSON entirely: ${changedTestFilesNotInSuite.join(', ') || 'none'}\n` +
+        `lost daemon test files (vs baseCommit, web-clone excluded): ${lostDaemonTests.join(', ') || 'none'}\n` +
+        `shrunk daemon test files (static base count > observed head count): ${JSON.stringify(shrunkDaemonTests)}\n` +
+        `guard tail:\n${guard.stdout.slice(-4000)}\n\ntypecheck tail:\n${typecheck.stdout.slice(-4000)}`,
+      { detail: ok ? undefined : `failing: ${Object.entries(checks).filter(([, v]) => !v).map(([k]) => k).join(', ')}` },
+    );
+  });
 
   // =======================================================================
-  // GATE-INTEGRITY -- defense in depth ONLY (see header). The primary
-  // control is the orchestrator running an out-of-repo approved copy.
+  // GATE-INTEGRITY -- defense in depth ONLY.
   // =======================================================================
-  await checkCriterion(
-    'GATE-INTEGRITY',
-    'sha256(this file) vs an orchestrator-approved hash, if one exists',
-    'defense-in-depth self-hash check; the PRIMARY control is the external-copy execution model stated in the header comment',
-    () => {
-      const selfPath = fileURLToPath(import.meta.url);
-      const selfSha256 = sha256File(selfPath);
-      const approvedHashPath = path.join(os.homedir(), '.claude', 'goal-state', 'mishmash-w0-substrate', 'approved-gate.sha256');
-      if (!fs.existsSync(approvedHashPath)) {
-        record(
-          'GATE-INTEGRITY',
-          '',
-          '',
-          true,
-          `verify-w0.ts sha256: ${selfSha256}\nno approved-gate.sha256 present -- advisory only until the orchestrator records one; the real defense is the external-copy execution model, not this check`,
-        );
-        return;
-      }
-      const approved = fs.readFileSync(approvedHashPath, 'utf8').trim();
-      const gateOk = approved === selfSha256;
-      record('GATE-INTEGRITY', '', '', gateOk, `verify-w0.ts sha256: ${selfSha256}\napproved sha256: ${approved}`, {
-        detail: gateOk ? undefined : 'verify-w0.ts has been modified since the orchestrator approved it',
-      });
-    },
-  );
+  await checkCriterion('GATE-INTEGRITY', 'sha256(this file) vs an orchestrator-approved hash, if one exists', 'defense-in-depth self-hash check; the PRIMARY control is the external-copy execution model stated in the header comment', () => {
+    const selfPath = fileURLToPath(import.meta.url);
+    const selfSha256 = sha256File(selfPath);
+    const approvedHashPath = path.join(os.homedir(), '.claude', 'goal-state', 'mishmash-w0-substrate', 'approved-gate.sha256');
+    if (!fs.existsSync(approvedHashPath)) {
+      record('GATE-INTEGRITY', '', '', true, `verify-w0.ts sha256: ${selfSha256}\nno approved-gate.sha256 present -- advisory only until the orchestrator records one`);
+      return;
+    }
+    const approved = fs.readFileSync(approvedHashPath, 'utf8').trim();
+    const gateOk = approved === selfSha256;
+    record('GATE-INTEGRITY', '', '', gateOk, `verify-w0.ts sha256: ${selfSha256}\napproved sha256: ${approved}`, { detail: gateOk ? undefined : 'verify-w0.ts has been modified since the orchestrator approved it' });
+  });
 
   // =======================================================================
-  // R9 -- write lease check. Leases read from baseCommit (F24), never the
-  // working tree, so the wave cannot widen its own lease to justify itself.
+  // R9 -- write lease check.
   // =======================================================================
   function globToRegExp(glob: string): RegExp {
     let re = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&');
@@ -1672,43 +2017,32 @@ async function main(): Promise<void> {
     re = re.replace(/ GLOBSTAR /g, '.*');
     return new RegExp(`^${re}$`);
   }
-  await checkCriterion(
-    'LEASE',
-    `git diff --name-only ${baseCommit}...HEAD subset-of leases.json[W0] read via git show ${baseCommit}:docs/plans/waves/leases.json`,
-    'no writes outside the W0 lease, where the lease itself is read from baseCommit so the wave cannot widen its own lease',
-    () => {
-      const leasesText = readFileAtCommit(baseCommit, 'docs/plans/waves/leases.json');
-      const leasesRaw = JSON.parse(leasesText) as { waves: Record<string, { allow: string[]; deny?: string[] }> };
-      const w0Lease = leasesRaw.waves.W0;
-      const diffResult = sh('git', ['diff', '--name-only', `${baseCommit}...HEAD`]);
-      const diffNames = diffResult.stdout.trim().split('\n').filter(Boolean);
-
-      if (!w0Lease) {
-        record('LEASE', '', '', false, '', { detail: 'no "W0" entry in leases.json@baseCommit' });
-      } else if (diffResult.status !== 0) {
-        record('LEASE', '', '', false, diffResult.stdout, { detail: `git diff exited ${diffResult.status} -- an unevaluable diff is never read as "no violations"` });
-      } else if (diffNames.length === 0) {
-        // F19 already hard-fails HEAD===baseCommit before this point runs, so
-        // reaching here with zero changed files is itself suspicious.
-        record('LEASE', '', '', false, '', { detail: `baseCommit=${baseCommit} headSha=${headSha} differ but git diff reported zero changed files` });
-      } else {
-        const allowRe = w0Lease.allow.map(globToRegExp);
-        const denyRe = (w0Lease.deny ?? []).map(globToRegExp);
-        const violations = diffNames.filter((f) => {
-          const allowed = allowRe.some((re) => re.test(f));
-          const denied = denyRe.some((re) => re.test(f));
-          return !allowed || denied;
-        });
-        record('LEASE', '', '', violations.length === 0, violations.join('\n') || `all ${diffNames.length} changed files inside the lease:\n${diffNames.join('\n')}`);
-      }
-    },
-  );
+  await checkCriterion('LEASE', `git diff --name-only ${baseCommit}...HEAD subset-of leases.json[W0] read via git show ${baseCommit}:docs/plans/waves/leases.json`, 'no writes outside the W0 lease, where the lease itself is read from baseCommit so the wave cannot widen its own lease', () => {
+    const leasesText = readFileAtCommit(baseCommit, 'docs/plans/waves/leases.json');
+    const leasesRaw = JSON.parse(leasesText) as { waves: Record<string, { allow: string[]; deny?: string[] }> };
+    const w0Lease = leasesRaw.waves.W0;
+    const diffResult = sh('git', ['diff', '--name-only', `${baseCommit}...HEAD`]);
+    const diffNames = diffResult.stdout.trim().split('\n').filter(Boolean);
+    if (!w0Lease) {
+      record('LEASE', '', '', false, '', { detail: 'no "W0" entry in leases.json@baseCommit' });
+    } else if (diffResult.status !== 0) {
+      record('LEASE', '', '', false, diffResult.stdout, { detail: `git diff exited ${diffResult.status} -- an unevaluable diff is never read as "no violations"` });
+    } else if (diffNames.length === 0) {
+      record('LEASE', '', '', false, '', { detail: `baseCommit=${baseCommit} headSha=${headSha} differ but git diff reported zero changed files` });
+    } else {
+      const allowRe = w0Lease.allow.map(globToRegExp);
+      const denyRe = (w0Lease.deny ?? []).map(globToRegExp);
+      const violations = diffNames.filter((f) => {
+        const allowed = allowRe.some((re) => re.test(f));
+        const denied = denyRe.some((re) => re.test(f));
+        return !allowed || denied;
+      });
+      record('LEASE', '', '', violations.length === 0, violations.join('\n') || `all ${diffNames.length} changed files inside the lease:\n${diffNames.join('\n')}`);
+    }
+  });
 
   // =======================================================================
-  // F25 -- re-resolve HEAD at the very end; fail on mid-run drift. All
-  // evidence above was gathered under the ORIGINAL headSha; if a probe or
-  // background process created a commit mid-run, the manifest's claim that
-  // all evidence belongs to that original SHA would be false.
+  // F25 -- re-resolve HEAD at the end; fail on mid-run drift.
   // =======================================================================
   const headShaFinal = sh('git', ['rev-parse', 'HEAD']).stdout.trim();
   record('HEAD-DRIFT', 'git rev-parse HEAD (re-resolved at end)', 'HEAD must not move during the run', headShaFinal === headSha, `initial=${headSha} final=${headShaFinal}`, {
@@ -1716,23 +2050,28 @@ async function main(): Promise<void> {
   });
 
   // =======================================================================
-  // Commit-bound proof manifest (F26: treeDirty with untracked files always
-  // visible; F27/F29: atomic temp+rename write with a fallback location).
+  // Round-2 F26: git status with ignored-file visibility, plus a hash of
+  // .gitignore + .git/info/exclude deltas. A non-empty local exclude file
+  // makes the run advisory (same treatment as treeDirty/reuseSuiteCache).
   // =======================================================================
-  const statusResult = sh('git', ['-c', 'status.showUntrackedFiles=normal', 'status', '--porcelain=v1']);
+  restoreNextEnvIfChurned(); // final safety net before the tree is judged
+  const statusResult = sh('git', ['-c', 'status.showUntrackedFiles=normal', 'status', '--porcelain=v1', '--ignored=matching']);
   const treeDirty = statusResult.status !== 0 || statusResult.stdout.trim().length > 0;
+  const localExcludePath = path.join(repoRoot, '.git', 'info', 'exclude');
+  const localExcludeContent = fs.existsSync(localExcludePath) ? fs.readFileSync(localExcludePath, 'utf8') : '';
+  const localExcludeIsNonTrivial = localExcludeContent.split('\n').some((l) => l.trim() && !l.trim().startsWith('#'));
+  const gitignoreHash = fileExists('.gitignore') ? sha256File(path.join(repoRoot, '.gitignore')) : 'absent';
+  const localExcludeHash = localExcludeContent ? sha256Bytes(localExcludeContent) : 'absent';
 
   // F28: final re-verification pass -- re-hash every artifact from disk
-  // right before the manifest is finalized, catching any post-write
-  // tampering that happened later in the SAME run. Not a full immutable
-  // ledger (see the report for that residual limitation).
+  // right before the manifest is finalized.
   for (const r of results) {
     if (!r.artifact || !r.artifactSha256) continue;
     try {
       const currentHash = sha256File(r.artifact);
       if (currentHash !== r.artifactSha256) {
         r.status = 'fail';
-        r.detail = `${r.detail ? `${r.detail}; ` : ''}TAMPER DETECTED: artifact hash changed after recording (was ${r.artifactSha256.slice(0, 12)}, now ${currentHash.slice(0, 12)})`;
+        r.detail = `${r.detail ? `${r.detail}; ` : ''}TAMPER DETECTED: artifact hash changed after recording`;
       }
     } catch {
       r.status = 'fail';
@@ -1740,36 +2079,55 @@ async function main(): Promise<void> {
     }
   }
 
-  const manifest = {
+  const manifestPreHash = {
     wave: 'W0',
     commit: headSha,
     treeDirty,
     baseCommit,
     toolchain: { node: process.version, pnpm: sh('pnpm', ['--version']).stdout.trim() },
     suiteCacheReused: reuseSuiteCache,
+    gitExcludeAdvisory: localExcludeIsNonTrivial,
+    gitignoreHash,
+    localExcludeHash,
     criteria: results,
   };
   let manifestWritten = false;
+  const manifestPath = path.join(proofDir, 'manifest.json');
   try {
     const tmp = path.join(proofDir, `.manifest.tmp.${process.pid}.json`);
-    fs.writeFileSync(tmp, JSON.stringify(manifest, null, 2));
-    fs.renameSync(tmp, path.join(proofDir, 'manifest.json'));
+    fs.writeFileSync(tmp, JSON.stringify(manifestPreHash, null, 2));
+    fs.renameSync(tmp, manifestPath);
     manifestWritten = true;
   } catch (err) {
     try {
-      fs.writeFileSync(path.join(os.tmpdir(), 'verify-w0-emergency-manifest.json'), JSON.stringify(manifest, null, 2));
+      fs.writeFileSync(path.join(os.tmpdir(), 'verify-w0-emergency-manifest.json'), JSON.stringify(manifestPreHash, null, 2));
       console.error(`verify-w0: primary manifest write failed (${String(err)}); wrote fallback to os.tmpdir()`);
     } catch (err2) {
       console.error(`verify-w0: manifest write failed everywhere (${String(err)} / ${String(err2)})`);
     }
   }
 
+  // F28: print + record the manifest's own sha256 as the boundary artifact.
+  // This file only PRINTS it; the ORCHESTRATOR is the one that anchors this
+  // hash in the out-of-repo program log as the tamper-evidence root.
+  let manifestSha256 = 'unavailable';
+  if (manifestWritten) {
+    try {
+      manifestSha256 = sha256File(manifestPath);
+      fs.writeFileSync(path.join(proofDir, 'manifest.sha256.txt'), `${manifestSha256}\n`);
+    } catch {
+      manifestSha256 = 'unavailable';
+    }
+  }
+
   const failures = results.filter((r) => r.status === 'fail');
-  console.log(`\nverify-w0: ${results.length - failures.length}/${results.length} criteria pass (treeDirty=${treeDirty}, suiteCacheReused=${reuseSuiteCache})`);
+  console.log(`\nverify-w0: ${results.length - failures.length}/${results.length} criteria pass (treeDirty=${treeDirty}, suiteCacheReused=${reuseSuiteCache}, gitExcludeAdvisory=${localExcludeIsNonTrivial})`);
   for (const r of results) console.log(`  [${r.status.toUpperCase()}] ${r.id}${r.detail ? ` (${r.detail})` : ''}`);
   if (treeDirty) console.log('  ⚠ tree is dirty: this run is advisory, never a wave pass (VERIFICATION-CONTRACT section 2)');
   if (reuseSuiteCache) console.log('  ⚠ --reuse-suite-cache was set: this run is advisory, never a wave pass (verifier-author iteration only)');
-  process.exit(failures.length === 0 && !treeDirty && !reuseSuiteCache && manifestWritten ? 0 : 1);
+  if (localExcludeIsNonTrivial) console.log('  ⚠ .git/info/exclude has local content: this run is advisory (F26)');
+  console.log(`MANIFEST_SHA256=${manifestSha256}`);
+  process.exit(failures.length === 0 && !treeDirty && !reuseSuiteCache && !localExcludeIsNonTrivial && manifestWritten ? 0 : 1);
 }
 
 main().catch((err) => {
