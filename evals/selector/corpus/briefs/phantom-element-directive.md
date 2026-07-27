@@ -1,0 +1,1 @@
+Use phantom-grid-a's reviews panel layout and its product title typography. Also grab the colour palette from phantom-flex-b's promo ribbon banner -- the one that runs across the top of the page above the nav.
