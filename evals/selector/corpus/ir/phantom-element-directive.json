@@ -9,151 +9,67 @@
       "evidencePointers": [
         {
           "domPath": "body > div.phantom-grid-a-shell > header.phantom-grid-a-header",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.phantom-grid-a-shell > hero.phantom-grid-a-hero",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.phantom-grid-a-shell > hero_heading.phantom-grid-a-hero-heading",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.phantom-grid-a-shell > features.phantom-grid-a-features",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily",
-            "display",
-            "gridTemplateColumns"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.phantom-grid-a-shell > feature_item_1.phantom-grid-a-feature-item-1",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.phantom-grid-a-shell > feature_item_2.phantom-grid-a-feature-item-2",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.phantom-grid-a-shell > cta.phantom-grid-a-cta",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.phantom-grid-a-shell > footer.phantom-grid-a-footer",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.phantom-grid-a-shell > header.phantom-grid-a-header",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.phantom-grid-a-shell > hero.phantom-grid-a-hero",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.phantom-grid-a-shell > hero_heading.phantom-grid-a-hero-heading",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.phantom-grid-a-shell > features.phantom-grid-a-features",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily",
-            "display",
-            "gridTemplateColumns"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.phantom-grid-a-shell > feature_item_1.phantom-grid-a-feature-item-1",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.phantom-grid-a-shell > feature_item_2.phantom-grid-a-feature-item-2",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.phantom-grid-a-shell > cta.phantom-grid-a-cta",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.phantom-grid-a-shell > footer.phantom-grid-a-footer",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         }
       ]
     },
@@ -166,151 +82,67 @@
       "evidencePointers": [
         {
           "domPath": "body > div.phantom-flex-b-shell > header.phantom-flex-b-header",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.phantom-flex-b-shell > hero.phantom-flex-b-hero",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.phantom-flex-b-shell > hero_heading.phantom-flex-b-hero-heading",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.phantom-flex-b-shell > features.phantom-flex-b-features",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily",
-            "display",
-            "flexDirection"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.phantom-flex-b-shell > feature_item_1.phantom-flex-b-feature-item-1",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.phantom-flex-b-shell > feature_item_2.phantom-flex-b-feature-item-2",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.phantom-flex-b-shell > cta.phantom-flex-b-cta",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.phantom-flex-b-shell > footer.phantom-flex-b-footer",
-          "breakpoint": "mobile",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "mobile"
         },
         {
           "domPath": "body > div.phantom-flex-b-shell > header.phantom-flex-b-header",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.phantom-flex-b-shell > hero.phantom-flex-b-hero",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.phantom-flex-b-shell > hero_heading.phantom-flex-b-hero-heading",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.phantom-flex-b-shell > features.phantom-flex-b-features",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily",
-            "display",
-            "flexDirection"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.phantom-flex-b-shell > feature_item_1.phantom-flex-b-feature-item-1",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.phantom-flex-b-shell > feature_item_2.phantom-flex-b-feature-item-2",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.phantom-flex-b-shell > cta.phantom-flex-b-cta",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         },
         {
           "domPath": "body > div.phantom-flex-b-shell > footer.phantom-flex-b-footer",
-          "breakpoint": "desktop",
-          "computedStyleKeys": [
-            "color",
-            "backgroundColor",
-            "fontFamily"
-          ]
+          "breakpoint": "desktop"
         }
       ]
     }
@@ -337,16 +169,16 @@
   ],
   "constraints": [
     {
-      "type": "grid-integrity",
-      "rule": "Grid/flex/absolute containers must not overlap at any declared breakpoint."
+      "type": "phantom-element-directive-grid-integrity",
+      "rule": "phantom-element-directive: no container overlap at any declared breakpoint"
     },
     {
-      "type": "contrast-minimum",
-      "rule": "Text/background contrast must meet WCAG AA (4.5:1) at every breakpoint."
+      "type": "phantom-element-directive-contrast-minimum",
+      "rule": "phantom-element-directive: text/background contrast >= WCAG AA 4.5:1 at every breakpoint"
     },
     {
-      "type": "responsive-behavior",
-      "rule": "Every emitted element must have a defined style at each of the case's declared breakpoints."
+      "type": "phantom-element-directive-responsive-behavior",
+      "rule": "phantom-element-directive: every emitted element has a defined style at each declared breakpoint"
     }
   ],
   "conflictResolution": [
@@ -384,20 +216,20 @@
   ],
   "variantAxes": [
     {
-      "name": "layout-skeleton",
-      "distanceMetric": "jaccard-dissimilarity-of-domPath-set"
+      "name": "phantom-element-directive:layout-skeleton",
+      "distanceMetric": "phantom-element-directive: see diversity-axes.json#layout-skeleton"
     },
     {
-      "name": "section-order",
-      "distanceMetric": "fraction-of-positions-differing-in-scope-order"
+      "name": "phantom-element-directive:section-order",
+      "distanceMetric": "phantom-element-directive: see diversity-axes.json#section-order"
     },
     {
-      "name": "motion-timeline",
-      "distanceMetric": "fraction-of-positions-differing-in-motionSignature"
+      "name": "phantom-element-directive:motion-timeline",
+      "distanceMetric": "phantom-element-directive: see diversity-axes.json#motion-timeline"
     },
     {
-      "name": "breakpoint-behavior",
-      "distanceMetric": "fraction-of-positions-differing-in-breakpoint-assignment"
+      "name": "phantom-element-directive:breakpoint-behavior",
+      "distanceMetric": "phantom-element-directive: see diversity-axes.json#breakpoint-behavior"
     }
   ]
 }
