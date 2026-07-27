@@ -58,7 +58,19 @@ export async function launchChromium(chromium, { headful = false } = {}) {
       return await chromium.launch({ headless: false, channel: "chrome", args: HEADFUL_STEALTH_ARGS });
     } catch (firstError) {
       try {
-        return await chromium.launch({ headless: false, args: HEADFUL_STEALTH_ARGS });
+        const browser = await chromium.launch({ headless: false, args: HEADFUL_STEALTH_ARGS });
+        // --headful exists specifically to get real Chrome's fingerprint past
+        // a bot wall; silently handing back bundled Chromium instead would
+        // let a caller/operator believe that happened when it didn't. This
+        // must be reported, not swallowed -- a different fingerprint may not
+        // clear the same challenge.
+        console.warn(
+          `⚠️ --headful requested real Chrome (channel:"chrome") but it failed to launch ` +
+            `(${firstError.message}); falling back to Playwright's bundled Chromium in headful ` +
+            `mode instead. This has a different fingerprint than real Chrome and may not clear ` +
+            `the same bot-wall challenge.`,
+        );
+        return browser;
       } catch {
         throw firstError;
       }

@@ -22,18 +22,35 @@
 // primitive, so the two mirror stages can never disagree about what counts as
 // a reference.
 
-const ATTRIBUTE_PATTERN = /\s([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*['"]([^'"]+)['"]/g;
+const QUOTED_ATTRIBUTE_PATTERN = /\s([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(['"])([^'"]*)\2/g;
+// Valid HTML5: an unquoted attribute value cannot contain space, quotes, `=`,
+// `<`, `>`, or a backtick. The negative lookahead keeps this pattern from
+// re-matching a value the quoted pattern above already consumed.
+const UNQUOTED_ATTRIBUTE_PATTERN = /\s([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?!['"])([^\s"'=<>`]+)/g;
 const CSS_URL_PATTERN = /url\(\s*['"]?([^'")]+)['"]?\s*\)/gi;
 const CSS_IMPORT_PATTERN = /@import\s+['"]([^'"]+)['"]/gi;
 
+/** Non-fetchable/inline schemes: nothing a mirror pass could retrieve or usefully localise. */
 function isIgnorableReference(value) {
-  return !value || value.startsWith("data:") || value.startsWith("#");
+  return !value || value.startsWith("data:") || value.startsWith("blob:") || value.startsWith("#");
 }
 
-/** Splits a `srcset` value into its candidate URLs, dropping the density/width descriptor. */
+/**
+ * Splits a `srcset` value into its candidate URLs, dropping the
+ * density/width descriptor.
+ *
+ * Splitting on every comma is wrong for a `data:` URI candidate: the comma
+ * separating a data URI's mime type from its payload (`data:image/svg+xml,...`)
+ * is not a candidate separator, but a bare `split(",")` treats it as one and
+ * emits the payload fragment as a spurious second "reference". Valid srcset
+ * syntax requires whitespace after the comma that actually separates
+ * candidates, so splitting on ",<whitespace>" instead correctly leaves a
+ * data URI's internal (unspaced) comma alone while still splitting real
+ * candidates apart.
+ */
 function srcsetCandidates(value) {
   return value
-    .split(",")
+    .split(/,\s+/)
     .map((part) => part.trim().split(/\s+/)[0] ?? "")
     .filter((candidate) => candidate.length > 0);
 }
@@ -48,13 +65,21 @@ function srcsetCandidates(value) {
 export function collectReferenceCandidates(text) {
   const refs = [];
 
-  for (const match of text.matchAll(ATTRIBUTE_PATTERN)) {
-    const [, name, raw] = match;
+  for (const match of text.matchAll(QUOTED_ATTRIBUTE_PATTERN)) {
+    const [, name, , raw] = match;
     const candidates = /srcset$/i.test(name) ? srcsetCandidates(raw) : [raw];
     for (const candidate of candidates) {
       const value = candidate.trim();
       if (!isIgnorableReference(value)) refs.push(value);
     }
+  }
+
+  // Unquoted values are always a single token (no whitespace is possible
+  // without ending the attribute), so a multi-candidate unquoted `srcset`
+  // cannot occur validly -- treat the token as one reference, not a list.
+  for (const match of text.matchAll(UNQUOTED_ATTRIBUTE_PATTERN)) {
+    const value = (match[2] ?? "").trim();
+    if (!isIgnorableReference(value)) refs.push(value);
   }
 
   for (const match of text.matchAll(CSS_URL_PATTERN)) {

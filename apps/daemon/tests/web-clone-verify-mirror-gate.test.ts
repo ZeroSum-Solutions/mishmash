@@ -8,9 +8,10 @@ import { describe, expect, it } from 'vitest';
 // gate (promoted from the rescue's RECON-v2/gate.mjs) a mirror must clear
 // before it may be reported complete or served to the user: serve it,
 // headless-load it at each captured viewport, and fail on any same-origin
-// resource failure, any broken image, scrollWidth/scrollHeight drift beyond
-// 5% vs a capture-time baseline, or a runtime global/count the baseline
-// recorded that the clone doesn't reproduce.
+// resource failure, any request that leaked to the mirror's original live
+// origin, any broken image, scrollWidth/scrollHeight drift beyond 5% vs a
+// capture-time baseline, or a runtime global/count the baseline recorded
+// that the clone doesn't reproduce.
 //
 // The gate's pass/fail *decision* lives in
 // skills/web-clone/scripts/lib/gate-decision.mjs as a pure function over
@@ -20,6 +21,13 @@ import { describe, expect, it } from 'vitest';
 // that assembles that data from a real headless run; these tests stand in
 // for that collection step with fixture data shaped exactly like what a
 // headless crawl of an incomplete-vs-complete mirror would produce.
+//
+// Round-2 additions (adversarial review): F2 (baseline validation must fail
+// closed on empty/incomplete/malformed input), F4 (the scroll-animation
+// clamp deliberately makes a clamped mirror's scrollWidth differ from the
+// raw live baseline -- the gate must not reject that fix, nor fail open on a
+// genuinely broken wide mirror that was never clamped), F18 (pin the exact
+// 5% tolerance boundary with explicit cases).
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../..');
 const gateDecisionScriptPath = path.join(
   repoRoot,
@@ -33,6 +41,7 @@ const gateDecisionScriptPath = path.join(
 type ViewportResult = {
   label: string;
   sameOriginFailures: Array<{ url: string; status?: number; error?: string }>;
+  originLeaks?: Array<{ url: string; status?: number; error?: string }>;
   brokenImages: string[];
   scrollWidth: number;
   scrollHeight: number;
@@ -45,11 +54,18 @@ type ViewportResult = {
 type Baseline = {
   scrollWidth: number;
   scrollHeight: number;
+  expectedScrollWidth?: number;
   frameworks: Record<string, boolean>;
   canvasCount: number;
   imageCount: number;
   videoCount: number;
 };
+
+type GateResult = { pass: boolean; baselineProvided: boolean; checks: Array<Record<string, unknown>> };
+
+type ValidationResult =
+  | { ok: true; baselineByLabel: Record<string, Baseline> }
+  | { ok: false; error: string };
 
 async function loadGateDecision() {
   return (await import(pathToFileURL(gateDecisionScriptPath).href)) as {
@@ -57,7 +73,9 @@ async function loadGateDecision() {
       viewports: ViewportResult[];
       baselineByLabel?: Record<string, Baseline> | null;
       tolerance?: number;
-    }) => { pass: boolean; baselineProvided: boolean; checks: Array<Record<string, unknown>> };
+    }) => GateResult;
+    validateBaselineDocument: (baselineDoc: unknown, requiredLabels?: string[]) => ValidationResult;
+    withinTolerance: (actual: number, expected: number, tolerance?: number) => boolean;
   };
 }
 
@@ -69,6 +87,7 @@ function viewportResult(overrides: Partial<ViewportResult> = {}): ViewportResult
   return {
     label: '1440',
     sameOriginFailures: [],
+    originLeaks: [],
     brokenImages: [],
     scrollWidth: 1440,
     scrollHeight: 3000,
@@ -90,6 +109,19 @@ const baselineByLabel: Record<string, Baseline> = {
     videoCount: 1,
   },
 };
+
+function validBaselineDoc(overrides: Partial<{ metrics: unknown[] }> = {}) {
+  return {
+    capturedAt: '2026-07-27T00:00:00.000Z',
+    origin: 'https://example.com',
+    metrics: [
+      { viewport: { label: '1440', width: 1440, height: 900, dpr: 1 }, scrollWidth: 1440, scrollHeight: 3000 },
+      { viewport: { label: '768', width: 768, height: 900, dpr: 1 }, scrollWidth: 768, scrollHeight: 3200 },
+      { viewport: { label: '390', width: 390, height: 844, dpr: 2 }, scrollWidth: 390, scrollHeight: 3400 },
+    ],
+    ...overrides,
+  };
+}
 
 describe('evaluateGate (verify-mirror.mjs pure gate decision)', () => {
   it('(b) fails a fixture mirror with a missing asset (404)', async () => {
@@ -124,6 +156,22 @@ describe('evaluateGate (verify-mirror.mjs pure gate decision)', () => {
     expect(result.pass).toBe(false);
   });
 
+  // F1: an asset the capture never downloaded stays absolute after the
+  // rewrite pass, so it loads fine from the still-live original origin
+  // during verification -- no request fails, but the mirror is silently
+  // still proxying the live site. This must fail regardless of HTTP status.
+  it('(F1) fails when a request leaked back to the original live origin, even with no same-origin failures', async () => {
+    const { evaluateGate } = await loadGateDecision();
+
+    const leaking = viewportResult({
+      originLeaks: [{ url: 'https://example.com/app.js', status: 200 }],
+    });
+
+    const result = evaluateGate({ viewports: [leaking], baselineByLabel });
+
+    expect(result.pass).toBe(false);
+  });
+
   it('(c) fails on scrollWidth drift beyond the 5% tolerance vs baseline', async () => {
     const { evaluateGate } = await loadGateDecision();
 
@@ -144,6 +192,45 @@ describe('evaluateGate (verify-mirror.mjs pure gate decision)', () => {
     const result = evaluateGate({ viewports: [withinTolerance], baselineByLabel });
 
     expect(result.pass).toBe(true);
+  });
+
+  // F18: pin the exact 5% boundary so a silent regression to (say) 10%
+  // tolerance would be caught, and cover the negative-drift and
+  // zero-baseline edges the original tests never exercised.
+  describe('(F18) 5% tolerance boundary', () => {
+    it('passes at exactly 5% drift (boundary is inclusive)', async () => {
+      const { evaluateGate } = await loadGateDecision();
+      const atBoundary = viewportResult({ scrollWidth: 1440 * 1.05 });
+
+      const result = evaluateGate({ viewports: [atBoundary], baselineByLabel });
+
+      expect(result.pass).toBe(true);
+    });
+
+    it('fails just above 5% drift', async () => {
+      const { evaluateGate } = await loadGateDecision();
+      const justOver = viewportResult({ scrollWidth: 1440 * 1.0501 });
+
+      const result = evaluateGate({ viewports: [justOver], baselineByLabel });
+
+      expect(result.pass).toBe(false);
+    });
+
+    it('fails on negative-direction drift beyond 5% (actual narrower than baseline)', async () => {
+      const { evaluateGate } = await loadGateDecision();
+      const narrower = viewportResult({ scrollWidth: 1440 * 0.9 });
+
+      const result = evaluateGate({ viewports: [narrower], baselineByLabel });
+
+      expect(result.pass).toBe(false);
+    });
+
+    it('a zero baseline requires an exact zero actual', async () => {
+      const { withinTolerance } = await loadGateDecision();
+
+      expect(withinTolerance(0, 0)).toBe(true);
+      expect(withinTolerance(1, 0)).toBe(false);
+    });
   });
 
   it('fails when a runtime global recorded true in the baseline is missing from the clone', async () => {
@@ -185,5 +272,180 @@ describe('evaluateGate (verify-mirror.mjs pure gate decision)', () => {
     const result = evaluateGate({ viewports: [incomplete], baselineByLabel: null });
 
     expect(result.pass).toBe(false);
+  });
+
+  // F2: an empty/misconfigured viewport list must never read as a pass --
+  // `Array.prototype.every` is vacuously true over `[]`.
+  it('(F2) fails closed when zero viewports were verified', async () => {
+    const { evaluateGate } = await loadGateDecision();
+
+    const result = evaluateGate({ viewports: [], baselineByLabel });
+
+    expect(result.pass).toBe(false);
+  });
+
+  // F2: a baseline document WAS supplied (so this is not the "no --baseline"
+  // path), but it has no entry for this exact viewport label -- must fail,
+  // not silently run the resource-only check as if no baseline existed.
+  it('(F2) fails when a baseline was supplied but has no entry for the checked viewport', async () => {
+    const { evaluateGate } = await loadGateDecision();
+
+    const result = evaluateGate({
+      viewports: [viewportResult({ label: '768' })],
+      baselineByLabel, // only has a '1440' entry
+    });
+
+    expect(result.pass).toBe(false);
+  });
+
+  // F4: the scroll-animation clamp deliberately makes a clamped mirror's
+  // scrollWidth DIFFERENT from the raw live-page baseline (that is the fix
+  // working -- see clamp-scroll-animation-overflow.mjs). mirror-site.mjs
+  // records a re-measured `expectedScrollWidth` on the baseline entry when
+  // it applied the clamp; when present, the gate must check against THAT
+  // value instead of the raw (pre-clamp, inflated) baseline.scrollWidth.
+  describe('(F4) clamp vs. baseline contract', () => {
+    it('a clamped mirror passes: raw baseline is wildly different, but actual matches expectedScrollWidth', async () => {
+      const { evaluateGate } = await loadGateDecision();
+      const clampedBaseline: Record<string, Baseline> = {
+        '1440': {
+          // Real designbybrandin.com regression: live/unclamped baseline
+          // reads ~6025px; the clamped local mirror measures ~1441px.
+          scrollWidth: 6025,
+          expectedScrollWidth: 1441,
+          scrollHeight: 3000,
+          frameworks: { lenis: true, three: false },
+          canvasCount: 2,
+          imageCount: 5,
+          videoCount: 1,
+        },
+      };
+      const clampedClone = viewportResult({ scrollWidth: 1441 });
+
+      const result = evaluateGate({ viewports: [clampedClone], baselineByLabel: clampedBaseline });
+
+      expect(result.pass).toBe(true);
+      expect(result.checks[0]?.scrollWidth).toMatchObject({ baseline: 1441, pass: true, source: 'post-clamp-expected' });
+    });
+
+    it('a genuinely-broken wide mirror with NO clamp metadata still fails', async () => {
+      const { evaluateGate } = await loadGateDecision();
+      // No `expectedScrollWidth` on this baseline entry -- nothing was
+      // clamped for this site, so a mirror that is simply wide/broken must
+      // still be checked against (and fail against) the raw baseline.
+      const unclampedBaseline: Record<string, Baseline> = {
+        '1440': {
+          scrollWidth: 1440,
+          scrollHeight: 3000,
+          frameworks: { lenis: true, three: false },
+          canvasCount: 2,
+          imageCount: 5,
+          videoCount: 1,
+        },
+      };
+      const brokenClone = viewportResult({ scrollWidth: 6025 });
+
+      const result = evaluateGate({ viewports: [brokenClone], baselineByLabel: unclampedBaseline });
+
+      expect(result.pass).toBe(false);
+      expect(result.checks[0]?.scrollWidth).toMatchObject({ baseline: 1440, pass: false, source: 'live-baseline' });
+    });
+  });
+});
+
+describe('validateBaselineDocument (F2: fail-closed baseline validation)', () => {
+  const requiredLabels = ['1440', '768', '390'];
+
+  it('accepts a complete, well-formed baseline covering every required viewport', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const result = validateBaselineDocument(validBaselineDoc(), requiredLabels);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(Object.keys(result.baselineByLabel).sort()).toEqual(requiredLabels.sort());
+    }
+  });
+
+  it('fails closed on an empty metrics array', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const result = validateBaselineDocument({ origin: 'https://example.com', metrics: [] }, requiredLabels);
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('fails closed when metrics is missing entirely', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const result = validateBaselineDocument({ origin: 'https://example.com' }, requiredLabels);
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('fails closed on a non-object document (e.g. a JSON array or null)', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    expect(validateBaselineDocument([], requiredLabels).ok).toBe(false);
+    expect(validateBaselineDocument(null, requiredLabels).ok).toBe(false);
+  });
+
+  it('fails closed when a metric is missing viewport.label', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const doc = validBaselineDoc({
+      metrics: [{ viewport: { width: 1440, height: 900, dpr: 1 }, scrollWidth: 1440, scrollHeight: 3000 }],
+    });
+
+    expect(validateBaselineDocument(doc, requiredLabels).ok).toBe(false);
+  });
+
+  it('fails closed on a duplicate viewport label', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const doc = validBaselineDoc({
+      metrics: [
+        { viewport: { label: '1440' }, scrollWidth: 1440, scrollHeight: 3000 },
+        { viewport: { label: '1440' }, scrollWidth: 1440, scrollHeight: 3000 },
+      ],
+    });
+
+    expect(validateBaselineDocument(doc, requiredLabels).ok).toBe(false);
+  });
+
+  it('fails closed on a non-finite required numeric field', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const doc = validBaselineDoc({
+      metrics: [{ viewport: { label: '1440' }, scrollWidth: Number.NaN, scrollHeight: 3000 }],
+    });
+
+    expect(validateBaselineDocument(doc, requiredLabels).ok).toBe(false);
+  });
+
+  // F2's exact named scenario: a baseline that only covers 1440 must not
+  // silently verify just that one viewport while 768/390 skip all baseline
+  // checks.
+  it('fails closed when a required viewport label is entirely missing from the baseline', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const doc = validBaselineDoc({
+      metrics: [{ viewport: { label: '1440' }, scrollWidth: 1440, scrollHeight: 3000 }],
+    });
+
+    const result = validateBaselineDocument(doc, requiredLabels);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/768/);
+  });
+
+  it('without requiredLabels, a partial-but-internally-valid baseline is accepted', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const doc = validBaselineDoc({
+      metrics: [{ viewport: { label: '1440' }, scrollWidth: 1440, scrollHeight: 3000 }],
+    });
+
+    expect(validateBaselineDocument(doc).ok).toBe(true);
   });
 });

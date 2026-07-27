@@ -85,6 +85,16 @@ export async function steppedScroll(page, viewport, { stepPx = 700, settleMs = 2
  * recon-site.mjs already uses (window.THREE/gsap/Lenis, ...), so a baseline
  * captured here and a clone checked by verify-mirror.mjs speak the same
  * vocabulary.
+ *
+ * `frameworks` records ONLY the actual runtime global (`Boolean(window.THREE)`,
+ * etc.) -- this is what the verify-mirror gate checks a clone against.
+ * `frameworkScriptHints` is a separate, non-gating diagnostic: whether a
+ * script tag whose URL merely *looks like* the library is present. A script
+ * that 200s but fails to execute (syntax error, wrong MIME, truncated body)
+ * leaves its `<script>` tag in the DOM without ever setting the real global
+ * -- conflating the two (as `Boolean(window.X) || scripts.some(...)` did)
+ * let a broken script masquerade as "the library loaded", passing the gate
+ * on a clone that doesn't actually run it.
  */
 export async function collectRuntimeMetrics(page, viewport) {
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
@@ -99,9 +109,14 @@ export async function collectRuntimeMetrics(page, viewport) {
         scrollWidth: document.documentElement.scrollWidth,
         scrollHeight: document.documentElement.scrollHeight,
         frameworks: {
-          three: Boolean(win.THREE) || scripts.some((src) => /three(\.module)?(\.min)?\.js/i.test(src)),
-          gsap: Boolean(win.gsap) || scripts.some((src) => src.toLowerCase().includes("gsap")),
-          lenis: Boolean(win.Lenis) || scripts.some((src) => src.toLowerCase().includes("lenis")),
+          three: Boolean(win.THREE),
+          gsap: Boolean(win.gsap),
+          lenis: Boolean(win.Lenis),
+        },
+        frameworkScriptHints: {
+          three: scripts.some((src) => /three(\.module)?(\.min)?\.js/i.test(src)),
+          gsap: scripts.some((src) => src.toLowerCase().includes("gsap")),
+          lenis: scripts.some((src) => src.toLowerCase().includes("lenis")),
         },
         canvasCount: document.querySelectorAll("canvas").length,
         imageCount: document.images.length,

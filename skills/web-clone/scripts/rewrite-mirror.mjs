@@ -20,6 +20,7 @@
 // would trade a working remote link for a guaranteed 404, so those are left alone
 // and reported instead -- an honest gap beats a silent break.
 
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -116,7 +117,30 @@ function originHosts(origin) {
   return new Set([bare.toLowerCase(), `www.${bare}`.toLowerCase()]);
 }
 
-/** Local path a same-origin URL was mirrored to, mirroring urlToLocalPath in mirror-site.mjs. */
+/**
+ * A query string changes which body a request returns (`/theme.css?mode=light`
+ * vs. `?mode=dark`), but the path alone does not encode that -- so distinct
+ * query variants of the same path must not collide on the same local file.
+ * Suffixing a short stable hash of the query onto the filename (before the
+ * extension) keeps every variant addressable, and doing it unconditionally
+ * (not just when a collision is detected) means the same URL always maps to
+ * the same local path everywhere it's computed, with no retroactive rename.
+ */
+function withQuerySuffix(pathname, search) {
+  if (!search) return pathname;
+  const hash = crypto.createHash("sha256").update(search).digest("hex").slice(0, 8);
+  const ext = path.posix.extname(pathname);
+  const base = ext ? pathname.slice(0, -ext.length) : pathname;
+  return `${base}.${hash}${ext}`;
+}
+
+/**
+ * Local path a same-origin URL was mirrored to. The single canonical
+ * URL->local-path rule: mirror-site.mjs's capture/persist path and this
+ * rewriter must agree on it byte-for-byte, or the same asset resolves to two
+ * different local paths depending on which stage computed it -- one of them
+ * ends up "missing" and gets refetched from a different, wrong URL.
+ */
 function localPathForUrl(url, hosts) {
   let parsed;
   try {
@@ -128,6 +152,7 @@ function localPathForUrl(url, hosts) {
   let p = parsed.pathname;
   if (p === "" || p.endsWith("/")) p += "index.html";
   p = p.replace(/^\/+/, "");
+  p = withQuerySuffix(p, parsed.search);
   try {
     return decodeURIComponent(p);
   } catch {
@@ -136,16 +161,25 @@ function localPathForUrl(url, hosts) {
 }
 
 /**
- * Every same-origin path the mirrored files reference, whether written absolutely
- * or root-relative.
+ * Every same-origin path the mirrored files reference: absolute, root-relative,
+ * *and* document-relative (`../fonts/Foo.woff2`).
  *
  * `mirror-site.mjs` only downloads what the capture run actually requested, so
  * anything behind a lazy-load, a hover state, or an unused `@font-face` format
  * (`.eot`/`.woff` alternates) is referenced by the markup but absent from disk.
  * Reading the references back off the mirror is what turns those into a
  * fetchable list.
+ *
+ * A document-relative reference has no host to check against directly -- it
+ * has to be resolved against the URL the *owning* mirrored file was captured
+ * from first. `mirror-site.mjs` preserves the origin's path structure 1:1
+ * (that is the whole mirroring contract), so a file's own path relative to
+ * `siteDir` doubles as its original URL path relative to `origin`. Passing
+ * `origin` enables this resolution; omitting it (no known origin, e.g. a
+ * `--site`-only rewrite-mirror.mjs invocation) skips document-relative
+ * references rather than guessing.
  */
-function collectSameOriginRefs(siteDir, hosts) {
+function collectSameOriginRefs(siteDir, hosts, origin) {
   const refs = new Set();
   // The reference-candidate extraction (attribute values incl. every srcset
   // candidate, CSS url(), @import) is the same primitive mirror-site.mjs's
@@ -155,12 +189,33 @@ function collectSameOriginRefs(siteDir, hosts) {
   // fetches assets nothing points at and misses ones that do.
   for (const file of walk(siteDir)) {
     const text = fs.readFileSync(file, "utf8");
+    const ownerRel = path.relative(siteDir, file).split(path.sep).join("/");
     for (const value of collectReferenceCandidates(text)) {
       let local = null;
       if (/^(https?:)?\/\//i.test(value)) {
         local = localPathForUrl(value, hosts);
       } else if (value.startsWith("/")) {
         local = localPathForUrl(`https://${[...hosts][0]}${value}`, hosts);
+      } else if (origin && value.includes("/")) {
+        // `collectReferenceCandidates` matches every attribute, not an
+        // allowlist of URL-bearing ones (see its own docblock) -- so an
+        // ordinary non-URL unquoted/quoted value (`charset=utf-8`,
+        // `rel=stylesheet`, `height=64`) reaches here too. Every one of
+        // those is a bare word with no `/`, while a genuine document-
+        // relative reference (`../fonts/Foo.woff2`, `./assets/x.png`,
+        // `fonts/Foo.woff2`) always has at least one path separator. `new
+        // URL()` happily "resolves" a bare word into a same-directory
+        // sibling URL too, so without this guard every such attribute value
+        // becomes a phantom "missing asset" the recursive fetch pass then
+        // 404s on. The tradeoff: a bare same-directory filename with no
+        // separator at all (`url(icon.svg)`) is not resolved either -- an
+        // honest gap, not a guess, matching this file's existing discipline.
+        try {
+          const resolved = new URL(value, `${origin}/${ownerRel}`).href;
+          local = localPathForUrl(resolved, hosts);
+        } catch {
+          local = null;
+        }
       }
       if (local) refs.add(local);
     }
@@ -185,11 +240,17 @@ function makeRewriter(siteDir, ownerFile, hosts) {
       missing.set(local, (missing.get(local) ?? 0) + 1);
       return raw;
     }
-    const suffix = value.match(/^[^?#]*([?#][\s\S]*)$/)?.[1] ?? "";
+    // The query string (if any) is already baked into `local`'s filename via
+    // `withQuerySuffix`, so it must NOT also be appended here -- that would
+    // send the browser back to the original (now-absent) query on a file
+    // whose name already disambiguates it. A `#fragment` is unrelated to what
+    // the server sees and is still meaningful (anchors, SPA routing), so it
+    // is preserved.
+    const hashSuffix = value.match(/^[^#]*(#[\s\S]*)$/)?.[1] ?? "";
     let rel = path.relative(path.dirname(ownerFile), target).split(path.sep).join("/");
     if (!rel.startsWith(".")) rel = `./${rel}`;
     stats.rewritten += 1;
-    return `${rel}${suffix}`;
+    return `${rel}${hashSuffix}`;
   };
 }
 

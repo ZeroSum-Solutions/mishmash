@@ -15,20 +15,26 @@
 // standalone HTTP client never can. This module's `looksLikeBotWallResponse`
 // generalizes the HTML-body-only check mirror-site.mjs already had (the
 // "captured page is an anti-bot challenge, not <origin>" hard-fail) to also
-// recognize a 403/202 status code paired with a captcha/challenge response
-// header, and `headfulEscalationGuidance` is the operator-facing instruction
-// to re-run with `--headful` -- never fall back to a plain HTTP re-fetch for
-// same-origin assets, which is what got 403'd in the first place.
+// recognize a specific known bot-mitigation response header NAME (see
+// `looksLikeBotWallResponse`'s own docblock below for why a bare status code
+// is deliberately not sufficient on its own), and `headfulEscalationGuidance`
+// is the operator-facing instruction to re-run with `--headful` -- never
+// fall back to a plain HTTP re-fetch for same-origin assets, which is what
+// got 403'd in the first place.
 //
-// Pure status/header/body classification -- no fs/network/browser -- so it
-// is unit-testable without Playwright, which this repo does not install as a
+// Pure header/body classification -- no fs/network/browser -- so it is
+// unit-testable without Playwright, which this repo does not install as a
 // workspace dependency (see SKILL.md's "Open Design environment prep").
 
 const CHALLENGE_BODY_PATTERN =
   /sgcaptcha|cf-browser-verification|challenge-platform|__cf_chl|_incapsula_|<title>\s*Just a moment/i;
-const CHALLENGE_HEADER_NAME_PATTERN = /sg-?captcha|cf-mitigated|cf-chl/i;
-const CHALLENGE_HEADER_VALUE_PATTERN = /captcha|challenge/i;
-const CHALLENGE_STATUS_CODES = new Set([403, 202]);
+// Exact known header *names* only -- a legitimate origin can set an
+// unrelated header whose *value* happens to contain the word "challenge" or
+// "captcha" (e.g. a custom `x-note: challenge accepted`), so matching on
+// value content is a false-positive magnet. These specific header names are
+// ones SiteGround/Cloudflare's bot-mitigation stacks set themselves; a
+// normal origin has no reason to emit them.
+const CHALLENGE_HEADER_NAME_PATTERNS = [/^sg-?captcha$/i, /^cf-mitigated$/i, /^cf-chl-/i];
 
 /** True when `body` carries a known anti-bot interstitial signature. */
 export function looksLikeBotWallBody(body) {
@@ -37,24 +43,26 @@ export function looksLikeBotWallBody(body) {
 
 function hasBotWallHeader(headers) {
   if (!headers || typeof headers !== "object") return false;
-  return Object.entries(headers).some(
-    ([name, value]) =>
-      CHALLENGE_HEADER_NAME_PATTERN.test(name) || CHALLENGE_HEADER_VALUE_PATTERN.test(String(value ?? "")),
-  );
+  return Object.keys(headers).some((name) => CHALLENGE_HEADER_NAME_PATTERNS.some((pattern) => pattern.test(name)));
 }
 
 /**
  * True when a response looks like an anti-bot interstitial rather than the
- * real asset/document: a known challenge-page body signature, a
- * captcha/challenge response header (SiteGround `sg-captcha`, Cloudflare
- * `cf-mitigated`/`cf-chl-*`), or a 403/202 status code -- the pair of status
- * codes these bot walls answer a blocked request with instead of the real
- * asset or a plain 4xx.
+ * real asset/document: a known challenge-page body signature, or a specific
+ * known bot-mitigation response header name (SiteGround `sg-captcha`,
+ * Cloudflare `cf-mitigated`/`cf-chl-*`).
+ *
+ * A bare 403 or 202 status is deliberately NOT sufficient on its own --
+ * ordinary authorization failures return 403, and legitimate async-accepted
+ * endpoints return 202 (`{"accepted":true}`), neither of which is a bot
+ * wall. Status alone produced false positives on both in practice; a real
+ * challenge is identified by its body or its header, not by a status code
+ * that plenty of ordinary responses also use.
  */
-export function looksLikeBotWallResponse({ status, headers, body } = {}) {
+export function looksLikeBotWallResponse({ headers, body } = {}) {
   if (looksLikeBotWallBody(body)) return true;
   if (hasBotWallHeader(headers)) return true;
-  return CHALLENGE_STATUS_CODES.has(status);
+  return false;
 }
 
 /** Operator-facing escalation instruction: re-run the capture with --headful. */

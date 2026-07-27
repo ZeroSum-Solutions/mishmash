@@ -67,14 +67,13 @@ export async function fetchInPage(page, url, { timeoutMs = 60000 } = {}) {
     return { ok: false, error: error.message };
   }
 
-  if (!evalResult.ok) {
-    return { ok: false, status: evalResult.status, contentType: evalResult.contentType, error: evalResult.error };
-  }
-
   const body = evalResult.bytesB64 ? Buffer.from(evalResult.bytesB64, "base64") : Buffer.alloc(0);
-  // A challenge answers 200 for the interstitial page itself just as often as
-  // it answers 403/202 for the blocked request, so check the body/headers
-  // even on an `ok` response before trusting it as the real asset.
+  // Classify BEFORE the ok-check: a bot wall's most common signal is
+  // precisely a non-2xx status (403/202) paired with its own header, and
+  // `response.ok` is false for exactly those statuses. Checking only inside
+  // the `ok` branch below would mean the single most common challenge shape
+  // never reaches the detector at all -- `botWallHits` (and the --headful
+  // escalation guidance) would stay empty for the case this exists to catch.
   if (
     looksLikeBotWallResponse({
       status: evalResult.status,
@@ -83,6 +82,10 @@ export async function fetchInPage(page, url, { timeoutMs = 60000 } = {}) {
     })
   ) {
     return { ok: false, status: evalResult.status, contentType: evalResult.contentType, error: "bot-wall-challenge" };
+  }
+
+  if (!evalResult.ok) {
+    return { ok: false, status: evalResult.status, contentType: evalResult.contentType, error: evalResult.error };
   }
 
   return { ok: true, status: evalResult.status, contentType: evalResult.contentType, body };

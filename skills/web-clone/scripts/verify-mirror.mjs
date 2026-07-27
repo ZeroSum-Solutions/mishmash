@@ -6,54 +6,35 @@
 // ephemeral localhost port, headless-load it at each captured viewport with
 // the same stepped-scroll pass mirror-site.mjs uses, and fail loudly on
 // anything a "done" clone must not ship with: a same-origin request that
-// 404s/fails, a broken <img>, scrollWidth/scrollHeight drifting more than 5%
-// from the capture-time baseline, or a runtime global/count the baseline
-// recorded that the clone doesn't reproduce.
+// 404s/fails, a request that leaked back to the mirror's original live
+// origin instead of loading from the served local mirror, a broken <img>,
+// scrollWidth/scrollHeight drifting more than 5% from the capture-time
+// baseline, or a runtime global/count the baseline recorded that the clone
+// doesn't reproduce.
 //
-// The pass/fail rules themselves are pure (lib/gate-decision.mjs) so they are
-// unit-testable without a live browser; this file is the Playwright-dependent
-// glue that collects the data those rules run over.
+// The pass/fail rules (lib/gate-decision.mjs), baseline validation
+// (lib/gate-decision.mjs's validateBaselineDocument), request classification
+// (lib/request-classification.mjs), and the static server + path guard
+// (lib/static-server.mjs) are all pure/importable modules, unit-tested on
+// their own without a live browser. This file is the thin Playwright-
+// dependent glue that wires them together against a real served mirror.
 //
 // Usage:
 //   node scripts/verify-mirror.mjs --site <mirror>/site [--baseline <mirror>/mirror-baseline-metrics.json] [--json]
 //
 // Without --baseline, only the same-origin-failure and broken-image checks
-// run (no drift/runtime-global/count gating) -- pass mirror-site.mjs's
-// mirror-baseline-metrics.json for the full gate.
-// Exit 0 only on a full pass; exit 1 on any failing check.
+// run (no drift/runtime-global/count/origin-leak gating) -- pass
+// mirror-site.mjs's mirror-baseline-metrics.json for the full gate.
+// Exit 0 only on a full pass; exit 1 on any failing check or invalid input.
 
 import fs from "node:fs";
-import http from "node:http";
 import path from "node:path";
 
 import { loadPlaywright, launchChromium } from "./lib/playwright-loader.mjs";
 import { DEFAULT_VIEWPORTS, forceLazyMarkup, steppedScroll, collectRuntimeMetrics } from "./lib/viewport-capture.mjs";
-import { evaluateGate } from "./lib/gate-decision.mjs";
-
-const MIME_TYPES = {
-  ".html": "text/html; charset=utf-8",
-  ".htm": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".avif": "image/avif",
-  ".ico": "image/x-icon",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-  ".ttf": "font/ttf",
-  ".otf": "font/otf",
-  ".mp4": "video/mp4",
-  ".webm": "video/webm",
-  ".wasm": "application/wasm",
-  ".txt": "text/plain; charset=utf-8",
-};
+import { evaluateGate, validateBaselineDocument } from "./lib/gate-decision.mjs";
+import { classifyRequestOrigin } from "./lib/request-classification.mjs";
+import { startStaticServer } from "./lib/static-server.mjs";
 
 function parseArgs(argv) {
   const o = { site: "", baseline: "", json: false, help: false };
@@ -79,8 +60,9 @@ function usage() {
 
 Serves --site on an ephemeral localhost port, headless-loads it at each captured
 viewport with a stepped scroll pass, and FAILS (exit 1) on: any same-origin
-failed/404 request, any broken image, scrollWidth/scrollHeight drift beyond 5% vs
-the baseline, or a runtime global/count the baseline recorded that the clone does
+failed/404 request, any request that leaked back to the mirror's original live
+origin, any broken image, scrollWidth/scrollHeight drift beyond 5% vs the
+baseline, or a runtime global/count the baseline recorded that the clone does
 not reproduce. Exit 0 only on a full pass. A clone may not be reported complete or
 served to the user until this exits 0.`);
 }
@@ -97,90 +79,95 @@ if (!fs.existsSync(siteDir)) {
   process.exit(1);
 }
 
-const baselineDoc = args.baseline ? JSON.parse(fs.readFileSync(path.resolve(args.baseline), "utf8")) : null;
-const baselineByLabel = baselineDoc
-  ? Object.fromEntries(baselineDoc.metrics.map((m) => [m.viewport.label, m]))
-  : null;
+const requiredLabels = DEFAULT_VIEWPORTS.map((v) => v.label);
+let baselineDoc = null;
+let baselineByLabel = null;
+if (args.baseline) {
+  let parsed;
+  try {
+    parsed = JSON.parse(fs.readFileSync(path.resolve(args.baseline), "utf8"));
+  } catch (error) {
+    console.error(`✗ Could not read/parse --baseline ${args.baseline}: ${error.message}`);
+    process.exit(1);
+  }
+  // Fail closed: an empty, malformed, or partial baseline (e.g. only
+  // covering one of the three captured viewports) must not silently narrow
+  // or skip the gate -- see lib/gate-decision.mjs's validateBaselineDocument.
+  const validation = validateBaselineDocument(parsed, requiredLabels);
+  if (!validation.ok) {
+    console.error(`✗ Invalid --baseline ${args.baseline}: ${validation.error}`);
+    process.exit(1);
+  }
+  baselineDoc = parsed;
+  baselineByLabel = validation.baselineByLabel;
+}
+
 const viewports = baselineDoc ? baselineDoc.metrics.map((m) => m.viewport) : DEFAULT_VIEWPORTS;
 
-function contentTypeFor(file) {
-  return MIME_TYPES[path.extname(file).toLowerCase()] || "application/octet-stream";
-}
+let gate;
+const localServer = await startStaticServer(siteDir);
+try {
+  const pw = loadPlaywright();
+  const browser = await launchChromium(pw.chromium);
+  try {
+    const viewportResults = [];
+    for (const viewport of viewports) {
+      console.log(`▸ [${viewport.label}] Verifying: ${localServer.baseUrl}/`);
+      const context = await browser.newContext({
+        viewport: { width: viewport.width, height: viewport.height },
+        deviceScaleFactor: viewport.dpr,
+      });
+      try {
+        const page = await context.newPage();
+        const sameOriginFailures = [];
+        const crossOriginFailures = [];
+        const originLeaks = [];
+        const classify = (url) => classifyRequestOrigin(url, { localBase: localServer.baseUrl, originalOrigin: baselineDoc?.origin });
+        const record = (entry, url) => {
+          const kind = classify(url);
+          if (kind === "local") sameOriginFailures.push(entry);
+          else if (kind === "origin-leak") originLeaks.push(entry);
+          else crossOriginFailures.push(entry);
+        };
+        page.on("requestfailed", (request) => {
+          record({ url: request.url(), error: request.failure()?.errorText || "" }, request.url());
+        });
+        page.on("response", (response) => {
+          if (response.status() >= 400) record({ url: response.url(), status: response.status() }, response.url());
+        });
 
-function resolveRequestPath(pathname) {
-  const decoded = decodeURIComponent(pathname.split("?")[0] || "/");
-  let rel = decoded.replace(/^\/+/, "");
-  if (rel === "" || rel.endsWith("/")) rel += "index.html";
-  const resolved = path.resolve(siteDir, rel);
-  if (!resolved.startsWith(path.resolve(siteDir) + path.sep) && resolved !== path.resolve(siteDir)) return null;
-  return resolved;
-}
+        await page.goto(`${localServer.baseUrl}/`, { waitUntil: "domcontentloaded", timeout: 60000 });
+        await page.waitForLoadState("load", { timeout: 45000 }).catch(() => {});
+        await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+        await forceLazyMarkup(page);
+        await steppedScroll(page, viewport);
+        const metrics = await collectRuntimeMetrics(page, viewport);
 
-const server = http.createServer((req, res) => {
-  const file = resolveRequestPath(req.url || "/");
-  if (!file || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
-    res.writeHead(404, { "content-type": "text/plain" });
-    res.end("Not found");
-    return;
-  }
-  res.writeHead(200, { "content-type": contentTypeFor(file) });
-  fs.createReadStream(file).pipe(res);
-});
-
-await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-const { port } = server.address();
-const base = `http://127.0.0.1:${port}`;
-
-const pw = loadPlaywright();
-const browser = await launchChromium(pw.chromium);
-
-const viewportResults = [];
-for (const viewport of viewports) {
-  console.log(`▸ [${viewport.label}] Verifying: ${base}/`);
-  const context = await browser.newContext({
-    viewport: { width: viewport.width, height: viewport.height },
-    deviceScaleFactor: viewport.dpr,
-  });
-  const page = await context.newPage();
-  const sameOriginFailures = [];
-  const crossOriginFailures = [];
-  page.on("requestfailed", (request) => {
-    const entry = { url: request.url(), error: request.failure()?.errorText || "" };
-    (request.url().startsWith(base) ? sameOriginFailures : crossOriginFailures).push(entry);
-  });
-  page.on("response", (response) => {
-    if (response.status() >= 400) {
-      const entry = { url: response.url(), status: response.status() };
-      (response.url().startsWith(base) ? sameOriginFailures : crossOriginFailures).push(entry);
+        viewportResults.push({
+          label: viewport.label,
+          sameOriginFailures,
+          crossOriginFailures,
+          originLeaks,
+          scrollWidth: metrics.scrollWidth,
+          scrollHeight: metrics.scrollHeight,
+          frameworks: metrics.frameworks,
+          canvasCount: metrics.canvasCount,
+          imageCount: metrics.imageCount,
+          videoCount: metrics.videoCount,
+          brokenImages: metrics.brokenImages,
+        });
+      } finally {
+        await context.close().catch(() => {});
+      }
     }
-  });
 
-  await page.goto(`${base}/`, { waitUntil: "domcontentloaded", timeout: 60000 });
-  await page.waitForLoadState("load", { timeout: 45000 }).catch(() => {});
-  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
-  await forceLazyMarkup(page);
-  await steppedScroll(page, viewport);
-  const metrics = await collectRuntimeMetrics(page, viewport);
-  await context.close();
-
-  viewportResults.push({
-    label: viewport.label,
-    sameOriginFailures,
-    crossOriginFailures,
-    scrollWidth: metrics.scrollWidth,
-    scrollHeight: metrics.scrollHeight,
-    frameworks: metrics.frameworks,
-    canvasCount: metrics.canvasCount,
-    imageCount: metrics.imageCount,
-    videoCount: metrics.videoCount,
-    brokenImages: metrics.brokenImages,
-  });
+    gate = evaluateGate({ viewports: viewportResults, baselineByLabel });
+  } finally {
+    await browser.close().catch(() => {});
+  }
+} finally {
+  await localServer.close();
 }
-
-await browser.close();
-await new Promise((resolve) => server.close(resolve));
-
-const gate = evaluateGate({ viewports: viewportResults, baselineByLabel });
 
 for (const check of gate.checks) {
   const status = check.pass ? "PASS" : "FAIL";
@@ -189,6 +176,12 @@ for (const check of gate.checks) {
     console.log(`   same-origin failures: ${check.sameOriginFailures.count}`);
     for (const failure of check.sameOriginFailures.items.slice(0, 10)) {
       console.log(`     ${failure.status ?? ""} ${failure.url} ${failure.error ?? ""}`.trim());
+    }
+  }
+  if (check.originLeaks && !check.originLeaks.pass) {
+    console.log(`   requests leaked to the original live origin: ${check.originLeaks.count} (mirror is not self-contained)`);
+    for (const leak of check.originLeaks.items.slice(0, 10)) {
+      console.log(`     ${leak.status ?? ""} ${leak.url} ${leak.error ?? ""}`.trim());
     }
   }
   if (!check.brokenImages.pass) {
@@ -212,7 +205,7 @@ for (const check of gate.checks) {
 }
 
 if (!gate.baselineProvided) {
-  console.log("\n(no --baseline supplied: only same-origin-failure and broken-image checks ran)");
+  console.log("\n(no --baseline supplied: only same-origin-failure, origin-leak, and broken-image checks ran)");
 }
 console.log(`\n${gate.pass ? "✅ PASS" : "✗ FAIL"}: mirror ${gate.pass ? "may" : "may NOT"} be reported complete or served to the user.`);
 

@@ -10,13 +10,23 @@ import { describe, expect, it } from 'vitest';
 // .od/projects/157a2e1f.../RECON-v2/browser-mirror-headful.mjs, and its
 // NOTES.md). skills/web-clone/scripts/lib/bot-wall.mjs generalizes the
 // bot-wall detection mirror-site.mjs already had (an HTML-body challenge-page
-// check) to also recognize a 403/202 status code paired with a
-// captcha/challenge response header (e.g. SiteGround's `sg-captcha`), and
-// gives the operator an explicit escalation instruction: re-run with
+// check) to also recognize a specific known bot-mitigation response header
+// name (SiteGround's `sg-captcha`, Cloudflare's `cf-mitigated`/`cf-chl-*`),
+// and gives the operator an explicit escalation instruction: re-run with
 // --headful (real, visible Chrome + AutomationControlled mask + in-page
 // fetch()) rather than ever falling back to a plain HTTP re-fetch for
 // same-origin assets. Pure status/header/body classification -- no
 // fs/network/browser -- so it's unit-testable without Playwright.
+//
+// Round-2 fix (adversarial review finding F8): the first version treated a
+// BARE 403/202 status as sufficient on its own, and matched any header
+// *value* containing "challenge"/"captcha" -- both false-positive magnets
+// (an ordinary auth 403, a legitimate `202 {"accepted":true}`, or a custom
+// `x-note: challenge accepted` header all got misclassified as a bot wall).
+// The classifier now requires a known challenge body OR a known challenge
+// header *name*; status is no longer a sufficient signal by itself. The
+// tests below cover both directions: real challenges still detected, and
+// the exact false positives the review found are no longer detected.
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../..');
 const botWallScriptPath = path.join(
   repoRoot,
@@ -73,11 +83,40 @@ describe('bot-wall detection (P... capture-hardening)', () => {
     );
   });
 
-  it('treats a bare 403/202 status as a bot-wall signature even with no other signal', async () => {
+  // F8: a bare 403/202 with no header or body signal is NOT sufficient --
+  // an ordinary authorization failure returns 403, and a legitimate
+  // async-accepted endpoint returns 202, all the time, for reasons that
+  // have nothing to do with bot walls.
+  it('(F8) does NOT flag a bare 403 with no other signal (ordinary auth failure)', async () => {
     const { looksLikeBotWallResponse } = await loadBotWall();
 
-    expect(looksLikeBotWallResponse({ status: 403, headers: {}, body: '' })).toBe(true);
-    expect(looksLikeBotWallResponse({ status: 202, headers: {}, body: '' })).toBe(true);
+    expect(looksLikeBotWallResponse({ status: 403, headers: { 'content-type': 'text/plain' }, body: 'Forbidden' })).toBe(
+      false,
+    );
+  });
+
+  it('(F8) does NOT flag a bare 202 with no other signal (legitimate async-accepted response)', async () => {
+    const { looksLikeBotWallResponse } = await loadBotWall();
+
+    const detected = looksLikeBotWallResponse({
+      status: 202,
+      headers: { 'content-type': 'application/json' },
+      body: '{"accepted":true}',
+    });
+
+    expect(detected).toBe(false);
+  });
+
+  it('(F8) does NOT flag a 200 response whose header VALUE merely contains the word "challenge"', async () => {
+    const { looksLikeBotWallResponse } = await loadBotWall();
+
+    const detected = looksLikeBotWallResponse({
+      status: 200,
+      headers: { 'content-type': 'text/html', 'x-note': 'challenge accepted' },
+      body: '<!doctype html><html><body>ok</body></html>',
+    });
+
+    expect(detected).toBe(false);
   });
 
   it('does not flag an ordinary 404 with a plain body', async () => {

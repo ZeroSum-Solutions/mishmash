@@ -45,8 +45,9 @@ async function loadDiscovery() {
 
 async function loadRewriteMirror() {
   return (await import(pathToFileURL(rewriteMirrorScriptPath).href)) as {
-    collectSameOriginRefs: (siteDir: string, hosts: Set<string>) => Set<string>;
+    collectSameOriginRefs: (siteDir: string, hosts: Set<string>, origin?: string) => Set<string>;
     originHosts: (origin: string) => Set<string>;
+    localPathForUrl: (url: string, hosts: Set<string>) => string | null;
   };
 }
 
@@ -110,6 +111,41 @@ describe('collectReferenceCandidates (pure discovery primitive)', () => {
 
     expect(refs).toEqual([]);
   });
+
+  // F21: a data: URI's internal mime/payload-separating comma
+  // (`image/svg+xml,%3Csvg...`) is not a srcset candidate separator, and a
+  // bare `blob:` reference is not fetchable/reproducible by a mirror pass.
+  it('(F21) does not split a data: URI srcset candidate on its internal comma, and ignores blob:', async () => {
+    const { collectReferenceCandidates } = await loadDiscovery();
+    const html = `<img srcset="data:image/svg+xml,%3Csvg%3E 1x, /ok.png 2x"><video src="blob:https://example.com/9f2c-uuid"></video>`;
+
+    const refs = collectReferenceCandidates(html);
+
+    expect(refs).toContain('/ok.png');
+    expect(refs.some((ref) => ref.startsWith('data:'))).toBe(false);
+    expect(refs.some((ref) => ref.startsWith('blob:'))).toBe(false);
+  });
+
+  // F22: unquoted attribute values are valid HTML5
+  // (`<img data-src=/images/lazy.png>`); a quoted-only regex misses them
+  // entirely, silently dropping lazy-loaded images from discovery.
+  it('(F22) enumerates an unquoted lazy-load attribute value', async () => {
+    const { collectReferenceCandidates } = await loadDiscovery();
+    const html = `<img data-src=/images/lazy.png class=hero>`;
+
+    const refs = collectReferenceCandidates(html);
+
+    expect(refs).toContain('/images/lazy.png');
+  });
+
+  it('(F22) does not double-count a quoted value via the unquoted pattern', async () => {
+    const { collectReferenceCandidates } = await loadDiscovery();
+    const html = `<img data-src="/images/lazy.png">`;
+
+    const refs = collectReferenceCandidates(html);
+
+    expect(refs.filter((ref) => ref === '/images/lazy.png')).toHaveLength(1);
+  });
 });
 
 describe('collectSameOriginRefs (rewrite-mirror.mjs, on-disk integration)', () => {
@@ -153,5 +189,125 @@ describe('collectSameOriginRefs (rewrite-mirror.mjs, on-disk integration)', () =
         'images/bg.png',
       ].sort(),
     );
+  });
+
+  // F7: a document-relative reference (`../fonts/Foo.woff2`) has no host to
+  // check directly -- it must be resolved against the URL the OWNING
+  // mirrored file was itself captured from before same-origin filtering can
+  // apply. Without `origin`, this class of reference was silently dropped
+  // even though it is exactly the kind of "referenced but never requested"
+  // asset (an unused @font-face format fallback) the recursive fetch pass
+  // exists to catch.
+  it('(F7) resolves a document-relative reference against its owning file\'s mirrored path when origin is passed', async () => {
+    const { collectSameOriginRefs, originHosts } = await loadRewriteMirror();
+    fs.mkdirSync(path.join(siteDir, 'css'), { recursive: true });
+    fs.writeFileSync(
+      path.join(siteDir, 'css', 'main.css'),
+      `@font-face { font-family: "Fallback"; src: url("../fonts/Foo.woff2") format("woff2"); }`,
+    );
+
+    const refs = collectSameOriginRefs(siteDir, originHosts('https://example.com'), 'https://example.com');
+
+    expect([...refs]).toContain('fonts/Foo.woff2');
+  });
+
+  it('(F7) without an origin, a document-relative reference is not resolved (no guessing)', async () => {
+    const { collectSameOriginRefs, originHosts } = await loadRewriteMirror();
+    fs.mkdirSync(path.join(siteDir, 'css'), { recursive: true });
+    fs.writeFileSync(
+      path.join(siteDir, 'css', 'main.css'),
+      `@font-face { font-family: "Fallback"; src: url("../fonts/Foo.woff2") format("woff2"); }`,
+    );
+
+    const refs = collectSameOriginRefs(siteDir, originHosts('https://example.com'));
+
+    expect([...refs]).not.toContain('fonts/Foo.woff2');
+  });
+
+  // Regression caught by a live end-to-end smoke test while hardening F7:
+  // `collectReferenceCandidates` matches every attribute value, not a
+  // URL-bearing allowlist (charset="utf-8", rel="stylesheet", as="image",
+  // height="64", class="hero", ...). Without a guard, the F7 relative-URL
+  // resolution branch treated every one of those bare, slash-free words as
+  // a "document-relative reference" too (`new URL("utf-8", base)` resolves
+  // just fine as a same-directory sibling), turning ordinary HTML attributes
+  // into phantom "missing assets" that the recursive fetch pass then 404s
+  // on. A genuine relative asset reference always has at least one `/`.
+  it('(F7 regression) does not treat ordinary non-URL attribute values as document-relative references', async () => {
+    const { collectSameOriginRefs, originHosts } = await loadRewriteMirror();
+    fs.writeFileSync(
+      path.join(siteDir, 'index.html'),
+      `<!doctype html><html><head>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="/styles.css">
+        <link rel="preload" as="image" href="/images/preload-only.png">
+      </head><body>
+        <img src="/images/logo.png" width="64" height="64" class="hero">
+      </body></html>`,
+    );
+
+    const refs = [...collectSameOriginRefs(siteDir, originHosts('https://example.com'), 'https://example.com')];
+
+    expect(refs).not.toContain('utf-8');
+    expect(refs).not.toContain('stylesheet');
+    expect(refs).not.toContain('preload');
+    expect(refs).not.toContain('image');
+    expect(refs).not.toContain('64');
+    expect(refs).not.toContain('hero');
+    // The genuine same-origin references in this fixture must still resolve.
+    expect(refs).toContain('styles.css');
+    expect(refs).toContain('images/preload-only.png');
+    expect(refs).toContain('images/logo.png');
+  });
+});
+
+describe('localPathForUrl (rewrite-mirror.mjs, F10/F11: unified + query-safe path mapping)', () => {
+  // F10: capture (mirror-site.mjs) and rewrite (rewrite-mirror.mjs) used to
+  // compute a same URL's local path via two separately-written functions
+  // that disagreed on percent-encoding, so the same asset resolved to two
+  // different local paths depending on which stage asked. Both now call
+  // this single function.
+  it('(F10) decodes a percent-encoded pathname consistently', async () => {
+    const { localPathForUrl, originHosts } = await loadRewriteMirror();
+    const hosts = originHosts('https://example.com');
+
+    expect(localPathForUrl('https://example.com/models/a%2Fb.buf', hosts)).toBe('models/a/b.buf');
+  });
+
+  // F11: two distinct query variants of the same path return two different
+  // bodies (`?mode=light` vs `?mode=dark`) -- stripping the query collapsed
+  // both onto the same local file, so only whichever was captured first
+  // ever got served, silently, for the other variant too.
+  it('(F11) distinct query variants of the same path map to distinct local paths', async () => {
+    const { localPathForUrl, originHosts } = await loadRewriteMirror();
+    const hosts = originHosts('https://example.com');
+
+    const light = localPathForUrl('https://example.com/theme.css?mode=light', hosts);
+    const dark = localPathForUrl('https://example.com/theme.css?mode=dark', hosts);
+
+    expect(light).not.toBeNull();
+    expect(dark).not.toBeNull();
+    expect(light).not.toBe(dark);
+    // Both must still resolve to a `.css` file so the static server's MIME
+    // lookup (by extension) keeps working.
+    expect(light).toMatch(/\.css$/);
+    expect(dark).toMatch(/\.css$/);
+  });
+
+  it('(F11) the same URL (same query) always maps to the same local path', async () => {
+    const { localPathForUrl, originHosts } = await loadRewriteMirror();
+    const hosts = originHosts('https://example.com');
+
+    const first = localPathForUrl('https://example.com/theme.css?mode=dark', hosts);
+    const second = localPathForUrl('https://example.com/theme.css?mode=dark', hosts);
+
+    expect(first).toBe(second);
+  });
+
+  it('a query-free URL is unaffected by the query-suffix logic', async () => {
+    const { localPathForUrl, originHosts } = await loadRewriteMirror();
+    const hosts = originHosts('https://example.com');
+
+    expect(localPathForUrl('https://example.com/theme.css', hosts)).toBe('theme.css');
   });
 });
