@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-      "nodeId": "phantom-flex-b-header",
+      "nodeId": "phantom-flex-b-header-desktop",
       "domPath": "body > div.phantom-flex-b-shell > header.phantom-flex-b-header",
       "computedStyle": {
         "color": "#0e2a4a",
@@ -10,7 +10,7 @@
       }
     },
     {
-      "nodeId": "phantom-flex-b-hero",
+      "nodeId": "phantom-flex-b-hero-desktop",
       "domPath": "body > div.phantom-flex-b-shell > hero.phantom-flex-b-hero",
       "computedStyle": {
         "color": "#0e2a4a",
@@ -19,7 +19,7 @@
       }
     },
     {
-      "nodeId": "phantom-flex-b-hero-heading",
+      "nodeId": "phantom-flex-b-hero-heading-desktop",
       "domPath": "body > div.phantom-flex-b-shell > hero_heading.phantom-flex-b-hero-heading",
       "computedStyle": {
         "color": "#0e2a4a",
@@ -28,7 +28,7 @@
       }
     },
     {
-      "nodeId": "phantom-flex-b-features",
+      "nodeId": "phantom-flex-b-features-desktop",
       "domPath": "body > div.phantom-flex-b-shell > features.phantom-flex-b-features",
       "computedStyle": {
         "color": "#0e2a4a",
@@ -39,7 +39,7 @@
       }
     },
     {
-      "nodeId": "phantom-flex-b-feature-item-1",
+      "nodeId": "phantom-flex-b-feature-item-1-desktop",
       "domPath": "body > div.phantom-flex-b-shell > feature_item_1.phantom-flex-b-feature-item-1",
       "computedStyle": {
         "color": "#0e2a4a",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "nodeId": "phantom-flex-b-feature-item-2",
+      "nodeId": "phantom-flex-b-feature-item-2-desktop",
       "domPath": "body > div.phantom-flex-b-shell > feature_item_2.phantom-flex-b-feature-item-2",
       "computedStyle": {
         "color": "#0e2a4a",
@@ -57,7 +57,7 @@
       }
     },
     {
-      "nodeId": "phantom-flex-b-cta",
+      "nodeId": "phantom-flex-b-cta-desktop",
       "domPath": "body > div.phantom-flex-b-shell > cta.phantom-flex-b-cta",
       "computedStyle": {
         "color": "#0e2a4a",
@@ -66,7 +66,7 @@
       }
     },
     {
-      "nodeId": "phantom-flex-b-footer",
+      "nodeId": "phantom-flex-b-footer-desktop",
       "domPath": "body > div.phantom-flex-b-shell > footer.phantom-flex-b-footer",
       "computedStyle": {
         "color": "#0e2a4a",

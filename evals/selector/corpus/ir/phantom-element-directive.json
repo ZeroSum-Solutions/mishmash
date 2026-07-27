@@ -370,14 +370,14 @@
     {
       "elementId": "phantom-element-directive-di-0-layout",
       "sourceId": "phantom-grid-a",
-      "nodeId": "phantom-grid-a-features",
+      "nodeId": "phantom-grid-a-features-mobile",
       "domPath": "body > div.phantom-grid-a-shell > features.phantom-grid-a-features",
       "breakpoint": "mobile"
     },
     {
       "elementId": "phantom-element-directive-di-1-typography",
       "sourceId": "phantom-grid-a",
-      "nodeId": "phantom-grid-a-hero-heading",
+      "nodeId": "phantom-grid-a-hero-heading-desktop",
       "domPath": "body > div.phantom-grid-a-shell > hero_heading.phantom-grid-a-hero-heading",
       "breakpoint": "desktop"
     }

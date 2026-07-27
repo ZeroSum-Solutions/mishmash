@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-      "nodeId": "phantom-grid-a-header",
+      "nodeId": "phantom-grid-a-header-mobile",
       "domPath": "body > div.phantom-grid-a-shell > header.phantom-grid-a-header",
       "computedStyle": {
         "color": "#4a0e0e",
@@ -10,7 +10,7 @@
       }
     },
     {
-      "nodeId": "phantom-grid-a-hero",
+      "nodeId": "phantom-grid-a-hero-mobile",
       "domPath": "body > div.phantom-grid-a-shell > hero.phantom-grid-a-hero",
       "computedStyle": {
         "color": "#4a0e0e",
@@ -19,7 +19,7 @@
       }
     },
     {
-      "nodeId": "phantom-grid-a-hero-heading",
+      "nodeId": "phantom-grid-a-hero-heading-mobile",
       "domPath": "body > div.phantom-grid-a-shell > hero_heading.phantom-grid-a-hero-heading",
       "computedStyle": {
         "color": "#4a0e0e",
@@ -28,7 +28,7 @@
       }
     },
     {
-      "nodeId": "phantom-grid-a-features",
+      "nodeId": "phantom-grid-a-features-mobile",
       "domPath": "body > div.phantom-grid-a-shell > features.phantom-grid-a-features",
       "computedStyle": {
         "color": "#4a0e0e",
@@ -39,7 +39,7 @@
       }
     },
     {
-      "nodeId": "phantom-grid-a-feature-item-1",
+      "nodeId": "phantom-grid-a-feature-item-1-mobile",
       "domPath": "body > div.phantom-grid-a-shell > feature_item_1.phantom-grid-a-feature-item-1",
       "computedStyle": {
         "color": "#4a0e0e",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "nodeId": "phantom-grid-a-feature-item-2",
+      "nodeId": "phantom-grid-a-feature-item-2-mobile",
       "domPath": "body > div.phantom-grid-a-shell > feature_item_2.phantom-grid-a-feature-item-2",
       "computedStyle": {
         "color": "#4a0e0e",
@@ -57,7 +57,7 @@
       }
     },
     {
-      "nodeId": "phantom-grid-a-cta",
+      "nodeId": "phantom-grid-a-cta-mobile",
       "domPath": "body > div.phantom-grid-a-shell > cta.phantom-grid-a-cta",
       "computedStyle": {
         "color": "#4a0e0e",
@@ -66,7 +66,7 @@
       }
     },
     {
-      "nodeId": "phantom-grid-a-footer",
+      "nodeId": "phantom-grid-a-footer-mobile",
       "domPath": "body > div.phantom-grid-a-shell > footer.phantom-grid-a-footer",
       "computedStyle": {
         "color": "#4a0e0e",
