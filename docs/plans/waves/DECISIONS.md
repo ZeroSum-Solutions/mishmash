@@ -59,3 +59,17 @@ observing all evidence independently. Pre-implementation, these criteria fail wi
 surfaces. Implementation-coupled semantic checks (rotation/revocation behavior) activate when
 the surfaces exist and assert semantics, not status codes. Remaining round-3 findings closed
 mechanically in the same rewrite.
+
+## 2026-07-27 — W7 held-out corpus RE-SEAL (orchestrator decision record under standing directive)
+
+The gate's frozen-path rule requires a re-seal to carry "a NEW seal commit and a founder
+decision record." This is that record; the founder may veto. Grounds: three corpus-generator
+defects made the originally-sealed payloads permanently fail mechanical criteria (hardcoded
+`breakpoint` fields defeating the C7-4 derangement control; a shared style preset and JSON
+boilerplate producing byte-identical spans that tripped the C7-11 leak scan as false positives).
+Threat-model assessment: W8 has not started; no scoring or tuning has consumed the sealed cases;
+the corrections were authored by the same agent that legitimately authored the originals
+pre-seal; the frozen-path invariant was verified intact (zero post-seal touches) before
+re-sealing. Ceremony: v2 blobs commit `5abb5e357` (all 10 payloads hash-verified + round-trip
+decrypted), new seal commit `d8caf813d` (SEALED-ACCESS.md v2). v1 plaintext retained in
+orchestrator-owned storage for provenance.
