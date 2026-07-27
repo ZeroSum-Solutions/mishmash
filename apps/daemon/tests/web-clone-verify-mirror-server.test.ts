@@ -371,11 +371,14 @@ describe.skipIf(!cachedPlaywrightPath)('verify-mirror.mjs (F17: real subprocess 
     const baseline = {
       capturedAt: new Date().toISOString(),
       origin: originalOrigin,
+      // Writer-shaped frameworks (A3 tightened validateBaselineDocument:
+      // an empty frameworks object now fails closed, because the real
+      // writer always records the full boolean flag set).
       metrics: requiredViewports.map((v) => ({
         viewport: v,
         scrollWidth: 1,
         scrollHeight: 1,
-        frameworks: {},
+        frameworks: { three: false, gsap: false, lenis: false },
         canvasCount: 0,
         imageCount: 1,
         videoCount: 0,
@@ -408,4 +411,129 @@ describe.skipIf(!cachedPlaywrightPath)('verify-mirror.mjs (F17: real subprocess 
       await new Promise<void>((resolve) => originalOriginServer.close(() => resolve()));
     }
   }, 60_000);
+});
+
+// --- Class-A close-out (wave W-C, criteria CC-3/CC-4): wire-level A2 ---
+//
+// The F17/F1 subprocess test above proves the SUCCESSFUL-leak path (origin
+// answers 200). A2 is its complement: a mirror that still references its
+// original origin must fail verification even when that origin is DOWN --
+// requestfailed events were previously routed into the ignored cross-origin
+// bucket, so an offline origin made the leak invisible and the gate passed.
+// The negative control proves the fix doesn't over-classify: an unrelated
+// third-party host failing identically must NOT trip the origin-leak gate.
+describe.skipIf(!cachedPlaywrightPath)('verify-mirror.mjs (A2/CC-3/CC-4: origin-leak vs a DOWN origin, real subprocess)', () => {
+  let siteDir: string;
+
+  // A real ephemeral port that is then closed again: requests to it get
+  // ECONNREFUSED deterministically, with no Chrome unsafe-port special case.
+  async function allocateClosedPort(): Promise<number> {
+    return await new Promise<number>((resolve) => {
+      const probe = http.createServer();
+      probe.listen(0, '127.0.0.1', () => {
+        const address = probe.address();
+        const port = typeof address === 'object' && address ? address.port : 0;
+        probe.close(() => resolve(port));
+      });
+    });
+  }
+
+  function writeBaseline(originForBaseline: string): string {
+    // Matches the real writer's shapes exactly: viewport-capture.mjs's
+    // collectRuntimeMetrics always emits {three,gsap,lenis} booleans, and the
+    // fixture page has no overflow, so scroll dims equal the viewport dims.
+    const viewports = [
+      { width: 1440, height: 900, dpr: 1, label: '1440' },
+      { width: 768, height: 900, dpr: 1, label: '768' },
+      { width: 390, height: 844, dpr: 2, label: '390' },
+    ];
+    const baseline = {
+      capturedAt: new Date().toISOString(),
+      origin: originForBaseline,
+      metrics: viewports.map((v) => ({
+        viewport: v,
+        scrollWidth: v.width,
+        scrollHeight: v.height,
+        frameworks: { three: false, gsap: false, lenis: false },
+        canvasCount: 0,
+        imageCount: 1,
+        videoCount: 0,
+      })),
+    };
+    const baselinePath = path.join(siteDir, '..', `baseline-${path.basename(siteDir)}.json`);
+    fs.writeFileSync(baselinePath, JSON.stringify(baseline));
+    return baselinePath;
+  }
+
+  async function runVerifyWithBaseline(baselinePath: string): Promise<{ status: number; stdout: string }> {
+    try {
+      const { stdout } = await execFileAsync(
+        process.execPath,
+        [verifyMirrorScriptPath, '--site', siteDir, '--baseline', baselinePath, '--json'],
+        { env: { ...process.env, OD_PLAYWRIGHT_PATH: cachedPlaywrightPath ?? '' }, encoding: 'utf8', timeout: 60_000 },
+      );
+      return { status: 0, stdout };
+    } catch (error) {
+      const execError = error as { code?: number; stdout?: string };
+      return { status: execError.code ?? 1, stdout: execError.stdout ?? '' };
+    }
+  }
+
+  beforeEach(() => {
+    siteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'web-clone-verify-a2-'));
+    writeFixtureSite(siteDir);
+  });
+
+  afterEach(() => {
+    fs.rmSync(siteDir, { recursive: true, force: true });
+    fs.rmSync(path.join(siteDir, '..', `baseline-${path.basename(siteDir)}.json`), { force: true });
+  });
+
+  it('(A2/CC-3) exits 1 with an originLeak when the mirror references its original origin and that origin refuses connections', async () => {
+    const deadOriginPort = await allocateClosedPort();
+    const deadOrigin = `http://127.0.0.1:${deadOriginPort}`;
+    // A stylesheet reference (not an <img>): its failure cannot double-count
+    // as a broken image, so the ONLY thing that can fail this fixture is the
+    // origin-leak routing under test.
+    fs.writeFileSync(
+      path.join(siteDir, 'index.html'),
+      `<!doctype html><html><head><meta charset="utf-8"><title>Fixture</title>` +
+        `<link rel="stylesheet" href="/styles.css">` +
+        `<link rel="stylesheet" href="${deadOrigin}/leaked.css"></head><body>` +
+        `<h1>Fixture</h1><img src="/images/logo.png" width="1" height="1"></body></html>`,
+    );
+    const baselinePath = writeBaseline(deadOrigin);
+
+    const result = await runVerifyWithBaseline(baselinePath);
+
+    expect(result.status).toBe(1);
+    const gate = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')));
+    expect(gate.pass).toBe(false);
+    const leakCounts = gate.checks.map((check: { originLeaks?: { count: number } }) => check.originLeaks?.count ?? 0);
+    expect(leakCounts.some((count: number) => count > 0)).toBe(true);
+  }, 90_000);
+
+  it('(A2/CC-4 negative control) an unrelated offline CDN does NOT trip the origin-leak gate, and the mirror passes', async () => {
+    const deadCdnPort = await allocateClosedPort();
+    const deadBaselinePort = await allocateClosedPort();
+    // The baseline origin and the failing CDN are DIFFERENT hosts+ports: the
+    // CDN failure must land in the ignored cross-origin bucket, exactly as
+    // before the fix. If this control fails, the fix over-classified.
+    fs.writeFileSync(
+      path.join(siteDir, 'index.html'),
+      `<!doctype html><html><head><meta charset="utf-8"><title>Fixture</title>` +
+        `<link rel="stylesheet" href="/styles.css">` +
+        `<link rel="stylesheet" href="http://127.0.0.1:${deadCdnPort}/vendor.css"></head><body>` +
+        `<h1>Fixture</h1><img src="/images/logo.png" width="1" height="1"></body></html>`,
+    );
+    const baselinePath = writeBaseline(`http://127.0.0.1:${deadBaselinePort}`);
+
+    const result = await runVerifyWithBaseline(baselinePath);
+
+    const gate = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')));
+    const leakCounts = gate.checks.map((check: { originLeaks?: { count: number } }) => check.originLeaks?.count ?? 0);
+    expect(leakCounts.every((count: number) => count === 0)).toBe(true);
+    expect(result.status).toBe(0);
+    expect(gate.pass).toBe(true);
+  }, 90_000);
 });

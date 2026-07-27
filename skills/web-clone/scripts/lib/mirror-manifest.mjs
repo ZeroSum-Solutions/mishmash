@@ -17,10 +17,20 @@
 // This module tracks the mapping explicitly as it is decided -- once, at the
 // moment a body is actually about to be written -- so nothing downstream
 // (recursive fetch, rewrite, the static server, the gate) ever needs to
-// reverse it. `claim()` is the ONLY way a local path is assigned, and it is
-// injective: if the "natural" computed path is already claimed by a
-// DIFFERENT url, it disambiguates with a hash of the raw url rather than
-// silently letting the second write collide with the first.
+// reverse it. `claim()` is the ONLY way a local path is assigned. Collision
+// handling: when the "natural" computed path is already claimed by a
+// DIFFERENT url -- including a path that only a FILESYSTEM would consider
+// equal (case-insensitive APFS/NTFS, Unicode-normalizing APFS; A5) -- the
+// second claim is disambiguated with a hash of the url instead of silently
+// sharing the first claim's file. This makes accidental collisions safe; it
+// is NOT a guarantee against a deliberately crafted adversarial URL set --
+// see SKILL.md's "Known limitations".
+//
+// URL identity (A4): a `#fragment` is client-side only -- the server never
+// sees it, so `/sprite.svg` and `/sprite.svg#icon` are the same resource.
+// Every entry point strips the fragment before touching the maps, so a
+// fragment variant can never duplicate a captured asset. Rewrite re-attaches
+// fragments when emitting localized references (see rewrite-mirror.mjs).
 
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -28,6 +38,23 @@ import path from "node:path";
 
 import { collectReferenceCandidates } from "./asset-discovery.mjs";
 import { walk } from "./fs-walk.mjs";
+
+/** Fragment-free manifest identity for a URL (A4). */
+function manifestUrlKey(url) {
+  const hashIndex = url.indexOf("#");
+  return hashIndex === -1 ? url : url.slice(0, hashIndex);
+}
+
+/**
+ * Collision key under which two local paths count as "the same file" on the
+ * filesystems mirrors actually land on (A5): APFS and NTFS are
+ * case-insensitive, and APFS normalizes Unicode -- `Images/Logo.png` vs
+ * `images/logo.png`, or NFC vs NFD `café.png`, are distinct strings but one
+ * single file on disk.
+ */
+function fsCollisionKey(localPath) {
+  return localPath.normalize("NFC").toLowerCase();
+}
 
 /**
  * @param {{ computeLocalPath: (url: string, hosts: Set<string>) => string | null }} deps
@@ -37,45 +64,66 @@ import { walk } from "./fs-walk.mjs";
  *   import between the two files would be a cycle.
  */
 export function createMirrorManifest({ computeLocalPath }) {
-  const forward = new Map(); // sourceUrl -> localPath
-  const reverse = new Map(); // localPath -> sourceUrl
+  const forward = new Map(); // fragment-free sourceUrl -> localPath (exact string)
+  const reverse = new Map(); // localPath (exact string) -> fragment-free sourceUrl
+  // fsCollisionKey(localPath) -> fragment-free sourceUrl. Collision checks
+  // run against THIS map (A5): `reverse` alone treats `Images/Logo.png` and
+  // `images/logo.png` as distinct even though a case-insensitive filesystem
+  // stores them as one file, silently letting the second write reuse the
+  // first's bytes. `reverse` keeps the exact strings because
+  // `reverseGet()` is queried with real on-disk relative paths.
+  const reverseCanonical = new Map();
 
-  function disambiguate(candidate, url) {
-    const hash = crypto.createHash("sha256").update(url).digest("hex").slice(0, 8);
+  function taken(candidate, urlKey) {
+    const owner = reverseCanonical.get(fsCollisionKey(candidate));
+    return owner !== undefined && owner !== urlKey;
+  }
+
+  function disambiguate(candidate, urlKey) {
+    const hash = crypto.createHash("sha256").update(urlKey).digest("hex").slice(0, 8);
     const ext = path.posix.extname(candidate);
     const base = ext ? candidate.slice(0, -ext.length) : candidate;
     let next = `${base}.${hash}${ext}`;
-    if (reverse.has(next) && reverse.get(next) !== url) {
+    if (taken(next, urlKey)) {
       // A second collision on an 8-hex-char hash is astronomically unlikely
-      // (would require two different URLs colliding on both the natural
-      // path AND the same short hash); widen the hash rather than loop.
-      const longHash = crypto.createHash("sha256").update(url).digest("hex").slice(0, 16);
+      // for real-world URL sets (it would need two different URLs colliding
+      // on both the natural path AND the same short hash); widen the hash
+      // rather than loop. A DELIBERATELY crafted set can still defeat this
+      // -- documented as a known limitation in SKILL.md, not defended here.
+      const longHash = crypto.createHash("sha256").update(urlKey).digest("hex").slice(0, 16);
       next = `${base}.${longHash}${ext}`;
     }
     return next;
   }
 
+  function record(urlKey, localPath) {
+    forward.set(urlKey, localPath);
+    reverse.set(localPath, urlKey);
+    reverseCanonical.set(fsCollisionKey(localPath), urlKey);
+  }
+
   /**
-   * Assigns (or returns the already-assigned) local path for `url`. Pass the
-   * SAME `hosts` set used elsewhere in the run; this does not itself check
+   * Assigns (or returns the already-assigned) local path for `url` --
+   * fragment variants of one URL share one entry (A4). Pass the SAME
+   * `hosts` set used elsewhere in the run; this does not itself check
    * same-origin membership beyond what `computeLocalPath` already does.
    */
   function claim(url, hosts) {
-    const existing = forward.get(url);
+    const urlKey = manifestUrlKey(url);
+    const existing = forward.get(urlKey);
     if (existing) return existing;
-    const natural = computeLocalPath(url, hosts);
+    const natural = computeLocalPath(urlKey, hosts);
     if (!natural) return null;
-    const candidate = reverse.has(natural) && reverse.get(natural) !== url ? disambiguate(natural, url) : natural;
-    forward.set(url, candidate);
-    reverse.set(candidate, url);
+    const candidate = taken(natural, urlKey) ? disambiguate(natural, urlKey) : natural;
+    record(urlKey, candidate);
     return candidate;
   }
 
   function get(url) {
-    return forward.get(url);
+    return forward.get(manifestUrlKey(url));
   }
   function has(url) {
-    return forward.has(url);
+    return forward.has(manifestUrlKey(url));
   }
   function reverseGet(localPath) {
     return reverse.get(localPath);
@@ -91,10 +139,15 @@ export function createMirrorManifest({ computeLocalPath }) {
     for (const entry of Array.isArray(entriesArray) ? entriesArray : []) {
       const sourceUrl = entry?.sourceUrl;
       const localPath = entry?.localPath;
-      if (typeof sourceUrl === "string" && typeof localPath === "string" && !forward.has(sourceUrl)) {
-        forward.set(sourceUrl, localPath);
-        if (!reverse.has(localPath)) reverse.set(localPath, sourceUrl);
-      }
+      if (typeof sourceUrl !== "string" || typeof localPath !== "string") continue;
+      const urlKey = manifestUrlKey(sourceUrl);
+      if (forward.has(urlKey)) continue;
+      forward.set(urlKey, localPath);
+      // A persisted manifest is trusted as-authored (see SKILL.md's known
+      // limitations): record reverse mappings only where they do not
+      // contradict a live claim.
+      if (!reverse.has(localPath)) reverse.set(localPath, urlKey);
+      if (!reverseCanonical.has(fsCollisionKey(localPath))) reverseCanonical.set(fsCollisionKey(localPath), urlKey);
     }
   }
 
@@ -150,7 +203,10 @@ export function findMissingSourceUrls({ siteDir, hosts, manifest }) {
       }
       if (!hosts.has(host)) continue;
       if (isCaptured({ siteDir, manifest, url: resolved })) continue;
-      missing.add(resolved);
+      // Fragment-free (A4): `/sprite.svg#a` and `/sprite.svg#b` are one
+      // missing resource, and the fetch that resolves them is the same
+      // request either way (the server never sees a fragment).
+      missing.add(manifestUrlKey(resolved));
     }
   }
   return missing;

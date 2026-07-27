@@ -49,8 +49,25 @@ export function validateBaselineDocument(baselineDoc, requiredLabels = []) {
   if (!baselineDoc || typeof baselineDoc !== "object" || Array.isArray(baselineDoc)) {
     return { ok: false, error: "baseline must be a JSON object" };
   }
+  // A3: "non-empty string" let `origin: "not a url"` through, and a
+  // non-URL origin silently disables the origin-leak gate for the whole run
+  // (classifyRequestOrigin can never match a host against it). The writer
+  // records `new URL(args.url).origin` -- always an absolute http(s) URL --
+  // so anything else is not writer output and must fail closed.
   if (typeof baselineDoc.origin !== "string" || baselineDoc.origin.length === 0) {
     return { ok: false, error: "baseline.origin must be a non-empty string (needed for the origin-leak gate)" };
+  }
+  let originUrl = null;
+  try {
+    originUrl = new URL(baselineDoc.origin);
+  } catch {
+    originUrl = null;
+  }
+  if (!originUrl || (originUrl.protocol !== "http:" && originUrl.protocol !== "https:")) {
+    return {
+      ok: false,
+      error: `baseline.origin must be an absolute http(s) URL, got ${JSON.stringify(baselineDoc.origin)} (a non-URL origin silently disables the origin-leak gate)`,
+    };
   }
   if (!Array.isArray(baselineDoc.metrics) || baselineDoc.metrics.length === 0) {
     return { ok: false, error: "baseline.metrics must be a non-empty array" };
@@ -67,6 +84,25 @@ export function validateBaselineDocument(baselineDoc, requiredLabels = []) {
     }
     if (typeof metric.frameworks !== "object" || metric.frameworks === null || Array.isArray(metric.frameworks)) {
       return { ok: false, error: `baseline.metrics[${index}] (viewport "${label}") is missing a frameworks object` };
+    }
+    // A3: the writer (lib/viewport-capture.mjs's collectRuntimeMetrics)
+    // always records the full runtime-global flag set as booleans. An EMPTY
+    // frameworks object passes the shape check above but silently disables
+    // the runtime-global gate (no baseline-true globals to require), and a
+    // non-boolean value means the document was not produced by the writer.
+    const frameworkEntries = Object.entries(metric.frameworks);
+    if (frameworkEntries.length === 0) {
+      return {
+        ok: false,
+        error: `baseline.metrics[${index}] (viewport "${label}") has an empty frameworks object -- not writer output; it would silently disable the runtime-global gate`,
+      };
+    }
+    const nonBoolean = frameworkEntries.find(([, present]) => typeof present !== "boolean");
+    if (nonBoolean) {
+      return {
+        ok: false,
+        error: `baseline.metrics[${index}] (viewport "${label}") frameworks.${nonBoolean[0]} must be a boolean, got ${JSON.stringify(nonBoolean[1])}`,
+      };
     }
     for (const field of REQUIRED_NUMERIC_FIELDS) {
       if (!Number.isFinite(metric[field])) {

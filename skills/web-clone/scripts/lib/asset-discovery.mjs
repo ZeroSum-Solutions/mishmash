@@ -41,8 +41,23 @@ const CSS_IMPORT_PATTERN = /@import\s+['"]([^'"]+)['"]/gi;
 // references, turning them into phantom "missing assets". Real lazy-load
 // attributes invented by themes (`data-nectar-img-src`, `data-lazy-srcset`,
 // `data-bg`, ...) all end in one of these tokens, so matching by suffix
-// (optionally after a `-`/`_`) still covers them without an enumerable list.
-export const URL_BEARING_ATTRIBUTE_PATTERN = /(?:^|[-_])(?:src|href|poster|srcset|bg|background)$/i;
+// (after `-`/`_`/`:` or at the start) still covers them without an
+// enumerable list. The `:` separator covers XML-namespaced names
+// (`xlink:href` on SVG 1.x `<image>`/`<use>`), and `imagesrcset` is its own
+// token because `<link imagesrcset>` has no separator before the suffix.
+const URL_BEARING_SUFFIX_PATTERN = /(?:^|[-_:])(?:src|href|poster|srcset|imagesrcset|bg|background)$/i;
+// A7: standard URL-carrying attributes whose names do not END in a URL-ish
+// token and so need exact matching: `<object data>`, `<form action>`,
+// `<button formaction>`. Exact -- NOT suffix -- because `data-*`/
+// `data-action` style names routinely carry non-URL values (JS hooks,
+// config), and a suffix match would resolve those into phantom missing
+// assets, the precise failure the allowlist above exists to prevent.
+const URL_BEARING_EXACT_PATTERN = /^(?:data|action|formaction)$/i;
+
+/** True when an HTML attribute name plausibly carries a URL reference. */
+export function isUrlBearingAttributeName(name) {
+  return URL_BEARING_SUFFIX_PATTERN.test(name) || URL_BEARING_EXACT_PATTERN.test(name);
+}
 
 /** Non-fetchable/inline schemes: nothing a mirror pass could retrieve or usefully localise. */
 function isIgnorableReference(value) {
@@ -108,14 +123,14 @@ function srcsetCandidates(value) {
  *
  * CSS `url()`/`@import` values are always eligible (unambiguously resource
  * references in that position); HTML attribute values are eligible only
- * from a URL-bearing attribute name (see `URL_BEARING_ATTRIBUTE_PATTERN`).
+ * from a URL-bearing attribute name (see `isUrlBearingAttributeName`).
  */
 export function collectReferenceCandidates(text) {
   const refs = [];
 
   for (const match of text.matchAll(QUOTED_ATTRIBUTE_PATTERN)) {
     const [, name, , raw] = match;
-    if (!URL_BEARING_ATTRIBUTE_PATTERN.test(name)) continue;
+    if (!isUrlBearingAttributeName(name)) continue;
     const candidates = /srcset$/i.test(name) ? srcsetCandidates(raw) : [raw];
     for (const candidate of candidates) {
       const value = candidate.trim();
@@ -123,14 +138,19 @@ export function collectReferenceCandidates(text) {
     }
   }
 
-  // Unquoted values are always a single token (no whitespace is possible
-  // without ending the attribute), so a multi-candidate unquoted `srcset`
-  // cannot occur validly -- treat the token as one reference, not a list.
+  // An unquoted value cannot contain whitespace (that ends the attribute),
+  // but it CAN contain commas -- `srcset=a.png,b.png` is valid srcset with
+  // two descriptor-less candidates (A7: this used to be pushed as the single
+  // reference "a.png,b.png"). Run srcset-named values through the same
+  // tokenizer as the quoted form; every other unquoted value is one token.
   for (const match of text.matchAll(UNQUOTED_ATTRIBUTE_PATTERN)) {
     const [, name, raw] = match;
-    if (!URL_BEARING_ATTRIBUTE_PATTERN.test(name)) continue;
-    const value = (raw ?? "").trim();
-    if (!isIgnorableReference(value)) refs.push(value);
+    if (!isUrlBearingAttributeName(name)) continue;
+    const candidates = /srcset$/i.test(name) ? srcsetCandidates(raw ?? "") : [raw ?? ""];
+    for (const candidate of candidates) {
+      const value = candidate.trim();
+      if (!isIgnorableReference(value)) refs.push(value);
+    }
   }
 
   for (const match of text.matchAll(CSS_URL_PATTERN)) {

@@ -33,7 +33,7 @@ import path from "node:path";
 import { loadPlaywright, launchChromium } from "./lib/playwright-loader.mjs";
 import { DEFAULT_VIEWPORTS, forceLazyMarkup, steppedScroll, collectRuntimeMetrics } from "./lib/viewport-capture.mjs";
 import { evaluateGate, validateBaselineDocument } from "./lib/gate-decision.mjs";
-import { classifyRequestOrigin } from "./lib/request-classification.mjs";
+import { bucketForRequestIssue, classifyRequestOrigin } from "./lib/request-classification.mjs";
 import { startStaticServer } from "./lib/static-server.mjs";
 
 function parseArgs(argv) {
@@ -119,19 +119,24 @@ try {
       });
       try {
         const page = await context.newPage();
-        const sameOriginFailures = [];
-        const crossOriginFailures = [];
-        const originLeaks = [];
+        const buckets = {
+          sameOriginFailures: [],
+          crossOriginFailures: [],
+          originLeaks: [],
+        };
+        const { sameOriginFailures, crossOriginFailures, originLeaks } = buckets;
         const classify = (url) => classifyRequestOrigin(url, { localBase: localServer.baseUrl, originalOrigin: baselineDoc?.origin });
         page.on("requestfailed", (request) => {
           const url = request.url();
-          const entry = { url, error: request.failure()?.errorText || "" };
-          const kind = classify(url);
-          // A failed request can't itself be a "leak" (a leak means the
-          // live origin answered successfully) -- classify local vs.
-          // cross-origin only.
-          if (kind === "local") sameOriginFailures.push(entry);
-          else crossOriginFailures.push(entry);
+          // A2: a FAILED request routes through the same bucket rule as an
+          // error response -- an origin-leak-classified URL is a leak
+          // whether or not the origin answered. The previous handler
+          // reasoned "a failed request can't be a leak (the origin didn't
+          // answer)" and filed it under the ignored cross-origin bucket,
+          // which let a mirror that still referenced its origin PASS the
+          // gate whenever that origin happened to be offline -- the exact
+          // situation (origin gone) the gate exists to protect against.
+          buckets[bucketForRequestIssue(classify(url))].push({ url, error: request.failure()?.errorText || "" });
         });
         page.on("response", (response) => {
           const url = response.url();
@@ -147,9 +152,7 @@ try {
             return;
           }
           if (response.status() >= 400) {
-            const entry = { url, status: response.status() };
-            if (kind === "local") sameOriginFailures.push(entry);
-            else crossOriginFailures.push(entry);
+            buckets[bucketForRequestIssue(kind)].push({ url, status: response.status() });
           }
         });
 

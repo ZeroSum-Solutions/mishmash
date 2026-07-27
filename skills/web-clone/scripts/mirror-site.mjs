@@ -370,14 +370,30 @@ try {
       }
       if (hitSafetyCap || !progress) break;
     }
-    if (hitSafetyCap) {
-      const stillMissing = findMissingSourceUrls({ siteDir, hosts, manifest });
+    // A1: EVERY exit from the loop re-checks what is actually still missing
+    // -- not just the safety-cap path. The no-progress exit (a round where
+    // every remaining fetch failed) used to fall through here silently:
+    // those URLs never appear in `responses` (no browser request ever fired
+    // for a discovery-only reference), so the final tally below cannot see
+    // them either, and the run printed "Mirror complete" with exit 0 over a
+    // mirror that was provably missing referenced same-origin assets.
+    const stillMissing = findMissingSourceUrls({ siteDir, hosts, manifest });
+    if (stillMissing.size) {
       mirrorIncomplete = true;
-      console.error(
-        `✗ Hit the ${MAX_FETCH_ATTEMPTS}-attempt recursive-fetch safety cap with ${stillMissing.size} ` +
-          `referenced asset(s) still missing. This likely means a reference cycle or an unusually deep ` +
-          `asset chain -- this mirror is INCOMPLETE and must not be treated as done.`,
-      );
+      if (hitSafetyCap) {
+        console.error(
+          `✗ Hit the ${MAX_FETCH_ATTEMPTS}-attempt recursive-fetch safety cap with ${stillMissing.size} ` +
+            `referenced asset(s) still missing. This likely means a reference cycle or an unusually deep ` +
+            `asset chain -- this mirror is INCOMPLETE and must not be treated as done.`,
+        );
+      } else {
+        console.error(
+          `✗ Recursive fetch exhausted with ${stillMissing.size} referenced same-origin asset(s) still ` +
+            `missing (every remaining attempt failed). This mirror is INCOMPLETE and must not be ` +
+            `treated as done:\n   ` +
+            [...stillMissing].slice(0, 12).join("\n   "),
+        );
+      }
     }
   } finally {
     await fetchContext.close().catch(() => {});

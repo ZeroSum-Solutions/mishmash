@@ -296,6 +296,28 @@ SSL_CERT_FILE=/etc/ssl/cert.pem gh api repos/<u>/<r> | jq '.license'  # + look f
 - `scripts/od-preview-rewrite.mjs`: rewrites project-root asset references in HTML/CSS/SVG (e.g. `/reference-assets/main.css`) to relative paths, so Open Design's file preview and exported zip still load assets under nested routes.
 - `scripts/dna-scaffold.mjs`: generates a `design-dna.json` design-identity skeleton from recon JSON (fonts/color candidates/framework effect signals, best-effort prefilled), for use in "visual clone / content overhaul" mode. See `references/design-dna.md`.
 
+## Known limitations (documented, deliberately not built)
+
+Hostile-input hardening on a local tool the operator points at sites they choose. Each entry
+states its precondition — none is reachable from a benign real-world site. This list is frozen
+by the W-C close-out (2026-07-26); adding an entry requires a founder decision, not an agent's
+reclassification of a failing test.
+
+1. **In-root symlinks can redirect a write.** `lib/safe-path.mjs`'s `containedPath()` guards
+   lexically (defeats `..` traversal, including percent-encoded forms) but does not `realpath`
+   the destination. Precondition: a symlinked directory (e.g. `assets/` → elsewhere) already
+   exists inside the mirror root before capture writes into it. The mirror root is created by
+   `mirror-site.mjs` itself, so this requires a deliberately pre-seeded output directory.
+2. **`claim()` disambiguation is not injective against a crafted URL set.** A collision on the
+   natural path widens the suffix 8→16 hex chars without re-checking the widened result.
+   Precondition: an adversary controlling the site's URL structure crafts multiple URLs that
+   collide on both the natural path *and* the short hash — astronomically unlikely for real
+   sites, constructible on purpose.
+3. **A hand-edited `url-manifest.json` is trusted as-authored.** `restore()` accepts persisted
+   entries without re-validating for duplicate or unsafe local paths (writes are still
+   containment-checked at write time). Precondition: the operator (or something with write
+   access to the mirror output directory) edits the manifest between runs.
+
 ## Capability boundary (default stance)
 - **Can do high-fidelity**: static marketing pages, corporate sites, content-driven React/Vue/Next frontends, animated sites where the source is directly available.
 - **Can visually reproduce but will simplify**: CMS backend data, complex scroll storytelling, multi-breakpoint layouts, WebGL/Canvas effects, third-party embeds.

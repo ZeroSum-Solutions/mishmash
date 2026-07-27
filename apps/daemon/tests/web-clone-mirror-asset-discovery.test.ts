@@ -355,3 +355,95 @@ describe('localPathForUrl (rewrite-mirror.mjs, F10/F11: unified + query-safe pat
     expect(localPathForUrl('https://example.com/theme.css', hosts)).toBe('theme.css');
   });
 });
+
+// --- Class-A close-out (wave W-C, criteria CC-1/CC-6): discovery coverage ---
+describe('(A6) localPathForUrl caps filesystem-unrepresentable path components', () => {
+  const hosts = new Set(['example.com', 'www.example.com']);
+
+  it('(A6) a >255-byte decoded path component is capped below the filesystem limit', async () => {
+    const { localPathForUrl } = await loadRewriteMirror();
+    const longName = 'a'.repeat(300);
+
+    const rel = localPathForUrl(`https://example.com/assets/${longName}.png`, hosts)!;
+
+    expect(rel).toBeTruthy();
+    for (const component of rel.split('/')) {
+      expect(Buffer.byteLength(component, 'utf8')).toBeLessThanOrEqual(255);
+    }
+  });
+
+  it('(A6) capping is deterministic and keeps distinct long names distinct', async () => {
+    const { localPathForUrl } = await loadRewriteMirror();
+    const nameA = `${'a'.repeat(300)}.png`;
+    const nameB = `${'a'.repeat(299)}b.png`;
+
+    const first = localPathForUrl(`https://example.com/${nameA}`, hosts);
+    const again = localPathForUrl(`https://example.com/${nameA}`, hosts);
+    const other = localPathForUrl(`https://example.com/${nameB}`, hosts);
+
+    expect(again).toBe(first);
+    expect(other).not.toBe(first);
+  });
+
+  it('(A6) a multi-byte (UTF-8) long component is capped without splitting a character', async () => {
+    const { localPathForUrl } = await loadRewriteMirror();
+    const longName = 'é'.repeat(200); // 400 UTF-8 bytes
+
+    const rel = localPathForUrl(`https://example.com/${encodeURIComponent(longName)}.woff2`, hosts)!;
+
+    for (const component of rel.split('/')) {
+      expect(Buffer.byteLength(component, 'utf8')).toBeLessThanOrEqual(255);
+      // Re-encoding must round-trip -- a split surrogate/partial UTF-8
+      // sequence would produce replacement characters here.
+      expect(Buffer.from(component, 'utf8').toString('utf8')).toBe(component);
+    }
+  });
+});
+
+describe('(A7) URL-bearing attribute coverage: the standard attributes discovery previously missed', () => {
+  it('(A7) discovers object[data]', async () => {
+    const { collectReferenceCandidates } = await loadDiscovery();
+    const refs = collectReferenceCandidates('<object data="/media/movie.swf" type="application/x-shockwave-flash"></object>');
+    expect(refs).toContain('/media/movie.swf');
+  });
+
+  it('(A7) discovers link[imagesrcset] preload candidates, with width descriptors', async () => {
+    const { collectReferenceCandidates } = await loadDiscovery();
+    const refs = collectReferenceCandidates(
+      '<link rel="preload" as="image" imagesrcset="/img/hero-400.png 400w,/img/hero-800.png 800w">',
+    );
+    expect(refs).toContain('/img/hero-400.png');
+    expect(refs).toContain('/img/hero-800.png');
+  });
+
+  it('(A7) discovers form[action] and button[formaction]', async () => {
+    const { collectReferenceCandidates } = await loadDiscovery();
+    const refs = collectReferenceCandidates(
+      '<form action="/subscribe.html"><button formaction="/confirm.html">Go</button></form>',
+    );
+    expect(refs).toContain('/subscribe.html');
+    expect(refs).toContain('/confirm.html');
+  });
+
+  it('(A7) discovers xlink:href (SVG 1.x image/use references)', async () => {
+    const { collectReferenceCandidates } = await loadDiscovery();
+    const refs = collectReferenceCandidates('<svg><image xlink:href="/img/photo.jpg" width="10" height="10"/></svg>');
+    expect(refs).toContain('/img/photo.jpg');
+  });
+
+  it('(A7) tokenizes an unquoted srcset value with the same tokenizer as the quoted form', async () => {
+    const { collectReferenceCandidates } = await loadDiscovery();
+    const refs = collectReferenceCandidates('<img srcset=/img/a.png,/img/b.png alt="">');
+    expect(refs).toContain('/img/a.png');
+    expect(refs).toContain('/img/b.png');
+    expect(refs).not.toContain('/img/a.png,/img/b.png');
+  });
+
+  it('(A7 negative control) does not treat data-action/data-metadata JS hooks as URL references', async () => {
+    const { collectReferenceCandidates } = await loadDiscovery();
+    const refs = collectReferenceCandidates(
+      '<button data-action="save-draft" data-metadata="v2">Save</button><meta charset="utf-8">',
+    );
+    expect(refs).toHaveLength(0);
+  });
+});

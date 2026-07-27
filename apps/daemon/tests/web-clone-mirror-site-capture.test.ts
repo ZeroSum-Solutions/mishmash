@@ -195,3 +195,62 @@ describe.skipIf(!cachedPlaywrightPath)('mirror-site.mjs (F6/F9/N6: real subproce
     }
   }, 60_000);
 });
+
+// --- Class-A close-out (wave W-C, criterion CC-2) ---
+//
+// A1, the false-green completion path. The F9/N6 test above passes only
+// because its missing asset is EAGERLY requested by the browser (a <link>
+// stylesheet), which lands the 404 in the `responses` map that the final
+// tally iterates. A reference that only the post-capture discovery scan can
+// see -- an unused CSS background url() with no matching element, so the
+// browser never fires a request for it -- never enters `responses` at all.
+// The recursive-fetch rounds claim it, fail to fetch it, exhaust with no
+// progress, and exit the loop WITHOUT setting `mirrorIncomplete`; the tally
+// then can't see it either, and the run prints "Mirror complete" with exit
+// 0 over a mirror that is provably missing a referenced same-origin asset.
+describe.skipIf(!cachedPlaywrightPath)('mirror-site.mjs (A1/CC-2: no-progress exhaustion must not report complete)', () => {
+  let outDir: string;
+
+  beforeEach(() => {
+    outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'web-clone-mirror-site-a1-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(outDir, { recursive: true, force: true });
+  });
+
+  it('(A1/CC-2) exits non-zero when a discovery-only reference (never browser-requested) is permanently unfetchable', async () => {
+    const server = await startFixtureServer({
+      '/': (_req, res) => {
+        res
+          .writeHead(200, { 'content-type': 'text/html' })
+          .end(
+            '<!doctype html><html><head><meta charset="utf-8"><title>Fixture</title>' +
+              '<link rel="stylesheet" href="/styles.css"></head>' +
+              '<body><h1>Fixture</h1><p>' +
+              FILLER +
+              '</p></body></html>',
+          );
+      },
+      '/styles.css': (_req, res) => {
+        // The .unused rule matches no element, so no browser request is
+        // ever fired for lazy-bg.png -- only the discovery scan can see it.
+        res
+          .writeHead(200, { 'content-type': 'text/css' })
+          .end('body{font-family:sans-serif} .unused-hover-sprite{background-image:url(/assets/lazy-bg.png)}');
+      },
+      // /assets/lazy-bg.png is intentionally never registered: 404 forever.
+    });
+
+    try {
+      const result = await runMirrorSite(`${server.origin}/`, outDir);
+      const combined = result.stdout + result.stderr;
+
+      expect(result.status).not.toBe(0);
+      expect(combined).not.toMatch(/Mirror complete/);
+      expect(combined).toMatch(/INCOMPLETE/);
+    } finally {
+      await server.close();
+    }
+  }, 60_000);
+});

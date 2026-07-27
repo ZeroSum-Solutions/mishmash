@@ -68,3 +68,23 @@ export function classifyRequestOrigin(requestUrl, { localBase, originalOrigin = 
 
   return "cross-origin";
 }
+
+/**
+ * Which verify-mirror.mjs bucket an OBSERVED PROBLEM with a request belongs
+ * in, given its `classifyRequestOrigin` kind. Used for both a failed request
+ * (`page.on('requestfailed')`) and an error-status response -- the routing
+ * must be identical for the two (A2): an origin-leak-classified URL goes to
+ * `originLeaks` REGARDLESS of whether the origin answered, because
+ * self-containment is about where the mirror points, not about whether the
+ * live origin happened to be reachable during verification. Routing failed
+ * origin-requests into the ignored cross-origin bucket is exactly how a
+ * leaking mirror used to pass the gate whenever its origin was offline.
+ *
+ * @param {"local" | "origin-leak" | "cross-origin" | "invalid"} kind
+ * @returns {"originLeaks" | "sameOriginFailures" | "crossOriginFailures"}
+ */
+export function bucketForRequestIssue(kind) {
+  if (kind === "origin-leak") return "originLeaks";
+  if (kind === "local") return "sameOriginFailures";
+  return "crossOriginFailures";
+}

@@ -320,3 +320,84 @@ describe('isCaptured / findMissingSourceUrls (lib/mirror-manifest.mjs)', () => {
     expect([...missing]).toHaveLength(0);
   });
 });
+
+// --- Class-A close-out (wave W-C, criteria CC-1/CC-6): manifest identity ---
+//
+// Round-3 REJECT items A4/A5/A6. Each red spec below fails on parent
+// 371daca15 and passes at head -- see proof/CC-1-red.txt / CC-1-green.txt in
+// the goal-state run directory.
+describe('(A4) fragment references share the fragment-free manifest identity', () => {
+  it('(A4) get()/has() find a claimed URL when queried with a #fragment appended', async () => {
+    const { createMirrorManifest } = await loadMirrorManifest();
+    const { localPathForUrl, originHosts } = await loadRewriteMirror();
+    const hosts = originHosts('https://example.com');
+    const manifest = createMirrorManifest({ computeLocalPath: localPathForUrl });
+
+    const bare = manifest.claim('https://example.com/sprite.svg', hosts);
+
+    expect(manifest.get('https://example.com/sprite.svg#icon-menu')).toBe(bare);
+    expect(manifest.has('https://example.com/sprite.svg#icon-close')).toBe(true);
+  });
+
+  it('(A4) claiming a #fragment variant of an already-claimed URL reuses the entry instead of duplicating the file', async () => {
+    const { createMirrorManifest } = await loadMirrorManifest();
+    const { localPathForUrl, originHosts } = await loadRewriteMirror();
+    const hosts = originHosts('https://example.com');
+    const manifest = createMirrorManifest({ computeLocalPath: localPathForUrl });
+
+    const bare = manifest.claim('https://example.com/sprite.svg', hosts);
+    const fragged = manifest.claim('https://example.com/sprite.svg#icon-menu', hosts);
+
+    expect(fragged).toBe(bare);
+    expect(manifest.entries()).toHaveLength(1);
+  });
+
+  it('(A4) findMissingSourceUrls() does not report a #fragment reference whose fragment-free asset is already captured', async () => {
+    const { createMirrorManifest, findMissingSourceUrls } = await loadMirrorManifest();
+    const { localPathForUrl, originHosts } = await loadRewriteMirror();
+    const hosts = originHosts('https://example.com');
+    const manifest = createMirrorManifest({ computeLocalPath: localPathForUrl });
+    const siteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'web-clone-fragment-'));
+    try {
+      const indexRel = manifest.claim('https://example.com/', hosts)!;
+      fs.writeFileSync(
+        path.join(siteDir, indexRel),
+        '<!doctype html><html><body><svg><use href="/sprite.svg#icon-menu"></use></svg></body></html>',
+      );
+      const spriteRel = manifest.claim('https://example.com/sprite.svg', hosts)!;
+      fs.writeFileSync(path.join(siteDir, spriteRel), '<svg><symbol id="icon-menu"/></svg>');
+
+      const missing = findMissingSourceUrls({ siteDir, hosts, manifest });
+
+      expect([...missing]).toHaveLength(0);
+    } finally {
+      fs.rmSync(siteDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('(A5) filesystem-equivalent local paths must not silently collide', () => {
+  it('(A5) case-only distinct URLs get case-insensitively distinct local paths (APFS/NTFS are case-insensitive)', async () => {
+    const { createMirrorManifest } = await loadMirrorManifest();
+    const { localPathForUrl, originHosts } = await loadRewriteMirror();
+    const hosts = originHosts('https://example.com');
+    const manifest = createMirrorManifest({ computeLocalPath: localPathForUrl });
+
+    const upper = manifest.claim('https://example.com/Images/Logo.png', hosts)!;
+    const lower = manifest.claim('https://example.com/images/logo.png', hosts)!;
+
+    expect(upper.toLowerCase()).not.toBe(lower.toLowerCase());
+  });
+
+  it('(A5) NFC/NFD-equivalent URLs get normalization-insensitively distinct local paths (APFS normalizes)', async () => {
+    const { createMirrorManifest } = await loadMirrorManifest();
+    const { localPathForUrl, originHosts } = await loadRewriteMirror();
+    const hosts = originHosts('https://example.com');
+    const manifest = createMirrorManifest({ computeLocalPath: localPathForUrl });
+
+    const nfc = manifest.claim(`https://example.com/${encodeURIComponent('café.png'.normalize('NFC'))}`, hosts)!;
+    const nfd = manifest.claim(`https://example.com/${encodeURIComponent('café.png'.normalize('NFD'))}`, hosts)!;
+
+    expect(nfc.normalize('NFC').toLowerCase()).not.toBe(nfd.normalize('NFC').toLowerCase());
+  });
+});

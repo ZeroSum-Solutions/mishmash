@@ -37,9 +37,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { collectReferenceCandidates, URL_BEARING_ATTRIBUTE_PATTERN } from "./lib/asset-discovery.mjs";
+import { collectReferenceCandidates, isUrlBearingAttributeName } from "./lib/asset-discovery.mjs";
 import { walk as walkFiles } from "./lib/fs-walk.mjs";
 import { loadMirrorManifest } from "./lib/mirror-manifest.mjs";
+import { capPathComponents } from "./lib/safe-path.mjs";
 
 // `mirror-site.mjs` imports these so the "which local file does this URL mean?"
 // rule has exactly one definition. A second copy would drift, and a drifted copy
@@ -161,10 +162,15 @@ function localPathForUrl(url, hosts) {
   p = p.replace(/^\/+/, "");
   p = withQuerySuffix(p, parsed.search);
   try {
-    return decodeURIComponent(p);
+    p = decodeURIComponent(p);
   } catch {
-    return p;
+    // Not valid percent-encoding; use the raw path as-is.
   }
+  // A6: a decoded component can exceed the filesystem's 255-byte component
+  // limit (a ~300-char URL segment produced ENAMETOOLONG on write). Capping
+  // happens HERE, in the single URL->path rule, so the manifest, capture,
+  // recursive fetch, and rewrite all agree on the capped form.
+  return capPathComponents(p);
 }
 
 /**
@@ -305,15 +311,16 @@ function rewriteText(text, file, rewriteRef, { manifestActive = false } = {}) {
 
   if (!isCss) {
     // Only URL-bearing attribute names are touched (see
-    // lib/asset-discovery.mjs's URL_BEARING_ATTRIBUTE_PATTERN) -- an
-    // allowlist-by-suffix rather than a fixed enum, so theme-invented
-    // lazy-load attributes (`data-nectar-img-src`, `data-lazy-srcset`, ...)
-    // are still covered, while ordinary non-URL attributes
-    // (`data-aspect="16/9"`, `charset="utf-8"`) are left untouched.
+    // lib/asset-discovery.mjs's isUrlBearingAttributeName) -- an
+    // allowlist-by-suffix plus a short exact-name set (`data`, `action`,
+    // `formaction`), so theme-invented lazy-load attributes
+    // (`data-nectar-img-src`, `data-lazy-srcset`, ...) are still covered,
+    // while ordinary non-URL attributes (`data-aspect="16/9"`,
+    // `charset="utf-8"`, `data-action="save"`) are left untouched.
     next = next.replace(
       /(\s)([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(['"])([\s\S]*?)\3/g,
       (match, space, name, quote, value) => {
-        if (!URL_BEARING_ATTRIBUTE_PATTERN.test(name)) return match;
+        if (!isUrlBearingAttributeName(name)) return match;
         if (/srcset$/i.test(name)) {
           const rewritten = rewriteSrcset(value, rewriteRef);
           return rewritten === value ? match : `${space}${name}=${quote}${rewritten}${quote}`;

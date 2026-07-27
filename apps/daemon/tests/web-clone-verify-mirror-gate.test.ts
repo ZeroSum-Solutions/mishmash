@@ -516,3 +516,104 @@ describe('validateBaselineDocument (F2: fail-closed baseline validation)', () =>
     expect(validateBaselineDocument(doc, requiredLabels).ok).toBe(false);
   });
 });
+
+// --- Class-A close-out (wave W-C, criteria CC-3/CC-4/CC-5) ---
+describe('(A2) origin-leak detection is independent of response status', () => {
+  it('(A2/CC-3) routes a FAILED request to the original origin into originLeaks, not the ignored cross-origin bucket', async () => {
+    const requestClassification = (await import(
+      pathToFileURL(path.join(repoRoot, 'skills', 'web-clone', 'scripts', 'lib', 'request-classification.mjs')).href
+    )) as {
+      classifyRequestOrigin: (url: string, ctx: { localBase: string; originalOrigin?: string | null }) => string;
+      bucketForRequestIssue?: (kind: string) => string;
+    };
+    // The routing decision verify-mirror.mjs applies to page.on('requestfailed')
+    // must live in a pure, testable function -- and it must send an
+    // origin-leak-classified URL to originLeaks REGARDLESS of whether the
+    // origin answered. Self-containment is about where the mirror points,
+    // not whether the live origin happened to be up during verification.
+    expect(typeof requestClassification.bucketForRequestIssue).toBe('function');
+    const kind = requestClassification.classifyRequestOrigin('https://example.com/app.js', {
+      localBase: 'http://127.0.0.1:4173',
+      originalOrigin: 'https://example.com',
+    });
+    expect(kind).toBe('origin-leak');
+    expect(requestClassification.bucketForRequestIssue!(kind)).toBe('originLeaks');
+  });
+
+  it('(A2/CC-4 negative control) an unrelated third-party failure stays out of the origin-leak bucket', async () => {
+    const requestClassification = (await import(
+      pathToFileURL(path.join(repoRoot, 'skills', 'web-clone', 'scripts', 'lib', 'request-classification.mjs')).href
+    )) as {
+      classifyRequestOrigin: (url: string, ctx: { localBase: string; originalOrigin?: string | null }) => string;
+      bucketForRequestIssue?: (kind: string) => string;
+    };
+    expect(typeof requestClassification.bucketForRequestIssue).toBe('function');
+    const kind = requestClassification.classifyRequestOrigin('https://cdn.unrelated.net/lib.js', {
+      localBase: 'http://127.0.0.1:4173',
+      originalOrigin: 'https://example.com',
+    });
+    expect(kind).toBe('cross-origin');
+    expect(requestClassification.bucketForRequestIssue!(kind)).toBe('crossOriginFailures');
+    // And a local failure still lands where the same-origin gate reads it.
+    expect(requestClassification.bucketForRequestIssue!('local')).toBe('sameOriginFailures');
+  });
+
+  it('(A2) an origin-leak entry recorded from a failed request (error, no status) still fails evaluateGate', async () => {
+    const { evaluateGate } = await loadGateDecision();
+
+    const gate = evaluateGate({
+      viewports: [
+        viewportResult({
+          originLeaks: [{ url: 'https://example.com/app.js', error: 'net::ERR_CONNECTION_REFUSED' }],
+        }),
+      ],
+      baselineByLabel,
+    });
+
+    expect(gate.pass).toBe(false);
+  });
+});
+
+describe('(A3/CC-5) malformed baselines fail closed with named diagnostics', () => {
+  const requiredLabels = ['1440', '768', '390'];
+
+  it('(A3) rejects an origin that is not an absolute http(s) URL', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const result = validateBaselineDocument(validBaselineDoc({ origin: 'not a url' }), requiredLabels);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/http/i);
+  });
+
+  it('(A3) rejects a non-http(s) scheme origin (nothing a browser request could leak back to)', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const result = validateBaselineDocument(validBaselineDoc({ origin: 'file:///tmp/site' }), requiredLabels);
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('(A3) rejects an empty frameworks object (the writer always records the runtime-global flags)', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const result = validateBaselineDocument(
+      validBaselineDoc({ metrics: [completeMetric('1440', { frameworks: {} })] }),
+      ['1440'],
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/frameworks/i);
+  });
+
+  it('(A3) rejects non-boolean frameworks values (schema drift, not writer output)', async () => {
+    const { validateBaselineDocument } = await loadGateDecision();
+
+    const result = validateBaselineDocument(
+      validBaselineDoc({ metrics: [completeMetric('1440', { frameworks: { lenis: 'yes' } })] }),
+      ['1440'],
+    );
+
+    expect(result.ok).toBe(false);
+  });
+});
