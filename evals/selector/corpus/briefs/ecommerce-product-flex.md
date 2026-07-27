@@ -1,0 +1,1 @@
+Use ecom-flex-a's colour palette on the price badge -- I looked at ecom-grid-b's price styling too but I'm going with ecom-flex-a's. Also carry over ecom-grid-b's add-to-cart button motion, and keep ecom-flex-a's reviews panel section structure and overall layout.
