@@ -12,13 +12,32 @@ fail the gate (`verify-w7.ts` C7-2 / C7-11, F18).
 
 This corpus's held-out split is 2 of 10 cases (`manifest.sealedFraction = 0.2`):
 
-- **`sealed-marketing-alt`** — IR plaintext sha256: `101eee4a6943bbdc784613985308e971b5eb310eaf6457cd7200c939de860928`
-- **`sealed-docs-widget`** — IR plaintext sha256: `087cf656b0613a149a3007b9b91f7b0d0ebc84c2c36caea1751f46666d79116f`
+- **`sealed-marketing-alt`** — IR plaintext sha256: `f39a253d9cd69f1fde160ad269a8277e8dde174c10ab960fb7bbfa8812c1ada5`
+- **`sealed-docs-widget`** — IR plaintext sha256: `d74bc0368ef786e770357792c52250ebca1c4bd1916db4c769478bab130e86b3`
 
-Both cases' plaintext (IR + every source's per-breakpoint snapshot) was authored by the W7
-implementing agent and handed off out-of-band for encryption — it was **never** committed to this
-repository in plaintext, and the implementing agent never held (and did not seek) the seal key at
-`~/.claude/goal-state/mishmash-w7-selector-foundations/seal.key`.
+**This is the SECOND version of this handoff bundle**, replacing an earlier one that was already
+sealed and committed (blobs `0c459cde6`, seal record `d294c2b98`). Three bugs were found in the
+FIRST version after it was sealed, all fixed in the regenerated plaintext below — see the milestone
+message to the orchestrator for the full story:
+
+1. Every IR's `provenance[].breakpoint` was hardcoded to `"desktop"` and every node's `nodeId`/
+   `domPath` were shared verbatim across both breakpoints, so `verify-w7.ts` C7-4's breakpoint-only
+   field-derangement control was mechanically unconstructible / never actually broke resolution.
+   Fixed: `nodeId` is now breakpoint-specific and provenance breakpoints alternate.
+2. `sealed-docs-b` and `mkt-grid-a` (a non-sealed source) shared the same style preset index,
+   producing byte-identical `computedStyle` blocks that tripped `verify-w7.ts` C7-11's leak
+   scanner. Fixed: every one of the 19 sources now has a unique preset.
+3. Pretty-printed JSON plus long, near-identical boilerplate prose (`constraints`, `variantAxes`,
+   `conflictResolution` rationale) produced >64-byte spans byte-identical across every case,
+   including this sealed one — more C7-11 false positives. Fixed: compact JSON, short
+   case/axis/source-tagged tokens instead of prose, and decorative CSS properties dropped from
+   `computedStyle` (kept only `display`/`position`, the two the layout-evidence check reads).
+
+**If a prior version of `sealed-marketing-alt`/`sealed-docs-widget` is already sealed in this repo,
+it must be replaced by this corrected version** — the previously-sealed ciphertext no longer
+matches the corrected, non-sealed half of the corpus and will fail C7-4/C7-11 permanently
+otherwise. Per the frozen-path rule this requires a NEW seal commit (a fresh touch of this file)
+and, per `verify-w7.ts`'s own comments, a founder decision record authorizing the re-seal.
 
 ## Access control
 
