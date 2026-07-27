@@ -1,0 +1,425 @@
+{
+  "sourceSlots": [
+    {
+      "id": "dash-abs-a",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "evidencePointers": [
+        {
+          "domPath": "body > div.dash-abs-a-shell > header.dash-abs-a-header",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-abs-a-shell > hero.dash-abs-a-hero",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-abs-a-shell > hero_heading.dash-abs-a-hero-heading",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-abs-a-shell > features.dash-abs-a-features",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "position"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-abs-a-shell > feature_item_1.dash-abs-a-feature-item-1",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-abs-a-shell > feature_item_2.dash-abs-a-feature-item-2",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-abs-a-shell > cta.dash-abs-a-cta",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-abs-a-shell > footer.dash-abs-a-footer",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-abs-a-shell > header.dash-abs-a-header",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-abs-a-shell > hero.dash-abs-a-hero",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-abs-a-shell > hero_heading.dash-abs-a-hero-heading",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-abs-a-shell > features.dash-abs-a-features",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "position"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-abs-a-shell > feature_item_1.dash-abs-a-feature-item-1",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-abs-a-shell > feature_item_2.dash-abs-a-feature-item-2",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-abs-a-shell > cta.dash-abs-a-cta",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-abs-a-shell > footer.dash-abs-a-footer",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dash-grid-b",
+      "breakpoints": [
+        "mobile",
+        "desktop"
+      ],
+      "evidencePointers": [
+        {
+          "domPath": "body > div.dash-grid-b-shell > header.dash-grid-b-header",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-grid-b-shell > hero.dash-grid-b-hero",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-grid-b-shell > hero_heading.dash-grid-b-hero-heading",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-grid-b-shell > features.dash-grid-b-features",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "gridTemplateColumns"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-grid-b-shell > feature_item_1.dash-grid-b-feature-item-1",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-grid-b-shell > feature_item_2.dash-grid-b-feature-item-2",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-grid-b-shell > cta.dash-grid-b-cta",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-grid-b-shell > footer.dash-grid-b-footer",
+          "breakpoint": "mobile",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-grid-b-shell > header.dash-grid-b-header",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-grid-b-shell > hero.dash-grid-b-hero",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-grid-b-shell > hero_heading.dash-grid-b-hero-heading",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-grid-b-shell > features.dash-grid-b-features",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily",
+            "display",
+            "gridTemplateColumns"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-grid-b-shell > feature_item_1.dash-grid-b-feature-item-1",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-grid-b-shell > feature_item_2.dash-grid-b-feature-item-2",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-grid-b-shell > cta.dash-grid-b-cta",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        },
+        {
+          "domPath": "body > div.dash-grid-b-shell > footer.dash-grid-b-footer",
+          "breakpoint": "desktop",
+          "computedStyleKeys": [
+            "color",
+            "backgroundColor",
+            "fontFamily"
+          ]
+        }
+      ]
+    }
+  ],
+  "directives": [
+    {
+      "axis": "typography",
+      "source": "dash-abs-a",
+      "scope": "body > div.dash-abs-a-shell > hero_heading.dash-abs-a-hero-heading",
+      "strength": 0.9
+    },
+    {
+      "axis": "typography",
+      "source": "dash-grid-b",
+      "scope": "body > div.dash-grid-b-shell > hero_heading.dash-grid-b-hero-heading",
+      "strength": 0.55
+    },
+    {
+      "axis": "interaction",
+      "source": "dash-abs-a",
+      "scope": "body > div.dash-abs-a-shell > cta.dash-abs-a-cta",
+      "strength": 0.75
+    },
+    {
+      "axis": "layout",
+      "source": "dash-abs-a",
+      "scope": "body > div.dash-abs-a-shell > features.dash-abs-a-features",
+      "strength": 0.8
+    }
+  ],
+  "constraints": [
+    {
+      "type": "grid-integrity",
+      "rule": "Grid/flex/absolute containers must not overlap at any declared breakpoint."
+    },
+    {
+      "type": "contrast-minimum",
+      "rule": "Text/background contrast must meet WCAG AA (4.5:1) at every breakpoint."
+    },
+    {
+      "type": "responsive-behavior",
+      "rule": "Every emitted element must have a defined style at each of the case's declared breakpoints."
+    }
+  ],
+  "conflictResolution": [
+    {
+      "axis": "typography",
+      "winningSource": "dash-abs-a",
+      "losingSource": "dash-grid-b",
+      "losingClaim": "typography claim from dash-grid-b superseded by dash-abs-a",
+      "rationale": "Both dash-abs-a and dash-grid-b claimed the typography axis on overlapping scope; dash-abs-a takes precedence per the frozen corpus ground truth for this case."
+    },
+    {
+      "axis": "interaction",
+      "winningSource": "dash-abs-a",
+      "rationale": "Single claimant (dash-abs-a) on the interaction axis in this case; no contention to resolve."
+    },
+    {
+      "axis": "layout",
+      "winningSource": "dash-abs-a",
+      "rationale": "Single claimant (dash-abs-a) on the layout axis in this case; no contention to resolve."
+    }
+  ],
+  "provenance": [
+    {
+      "elementId": "dashboard-canvas-widgets-di-0-typography",
+      "sourceId": "dash-abs-a",
+      "nodeId": "dash-abs-a-hero-heading",
+      "domPath": "body > div.dash-abs-a-shell > hero_heading.dash-abs-a-hero-heading",
+      "breakpoint": "desktop"
+    },
+    {
+      "elementId": "dashboard-canvas-widgets-di-1-typography",
+      "sourceId": "dash-grid-b",
+      "nodeId": "dash-grid-b-hero-heading",
+      "domPath": "body > div.dash-grid-b-shell > hero_heading.dash-grid-b-hero-heading",
+      "breakpoint": "desktop"
+    },
+    {
+      "elementId": "dashboard-canvas-widgets-di-2-interaction",
+      "sourceId": "dash-abs-a",
+      "nodeId": "dash-abs-a-cta",
+      "domPath": "body > div.dash-abs-a-shell > cta.dash-abs-a-cta",
+      "breakpoint": "desktop"
+    },
+    {
+      "elementId": "dashboard-canvas-widgets-di-3-layout",
+      "sourceId": "dash-abs-a",
+      "nodeId": "dash-abs-a-features",
+      "domPath": "body > div.dash-abs-a-shell > features.dash-abs-a-features",
+      "breakpoint": "desktop"
+    }
+  ],
+  "variantAxes": [
+    {
+      "name": "layout-skeleton",
+      "distanceMetric": "jaccard-dissimilarity-of-domPath-set"
+    },
+    {
+      "name": "section-order",
+      "distanceMetric": "fraction-of-positions-differing-in-scope-order"
+    },
+    {
+      "name": "motion-timeline",
+      "distanceMetric": "fraction-of-positions-differing-in-motionSignature"
+    },
+    {
+      "name": "breakpoint-behavior",
+      "distanceMetric": "fraction-of-positions-differing-in-breakpoint-assignment"
+    }
+  ]
+}
