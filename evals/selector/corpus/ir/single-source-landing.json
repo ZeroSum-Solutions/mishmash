@@ -204,7 +204,7 @@
       "sourceId": "land-solo-a",
       "nodeId": "land-solo-a-features",
       "domPath": "body > div.land-solo-a-shell > features.land-solo-a-features",
-      "breakpoint": "desktop"
+      "breakpoint": "mobile"
     },
     {
       "elementId": "single-source-landing-di-1-palette",
