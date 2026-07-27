@@ -29,9 +29,9 @@ a composer consumes, with every one of these four questions given a field.
 One entry per reference. A source slot is `{id, breakpoints, evidencePointers}`: the breakpoints
 actually captured for that source, and the DOM-path + breakpoint evidence pointers available to
 ground later directives and provenance against it. A source slot is not the raw capture — it is
-the addressable surface the rest of the IR can point into. `evidencePointers[].domPath` and
-`.breakpoint` must correspond to real nodes in that source's pinned snapshot (see
-`evals/selector/CORPUS.md` for how the corpus pins snapshots).
+the addressable surface the rest of the IR can point into. `evidencePointers` is an array of
+compact `"<domPath>@<breakpoint>"` strings; each must correspond to a real node in that source's
+pinned snapshot (see `evals/selector/CORPUS.md` for how the corpus pins snapshots).
 
 ### 2. Directive parse (`directives`)
 

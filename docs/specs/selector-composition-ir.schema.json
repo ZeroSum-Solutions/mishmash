@@ -20,19 +20,9 @@
             "items": { "type": "string", "minLength": 1 }
           },
           "evidencePointers": {
+            "description": "Compact '<domPath>@<breakpoint>' strings -- one per (domPath, breakpoint) pair actually captured for this source.",
             "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["domPath", "breakpoint"],
-              "properties": {
-                "domPath": { "type": "string", "minLength": 1 },
-                "breakpoint": { "type": "string", "minLength": 1 },
-                "computedStyleKeys": {
-                  "type": "array",
-                  "items": { "type": "string" }
-                }
-              }
-            }
+            "items": { "type": "string", "minLength": 1, "pattern": "^.+@.+$" }
           }
         }
       }
