@@ -48,11 +48,13 @@ output is `evals/selector/spike/composed-output.json`.
   querying `directives` for the same `axis`+`source` pair, is a real schema design call this
   one-case spike is not positioned to make well; it needs a second conflict case with genuinely
   different shape to avoid over-fitting the field to this example.
-- No `breakpoint` field was added to `directives`/the claim shape. `compose.ts`'s "prefer desktop
-  when the scope resolves at multiple breakpoints" policy is recorded here, in this document, as
-  the working default rather than promoted into the schema — a policy choice backed by exactly one
-  case is exactly the kind of premature schema commitment S7-5 exists to catch before it happens,
-  not to make.
+- Update (deliverable-review fix round 1): a `breakpoint` field WAS subsequently added to
+  `directives`/the claim shape (`docs/specs/selector-composition-ir.schema.json`, optional, additive
+  -- see "Two shapes, one schema"), once a second real conflict case (not just this one) made the
+  need for an explicit, per-claim breakpoint concrete rather than speculative. `compose.ts` itself is
+  unchanged and still applies its own "prefer desktop when present" fallback for claims that don't
+  set it — this spike's original finding (the ambiguity was real) stands; the schema response just
+  arrived later than this document did.
 - No measured-distance field was added to `variantAxes`. Keeping the axis definitions purely
   declarative (name + distanceMetric) and leaving the MEASURED distance to
   `evals/selector/scorer/diversity.ts` — never to the IR instance that produced the composition —
@@ -62,9 +64,12 @@ output is `evals/selector/spike/composed-output.json`.
 
 ## Evidence
 
-This spike's evidence is case `marketing-hero-grid`, output hash
-`59478f2c42784f3b5a2c796471c1c2cc426a4c092c68510371b551a03868eff2` (sha256 of
+Re-run against the v3 (genre-renamed) corpus (deliverable-review fix round 1) after the original
+run's node ids/domPaths were renamed out from under it. This spike's evidence is case
+`marketing-hero-grid`, output hash
+`619266819008ef47e4a9e00519b4a3e651de4617b7025b14b9306f3f2aa7d7e9` (sha256 of
 `evals/selector/spike/composed-output.json`), and run-log hash
-`5283837c6de2faa30ccff9eb939c5025b3bc5ae1f51ea164524a8f2f7b6f49e9` (sha256 of
+`a985f69919148fc57d7d7f9a0f0ca0449f50a42bba8a6844011c8314a46d7807` (sha256 of
 `evals/selector/spike/run-log.txt`) — the transcript that produced that exact output, ending in a
-terminal `exit code: 0`.
+terminal `exit code: 0`. All four directive claims still resolve end to end; nothing about the
+spike's findings above changed, only the case's internal node naming.
