@@ -151,8 +151,15 @@ const headShaResult = sh('git', ['rev-parse', 'HEAD']);
 const headSha = headShaResult.status === 0 ? headShaResult.stdout.trim() : '';
 const gitIdentityOk = /^[0-9a-f]{40}$/i.test(headSha);
 
+// F20 (round 5): dispositionPath() now returns an ABSOLUTE path outside the
+// repo (goal-state, orchestrator-only-writable) rather than a repo-relative
+// path -- path.join(repoRoot, absolutePath) would silently mangle it (join
+// does not reset to root on an absolute-looking segment the way resolve
+// does), so every existing repo-relative caller of abs()/readJson()/
+// readText()/exists() keeps working unchanged while an absolute path now
+// passes through untouched.
 function abs(rel: string): string {
-  return path.join(repoRoot, rel);
+  return path.isAbsolute(rel) ? rel : path.join(repoRoot, rel);
 }
 
 function exists(rel: string): boolean {
@@ -214,6 +221,28 @@ async function importEvalModule(rel: string): Promise<{ ok: true; mod: Record<st
     return { ok: true, mod };
   } catch (error) {
     return { ok: false, error: `import threw: ${(error as Error).stack ?? String(error)}` };
+  }
+}
+
+// F14 (round 5): the TypeScript compiler API is loaded by an ABSOLUTE path
+// into repoRoot's own node_modules, dynamically, at call time -- a static
+// top-level `import ts from 'typescript'` would be resolved by Node relative
+// to THIS FILE's own location, which breaks the out-of-repo execution mode
+// (F19) exactly like every other repo-relative resource here, so it has to
+// go through the same repoRoot-derived absolute-path pattern as
+// importEvalModule above.
+let cachedTsCompilerApi: typeof import('typescript') | null = null;
+async function loadTypeScriptCompilerApi(): Promise<{ ok: true; ts: typeof import('typescript') } | { ok: false; error: string }> {
+  if (cachedTsCompilerApi) return { ok: true, ts: cachedTsCompilerApi };
+  const tsMainPath = path.join(repoRoot, 'node_modules', 'typescript', 'lib', 'typescript.js');
+  if (!fs.existsSync(tsMainPath)) return { ok: false, error: `typescript compiler module not found at ${tsMainPath}` };
+  try {
+    const mod = (await import(pathToFileURL(tsMainPath).href)) as { default?: typeof import('typescript') };
+    const ts = (mod.default ?? (mod as unknown)) as typeof import('typescript');
+    cachedTsCompilerApi = ts;
+    return { ok: true, ts };
+  } catch (error) {
+    return { ok: false, error: `import of typescript compiler API threw: ${(error as Error).stack ?? String(error)}` };
   }
 }
 
@@ -616,7 +645,13 @@ function strictDescendant(ancestorRev: string, descendantRev: string): { ok: boo
 // walking history from sealCommit^ backwards) to be an ANCESTOR of --
 // i.e. to PRECEDE -- the seal commit. No "descends from" requirement
 // remains for sealed payloads; freeze-descendant ancestry is kept for
-// NON-sealed IR instances only (see C7-2).
+// NON-sealed IR instances only (see C7-2). F18 (round 5, revert-after-seal):
+// round 4's defining-commit search is backward-only from sealCommit^, so it
+// cannot detect a LATER, post-seal touch that re-establishes the exact
+// pre-seal bytes (commit X, seal, commit Y, revert to X -- HEAD equals
+// sealCommit^ again while the backward search still finds the original,
+// legitimate pre-seal commit). A frozen-path rule closes this: zero commits
+// strictly after the seal commit may touch the sealed path at all.
 function sealedPayloadPrecedesSeal(sealCommit: string, relEncPath: string): { ok: boolean; detail: string } {
   const contentBinding = contentBoundBeforeSeal(sealCommit, relEncPath);
   if (!contentBinding.ok) return contentBinding;
@@ -628,7 +663,31 @@ function sealedPayloadPrecedesSeal(sealCommit: string, relEncPath: string): { ok
   if (definingCommit === sealCommit) return { ok: false, detail: `defining commit resolved to the seal commit itself -- not a strict ancestor (precedes, not descends)` };
   const ancestorCheck = sh('git', ['merge-base', '--is-ancestor', definingCommit, sealCommit]);
   if (ancestorCheck.status !== 0) return { ok: false, detail: `defining commit ${definingCommit} is not an ancestor of (does not precede) the seal commit ${sealCommit}` };
-  return { ok: true, detail: `${contentBinding.detail}; defining commit ${definingCommit} precedes (is an ancestor of) the seal commit ${sealCommit}` };
+
+  // F18 (round 5, revert-after-seal): the backward-only defining-commit
+  // search above is tautological on its own -- it can prove A pre-seal
+  // commit touched the path, but says nothing about whether a LATER,
+  // post-seal commit re-touched it, including reverting a post-seal tamper
+  // back to the original bytes (repro: commit ciphertext X, seal, commit
+  // ciphertext Y, then revert to X -- HEAD equals the pre-seal blob again
+  // while two commits strictly after the seal touched the path). The
+  // frozen-path invariant is required directly and unconditionally: ZERO
+  // commits strictly after the seal commit may touch this path at all. A
+  // legitimate re-seal is a NEW seal commit (a new ${SEALED_ACCESS_PATH}
+  // entry) plus a founder decision record -- not a same-seal-commit touch.
+  const postSealTouches = sh('git', ['log', `${sealCommit}..HEAD`, '--format=%H', '--', relEncPath]);
+  if (postSealTouches.status !== 0) {
+    return { ok: false, detail: `git log ${sealCommit}..HEAD -- ${relEncPath} failed (status=${postSealTouches.status}): ${postSealTouches.stderr}` };
+  }
+  const postSealCommits = postSealTouches.stdout.trim().split('\n').filter(Boolean);
+  if (postSealCommits.length > 0) {
+    return {
+      ok: false,
+      detail: `${postSealCommits.length} commit(s) strictly after the seal commit ${sealCommit} touch ${relEncPath} (${postSealCommits.join(', ')}) -- the frozen-path invariant requires ZERO post-seal touches (a legitimate re-seal needs a new seal commit + founder decision record, not a same-seal-era touch)`,
+    };
+  }
+
+  return { ok: true, detail: `${contentBinding.detail}; defining commit ${definingCommit} precedes (is an ancestor of) the seal commit ${sealCommit}; zero commits strictly after the seal touch ${relEncPath}` };
 }
 
 // =============================================================================
@@ -888,6 +947,13 @@ interface DispositionReviewer {
   identity?: string;
   model?: string;
   verdict?: string;
+  // F20 (round 5): the orchestrator attaches the actual codex/grok job id
+  // that produced this review as a receipt. This verifier can only check
+  // that a receipt is PRESENT and non-empty (structure only, per R7/S1) --
+  // it does not call out to codex/grok to authenticate the job id itself;
+  // that remains a human/orchestrator responsibility, same as GATE-INTEGRITY
+  // trusting approved-gate.sha256's location rather than re-deriving it.
+  jobId?: string;
 }
 interface DispositionRecord {
   finding?: string;
@@ -896,9 +962,25 @@ interface DispositionRecord {
   reviewers?: DispositionReviewer[];
 }
 
+// F20 (round 5): implementer-authored JSON at an in-repo path is
+// unauthenticated -- nothing stopped the wave implementer from writing
+// their own "APPROVE" record naming arbitrary reviewer identities and an
+// old ancestor commit. The load-bearing copy is relocated to a directory
+// under goal-state that ONLY the orchestrator writes -- the identical
+// trust model as approved-gate.sha256 (GATE-INTEGRITY, above): the
+// verifier trusts this location because the implementation agent's lease
+// (leases.json[W7]) never grants write access outside docs/specs/**,
+// evals/**, scripts/waves/verify-w7.ts, and docs/plans/waves/**, so it
+// cannot forge a record here even if it wanted to. Any docs/specs/
+// selector-reviews/*.json copy left in the repo is optional
+// documentation for humans only -- it is never read by this check and
+// carries no authority.
+const DISPOSITIONS_DIR = path.join(goalStateDir, 'dispositions');
 function dispositionPath(findingId: Round3FindingId): string {
-  return `docs/specs/selector-reviews/${findingId}-disposition.json`;
+  return path.join(DISPOSITIONS_DIR, `${findingId}.json`);
 }
+const PHASE2_TRUST_BOUNDARY_NOTE =
+  'TRUST BOUNDARY (F20): this record is read from an orchestrator-only-writable directory OUTSIDE the repo (the same trust model as approved-gate.sha256) -- the W7 implementation lease never grants write access there, so it cannot be forged by the implementer; any docs/specs/selector-reviews/*.json copy in the repo is optional human documentation only and is never read or trusted by this check';
 
 // Structure-only check, per R7/S1: this NEVER judges whether the reviewers
 // were RIGHT to approve -- only that a genuine, commit-bound, dual-lane
@@ -936,7 +1018,13 @@ function checkReviewerDisposition(findingId: Round3FindingId): { ok: boolean; de
   const grokLane = approved.find((r) => /grok/i.test(identityText(r)));
   if (!solLane) return { ok: false, detail: `${relPath}.reviewers has no APPROVE record identifying a Sol-lane (GPT-5.6 Sol) reviewer -- reviewer disposition records missing` };
   if (!grokLane) return { ok: false, detail: `${relPath}.reviewers has no APPROVE record identifying a Grok-lane reviewer -- reviewer disposition records missing` };
-  return { ok: true, detail: `${relPath}: verbatim finding matched, commitReviewed (${record.commitReviewed}) ancestry OK, both Sol-lane and Grok-lane APPROVE present (dated ${record.date})` };
+  // F20: each lane's job-id receipt must be present and non-empty.
+  if (!solLane.jobId || solLane.jobId.trim().length === 0) return { ok: false, detail: `${relPath}'s Sol-lane reviewer record has no non-empty jobId receipt -- reviewer disposition records missing (or incomplete)` };
+  if (!grokLane.jobId || grokLane.jobId.trim().length === 0) return { ok: false, detail: `${relPath}'s Grok-lane reviewer record has no non-empty jobId receipt -- reviewer disposition records missing (or incomplete)` };
+  return {
+    ok: true,
+    detail: `${relPath}: verbatim finding matched, commitReviewed (${record.commitReviewed}) ancestry OK, both Sol-lane (jobId=${solLane.jobId}) and Grok-lane (jobId=${grokLane.jobId}) APPROVE present with job-id receipts (dated ${record.date})`,
+  };
 }
 
 // Wraps an existing probe body (verbatim, unchanged -- the "necessary but
@@ -1063,12 +1151,16 @@ await probe(
 // content-bound to, and defined by a commit that PRECEDES, the seal commit
 // -- requiring both directions on the same case was the contradiction F18
 // found real, since ordinary compliant history (capture, then seal later)
-// cannot satisfy "descends from seal" at all.
+// cannot satisfy "descends from seal" at all. F18 (round 5): the backward-
+// only defining-commit search cannot detect a post-seal touch that reverts
+// the payload back to its original bytes, so sealedPayloadPrecedesSeal now
+// additionally requires ZERO commits strictly after the seal commit to
+// touch the sealed path at all (frozen-path rule).
 // =============================================================================
 await probe(
   'C7-2',
-  `read the corpus-freeze hash line in ${CORPUS_MD_PATH}; resolve the freeze commit (latest commit touching ${CORPUS_MD_PATH}); for every case, cross-check directiveInventory (all 4 fields) against ir.directives; for NON-SEALED cases require the IR commit to be a STRICT DESCENDANT of the freeze commit; for SEALED cases require the ciphertext to be content-bound to, and its defining commit to PRECEDE (be an ancestor of, not descend from), the seal commit`,
-  `${CORPUS_MD_PATH} contains a line "Corpus freeze sha256: <hex>" equal to sha256(${MANIFEST_PATH}) at HEAD (proving the manifest has not silently changed since the stated freeze); every case's directiveInventory entry (axis in [${DIRECTIVE_AXES.join('/')}], source a real source id, scope non-empty, strength in [0,1]) has a matching ir.directives entry on ALL FOUR fields (axis+source+scope+strength, exact); for non-sealed cases, the commit that last-touched the IR file must be a STRICT descendant of the corpus-freeze commit (same-commit or ancestor-only fails); for SEALED cases (F18-corrected), the current ciphertext must equal the blob at the seal commit's parent AND the commit that defines that content must be an ANCESTOR of (precede) the seal commit -- no descend-from requirement applies to sealed payloads; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above): ${dispositionPath('F2')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F2 finding -- until it exists this criterion fails with "reviewer disposition records missing"`,
+  `read the corpus-freeze hash line in ${CORPUS_MD_PATH}; resolve the freeze commit (latest commit touching ${CORPUS_MD_PATH}); for every case, cross-check directiveInventory (all 4 fields) against ir.directives; for NON-SEALED cases require the IR commit to be a STRICT DESCENDANT of the freeze commit; for SEALED cases require the ciphertext to be content-bound to, and its defining commit to PRECEDE (be an ancestor of, not descend from), the seal commit, AND require zero commits strictly after the seal commit to touch the sealed path (frozen-path rule)`,
+  `${CORPUS_MD_PATH} contains a line "Corpus freeze sha256: <hex>" equal to sha256(${MANIFEST_PATH}) at HEAD (proving the manifest has not silently changed since the stated freeze); every case's directiveInventory entry (axis in [${DIRECTIVE_AXES.join('/')}], source a real source id, scope non-empty, strength in [0,1]) has a matching ir.directives entry on ALL FOUR fields (axis+source+scope+strength, exact); for non-sealed cases, the commit that last-touched the IR file must be a STRICT descendant of the corpus-freeze commit (same-commit or ancestor-only fails); for SEALED cases (F18-corrected), the current ciphertext must equal the blob at the seal commit's parent AND the commit that defines that content must be an ANCESTOR of (precede) the seal commit AND git log <sealCommit>..HEAD -- <path> must be EMPTY (frozen-path rule -- a legitimate re-seal is a new seal commit + founder decision record, not a same-seal-era touch; this closes the revert-after-seal repro where a post-seal tamper is reverted back to the pre-seal bytes) -- no descend-from requirement applies to sealed payloads; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above): ${dispositionPath('F2')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F2 finding -- until it exists this criterion fails with "reviewer disposition records missing"; ${PHASE2_TRUST_BOUNDARY_NOTE}`,
   async () => withReviewerDisposition('F2', async () => {
     const corpusMdText = readText(CORPUS_MD_PATH);
     if (corpusMdText === null) return { ok: false, evidence: `missing ${CORPUS_MD_PATH}` };
@@ -1189,7 +1281,7 @@ await probe(
 await probe(
   'C7-3',
   `dynamic-import ${RESOLVE_CONFLICTS_PATH}, call resolveConflicts(ir) three times per conflict case; require a non-null result, exactly one losingClaims entry for the declared axis naming BOTH the declared winningSource and losingSource, and a matching entry in the IR's own conflictResolution array`,
-  `${RESOLVE_CONFLICTS_PATH} exports resolveConflicts(ir): { result: unknown; losingClaims: Array<{axis,winningSource,losingSource}> }; for every conflict-marked case: result is not null/undefined; losingClaims.filter(axis===declaredAxis) has length EXACTLY 1 (a cross-product-of-every-axis-and-source stub fails this); that one entry has winningSource===declared.winningSource AND losingSource===declared.losingSource; the case's own ir.conflictResolution array has a matching entry for the same axis/winningSource/losingSource (three-way consistency: manifest ground truth, IR's own recorded precedence, and the live resolver all agree); three calls in this process are hash-identical; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above): ${dispositionPath('F4')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F4 finding -- until it exists this criterion fails with "reviewer disposition records missing"`,
+  `${RESOLVE_CONFLICTS_PATH} exports resolveConflicts(ir): { result: unknown; losingClaims: Array<{axis,winningSource,losingSource}> }; for every conflict-marked case: result is not null/undefined; losingClaims.filter(axis===declaredAxis) has length EXACTLY 1 (a cross-product-of-every-axis-and-source stub fails this); that one entry has winningSource===declared.winningSource AND losingSource===declared.losingSource; the case's own ir.conflictResolution array has a matching entry for the same axis/winningSource/losingSource (three-way consistency: manifest ground truth, IR's own recorded precedence, and the live resolver all agree); three calls in this process are hash-identical; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above): ${dispositionPath('F4')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F4 finding -- until it exists this criterion fails with "reviewer disposition records missing"; ${PHASE2_TRUST_BOUNDARY_NOTE}`,
   async () => withReviewerDisposition('F4', async () => {
     const { manifest, error } = loadManifest();
     if (!manifest) return { ok: false, evidence: `cannot run: ${error}` };
@@ -1339,7 +1431,7 @@ const LAYOUT_SYSTEM_EVIDENCE: Record<string, (style: Record<string, string>) => 
 await probe(
   'C7-5',
   `read ${MANIFEST_PATH} + ${CORPUS_MD_PATH}; assert each S7-2 quota row against a CLOSED genre/layout-system vocabulary; require every source to have a snapshot for every declared breakpoint (cross-checked, not just counted); validate declared layoutSystem against real captured computedStyle evidence; decrypt+re-hash every snapshot; require global content-hash distinctness, per-case distinct viewportWidths, a minimum node count; conflict metadata cross-references the case's own IR conflictResolution record`,
-  `${CORPUS_MD_PATH} exists; layoutSystem in [${ALLOWED_LAYOUT_SYSTEMS.join(', ')}] (all 3 appear), genre in [${ALLOWED_GENRES.join(', ')}] (all 4 appear); every non-skip case's breakpoints has no duplicates, >=2 entries, and for EVERY source in that case, Object.keys(source.snapshots) is EXACTLY that breakpoint set (not merely >=2 in count -- a source missing one declared breakpoint's snapshot fails); css-grid-first cases have >=1 captured node with computedStyle.display matching /grid/, flex-utility have >=1 node with display matching /flex/, absolute-canvas have >=1 node with position matching /absolute|fixed/; >=3 conflict cases with a real axis + real distinct source ids, AND each case's decrypted IR has a conflictResolution entry matching that exact axis/winningSource/losingSource (cross-referencing the same record C7-3 exercises live); degenerate cases are semantically real; >=1 documented skip; every snapshot's re-computed plaintext sha256 matches the manifest, every snapshot has >=5 nodes, and NO TWO snapshot files anywhere in the corpus share a content hash; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above): ${dispositionPath('F6')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F6 finding -- until it exists this criterion fails with "reviewer disposition records missing"`,
+  `${CORPUS_MD_PATH} exists; layoutSystem in [${ALLOWED_LAYOUT_SYSTEMS.join(', ')}] (all 3 appear), genre in [${ALLOWED_GENRES.join(', ')}] (all 4 appear); every non-skip case's breakpoints has no duplicates, >=2 entries, and for EVERY source in that case, Object.keys(source.snapshots) is EXACTLY that breakpoint set (not merely >=2 in count -- a source missing one declared breakpoint's snapshot fails); css-grid-first cases have >=1 captured node with computedStyle.display matching /grid/, flex-utility have >=1 node with display matching /flex/, absolute-canvas have >=1 node with position matching /absolute|fixed/; >=3 conflict cases with a real axis + real distinct source ids, AND each case's decrypted IR has a conflictResolution entry matching that exact axis/winningSource/losingSource (cross-referencing the same record C7-3 exercises live); degenerate cases are semantically real; >=1 documented skip; every snapshot's re-computed plaintext sha256 matches the manifest, every snapshot has >=5 nodes, and NO TWO snapshot files anywhere in the corpus share a content hash; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above): ${dispositionPath('F6')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F6 finding -- until it exists this criterion fails with "reviewer disposition records missing"; ${PHASE2_TRUST_BOUNDARY_NOTE}`,
   async () => withReviewerDisposition('F6', async () => {
     if (!exists(CORPUS_MD_PATH)) return { ok: false, evidence: `missing ${CORPUS_MD_PATH}` };
     const { manifest, error } = loadManifest();
@@ -1556,7 +1648,7 @@ function loadBlindedFixture(relDir: string, manifest: CorpusManifest): { ok: tru
 await probe(
   'C7-6',
   `dynamic-import ${SCORER_INDEX_PATH}; for >=5 eligible corpus cases build a real faithfulComposition (verifier-built, "faithful" population) and a cross-case-attribution-swapped mutation of it (verifier-built, "wrong" population -- every element's sourceId replaced with a source id belonging to a DIFFERENT case entirely); score both populations and assert zero distribution overlap; also score any implementer-provided fixtures under ${POPULATION_DIR} as an additional, non-load-bearing check`,
-  `>=5 corpus cases (non-sealed, non-skip, directiveInventory-resolvable) each yield a faithful composition and a cross-case-mutated "wrong" counterpart (every sourceId replaced by a source id foreign to that case); scoreComposition(input).overall in [0,1] (F12) for all 10; max(wrong scores) < min(faithful scores); implementer fixtures under ${POPULATION_DIR}/{wrong,faithful} (if present) must also be corpus-derived + blinded + mutually unique and are scored as an additional, non-load-bearing signal; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above): ${dispositionPath('F7')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F7 finding -- until it exists this criterion fails with "reviewer disposition records missing"`,
+  `>=5 corpus cases (non-sealed, non-skip, directiveInventory-resolvable) each yield a faithful composition and a cross-case-mutated "wrong" counterpart (every sourceId replaced by a source id foreign to that case); scoreComposition(input).overall in [0,1] (F12) for all 10; max(wrong scores) < min(faithful scores); implementer fixtures under ${POPULATION_DIR}/{wrong,faithful} (if present) must also be corpus-derived + blinded + mutually unique and are scored as an additional, non-load-bearing signal; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above): ${dispositionPath('F7')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F7 finding -- until it exists this criterion fails with "reviewer disposition records missing"; ${PHASE2_TRUST_BOUNDARY_NOTE}`,
   async () => withReviewerDisposition('F7', async () => {
     const { manifest, error } = loadManifest();
     if (!manifest) return { ok: false, evidence: `cannot run: ${error}` };
@@ -1669,7 +1761,7 @@ await probe(
 await probe(
   'C7-7',
   `dynamic-import ${SOURCE_BLEED_PATH}; build THREE verifier compositions from real captured node+style data -- clean, domPath-membership-bled (one element's domPath/nodeId genuinely belongs to a different source), and style-fingerprint-bled (one element's domPath/nodeId are correct but its styleFingerprint is injected from a non-selected source's real captured style cluster) -- call scoreSourceBleed directly on all three; ALSO run the implementer test suite as an additional, non-load-bearing check`,
-  `${SOURCE_BLEED_PATH} exports scoreSourceBleed({composition, sourceDomPaths, sourceStyleFingerprints}): {bleedCount, violatingElementIds}; clean composition scores bleedCount===0; domPath-membership-bled scores bleedCount>=1 including "bleed-el-0"; style-fingerprint-bled (domPath/nodeId correct, only styleFingerprint injected from a different real source) ALSO scores bleedCount>=1 including "bleed-el-0" -- a domPath-set-membership-only implementation passes the second control but fails the third by construction; ${SOURCE_BLEED_TEST_PATH} additionally passes with named clean/injected-bleed/absent-name control cases; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above -- C7-7 and C7-8 share the F8 disposition, which historically covered both bleed and diversity semantics): ${dispositionPath('F8')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F8 finding -- until it exists this criterion fails with "reviewer disposition records missing"`,
+  `${SOURCE_BLEED_PATH} exports scoreSourceBleed({composition, sourceDomPaths, sourceStyleFingerprints}): {bleedCount, violatingElementIds}; clean composition scores bleedCount===0; domPath-membership-bled scores bleedCount>=1 including "bleed-el-0"; style-fingerprint-bled (domPath/nodeId correct, only styleFingerprint injected from a different real source) ALSO scores bleedCount>=1 including "bleed-el-0" -- a domPath-set-membership-only implementation passes the second control but fails the third by construction; ${SOURCE_BLEED_TEST_PATH} additionally passes with named clean/injected-bleed/absent-name control cases; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above -- C7-7 and C7-8 share the F8 disposition, which historically covered both bleed and diversity semantics): ${dispositionPath('F8')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F8 finding -- until it exists this criterion fails with "reviewer disposition records missing"; ${PHASE2_TRUST_BOUNDARY_NOTE}`,
   async () => withReviewerDisposition('F8', async () => {
     if (!exists(SOURCE_BLEED_PATH)) return { ok: false, evidence: `missing ${SOURCE_BLEED_PATH}` };
     const { manifest, error } = loadManifest();
@@ -1761,7 +1853,7 @@ function rotateArray<T>(arr: T[], shift: number): T[] {
 await probe(
   'C7-8',
   `read ${DIVERSITY_AXES_PATH}; dynamic-import ${DIVERSITY_PATH}; build 4 INDEPENDENT axis-isolated trios from a real faithful composition (section order permuted alone / domPath-skeleton varied alone / motionSignature varied alone / breakpoint varied alone) plus the identical-trio control; call scoreDiversity directly on all 5; ALSO run the implementer test suite as an additional, non-load-bearing check`,
-  `${DIVERSITY_AXES_PATH} freezes >=4 pre-registered axes (layout-skeleton/section-order/motion-timeline/breakpoint-behavior); ${DIVERSITY_PATH} exports scoreDiversity(compositions[]): {score}, a finite number in [0,1] (F12); the fully-identical trio scores < floors.structural_variant_diversity; EACH of the 4 axis-isolated trios (holding every other axis fixed) independently scores >= that floor -- a scorer testing only "any change" or only 2 of the 4 axes fails at least one isolated case; ${DIVERSITY_TEST_PATH} additionally passes with named recolor-only/class-names-only control cases; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above -- C7-7 and C7-8 share the F8 disposition, which historically covered both bleed and diversity semantics): ${dispositionPath('F8')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F8 finding -- until it exists this criterion fails with "reviewer disposition records missing"`,
+  `${DIVERSITY_AXES_PATH} freezes >=4 pre-registered axes (layout-skeleton/section-order/motion-timeline/breakpoint-behavior); ${DIVERSITY_PATH} exports scoreDiversity(compositions[]): {score}, a finite number in [0,1] (F12); the fully-identical trio scores < floors.structural_variant_diversity; EACH of the 4 axis-isolated trios (holding every other axis fixed) independently scores >= that floor -- a scorer testing only "any change" or only 2 of the 4 axes fails at least one isolated case; ${DIVERSITY_TEST_PATH} additionally passes with named recolor-only/class-names-only control cases; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above -- C7-7 and C7-8 share the F8 disposition, which historically covered both bleed and diversity semantics): ${dispositionPath('F8')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F8 finding -- until it exists this criterion fails with "reviewer disposition records missing"; ${PHASE2_TRUST_BOUNDARY_NOTE}`,
   async () => withReviewerDisposition('F8', async () => {
     const axes = readJson<{ axes?: Array<{ name: string }> }>(DIVERSITY_AXES_PATH);
     if (axes === null || !Array.isArray(axes.axes)) return { ok: false, evidence: `missing or invalid ${DIVERSITY_AXES_PATH}` };
@@ -1860,7 +1952,7 @@ function runNodeTest(files: string[]): { status: number; stdout: string; tests: 
 await probe(
   'C7-9',
   `build a verifier faithful composition (every directiveInventory claim's cited evidence resolves against its OWN claimed source via the C7-4 resolution machinery) and a house-style composition (same underlying nodes, sourceId misattributed -- so resolution against the claimed source fails); independently verify this resolution pattern BEFORE checking the scorer; then require axes.directive_claim_coverage to be low/high accordingly while geometry/palette/type stay high on house-style; also score implementer fixtures as an additional, non-load-bearing check`,
-  `every faithful-composition element's (nodeId,domPath,breakpoint) resolves against its claimed sourceId's real captured nodes (100%, same resolves() function as C7-4) and each directiveInventory[i] has a corresponding composition[i] with matching domPath (cited output element exists); every house-style element's claimed attribution does NOT resolve (0%) since the underlying node data is real but misattributed -- if either resolution check fails, this criterion fails outright before the scorer is even consulted; GIVEN that resolution pattern holds, scoreComposition's axes.directive_claim_coverage is < floor for house-style (while layout_geometry/palette_fidelity/type_fidelity are >= floor) and >= floor for faithful; implementer fixtures under ${DIRECTIVE_FIXTURES_DIR} (if present) are scored as an additional, non-load-bearing signal; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above): ${dispositionPath('F9')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F9 finding -- until it exists this criterion fails with "reviewer disposition records missing"`,
+  `every faithful-composition element's (nodeId,domPath,breakpoint) resolves against its claimed sourceId's real captured nodes (100%, same resolves() function as C7-4) and each directiveInventory[i] has a corresponding composition[i] with matching domPath (cited output element exists); every house-style element's claimed attribution does NOT resolve (0%) since the underlying node data is real but misattributed -- if either resolution check fails, this criterion fails outright before the scorer is even consulted; GIVEN that resolution pattern holds, scoreComposition's axes.directive_claim_coverage is < floor for house-style (while layout_geometry/palette_fidelity/type_fidelity are >= floor) and >= floor for faithful; implementer fixtures under ${DIRECTIVE_FIXTURES_DIR} (if present) are scored as an additional, non-load-bearing signal; ADDITIONALLY (Phase-2, gate-scope ruling item 8, necessary but not sufficient with the checks above): ${dispositionPath('F9')} must record a commit-bound, dual-reviewer (Sol-lane + Grok-lane) APPROVE disposing the verbatim round-3 F9 finding -- until it exists this criterion fails with "reviewer disposition records missing"; ${PHASE2_TRUST_BOUNDARY_NOTE}`,
   async () => withReviewerDisposition('F9', async () => {
     const floors = readJson<{ floors?: Record<string, number> }>(FLOORS_PATH);
     if (floors === null || !floors.floors) return { ok: false, evidence: `missing or invalid ${FLOORS_PATH}` };
@@ -2076,17 +2168,34 @@ const SEAL_ACCESS_BOUNDARY = {
   mechanicallyVerified: [
     'sealed .enc ciphertext is content-bound to the git blob at the seal commit\'s parent (F3)',
     'decrypting every sealed .enc blob and re-hashing yields exactly the manifest\'s recorded plaintext hash',
-    'no git-tracked file under evals/ contains a content window sampled from any sealed plaintext (F11)',
+    'no git-tracked file under evals/ contains a CONTIGUOUS content window (raw, base64, or hex) sampled from any sealed plaintext (F11)',
     `seal.key file mode is exactly 0600 (verified every run, not just set-on-create)`,
   ],
   orchestrationInvariant:
     'Same-user, out-of-repo access to seal.key or the proof directory (~/.claude/goal-state/mishmash-w7-selector-foundations/) cannot be prevented by file permissions alone -- any process running as this OS user can read those paths. The held-out guarantee therefore also depends on an ORCHESTRATION invariant outside this verifier\'s mechanical reach: the orchestrator must never expose goal-state paths (or the seal key material) to a W8 implementing agent\'s context or sandbox. This is declared here per R7 (human/process assumptions must be declared, not disguised as mechanical guarantees) -- it is NOT mechanically checked by this criterion.',
+  // F11 (round 5, deliberate-evasion static-analysis arms race): round 4's
+  // preflight review showed that ANY contiguous-needle scan is defeatable
+  // by fragmenting the encoded plaintext (e.g. concatenated 8-character
+  // string literals that reconstruct exactly but match no single
+  // contiguous needle). Chasing this mechanically is an unwinnable arms
+  // race against an adversarial author -- per the gate-scope ruling this is
+  // declared as an R7 boundary rather than attempted again: the mechanical
+  // scan's REAL coverage is contiguous plaintext/base64/hex leakage; a
+  // DELIBERATE fragmentation evasion is outside static reach and is
+  // governed by (i) the orchestration invariant above (implementation
+  // agents never receive goal-state paths, so they never have the sealed
+  // plaintext to fragment and leak in the first place) and (ii) the
+  // mandatory adversarial deliverable reviews, whose charters (the
+  // commit-bound disposition records under DISPOSITIONS_DIR) explicitly
+  // include checking for exactly this evasion.
+  deliberateEvasionBoundary:
+    'F11: the leak scan mechanically covers CONTIGUOUS plaintext/base64/hex leakage only. Deliberate fragmentation (e.g. concatenated short string-literal chunks that reconstruct the sealed plaintext without ever appearing as one contiguous needle) is a static-analysis arms race this verifier does not attempt to win mechanically. Coverage of that residual instead comes from (i) the orchestration invariant above -- an implementation agent that never receives goal-state paths never has the sealed plaintext to fragment and leak -- and (ii) the mandatory adversarial deliverable reviews, whose charters explicitly include checking for this evasion. Declared per R7, not disguised as mechanical.',
 };
 
 await probe(
   'C7-11',
   `read ${SEALED_ACCESS_PATH}; decrypt every sealed case's IR + snapshot blobs and hash-check against the manifest's recorded plaintext hashes; content-bind every sealed .enc file to the git blob at the seal commit's parent; scan every git-tracked file under evals/ for content-window leakage of any sealed plaintext; verify seal.key is mode 0600`,
-  `${SEALED_ACCESS_PATH} names every sealed case id, records its plaintext irSha256, and states an access-control statement; manifest.sealedFraction matches the actual sealed fraction within 0.02; every sealed path ends in ".enc"; decrypting + re-hashing yields exactly the manifest's recorded plaintext hash; the CURRENT ciphertext of every sealed .enc file equals sha256(git show <sealCommit>^:<path>) -- a payload swapped in or after the seal commit fails (F3); a content-window scan (5 x 64-byte windows per sealed plaintext, F11) finds NO match in any git-tracked evals/ file other than the .enc blobs themselves; ${SEAL_KEY_PATH} is mode 0600; the manifest records the explicit orchestration-invariant boundary statement above (R7) alongside the mechanical results`,
+  `${SEALED_ACCESS_PATH} names every sealed case id, records its plaintext irSha256, and states an access-control statement; manifest.sealedFraction matches the actual sealed fraction within 0.02; every sealed path ends in ".enc"; decrypting + re-hashing yields exactly the manifest's recorded plaintext hash; the CURRENT ciphertext of every sealed .enc file equals sha256(git show <sealCommit>^:<path>) -- a payload swapped in or after the seal commit fails (F3); a content-window scan (5 x 64-byte windows per sealed plaintext, plus base64/hex encodings of each window and a base64-full-payload prefix, F11) finds NO match in any git-tracked evals/ file other than the .enc blobs themselves; ${SEAL_KEY_PATH} is mode 0600; the manifest records the explicit orchestration-invariant boundary statement above (R7) alongside the mechanical results; R7 BOUNDARY (F11, round 5 -- declared, not mechanically closed): ${SEAL_ACCESS_BOUNDARY.deliberateEvasionBoundary}`,
   async () => {
     const text = readText(SEALED_ACCESS_PATH);
     if (text === null) return { ok: false, evidence: `missing ${SEALED_ACCESS_PATH}` };
@@ -2300,6 +2409,32 @@ function scanScorerForMachineIdentityRefs(): { ok: boolean; violations: string[]
   return { ok: violations.length === 0, violations, filesScanned: scorerFiles.length };
 }
 
+// F13 (round 5, deliberate-evasion static-analysis arms race): round 4's
+// preflight review showed the identifier-name regex scan is bypassed by
+// `import { hostname as machineId } from "node:os"` or `os["hostname"]()`
+// -- an alias, a computed property access, or a machine-identity read
+// relocated to an imported module outside scorer/ all observe the same
+// real hostname while the static regex reports clean. As with F11, this is
+// declared as an R7 boundary rather than chased further: the mechanical
+// scan's REAL coverage is direct, syntactically literal identifier reads
+// (os.hostname(), os.networkInterfaces(), process.env.<literal-key>) in
+// scorer/ itself. A DELIBERATE evasion (aliasing, computed access, an
+// indirection through another module) is outside static reach and is
+// governed by the same two controls as F11: (i) the orchestration
+// invariant (an implementation agent never receives goal-state paths, so
+// it has no sealed cross-machine ground truth to game in the first place)
+// and (ii) the mandatory adversarial deliverable reviews, whose charters
+// explicitly include checking for exactly this evasion.
+const MACHINE_IDENTITY_BOUNDARY = {
+  mechanicallyVerified: [
+    'scoreComposition is byte-identical across two in-process calls and one freshly-spawned subprocess with HOSTNAME/TZ/LANG genuinely overridden (verified actually passed, not inherited)',
+    'no .ts file under evals/selector/scorer/ contains a DIRECT, syntactically literal reference to os.hostname(), os.networkInterfaces(), or process.env.<literal-key> outside the allowlist',
+    "this run's machine fingerprint (hostname/platform/arch/node version) is recorded in the proof manifest",
+  ],
+  deliberateEvasionBoundary:
+    'F13: the static scan mechanically covers only DIRECT, syntactically literal machine-identity reads inside evals/selector/scorer/ itself. Deliberate evasion -- import aliasing (`import { hostname as x }`), computed property access (`os["hostname"]`), or relocating the read to an imported module outside scorer/ -- is a static-analysis arms race this verifier does not attempt to win mechanically. Coverage of that residual instead comes from (i) the orchestration invariant (an implementation agent never receives goal-state paths, so it has no sealed cross-machine ground truth to exploit) and (ii) the mandatory adversarial deliverable reviews, whose charters explicitly include checking for this evasion. Declared per R7, not disguised as mechanical.',
+};
+
 // =============================================================================
 // C7-13 -- scorer versioned (real semver), pinned in a dedicated
 // eval-manifest.json cross-checked against floors/corpus versions, and
@@ -2308,11 +2443,13 @@ function scanScorerForMachineIdentityRefs(): { ok: boolean; violations: string[]
 // had no env parameter, so the subprocess silently inherited unchanged env
 // and the cross-machine check never exercised anything). F13 (round 3):
 // narrowed further -- see the comment above scanScorerForMachineIdentityRefs.
+// F13 (round 5): the static scan's own coverage limits are now declared as
+// an R7 boundary -- see MACHINE_IDENTITY_BOUNDARY above.
 // =============================================================================
 await probe(
   'C7-13',
   `dynamic-import ${SCORER_INDEX_PATH}; require SCORER_VERSION matches semver; cross-check ${EVAL_MANIFEST_PATH} pins the same scorer/floors/corpus versions; call scoreComposition twice in-process AND once more in a freshly-spawned node subprocess ACTUALLY started with HOSTNAME/TZ/LANG overridden via sh()'s env parameter; require all three results are byte-identical; statically scan every .ts file under ${SCORER_DIR} for os.hostname()/os.networkInterfaces()/process.env.* references outside an explicit allowlist; record this run's machine fingerprint (hostname/platform/arch/node version) in the proof manifest`,
-  `${SCORER_INDEX_PATH} exports SCORER_VERSION matching /^\\d+\\.\\d+\\.\\d+$/; ${EVAL_MANIFEST_PATH} has {scorerVersion, floorsVersion, corpusVersion} matching the live SCORER_VERSION, ${FLOORS_PATH}.version, and ${MANIFEST_PATH}.version; scoreComposition(${DETERMINISM_FIXTURE_PATH}) called twice in this process AND once in a child process spawned with env={HOSTNAME:'verifier-control-host',TZ:'UTC',LANG:'C'} (verified actually passed, not inherited) yields stable-stringify-identical results across all three; no .ts file under ${SCORER_DIR} references os.hostname(), os.networkInterfaces(), or process.env.<key> for a key outside the (currently empty) allowlist -- RESIDUAL BOUNDARY (not mechanically provable by this verifier, R7): the env-override check and the static scan together rule out the mechanisms this verifier can reach, but true execution on a physically distinct second machine is not exercised here; the recorded machine fingerprint lets a human compare two independent runs' manifests to check that boundary`,
+  `${SCORER_INDEX_PATH} exports SCORER_VERSION matching /^\\d+\\.\\d+\\.\\d+$/; ${EVAL_MANIFEST_PATH} has {scorerVersion, floorsVersion, corpusVersion} matching the live SCORER_VERSION, ${FLOORS_PATH}.version, and ${MANIFEST_PATH}.version; scoreComposition(${DETERMINISM_FIXTURE_PATH}) called twice in this process AND once in a child process spawned with env={HOSTNAME:'verifier-control-host',TZ:'UTC',LANG:'C'} (verified actually passed, not inherited) yields stable-stringify-identical results across all three; no .ts file under ${SCORER_DIR} references os.hostname(), os.networkInterfaces(), or process.env.<key> for a key outside the (currently empty) allowlist -- RESIDUAL BOUNDARY (not mechanically provable by this verifier, R7): the env-override check and the static scan together rule out the mechanisms this verifier can reach, but true execution on a physically distinct second machine is not exercised here; the recorded machine fingerprint lets a human compare two independent runs' manifests to check that boundary; R7 BOUNDARY (F13, round 5 -- declared, not mechanically closed): ${MACHINE_IDENTITY_BOUNDARY.deliberateEvasionBoundary}`,
   async () => {
     const imported = await importEvalModule(SCORER_INDEX_PATH);
     if (!imported.ok) return { ok: false, evidence: imported.error };
@@ -2393,6 +2530,105 @@ await probe(
   },
 );
 
+// F14 (round 5): Parameters<>/ReturnType<> only ever see the LAST declared
+// overload signature of a function -- `function parse(input:any):any;
+// function parse(input:string):CompositionIR; function parse(input:any):any
+// { throw ... }` types as the well-behaved last signature under
+// Parameters<>/ReturnType<> even though the actual runtime export is the
+// any/any implementation, so round 3's conditional-type probe never sees
+// the problem. This can only be closed by inspecting the SOURCE STRUCTURE
+// (the compiler API's AST), not by asking TypeScript to resolve a type: we
+// require exactly one top-level declaration of "parse" (rejecting the
+// overload shape outright, regardless of what any individual signature
+// says) with explicit, non-"any" parameter and return type annotations.
+function collectAnyKeywordNodes(ts: typeof import('typescript'), node: import('typescript').Node): import('typescript').Node[] {
+  const found: import('typescript').Node[] = [];
+  const visit = (n: import('typescript').Node): void => {
+    if (n.kind === ts.SyntaxKind.AnyKeyword) found.push(n);
+    ts.forEachChild(n, visit);
+  };
+  visit(node);
+  return found;
+}
+
+function checkParseSignatureAst(ts: typeof import('typescript'), parserSourceText: string, parserPath: string): { ok: boolean; detail: string } {
+  const sourceFile = ts.createSourceFile(parserPath, parserSourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const parseFunctionDecls: import('typescript').FunctionDeclaration[] = [];
+  const parseVarDecls: import('typescript').VariableDeclaration[] = [];
+  for (const stmt of sourceFile.statements) {
+    if (ts.isFunctionDeclaration(stmt) && stmt.name?.text === 'parse') {
+      parseFunctionDecls.push(stmt);
+    } else if (ts.isVariableStatement(stmt)) {
+      for (const decl of stmt.declarationList.declarations) {
+        if (ts.isIdentifier(decl.name) && decl.name.text === 'parse') parseVarDecls.push(decl);
+      }
+    }
+  }
+  const totalDecls = parseFunctionDecls.length + parseVarDecls.length;
+  if (totalDecls === 0) {
+    return { ok: false, detail: `no top-level "function parse(...)" or "const parse = ..." declaration found in ${parserPath} for the AST probe (an indirect export -- re-export, destructuring, computed property -- cannot be followed by this static check)` };
+  }
+  if (totalDecls > 1) {
+    return {
+      ok: false,
+      detail: `${totalDecls} top-level declarations of "parse" found in ${parserPath} (${parseFunctionDecls.length} function declaration(s), ${parseVarDecls.length} const declaration(s)) -- overload signatures are rejected outright regardless of what any individual signature declares; exactly one call signature is required`,
+    };
+  }
+
+  let paramTypeNodes: (import('typescript').TypeNode | undefined)[] = [];
+  let returnTypeNode: import('typescript').TypeNode | undefined;
+  const missingAnnotations: string[] = [];
+
+  if (parseFunctionDecls.length === 1) {
+    const fn = parseFunctionDecls[0]!;
+    if (!fn.body) return { ok: false, detail: `"parse" function declaration in ${parserPath} has no body (a bodyless overload signature) -- exactly one call signature WITH an implementation is required` };
+    paramTypeNodes = fn.parameters.map((p) => p.type);
+    returnTypeNode = fn.type;
+    if (!returnTypeNode) missingAnnotations.push('return type');
+    fn.parameters.forEach((p, i) => {
+      if (!p.type) missingAnnotations.push(`parameter ${i} (${p.name.getText(sourceFile)})`);
+    });
+  } else {
+    const decl = parseVarDecls[0]!;
+    if (decl.type && ts.isFunctionTypeNode(decl.type)) {
+      paramTypeNodes = decl.type.parameters.map((p) => p.type);
+      returnTypeNode = decl.type.type;
+      decl.type.parameters.forEach((p, i) => {
+        if (!p.type) missingAnnotations.push(`parameter ${i}`);
+      });
+      if (!returnTypeNode) missingAnnotations.push('return type');
+    } else if (decl.initializer && (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))) {
+      const fn = decl.initializer;
+      paramTypeNodes = fn.parameters.map((p) => p.type);
+      returnTypeNode = fn.type;
+      fn.parameters.forEach((p, i) => {
+        if (!p.type) missingAnnotations.push(`parameter ${i}`);
+      });
+      if (!returnTypeNode) missingAnnotations.push('return type');
+    } else {
+      return { ok: false, detail: `"const parse" in ${parserPath} is neither a function-type annotation nor a function/arrow-function initializer this AST probe can inspect` };
+    }
+  }
+
+  if (missingAnnotations.length > 0) {
+    return { ok: false, detail: `"parse" in ${parserPath} is missing explicit type annotations for: ${missingAnnotations.join(', ')} -- an unannotated parameter/return is implicit "any" and is rejected the same as an explicit "any"` };
+  }
+
+  const anyLocations: string[] = [];
+  paramTypeNodes.forEach((t, i) => {
+    if (t && collectAnyKeywordNodes(ts, t).length > 0) anyLocations.push(`parameter ${i} type (${t.getText(sourceFile)})`);
+  });
+  if (returnTypeNode && collectAnyKeywordNodes(ts, returnTypeNode).length > 0) anyLocations.push(`return type (${returnTypeNode.getText(sourceFile)})`);
+  if (anyLocations.length > 0) {
+    return { ok: false, detail: `"any" type node(s) found in parse's signature in ${parserPath}: ${anyLocations.join('; ')}` };
+  }
+
+  return {
+    ok: true,
+    detail: `exactly one call signature for "parse" in ${parserPath} (${parseFunctionDecls.length} function decl, ${parseVarDecls.length} const decl), no "any" type node anywhere in its parameter/return types`,
+  };
+}
+
 // =============================================================================
 // C7-14 -- NL->IR goldens exist with a REAL typed parse interface. F14: a
 // raw-text regex over the parser file accepted a signature sitting in a
@@ -2419,12 +2655,22 @@ await probe(
 // empty object would satisfy it even though it isn't literally `any`,
 // which is the exact round-3 repro: "returning an empty object"). Runtime:
 // the awaited resolved value, when non-undefined, is additionally
-// validated against the committed IR JSON schema.
+// validated against the committed IR JSON schema. F14 (round 5): the
+// conditional-type probe only sees Parameters<>/ReturnType<>'s LAST
+// resolved overload signature, so an any/any overload declared ahead of a
+// well-typed one evades it entirely -- checkParseSignatureAst() above is a
+// SECOND, independent layer that inspects the parser file's own AST for
+// the overload structure itself (round 3's probe is kept as a second
+// layer, not replaced, per the round-5 scope). Runtime: a thrown error is
+// only acceptable stub behavior when it identifies itself as
+// NotImplemented (name or message) -- an arbitrary throw is no longer a
+// free pass, closing the round-4 repro where "implement parse by
+// throwing" satisfied the runtime check unconditionally.
 // =============================================================================
 await probe(
   'C7-14',
-  `read ${NL_GOLDENS_PATH} (>=5 pairs); write a generated .ts probe that derives parse's ACTUAL parameter/return types via Parameters<>/ReturnType<> and (a) asserts both are not "any" via a NotAny conditional-type + literal true/false assignment, (b) asserts the resolved return type is assignable to CompositionIR, (c) asserts the bare "{}" type is NOT assignable to the resolved return type; typecheck it plus all evals/**/*.ts; dynamic-import the parser and AWAIT parse(), requiring the RESOLVED value to be non-undefined (throw acceptable) AND, when non-undefined, valid against ${IR_SCHEMA_PATH}`,
-  `${NL_GOLDENS_PATH} has >=5 { id, nlDirective, expectedIR } pairs with an "axis" and "source" field; a generated probe file computes ParamType=Parameters<typeof parse>[0] and ReturnTypeResolved=Awaited<ReturnType<typeof parse>> and requires: IsAny<ParamType> and IsAny<ReturnTypeResolved> both compute to the literal type false (an input-any/output-any parse, including one with a matching signature merely sitting in a comment, fails this by construction -- an \`as\` cast would not, which is why none is used); ReturnTypeResolved extends CompositionIR (all 6 IR top-level array keys); "{}" does NOT extend ReturnTypeResolved (rejects a vacuous/empty-object-shaped return even when it is not literally "any"); calling parse() and AWAITING the result requires the RESOLVED value to be non-undefined AND, when non-undefined, to pass validateAgainstSchema against the committed ${IR_SCHEMA_PATH} with zero errors; every .ts file under evals/ typechecks cleanly`,
+  `read ${NL_GOLDENS_PATH} (>=5 pairs); AST-check ${NL_PARSER_PATH} (compiler API) for exactly one top-level "parse" declaration (no overload signatures) with zero "any" type nodes in its parameter/return types; write a generated .ts probe that derives parse's ACTUAL parameter/return types via Parameters<>/ReturnType<> and (a) asserts both are not "any" via a NotAny conditional-type + literal true/false assignment, (b) asserts the resolved return type is assignable to CompositionIR, (c) asserts the bare "{}" type is NOT assignable to the resolved return type; typecheck it plus all evals/**/*.ts; dynamic-import the parser and AWAIT parse(), requiring EITHER a non-undefined resolved value valid against ${IR_SCHEMA_PATH} OR a thrown error whose name/message matches NotImplemented`,
+  `${NL_GOLDENS_PATH} has >=5 { id, nlDirective, expectedIR } pairs with an "axis" and "source" field; ${NL_PARSER_PATH}'s AST has exactly one top-level declaration of "parse" (an overload-signature shape -- multiple declarations sharing the name, regardless of what any individual signature says -- is rejected outright) with explicit, non-"any" parameter and return type annotations (an unannotated parameter/return is treated as implicit "any"); SEPARATELY, a generated probe file computes ParamType=Parameters<typeof parse>[0] and ReturnTypeResolved=Awaited<ReturnType<typeof parse>> and requires: IsAny<ParamType> and IsAny<ReturnTypeResolved> both compute to the literal type false (a second, independent layer -- kept because Parameters<>/ReturnType<> alone only see the last overload signature, which the AST check above closes); ReturnTypeResolved extends CompositionIR (all 6 IR top-level array keys); "{}" does NOT extend ReturnTypeResolved (rejects a vacuous/empty-object-shaped return even when it is not literally "any"); calling parse() and AWAITING the result requires EITHER the resolved value to be non-undefined AND pass validateAgainstSchema against the committed ${IR_SCHEMA_PATH} with zero errors, OR a thrown error whose name or message matches /NotImplemented/i (an arbitrary throw is no longer acceptable stub behavior); every .ts file under evals/ typechecks cleanly`,
   async () => {
     const goldens = readJson<Array<{ id?: string; nlDirective?: string; expectedIR?: { axis?: string; source?: string } }>>(NL_GOLDENS_PATH);
     if (goldens === null || !Array.isArray(goldens)) return { ok: false, evidence: `missing or invalid ${NL_GOLDENS_PATH}` };
@@ -2435,6 +2681,15 @@ await probe(
     if (!exists(NL_PARSER_PATH)) return { ok: false, evidence: `missing ${NL_PARSER_PATH}` };
     const irSchema = readJson<JsonSchema>(IR_SCHEMA_PATH);
     if (irSchema === null) return { ok: false, evidence: `missing or invalid ${IR_SCHEMA_PATH}` };
+
+    // F14 (round 5): AST layer, independent of the conditional-type probe
+    // below -- rejects the overload-evasion shape by construction.
+    const tsApi = await loadTypeScriptCompilerApi();
+    if (!tsApi.ok) return { ok: false, evidence: tsApi.error };
+    const parserSource = readText(NL_PARSER_PATH);
+    if (parserSource === null) return { ok: false, evidence: `could not read ${NL_PARSER_PATH} for the AST probe` };
+    const astCheck = checkParseSignatureAst(tsApi.ts, parserSource, NL_PARSER_PATH);
+    if (!astCheck.ok) return { ok: false, evidence: `AST signature check: ${astCheck.detail}` };
 
     const evalsTsFiles = listFilesRecursive(abs('evals')).filter((f) => f.endsWith('.ts'));
     if (evalsTsFiles.length === 0) return { ok: false, evidence: 'no .ts files found under evals/ to typecheck' };
@@ -2530,14 +2785,25 @@ await probe(
           ? `resolved to ${typeof resolved}, valid against ${IR_SCHEMA_PATH}`
           : `FAIL: resolved to ${typeof resolved} but is invalid against ${IR_SCHEMA_PATH}: ${schemaErrors.join('; ')}`;
     } catch (e) {
-      runtimeOk = true;
-      callBehavior = `threw (acceptable stub behavior): ${(e as Error).message}`;
+      // F14 (round 5): a throw is acceptable stub behavior ONLY when it
+      // identifies itself as NotImplemented -- round 4's "implement parse
+      // by throwing" repro exploited an unconditional throw-is-fine rule to
+      // dodge the schema backstop entirely with a real, working overload
+      // hidden behind an any/any signature (now also blocked by the AST
+      // check above). An arbitrary throw (a genuine bug, a wrong-argument
+      // TypeError, etc.) is no longer a free pass.
+      const err = e as Error;
+      const isNotImplemented = /NotImplemented/i.test(err.name ?? '') || /NotImplemented/i.test(err.message ?? '');
+      runtimeOk = isNotImplemented;
+      callBehavior = isNotImplemented
+        ? `threw NotImplemented (acceptable stub behavior): name=${err.name} message=${err.message}`
+        : `FAIL: threw an error that does not identify itself as NotImplemented (name=${err.name} message=${err.message}) -- an arbitrary throw is no longer acceptable stub behavior`;
     }
 
     const ok = runtimeOk;
     return {
       ok,
-      evidence: `golden pairs: ${goldens.length}\ntype-assertion probe typechecked OK (tsc exit=${tsc.status})\nawaited runtime call: ${callBehavior}`,
+      evidence: `golden pairs: ${goldens.length}\nAST signature check: ${astCheck.detail}\ntype-assertion probe typechecked OK (tsc exit=${tsc.status})\nawaited runtime call: ${callBehavior}`,
       detail: ok ? undefined : callBehavior,
     };
   },
@@ -2557,15 +2823,23 @@ await probe(
 // doc must cross-reference the case id, the output hash, AND the run-log
 // hash together in one place, closing the gap where an unrelated log and
 // an unrelated output could each be hashed and cited independently without
-// ever having produced each other.
+// ever having produced each other. F17 (round 5): a hash-bound, cross-
+// referenced but ARBITRARY output (round-4 repro: `{}`) and a run-log that
+// need not report success are still not causal proof. The run-log's exit
+// code must now be exactly 0, and composed-output.json must (a) validate
+// against the real composition shape (blindInput/ScoringInput) and (b)
+// have every element's provenance RESOLVE into the referenced spike case's
+// own captured snapshots via the same resolves()/buildSnapshotsBySource()
+// machinery C7-4 uses -- an empty `{}` fails at the very first structural
+// check by construction.
 // =============================================================================
 const MIN_SPIKE_ITEM_LENGTH = 40;
 const MIN_NO_CHANGE_RATIONALE_LENGTH = 80;
 
 await probe(
   'C7-15',
-  `read ${SPIKE_DOC_PATH} + ${IR_SCHEMA_PATH} + ${SPIKE_RUNLOG_PATH}; require ${SPIKE_OUTPUT_PATH} exists with its sha256 recorded verbatim in the doc; require ${SPIKE_RUNLOG_PATH} exists, looks like a command transcript, and records an exit code; require the case id + output hash + run-log hash all appear together in one paragraph of the doc; enumerate real schema field names; require EVERY substantive insufficiency item to name a real field; require EVERY substantive response item to name a real field OR carry an explicit >=${MIN_NO_CHANGE_RATIONALE_LENGTH}-char no-change rationale`,
-  `${SPIKE_OUTPUT_PATH} exists (the spike's actual composed output, proving it was executed, not just narrated) and its sha256 is recorded verbatim in ${SPIKE_DOC_PATH}; ${SPIKE_RUNLOG_PATH} exists, contains a recognizable command-invocation line, and records an explicit exit code (F17: causal evidence that the spike actually ran, not just that some output file exists); the doc contains one paragraph naming the referenced case id, the output hash, AND the run-log hash together (F17: prevents citing a real output hash and a real run-log hash from two unrelated executions); "## Case" names a real corpus case id; EVERY list item under "## IR insufficiencies found" (>=1 item, each >= ${MIN_SPIKE_ITEM_LENGTH} chars) names at least one field name that is enumerated from the ACTUAL committed ${IR_SCHEMA_PATH} (not a fixed token list) -- a generic bullet or a field name in unrelated prose elsewhere in the doc does not count; EVERY list item under "## Responses" (>=1 item, each >= ${MIN_SPIKE_ITEM_LENGTH} chars) EITHER names a real schema field OR is itself >= ${MIN_NO_CHANGE_RATIONALE_LENGTH} chars (an explicit no-change rationale) -- a short token-only response line fails both branches`,
+  `read ${SPIKE_DOC_PATH} + ${IR_SCHEMA_PATH} + ${SPIKE_RUNLOG_PATH} + ${SPIKE_OUTPUT_PATH}; require ${SPIKE_OUTPUT_PATH} exists, validates against the composition shape (blindInput), has every element resolve into the referenced case's captured snapshots (buildSnapshotsBySource/resolves, same as C7-4), and its sha256 is recorded verbatim in the doc; require ${SPIKE_RUNLOG_PATH} exists, looks like a command transcript, and records exit code EXACTLY 0; require the case id + output hash + run-log hash all appear together in one paragraph of the doc; enumerate real schema field names; require EVERY substantive insufficiency item to name a real field; require EVERY substantive response item to name a real field OR carry an explicit >=${MIN_NO_CHANGE_RATIONALE_LENGTH}-char no-change rationale`,
+  `${SPIKE_OUTPUT_PATH} exists, parses via blindInput() into a valid {caseId, composition[]} (a bare "{}" fails immediately -- no non-empty caseId), every composition element's (sourceId,nodeId,domPath,breakpoint) RESOLVES against the referenced spike case's real captured snapshots (buildSnapshotsBySource + resolves(), the identical machinery C7-4 uses), and its sha256 is recorded verbatim in ${SPIKE_DOC_PATH}; ${SPIKE_RUNLOG_PATH} exists, contains a recognizable command-invocation line, and records exit code EXACTLY 0 (F17: causal evidence the spike actually SUCCEEDED, not merely that some output file and some log exist); the doc contains one paragraph naming the referenced case id, the output hash, AND the run-log hash together (F17: prevents citing a real output hash and a real run-log hash from two unrelated executions); "## Case" names a real corpus case id; EVERY list item under "## IR insufficiencies found" (>=1 item, each >= ${MIN_SPIKE_ITEM_LENGTH} chars) names at least one field name that is enumerated from the ACTUAL committed ${IR_SCHEMA_PATH} (not a fixed token list) -- a generic bullet or a field name in unrelated prose elsewhere in the doc does not count; EVERY list item under "## Responses" (>=1 item, each >= ${MIN_SPIKE_ITEM_LENGTH} chars) EITHER names a real schema field OR is itself >= ${MIN_NO_CHANGE_RATIONALE_LENGTH} chars (an explicit no-change rationale) -- a short token-only response line fails both branches`,
   async () => {
     const text = readText(SPIKE_DOC_PATH);
     if (text === null) return { ok: false, evidence: `missing ${SPIKE_DOC_PATH}` };
@@ -2589,6 +2863,12 @@ await probe(
     const exitCodeMatch = /\bexit(?:\s*code)?\s*[:=]?\s*(\d+)\b/i.exec(runLogText);
     if (!looksLikeCommandTranscript || !exitCodeMatch) {
       return { ok: false, evidence: `${SPIKE_RUNLOG_PATH} does not look like a command transcript with an exit code (looksLikeCommandTranscript=${looksLikeCommandTranscript}, exitCodeMatch=${!!exitCodeMatch})` };
+    }
+    // F17 (round 5): a run-log claiming a non-zero exit is not causal
+    // evidence of a SUCCESSFUL spike run -- round 4's repro committed
+    // "exit code: 1" and passed anyway.
+    if (exitCodeMatch[1] !== '0') {
+      return { ok: false, evidence: `${SPIKE_RUNLOG_PATH} records exit code ${exitCodeMatch[1]}, not 0 -- a non-zero exit is not causal evidence of a successful spike run` };
     }
     const runLogHash = sha256File(SPIKE_RUNLOG_PATH);
     if (!runLogHash || !text.includes(runLogHash)) {
@@ -2634,6 +2914,45 @@ await probe(
     const caseExists = manifest ? manifest.cases.some((c) => c.id === referencedId) : false;
     if (!caseExists) problems.push(`referenced case id "${referencedId ?? '(none found)'}" not present in ${MANIFEST_PATH}`);
 
+    // F17 (round 5): a hash-bound, cross-referenced output file is still
+    // not proof the spike is REAL -- round 4's repro committed a bare `{}`
+    // as composed-output.json and passed once its hash was cited. The
+    // artifact must (a) validate against the same composition shape the
+    // scorer consumes (ScoringInput/CompositionElement, via the existing
+    // blindInput() deep-whitelist parser -- a bare `{}` fails immediately
+    // since it has no non-empty "caseId" string) AND (b) have every
+    // element's provenance RESOLVE into the referenced spike case's own
+    // captured snapshots, using the exact same resolves()/
+    // buildSnapshotsBySource() machinery C7-4 uses.
+    let composedOutputSummary = '(not checked -- see problems)';
+    const composedOutputRaw = readJson<unknown>(SPIKE_OUTPUT_PATH);
+    if (composedOutputRaw === null) {
+      problems.push(`${SPIKE_OUTPUT_PATH} is missing or invalid JSON`);
+    } else {
+      const blinded = blindInput(composedOutputRaw);
+      if (!blinded.ok) {
+        problems.push(`${SPIKE_OUTPUT_PATH} does not validate against the composition shape: ${blinded.error}`);
+      } else if (blinded.input.composition.length === 0) {
+        problems.push(`${SPIKE_OUTPUT_PATH}.composition is empty -- a real spike output must have at least one element`);
+      } else {
+        const spikeCase = manifest?.cases.find((c) => c.id === referencedId);
+        if (!spikeCase) {
+          problems.push(`cannot resolve composed-output provenance -- referenced case "${referencedId ?? '(none)'}" not found in ${MANIFEST_PATH}`);
+        } else {
+          const snapshotsResult = buildSnapshotsBySource(spikeCase);
+          if (!snapshotsResult.ok) {
+            problems.push(`could not build snapshots for case ${spikeCase.id}: ${snapshotsResult.error}`);
+          } else {
+            const unresolved = blinded.input.composition.filter((el) => !resolves(el, snapshotsResult.bySource));
+            if (unresolved.length > 0) {
+              problems.push(`${unresolved.length}/${blinded.input.composition.length} composed-output elements do not resolve against case ${spikeCase.id}'s captured snapshots: ${JSON.stringify(unresolved.map((el) => el.elementId))}`);
+            }
+            composedOutputSummary = `${blinded.input.composition.length} element(s), ${blinded.input.composition.length - unresolved.length}/${blinded.input.composition.length} resolve against case ${spikeCase.id}'s captured snapshots`;
+          }
+        }
+      }
+    }
+
     // F17: the case id, output hash, and run-log hash must cross-reference
     // CONSISTENTLY -- i.e. appear together in one place -- not merely be
     // present somewhere each in the document independently (which would
@@ -2646,7 +2965,7 @@ await probe(
 
     return {
       ok: problems.length === 0,
-      evidence: `composed-output hash recorded: yes (${outputHash})\nrun-log (${SPIKE_RUNLOG_PATH}) hash recorded: yes (${runLogHash}), transcript+exit-code shape OK (exit=${exitCodeMatch[1]})\ncase id + output hash + run-log hash cross-referenced in one paragraph: ${crossReferenced}\nschema fields enumerated: ${schemaFields.size}\ncase section: ${caseSection.slice(0, 200)}\ninsufficiency items: ${insufficiencyItems.length} (field-grounded: ${insufficiencyItems.length - insuffFieldProblems.length})\nresponse items: ${responseItems.length} (valid: ${responseItems.length - responseProblems.length})\nreferenced case exists in manifest: ${caseExists}`,
+      evidence: `composed-output hash recorded: yes (${outputHash})\ncomposed-output shape + provenance: ${composedOutputSummary}\nrun-log (${SPIKE_RUNLOG_PATH}) hash recorded: yes (${runLogHash}), transcript+exit-code-0 shape OK\ncase id + output hash + run-log hash cross-referenced in one paragraph: ${crossReferenced}\nschema fields enumerated: ${schemaFields.size}\ncase section: ${caseSection.slice(0, 200)}\ninsufficiency items: ${insufficiencyItems.length} (field-grounded: ${insufficiencyItems.length - insuffFieldProblems.length})\nresponse items: ${responseItems.length} (valid: ${responseItems.length - responseProblems.length})\nreferenced case exists in manifest: ${caseExists}`,
       detail: problems.length > 0 ? problems.join('; ') : undefined,
     };
   },
@@ -2854,6 +3173,7 @@ const manifestOut = {
   baseCommit,
   verifierSha256: selfSha256,
   sealAccessBoundary: SEAL_ACCESS_BOUNDARY,
+  machineIdentityBoundary: MACHINE_IDENTITY_BOUNDARY,
   toolchain: { node: process.version, pnpm: sh('pnpm', ['--version']).stdout.trim() },
   machineFingerprint,
   // F16: a run whose canonical proof dir couldn't be created (fell back to
