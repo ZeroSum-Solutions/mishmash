@@ -4,46 +4,67 @@
 // program defined in docs/plans/waves/ (see VERIFICATION-CONTRACT.md) and is
 // deleted, with the rest of scripts/waves/, when that program closes.
 //
-// Run: pnpm exec tsx scripts/waves/verify-w7.ts
+// Run: pnpm exec tsx scripts/waves/verify-w7.ts [repoRootOverride]
 //
-// W7 ships zero product code -- its deliverable is a specification (the
-// composition IR + JSON Schema), a frozen eval corpus, and a grader shipped
-// as tested code under evals/selector/. This verifier is also the place
-// that DEFINES the file-layout contract those deliverables must land at,
-// since nothing under docs/specs/ or evals/ exists yet. Every path below is
-// stated in its criterion's assertion string, not just in this comment, so
-// the implementing agent can grep the assertions and build to the gate.
+// GATE-OF-RECORD EXECUTION POLICY (round-2 F-review): repoRoot is derived
+// from an explicit CLI argument or process.cwd() -- NEVER from
+// import.meta.url. This file is expected to be copyable to a pinned
+// out-of-repo location (e.g. once approved) and still operate correctly
+// against whatever worktree it is invoked with cwd set to. import.meta.url
+// is used for exactly one thing: hashing this file's OWN bytes for the
+// GATE-INTEGRITY self-check, which is deliberately about the physical
+// script, not the repo.
 //
-// Anti-gaming posture (VERIFICATION-CONTRACT.md S3), revised after round-1
-// adversarial review (round1-verify-w7.json, 15 HIGH + 2 MED, all fixed
-// here): wherever a criterion names a specific gaming vector, this verifier
-// (a) constructs the adversarial input ITSELF from real corpus data at run
-// time and calls the implementer's exported functions on it -- not trusting
-// implementer-authored fixtures for the load-bearing evidence -- and (b)
-// still requires implementer unit tests / fixtures as an ADDITIONAL, non-
-// load-bearing check. A "population" fixture that reaches the scorer is
-// first blinded down to a minimal schema {caseId, composition} so a label
-// field (fixtureKind/expected/marker) can never influence the score.
+// Anti-gaming posture (VERIFICATION-CONTRACT.md S3), twice-revised after
+// adversarial review (round1: 15 HIGH + 2 MED, all fixed; round2:
+// round2-verify-w7.json, 14 HIGH + 2 MED surviving round-1's fixes, all
+// addressed here -- this is the final round before founder escalation, so
+// fixes target the exploit CLASS, not just the literal repro):
+// - Every load-bearing adversarial control (population ground truth,
+//   source-bleed, diversity axes, directive-claim-coverage,
+//   counterfactual pairs) is now VERIFIER-CONSTRUCTED from real corpus
+//   snapshot/directive data with genuine resolvable node identity
+//   (nodeId+domPath+breakpoint), not implementer-authored fixtures.
+//   Implementer fixtures remain required but are additional/non-load-bearing.
+// - Fixture blinding is now a recursive per-element whitelist (elementId,
+//   sourceId, domPath, nodeId, breakpoint, + optional motionSignature/
+//   styleFingerprint), not just a top-level {caseId,composition} shape --
+//   no nested marker field can reach the scorer.
+// - The directiveInventory ground truth is bound to a corpus-freeze commit
+//   in CORPUS.md; every case's IR must be a STRICT DESCENDANT of that
+//   freeze commit, and all four claim fields (axis/source/scope/strength)
+//   are cross-checked, not three.
+// - Sealed-payload ancestry is bound to CONTENT (the current ciphertext
+//   must equal the git blob at the seal commit's PARENT), not just to
+//   when the file path was first added.
+// - Every numeric score consumed anywhere (scorer axes, diversity, bleed
+//   counts) is range/finiteness-checked; floors carry a named epsilon
+//   (0.05) so denormalized-positive floors can't pass.
 //
 // Gate self-integrity (F1): this file's own sha256 is recorded in every
 // manifest. Once an approval round writes
 // ~/.claude/goal-state/mishmash-w7-selector-foundations/approved-gate.sha256,
-// every later run hard-fails if this file no longer matches that hash --
-// closing the hole where an implementation commit could rewrite the
-// verifier to record unconditional passes (the lease legitimately allows
-// W7 to touch this file, so R9 alone cannot catch that).
+// every later run hard-fails if this file no longer matches that hash.
 //
-// Held-out sealing (F11): sealed cases' IR/snapshot payloads are committed
-// ONLY as AES-256-CBC blobs (openssl, key at
+// Held-out sealing (F3/F11): sealed cases' IR/snapshot payloads are
+// committed ONLY as AES-256-CBC blobs (openssl, key at
 // ~/.claude/goal-state/mishmash-w7-selector-foundations/seal.key, outside
-// the repo). The verifier decrypts to a proof-dir temp file, hash-checks
-// against the plaintext hash recorded in the manifest, and separately scans
-// every git-tracked file under evals/ for accidental plaintext leakage.
+// the repo, chmod 0600 and verified). The verifier decrypts, hash-checks,
+// content-binds ciphertext to the seal commit's parent blob, and scans
+// every git-tracked file under evals/ for plaintext leakage using
+// multiple content windows (not whole-file hashes). The manifest records
+// an explicit, honest boundary statement (R7): mechanical checks cover
+// in-repo leakage and key permissions; same-user out-of-repo access to the
+// key/proof directory is an ORCHESTRATION invariant, not something file
+// permissions alone can enforce, and is declared as such, never disguised
+// as a mechanical guarantee.
 //
 // Exit code: 0 only when every criterion is "pass" or "blocked-on-founder"
 // (R7: a wave must be able to reach "all mechanical criteria green, N
-// founder items pending" without a person) AND the tree is clean. Any
-// "fail" or a dirty tree forces non-zero, unconditionally.
+// founder items pending" without a person), the tree is clean, AND the
+// proof manifest itself was written without degrading to a fallback path
+// (F16). Any "fail", a dirty tree, or a degraded manifest write forces
+// non-zero, unconditionally.
 
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -52,19 +73,64 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const repoRoot = path.resolve(fileURLToPath(import.meta.url), '..', '..', '..');
+// GATE-OF-RECORD EXECUTION POLICY, continued: everything below runs inside a
+// single async IIFE rather than using top-level await. This file must stay
+// runnable when copied to an out-of-repo pinned location (e.g. once
+// approved) and invoked from an arbitrary directory -- tsx/esbuild decide
+// CJS vs ESM output per-file based on the nearest package.json, and a file
+// living outside any Node project (no ancestor package.json declaring
+// "type": "module") gets compiled as CJS, where top-level await is a syntax
+// error. An async IIFE has no such restriction. Verified by reproduction:
+// running an out-of-repo copy with top-level await failed with esbuild's
+// "Top-level await is currently not supported with the cjs output format";
+// wrapping in this IIFE fixed it.
+void (async () => {
+const repoRoot = path.resolve(process.argv[2] ?? process.cwd());
 const WAVE_SLUG = 'mishmash-w7-selector-foundations';
 const goalStateDir = path.join(os.homedir(), '.claude', 'goal-state', WAVE_SLUG);
-const proofDir = path.join(goalStateDir, 'proof');
-fs.mkdirSync(proofDir, { recursive: true });
 
-function sh(cmd: string, args: string[], cwd: string = repoRoot): { status: number; stdout: string; stderr: string } {
+// F16: proof-dir creation is guarded. If the primary location can't be
+// created (permission issue, a file blocking the path, ...), fall back to
+// a temp location rather than crashing the whole process before any
+// criterion has run.
+let proofDir = path.join(goalStateDir, 'proof');
+try {
+  fs.mkdirSync(proofDir, { recursive: true });
+} catch (e) {
+  const fallback = path.join(os.tmpdir(), `verify-w7-proof-fallback-${process.pid}`);
+  console.error(`verify-w7: could not create primary proof dir ${proofDir} (${(e as Error).message}); falling back to ${fallback}`);
+  fs.mkdirSync(fallback, { recursive: true });
+  proofDir = fallback;
+}
+
+function sh(cmd: string, args: string[], cwd: string = repoRoot, env?: NodeJS.ProcessEnv): { status: number; stdout: string; stderr: string } {
   try {
-    const stdout = execFileSync(cmd, args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 15 * 60_000 });
+    const options: { cwd: string; encoding: 'utf8'; maxBuffer: number; timeout: number; env?: NodeJS.ProcessEnv } = {
+      cwd,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: 15 * 60_000,
+    };
+    if (env) options.env = { ...process.env, ...env };
+    const stdout = execFileSync(cmd, args, options);
     return { status: 0, stdout, stderr: '' };
   } catch (error) {
     const e = error as { status?: number; stdout?: string; stderr?: string };
     return { status: e.status ?? 1, stdout: e.stdout ?? '', stderr: e.stderr ?? '' };
+  }
+}
+
+// Binary-safe variant for reading git blob content (e.g. an encrypted .enc
+// payload via `git show <rev>:<path>`) -- `sh()` forces utf8 decoding, which
+// is lossy for arbitrary ciphertext bytes and would make hash comparisons
+// meaningless (F3 content-binding needs the real bytes).
+function shBuffer(cmd: string, args: string[], cwd: string = repoRoot): { status: number; stdout: Buffer; stderr: string } {
+  try {
+    const stdout = execFileSync(cmd, args, { cwd, maxBuffer: 64 * 1024 * 1024, timeout: 15 * 60_000 });
+    return { status: 0, stdout: stdout as Buffer, stderr: '' };
+  } catch (error) {
+    const e = error as { status?: number; stdout?: Buffer; stderr?: Buffer };
+    return { status: e.status ?? 1, stdout: e.stdout instanceof Buffer ? e.stdout : Buffer.alloc(0), stderr: e.stderr ? e.stderr.toString('utf8') : '' };
   }
 }
 
@@ -151,9 +217,7 @@ interface CriterionResult {
 const results: CriterionResult[] = [];
 
 // F16: artifactFor/record must never throw. A write failure falls back to a
-// different path, then to a fully in-memory hash if even that fails -- the
-// catch path in probe() calls record() again on failure, so record() itself
-// recursing into the same failing writer would crash the whole run.
+// different path, then to a fully in-memory hash if even that fails.
 function artifactFor(id: string, content: string): { artifact: string | null; artifactSha256: string } {
   const primary = path.join(proofDir, `${id}.txt`);
   try {
@@ -169,8 +233,6 @@ function artifactFor(id: string, content: string): { artifact: string | null; ar
     fs.writeFileSync(fallback, content);
     return { artifact: fallback, artifactSha256: crypto.createHash('sha256').update(content).digest('hex') };
   } catch {
-    // last resort: no artifact written to disk, but the hash is still real
-    // and the manifest write still succeeds.
     return { artifact: null, artifactSha256: crypto.createHash('sha256').update(content).digest('hex') };
   }
 }
@@ -188,22 +250,27 @@ function record(
     id,
     `# ${id}\n# assertion: ${assertion}\n# verdict: ${status}\n${detail ? `# detail: ${detail}\n` : ''}\n${evidence}\n`,
   );
+  // F16: a criterion with no real, readable artifact backing it may never
+  // be reported as anything but "fail" -- contract S2 rule 4 requires a
+  // non-empty, hash-matched artifact, and "artifact: null" cannot satisfy
+  // that no matter what the probe computed.
+  const effectiveStatus: 'pass' | 'fail' | 'blocked-on-founder' = artifact === null ? 'fail' : status;
+  const effectiveDetail = artifact === null ? `${detail ? `${detail}; ` : ''}artifact could not be written to any location (F16: forced fail, no artifact-less pass permitted)` : detail;
   results.push({
     id,
     command,
     assertion,
     artifact,
     artifactSha256,
-    exitCode: status === 'fail' ? 1 : 0,
-    status,
+    exitCode: effectiveStatus === 'fail' ? 1 : 0,
+    status: effectiveStatus,
     durationMs: Date.now() - startedAt,
-    detail,
+    detail: effectiveDetail,
   });
 }
 
 // Every probe is wrapped so a thrown exception becomes a recorded "fail",
-// never a crashed process. record() itself is now failure-safe (F16), so
-// this catch path can never recurse into the same failing writer.
+// never a crashed process. record() itself is failure-safe.
 async function probe(id: string, command: string, assertion: string, fn: () => Promise<{ ok: boolean; evidence: string; detail?: string | undefined }>): Promise<void> {
   const startedAt = Date.now();
   try {
@@ -215,8 +282,6 @@ async function probe(id: string, command: string, assertion: string, fn: () => P
 }
 
 // --- minimal JSON Schema interpreter (subset) ------------------------------
-// Supports: type, required, properties, items, enum, minItems, minLength,
-// minimum, maximum, pattern.
 type JsonSchema = Record<string, unknown>;
 
 function validateAgainstSchema(schema: JsonSchema, data: unknown, at = '$'): string[] {
@@ -268,28 +333,25 @@ function validateAgainstSchema(schema: JsonSchema, data: unknown, at = '$'): str
   return errors;
 }
 
-// --- corpus manifest contract ----------------------------------------------
-// evals/selector/corpus/manifest.json -- the machine-readable corpus index.
-// Shape mandated here (restated in each criterion's assertion string):
-//
-// interface DirectiveClaim { axis: DirectiveAxis; source: string; scope: string; strength: number }
-// interface SnapshotRef { path: string; sha256: string; viewportWidth: number }
-//   -- for a sealed case, `path` MUST end in `.enc` (AES-256-CBC blob) and
-//      `sha256` is still the PLAINTEXT content hash, checked post-decrypt.
-// interface CorpusSource { id: string; snapshots: Record<breakpoint, SnapshotRef> }
-// interface CorpusCase {
-//   id: string; genre: one of ALLOWED_GENRES; layoutSystem: one of ALLOWED_LAYOUT_SYSTEMS;
-//   breakpoints: string[]; sources: CorpusSource[];
-//   directiveInventory: DirectiveClaim[];   // ground truth: what the case's brief actually asks for
-//   conflict: { axis; winningSource; losingSource } | null;
-//   degenerate: 'single-source' | 'nonexistent-element-directive' | 'hostile-heavy-dom' | null;
-//   skip: { reason: 'login-walled' | 'bot-walled'; target: string } | null;
-//   sealed: boolean;
-//   irPath: string;      // for a sealed case, MUST end in `.enc`
-//   irSha256: string;    // plaintext IR content hash, always
-// }
-// interface CorpusManifest { version: number; sealedFraction: number; cases: CorpusCase[] }
+// Recursively enumerate every JSON-Schema property NAME anywhere in the
+// schema tree (F17: insufficiency/response items must name a field that
+// really exists in the committed schema, not a token from a hardcoded list).
+function enumerateSchemaFieldNames(schema: JsonSchema, acc: Set<string> = new Set()): Set<string> {
+  const properties = schema['properties'];
+  if (properties && typeof properties === 'object') {
+    for (const [key, sub] of Object.entries(properties as Record<string, JsonSchema>)) {
+      acc.add(key);
+      enumerateSchemaFieldNames(sub, acc);
+    }
+  }
+  const items = schema['items'];
+  if (items && typeof items === 'object') enumerateSchemaFieldNames(items as JsonSchema, acc);
+  return acc;
+}
 
+// =============================================================================
+// corpus manifest contract
+// =============================================================================
 const DIRECTIVE_AXES = ['layout', 'motion', 'palette', 'typography', 'section', 'interaction'] as const;
 type DirectiveAxis = (typeof DIRECTIVE_AXES)[number];
 const ALLOWED_LAYOUT_SYSTEMS = ['css-grid-first', 'flex-utility', 'absolute-canvas'] as const;
@@ -348,6 +410,7 @@ const SEALED_ACCESS_PATH = 'evals/selector/SEALED-ACCESS.md';
 const NL_GOLDENS_PATH = 'evals/selector/nl-to-ir/goldens.json';
 const NL_PARSER_PATH = 'evals/selector/nl-to-ir/parser.ts';
 const SPIKE_DOC_PATH = 'docs/specs/selector-feasibility-spike.md';
+const SPIKE_OUTPUT_PATH = 'evals/selector/spike/composed-output.json';
 const GO_NO_GO_PATH = 'docs/specs/selector-go-no-go.md';
 const POPULATION_DIR = 'evals/selector/fixtures/population';
 const DIRECTIVE_FIXTURES_DIR = 'evals/selector/fixtures/directive-coverage';
@@ -372,6 +435,26 @@ const REQUIRED_AXES = [
   'structural_variant_diversity',
   'directive_claim_coverage',
 ] as const;
+type ScorerAxis = (typeof REQUIRED_AXES)[number];
+
+// F10: the directive-axis vocabulary (layout/motion/palette/...) is NOT the
+// same vocabulary as the scorer's registered axis ids (layout_geometry/...).
+// C7-10 indexed axes[] with the wrong vocabulary in round 1, silently always
+// reading undefined. This explicit map is the only place that bridges them,
+// and every value in it is validated against floors.json's actual keys at
+// runtime so a future drift fails loudly instead of silently.
+const DIRECTIVE_AXIS_TO_SCORER_AXIS: Record<DirectiveAxis, ScorerAxis> = {
+  layout: 'layout_geometry',
+  motion: 'motion_timing',
+  palette: 'palette_fidelity',
+  typography: 'type_fidelity',
+  section: 'section_identity',
+  interaction: 'responsiveness',
+};
+
+// F12: named epsilon -- a floor or delta must be meaningfully above zero,
+// not merely "> 0" (which a denormalized 5e-324 would satisfy).
+const MIN_MEANINGFUL_THRESHOLD = 0.05;
 
 function loadManifest(): { manifest: CorpusManifest | null; error: string | null } {
   if (!exists(MANIFEST_PATH)) return { manifest: null, error: `${MANIFEST_PATH} does not exist` };
@@ -381,11 +464,22 @@ function loadManifest(): { manifest: CorpusManifest | null; error: string | null
   return { manifest: parsed, error: null };
 }
 
-// --- sealing (F11): sealed payloads live in-tree only as AES-256-CBC blobs -
+// --- sealing (F3/F11): sealed payloads live in-tree only as AES-256-CBC
+// blobs, content-bound to a commit ancestry, key permissions enforced -----
 function ensureSealKey(): void {
-  if (fs.existsSync(SEAL_KEY_PATH)) return;
-  fs.mkdirSync(path.dirname(SEAL_KEY_PATH), { recursive: true });
-  fs.writeFileSync(SEAL_KEY_PATH, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
+  if (!fs.existsSync(SEAL_KEY_PATH)) {
+    fs.mkdirSync(path.dirname(SEAL_KEY_PATH), { recursive: true });
+    fs.writeFileSync(SEAL_KEY_PATH, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
+  }
+  // F11: verify (not just set-on-create) the permission mode every run --
+  // re-assert 0600 unconditionally so a prior looser mode doesn't linger.
+  fs.chmodSync(SEAL_KEY_PATH, 0o600);
+}
+
+function sealKeyModeOk(): { ok: boolean; mode: string } {
+  ensureSealKey();
+  const mode = fs.statSync(SEAL_KEY_PATH).mode & 0o777;
+  return { ok: mode === 0o600, mode: mode.toString(8) };
 }
 
 function decryptToBytes(encRel: string, label: string): { ok: true; bytes: Buffer } | { ok: false; error: string } {
@@ -426,8 +520,13 @@ function loadSnapshotBytes(ref: SnapshotRef, sealed: boolean, label: string): { 
   return decryptToBytes(ref.path, label);
 }
 
+interface SnapshotNode {
+  nodeId: string;
+  domPath: string;
+  computedStyle?: Record<string, string>;
+}
 interface SnapshotDoc {
-  nodes?: Array<{ nodeId: string; domPath: string }>;
+  nodes?: SnapshotNode[];
   viewportWidth?: number;
 }
 
@@ -442,73 +541,264 @@ function loadSnapshotDoc(ref: SnapshotRef, sealed: boolean, label: string): { ok
   }
 }
 
-// --- scoring input contract (F7/F9 blinding) --------------------------------
-// Every fixture passed to scoreComposition is reduced to exactly this shape
-// before scoring -- any other field an implementer-authored fixture carries
-// (fixtureKind, expected, label, marker, ...) is stripped so it can never
-// influence the score.
-const SCORING_INPUT_ALLOWED_KEYS = ['caseId', 'composition'] as const;
+// F3: prove the CURRENT ciphertext blob is content-identical to the blob
+// that existed at the seal commit's PARENT -- not merely that the file path
+// was "added" at some ancestor commit (which a swap-in-place inside the
+// seal commit itself would still satisfy).
+function blobHashAtRevision(rev: string, relPath: string): { ok: true; hash: string } | { ok: false; error: string } {
+  const result = shBuffer('git', ['show', `${rev}:${relPath}`]);
+  if (result.status !== 0) return { ok: false, error: `git show ${rev}:${relPath} failed (status=${result.status}): ${result.stderr}` };
+  return { ok: true, hash: sha256Buffer(result.stdout) };
+}
+
+function contentBoundBeforeSeal(sealCommit: string, relEncPath: string): { ok: boolean; detail: string } {
+  const parentRev = `${sealCommit}^`;
+  const parentBlob = blobHashAtRevision(parentRev, relEncPath);
+  if (!parentBlob.ok) return { ok: false, detail: `no blob for ${relEncPath} at ${parentRev} (${parentBlob.error}) -- payload not provably present before the seal commit` };
+  const currentHash = sha256File(relEncPath);
+  if (!currentHash) return { ok: false, detail: `cannot read current ${relEncPath}` };
+  if (currentHash !== parentBlob.hash) {
+    return { ok: false, detail: `ciphertext at HEAD (${currentHash}) differs from the blob at ${parentRev} (${parentBlob.hash}) -- payload was swapped at/after the seal commit (F3)` };
+  }
+  return { ok: true, detail: `ciphertext content-bound: identical at ${parentRev} and HEAD (${currentHash})` };
+}
+
+// Resolve "the commit that currently defines <path>'s content" -- the most
+// recent commit touching it, used both for the corpus-freeze commit (F2)
+// and the seal commit (F3). Deliberately NOT "first added": a file that is
+// legitimately edited once after creation should be judged by its latest
+// state, and this is simpler/more robust than the round-1
+// diff-filter=A-then-pop() pattern.
+function latestCommitTouching(relPath: string): string | null {
+  const result = sh('git', ['log', '-1', '--format=%H', '--', relPath]);
+  if (result.status !== 0) return null;
+  const sha = result.stdout.trim();
+  return /^[0-9a-f]{40}$/i.test(sha) ? sha : null;
+}
+
+function strictDescendant(ancestorRev: string, descendantRev: string): { ok: boolean; detail: string } {
+  if (ancestorRev === descendantRev) return { ok: false, detail: `same commit (${ancestorRev}) -- not a strict descendant` };
+  const check = sh('git', ['merge-base', '--is-ancestor', ancestorRev, descendantRev]);
+  if (check.status !== 0) return { ok: false, detail: `${ancestorRev} is NOT an ancestor of ${descendantRev}` };
+  return { ok: true, detail: `${descendantRev} strictly descends from ${ancestorRev}` };
+}
+
+// =============================================================================
+// scoring input contract (F7/F9 deep blinding; F5/F8/F9 real resolvable
+// node identity; F8 axis-isolation fields)
+// =============================================================================
 interface CompositionElement {
   elementId: string;
   sourceId: string;
   domPath: string;
+  nodeId: string;
+  breakpoint: string;
+  motionSignature?: string;
+  styleFingerprint?: string;
 }
 interface ScoringInput {
   caseId: string;
   composition: CompositionElement[];
 }
 
-function blindInput(raw: unknown): { ok: true; input: ScoringInput; extraKeys: string[] } | { ok: false; error: string } {
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === 'string' && v.length > 0;
+}
+
+// F7: deep-strip, not just top-level. Every composition element is rebuilt
+// field-by-field from a fixed whitelist -- a marker smuggled into elementId,
+// an extra nested field, or any nested object is never forwarded to the
+// scorer. Malformed elements make the whole fixture invalid rather than
+// being silently dropped (so a fixture can't "average away" a bad element).
+function blindInput(raw: unknown): { ok: true; input: ScoringInput; extraTopKeys: string[]; extraElementKeys: string[] } | { ok: false; error: string } {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, error: 'input.json is not an object' };
   const obj = raw as Record<string, unknown>;
-  const extraKeys = Object.keys(obj).filter((k) => !(SCORING_INPUT_ALLOWED_KEYS as readonly string[]).includes(k));
+  const ALLOWED_TOP = ['caseId', 'composition'];
+  const extraTopKeys = Object.keys(obj).filter((k) => !ALLOWED_TOP.includes(k));
   const caseId = obj['caseId'];
-  const composition = obj['composition'];
-  if (typeof caseId !== 'string' || caseId.length === 0) return { ok: false, error: 'input.json.caseId must be a non-empty string' };
-  if (!Array.isArray(composition)) return { ok: false, error: 'input.json.composition must be an array' };
-  return { ok: true, input: { caseId, composition: composition as CompositionElement[] }, extraKeys };
+  const compositionRaw = obj['composition'];
+  if (!isNonEmptyString(caseId)) return { ok: false, error: 'input.json.caseId must be a non-empty string' };
+  if (!Array.isArray(compositionRaw)) return { ok: false, error: 'input.json.composition must be an array' };
+
+  const ALLOWED_ELEMENT_KEYS = ['elementId', 'sourceId', 'domPath', 'nodeId', 'breakpoint', 'motionSignature', 'styleFingerprint'];
+  const extraElementKeys: string[] = [];
+  const composition: CompositionElement[] = [];
+  for (const [i, elRaw] of compositionRaw.entries()) {
+    if (elRaw === null || typeof elRaw !== 'object' || Array.isArray(elRaw)) return { ok: false, error: `composition[${i}] is not an object` };
+    const el = elRaw as Record<string, unknown>;
+    for (const k of Object.keys(el)) if (!ALLOWED_ELEMENT_KEYS.includes(k)) extraElementKeys.push(`composition[${i}].${k}`);
+    if (!isNonEmptyString(el['elementId']) || !isNonEmptyString(el['sourceId']) || !isNonEmptyString(el['domPath']) || !isNonEmptyString(el['nodeId']) || !isNonEmptyString(el['breakpoint'])) {
+      return { ok: false, error: `composition[${i}] missing/invalid required string field(s) among elementId/sourceId/domPath/nodeId/breakpoint` };
+    }
+    const rebuilt: CompositionElement = {
+      elementId: el['elementId'] as string,
+      sourceId: el['sourceId'] as string,
+      domPath: el['domPath'] as string,
+      nodeId: el['nodeId'] as string,
+      breakpoint: el['breakpoint'] as string,
+    };
+    if (isNonEmptyString(el['motionSignature'])) rebuilt.motionSignature = el['motionSignature'] as string;
+    if (isNonEmptyString(el['styleFingerprint'])) rebuilt.styleFingerprint = el['styleFingerprint'] as string;
+    composition.push(rebuilt);
+  }
+  return { ok: true, input: { caseId, composition }, extraTopKeys, extraElementKeys };
+}
+
+// F12: a [0,1] score must be a real, finite number in range -- Infinity,
+// -Infinity, NaN, and out-of-range values are all rejected explicitly.
+function isValidUnitScore(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1;
+}
+function isValidCount(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0;
 }
 
 function scoreRangeErrors(result: { overall?: unknown; axes?: unknown }): string[] {
   const errors: string[] = [];
-  if (typeof result.overall !== 'number' || Number.isNaN(result.overall) || result.overall < 0 || result.overall > 1) {
-    errors.push(`overall must be a number in [0,1], got ${String(result.overall)}`);
-  }
+  if (!isValidUnitScore(result.overall)) errors.push(`overall must be a finite number in [0,1], got ${String(result.overall)}`);
   if (!result.axes || typeof result.axes !== 'object') {
     errors.push('axes object missing');
     return errors;
   }
   const axesObj = result.axes as Record<string, unknown>;
   for (const axis of REQUIRED_AXES) {
-    const v = axesObj[axis];
-    if (typeof v !== 'number' || Number.isNaN(v) || v < 0 || v > 1) errors.push(`axes.${axis} must be a number in [0,1], got ${String(v)}`);
+    if (!isValidUnitScore(axesObj[axis])) errors.push(`axes.${axis} must be a finite number in [0,1], got ${String(axesObj[axis])}`);
   }
   return errors;
 }
 
-// --- verifier-constructed synthetic composites (F8/F9/F10) -----------------
-// Built from REAL corpus directiveInventory + source data, never from
+// =============================================================================
+// shared resolution machinery (F5/F9): a "resolvable node" is a real
+// captured (nodeId, domPath, breakpoint) triple from a source's snapshot.
+// C7-4 (provenance), C7-9 (directive-claim-coverage), and the verifier-
+// constructed composites (C7-7/8/9/10) all use this SAME function, so
+// "resolves" means the same thing everywhere in this file.
+// =============================================================================
+interface ResolvableNode {
+  nodeId: string;
+  domPath: string;
+  breakpoint: string;
+  computedStyle: Record<string, string>;
+}
+
+function buildSnapshotsBySource(c: CorpusCase): { ok: true; bySource: Record<string, ResolvableNode[]> } | { ok: false; error: string } {
+  const bySource: Record<string, ResolvableNode[]> = {};
+  for (const source of c.sources) {
+    const nodes: ResolvableNode[] = [];
+    for (const [bp, ref] of Object.entries(source.snapshots)) {
+      const loaded = loadSnapshotDoc(ref, c.sealed, `${c.id}-${source.id}-${bp}`);
+      if (!loaded.ok) return { ok: false, error: `${c.id}/${source.id}/${bp}: ${loaded.error}` };
+      for (const n of loaded.doc.nodes ?? []) {
+        nodes.push({ nodeId: n.nodeId, domPath: n.domPath, breakpoint: bp, computedStyle: n.computedStyle ?? {} });
+      }
+    }
+    bySource[source.id] = nodes;
+  }
+  return { ok: true, bySource };
+}
+
+function resolves(el: { sourceId: string; nodeId: string; domPath: string; breakpoint: string }, bySource: Record<string, ResolvableNode[]>): boolean {
+  const nodes = bySource[el.sourceId] ?? [];
+  return nodes.some((n) => n.nodeId === el.nodeId && n.domPath === el.domPath && n.breakpoint === el.breakpoint);
+}
+
+function styleFingerprintOf(style: Record<string, string>): string | null {
+  const keys = ['color', 'backgroundColor', 'fontFamily'];
+  const parts = keys.map((k) => style[k]).filter((v): v is string => typeof v === 'string' && v.length > 0);
+  return parts.length > 0 ? parts.join('|') : null;
+}
+
+// F5: generic field-derangement -- produce a permutation of just ONE field's
+// values across entries (a fixed-point-free rotation), leaving every other
+// field untouched. Used to build three INDEPENDENT negative controls
+// (nodeId-only, domPath-only, breakpoint-only), each of which must
+// independently drive resolution to zero.
+function derangeField<T extends Record<string, unknown>, K extends keyof T>(entries: T[], field: K): T[K][] | null {
+  const original = entries.map((e) => e[field]);
+  const n = original.length;
+  if (n < 2) return null;
+  for (let shift = 1; shift < n; shift++) {
+    const candidate = original.map((_, i) => original[(i + shift) % n]!);
+    if (candidate.every((v, i) => v !== original[i])) return candidate;
+  }
+  return null;
+}
+
+// F11: deterministic-but-unpredictable 64-byte content windows sampled
+// across a plaintext buffer, used to scan tracked files for byte-substring
+// leakage rather than trusting a whole-file hash (which a single altered
+// framing byte, or embedding inside a larger file, would defeat).
+function sampleWindows(buf: Buffer, windowSize = 64, count = 5): Buffer[] {
+  if (buf.length <= windowSize) return buf.length > 0 ? [buf] : [];
+  const maxStart = buf.length - windowSize;
+  const windows: Buffer[] = [];
+  for (let i = 0; i < count; i++) {
+    const seed = crypto.createHash('sha256').update(buf.subarray(0, Math.min(4096, buf.length))).update(String(i)).digest();
+    const offset = seed.readUInt32BE(0) % (maxStart + 1);
+    windows.push(buf.subarray(offset, offset + windowSize));
+  }
+  return windows;
+}
+
+// =============================================================================
+// verifier-constructed synthetic composites (F7/F8/F9/F10) -- built from
+// REAL corpus directiveInventory + captured snapshot node data, never from
 // implementer-authored fixtures, so a label-keyed or name-grep scorer has
-// nothing to key off.
-function pickCaseWithDirectives(manifest: CorpusManifest, minSources = 2): CorpusCase | null {
-  return manifest.cases.find((c) => !c.sealed && !c.skip && c.sources.length >= minSources && c.directiveInventory.length >= 1) ?? null;
+// nothing to key off and every element is genuinely resolvable (or
+// deliberately not, by construction).
+// =============================================================================
+function findRealNode(c: CorpusCase, sourceId: string, domPath: string): { nodeId: string; breakpoint: string } | null {
+  const source = c.sources.find((s) => s.id === sourceId);
+  if (!source) return null;
+  for (const [bp, ref] of Object.entries(source.snapshots)) {
+    const loaded = loadSnapshotDoc(ref, c.sealed, `${c.id}-${sourceId}-${bp}`);
+    if (!loaded.ok) continue;
+    const node = (loaded.doc.nodes ?? []).find((n) => n.domPath === domPath);
+    if (node) return { nodeId: node.nodeId, breakpoint: bp };
+  }
+  return null;
 }
 
-function faithfulComposition(c: CorpusCase): CompositionElement[] {
-  return c.directiveInventory.map((d, i) => ({ elementId: `di-${i}-${d.axis}`, sourceId: d.source, domPath: d.scope }));
+// A composition where every directiveInventory claim is attributed to
+// EXACTLY the source/scope it names, with REAL nodeId/breakpoint pulled from
+// that source's own capture -- genuinely resolvable by construction. Returns
+// null if any directive's scope doesn't resolve against its own claimed
+// source (e.g. a degenerate "nonexistent-element-directive" case -- not a
+// usable case for building a faithful control).
+function faithfulComposition(c: CorpusCase): CompositionElement[] | null {
+  const elements: CompositionElement[] = [];
+  for (const [i, d] of c.directiveInventory.entries()) {
+    const real = findRealNode(c, d.source, d.scope);
+    if (!real) return null;
+    elements.push({ elementId: `di-${i}-${d.axis}`, sourceId: d.source, domPath: d.scope, nodeId: real.nodeId, breakpoint: real.breakpoint, motionSignature: 'timeline-a' });
+  }
+  return elements;
 }
 
-function houseStyleComposition(c: CorpusCase): CompositionElement[] {
+// Same underlying (nodeId, domPath, breakpoint) data, but every element's
+// sourceId is deliberately reassigned to a DIFFERENT source than the one
+// that actually captured it -- modeling "ignores the directive, blends a
+// house style instead" while still looking structurally complete. Because
+// the node data genuinely came from a different source, this composition
+// will NOT resolve against its (false) claimed attribution.
+function houseStyleComposition(c: CorpusCase): CompositionElement[] | null {
+  const faithful = faithfulComposition(c);
+  if (!faithful) return null;
   const sourceIds = c.sources.map((s) => s.id);
-  return c.directiveInventory.map((d, i) => {
-    const others = sourceIds.filter((id) => id !== d.source);
-    const blended = others.length > 0 ? others[i % others.length]! : d.source;
-    return { elementId: `di-${i}-${d.axis}`, sourceId: blended, domPath: d.scope };
+  return faithful.map((el, i) => {
+    const others = sourceIds.filter((id) => id !== el.sourceId);
+    const blended = others.length > 0 ? others[i % others.length]! : el.sourceId;
+    return { ...el, sourceId: blended };
   });
+}
+
+function pickCaseWithDirectives(manifest: CorpusManifest, minSources = 2): CorpusCase | null {
+  return manifest.cases.find((c) => !c.sealed && !c.skip && c.sources.length >= minSources && c.directiveInventory.length >= 1 && faithfulComposition(c) !== null) ?? null;
 }
 
 function swapOneDirective(c: CorpusCase): { base: CompositionElement[]; swapped: CompositionElement[]; axis: string; diffCount: number } | null {
   const base = faithfulComposition(c);
+  if (!base) return null;
   const idx = c.directiveInventory.findIndex((d) => c.sources.some((s) => s.id !== d.source));
   if (idx === -1) return null;
   const d = c.directiveInventory[idx]!;
@@ -539,14 +829,11 @@ await probe(
     const schema = readJson<JsonSchema>(IR_SCHEMA_PATH);
     if (schema === null) return { ok: false, evidence: `missing or invalid JSON at ${IR_SCHEMA_PATH}` };
 
-    // F2: top-level keys must be strictly REQUIRED, not merely declared as
-    // optional properties -- a schema that lists them only under
-    // "properties" without "required" would let a vacuous {} instance pass.
     const topRequiredArr = schema['required'];
     const topRequired = new Set(Array.isArray(topRequiredArr) ? (topRequiredArr as string[]) : []);
     const missingTop = REQUIRED_IR_TOP_KEYS.filter((k) => !topRequired.has(k));
     if (missingTop.length > 0) {
-      return { ok: false, evidence: `${IR_SCHEMA_PATH} does not list these top-level keys in "required" (declaring them only as optional properties does not count): ${missingTop.join(', ')}` };
+      return { ok: false, evidence: `${IR_SCHEMA_PATH} does not list these top-level keys in "required": ${missingTop.join(', ')}` };
     }
     const topProps = schema['properties'] as Record<string, JsonSchema> | undefined;
     const minItemsProblems: string[] = [];
@@ -556,7 +843,7 @@ await probe(
       if (typeof minItems !== 'number' || minItems < 1) minItemsProblems.push(arrKey);
     }
     if (minItemsProblems.length > 0) {
-      return { ok: false, evidence: `${IR_SCHEMA_PATH} properties.{${minItemsProblems.join(',')}}.minItems must be >= 1 -- otherwise an empty array vacuously satisfies "type: array"` };
+      return { ok: false, evidence: `${IR_SCHEMA_PATH} properties.{${minItemsProblems.join(',')}}.minItems must be >= 1` };
     }
     const provenanceItemSchema = topProps?.['provenance']?.['items'] as JsonSchema | undefined;
     const provenanceRequired = provenanceItemSchema?.['required'];
@@ -617,23 +904,37 @@ await probe(
 );
 
 // =============================================================================
-// C7-2 -- IR expresses every corpus directive (directiveInventory cross-check
-// + strict sealed-before-seal ancestry)
+// C7-2 -- IR expresses every corpus directive: the directiveInventory ground
+// truth is bound to a CORPUS-FREEZE COMMIT recorded in CORPUS.md (F2), every
+// case's IR must be a STRICT DESCENDANT of that freeze commit (inventory
+// precedes IR or the criterion fails), and all FOUR claim fields
+// (axis/source/scope/strength) are cross-checked, not three.
 // =============================================================================
 await probe(
   'C7-2',
-  `for every case in ${MANIFEST_PATH}, cross-check its directiveInventory ground truth against ir.directives; for sealed cases, require STRICT ancestry (irAddedCommit != sealAddedCommit) via git history`,
-  `every case's directiveInventory (>=1 entries, axis in [${DIRECTIVE_AXES.join('/')}], source a real source id, scope non-empty, strength in [0,1]) has a matching entry in that case's IR "directives" array (same axis+source+scope) -- an IR that vacuously omits a directive fails even if it validates against the schema; sealed cases' IR files must be added in a commit that is a STRICT ancestor of the ${SEALED_ACCESS_PATH} commit (same-commit does not count -- F3)`,
+  `read the corpus-freeze hash line in ${CORPUS_MD_PATH}; resolve the freeze commit (latest commit touching ${CORPUS_MD_PATH}); for every case, cross-check directiveInventory (all 4 fields) against ir.directives AND require the case's IR commit to be a STRICT DESCENDANT of the freeze commit; for sealed cases additionally require strict descendance from the seal commit`,
+  `${CORPUS_MD_PATH} contains a line "Corpus freeze sha256: <hex>" equal to sha256(${MANIFEST_PATH}) at HEAD (proving the manifest has not silently changed since the stated freeze); every case's directiveInventory entry (axis in [${DIRECTIVE_AXES.join('/')}], source a real source id, scope non-empty, strength in [0,1]) has a matching ir.directives entry on ALL FOUR fields (axis+source+scope+strength, exact); the commit that added/last-touched each case's IR file must be a STRICT descendant of the corpus-freeze commit (same-commit or ancestor-only fails) -- the ground truth must exist in history before the IR that is supposed to express it; sealed cases' IR commits must additionally strictly descend from the seal commit`,
   async () => {
+    const corpusMdText = readText(CORPUS_MD_PATH);
+    if (corpusMdText === null) return { ok: false, evidence: `missing ${CORPUS_MD_PATH}` };
+    const manifestHash = sha256File(MANIFEST_PATH);
+    if (!manifestHash) return { ok: false, evidence: `cannot hash ${MANIFEST_PATH}` };
+    const freezeLineMatch = /Corpus freeze sha256:\s*([0-9a-f]{64})/i.exec(corpusMdText);
+    if (!freezeLineMatch) return { ok: false, evidence: `${CORPUS_MD_PATH} does not contain a "Corpus freeze sha256: <64-hex>" line` };
+    if (freezeLineMatch[1]!.toLowerCase() !== manifestHash.toLowerCase()) {
+      return { ok: false, evidence: `${CORPUS_MD_PATH}'s stated freeze hash (${freezeLineMatch[1]}) does not match the current ${MANIFEST_PATH} content hash (${manifestHash}) -- manifest changed since the stated freeze` };
+    }
+    const freezeCommit = latestCommitTouching(CORPUS_MD_PATH);
+    if (!freezeCommit) return { ok: false, evidence: `could not resolve a git commit for ${CORPUS_MD_PATH} (uncommitted?)` };
+
     const { manifest, error } = loadManifest();
     if (!manifest) return { ok: false, evidence: `cannot check coverage: ${error}` };
     if (manifest.cases.length === 0) return { ok: false, evidence: `${MANIFEST_PATH} has zero cases` };
 
-    const lines: string[] = [];
-    let failures = 0;
-    const sealLog = sh('git', ['log', '--diff-filter=A', '--format=%H', '--', SEALED_ACCESS_PATH]);
-    const sealAddedCommit = sealLog.status === 0 ? sealLog.stdout.trim().split('\n').filter(Boolean).pop() : undefined;
+    const sealCommit = latestCommitTouching(SEALED_ACCESS_PATH);
 
+    const lines: string[] = [`freeze commit: ${freezeCommit} (hash-verified against current manifest)`, `seal commit: ${sealCommit ?? '(none/unresolved)'}`];
+    let failures = 0;
     for (const c of manifest.cases) {
       const loaded = loadCaseIRBytes(c);
       if (!loaded.ok) {
@@ -650,7 +951,6 @@ await probe(
         continue;
       }
 
-      // F2: directiveInventory ground-truth structural validity + cross-check.
       if (!Array.isArray(c.directiveInventory) || c.directiveInventory.length === 0) {
         failures++;
         lines.push(`${c.id}: manifest directiveInventory is empty -- no ground truth to express`);
@@ -662,14 +962,29 @@ await probe(
       );
       if (invalidEntries.length > 0) {
         failures++;
-        lines.push(`${c.id}: ${invalidEntries.length} directiveInventory entries are structurally invalid (bad axis/source/scope/strength): ${JSON.stringify(invalidEntries)}`);
+        lines.push(`${c.id}: ${invalidEntries.length} directiveInventory entries are structurally invalid: ${JSON.stringify(invalidEntries)}`);
         continue;
       }
       const irDirectives = Array.isArray(parsed.directives) ? parsed.directives : [];
-      const unexpressed = c.directiveInventory.filter((d) => !irDirectives.some((ird) => ird.axis === d.axis && ird.source === d.source && ird.scope === d.scope));
+      // F2: cross-check ALL FOUR fields, including strength (round 1 only
+      // checked axis+source+scope).
+      const unexpressed = c.directiveInventory.filter((d) => !irDirectives.some((ird) => ird.axis === d.axis && ird.source === d.source && ird.scope === d.scope && ird.strength === d.strength));
       if (unexpressed.length > 0) {
         failures++;
-        lines.push(`${c.id}: ${unexpressed.length}/${c.directiveInventory.length} ground-truth directives have no matching entry in ir.directives: ${JSON.stringify(unexpressed)}`);
+        lines.push(`${c.id}: ${unexpressed.length}/${c.directiveInventory.length} ground-truth directives (incl. strength) have no matching ir.directives entry: ${JSON.stringify(unexpressed)}`);
+        continue;
+      }
+
+      const irCommit = latestCommitTouching(c.irPath);
+      if (!irCommit) {
+        failures++;
+        lines.push(`${c.id}: could not resolve a git commit for ${c.irPath}`);
+        continue;
+      }
+      const freezeOrdering = strictDescendant(freezeCommit, irCommit);
+      if (!freezeOrdering.ok) {
+        failures++;
+        lines.push(`${c.id}: IR commit ${irCommit} is not a strict descendant of the freeze commit ${freezeCommit} (${freezeOrdering.detail}) -- directiveInventory does not provably precede the IR`);
         continue;
       }
 
@@ -679,51 +994,47 @@ await probe(
           lines.push(`${c.id}: sealed but irPath does not end in .enc (${c.irPath})`);
           continue;
         }
-        if (!sealAddedCommit) {
+        if (!sealCommit) {
           failures++;
-          lines.push(`${c.id}: sealed but ${SEALED_ACCESS_PATH} has no git "added" commit to anchor an ordering check`);
+          lines.push(`${c.id}: sealed but ${SEALED_ACCESS_PATH} has no resolvable commit to anchor an ordering check`);
           continue;
         }
-        const irLog = sh('git', ['log', '--diff-filter=A', '--format=%H', '--', c.irPath]);
-        const irAddedCommit = irLog.status === 0 ? irLog.stdout.trim().split('\n').filter(Boolean).pop() : undefined;
-        if (!irAddedCommit) {
+        const sealOrdering = strictDescendant(sealCommit, irCommit);
+        if (!sealOrdering.ok) {
           failures++;
-          lines.push(`${c.id}: sealed IR has no "added" commit in git history`);
+          lines.push(`${c.id}: sealed IR commit ${irCommit} is not a strict descendant of the seal commit ${sealCommit} (${sealOrdering.detail})`);
           continue;
         }
-        if (irAddedCommit === sealAddedCommit) {
+        const contentBinding = contentBoundBeforeSeal(sealCommit, c.irPath);
+        if (!contentBinding.ok) {
           failures++;
-          lines.push(`${c.id}: sealed IR added in the SAME commit as the seal record (${irAddedCommit}) -- F3 requires strict ancestry, not same-commit`);
+          lines.push(`${c.id}: F3 content-binding failed -- ${contentBinding.detail}`);
           continue;
         }
-        const ancestorCheck = sh('git', ['merge-base', '--is-ancestor', irAddedCommit, sealAddedCommit]);
-        if (ancestorCheck.status !== 0) {
-          failures++;
-          lines.push(`${c.id}: sealed IR added at ${irAddedCommit} which is NOT a strict ancestor of the seal commit ${sealAddedCommit} -- looks backfilled after sealing`);
-          continue;
-        }
-        lines.push(`${c.id}: directiveInventory fully expressed; sealed IR (${irAddedCommit}) is a strict ancestor of the seal commit (${sealAddedCommit})`);
+        lines.push(`${c.id}: directiveInventory expressed (4/4 fields); IR (${irCommit}) strictly descends from freeze (${freezeCommit}) and seal (${sealCommit}); ciphertext content-bound`);
       } else {
-        lines.push(`${c.id}: directiveInventory fully expressed in IR`);
+        lines.push(`${c.id}: directiveInventory expressed (4/4 fields); IR (${irCommit}) strictly descends from freeze (${freezeCommit})`);
       }
     }
-    return { ok: failures === 0, evidence: lines.join('\n'), detail: failures > 0 ? `${failures}/${manifest.cases.length} cases failed directive-inventory coverage or seal ordering` : undefined };
+    return { ok: failures === 0, evidence: lines.join('\n'), detail: failures > 0 ? `${failures}/${manifest.cases.length} cases failed directive-inventory coverage, freeze ordering, or seal binding` : undefined };
   },
 );
 
 // =============================================================================
-// C7-3 -- conflicts resolve deterministically and visibly, to the DECLARED
-// conflict (F4: a constant {result:null, losingClaims:[{}]} must fail)
+// C7-3 -- conflicts resolve deterministically to the DECLARED conflict,
+// per the IR's OWN precedence rule (F4: non-null result, winningSource
+// required, exactly-one matching claim per axis, cross-checked against
+// ir.conflictResolution)
 // =============================================================================
 await probe(
   'C7-3',
-  `dynamic-import ${RESOLVE_CONFLICTS_PATH}, call resolveConflicts(ir) three times per conflict case, hash each result, and require the losing claim to name the manifest-declared conflict axis+losingSource`,
-  `${RESOLVE_CONFLICTS_PATH} exports resolveConflicts(ir): { result: unknown; losingClaims: Array<{axis,winningSource,losingSource}> }; for every conflict-marked case, three independent calls in this process yield an identical stable hash AND at least one losingClaims entry has axis === manifest.conflict.axis && losingSource === manifest.conflict.losingSource -- a constant stub with a generic/empty losing claim fails this by construction`,
+  `dynamic-import ${RESOLVE_CONFLICTS_PATH}, call resolveConflicts(ir) three times per conflict case; require a non-null result, exactly one losingClaims entry for the declared axis naming BOTH the declared winningSource and losingSource, and a matching entry in the IR's own conflictResolution array`,
+  `${RESOLVE_CONFLICTS_PATH} exports resolveConflicts(ir): { result: unknown; losingClaims: Array<{axis,winningSource,losingSource}> }; for every conflict-marked case: result is not null/undefined; losingClaims.filter(axis===declaredAxis) has length EXACTLY 1 (a cross-product-of-every-axis-and-source stub fails this); that one entry has winningSource===declared.winningSource AND losingSource===declared.losingSource; the case's own ir.conflictResolution array has a matching entry for the same axis/winningSource/losingSource (three-way consistency: manifest ground truth, IR's own recorded precedence, and the live resolver all agree); three calls in this process are hash-identical`,
   async () => {
     const { manifest, error } = loadManifest();
     if (!manifest) return { ok: false, evidence: `cannot run: ${error}` };
     const conflictCases = manifest.cases.filter((c) => c.conflict !== null);
-    if (conflictCases.length < 3) return { ok: false, evidence: `only ${conflictCases.length} conflict-marked cases in manifest; C7-5 quota requires >=3`, detail: 'fewer than 3 conflict cases to test determinism against' };
+    if (conflictCases.length < 3) return { ok: false, evidence: `only ${conflictCases.length} conflict-marked cases in manifest; C7-5 quota requires >=3` };
 
     const imported = await importEvalModule(RESOLVE_CONFLICTS_PATH);
     if (!imported.ok) return { ok: false, evidence: imported.error };
@@ -740,48 +1051,48 @@ await probe(
         lines.push(`${c.id}: ${loaded.error}`);
         continue;
       }
-      const ir = JSON.parse(loaded.bytes.toString('utf8')) as unknown;
+      let ir: { conflictResolution?: Array<{ axis?: string; winningSource?: string; losingSource?: string }> };
+      try {
+        ir = JSON.parse(loaded.bytes.toString('utf8'));
+      } catch {
+        failures++;
+        lines.push(`${c.id}: IR is not valid JSON`);
+        continue;
+      }
+      const irEntry = (ir.conflictResolution ?? []).find((e) => e.axis === conflict.axis);
+      const irMatches = !!irEntry && irEntry.winningSource === conflict.winningSource && irEntry.losingSource === conflict.losingSource;
+
       const hashes: string[] = [];
-      let matchesDeclaredConflict = true;
+      let liveMatches = true;
       for (let run = 0; run < 3; run++) {
         // eslint-disable-next-line no-await-in-loop
         const out = await (resolveConflicts as (ir: unknown) => unknown | Promise<unknown>)(structuredClone(ir));
         const resolvedOut = out as { result?: unknown; losingClaims?: Array<{ axis?: string; losingSource?: string; winningSource?: string }> };
-        const hasMatch = Array.isArray(resolvedOut.losingClaims) && resolvedOut.losingClaims.some((lc) => lc.axis === conflict.axis && lc.losingSource === conflict.losingSource);
-        if (!hasMatch) matchesDeclaredConflict = false;
+        const nonNull = resolvedOut.result !== null && resolvedOut.result !== undefined;
+        const matchingForAxis = Array.isArray(resolvedOut.losingClaims) ? resolvedOut.losingClaims.filter((lc) => lc.axis === conflict.axis) : [];
+        const exactlyOne = matchingForAxis.length === 1;
+        const fieldsMatch = exactlyOne && matchingForAxis[0]!.winningSource === conflict.winningSource && matchingForAxis[0]!.losingSource === conflict.losingSource;
+        if (!nonNull || !fieldsMatch) liveMatches = false;
         hashes.push(sha256Of(resolvedOut));
       }
       const allSame = hashes.every((h) => h === hashes[0]);
-      if (!allSame || !matchesDeclaredConflict) {
-        failures++;
-        lines.push(`${c.id}: allSame=${allSame} matchesDeclaredConflict=${matchesDeclaredConflict} (expected axis=${conflict.axis} losingSource=${conflict.losingSource}) hashes=${hashes.join(',')}`);
-      } else {
-        lines.push(`${c.id}: deterministic across 3 runs (hash ${hashes[0]}), losing claim matches declared conflict (${conflict.axis}/${conflict.losingSource})`);
-      }
+      const ok = allSame && liveMatches && irMatches;
+      if (!ok) failures++;
+      lines.push(`${c.id}: allSame=${allSame} liveResolverMatches=${liveMatches} irConflictResolutionMatches=${irMatches} (declared axis=${conflict.axis} winning=${conflict.winningSource} losing=${conflict.losingSource}) hashes=${hashes.join(',')} -- ${ok ? 'OK' : 'FAIL'}`);
     }
-    return { ok: failures === 0, evidence: lines.join('\n'), detail: failures > 0 ? `${failures}/${conflictCases.length} conflict cases not deterministic or did not name the declared losing claim` : undefined };
+    return { ok: failures === 0, evidence: lines.join('\n'), detail: failures > 0 ? `${failures}/${conflictCases.length} conflict cases failed non-null-result, exactly-one-matching-claim, or IR-self-consistency` : undefined };
   },
 );
 
 // =============================================================================
-// C7-4 -- provenance pointers resolve; a REAL-nodeId-derangement control
-// scores zero (F5: no predictable sentinel, total checked both ways)
+// C7-4 -- provenance pointers resolve on the FULL (nodeId, domPath,
+// breakpoint) triple; THREE independent derangement controls (nodeId-only,
+// domPath-only, breakpoint-only) each drive resolution to zero (F5)
 // =============================================================================
-function derangeNodeIds(entries: Array<{ nodeId: string }>): string[] | null {
-  const original = entries.map((e) => e.nodeId);
-  const n = original.length;
-  if (n < 2) return null;
-  for (let shift = 1; shift < n; shift++) {
-    const candidate = original.map((_, i) => original[(i + shift) % n]!);
-    if (candidate.every((v, i) => v !== original[i])) return candidate;
-  }
-  return null;
-}
-
 await probe(
   'C7-4',
-  `dynamic-import ${PROVENANCE_RESOLVE_PATH}, call resolveProvenance(ir, snapshotsBySource) on real IR (expect total===provenance.length, resolved===total) and on a verifier-deranged IR built by permuting the REAL nodeIds among entries (expect resolved===0, total unchanged)`,
-  `${PROVENANCE_RESOLVE_PATH} exports resolveProvenance(ir, snapshots): { total, resolved, unresolvedPointers }; for every non-skip corpus case, total === ir.provenance.length on both the real and deranged IR, resolved === total > 0 on the real IR, and resolved === 0 on a control IR where every provenance[].nodeId is replaced by another entry's REAL nodeId (a permutation with no fixed points) rather than a synthetic sentinel string that could be special-cased`,
+  `dynamic-import ${PROVENANCE_RESOLVE_PATH}; call resolveProvenance(ir, snapshotsBySource) on the real IR (expect resolved===total===provenance.length) and on THREE independently-deranged controls -- nodeId-only, domPath-only, breakpoint-only -- each expecting resolved===0`,
+  `${PROVENANCE_RESOLVE_PATH} exports resolveProvenance(ir, snapshots): { total, resolved, unresolvedPointers }; snapshots carry the FULL captured node record (nodeId, domPath, breakpoint) per source, not nodeId alone; for every non-skip corpus case, total === ir.provenance.length and resolved === total > 0 on the real IR; on a control IR with ONLY nodeId deranged (domPath/breakpoint left correct), resolved === 0; independently, on a control with ONLY domPath deranged, resolved === 0; independently, on a control with ONLY breakpoint deranged, resolved === 0 -- a resolver that checks nodeId alone (ignoring domPath/breakpoint) passes the real case but fails at least one of the domPath-only/breakpoint-only controls, since those leave nodeId correct`,
   async () => {
     const { manifest, error } = loadManifest();
     if (!manifest) return { ok: false, evidence: `cannot run: ${error}` };
@@ -802,75 +1113,73 @@ await probe(
         lines.push(`${c.id}: ${loaded.error}`);
         continue;
       }
-      const ir = JSON.parse(loaded.bytes.toString('utf8')) as { provenance?: Array<{ sourceId: string; nodeId: string }> };
+      const ir = JSON.parse(loaded.bytes.toString('utf8')) as { provenance?: Array<{ sourceId: string; nodeId: string; domPath: string; breakpoint: string }> };
       if (!Array.isArray(ir.provenance) || ir.provenance.length < 2) {
         failures++;
-        lines.push(`${c.id}: IR has fewer than 2 provenance entries -- cannot build a fixed-point-free derangement control`);
+        lines.push(`${c.id}: IR has fewer than 2 provenance entries -- cannot build fixed-point-free derangement controls`);
         continue;
       }
-      const snapshotsBySource: Record<string, Array<{ nodeId: string }>> = {};
-      let snapshotLoadError: string | null = null;
-      for (const source of c.sources) {
-        const nodes: Array<{ nodeId: string }> = [];
-        for (const [bp, ref] of Object.entries(source.snapshots)) {
-          const snapDoc = loadSnapshotDoc(ref, c.sealed, `${c.id}-${source.id}-${bp}`);
-          if (!snapDoc.ok) {
-            snapshotLoadError = snapDoc.error;
-            break;
-          }
-          if (snapDoc.doc.nodes) nodes.push(...snapDoc.doc.nodes);
-        }
-        snapshotsBySource[source.id] = nodes;
-        if (snapshotLoadError) break;
-      }
-      if (snapshotLoadError) {
+      const snaps = buildSnapshotsBySource(c);
+      if (!snaps.ok) {
         failures++;
-        lines.push(`${c.id}: ${snapshotLoadError}`);
+        lines.push(`${c.id}: ${snaps.error}`);
         continue;
       }
+      const snapshotsBySource: Record<string, Array<{ nodeId: string; domPath: string; breakpoint: string }>> = {};
+      for (const [sourceId, nodes] of Object.entries(snaps.bySource)) snapshotsBySource[sourceId] = nodes.map((n) => ({ nodeId: n.nodeId, domPath: n.domPath, breakpoint: n.breakpoint }));
 
-      const deranged = derangeNodeIds(ir.provenance);
-      if (!deranged) {
-        failures++;
-        lines.push(`${c.id}: could not construct a derangement (all provenance nodeIds identical?)`);
-        continue;
-      }
+      const call = async (testIr: unknown) =>
+        (await (resolveProvenance as (ir: unknown, snaps: unknown) => unknown | Promise<unknown>)(testIr, snapshotsBySource)) as { total: number; resolved: number };
 
       // eslint-disable-next-line no-await-in-loop
-      const real = (await (resolveProvenance as (ir: unknown, snaps: unknown) => unknown | Promise<unknown>)(ir, snapshotsBySource)) as {
-        total: number;
-        resolved: number;
-      };
+      const real = await call(ir);
       const realOk = real.total === ir.provenance.length && real.resolved === real.total && real.total > 0;
 
-      const derangedIr = { ...ir, provenance: ir.provenance.map((p, i) => ({ ...p, nodeId: deranged[i]! })) };
-      // eslint-disable-next-line no-await-in-loop
-      const control = (await (resolveProvenance as (ir: unknown, snaps: unknown) => unknown | Promise<unknown>)(derangedIr, snapshotsBySource)) as {
-        total: number;
-        resolved: number;
-      };
-      const controlOk = control.total === ir.provenance.length && control.resolved === 0;
-
-      if (!realOk || !controlOk) {
-        failures++;
-        lines.push(`${c.id}: real(total=${real.total},resolved=${real.resolved},expectedTotal=${ir.provenance.length}) deranged-control(total=${control.total},resolved=${control.resolved}) -- expected real fully resolved with matching total, control zero`);
-      } else {
-        lines.push(`${c.id}: real fully resolves (${real.resolved}/${real.total}); nodeId-derangement control resolves to 0/${control.total}`);
+      const controls: { label: string; deranged: string[] | null; field: 'nodeId' | 'domPath' | 'breakpoint' }[] = [
+        { label: 'nodeId-only', deranged: derangeField(ir.provenance, 'nodeId'), field: 'nodeId' },
+        { label: 'domPath-only', deranged: derangeField(ir.provenance, 'domPath'), field: 'domPath' },
+        { label: 'breakpoint-only', deranged: derangeField(ir.provenance, 'breakpoint'), field: 'breakpoint' },
+      ];
+      let controlsOk = true;
+      const controlLines: string[] = [];
+      for (const ctl of controls) {
+        if (!ctl.deranged) {
+          controlsOk = false;
+          controlLines.push(`${ctl.label}: could not construct derangement`);
+          continue;
+        }
+        const derangedIr = { ...ir, provenance: ir.provenance.map((p, i) => ({ ...p, [ctl.field]: ctl.deranged![i] })) };
+        // eslint-disable-next-line no-await-in-loop
+        const control = await call(derangedIr);
+        const ok = control.total === ir.provenance.length && control.resolved === 0;
+        if (!ok) controlsOk = false;
+        controlLines.push(`${ctl.label}: total=${control.total} resolved=${control.resolved} (expect total=${ir.provenance.length}, resolved=0) -- ${ok ? 'OK' : 'FAIL'}`);
       }
+
+      const ok = realOk && controlsOk;
+      if (!ok) failures++;
+      lines.push(`${c.id}: real(total=${real.total},resolved=${real.resolved},expectedTotal=${ir.provenance.length},ok=${realOk})\n  ${controlLines.join('\n  ')} -- case ${ok ? 'OK' : 'FAIL'}`);
     }
-    return { ok: failures === 0, evidence: lines.join('\n'), detail: failures > 0 ? `${failures}/${nonSkipCases.length} cases failed real-resolve, total-check, or derangement-control-zero` : undefined };
+    return { ok: failures === 0, evidence: lines.join('\n'), detail: failures > 0 ? `${failures}/${nonSkipCases.length} cases failed real-resolve or one of the 3 independent field-derangement controls` : undefined };
   },
 );
 
 // =============================================================================
 // C7-5 -- corpus pinned, quota-satisfying, reproducible, and SUBSTANTIVE
-// (F6: closed genre/layout enums, distinct breakpoint widths, globally
-// distinct snapshot content, real degenerate/conflict semantics)
+// (F6: every declared breakpoint has a snapshot per source; layoutSystem is
+// validated against real captured computed-style evidence; conflict
+// metadata cross-references the IR's own conflictResolution record)
 // =============================================================================
+const LAYOUT_SYSTEM_EVIDENCE: Record<string, (style: Record<string, string>) => boolean> = {
+  'css-grid-first': (s) => /grid/i.test(s['display'] ?? ''),
+  'flex-utility': (s) => /flex/i.test(s['display'] ?? ''),
+  'absolute-canvas': (s) => /absolute|fixed/i.test(s['position'] ?? ''),
+};
+
 await probe(
   'C7-5',
-  `read ${MANIFEST_PATH} + ${CORPUS_MD_PATH}; assert each S7-2 quota row against a CLOSED genre/layout-system vocabulary; decrypt+re-hash every snapshot; require global content-hash distinctness, per-case distinct viewportWidths, a minimum node count, and real degenerate/conflict semantics`,
-  `${CORPUS_MD_PATH} exists; layoutSystem is drawn from [${ALLOWED_LAYOUT_SYSTEMS.join(', ')}] (>=3 distinct, i.e. all of them appear), genre from [${ALLOWED_GENRES.join(', ')}] (>=4 distinct, i.e. all of them appear); every non-skip case has >=2 breakpoints with no duplicate breakpoint names and each source's snapshot set for that case has a DISTINCT viewportWidth per breakpoint; >=3 cases with conflict!=null whose axis is in [${DIRECTIVE_AXES.join('/')}] and whose winningSource/losingSource are real source ids in that case; degenerate cases are semantically real -- single-source has exactly 1 source, nonexistent-element-directive has a directiveInventory scope matching no captured domPath, hostile-heavy-dom has >=200 total captured nodes; >=1 documented skip; every snapshot's re-computed plaintext sha256 (post-decrypt for sealed cases) matches the manifest, every snapshot has >=5 nodes, and NO TWO snapshot files anywhere in the corpus share a content hash`,
+  `read ${MANIFEST_PATH} + ${CORPUS_MD_PATH}; assert each S7-2 quota row against a CLOSED genre/layout-system vocabulary; require every source to have a snapshot for every declared breakpoint (cross-checked, not just counted); validate declared layoutSystem against real captured computedStyle evidence; decrypt+re-hash every snapshot; require global content-hash distinctness, per-case distinct viewportWidths, a minimum node count; conflict metadata cross-references the case's own IR conflictResolution record`,
+  `${CORPUS_MD_PATH} exists; layoutSystem in [${ALLOWED_LAYOUT_SYSTEMS.join(', ')}] (all 3 appear), genre in [${ALLOWED_GENRES.join(', ')}] (all 4 appear); every non-skip case's breakpoints has no duplicates, >=2 entries, and for EVERY source in that case, Object.keys(source.snapshots) is EXACTLY that breakpoint set (not merely >=2 in count -- a source missing one declared breakpoint's snapshot fails); css-grid-first cases have >=1 captured node with computedStyle.display matching /grid/, flex-utility have >=1 node with display matching /flex/, absolute-canvas have >=1 node with position matching /absolute|fixed/; >=3 conflict cases with a real axis + real distinct source ids, AND each case's decrypted IR has a conflictResolution entry matching that exact axis/winningSource/losingSource (cross-referencing the same record C7-3 exercises live); degenerate cases are semantically real; >=1 documented skip; every snapshot's re-computed plaintext sha256 matches the manifest, every snapshot has >=5 nodes, and NO TWO snapshot files anywhere in the corpus share a content hash`,
   async () => {
     if (!exists(CORPUS_MD_PATH)) return { ok: false, evidence: `missing ${CORPUS_MD_PATH}` };
     const { manifest, error } = loadManifest();
@@ -882,18 +1191,31 @@ await probe(
 
     const badLayout = nonSkip.filter((c) => !(ALLOWED_LAYOUT_SYSTEMS as readonly string[]).includes(c.layoutSystem));
     const layoutSystems = new Set(nonSkip.map((c) => c.layoutSystem));
-    rows.push({ row: `layoutSystem is closed-vocabulary and >=3 distinct`, ok: badLayout.length === 0 && layoutSystems.size >= 3, detail: `values=[${[...layoutSystems].join(', ')}] offVocab=${badLayout.map((c) => c.id).join(',') || 'none'}` });
+    rows.push({ row: 'layoutSystem is closed-vocabulary and >=3 distinct', ok: badLayout.length === 0 && layoutSystems.size >= 3, detail: `values=[${[...layoutSystems].join(', ')}] offVocab=${badLayout.map((c) => c.id).join(',') || 'none'}` });
 
     const badGenre = nonSkip.filter((c) => !(ALLOWED_GENRES as readonly string[]).includes(c.genre));
     const genres = new Set(nonSkip.map((c) => c.genre));
-    rows.push({ row: `genre is closed-vocabulary and >=4 distinct`, ok: badGenre.length === 0 && genres.size >= 4, detail: `values=[${[...genres].join(', ')}] offVocab=${badGenre.map((c) => c.id).join(',') || 'none'}` });
+    rows.push({ row: 'genre is closed-vocabulary and >=4 distinct', ok: badGenre.length === 0 && genres.size >= 4, detail: `values=[${[...genres].join(', ')}] offVocab=${badGenre.map((c) => c.id).join(',') || 'none'}` });
 
     const under2bp = nonSkip.filter((c) => c.breakpoints.length < 2);
     const dupBp = nonSkip.filter((c) => new Set(c.breakpoints).size !== c.breakpoints.length);
+    // F6: cross-check, not just count -- every source's snapshot key set
+    // must be EXACTLY the case's declared breakpoint set. A case that
+    // declares 2 breakpoints but a source only captured 1 now fails here.
+    const missingBpCoverage: string[] = [];
+    for (const c of nonSkip) {
+      const declared = new Set(c.breakpoints);
+      for (const source of c.sources) {
+        const have = new Set(Object.keys(source.snapshots));
+        const missing = [...declared].filter((bp) => !have.has(bp));
+        const extra = [...have].filter((bp) => !declared.has(bp));
+        if (missing.length > 0 || extra.length > 0) missingBpCoverage.push(`${c.id}/${source.id}: missing=[${missing.join(',')}] extra=[${extra.join(',')}]`);
+      }
+    }
     rows.push({
-      row: 'breakpoints >=2 per non-skip case, no literal duplicates',
-      ok: under2bp.length === 0 && dupBp.length === 0,
-      detail: `under2=${under2bp.map((c) => c.id).join(',') || 'none'} dup=${dupBp.map((c) => c.id).join(',') || 'none'}`,
+      row: 'breakpoints >=2 per non-skip case, no duplicates, and EVERY source has a snapshot for EVERY declared breakpoint (cross-checked)',
+      ok: under2bp.length === 0 && dupBp.length === 0 && missingBpCoverage.length === 0,
+      detail: `under2=${under2bp.map((c) => c.id).join(',') || 'none'} dup=${dupBp.map((c) => c.id).join(',') || 'none'} coverageGaps=${missingBpCoverage.join('; ') || 'none'}`,
     });
 
     const conflictCases = cases.filter((c) => c.conflict !== null);
@@ -902,19 +1224,40 @@ await probe(
       const sourceIds = new Set(c.sources.map((s) => s.id));
       return !DIRECTIVE_AXES.includes(conflict.axis as DirectiveAxis) || !sourceIds.has(conflict.winningSource) || !sourceIds.has(conflict.losingSource) || conflict.winningSource === conflict.losingSource;
     });
+    // F6: conflict metadata must cross-reference the case's OWN IR
+    // conflictResolution record (the same thing C7-3 exercises live).
+    const conflictCrossRefProblems: string[] = [];
+    for (const c of conflictCases) {
+      const loaded = loadCaseIRBytes(c);
+      if (!loaded.ok) {
+        conflictCrossRefProblems.push(`${c.id}: ${loaded.error}`);
+        continue;
+      }
+      let ir: { conflictResolution?: Array<{ axis?: string; winningSource?: string; losingSource?: string }> };
+      try {
+        ir = JSON.parse(loaded.bytes.toString('utf8'));
+      } catch {
+        conflictCrossRefProblems.push(`${c.id}: IR not valid JSON`);
+        continue;
+      }
+      const entry = (ir.conflictResolution ?? []).find((e) => e.axis === c.conflict!.axis);
+      if (!entry || entry.winningSource !== c.conflict!.winningSource || entry.losingSource !== c.conflict!.losingSource) {
+        conflictCrossRefProblems.push(`${c.id}: ir.conflictResolution has no entry matching declared axis=${c.conflict!.axis} winning=${c.conflict!.winningSource} losing=${c.conflict!.losingSource}`);
+      }
+    }
     rows.push({
-      row: 'conflict pairs >=3 cases, each with a real axis + real distinct winning/losing source ids',
-      ok: conflictCases.length >= 3 && badConflictSemantics.length === 0,
-      detail: `count=${conflictCases.length} semanticallyInvalid=${badConflictSemantics.map((c) => c.id).join(',') || 'none'}`,
+      row: 'conflict pairs >=3 cases, real axis + real distinct source ids, AND cross-referenced against the case IR conflictResolution record',
+      ok: conflictCases.length >= 3 && badConflictSemantics.length === 0 && conflictCrossRefProblems.length === 0,
+      detail: `count=${conflictCases.length} semanticallyInvalid=${badConflictSemantics.map((c) => c.id).join(',') || 'none'} crossRefProblems=${conflictCrossRefProblems.join('; ') || 'none'}`,
     });
 
     const skipCases = cases.filter((c) => c.skip !== null);
     const skipReasonsOk = skipCases.every((c) => c.skip && ['login-walled', 'bot-walled'].includes(c.skip.reason) && c.skip.target.length > 0);
     rows.push({ row: 'documented skip >=1 with valid reason+target', ok: skipCases.length >= 1 && skipReasonsOk, detail: `count=${skipCases.length}, reasonsOk=${skipReasonsOk}` });
 
-    // Snapshot decrypt + integrity + node-count + viewportWidth-distinctness +
-    // global content-hash distinctness, and degenerate-kind semantic checks,
-    // all in one pass over the (possibly-sealed) snapshot data.
+    // Snapshot decrypt + integrity + node-count + viewportWidth-distinctness
+    // + global content-hash distinctness + layoutSystem-content evidence +
+    // degenerate-kind semantic checks, in one pass over the snapshot data.
     let hashChecked = 0;
     let hashMismatches = 0;
     let tinySnapshots = 0;
@@ -922,12 +1265,15 @@ await probe(
     const globalHashLocations = new Map<string, string[]>();
     const caseNodeTotals = new Map<string, number>();
     const caseDomPaths = new Map<string, Set<string>>();
-    const perCaseBreakpointWidths = new Map<string, Map<string, Set<number>>>(); // caseId -> breakpoint -> widths seen
+    const caseLayoutEvidence = new Map<string, boolean>();
+    const perCaseBreakpointWidths = new Map<string, Map<string, Set<number>>>();
 
     for (const c of cases) {
       let nodeTotal = 0;
       const domPaths = new Set<string>();
       const bpWidths = new Map<string, Set<number>>();
+      const evidenceCheck = LAYOUT_SYSTEM_EVIDENCE[c.layoutSystem];
+      let layoutEvidenceFound = false;
       for (const source of c.sources) {
         for (const [bp, ref] of Object.entries(source.snapshots)) {
           hashChecked++;
@@ -946,10 +1292,13 @@ await probe(
           const nodes = loaded.doc.nodes ?? [];
           if (nodes.length < 5) {
             tinySnapshots++;
-            hashLines.push(`${label}: only ${nodes.length} nodes (< 5, looks like a placeholder capture)`);
+            hashLines.push(`${label}: only ${nodes.length} nodes (< 5)`);
           }
           nodeTotal += nodes.length;
-          for (const n of nodes) domPaths.add(n.domPath);
+          for (const n of nodes) {
+            domPaths.add(n.domPath);
+            if (evidenceCheck && n.computedStyle && evidenceCheck(n.computedStyle)) layoutEvidenceFound = true;
+          }
           const locs = globalHashLocations.get(actualHash) ?? [];
           locs.push(label);
           globalHashLocations.set(actualHash, locs);
@@ -965,20 +1314,26 @@ await probe(
       }
       caseNodeTotals.set(c.id, nodeTotal);
       caseDomPaths.set(c.id, domPaths);
+      caseLayoutEvidence.set(c.id, layoutEvidenceFound);
       perCaseBreakpointWidths.set(c.id, bpWidths);
     }
     rows.push({ row: 'snapshot content-hashes match manifest (pinned, post-decrypt for sealed)', ok: hashChecked > 0 && hashMismatches === 0, detail: `checked=${hashChecked} mismatches=${hashMismatches}` });
     rows.push({ row: 'every snapshot has >=5 nodes (not a tiny placeholder)', ok: tinySnapshots === 0, detail: `tinySnapshots=${tinySnapshots}` });
 
+    const layoutEvidenceProblems = nonSkip.filter((c) => LAYOUT_SYSTEM_EVIDENCE[c.layoutSystem] && !caseLayoutEvidence.get(c.id));
+    rows.push({
+      row: 'declared layoutSystem is backed by real captured computedStyle evidence (grid/flex/absolute-position presence)',
+      ok: layoutEvidenceProblems.length === 0,
+      detail: layoutEvidenceProblems.length ? layoutEvidenceProblems.map((c) => `${c.id}: no node evidences layoutSystem="${c.layoutSystem}"`).join('; ') : 'all cases have supporting evidence',
+    });
+
     const duplicateHashes = [...globalHashLocations.entries()].filter(([, locs]) => locs.length > 1);
     rows.push({
-      row: 'snapshot content is GLOBALLY distinct across the whole corpus (no reused/duplicate captures)',
+      row: 'snapshot content is GLOBALLY distinct across the whole corpus',
       ok: duplicateHashes.length === 0,
       detail: duplicateHashes.length ? duplicateHashes.map(([h, locs]) => `${h.slice(0, 12)}...: ${locs.join(', ')}`).join('; ') : `all ${globalHashLocations.size} snapshot hashes distinct`,
     });
 
-    // Cross-breakpoint viewportWidth must actually differ within a case+source
-    // set -- otherwise "mobile" and "desktop" could be the same capture twice.
     let widthCollisions = 0;
     const widthLines: string[] = [];
     for (const [caseId, bpWidths] of perCaseBreakpointWidths) {
@@ -988,9 +1343,8 @@ await probe(
         widthLines.push(`${caseId}: duplicate viewportWidth across declared breakpoints (${allWidths.join(',')})`);
       }
     }
-    rows.push({ row: 'each case has a distinct viewportWidth per breakpoint (not the same capture relabeled)', ok: widthCollisions === 0, detail: widthLines.join('; ') || 'no collisions' });
+    rows.push({ row: 'each case has a distinct viewportWidth per breakpoint', ok: widthCollisions === 0, detail: widthLines.join('; ') || 'no collisions' });
 
-    // Degenerate-kind substantive checks.
     const degenerateProblems: string[] = [];
     for (const kind of ['single-source', 'nonexistent-element-directive', 'hostile-heavy-dom'] as const) {
       const matching = cases.filter((c) => c.degenerate === kind);
@@ -999,9 +1353,7 @@ await probe(
         continue;
       }
       for (const c of matching) {
-        if (kind === 'single-source' && c.sources.length !== 1) {
-          degenerateProblems.push(`${c.id}: degenerate="single-source" but sources.length=${c.sources.length}`);
-        }
+        if (kind === 'single-source' && c.sources.length !== 1) degenerateProblems.push(`${c.id}: degenerate="single-source" but sources.length=${c.sources.length}`);
         if (kind === 'nonexistent-element-directive') {
           const domPaths = caseDomPaths.get(c.id) ?? new Set();
           const hasUnresolvableScope = c.directiveInventory.some((d) => !domPaths.has(d.scope));
@@ -1013,7 +1365,7 @@ await probe(
         }
       }
     }
-    rows.push({ row: 'degenerate cases are semantically real (single-source/nonexistent-element/hostile-heavy-dom actually hold)', ok: degenerateProblems.length === 0, detail: degenerateProblems.join('; ') || 'all degenerate cases verified' });
+    rows.push({ row: 'degenerate cases are semantically real', ok: degenerateProblems.length === 0, detail: degenerateProblems.join('; ') || 'all degenerate cases verified' });
 
     const failed = rows.filter((r) => !r.ok);
     const evidence = [...rows.map((r) => `[${r.ok ? 'OK' : 'FAIL'}] ${r.row} -- ${r.detail}`), ...hashLines].join('\n');
@@ -1021,27 +1373,30 @@ await probe(
   },
 );
 
-// Shared fixture loader for the criteria below: reads input.json, blinds it
-// down to {caseId, composition} (F9), requires the caseId to reference a
-// real corpus case (F7 corpus-membership), and returns the blinded content's
-// stable hash for cross-fixture uniqueness checks (F7).
-function loadBlindedFixture(relDir: string, manifest: CorpusManifest): { ok: true; input: ScoringInput; blindHash: string; extraKeys: string[] } | { ok: false; error: string } {
+// Shared fixture loader for the implementer-fixture (non-load-bearing)
+// checks below: reads input.json, deep-blinds it (F7), requires the caseId
+// to reference a real corpus case, and returns the blinded content's stable
+// hash for cross-fixture uniqueness checks.
+function loadBlindedFixture(relDir: string, manifest: CorpusManifest): { ok: true; input: ScoringInput; blindHash: string } | { ok: false; error: string } {
   const raw = readJson<unknown>(path.join(relDir, 'input.json'));
   if (raw === null) return { ok: false, error: `${relDir}: missing or invalid input.json` };
   const blinded = blindInput(raw);
   if (!blinded.ok) return { ok: false, error: `${relDir}: ${blinded.error}` };
-  if (!manifest.cases.some((c) => c.id === blinded.input.caseId)) return { ok: false, error: `${relDir}: caseId "${blinded.input.caseId}" is not a real corpus case (not corpus-derived)` };
-  return { ok: true, input: blinded.input, blindHash: sha256Of(blinded.input), extraKeys: blinded.extraKeys };
+  if (!manifest.cases.some((c) => c.id === blinded.input.caseId)) return { ok: false, error: `${relDir}: caseId "${blinded.input.caseId}" is not a real corpus case` };
+  return { ok: true, input: blinded.input, blindHash: sha256Of(blinded.input) };
 }
 
 // =============================================================================
-// C7-6 -- grader discriminates on a population, not an example (F7: corpus
-// membership + uniqueness required; F9/F12: blinded input + range-checked)
+// C7-6 -- grader discriminates on a population, not an example. F7: the
+// "wrong" population is now VERIFIER-BUILT by mutating real faithful
+// compositions (cross-case attribution swap), removing the implementer from
+// authoring ground truth entirely; implementer-provided fixtures (if any)
+// remain non-load-bearing extras reported alongside.
 // =============================================================================
 await probe(
   'C7-6',
-  `dynamic-import ${SCORER_INDEX_PATH}; blind + corpus-membership-check + uniqueness-check every fixture under ${POPULATION_DIR}/{wrong,faithful}; score the blinded {caseId,composition} only; assert no overlap between the two score distributions`,
-  `${POPULATION_DIR}/wrong/<id>/input.json (>=5) and ${POPULATION_DIR}/faithful/<id>/input.json (>=5) each declare a caseId that is a real ${MANIFEST_PATH} case; after blinding to {caseId,composition} (F9), no two fixtures across BOTH groups share an identical blinded content hash (F7 uniqueness); each blinded fixture scores via scoreComposition(input).overall, in [0,1] (F12); max(wrong scores) < min(faithful scores) -- zero distribution overlap`,
+  `dynamic-import ${SCORER_INDEX_PATH}; for >=5 eligible corpus cases build a real faithfulComposition (verifier-built, "faithful" population) and a cross-case-attribution-swapped mutation of it (verifier-built, "wrong" population -- every element's sourceId replaced with a source id belonging to a DIFFERENT case entirely); score both populations and assert zero distribution overlap; also score any implementer-provided fixtures under ${POPULATION_DIR} as an additional, non-load-bearing check`,
+  `>=5 corpus cases (non-sealed, non-skip, directiveInventory-resolvable) each yield a faithful composition and a cross-case-mutated "wrong" counterpart (every sourceId replaced by a source id foreign to that case); scoreComposition(input).overall in [0,1] (F12) for all 10; max(wrong scores) < min(faithful scores); implementer fixtures under ${POPULATION_DIR}/{wrong,faithful} (if present) must also be corpus-derived + blinded + mutually unique and are scored as an additional, non-load-bearing signal`,
   async () => {
     const { manifest, error } = loadManifest();
     if (!manifest) return { ok: false, evidence: `cannot run: ${error}` };
@@ -1050,140 +1405,203 @@ await probe(
     const scoreComposition = imported.mod['scoreComposition'];
     if (typeof scoreComposition !== 'function') return { ok: false, evidence: `${SCORER_INDEX_PATH} does not export scoreComposition` };
 
-    const seenHashes = new Map<string, string>(); // blindHash -> first location
-    const scoreGroup = async (subdir: 'wrong' | 'faithful'): Promise<{ ids: string[]; scores: number[]; errors: string[] }> => {
+    const eligible = manifest.cases.filter((c) => !c.sealed && !c.skip && c.directiveInventory.length >= 1 && faithfulComposition(c) !== null);
+    if (eligible.length < 5) return { ok: false, evidence: `only ${eligible.length} eligible (non-sealed, non-skip, resolvable) corpus cases, need >=5` };
+
+    const scoreOne = async (caseId: string, composition: CompositionElement[]): Promise<{ score: number; errors: string[] }> => {
+      const input: ScoringInput = { caseId, composition };
+      const out = (await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)(input)) as { overall?: unknown; axes?: unknown };
+      const errs = scoreRangeErrors(out);
+      return { score: errs.length === 0 ? (out.overall as number) : NaN, errors: errs };
+    };
+
+    const faithfulScores: number[] = [];
+    const wrongScores: number[] = [];
+    const lines: string[] = [];
+    const errors: string[] = [];
+    for (let i = 0; i < Math.min(eligible.length, 8); i++) {
+      const c = eligible[i]!;
+      const faithful = faithfulComposition(c)!;
+      // eslint-disable-next-line no-await-in-loop
+      const faithfulResult = await scoreOne(c.id, faithful);
+      if (faithfulResult.errors.length > 0) {
+        errors.push(`${c.id} faithful: ${faithfulResult.errors.join('; ')}`);
+      } else {
+        faithfulScores.push(faithfulResult.score);
+        lines.push(`${c.id} faithful=${faithfulResult.score.toFixed(3)}`);
+      }
+
+      const foreign = eligible.find((other) => other.id !== c.id && !c.sources.some((s) => other.sources.some((os) => os.id === s.id)));
+      if (!foreign) {
+        errors.push(`${c.id}: no foreign case with a disjoint source-id set to build a cross-case mutation from`);
+        continue;
+      }
+      const foreignSourceId = foreign.sources[0]!.id;
+      const wrong = faithful.map((el) => ({ ...el, sourceId: foreignSourceId }));
+      // eslint-disable-next-line no-await-in-loop
+      const wrongResult = await scoreOne(c.id, wrong);
+      if (wrongResult.errors.length > 0) {
+        errors.push(`${c.id} wrong (foreign source ${foreignSourceId} from ${foreign.id}): ${wrongResult.errors.join('; ')}`);
+      } else {
+        wrongScores.push(wrongResult.score);
+        lines.push(`${c.id} wrong(foreignSource=${foreignSourceId} from ${foreign.id})=${wrongResult.score.toFixed(3)}`);
+      }
+    }
+    if (faithfulScores.length < 5) errors.push(`only ${faithfulScores.length} valid verifier-built "faithful" scores, need >=5`);
+    if (wrongScores.length < 5) errors.push(`only ${wrongScores.length} valid verifier-built "wrong" scores, need >=5`);
+    if (errors.length > 0) return { ok: false, evidence: [...lines, ...errors].join('\n') };
+
+    const maxWrong = Math.max(...wrongScores);
+    const minFaithful = Math.min(...faithfulScores);
+    const separated = maxWrong < minFaithful;
+
+    // Additional, non-load-bearing: implementer fixtures, if provided.
+    const seenHashes = new Map<string, string>();
+    const fixtureLines: string[] = [];
+    const scoreImplementerGroup = async (subdir: 'wrong' | 'faithful'): Promise<number> => {
       const dir = abs(path.join(POPULATION_DIR, subdir));
-      const ids: string[] = [];
-      const scores: number[] = [];
-      const errors: string[] = [];
-      if (!fs.existsSync(dir)) return { ids, scores, errors: [`missing directory ${POPULATION_DIR}/${subdir}`] };
+      if (!fs.existsSync(dir)) {
+        fixtureLines.push(`${subdir}: no implementer fixtures present (not required)`);
+        return 0;
+      }
+      let count = 0;
       for (const entry of fs.readdirSync(dir)) {
         const relDir = path.join(POPULATION_DIR, subdir, entry);
         const loaded = loadBlindedFixture(relDir, manifest);
         if (!loaded.ok) {
-          errors.push(loaded.error);
+          fixtureLines.push(`${relDir}: ${loaded.error}`);
           continue;
         }
-        const dupLocation = seenHashes.get(loaded.blindHash);
-        if (dupLocation) {
-          errors.push(`${relDir}: blinded content is identical to ${dupLocation} -- not a distinct population member`);
+        const dup = seenHashes.get(loaded.blindHash);
+        if (dup) {
+          fixtureLines.push(`${relDir}: blinded content identical to ${dup}`);
           continue;
         }
         seenHashes.set(loaded.blindHash, relDir);
         // eslint-disable-next-line no-await-in-loop
-        const out = (await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)(loaded.input)) as { overall?: number; axes?: unknown };
-        const rangeErrors = scoreRangeErrors(out);
-        if (rangeErrors.length > 0) {
-          errors.push(`${relDir}: ${rangeErrors.join('; ')}`);
-          continue;
-        }
-        ids.push(entry);
-        scores.push(out.overall as number);
+        const out = (await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)(loaded.input)) as { overall?: unknown; axes?: unknown };
+        const re = scoreRangeErrors(out);
+        fixtureLines.push(`${relDir}: score=${re.length === 0 ? (out.overall as number).toFixed(3) : `INVALID (${re.join('; ')})`}`);
+        count++;
       }
-      return { ids, scores, errors };
+      return count;
     };
+    const implementerWrongCount = await scoreImplementerGroup('wrong');
+    const implementerFaithfulCount = await scoreImplementerGroup('faithful');
 
-    const wrong = await scoreGroup('wrong');
-    const faithful = await scoreGroup('faithful');
-    const errors = [...wrong.errors, ...faithful.errors];
-    if (wrong.scores.length < 5) errors.push(`only ${wrong.scores.length} valid "wrong" fixtures, need >=5`);
-    if (faithful.scores.length < 5) errors.push(`only ${faithful.scores.length} valid "faithful" fixtures, need >=5`);
-    if (errors.length > 0) return { ok: false, evidence: errors.join('\n') };
-
-    const maxWrong = Math.max(...wrong.scores);
-    const minFaithful = Math.min(...faithful.scores);
-    const separated = maxWrong < minFaithful;
     const evidence = [
-      `wrong: [${wrong.ids.map((id, i) => `${id}=${wrong.scores[i]?.toFixed(3)}`).join(', ')}] max=${maxWrong.toFixed(3)}`,
-      `faithful: [${faithful.ids.map((id, i) => `${id}=${faithful.scores[i]?.toFixed(3)}`).join(', ')}] min=${minFaithful.toFixed(3)}`,
-      `separated (max(wrong) < min(faithful)): ${separated}`,
+      ...lines,
+      `verifier-built: wrong max=${maxWrong.toFixed(3)} faithful min=${minFaithful.toFixed(3)} separated=${separated}`,
+      `implementer fixtures (additional, non-load-bearing): wrong=${implementerWrongCount} faithful=${implementerFaithfulCount}`,
+      ...fixtureLines,
     ].join('\n');
-    return { ok: separated, evidence, detail: separated ? undefined : 'score distributions overlap' };
+    return { ok: separated, evidence, detail: separated ? undefined : 'verifier-built score distributions overlap' };
   },
 );
 
 // =============================================================================
-// C7-7 -- source bleed metric: LOAD-BEARING check is a verifier-constructed
-// control built from real corpus snapshot domPaths (F8); implementer unit
-// tests remain required but are additional, non-load-bearing (F8)
+// C7-7 -- source bleed: verifier-constructed controls now cover BOTH a
+// domPath-membership bleed AND a style-fingerprint bleed (F8) -- an element
+// can be correctly attributed by domPath yet still carry a computed-style
+// cluster injected from a non-selected source, and the metric must catch
+// that too, not just DOM-path set membership.
 // =============================================================================
 await probe(
   'C7-7',
-  `dynamic-import ${SOURCE_BLEED_PATH} and call its bleed-scoring export DIRECTLY on a verifier-built clean composition (all elements' domPaths genuinely belong to their attributed source's own snapshot) vs a verifier-built injected-bleed composition (one element's sourceId is reassigned to a source whose snapshot does NOT contain that domPath); ALSO run \`node --import tsx --test ${SOURCE_BLEED_TEST_PATH}\` as an additional, non-load-bearing check`,
-  `${SOURCE_BLEED_PATH} exports scoreSourceBleed({composition, sourceDomPaths}): {bleedCount, violatingElementIds} (or equivalent violation list); on the verifier-built clean composition bleedCount === 0; on the verifier-built injected-bleed composition bleedCount >= 1 and the injected element id appears in the violation list -- this uses no source "name" field at all, so a name-grep implementation cannot pass by construction; ${SOURCE_BLEED_TEST_PATH} additionally passes with named clean/injected-bleed/absent-name control cases`,
+  `dynamic-import ${SOURCE_BLEED_PATH}; build THREE verifier compositions from real captured node+style data -- clean, domPath-membership-bled (one element's domPath/nodeId genuinely belongs to a different source), and style-fingerprint-bled (one element's domPath/nodeId are correct but its styleFingerprint is injected from a non-selected source's real captured style cluster) -- call scoreSourceBleed directly on all three; ALSO run the implementer test suite as an additional, non-load-bearing check`,
+  `${SOURCE_BLEED_PATH} exports scoreSourceBleed({composition, sourceDomPaths, sourceStyleFingerprints}): {bleedCount, violatingElementIds}; clean composition scores bleedCount===0; domPath-membership-bled scores bleedCount>=1 including "bleed-el-0"; style-fingerprint-bled (domPath/nodeId correct, only styleFingerprint injected from a different real source) ALSO scores bleedCount>=1 including "bleed-el-0" -- a domPath-set-membership-only implementation passes the second control but fails the third by construction; ${SOURCE_BLEED_TEST_PATH} additionally passes with named clean/injected-bleed/absent-name control cases`,
   async () => {
     if (!exists(SOURCE_BLEED_PATH)) return { ok: false, evidence: `missing ${SOURCE_BLEED_PATH}` };
     const { manifest, error } = loadManifest();
     if (!manifest) return { ok: false, evidence: `cannot run: ${error}` };
 
-    let target: { c: CorpusCase; domPathsBySource: Record<string, string[]> } | null = null;
+    let target: { c: CorpusCase; bySource: Record<string, ResolvableNode[]>; sourceA: string; sourceB: string; nodeA: ResolvableNode; nodeB: ResolvableNode; fpA: string; fpB: string } | null = null;
     for (const c of manifest.cases.filter((cc) => !cc.sealed && !cc.skip)) {
-      const domPathsBySource: Record<string, string[]> = {};
-      let loadError: string | null = null;
-      for (const source of c.sources) {
-        const set = new Set<string>();
-        for (const [bp, ref] of Object.entries(source.snapshots)) {
-          const loaded = loadSnapshotDoc(ref, c.sealed, `${c.id}-${source.id}-${bp}`);
-          if (!loaded.ok) {
-            loadError = loaded.error;
-            break;
-          }
-          for (const n of loaded.doc.nodes ?? []) set.add(n.domPath);
-        }
-        domPathsBySource[source.id] = [...set];
-        if (loadError) break;
-      }
-      if (loadError) continue;
-      const usable = Object.entries(domPathsBySource).filter(([, paths]) => paths.length > 0);
-      if (usable.length >= 2) {
-        target = { c, domPathsBySource };
-        break;
-      }
+      const snaps = buildSnapshotsBySource(c);
+      if (!snaps.ok) continue;
+      const sourceIds = Object.keys(snaps.bySource).filter((id) => (snaps.bySource[id]?.length ?? 0) > 0);
+      if (sourceIds.length < 2) continue;
+      const [sourceA, sourceB] = sourceIds;
+      const nodesA = snaps.bySource[sourceA!]!;
+      const nodesB = snaps.bySource[sourceB!]!;
+      const nodeA = nodesA.find((n) => styleFingerprintOf(n.computedStyle));
+      if (!nodeA) continue;
+      const fpA = styleFingerprintOf(nodeA.computedStyle)!;
+      const nodeB = nodesB.find((n) => {
+        const fp = styleFingerprintOf(n.computedStyle);
+        return fp && fp !== fpA;
+      });
+      if (!nodeB) continue;
+      target = { c, bySource: snaps.bySource, sourceA: sourceA!, sourceB: sourceB!, nodeA, nodeB, fpA, fpB: styleFingerprintOf(nodeB.computedStyle)! };
+      break;
     }
-    if (!target) return { ok: false, evidence: 'no corpus case with >=2 sources each having >=1 captured domPath was found to build a bleed control from' };
+    if (!target) return { ok: false, evidence: 'no corpus case with >=2 sources each carrying distinct real computedStyle fingerprints was found to build bleed controls from' };
 
-    const [sourceA, sourceB] = Object.entries(target.domPathsBySource).filter(([, p]) => p.length > 0);
-    const pathsA = sourceA![1];
-    const clean: CompositionElement[] = pathsA.slice(0, Math.min(5, pathsA.length)).map((p, i) => ({ elementId: `bleed-el-${i}`, sourceId: sourceA![0], domPath: p }));
-    const bled: CompositionElement[] = clean.map((el, i) => (i === 0 ? { ...el, sourceId: sourceB![0] } : el));
+    const nodesA = target.bySource[target.sourceA]!;
+    const cleanPool = nodesA.filter((n) => n.nodeId !== target!.nodeA.nodeId).slice(0, 4);
+    const clean: CompositionElement[] = [target.nodeA, ...cleanPool].map((n, i) => {
+      const fp = styleFingerprintOf(n.computedStyle);
+      const el: CompositionElement = { elementId: `bleed-el-${i}`, sourceId: target!.sourceA, domPath: n.domPath, nodeId: n.nodeId, breakpoint: n.breakpoint };
+      if (fp) el.styleFingerprint = fp;
+      return el;
+    });
+    const domPathBled = clean.map((el, i) => (i === 0 ? { ...el, domPath: target!.nodeB.domPath, nodeId: target!.nodeB.nodeId, breakpoint: target!.nodeB.breakpoint } : el));
+    const styleBled = clean.map((el, i) => (i === 0 ? { ...el, styleFingerprint: target!.fpB } : el));
+
+    const sourceDomPaths: Record<string, string[]> = {};
+    const sourceStyleFingerprints: Record<string, string[]> = {};
+    for (const [sourceId, nodes] of Object.entries(target.bySource)) {
+      sourceDomPaths[sourceId] = nodes.map((n) => n.domPath);
+      sourceStyleFingerprints[sourceId] = [...new Set(nodes.map((n) => styleFingerprintOf(n.computedStyle)).filter((v): v is string => v !== null))];
+    }
 
     const imported = await importEvalModule(SOURCE_BLEED_PATH);
     if (!imported.ok) return { ok: false, evidence: imported.error };
     const scoreSourceBleed = imported.mod['scoreSourceBleed'];
     if (typeof scoreSourceBleed !== 'function') return { ok: false, evidence: `${SOURCE_BLEED_PATH} does not export a scoreSourceBleed function` };
-
     const call = async (composition: CompositionElement[]) =>
-      (await (scoreSourceBleed as (i: unknown) => unknown | Promise<unknown>)({ composition, sourceDomPaths: target!.domPathsBySource })) as { bleedCount?: number; violatingElementIds?: string[] };
+      (await (scoreSourceBleed as (i: unknown) => unknown | Promise<unknown>)({ composition, sourceDomPaths, sourceStyleFingerprints })) as { bleedCount?: unknown; violatingElementIds?: unknown };
+
     const cleanResult = await call(clean);
-    const bledResult = await call(bled);
-    const cleanOk = cleanResult.bleedCount === 0;
-    const bledOk = (bledResult.bleedCount ?? 0) >= 1 && Array.isArray(bledResult.violatingElementIds) && bledResult.violatingElementIds.includes('bleed-el-0');
+    const domPathBledResult = await call(domPathBled);
+    const styleBledResult = await call(styleBled);
+    const validCounts = isValidCount(cleanResult.bleedCount) && isValidCount(domPathBledResult.bleedCount) && isValidCount(styleBledResult.bleedCount);
+    const cleanOk = validCounts && cleanResult.bleedCount === 0;
+    const domPathOk = validCounts && (domPathBledResult.bleedCount as number) >= 1 && Array.isArray(domPathBledResult.violatingElementIds) && domPathBledResult.violatingElementIds.includes('bleed-el-0');
+    const styleOk = validCounts && (styleBledResult.bleedCount as number) >= 1 && Array.isArray(styleBledResult.violatingElementIds) && styleBledResult.violatingElementIds.includes('bleed-el-0');
 
     const testRun = runNodeTest([SOURCE_BLEED_TEST_PATH]);
     const needles = ['clean', 'inject', 'absent'];
     const missingNeedles = needles.filter((n) => !testRun.tests.some((t) => t.name.toLowerCase().includes(n) && t.pass));
     const testsOk = testRun.status === 0 && testRun.tests.length > 0 && missingNeedles.length === 0;
 
-    const ok = cleanOk && bledOk && testsOk;
+    const ok = cleanOk && domPathOk && styleOk && testsOk;
     const evidence = [
-      `case=${target.c.id}`,
-      `clean composition -> ${JSON.stringify(cleanResult)} (expect bleedCount=0): ${cleanOk ? 'OK' : 'FAIL'}`,
-      `injected-bleed composition -> ${JSON.stringify(bledResult)} (expect bleedCount>=1 incl. bleed-el-0): ${bledOk ? 'OK' : 'FAIL'}`,
+      `case=${target.c.id} sourceA=${target.sourceA} sourceB=${target.sourceB}`,
+      `clean -> ${JSON.stringify(cleanResult)} (expect bleedCount=0): ${cleanOk ? 'OK' : 'FAIL'}`,
+      `domPath-membership-bled -> ${JSON.stringify(domPathBledResult)} (expect bleedCount>=1 incl. bleed-el-0): ${domPathOk ? 'OK' : 'FAIL'}`,
+      `style-fingerprint-bled -> ${JSON.stringify(styleBledResult)} (expect bleedCount>=1 incl. bleed-el-0): ${styleOk ? 'OK' : 'FAIL'}`,
       `implementer test suite (additional, non-load-bearing): exit=${testRun.status} missingNeedles=${missingNeedles.join(',') || 'none'}`,
-      testRun.tests.map((t) => `  ${t.pass ? 'PASS' : 'FAIL'} ${t.name}`).join('\n'),
     ].join('\n');
-    return { ok, evidence, detail: ok ? undefined : `cleanOk=${cleanOk} bledOk=${bledOk} testsOk=${testsOk}` };
+    return { ok, evidence, detail: ok ? undefined : `cleanOk=${cleanOk} domPathOk=${domPathOk} styleOk=${styleOk} testsOk=${testsOk}` };
   },
 );
 
 // =============================================================================
-// C7-8 -- diversity: LOAD-BEARING check is a verifier-constructed structural
-// identity control (F8); implementer unit tests remain required, additional
+// C7-8 -- diversity: FOUR independent axis-isolation trios (F8), one per
+// pre-registered axis (section-order, layout-skeleton, motion-timeline,
+// breakpoint-behavior), each varying ONLY that axis and required to move
+// the metric on its own; plus the identical-trio negative control.
 // =============================================================================
+function rotateArray<T>(arr: T[], shift: number): T[] {
+  const n = arr.length;
+  return arr.map((_, i) => arr[(i + shift) % n]!);
+}
+
 await probe(
   'C7-8',
-  `read ${DIVERSITY_AXES_PATH}; dynamic-import ${DIVERSITY_PATH} and call its scoring export DIRECTLY on a verifier-built structurally-IDENTICAL trio (proxy for recolor/class-only variation, since the composition contract carries no color/class data -- three identical structures) vs a verifier-built structurally-DIFFERENT trio (different source attribution per element + reversed section order); ALSO run \`node --import tsx --test ${DIVERSITY_TEST_PATH}\` as an additional, non-load-bearing check`,
-  `${DIVERSITY_AXES_PATH} freezes >=4 pre-registered axes including layout-skeleton/section-order/motion-timeline/breakpoint-behavior; ${DIVERSITY_PATH} exports a diversity-scoring function taking an array of compositions; on the identical trio the score is < floors.structural_variant_diversity; on the structurally-different trio the score is >= that floor; ${DIVERSITY_TEST_PATH} additionally passes with named recolor-only/class-names-only control cases`,
+  `read ${DIVERSITY_AXES_PATH}; dynamic-import ${DIVERSITY_PATH}; build 4 INDEPENDENT axis-isolated trios from a real faithful composition (section order permuted alone / domPath-skeleton varied alone / motionSignature varied alone / breakpoint varied alone) plus the identical-trio control; call scoreDiversity directly on all 5; ALSO run the implementer test suite as an additional, non-load-bearing check`,
+  `${DIVERSITY_AXES_PATH} freezes >=4 pre-registered axes (layout-skeleton/section-order/motion-timeline/breakpoint-behavior); ${DIVERSITY_PATH} exports scoreDiversity(compositions[]): {score}, a finite number in [0,1] (F12); the fully-identical trio scores < floors.structural_variant_diversity; EACH of the 4 axis-isolated trios (holding every other axis fixed) independently scores >= that floor -- a scorer testing only "any change" or only 2 of the 4 axes fails at least one isolated case; ${DIVERSITY_TEST_PATH} additionally passes with named recolor-only/class-names-only control cases`,
   async () => {
     const axes = readJson<{ axes?: Array<{ name: string }> }>(DIVERSITY_AXES_PATH);
     if (axes === null || !Array.isArray(axes.axes)) return { ok: false, evidence: `missing or invalid ${DIVERSITY_AXES_PATH}` };
@@ -1193,635 +1611,57 @@ await probe(
     if (missingAxes.length > 0) return { ok: false, evidence: `${DIVERSITY_AXES_PATH} is missing pre-registered axes matching: ${missingAxes.join(', ')} (found: ${names.join(', ')})` };
     if (!exists(DIVERSITY_PATH)) return { ok: false, evidence: `missing ${DIVERSITY_PATH}` };
 
-    const floors = readJson<{ floors?: Record<string, number> }>(FLOORS_PATH);
-    const floor = floors?.floors?.['structural_variant_diversity'];
+    const floorsDoc = readJson<{ floors?: Record<string, number> }>(FLOORS_PATH);
+    const floor = floorsDoc?.floors?.['structural_variant_diversity'];
     if (typeof floor !== 'number') return { ok: false, evidence: `${FLOORS_PATH} missing numeric floors.structural_variant_diversity` };
 
     const { manifest, error } = loadManifest();
     if (!manifest) return { ok: false, evidence: `cannot run: ${error}` };
     const c = pickCaseWithDirectives(manifest, 2);
-    if (!c) return { ok: false, evidence: 'no non-sealed, non-skip corpus case with >=2 sources and >=1 directiveInventory entries to build a diversity control from' };
+    if (!c) return { ok: false, evidence: 'no non-sealed, non-skip corpus case with >=2 sources and a resolvable faithful composition to build diversity controls from' };
+    const base = faithfulComposition(c)!;
+    if (base.length < 2) return { ok: false, evidence: `case ${c.id}'s faithful composition has fewer than 2 elements -- cannot vary section order meaningfully` };
+    if (c.breakpoints.length < 2) return { ok: false, evidence: `case ${c.id} declares fewer than 2 breakpoints -- cannot build an independent breakpoint-behavior trio` };
 
-    const base = faithfulComposition(c);
     const identicalTrio = [base, base.map((e) => ({ ...e })), base.map((e) => ({ ...e }))];
-    const sourceIds = c.sources.map((s) => s.id);
-    const rotated = base.map((el) => ({ ...el, sourceId: sourceIds[(sourceIds.indexOf(el.sourceId) + 1) % sourceIds.length]! }));
-    const reversed = [...base].reverse();
-    const diverseTrio = [base, rotated, reversed];
+    const sectionOrderTrio = [base, rotateArray(base, 1), [...base].reverse()];
+    const skeletonTrio = [base, base.map((e) => ({ ...e, domPath: `${e.domPath}#skeleton-b` })), base.map((e) => ({ ...e, domPath: `${e.domPath}#skeleton-c` }))];
+    const motionTrio = [base.map((e) => ({ ...e, motionSignature: 'timeline-a' })), base.map((e) => ({ ...e, motionSignature: 'timeline-b' })), base.map((e) => ({ ...e, motionSignature: 'timeline-c' }))];
+    const [bpA, bpB] = c.breakpoints;
+    const breakpointTrio = [base.map((e) => ({ ...e, breakpoint: bpA! })), base.map((e) => ({ ...e, breakpoint: bpB! })), base.map((e, i) => ({ ...e, breakpoint: c.breakpoints[(i + 1) % c.breakpoints.length]! }))];
 
     const imported = await importEvalModule(DIVERSITY_PATH);
     if (!imported.ok) return { ok: false, evidence: imported.error };
     const scoreDiversity = imported.mod['scoreDiversity'];
     if (typeof scoreDiversity !== 'function') return { ok: false, evidence: `${DIVERSITY_PATH} does not export a scoreDiversity function` };
+    const call = async (trio: CompositionElement[][]) => (await (scoreDiversity as (v: unknown) => unknown | Promise<unknown>)(trio)) as { score?: unknown };
 
-    const identicalResult = (await (scoreDiversity as (v: unknown) => unknown | Promise<unknown>)(identicalTrio)) as { score?: number };
-    const diverseResult = (await (scoreDiversity as (v: unknown) => unknown | Promise<unknown>)(diverseTrio)) as { score?: number };
-    const identicalOk = typeof identicalResult.score === 'number' && identicalResult.score < floor;
-    const diverseOk = typeof diverseResult.score === 'number' && diverseResult.score >= floor;
+    const checks: { label: string; result: { score?: unknown }; expectBelow: boolean }[] = [
+      { label: 'identical (expect below floor)', result: await call(identicalTrio), expectBelow: true },
+      { label: 'section-order-only (expect >= floor)', result: await call(sectionOrderTrio), expectBelow: false },
+      { label: 'layout-skeleton-only (expect >= floor)', result: await call(skeletonTrio), expectBelow: false },
+      { label: 'motion-timeline-only (expect >= floor)', result: await call(motionTrio), expectBelow: false },
+      { label: 'breakpoint-behavior-only (expect >= floor)', result: await call(breakpointTrio), expectBelow: false },
+    ];
+    const lines: string[] = [];
+    let failures = 0;
+    for (const chk of checks) {
+      const scoreValid = isValidUnitScore(chk.result.score);
+      const ok = scoreValid && (chk.expectBelow ? (chk.result.score as number) < floor : (chk.result.score as number) >= floor);
+      if (!ok) failures++;
+      lines.push(`${chk.label}: score=${String(chk.result.score)} -- ${ok ? 'OK' : 'FAIL'}`);
+    }
 
     const testRun = runNodeTest([DIVERSITY_TEST_PATH]);
     const needles = ['recolor', 'class'];
     const missingNeedles = needles.filter((n) => !testRun.tests.some((t) => t.name.toLowerCase().includes(n) && t.pass));
     const testsOk = testRun.status === 0 && testRun.tests.length > 0 && missingNeedles.length === 0;
 
-    const ok = identicalOk && diverseOk && testsOk;
-    const evidence = [
-      `axis set: ${names.join(', ')}; floor=${floor}; case=${c.id}`,
-      `identical-trio score=${identicalResult.score} (expect < ${floor}): ${identicalOk ? 'OK' : 'FAIL'}`,
-      `diverse-trio score=${diverseResult.score} (expect >= ${floor}): ${diverseOk ? 'OK' : 'FAIL'}`,
-      `implementer test suite (additional, non-load-bearing): exit=${testRun.status} missingNeedles=${missingNeedles.join(',') || 'none'}`,
-    ].join('\n');
-    return { ok, evidence, detail: ok ? undefined : `identicalOk=${identicalOk} diverseOk=${diverseOk} testsOk=${testsOk}` };
+    const ok = failures === 0 && testsOk;
+    const evidence = [`axis set: ${names.join(', ')}; floor=${floor}; case=${c.id}`, ...lines, `implementer test suite (additional, non-load-bearing): exit=${testRun.status} missingNeedles=${missingNeedles.join(',') || 'none'}`].join('\n');
+    return { ok, evidence, detail: ok ? undefined : `${failures} axis-isolation checks failed; testsOk=${testsOk}` };
   },
 );
-
-// =============================================================================
-// C7-9 -- directive_claim_coverage: LOAD-BEARING check is a verifier-built
-// house-style-vs-faithful composite pair from REAL directiveInventory data
-// (F9 -- no fixtureKind field exists for a scorer to key off); implementer
-// fixtures remain required, blinded + corpus-membership + uniqueness-checked
-// (F7), as an additional, non-load-bearing check
-// =============================================================================
-await probe(
-  'C7-9',
-  `dynamic-import ${SCORER_INDEX_PATH}; score a verifier-built house-style composite (every directiveInventory entry deliberately attributed to a DIFFERENT source than requested) vs a verifier-built faithful composite (every entry attributed exactly as requested) for a real corpus case; ALSO blind+corpus-check+uniqueness-check+score implementer fixtures under ${DIRECTIVE_FIXTURES_DIR}/{house-style,faithful} as an additional, non-load-bearing check`,
-  `the verifier-built house-style composite scores axes.directive_claim_coverage < floors.directive_claim_coverage while axes.layout_geometry/palette_fidelity/type_fidelity are each >= their floor; the verifier-built faithful composite scores axes.directive_claim_coverage >= floor; implementer fixtures (>=3 each group, blinded to {caseId,composition}, corpus-derived, mutually unique) show the same pattern`,
-  async () => {
-    const floors = readJson<{ floors?: Record<string, number> }>(FLOORS_PATH);
-    if (floors === null || !floors.floors) return { ok: false, evidence: `missing or invalid ${FLOORS_PATH}` };
-    const missingFloorAxes = REQUIRED_AXES.filter((a) => typeof floors.floors?.[a] !== 'number');
-    if (missingFloorAxes.length > 0) return { ok: false, evidence: `${FLOORS_PATH} missing numeric floors for: ${missingFloorAxes.join(', ')}` };
-    const f = floors.floors;
-
-    const imported = await importEvalModule(SCORER_INDEX_PATH);
-    if (!imported.ok) return { ok: false, evidence: imported.error };
-    const scoreComposition = imported.mod['scoreComposition'];
-    if (typeof scoreComposition !== 'function') return { ok: false, evidence: `${SCORER_INDEX_PATH} does not export scoreComposition` };
-
-    const { manifest, error } = loadManifest();
-    if (!manifest) return { ok: false, evidence: `cannot run: ${error}` };
-    const c = pickCaseWithDirectives(manifest, 2);
-    if (!c) return { ok: false, evidence: 'no non-sealed, non-skip corpus case with >=2 sources and >=1 directiveInventory entries to build house-style/faithful composites from' };
-
-    const scoreOf = async (composition: CompositionElement[]) => {
-      const input: ScoringInput = { caseId: c.id, composition };
-      return (await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)(input)) as { axes?: Record<string, number> };
-    };
-    const rangeCheck = (label: string, out: { axes?: Record<string, number> }): string[] => scoreRangeErrors(out).map((e) => `${label}: ${e}`);
-
-    const houseResult = await scoreOf(houseStyleComposition(c));
-    const faithfulResult = await scoreOf(faithfulComposition(c));
-    const rangeErrors = [...rangeCheck('verifier house-style', houseResult), ...rangeCheck('verifier faithful', faithfulResult)];
-    if (rangeErrors.length > 0) return { ok: false, evidence: rangeErrors.join('\n') };
-
-    const dccBelow = (houseResult.axes?.['directive_claim_coverage'] ?? 1) < (f['directive_claim_coverage'] ?? 0);
-    const othersAboveFloor =
-      (houseResult.axes?.['layout_geometry'] ?? -1) >= (f['layout_geometry'] ?? 0) &&
-      (houseResult.axes?.['palette_fidelity'] ?? -1) >= (f['palette_fidelity'] ?? 0) &&
-      (houseResult.axes?.['type_fidelity'] ?? -1) >= (f['type_fidelity'] ?? 0);
-    const faithfulAbove = (faithfulResult.axes?.['directive_claim_coverage'] ?? -1) >= (f['directive_claim_coverage'] ?? 0);
-    const verifierOk = dccBelow && othersAboveFloor && faithfulAbove;
-
-    // Additional, non-load-bearing: implementer fixtures.
-    const scoreGroup = async (subdir: string, seenHashes: Map<string, string>): Promise<{ items: { id: string; axes: Record<string, number> }[]; errors: string[] }> => {
-      const dir = abs(path.join(DIRECTIVE_FIXTURES_DIR, subdir));
-      const items: { id: string; axes: Record<string, number> }[] = [];
-      const errors: string[] = [];
-      if (!fs.existsSync(dir)) return { items, errors: [`missing ${DIRECTIVE_FIXTURES_DIR}/${subdir}`] };
-      for (const entry of fs.readdirSync(dir)) {
-        const relDir = path.join(DIRECTIVE_FIXTURES_DIR, subdir, entry);
-        const loaded = loadBlindedFixture(relDir, manifest);
-        if (!loaded.ok) {
-          errors.push(loaded.error);
-          continue;
-        }
-        const dup = seenHashes.get(loaded.blindHash);
-        if (dup) {
-          errors.push(`${relDir}: blinded content identical to ${dup}`);
-          continue;
-        }
-        seenHashes.set(loaded.blindHash, relDir);
-        // eslint-disable-next-line no-await-in-loop
-        const result = (await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)(loaded.input)) as { axes?: Record<string, number> };
-        const re = scoreRangeErrors(result);
-        if (re.length > 0) {
-          errors.push(`${relDir}: ${re.join('; ')}`);
-          continue;
-        }
-        items.push({ id: entry, axes: result.axes! });
-      }
-      return { items, errors };
-    };
-    const seen = new Map<string, string>();
-    const houseStyleFixtures = await scoreGroup('house-style', seen);
-    const faithfulFixtures = await scoreGroup('faithful', seen);
-    const fixtureErrors = [...houseStyleFixtures.errors, ...faithfulFixtures.errors];
-    if (houseStyleFixtures.items.length < 3) fixtureErrors.push(`only ${houseStyleFixtures.items.length} valid house-style fixtures, need >=3`);
-    if (faithfulFixtures.items.length < 3) fixtureErrors.push(`only ${faithfulFixtures.items.length} valid faithful fixtures, need >=3`);
-    let fixtureFailures = 0;
-    for (const h of houseStyleFixtures.items) {
-      const ok = (h.axes['directive_claim_coverage'] ?? 1) < (f['directive_claim_coverage'] ?? 0) && (h.axes['layout_geometry'] ?? -1) >= (f['layout_geometry'] ?? 0) && (h.axes['palette_fidelity'] ?? -1) >= (f['palette_fidelity'] ?? 0) && (h.axes['type_fidelity'] ?? -1) >= (f['type_fidelity'] ?? 0);
-      if (!ok) fixtureFailures++;
-    }
-    for (const g of faithfulFixtures.items) {
-      if ((g.axes['directive_claim_coverage'] ?? -1) < (f['directive_claim_coverage'] ?? 0)) fixtureFailures++;
-    }
-    const fixturesOk = fixtureErrors.length === 0 && fixtureFailures === 0;
-
-    const ok = verifierOk && fixturesOk;
-    const evidence = [
-      `case=${c.id}`,
-      `verifier house-style axes=${JSON.stringify(houseResult.axes)} dccBelow=${dccBelow} othersAboveFloor=${othersAboveFloor}`,
-      `verifier faithful axes=${JSON.stringify(faithfulResult.axes)} faithfulAbove=${faithfulAbove}`,
-      `implementer fixtures (additional, non-load-bearing): house-style=${houseStyleFixtures.items.length} faithful=${faithfulFixtures.items.length} failures=${fixtureFailures} errors=${fixtureErrors.join('; ') || 'none'}`,
-    ].join('\n');
-    return { ok, evidence, detail: ok ? undefined : `verifierOk=${verifierOk} fixturesOk=${fixturesOk}` };
-  },
-);
-
-// =============================================================================
-// C7-10 -- counterfactual separation: LOAD-BEARING check is a verifier-built
-// pair differing in EXACTLY one composition element (mechanically diffed --
-// F10 "only one axis changed"), from real directiveInventory data
-// =============================================================================
-await probe(
-  'C7-10',
-  `dynamic-import ${SCORER_INDEX_PATH}; build a verifier base/swapped pair from real directiveInventory data where EXACTLY ONE composition element's sourceId differs (mechanically diff-checked); score both and assert the swapped axis's score moves by more than floors.counterfactualMinDelta (> 0, F10/F12); repeat over every eligible corpus case (>=3) for population-style coverage; ALSO score implementer fixtures under ${COUNTERFACTUAL_DIR} (blinded + corpus-checked) as an additional, non-load-bearing check`,
-  `floors.counterfactualMinDelta is a number > 0; for >=3 corpus cases, a verifier-built pair whose composition arrays differ in exactly 1 of N elements produces |scoreComposition(base).axes[axis] - scoreComposition(swapped).axes[axis]| > counterfactualMinDelta on the swapped directive's axis; implementer-provided ${COUNTERFACTUAL_DIR}/<pair-id>/{base,swapped}/input.json fixtures (>=3 pairs) show the same separation as an additional check`,
-  async () => {
-    const floors = readJson<{ counterfactualMinDelta?: number }>(FLOORS_PATH);
-    if (floors === null || typeof floors.counterfactualMinDelta !== 'number' || floors.counterfactualMinDelta <= 0) {
-      return { ok: false, evidence: `${FLOORS_PATH}.counterfactualMinDelta must be a number > 0, got ${floors?.counterfactualMinDelta}` };
-    }
-    const minDelta = floors.counterfactualMinDelta;
-
-    const imported = await importEvalModule(SCORER_INDEX_PATH);
-    if (!imported.ok) return { ok: false, evidence: imported.error };
-    const scoreComposition = imported.mod['scoreComposition'];
-    if (typeof scoreComposition !== 'function') return { ok: false, evidence: `${SCORER_INDEX_PATH} does not export scoreComposition` };
-
-    const { manifest, error } = loadManifest();
-    if (!manifest) return { ok: false, evidence: `cannot run: ${error}` };
-    const eligibleCases = manifest.cases.filter((c) => !c.sealed && !c.skip && c.sources.length >= 2 && c.directiveInventory.length >= 1);
-    if (eligibleCases.length < 3) return { ok: false, evidence: `only ${eligibleCases.length} eligible corpus cases (non-sealed, non-skip, >=2 sources, >=1 directiveInventory entries), need >=3` };
-
-    const lines: string[] = [];
-    let verifierFailures = 0;
-    let verifierAttempts = 0;
-    for (const c of eligibleCases) {
-      const pair = swapOneDirective(c);
-      if (!pair) {
-        lines.push(`${c.id}: could not construct a single-element swap`);
-        continue;
-      }
-      verifierAttempts++;
-      if (pair.diffCount !== 1) {
-        verifierFailures++;
-        lines.push(`${c.id}: base/swapped composition differ in ${pair.diffCount} elements, expected exactly 1`);
-        continue;
-      }
-      const baseInput: ScoringInput = { caseId: c.id, composition: pair.base };
-      const swappedInput: ScoringInput = { caseId: c.id, composition: pair.swapped };
-      // eslint-disable-next-line no-await-in-loop
-      const baseResult = (await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)(baseInput)) as { axes?: Record<string, number> };
-      // eslint-disable-next-line no-await-in-loop
-      const swappedResult = (await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)(swappedInput)) as { axes?: Record<string, number> };
-      const rangeErrors = [...scoreRangeErrors(baseResult), ...scoreRangeErrors(swappedResult)];
-      if (rangeErrors.length > 0) {
-        verifierFailures++;
-        lines.push(`${c.id}: ${rangeErrors.join('; ')}`);
-        continue;
-      }
-      const baseScore = baseResult.axes?.[pair.axis];
-      const swappedScore = swappedResult.axes?.[pair.axis];
-      if (typeof baseScore !== 'number' || typeof swappedScore !== 'number') {
-        verifierFailures++;
-        lines.push(`${c.id}: axis "${pair.axis}" not scored on one side`);
-        continue;
-      }
-      const delta = Math.abs(baseScore - swappedScore);
-      const ok = delta > minDelta;
-      if (!ok) verifierFailures++;
-      lines.push(`${c.id}: axis=${pair.axis} diffCount=${pair.diffCount} base=${baseScore.toFixed(3)} swapped=${swappedScore.toFixed(3)} delta=${delta.toFixed(3)} (min ${minDelta}) -- ${ok ? 'OK' : 'FAIL'}`);
-    }
-    if (verifierAttempts < 3) verifierFailures++;
-
-    // Additional, non-load-bearing: implementer fixtures.
-    const fixtureLines: string[] = [];
-    let fixtureFailures = 0;
-    const dir = abs(COUNTERFACTUAL_DIR);
-    const pairIds = fs.existsSync(dir) ? fs.readdirSync(dir).filter((e) => fs.statSync(path.join(dir, e)).isDirectory()) : [];
-    if (pairIds.length < 3) {
-      fixtureFailures++;
-      fixtureLines.push(`only ${pairIds.length} counterfactual fixture pairs, need >=3`);
-    }
-    for (const pairId of pairIds) {
-      const meta = readJson<{ swappedAxis?: string }>(path.join(COUNTERFACTUAL_DIR, pairId, 'meta.json'));
-      const axis = meta?.swappedAxis;
-      const baseLoaded = loadBlindedFixture(path.join(COUNTERFACTUAL_DIR, pairId, 'base'), manifest);
-      const swappedLoaded = loadBlindedFixture(path.join(COUNTERFACTUAL_DIR, pairId, 'swapped'), manifest);
-      if (!axis || !baseLoaded.ok || !swappedLoaded.ok) {
-        fixtureFailures++;
-        fixtureLines.push(`${pairId}: incomplete (axis=${axis}, base=${baseLoaded.ok}, swapped=${swappedLoaded.ok})`);
-        continue;
-      }
-      // eslint-disable-next-line no-await-in-loop
-      const baseResult = (await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)(baseLoaded.input)) as { axes?: Record<string, number> };
-      // eslint-disable-next-line no-await-in-loop
-      const swappedResult = (await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)(swappedLoaded.input)) as { axes?: Record<string, number> };
-      const baseScore = baseResult.axes?.[axis];
-      const swappedScore = swappedResult.axes?.[axis];
-      if (typeof baseScore !== 'number' || typeof swappedScore !== 'number' || Math.abs(baseScore - swappedScore) <= minDelta) {
-        fixtureFailures++;
-        fixtureLines.push(`${pairId}: axis=${axis} base=${baseScore} swapped=${swappedScore} did not separate beyond minDelta`);
-      } else {
-        fixtureLines.push(`${pairId}: axis=${axis} base=${baseScore.toFixed(3)} swapped=${swappedScore.toFixed(3)} -- OK`);
-      }
-    }
-
-    const ok = verifierFailures === 0 && fixtureFailures === 0;
-    const evidence = [`verifier-constructed pairs (${verifierAttempts} attempted):`, ...lines, `implementer fixtures (additional, non-load-bearing, ${pairIds.length} pairs):`, ...fixtureLines].join('\n');
-    return { ok, evidence, detail: ok ? undefined : `verifierFailures=${verifierFailures} fixtureFailures=${fixtureFailures}` };
-  },
-);
-
-// =============================================================================
-// C7-11 -- held-out split is REALLY sealed: encrypted-blob-only in-tree,
-// decrypt-and-hash-verify, and a repo-wide plaintext-leak scan (F11)
-// =============================================================================
-await probe(
-  'C7-11',
-  `read ${SEALED_ACCESS_PATH}; decrypt every sealed case's IR + snapshot blobs with the seal key and hash-check against the manifest's recorded plaintext hashes; scan every git-tracked file under evals/ for accidental plaintext leakage of any sealed hash`,
-  `${SEALED_ACCESS_PATH} names every sealed case id, records its plaintext irSha256, and states an access-control statement; manifest.sealedFraction matches the actual sealed fraction within 0.02; every sealed case's irPath and every sealed snapshot path end in ".enc"; decrypting each blob with the seal key (${SEAL_KEY_PATH}) and re-hashing yields exactly the manifest's recorded plaintext hash; NO git-tracked file under evals/ (other than the .enc blobs themselves) has content matching any sealed case's plaintext irSha256 or snapshot sha256 -- a plaintext leak anywhere is a hard fail`,
-  async () => {
-    const text = readText(SEALED_ACCESS_PATH);
-    if (text === null) return { ok: false, evidence: `missing ${SEALED_ACCESS_PATH}` };
-    const { manifest, error } = loadManifest();
-    if (!manifest) return { ok: false, evidence: `cannot cross-check: ${error}` };
-    const sealedCases = manifest.cases.filter((c) => c.sealed);
-    if (sealedCases.length === 0) return { ok: false, evidence: 'manifest has zero sealed cases' };
-
-    const actualFraction = sealedCases.length / manifest.cases.length;
-    const fractionOk = Math.abs(actualFraction - manifest.sealedFraction) <= 0.02;
-    const missingFromDoc = sealedCases.filter((c) => !text.includes(c.id));
-    const hasAccessStatement = /must not|forbidden|access.?control|not readable|no access/i.test(text);
-
-    const forbiddenHashes = new Set<string>();
-    const lines: string[] = [];
-    let decryptFailures = 0;
-    for (const c of sealedCases) {
-      if (!c.irPath.endsWith('.enc')) {
-        decryptFailures++;
-        lines.push(`${c.id}: irPath does not end in .enc (${c.irPath})`);
-      } else {
-        const decrypted = decryptToBytes(c.irPath, `${c.id}-seal-verify`);
-        if (!decrypted.ok) {
-          decryptFailures++;
-          lines.push(`${c.id}: ${decrypted.error}`);
-        } else {
-          const actualHash = sha256Buffer(decrypted.bytes);
-          if (actualHash !== c.irSha256) {
-            decryptFailures++;
-            lines.push(`${c.id}: decrypted IR hash mismatch (manifest=${c.irSha256} actual=${actualHash})`);
-          } else {
-            lines.push(`${c.id}: decrypted IR hash confirmed`);
-          }
-          forbiddenHashes.add(c.irSha256);
-        }
-      }
-      if (!text.includes(c.irSha256 ?? '')) {
-        decryptFailures++;
-        lines.push(`${c.id}: irSha256 not recorded verbatim in ${SEALED_ACCESS_PATH}`);
-      }
-      for (const source of c.sources) {
-        for (const [bp, ref] of Object.entries(source.snapshots)) {
-          const label = `${c.id}/${source.id}/${bp}`;
-          if (!ref.path.endsWith('.enc')) {
-            decryptFailures++;
-            lines.push(`${label}: snapshot path does not end in .enc (${ref.path})`);
-            continue;
-          }
-          const decrypted = decryptToBytes(ref.path, label);
-          if (!decrypted.ok) {
-            decryptFailures++;
-            lines.push(`${label}: ${decrypted.error}`);
-            continue;
-          }
-          const actualHash = sha256Buffer(decrypted.bytes);
-          if (actualHash !== ref.sha256) {
-            decryptFailures++;
-            lines.push(`${label}: decrypted snapshot hash mismatch (manifest=${ref.sha256} actual=${actualHash})`);
-          }
-          forbiddenHashes.add(ref.sha256);
-        }
-      }
-    }
-
-    // Repo-wide plaintext-leak scan over every git-tracked file under evals/.
-    const tracked = sh('git', ['ls-files', 'evals']);
-    const leaks: string[] = [];
-    if (tracked.status === 0) {
-      for (const rel of tracked.stdout.split('\n').filter(Boolean)) {
-        if (rel.endsWith('.enc')) continue;
-        const h = sha256File(rel);
-        if (h && forbiddenHashes.has(h)) leaks.push(`${rel} (hash ${h}) matches a sealed plaintext hash`);
-      }
-    } else {
-      leaks.push(`could not run git ls-files evals to scan for leaks (status=${tracked.status})`);
-    }
-
-    const evidence = [
-      `sealedFraction manifest=${manifest.sealedFraction} actual=${actualFraction.toFixed(3)} ok=${fractionOk}`,
-      `sealed cases named in ${SEALED_ACCESS_PATH}: ${sealedCases.length - missingFromDoc.length}/${sealedCases.length} (missing: ${missingFromDoc.map((c) => c.id).join(', ') || 'none'})`,
-      `access-control statement present: ${hasAccessStatement}`,
-      `decrypt+hash checks: ${decryptFailures === 0 ? 'all OK' : `${decryptFailures} failures`}`,
-      `plaintext-leak scan over ${tracked.status === 0 ? tracked.stdout.split('\n').filter(Boolean).length : 0} tracked evals/ files: ${leaks.length === 0 ? 'clean' : leaks.join('; ')}`,
-      ...lines,
-    ].join('\n');
-    const ok = fractionOk && missingFromDoc.length === 0 && hasAccessStatement && decryptFailures === 0 && leaks.length === 0;
-    return { ok, evidence, detail: ok ? undefined : 'seal record incomplete, decrypt/hash mismatch, or plaintext leak detected' };
-  },
-);
-
-// =============================================================================
-// C7-12 -- absolute floors frozen and non-vacuous (F12: every floor > 0)
-// =============================================================================
-await probe(
-  'C7-12',
-  `read ${FLOORS_PATH}; assert version + all 11 axis floors present, numeric, and STRICTLY > 0; assert counterfactualMinDelta > 0; record its sha256`,
-  `${FLOORS_PATH} has a numeric "version", a "floors" object with a numeric entry STRICTLY > 0 (and <= 1) for every axis in [${REQUIRED_AXES.join(', ')}] -- a floor of exactly 0 is vacuous and fails -- and a numeric "counterfactualMinDelta" > 0; its sha256 is recorded in this criterion's artifact so a later silent edit is detectable by hash drift`,
-  async () => {
-    const raw = readText(FLOORS_PATH);
-    if (raw === null) return { ok: false, evidence: `missing ${FLOORS_PATH}` };
-    const parsed = readJson<{ version?: number; floors?: Record<string, number>; counterfactualMinDelta?: number }>(FLOORS_PATH);
-    if (parsed === null) return { ok: false, evidence: `${FLOORS_PATH} is not valid JSON` };
-    if (typeof parsed.version !== 'number') return { ok: false, evidence: `${FLOORS_PATH} missing numeric "version"` };
-    if (!parsed.floors) return { ok: false, evidence: `${FLOORS_PATH} missing "floors" object` };
-    const bad = REQUIRED_AXES.filter((a) => typeof parsed.floors?.[a] !== 'number' || (parsed.floors[a] as number) <= 0 || (parsed.floors[a] as number) > 1);
-    const deltaOk = typeof parsed.counterfactualMinDelta === 'number' && parsed.counterfactualMinDelta > 0;
-    const hash = crypto.createHash('sha256').update(raw).digest('hex');
-    const ok = bad.length === 0 && deltaOk;
-    return {
-      ok,
-      evidence: `version=${parsed.version}\nfloors=${JSON.stringify(parsed.floors, null, 2)}\ncounterfactualMinDelta=${parsed.counterfactualMinDelta}\nsha256=${hash}`,
-      detail: ok ? undefined : `axes with missing/zero/out-of-range floors: ${bad.join(', ')}${deltaOk ? '' : '; counterfactualMinDelta must be > 0'}`,
-    };
-  },
-);
-
-// =============================================================================
-// C7-13 -- scorer versioned (real semver) and deterministic across the SAME
-// process, a FRESH subprocess with different env (F13 cross-run proxy), and
-// pinned in a dedicated eval-manifest.json cross-checked against floors/corpus
-// =============================================================================
-await probe(
-  'C7-13',
-  `dynamic-import ${SCORER_INDEX_PATH}; require SCORER_VERSION matches semver; cross-check ${EVAL_MANIFEST_PATH} pins the same scorer/floors/corpus versions; call scoreComposition twice in-process AND once more in a freshly-spawned node subprocess with different HOSTNAME/TZ/LANG env, and require all three results are byte-identical`,
-  `${SCORER_INDEX_PATH} exports SCORER_VERSION matching /^\\d+\\.\\d+\\.\\d+$/; ${EVAL_MANIFEST_PATH} has {scorerVersion, floorsVersion, corpusVersion} matching the live SCORER_VERSION, ${FLOORS_PATH}.version, and ${MANIFEST_PATH}.version respectively; scoreComposition(${DETERMINISM_FIXTURE_PATH}) called twice in this process AND once in a child process spawned with HOSTNAME=verifier-control-host TZ=UTC LANG=C yields stable-stringify-identical results across all three`,
-  async () => {
-    const imported = await importEvalModule(SCORER_INDEX_PATH);
-    if (!imported.ok) return { ok: false, evidence: imported.error };
-    const version = imported.mod['SCORER_VERSION'];
-    if (typeof version !== 'string' || !/^\d+\.\d+\.\d+$/.test(version)) return { ok: false, evidence: `${SCORER_INDEX_PATH} SCORER_VERSION must be a semver string (X.Y.Z), got ${JSON.stringify(version)}` };
-    const scoreComposition = imported.mod['scoreComposition'];
-    if (typeof scoreComposition !== 'function') return { ok: false, evidence: `${SCORER_INDEX_PATH} does not export scoreComposition` };
-
-    const evalManifest = readJson<{ scorerVersion?: string; floorsVersion?: number; corpusVersion?: number }>(EVAL_MANIFEST_PATH);
-    if (evalManifest === null) return { ok: false, evidence: `missing or invalid ${EVAL_MANIFEST_PATH}` };
-    const floorsDoc = readJson<{ version?: number }>(FLOORS_PATH);
-    const { manifest } = loadManifest();
-    const pinProblems: string[] = [];
-    if (evalManifest.scorerVersion !== version) pinProblems.push(`scorerVersion ${evalManifest.scorerVersion} !== live SCORER_VERSION ${version}`);
-    if (!floorsDoc || evalManifest.floorsVersion !== floorsDoc.version) pinProblems.push(`floorsVersion ${evalManifest.floorsVersion} !== ${FLOORS_PATH}.version ${floorsDoc?.version}`);
-    if (!manifest || evalManifest.corpusVersion !== manifest.version) pinProblems.push(`corpusVersion ${evalManifest.corpusVersion} !== ${MANIFEST_PATH}.version ${manifest?.version}`);
-    if (pinProblems.length > 0) return { ok: false, evidence: pinProblems.join('; ') };
-
-    const input = readJson<unknown>(DETERMINISM_FIXTURE_PATH);
-    if (input === null) return { ok: false, evidence: `missing or invalid ${DETERMINISM_FIXTURE_PATH}` };
-
-    const run1 = await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)(structuredClone(input));
-    const run2 = await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)(structuredClone(input));
-    const inProcessEqual = stableStringify(run1) === stableStringify(run2);
-
-    // Fresh subprocess with deliberately different hostname/timezone/locale
-    // env -- a scorer that reads process.platform/os.hostname()/Date-locale
-    // instead of pure input data will diverge here even though it can't
-    // diverge across two in-process calls.
-    const runnerPath = path.join(proofDir, 'C7-13-subprocess-runner.mjs');
-    const outPath = path.join(proofDir, 'C7-13-subprocess-result.json');
-    fs.writeFileSync(
-      runnerPath,
-      [
-        `import { pathToFileURL } from 'node:url';`,
-        `import fs from 'node:fs';`,
-        `const mod = await import(pathToFileURL(${JSON.stringify(abs(SCORER_INDEX_PATH))}).href);`,
-        `const input = JSON.parse(fs.readFileSync(${JSON.stringify(abs(DETERMINISM_FIXTURE_PATH))}, 'utf8'));`,
-        `const result = await mod.scoreComposition(input);`,
-        `fs.writeFileSync(${JSON.stringify(outPath)}, JSON.stringify(result));`,
-      ].join('\n'),
-    );
-    const subprocess = sh('node', ['--import', 'tsx', runnerPath], repoRoot);
-    let subprocessEqual = false;
-    let subprocessDetail = `subprocess exit=${subprocess.status}`;
-    if (subprocess.status === 0 && fs.existsSync(outPath)) {
-      try {
-        const run3 = JSON.parse(fs.readFileSync(outPath, 'utf8')) as unknown;
-        subprocessEqual = stableStringify(run3) === stableStringify(run1);
-        subprocessDetail += ` result=${stableStringify(run3)}`;
-      } catch (e) {
-        subprocessDetail += ` (failed to read/parse subprocess result: ${(e as Error).message})`;
-      }
-    } else {
-      subprocessDetail += ` stderr=${subprocess.stderr}`;
-    }
-
-    const ok = inProcessEqual && subprocessEqual;
-    return {
-      ok,
-      evidence: `SCORER_VERSION=${version}\nrun1=${stableStringify(run1)}\nrun2=${stableStringify(run2)}\ninProcessEqual=${inProcessEqual}\n${subprocessDetail}\nsubprocessEqual=${subprocessEqual}`,
-      detail: ok ? undefined : `inProcessEqual=${inProcessEqual} subprocessEqual=${subprocessEqual}`,
-    };
-  },
-);
-
-// =============================================================================
-// C7-14 -- NL->IR goldens exist with a REAL typed parse interface (F14: an
-// `export {}` stub must fail)
-// =============================================================================
-await probe(
-  'C7-14',
-  `read ${NL_GOLDENS_PATH} (>=5 pairs); statically require a typed "parse(input: string): <IR-referencing type>" export in ${NL_PARSER_PATH}; dynamic-import it and call parse() (a NotImplemented throw is acceptable, silent absence is not); typecheck all evals/**/*.ts`,
-  `${NL_GOLDENS_PATH} has >=5 { id, nlDirective, expectedIR } pairs where expectedIR contains at least an "axis" and "source" field; ${NL_PARSER_PATH} contains a source-level \`export function parse(input: string): ...\` or \`export const parse: (input: string) => ...\` signature whose return type is not void/any/unknown and whose text references an IR-shaped type -- a file containing only \`export {}\` fails this by construction; the exported parse is actually a function and either returns or throws (never undefined/missing) when called; every .ts file under evals/ typechecks cleanly`,
-  async () => {
-    const goldens = readJson<Array<{ id?: string; nlDirective?: string; expectedIR?: { axis?: string; source?: string } }>>(NL_GOLDENS_PATH);
-    if (goldens === null || !Array.isArray(goldens)) return { ok: false, evidence: `missing or invalid ${NL_GOLDENS_PATH}` };
-    if (goldens.length < 5) return { ok: false, evidence: `only ${goldens.length} golden pairs, need >=5` };
-    const malformed = goldens.filter((g) => !g.id || !g.nlDirective || !g.expectedIR?.axis || !g.expectedIR?.source);
-    if (malformed.length > 0) return { ok: false, evidence: `${malformed.length} golden(s) missing id/nlDirective/expectedIR.axis/expectedIR.source` };
-
-    const parserText = readText(NL_PARSER_PATH);
-    if (parserText === null) return { ok: false, evidence: `missing ${NL_PARSER_PATH}` };
-    const sigMatch = /export\s+(?:async\s+)?function\s+parse\s*\(\s*\w+\s*:\s*string\s*\)\s*:\s*([^{;]+)/.exec(parserText) ?? /export\s+const\s+parse\s*:\s*\(\s*\w+\s*:\s*string\s*\)\s*=>\s*([^;=]+)/.exec(parserText);
-    if (!sigMatch) {
-      return { ok: false, evidence: `${NL_PARSER_PATH} does not contain a source-level "export function parse(input: string): ..." or "export const parse: (input: string) => ..." signature -- an \`export {}\`-only file (or any file lacking a typed parse export) fails this criterion by construction (F14)` };
-    }
-    const returnType = sigMatch[1]!.trim();
-    if (/^(void|any|unknown)\b/.test(returnType)) {
-      return { ok: false, evidence: `${NL_PARSER_PATH} parse() return type "${returnType}" is void/any/unknown -- must reference a concrete IR-shaped type` };
-    }
-
-    const imported = await importEvalModule(NL_PARSER_PATH);
-    if (!imported.ok) return { ok: false, evidence: imported.error };
-    const parseFn = imported.mod['parse'];
-    if (typeof parseFn !== 'function') return { ok: false, evidence: `${NL_PARSER_PATH} does not export a callable "parse" function at runtime` };
-    let callBehavior: string;
-    try {
-      const out = (parseFn as (s: string) => unknown)(goldens[0]!.nlDirective!);
-      callBehavior = out === undefined ? 'FAIL: parse() returned undefined' : `returned ${typeof out}`;
-    } catch (e) {
-      callBehavior = `threw (acceptable stub behavior): ${(e as Error).message}`;
-    }
-    if (callBehavior.startsWith('FAIL')) return { ok: false, evidence: callBehavior };
-
-    const evalsTsFiles = listFilesRecursive(abs('evals')).filter((f) => f.endsWith('.ts'));
-    if (evalsTsFiles.length === 0) return { ok: false, evidence: 'no .ts files found under evals/ to typecheck' };
-    const tmpTsconfig = path.join(proofDir, 'C7-14-tsconfig.json');
-    fs.writeFileSync(
-      tmpTsconfig,
-      JSON.stringify(
-        {
-          compilerOptions: {
-            target: 'ES2022',
-            lib: ['ES2022'],
-            module: 'NodeNext',
-            moduleResolution: 'NodeNext',
-            strict: true,
-            noUncheckedIndexedAccess: true,
-            exactOptionalPropertyTypes: true,
-            allowImportingTsExtensions: true,
-            noEmit: true,
-            isolatedModules: true,
-            esModuleInterop: true,
-            skipLibCheck: true,
-            types: ['node'],
-          },
-          include: evalsTsFiles,
-        },
-        null,
-        2,
-      ),
-    );
-    const tsc = sh('pnpm', ['exec', 'tsc', '-p', tmpTsconfig, '--noEmit']);
-    const ok = tsc.status === 0;
-    return {
-      ok,
-      evidence: `golden pairs: ${goldens.length}\nparse() signature return type: ${returnType}\nruntime call: ${callBehavior}\ntsc exit=${tsc.status}\n${tsc.stdout}`,
-      detail: ok ? undefined : 'evals/**/*.ts does not typecheck',
-    };
-  },
-);
-
-// =============================================================================
-// C7-15 -- feasibility spike documented, SUBSTANTIVELY (F17: "- none" fails)
-// =============================================================================
-const IR_FIELD_TOKENS = [...REQUIRED_IR_TOP_KEYS, ...REQUIRED_PROVENANCE_ENTRY_KEYS, 'axis', 'scope', 'strength', 'source'];
-const MIN_SPIKE_ITEM_LENGTH = 40;
-
-await probe(
-  'C7-15',
-  `read ${SPIKE_DOC_PATH}; require non-empty "## Case", and >=1 SUBSTANTIVE (>=${MIN_SPIKE_ITEM_LENGTH} chars) list item under "## IR insufficiencies found" grounded in a concrete IR field name, and >=1 substantive item under "## Responses" likewise grounded; the case id must exist in ${MANIFEST_PATH}`,
-  `"## Case" names a real corpus case id; "## IR insufficiencies found" has >=1 list item of length >= ${MIN_SPIKE_ITEM_LENGTH} chars, and the section's text mentions >=2 distinct IR field-name tokens from [${IR_FIELD_TOKENS.join(', ')}]; "## Responses" has >=1 list item of length >= ${MIN_SPIKE_ITEM_LENGTH} chars and mentions >=1 such token -- a placeholder like "- none" fails both the length and the field-grounding check`,
-  async () => {
-    const text = readText(SPIKE_DOC_PATH);
-    if (text === null) return { ok: false, evidence: `missing ${SPIKE_DOC_PATH}` };
-    const section = (heading: string): string => {
-      const re = new RegExp(`##\\s*${heading}[^\\n]*\\n([\\s\\S]*?)(\\n##\\s|$)`, 'i');
-      return (text.match(re)?.[1] ?? '').trim();
-    };
-    const caseSection = section('Case');
-    const insufficienciesSection = section('IR insufficiencies');
-    const responsesSection = section('Responses');
-    const listItemTexts = (s: string): string[] =>
-      s
-        .split(/\n(?=[-*]\s|\d+\.\s)/)
-        .map((item) => item.replace(/^[-*]\s|^\d+\.\s/, '').trim())
-        .filter(Boolean);
-    const insufficiencyItems = listItemTexts(insufficienciesSection);
-    const responseItems = listItemTexts(responsesSection);
-    const substantive = (items: string[]): string[] => items.filter((i) => i.length >= MIN_SPIKE_ITEM_LENGTH);
-    const tokensIn = (s: string): number => IR_FIELD_TOKENS.filter((t) => new RegExp(`\\b${t}\\b`, 'i').test(s)).length;
-
-    const problems: string[] = [];
-    if (caseSection.length === 0) problems.push('"## Case" section missing or empty');
-    const substantiveInsuff = substantive(insufficiencyItems);
-    if (substantiveInsuff.length === 0) problems.push(`"## IR insufficiencies found" has no list item >= ${MIN_SPIKE_ITEM_LENGTH} chars (found ${insufficiencyItems.length} items, longest=${Math.max(0, ...insufficiencyItems.map((i) => i.length))})`);
-    if (tokensIn(insufficienciesSection) < 2) problems.push(`"## IR insufficiencies found" mentions fewer than 2 distinct IR field-name tokens`);
-    const substantiveResp = substantive(responseItems);
-    if (substantiveResp.length === 0) problems.push(`"## Responses" has no list item >= ${MIN_SPIKE_ITEM_LENGTH} chars (found ${responseItems.length} items, longest=${Math.max(0, ...responseItems.map((i) => i.length))})`);
-    if (tokensIn(responsesSection) < 1) problems.push(`"## Responses" mentions no IR field-name token`);
-
-    const { manifest } = loadManifest();
-    const caseIdMatch = caseSection.match(/[a-zA-Z0-9_-]+/);
-    const referencedId = caseIdMatch?.[0];
-    const caseExists = manifest ? manifest.cases.some((c) => c.id === referencedId) : false;
-    if (!caseExists) problems.push(`referenced case id "${referencedId ?? '(none found)'}" not present in ${MANIFEST_PATH}`);
-
-    return {
-      ok: problems.length === 0,
-      evidence: `case section: ${caseSection.slice(0, 200)}\ninsufficiency items: ${insufficiencyItems.length} (substantive: ${substantiveInsuff.length}), field tokens: ${tokensIn(insufficienciesSection)}\nresponse items: ${responseItems.length} (substantive: ${substantiveResp.length}), field tokens: ${tokensIn(responsesSection)}\nreferenced case exists in manifest: ${caseExists}`,
-      detail: problems.length > 0 ? problems.join('; ') : undefined,
-    };
-  },
-);
-
-// =============================================================================
-// C7-16 -- human: go/no-go recorded (never mechanically "pass")
-// =============================================================================
-await (async () => {
-  const startedAt = Date.now();
-  const command = `read ${GO_NO_GO_PATH}`;
-  const assertion = `${GO_NO_GO_PATH} is the founder go/no-go record. Structure only, never judgment: requires a non-empty "## Founder" line naming an identity, a "## Reviewer 1" section (GPT-5.6 Sol) with a "Verdict: GO" or "Verdict: NO-GO" line plus non-empty rationale, a "## Reviewer 2" section (Grok 4.5) with the same shape, and a "## Overall decision" with "Decision: GO" or "Decision: NO-GO". This criterion NEVER reports "pass": it is "fail" while the record is missing/incomplete and "blocked-on-founder" once structurally complete -- only a human landing decision outside this verifier can close it (VERIFICATION-CONTRACT.md S2 rule 3, S3 R7)`;
-  try {
-    const text = readText(GO_NO_GO_PATH);
-    if (text === null) {
-      record('C7-16', command, assertion, 'fail', `missing ${GO_NO_GO_PATH}`, startedAt, 'go/no-go record does not exist yet');
-      return;
-    }
-    const founderLine = /##\s*Founder[^\n]*\n+([^\n#]+)/i.exec(text);
-    const founderOk = !!founderLine && founderLine[1]!.trim().length > 0;
-    const verdictBlock = (label: string, needle: RegExp): { present: boolean; verdictOk: boolean; rationaleOk: boolean } => {
-      const m = needle.exec(text);
-      if (!m) return { present: false, verdictOk: false, rationaleOk: false };
-      const block = m[0];
-      const verdict = /Verdict:\s*(GO|NO-GO)/i.exec(block);
-      const rationaleLen = block.replace(/##[^\n]*\n/, '').replace(/Verdict:[^\n]*\n?/i, '').trim().length;
-      return { present: true, verdictOk: !!verdict, rationaleOk: rationaleLen > 20 };
-    };
-    const r1 = verdictBlock('Reviewer 1', /##\s*Reviewer 1[^\n]*\n([\s\S]*?)(\n##\s|$)/i);
-    const r2 = verdictBlock('Reviewer 2', /##\s*Reviewer 2[^\n]*\n([\s\S]*?)(\n##\s|$)/i);
-    const overallMatch = /##\s*Overall decision[^\n]*\n([\s\S]*?)(\n##\s|$)/i.exec(text);
-    const overallDecisionOk = !!overallMatch && /Decision:\s*(GO|NO-GO)/i.test(overallMatch[1] ?? '');
-    const sol = /sol/i.test(text) && /gpt-?5\.6/i.test(text);
-    const grok = /grok/i.test(text);
-
-    const problems: string[] = [];
-    if (!founderOk) problems.push('missing/empty "## Founder" identity line');
-    if (!r1.present || !r1.verdictOk || !r1.rationaleOk) problems.push(`Reviewer 1 section incomplete (present=${r1.present} verdict=${r1.verdictOk} rationale=${r1.rationaleOk})`);
-    if (!r2.present || !r2.verdictOk || !r2.rationaleOk) problems.push(`Reviewer 2 section incomplete (present=${r2.present} verdict=${r2.verdictOk} rationale=${r2.rationaleOk})`);
-    if (!overallDecisionOk) problems.push('missing "## Overall decision" with a Decision: GO|NO-GO line');
-    if (!sol) problems.push('Reviewer 1 does not identify GPT-5.6 Sol');
-    if (!grok) problems.push('Reviewer 2 does not identify Grok');
-
-    const evidence = `founderOk=${founderOk}\nreviewer1=${JSON.stringify(r1)}\nreviewer2=${JSON.stringify(r2)}\noverallDecisionOk=${overallDecisionOk}\nidentifiesSol=${sol}\nidentifiesGrok=${grok}`;
-    if (problems.length > 0) {
-      record('C7-16', command, assertion, 'fail', evidence, startedAt, problems.join('; '));
-    } else {
-      record('C7-16', command, assertion, 'blocked-on-founder', evidence, startedAt, 'record is structurally complete; awaiting/reflecting the human landing decision, never auto-passed');
-    }
-  } catch (error) {
-    record('C7-16', command, assertion, 'fail', `probe threw: ${(error as Error).stack ?? String(error)}`, startedAt, 'probe crashed instead of failing cleanly');
-  }
-})();
 
 function listFilesRecursive(dir: string): string[] {
   if (!fs.existsSync(dir)) return [];
@@ -1849,6 +1689,713 @@ function runNodeTest(files: string[]): { status: number; stdout: string; tests: 
 }
 
 // =============================================================================
+// C7-9 -- directive_claim_coverage: cited evidence must RESOLVE through the
+// SAME resolution machinery as C7-4, and the cited output element must
+// exist in the composition (F9). The verifier independently resolves
+// faithful vs house-style compositions against real snapshot data BEFORE
+// trusting the scorer's self-reported axis value -- if the verifier's own
+// resolution doesn't match the expected pattern, the criterion fails
+// outright regardless of what the scorer claims.
+// =============================================================================
+await probe(
+  'C7-9',
+  `build a verifier faithful composition (every directiveInventory claim's cited evidence resolves against its OWN claimed source via the C7-4 resolution machinery) and a house-style composition (same underlying nodes, sourceId misattributed -- so resolution against the claimed source fails); independently verify this resolution pattern BEFORE checking the scorer; then require axes.directive_claim_coverage to be low/high accordingly while geometry/palette/type stay high on house-style; also score implementer fixtures as an additional, non-load-bearing check`,
+  `every faithful-composition element's (nodeId,domPath,breakpoint) resolves against its claimed sourceId's real captured nodes (100%, same resolves() function as C7-4) and each directiveInventory[i] has a corresponding composition[i] with matching domPath (cited output element exists); every house-style element's claimed attribution does NOT resolve (0%) since the underlying node data is real but misattributed -- if either resolution check fails, this criterion fails outright before the scorer is even consulted; GIVEN that resolution pattern holds, scoreComposition's axes.directive_claim_coverage is < floor for house-style (while layout_geometry/palette_fidelity/type_fidelity are >= floor) and >= floor for faithful; implementer fixtures under ${DIRECTIVE_FIXTURES_DIR} (if present) are scored as an additional, non-load-bearing signal`,
+  async () => {
+    const floors = readJson<{ floors?: Record<string, number> }>(FLOORS_PATH);
+    if (floors === null || !floors.floors) return { ok: false, evidence: `missing or invalid ${FLOORS_PATH}` };
+    const missingFloorAxes = REQUIRED_AXES.filter((a) => typeof floors.floors?.[a] !== 'number');
+    if (missingFloorAxes.length > 0) return { ok: false, evidence: `${FLOORS_PATH} missing numeric floors for: ${missingFloorAxes.join(', ')}` };
+    const f = floors.floors;
+
+    const { manifest, error } = loadManifest();
+    if (!manifest) return { ok: false, evidence: `cannot run: ${error}` };
+    const c = pickCaseWithDirectives(manifest, 2);
+    if (!c) return { ok: false, evidence: 'no non-sealed, non-skip corpus case with >=2 sources and a resolvable faithful composition to build coverage controls from' };
+    const faithful = faithfulComposition(c)!;
+    const houseStyle = houseStyleComposition(c)!;
+    const snaps = buildSnapshotsBySource(c);
+    if (!snaps.ok) return { ok: false, evidence: snaps.error };
+
+    // Independent verifier-side resolution, BEFORE consulting the scorer.
+    const faithfulResolved = faithful.filter((el) => resolves(el, snaps.bySource)).length;
+    const houseStyleResolved = houseStyle.filter((el) => resolves(el, snaps.bySource)).length;
+    const citedElementsExist = c.directiveInventory.every((d, i) => faithful[i] !== undefined && faithful[i]!.domPath === d.scope);
+    const setupOk = faithfulResolved === faithful.length && houseStyleResolved === 0 && citedElementsExist;
+    if (!setupOk) {
+      return {
+        ok: false,
+        evidence: `verifier-side resolution setup is broken (before the scorer was even consulted): faithfulResolved=${faithfulResolved}/${faithful.length} (want all) houseStyleResolved=${houseStyleResolved}/${houseStyle.length} (want 0) citedElementsExist=${citedElementsExist}`,
+        detail: 'F9: cited evidence did not resolve as expected -- cannot trust a coverage-axis test built on unresolvable evidence',
+      };
+    }
+
+    const imported = await importEvalModule(SCORER_INDEX_PATH);
+    if (!imported.ok) return { ok: false, evidence: imported.error };
+    const scoreComposition = imported.mod['scoreComposition'];
+    if (typeof scoreComposition !== 'function') return { ok: false, evidence: `${SCORER_INDEX_PATH} does not export scoreComposition` };
+    const scoreOf = async (composition: CompositionElement[]) => (await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)({ caseId: c.id, composition })) as { axes?: Record<string, number> };
+
+    const houseResult = await scoreOf(houseStyle);
+    const faithfulResult = await scoreOf(faithful);
+    const rangeErrors = [...scoreRangeErrors(houseResult), ...scoreRangeErrors(faithfulResult)];
+    if (rangeErrors.length > 0) return { ok: false, evidence: rangeErrors.join('\n') };
+
+    const dccBelow = houseResult.axes!['directive_claim_coverage']! < f['directive_claim_coverage']!;
+    const othersAboveFloor = houseResult.axes!['layout_geometry']! >= f['layout_geometry']! && houseResult.axes!['palette_fidelity']! >= f['palette_fidelity']! && houseResult.axes!['type_fidelity']! >= f['type_fidelity']!;
+    const faithfulAbove = faithfulResult.axes!['directive_claim_coverage']! >= f['directive_claim_coverage']!;
+    const verifierOk = dccBelow && othersAboveFloor && faithfulAbove;
+
+    // Additional, non-load-bearing: implementer fixtures.
+    const scoreGroup = async (subdir: string, seenHashes: Map<string, string>): Promise<{ count: number; lines: string[] }> => {
+      const dir = abs(path.join(DIRECTIVE_FIXTURES_DIR, subdir));
+      const lines: string[] = [];
+      if (!fs.existsSync(dir)) {
+        lines.push(`${subdir}: no implementer fixtures present (not required)`);
+        return { count: 0, lines };
+      }
+      let count = 0;
+      for (const entry of fs.readdirSync(dir)) {
+        const relDir = path.join(DIRECTIVE_FIXTURES_DIR, subdir, entry);
+        const loaded = loadBlindedFixture(relDir, manifest);
+        if (!loaded.ok) {
+          lines.push(`${relDir}: ${loaded.error}`);
+          continue;
+        }
+        const dup = seenHashes.get(loaded.blindHash);
+        if (dup) {
+          lines.push(`${relDir}: blinded content identical to ${dup}`);
+          continue;
+        }
+        seenHashes.set(loaded.blindHash, relDir);
+        // eslint-disable-next-line no-await-in-loop
+        const result = await scoreOf(loaded.input.composition);
+        const re = scoreRangeErrors(result);
+        lines.push(`${relDir}: dcc=${re.length === 0 ? result.axes!['directive_claim_coverage'] : `INVALID (${re.join('; ')})`}`);
+        count++;
+      }
+      return { count, lines };
+    };
+    const seen = new Map<string, string>();
+    const houseFixtures = await scoreGroup('house-style', seen);
+    const faithfulFixtures = await scoreGroup('faithful', seen);
+
+    const ok = verifierOk;
+    const evidence = [
+      `case=${c.id}`,
+      `resolution setup: faithfulResolved=${faithfulResolved}/${faithful.length} houseStyleResolved=${houseStyleResolved}/${houseStyle.length} citedElementsExist=${citedElementsExist}`,
+      `house-style axes=${JSON.stringify(houseResult.axes)} dccBelow=${dccBelow} othersAboveFloor=${othersAboveFloor}`,
+      `faithful axes=${JSON.stringify(faithfulResult.axes)} faithfulAbove=${faithfulAbove}`,
+      `implementer fixtures (additional, non-load-bearing): house-style=${houseFixtures.count} faithful=${faithfulFixtures.count}`,
+      ...houseFixtures.lines,
+      ...faithfulFixtures.lines,
+    ].join('\n');
+    return { ok, evidence, detail: ok ? undefined : `dccBelow=${dccBelow} othersAboveFloor=${othersAboveFloor} faithfulAbove=${faithfulAbove}` };
+  },
+);
+
+// =============================================================================
+// C7-10 -- counterfactual separation, indexed by the CORRECT registered
+// scorer axis id (F10: round-1 indexed axes[] with the directive-axis
+// vocabulary, e.g. axes['layout'], which is never a key the scorer
+// populates -- always undefined, so the check silently never worked).
+// The mapping is validated against floors.json's own keys so a future
+// name drift fails loudly instead of reading undefined again.
+// =============================================================================
+await probe(
+  'C7-10',
+  `validate DIRECTIVE_AXIS_TO_SCORER_AXIS's values all appear in ${FLOORS_PATH}'s floors keys (fail loudly on drift); require counterfactualMinDelta >= ${MIN_MEANINGFUL_THRESHOLD} (named epsilon, F12); for >=3 corpus cases build a verifier base/swapped pair differing in EXACTLY one composition element (mechanically diff-checked) and assert the CORRECTLY-MAPPED scorer axis moves by more than the delta; also score implementer fixtures as an additional, non-load-bearing check`,
+  `every value in the directive-axis-to-scorer-axis map (layout->layout_geometry, motion->motion_timing, palette->palette_fidelity, typography->type_fidelity, section->section_identity, interaction->responsiveness) is a real key in ${FLOORS_PATH}.floors; ${FLOORS_PATH}.counterfactualMinDelta is a finite number >= ${MIN_MEANINGFUL_THRESHOLD} (not merely > 0); for >=3 eligible corpus cases, a verifier-built pair whose composition arrays differ in EXACTLY 1 of N elements (mechanically diff-counted) produces |scoreComposition(base).axes[mappedAxis] - scoreComposition(swapped).axes[mappedAxis]| > counterfactualMinDelta; implementer-provided ${COUNTERFACTUAL_DIR} fixtures (if present) are scored as an additional, non-load-bearing signal`,
+  async () => {
+    const floorsDoc = readJson<{ floors?: Record<string, number>; counterfactualMinDelta?: number }>(FLOORS_PATH);
+    if (floorsDoc === null || !floorsDoc.floors) return { ok: false, evidence: `missing or invalid ${FLOORS_PATH}` };
+    const floorsKeys = new Set(Object.keys(floorsDoc.floors));
+    const mappingProblems = Object.entries(DIRECTIVE_AXIS_TO_SCORER_AXIS).filter(([, scorerAxis]) => !floorsKeys.has(scorerAxis));
+    if (mappingProblems.length > 0) {
+      return { ok: false, evidence: `DIRECTIVE_AXIS_TO_SCORER_AXIS references scorer axis ids not present in ${FLOORS_PATH}.floors (name drift): ${JSON.stringify(mappingProblems)}` };
+    }
+    if (typeof floorsDoc.counterfactualMinDelta !== 'number' || !Number.isFinite(floorsDoc.counterfactualMinDelta) || floorsDoc.counterfactualMinDelta < MIN_MEANINGFUL_THRESHOLD) {
+      return { ok: false, evidence: `${FLOORS_PATH}.counterfactualMinDelta must be a finite number >= ${MIN_MEANINGFUL_THRESHOLD}, got ${floorsDoc.counterfactualMinDelta}` };
+    }
+    const minDelta = floorsDoc.counterfactualMinDelta;
+
+    const imported = await importEvalModule(SCORER_INDEX_PATH);
+    if (!imported.ok) return { ok: false, evidence: imported.error };
+    const scoreComposition = imported.mod['scoreComposition'];
+    if (typeof scoreComposition !== 'function') return { ok: false, evidence: `${SCORER_INDEX_PATH} does not export scoreComposition` };
+
+    const { manifest, error } = loadManifest();
+    if (!manifest) return { ok: false, evidence: `cannot run: ${error}` };
+    const eligibleCases = manifest.cases.filter((c) => !c.sealed && !c.skip && c.sources.length >= 2 && c.directiveInventory.length >= 1 && faithfulComposition(c) !== null);
+    if (eligibleCases.length < 3) return { ok: false, evidence: `only ${eligibleCases.length} eligible corpus cases, need >=3` };
+
+    const lines: string[] = [];
+    let verifierFailures = 0;
+    let verifierAttempts = 0;
+    for (const c of eligibleCases) {
+      const pair = swapOneDirective(c);
+      if (!pair) {
+        lines.push(`${c.id}: could not construct a single-element swap`);
+        continue;
+      }
+      verifierAttempts++;
+      if (pair.diffCount !== 1) {
+        verifierFailures++;
+        lines.push(`${c.id}: base/swapped composition differ in ${pair.diffCount} elements, expected exactly 1`);
+        continue;
+      }
+      const scorerAxis = DIRECTIVE_AXIS_TO_SCORER_AXIS[pair.axis as DirectiveAxis];
+      // eslint-disable-next-line no-await-in-loop
+      const baseResult = (await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)({ caseId: c.id, composition: pair.base })) as { axes?: Record<string, number> };
+      // eslint-disable-next-line no-await-in-loop
+      const swappedResult = (await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)({ caseId: c.id, composition: pair.swapped })) as { axes?: Record<string, number> };
+      const rangeErrors = [...scoreRangeErrors(baseResult), ...scoreRangeErrors(swappedResult)];
+      if (rangeErrors.length > 0) {
+        verifierFailures++;
+        lines.push(`${c.id}: ${rangeErrors.join('; ')}`);
+        continue;
+      }
+      const baseScore = baseResult.axes![scorerAxis]!;
+      const swappedScore = swappedResult.axes![scorerAxis]!;
+      const delta = Math.abs(baseScore - swappedScore);
+      const ok = delta > minDelta;
+      if (!ok) verifierFailures++;
+      lines.push(`${c.id}: directiveAxis=${pair.axis} -> scorerAxis=${scorerAxis} diffCount=${pair.diffCount} base=${baseScore.toFixed(3)} swapped=${swappedScore.toFixed(3)} delta=${delta.toFixed(3)} (min ${minDelta}) -- ${ok ? 'OK' : 'FAIL'}`);
+    }
+    if (verifierAttempts < 3) verifierFailures++;
+
+    // Additional, non-load-bearing: implementer fixtures.
+    const fixtureLines: string[] = [];
+    const dir = abs(COUNTERFACTUAL_DIR);
+    const pairIds = fs.existsSync(dir) ? fs.readdirSync(dir).filter((e) => fs.statSync(path.join(dir, e)).isDirectory()) : [];
+    if (pairIds.length === 0) {
+      fixtureLines.push('no implementer counterfactual fixtures present (not required)');
+    }
+    for (const pairId of pairIds) {
+      const meta = readJson<{ swappedAxis?: string }>(path.join(COUNTERFACTUAL_DIR, pairId, 'meta.json'));
+      const axis = meta?.swappedAxis;
+      const scorerAxis = axis && DIRECTIVE_AXES.includes(axis as DirectiveAxis) ? DIRECTIVE_AXIS_TO_SCORER_AXIS[axis as DirectiveAxis] : axis;
+      const baseLoaded = loadBlindedFixture(path.join(COUNTERFACTUAL_DIR, pairId, 'base'), manifest);
+      const swappedLoaded = loadBlindedFixture(path.join(COUNTERFACTUAL_DIR, pairId, 'swapped'), manifest);
+      if (!scorerAxis || !baseLoaded.ok || !swappedLoaded.ok) {
+        fixtureLines.push(`${pairId}: incomplete (axis=${axis}, base=${baseLoaded.ok}, swapped=${swappedLoaded.ok})`);
+        continue;
+      }
+      // eslint-disable-next-line no-await-in-loop
+      const baseResult = (await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)(baseLoaded.input)) as { axes?: Record<string, number> };
+      // eslint-disable-next-line no-await-in-loop
+      const swappedResult = (await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)(swappedLoaded.input)) as { axes?: Record<string, number> };
+      const baseScore = baseResult.axes?.[scorerAxis];
+      const swappedScore = swappedResult.axes?.[scorerAxis];
+      if (typeof baseScore !== 'number' || typeof swappedScore !== 'number' || Math.abs(baseScore - swappedScore) <= minDelta) {
+        fixtureLines.push(`${pairId}: axis=${axis}->${scorerAxis} base=${baseScore} swapped=${swappedScore} did not separate beyond minDelta`);
+      } else {
+        fixtureLines.push(`${pairId}: axis=${axis}->${scorerAxis} base=${baseScore.toFixed(3)} swapped=${swappedScore.toFixed(3)} -- OK`);
+      }
+    }
+
+    const ok = verifierFailures === 0;
+    const evidence = [`verifier-constructed pairs (${verifierAttempts} attempted):`, ...lines, `implementer fixtures (additional, non-load-bearing, ${pairIds.length} pairs):`, ...fixtureLines].join('\n');
+    return { ok, evidence, detail: ok ? undefined : `verifierFailures=${verifierFailures}` };
+  },
+);
+
+// =============================================================================
+// C7-11 -- held-out split is REALLY sealed. F3: ciphertext is content-bound
+// to the seal commit's parent blob (a swap-in-the-seal-commit no longer
+// passes). F11: the leak scan samples multiple content windows from each
+// sealed plaintext rather than trusting whole-file hashes (catches
+// embedding inside a larger file, or a single altered framing byte); the
+// seal key's 0600 permission is verified every run; the manifest records
+// an HONEST boundary statement (R7) -- mechanical checks cover in-repo
+// leakage and key perms, while same-user out-of-repo access to the key or
+// proof directory is an orchestration invariant, not something file
+// permissions can enforce, and is declared as such rather than disguised.
+// =============================================================================
+const SEAL_ACCESS_BOUNDARY = {
+  mechanicallyVerified: [
+    'sealed .enc ciphertext is content-bound to the git blob at the seal commit\'s parent (F3)',
+    'decrypting every sealed .enc blob and re-hashing yields exactly the manifest\'s recorded plaintext hash',
+    'no git-tracked file under evals/ contains a content window sampled from any sealed plaintext (F11)',
+    `seal.key file mode is exactly 0600 (verified every run, not just set-on-create)`,
+  ],
+  orchestrationInvariant:
+    'Same-user, out-of-repo access to seal.key or the proof directory (~/.claude/goal-state/mishmash-w7-selector-foundations/) cannot be prevented by file permissions alone -- any process running as this OS user can read those paths. The held-out guarantee therefore also depends on an ORCHESTRATION invariant outside this verifier\'s mechanical reach: the orchestrator must never expose goal-state paths (or the seal key material) to a W8 implementing agent\'s context or sandbox. This is declared here per R7 (human/process assumptions must be declared, not disguised as mechanical guarantees) -- it is NOT mechanically checked by this criterion.',
+};
+
+await probe(
+  'C7-11',
+  `read ${SEALED_ACCESS_PATH}; decrypt every sealed case's IR + snapshot blobs and hash-check against the manifest's recorded plaintext hashes; content-bind every sealed .enc file to the git blob at the seal commit's parent; scan every git-tracked file under evals/ for content-window leakage of any sealed plaintext; verify seal.key is mode 0600`,
+  `${SEALED_ACCESS_PATH} names every sealed case id, records its plaintext irSha256, and states an access-control statement; manifest.sealedFraction matches the actual sealed fraction within 0.02; every sealed path ends in ".enc"; decrypting + re-hashing yields exactly the manifest's recorded plaintext hash; the CURRENT ciphertext of every sealed .enc file equals sha256(git show <sealCommit>^:<path>) -- a payload swapped in or after the seal commit fails (F3); a content-window scan (5 x 64-byte windows per sealed plaintext, F11) finds NO match in any git-tracked evals/ file other than the .enc blobs themselves; ${SEAL_KEY_PATH} is mode 0600; the manifest records the explicit orchestration-invariant boundary statement above (R7) alongside the mechanical results`,
+  async () => {
+    const text = readText(SEALED_ACCESS_PATH);
+    if (text === null) return { ok: false, evidence: `missing ${SEALED_ACCESS_PATH}` };
+    const { manifest, error } = loadManifest();
+    if (!manifest) return { ok: false, evidence: `cannot cross-check: ${error}` };
+    const sealedCases = manifest.cases.filter((c) => c.sealed);
+    if (sealedCases.length === 0) return { ok: false, evidence: 'manifest has zero sealed cases' };
+
+    const sealCommit = latestCommitTouching(SEALED_ACCESS_PATH);
+    if (!sealCommit) return { ok: false, evidence: `could not resolve a git commit for ${SEALED_ACCESS_PATH}` };
+
+    const actualFraction = sealedCases.length / manifest.cases.length;
+    const fractionOk = Math.abs(actualFraction - manifest.sealedFraction) <= 0.02;
+    const missingFromDoc = sealedCases.filter((c) => !text.includes(c.id));
+    const hasAccessStatement = /must not|forbidden|access.?control|not readable|no access/i.test(text);
+
+    const plaintextBuffers: { label: string; bytes: Buffer }[] = [];
+    const lines: string[] = [];
+    let decryptFailures = 0;
+    let contentBindingFailures = 0;
+    for (const c of sealedCases) {
+      if (!c.irPath.endsWith('.enc')) {
+        decryptFailures++;
+        lines.push(`${c.id}: irPath does not end in .enc (${c.irPath})`);
+      } else {
+        const decrypted = decryptToBytes(c.irPath, `${c.id}-seal-verify`);
+        if (!decrypted.ok) {
+          decryptFailures++;
+          lines.push(`${c.id}: ${decrypted.error}`);
+        } else {
+          const actualHash = sha256Buffer(decrypted.bytes);
+          if (actualHash !== c.irSha256) {
+            decryptFailures++;
+            lines.push(`${c.id}: decrypted IR hash mismatch (manifest=${c.irSha256} actual=${actualHash})`);
+          } else {
+            lines.push(`${c.id}: decrypted IR hash confirmed`);
+            plaintextBuffers.push({ label: `${c.id}/ir`, bytes: decrypted.bytes });
+          }
+        }
+        const binding = contentBoundBeforeSeal(sealCommit, c.irPath);
+        if (!binding.ok) {
+          contentBindingFailures++;
+          lines.push(`${c.id}/ir: ${binding.detail}`);
+        }
+      }
+      if (!text.includes(c.irSha256 ?? '')) {
+        decryptFailures++;
+        lines.push(`${c.id}: irSha256 not recorded verbatim in ${SEALED_ACCESS_PATH}`);
+      }
+      for (const source of c.sources) {
+        for (const [bp, ref] of Object.entries(source.snapshots)) {
+          const label = `${c.id}/${source.id}/${bp}`;
+          if (!ref.path.endsWith('.enc')) {
+            decryptFailures++;
+            lines.push(`${label}: snapshot path does not end in .enc (${ref.path})`);
+            continue;
+          }
+          const decrypted = decryptToBytes(ref.path, label);
+          if (!decrypted.ok) {
+            decryptFailures++;
+            lines.push(`${label}: ${decrypted.error}`);
+          } else {
+            const actualHash = sha256Buffer(decrypted.bytes);
+            if (actualHash !== ref.sha256) {
+              decryptFailures++;
+              lines.push(`${label}: decrypted snapshot hash mismatch (manifest=${ref.sha256} actual=${actualHash})`);
+            } else {
+              plaintextBuffers.push({ label, bytes: decrypted.bytes });
+            }
+          }
+          const binding = contentBoundBeforeSeal(sealCommit, ref.path);
+          if (!binding.ok) {
+            contentBindingFailures++;
+            lines.push(`${label}: ${binding.detail}`);
+          }
+        }
+      }
+    }
+
+    // F11: content-window leak scan over every git-tracked file under evals/.
+    const tracked = sh('git', ['ls-files', 'evals']);
+    const trackedFiles = tracked.status === 0 ? tracked.stdout.split('\n').filter(Boolean) : [];
+    const leaks: string[] = [];
+    if (tracked.status !== 0) {
+      leaks.push(`could not run git ls-files evals to scan for leaks (status=${tracked.status})`);
+    } else {
+      const windows: { source: string; window: Buffer }[] = [];
+      for (const { label, bytes } of plaintextBuffers) for (const w of sampleWindows(bytes)) windows.push({ source: label, window: w });
+      for (const rel of trackedFiles) {
+        if (rel.endsWith('.enc')) continue;
+        let fileBytes: Buffer;
+        try {
+          fileBytes = fs.readFileSync(abs(rel));
+        } catch {
+          continue;
+        }
+        for (const { source, window } of windows) {
+          if (window.length > 0 && fileBytes.includes(window)) leaks.push(`${rel} contains a content window sampled from sealed plaintext ${source}`);
+        }
+      }
+    }
+
+    const keyMode = sealKeyModeOk();
+
+    const evidence = [
+      `sealedFraction manifest=${manifest.sealedFraction} actual=${actualFraction.toFixed(3)} ok=${fractionOk}`,
+      `sealed cases named in ${SEALED_ACCESS_PATH}: ${sealedCases.length - missingFromDoc.length}/${sealedCases.length}`,
+      `access-control statement present: ${hasAccessStatement}`,
+      `decrypt+hash checks: ${decryptFailures === 0 ? 'all OK' : `${decryptFailures} failures`}`,
+      `F3 content-binding (ciphertext === blob at ${sealCommit}^): ${contentBindingFailures === 0 ? 'all OK' : `${contentBindingFailures} failures`}`,
+      `F11 content-window leak scan over ${trackedFiles.length} tracked evals/ files, ${plaintextBuffers.length} sealed plaintexts sampled: ${leaks.length === 0 ? 'clean' : leaks.join('; ')}`,
+      `seal.key mode: ${keyMode.mode} (want 0600): ${keyMode.ok ? 'OK' : 'FAIL'}`,
+      `honest boundary (R7, not mechanically enforced): ${SEAL_ACCESS_BOUNDARY.orchestrationInvariant}`,
+      ...lines,
+    ].join('\n');
+    const ok = fractionOk && missingFromDoc.length === 0 && hasAccessStatement && decryptFailures === 0 && contentBindingFailures === 0 && leaks.length === 0 && keyMode.ok;
+    return { ok, evidence, detail: ok ? undefined : 'seal record incomplete, decrypt/hash/content-binding mismatch, leak detected, or key mode wrong' };
+  },
+);
+
+// =============================================================================
+// C7-12 -- absolute floors frozen and non-vacuous. F12: a floor must be
+// >= a NAMED epsilon (0.05), not merely "> 0" (a denormalized 5e-324
+// satisfies ">0" but is functionally zero).
+// =============================================================================
+await probe(
+  'C7-12',
+  `read ${FLOORS_PATH}; assert version + all 11 axis floors present, finite, and >= the named epsilon ${MIN_MEANINGFUL_THRESHOLD}; assert counterfactualMinDelta >= ${MIN_MEANINGFUL_THRESHOLD}; record its sha256`,
+  `${FLOORS_PATH} has a numeric "version", a "floors" object with a FINITE numeric entry >= ${MIN_MEANINGFUL_THRESHOLD} (named epsilon, and <= 1) for every axis in [${REQUIRED_AXES.join(', ')}] -- a floor of 0, or a denormalized near-zero positive number, is vacuous and fails -- and a finite numeric "counterfactualMinDelta" >= ${MIN_MEANINGFUL_THRESHOLD}; its sha256 is recorded so a later silent edit is detectable by hash drift`,
+  async () => {
+    const raw = readText(FLOORS_PATH);
+    if (raw === null) return { ok: false, evidence: `missing ${FLOORS_PATH}` };
+    const parsed = readJson<{ version?: number; floors?: Record<string, number>; counterfactualMinDelta?: number }>(FLOORS_PATH);
+    if (parsed === null) return { ok: false, evidence: `${FLOORS_PATH} is not valid JSON` };
+    if (typeof parsed.version !== 'number') return { ok: false, evidence: `${FLOORS_PATH} missing numeric "version"` };
+    if (!parsed.floors) return { ok: false, evidence: `${FLOORS_PATH} missing "floors" object` };
+    const bad = REQUIRED_AXES.filter((a) => {
+      const v = parsed.floors?.[a];
+      return typeof v !== 'number' || !Number.isFinite(v) || v < MIN_MEANINGFUL_THRESHOLD || v > 1;
+    });
+    const deltaOk = typeof parsed.counterfactualMinDelta === 'number' && Number.isFinite(parsed.counterfactualMinDelta) && parsed.counterfactualMinDelta >= MIN_MEANINGFUL_THRESHOLD;
+    const hash = crypto.createHash('sha256').update(raw).digest('hex');
+    const ok = bad.length === 0 && deltaOk;
+    return {
+      ok,
+      evidence: `version=${parsed.version}\nfloors=${JSON.stringify(parsed.floors, null, 2)}\ncounterfactualMinDelta=${parsed.counterfactualMinDelta}\nepsilon=${MIN_MEANINGFUL_THRESHOLD}\nsha256=${hash}`,
+      detail: ok ? undefined : `axes below epsilon/out-of-range/non-finite: ${bad.join(', ')}${deltaOk ? '' : '; counterfactualMinDelta must be finite and >= epsilon'}`,
+    };
+  },
+);
+
+// =============================================================================
+// C7-13 -- scorer versioned (real semver), pinned in a dedicated
+// eval-manifest.json cross-checked against floors/corpus versions, and
+// deterministic across the SAME process AND a freshly-spawned subprocess
+// that ACTUALLY receives altered HOSTNAME/TZ/LANG env (F13: round 1's sh()
+// had no env parameter, so the subprocess silently inherited unchanged env
+// and the cross-machine check never exercised anything).
+// =============================================================================
+await probe(
+  'C7-13',
+  `dynamic-import ${SCORER_INDEX_PATH}; require SCORER_VERSION matches semver; cross-check ${EVAL_MANIFEST_PATH} pins the same scorer/floors/corpus versions; call scoreComposition twice in-process AND once more in a freshly-spawned node subprocess ACTUALLY started with HOSTNAME/TZ/LANG overridden via sh()'s env parameter; require all three results are byte-identical`,
+  `${SCORER_INDEX_PATH} exports SCORER_VERSION matching /^\\d+\\.\\d+\\.\\d+$/; ${EVAL_MANIFEST_PATH} has {scorerVersion, floorsVersion, corpusVersion} matching the live SCORER_VERSION, ${FLOORS_PATH}.version, and ${MANIFEST_PATH}.version; scoreComposition(${DETERMINISM_FIXTURE_PATH}) called twice in this process AND once in a child process spawned with env={HOSTNAME:'verifier-control-host',TZ:'UTC',LANG:'C'} (verified actually passed, not inherited) yields stable-stringify-identical results across all three`,
+  async () => {
+    const imported = await importEvalModule(SCORER_INDEX_PATH);
+    if (!imported.ok) return { ok: false, evidence: imported.error };
+    const version = imported.mod['SCORER_VERSION'];
+    if (typeof version !== 'string' || !/^\d+\.\d+\.\d+$/.test(version)) return { ok: false, evidence: `${SCORER_INDEX_PATH} SCORER_VERSION must be a semver string (X.Y.Z), got ${JSON.stringify(version)}` };
+    const scoreComposition = imported.mod['scoreComposition'];
+    if (typeof scoreComposition !== 'function') return { ok: false, evidence: `${SCORER_INDEX_PATH} does not export scoreComposition` };
+
+    const evalManifest = readJson<{ scorerVersion?: string; floorsVersion?: number; corpusVersion?: number }>(EVAL_MANIFEST_PATH);
+    if (evalManifest === null) return { ok: false, evidence: `missing or invalid ${EVAL_MANIFEST_PATH}` };
+    const floorsDoc = readJson<{ version?: number }>(FLOORS_PATH);
+    const { manifest } = loadManifest();
+    const pinProblems: string[] = [];
+    if (evalManifest.scorerVersion !== version) pinProblems.push(`scorerVersion ${evalManifest.scorerVersion} !== live SCORER_VERSION ${version}`);
+    if (!floorsDoc || evalManifest.floorsVersion !== floorsDoc.version) pinProblems.push(`floorsVersion ${evalManifest.floorsVersion} !== ${FLOORS_PATH}.version ${floorsDoc?.version}`);
+    if (!manifest || evalManifest.corpusVersion !== manifest.version) pinProblems.push(`corpusVersion ${evalManifest.corpusVersion} !== ${MANIFEST_PATH}.version ${manifest?.version}`);
+    if (pinProblems.length > 0) return { ok: false, evidence: pinProblems.join('; ') };
+
+    const input = readJson<unknown>(DETERMINISM_FIXTURE_PATH);
+    if (input === null) return { ok: false, evidence: `missing or invalid ${DETERMINISM_FIXTURE_PATH}` };
+
+    const run1 = await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)(structuredClone(input));
+    const run2 = await (scoreComposition as (i: unknown) => unknown | Promise<unknown>)(structuredClone(input));
+    const inProcessEqual = stableStringify(run1) === stableStringify(run2);
+
+    // F13: build a tiny runner script and spawn it with an ACTUALLY-altered
+    // environment via sh()'s env parameter -- a scorer reading
+    // process.env.TZ/HOSTNAME/LANG, os.hostname(), or locale-sensitive
+    // Date formatting will now genuinely diverge here.
+    const controlEnv = { HOSTNAME: 'verifier-control-host', TZ: 'UTC', LANG: 'C' };
+    const runnerPath = path.join(proofDir, 'C7-13-subprocess-runner.mjs');
+    const outPath = path.join(proofDir, 'C7-13-subprocess-result.json');
+    fs.writeFileSync(
+      runnerPath,
+      [
+        `import { pathToFileURL } from 'node:url';`,
+        `import fs from 'node:fs';`,
+        `const mod = await import(pathToFileURL(${JSON.stringify(abs(SCORER_INDEX_PATH))}).href);`,
+        `const input = JSON.parse(fs.readFileSync(${JSON.stringify(abs(DETERMINISM_FIXTURE_PATH))}, 'utf8'));`,
+        `const result = await mod.scoreComposition(input);`,
+        `fs.writeFileSync(${JSON.stringify(outPath)}, JSON.stringify({ result, env: { HOSTNAME: process.env.HOSTNAME, TZ: process.env.TZ, LANG: process.env.LANG } }));`,
+      ].join('\n'),
+    );
+    const subprocess = sh('node', ['--import', 'tsx', runnerPath], repoRoot, controlEnv);
+    let subprocessEqual = false;
+    let envActuallyChanged = false;
+    let subprocessDetail = `subprocess exit=${subprocess.status}`;
+    if (subprocess.status === 0 && fs.existsSync(outPath)) {
+      try {
+        const parsedOut = JSON.parse(fs.readFileSync(outPath, 'utf8')) as { result: unknown; env: Record<string, string | undefined> };
+        subprocessEqual = stableStringify(parsedOut.result) === stableStringify(run1);
+        envActuallyChanged = parsedOut.env.HOSTNAME === controlEnv.HOSTNAME && parsedOut.env.TZ === controlEnv.TZ && parsedOut.env.LANG === controlEnv.LANG;
+        subprocessDetail += ` result=${stableStringify(parsedOut.result)} observedEnv=${JSON.stringify(parsedOut.env)} envActuallyChanged=${envActuallyChanged}`;
+      } catch (e) {
+        subprocessDetail += ` (failed to read/parse subprocess result: ${(e as Error).message})`;
+      }
+    } else {
+      subprocessDetail += ` stderr=${subprocess.stderr}`;
+    }
+
+    // The env-override plumbing itself must have worked, or this whole
+    // check proves nothing (exactly the F13 bug).
+    const ok = inProcessEqual && subprocessEqual && envActuallyChanged;
+    return {
+      ok,
+      evidence: `SCORER_VERSION=${version}\nrun1=${stableStringify(run1)}\nrun2=${stableStringify(run2)}\ninProcessEqual=${inProcessEqual}\n${subprocessDetail}\nsubprocessEqual=${subprocessEqual}`,
+      detail: ok ? undefined : `inProcessEqual=${inProcessEqual} subprocessEqual=${subprocessEqual} envActuallyChanged=${envActuallyChanged}`,
+    };
+  },
+);
+
+// =============================================================================
+// C7-14 -- NL->IR goldens exist with a REAL typed parse interface. F14: a
+// raw-text regex over the parser file accepted a signature sitting in a
+// COMMENT, and calling the function without awaiting let an async function
+// resolving undefined masquerade as "returned an object" (a Promise is an
+// object). Fixed with (a) a GENERATED .ts probe file that imports the
+// runtime export and assigns it to a declared function type -- comments
+// have zero effect on an assignment TypeScript actually checks -- and
+// (b) an AWAITED runtime call requiring the RESOLVED value to be non-
+// undefined (a throw is still acceptable stub behavior).
+// =============================================================================
+await probe(
+  'C7-14',
+  `read ${NL_GOLDENS_PATH} (>=5 pairs); write a generated .ts probe that imports { parse } from ${NL_PARSER_PATH} and assigns it to a declared "(input: string) => CompositionIR | Promise<CompositionIR>" type, typecheck it; dynamic-import the parser and AWAIT parse(), requiring the RESOLVED value to be non-undefined (throw acceptable); typecheck all evals/**/*.ts`,
+  `${NL_GOLDENS_PATH} has >=5 { id, nlDirective, expectedIR } pairs with an "axis" and "source" field; a generated probe file assigns the imported "parse" export to a declared type "(input: string) => CompositionIR | Promise<CompositionIR>" (CompositionIR requiring all 6 IR top-level array keys) and this assignment typechecks -- an untyped/incorrectly-typed parse (including one with a matching signature merely sitting in a comment) fails this by construction; calling parse() and AWAITING the result requires the RESOLVED value to be non-undefined (an async function that resolves undefined now fails, closing the round-1 gap where a Promise object was mistaken for a non-undefined return); every .ts file under evals/ typechecks cleanly`,
+  async () => {
+    const goldens = readJson<Array<{ id?: string; nlDirective?: string; expectedIR?: { axis?: string; source?: string } }>>(NL_GOLDENS_PATH);
+    if (goldens === null || !Array.isArray(goldens)) return { ok: false, evidence: `missing or invalid ${NL_GOLDENS_PATH}` };
+    if (goldens.length < 5) return { ok: false, evidence: `only ${goldens.length} golden pairs, need >=5` };
+    const malformed = goldens.filter((g) => !g.id || !g.nlDirective || !g.expectedIR?.axis || !g.expectedIR?.source);
+    if (malformed.length > 0) return { ok: false, evidence: `${malformed.length} golden(s) missing id/nlDirective/expectedIR.axis/expectedIR.source` };
+
+    if (!exists(NL_PARSER_PATH)) return { ok: false, evidence: `missing ${NL_PARSER_PATH}` };
+
+    const evalsTsFiles = listFilesRecursive(abs('evals')).filter((f) => f.endsWith('.ts'));
+    if (evalsTsFiles.length === 0) return { ok: false, evidence: 'no .ts files found under evals/ to typecheck' };
+
+    const probeTsPath = path.join(proofDir, 'C7-14-parse-signature-probe.ts');
+    const importSpecifierRaw = path.relative(proofDir, abs(NL_PARSER_PATH)).split(path.sep).join('/');
+    const importSpecifier = importSpecifierRaw.startsWith('.') ? importSpecifierRaw : `./${importSpecifierRaw}`;
+    fs.writeFileSync(
+      probeTsPath,
+      [
+        `import { parse } from ${JSON.stringify(importSpecifier)};`,
+        `type CompositionIR = {`,
+        `  sourceSlots: unknown[];`,
+        `  directives: unknown[];`,
+        `  constraints: unknown[];`,
+        `  conflictResolution: unknown[];`,
+        `  provenance: unknown[];`,
+        `  variantAxes: unknown[];`,
+        `};`,
+        `const typedParse: (input: string) => CompositionIR | Promise<CompositionIR> = parse;`,
+        `void typedParse;`,
+      ].join('\n'),
+    );
+
+    const tmpTsconfig = path.join(proofDir, 'C7-14-tsconfig.json');
+    fs.writeFileSync(
+      tmpTsconfig,
+      JSON.stringify(
+        {
+          compilerOptions: {
+            target: 'ES2022',
+            lib: ['ES2022'],
+            module: 'NodeNext',
+            moduleResolution: 'NodeNext',
+            strict: true,
+            noUncheckedIndexedAccess: true,
+            exactOptionalPropertyTypes: true,
+            allowImportingTsExtensions: true,
+            noEmit: true,
+            isolatedModules: true,
+            esModuleInterop: true,
+            skipLibCheck: true,
+            // This generated tsconfig lives in proofDir, OUTSIDE the repo --
+            // TypeScript's default typeRoots search walks up from the
+            // tsconfig file's own location, not from cwd or repoRoot, so
+            // "types": ["node"] silently fails to resolve @types/node
+            // unless typeRoots is pointed at the repo's own node_modules
+            // explicitly. Verified by direct reproduction before this fix.
+            typeRoots: [path.join(repoRoot, 'node_modules', '@types')],
+            types: ['node'],
+          },
+          include: [...evalsTsFiles, probeTsPath],
+        },
+        null,
+        2,
+      ),
+    );
+    const tsc = sh('pnpm', ['exec', 'tsc', '-p', tmpTsconfig, '--noEmit']);
+    if (tsc.status !== 0) {
+      return { ok: false, evidence: `golden pairs: ${goldens.length}\ntsc exit=${tsc.status}\n${tsc.stdout}`, detail: 'evals/**/*.ts (including the generated parse-signature type-assertion probe) does not typecheck' };
+    }
+
+    const imported = await importEvalModule(NL_PARSER_PATH);
+    if (!imported.ok) return { ok: false, evidence: imported.error };
+    const parseFn = imported.mod['parse'];
+    if (typeof parseFn !== 'function') return { ok: false, evidence: `${NL_PARSER_PATH} does not export a callable "parse" function at runtime` };
+    let callBehavior: string;
+    let runtimeOk: boolean;
+    try {
+      const resolved = await (parseFn as (s: string) => unknown | Promise<unknown>)(goldens[0]!.nlDirective!);
+      runtimeOk = resolved !== undefined;
+      callBehavior = runtimeOk ? `resolved to ${typeof resolved}` : 'FAIL: parse() resolved to undefined (awaited)';
+    } catch (e) {
+      runtimeOk = true;
+      callBehavior = `threw (acceptable stub behavior): ${(e as Error).message}`;
+    }
+
+    const ok = runtimeOk;
+    return {
+      ok,
+      evidence: `golden pairs: ${goldens.length}\ntype-assertion probe typechecked OK (tsc exit=${tsc.status})\nawaited runtime call: ${callBehavior}`,
+      detail: ok ? undefined : callBehavior,
+    };
+  },
+);
+
+// =============================================================================
+// C7-15 -- feasibility spike documented with EXECUTED evidence (F17): a real
+// composed-output artifact must exist with its hash recorded in the doc;
+// every insufficiency item must name a field that actually exists in the
+// committed schema (enumerated from the schema itself, not a hardcoded
+// token list); every response item must either cite such a real field or
+// carry an explicit >=80-char no-change rationale.
+// =============================================================================
+const MIN_SPIKE_ITEM_LENGTH = 40;
+const MIN_NO_CHANGE_RATIONALE_LENGTH = 80;
+
+await probe(
+  'C7-15',
+  `read ${SPIKE_DOC_PATH} + ${IR_SCHEMA_PATH}; require ${SPIKE_OUTPUT_PATH} exists with its sha256 recorded verbatim in the doc; enumerate real schema field names; require EVERY substantive insufficiency item to name a real field; require EVERY substantive response item to name a real field OR carry an explicit >=${MIN_NO_CHANGE_RATIONALE_LENGTH}-char no-change rationale`,
+  `${SPIKE_OUTPUT_PATH} exists (the spike's actual composed output, proving it was executed, not just narrated) and its sha256 is recorded verbatim in ${SPIKE_DOC_PATH}; "## Case" names a real corpus case id; EVERY list item under "## IR insufficiencies found" (>=1 item, each >= ${MIN_SPIKE_ITEM_LENGTH} chars) names at least one field name that is enumerated from the ACTUAL committed ${IR_SCHEMA_PATH} (not a fixed token list) -- a generic bullet or a field name in unrelated prose elsewhere in the doc does not count; EVERY list item under "## Responses" (>=1 item, each >= ${MIN_SPIKE_ITEM_LENGTH} chars) EITHER names a real schema field OR is itself >= ${MIN_NO_CHANGE_RATIONALE_LENGTH} chars (an explicit no-change rationale) -- a short token-only response line fails both branches`,
+  async () => {
+    const text = readText(SPIKE_DOC_PATH);
+    if (text === null) return { ok: false, evidence: `missing ${SPIKE_DOC_PATH}` };
+    const schema = readJson<JsonSchema>(IR_SCHEMA_PATH);
+    if (schema === null) return { ok: false, evidence: `missing or invalid ${IR_SCHEMA_PATH}` };
+    const schemaFields = enumerateSchemaFieldNames(schema);
+    if (schemaFields.size === 0) return { ok: false, evidence: `${IR_SCHEMA_PATH} has no enumerable property names` };
+
+    if (!exists(SPIKE_OUTPUT_PATH)) return { ok: false, evidence: `missing ${SPIKE_OUTPUT_PATH} -- the spike must produce a real composed-output artifact, not just a narrative` };
+    const outputHash = sha256File(SPIKE_OUTPUT_PATH);
+    if (!outputHash || !text.includes(outputHash)) {
+      return { ok: false, evidence: `${SPIKE_OUTPUT_PATH}'s sha256 (${outputHash ?? '(unreadable)'}) is not recorded verbatim in ${SPIKE_DOC_PATH}` };
+    }
+
+    const section = (heading: string): string => {
+      const re = new RegExp(`##\\s*${heading}[^\\n]*\\n([\\s\\S]*?)(\\n##\\s|$)`, 'i');
+      return (text.match(re)?.[1] ?? '').trim();
+    };
+    const caseSection = section('Case');
+    const insufficienciesSection = section('IR insufficiencies');
+    const responsesSection = section('Responses');
+    const listItemTexts = (s: string): string[] =>
+      s
+        .split(/\n(?=[-*]\s|\d+\.\s)/)
+        .map((item) => item.replace(/^[-*]\s|^\d+\.\s/, '').trim())
+        .filter(Boolean);
+    const insufficiencyItems = listItemTexts(insufficienciesSection);
+    const responseItems = listItemTexts(responsesSection);
+    const namesRealField = (item: string): string | null => [...schemaFields].find((f) => new RegExp(`\\b${f}\\b`, 'i').test(item)) ?? null;
+
+    const problems: string[] = [];
+    if (caseSection.length === 0) problems.push('"## Case" section missing or empty');
+    if (insufficiencyItems.length === 0) problems.push('"## IR insufficiencies found" has no list items');
+    const insuffFieldProblems = insufficiencyItems.filter((item) => item.length < MIN_SPIKE_ITEM_LENGTH || !namesRealField(item));
+    if (insuffFieldProblems.length > 0) {
+      problems.push(`${insuffFieldProblems.length}/${insufficiencyItems.length} insufficiency items are too short or name no real schema field: ${JSON.stringify(insuffFieldProblems.map((i) => i.slice(0, 60)))}`);
+    }
+    if (responseItems.length === 0) problems.push('"## Responses" has no list items');
+    const responseProblems = responseItems.filter((item) => {
+      if (namesRealField(item) && item.length >= MIN_SPIKE_ITEM_LENGTH) return false;
+      if (item.length >= MIN_NO_CHANGE_RATIONALE_LENGTH) return false;
+      return true;
+    });
+    if (responseProblems.length > 0) {
+      problems.push(`${responseProblems.length}/${responseItems.length} response items neither cite a real schema field (>= ${MIN_SPIKE_ITEM_LENGTH} chars) NOR carry a >= ${MIN_NO_CHANGE_RATIONALE_LENGTH}-char no-change rationale: ${JSON.stringify(responseProblems.map((i) => i.slice(0, 60)))}`);
+    }
+
+    const { manifest } = loadManifest();
+    const caseIdMatch = caseSection.match(/[a-zA-Z0-9_-]+/);
+    const referencedId = caseIdMatch?.[0];
+    const caseExists = manifest ? manifest.cases.some((c) => c.id === referencedId) : false;
+    if (!caseExists) problems.push(`referenced case id "${referencedId ?? '(none found)'}" not present in ${MANIFEST_PATH}`);
+
+    return {
+      ok: problems.length === 0,
+      evidence: `composed-output hash recorded: yes (${outputHash})\nschema fields enumerated: ${schemaFields.size}\ncase section: ${caseSection.slice(0, 200)}\ninsufficiency items: ${insufficiencyItems.length} (field-grounded: ${insufficiencyItems.length - insuffFieldProblems.length})\nresponse items: ${responseItems.length} (valid: ${responseItems.length - responseProblems.length})\nreferenced case exists in manifest: ${caseExists}`,
+      detail: problems.length > 0 ? problems.join('; ') : undefined,
+    };
+  },
+);
+
+// =============================================================================
+// C7-16 -- human: go/no-go recorded (never mechanically "pass")
+// =============================================================================
+await (async () => {
+  const startedAt = Date.now();
+  const command = `read ${GO_NO_GO_PATH}`;
+  const assertion = `${GO_NO_GO_PATH} is the founder go/no-go record. Structure only, never judgment: requires a non-empty "## Founder" line naming an identity, a "## Reviewer 1" section (GPT-5.6 Sol) with a "Verdict: GO" or "Verdict: NO-GO" line plus non-empty rationale, a "## Reviewer 2" section (Grok 4.5) with the same shape, and a "## Overall decision" with "Decision: GO" or "Decision: NO-GO". This criterion NEVER reports "pass": it is "fail" while the record is missing/incomplete and "blocked-on-founder" once structurally complete -- only a human landing decision outside this verifier can close it (VERIFICATION-CONTRACT.md S2 rule 3, S3 R7)`;
+  try {
+    const text = readText(GO_NO_GO_PATH);
+    if (text === null) {
+      record('C7-16', command, assertion, 'fail', `missing ${GO_NO_GO_PATH}`, startedAt, 'go/no-go record does not exist yet');
+      return;
+    }
+    const founderLine = /##\s*Founder[^\n]*\n+([^\n#]+)/i.exec(text);
+    const founderOk = !!founderLine && founderLine[1]!.trim().length > 0;
+    const verdictBlock = (needle: RegExp): { present: boolean; verdictOk: boolean; rationaleOk: boolean } => {
+      const m = needle.exec(text);
+      if (!m) return { present: false, verdictOk: false, rationaleOk: false };
+      const block = m[0];
+      const verdict = /Verdict:\s*(GO|NO-GO)/i.exec(block);
+      const rationaleLen = block.replace(/##[^\n]*\n/, '').replace(/Verdict:[^\n]*\n?/i, '').trim().length;
+      return { present: true, verdictOk: !!verdict, rationaleOk: rationaleLen > 20 };
+    };
+    const r1 = verdictBlock(/##\s*Reviewer 1[^\n]*\n([\s\S]*?)(\n##\s|$)/i);
+    const r2 = verdictBlock(/##\s*Reviewer 2[^\n]*\n([\s\S]*?)(\n##\s|$)/i);
+    const overallMatch = /##\s*Overall decision[^\n]*\n([\s\S]*?)(\n##\s|$)/i.exec(text);
+    const overallDecisionOk = !!overallMatch && /Decision:\s*(GO|NO-GO)/i.test(overallMatch[1] ?? '');
+    const sol = /sol/i.test(text) && /gpt-?5\.6/i.test(text);
+    const grok = /grok/i.test(text);
+
+    const problems: string[] = [];
+    if (!founderOk) problems.push('missing/empty "## Founder" identity line');
+    if (!r1.present || !r1.verdictOk || !r1.rationaleOk) problems.push(`Reviewer 1 section incomplete (present=${r1.present} verdict=${r1.verdictOk} rationale=${r1.rationaleOk})`);
+    if (!r2.present || !r2.verdictOk || !r2.rationaleOk) problems.push(`Reviewer 2 section incomplete (present=${r2.present} verdict=${r2.verdictOk} rationale=${r2.rationaleOk})`);
+    if (!overallDecisionOk) problems.push('missing "## Overall decision" with a Decision: GO|NO-GO line');
+    if (!sol) problems.push('Reviewer 1 does not identify GPT-5.6 Sol');
+    if (!grok) problems.push('Reviewer 2 does not identify Grok');
+
+    const evidence = `founderOk=${founderOk}\nreviewer1=${JSON.stringify(r1)}\nreviewer2=${JSON.stringify(r2)}\noverallDecisionOk=${overallDecisionOk}\nidentifiesSol=${sol}\nidentifiesGrok=${grok}`;
+    if (problems.length > 0) {
+      record('C7-16', command, assertion, 'fail', evidence, startedAt, problems.join('; '));
+    } else {
+      record('C7-16', command, assertion, 'blocked-on-founder', evidence, startedAt, 'record is structurally complete; awaiting/reflecting the human landing decision, never auto-passed');
+    }
+  } catch (error) {
+    record('C7-16', command, assertion, 'fail', `probe threw: ${(error as Error).stack ?? String(error)}`, startedAt, 'probe crashed instead of failing cleanly');
+  }
+})();
+
+// =============================================================================
 // GATE-INTEGRITY (F1) -- once an approval round pins this file's sha256,
 // every later run hard-fails on any drift. Before any approval exists, this
 // is advisory only (the hash is simply recorded for the orchestrator).
@@ -1873,35 +2420,27 @@ await (async () => {
 })();
 
 // =============================================================================
-// LEASE check (R9) -- F15: every git call's exit status is checked; the base
-// commit is resolved from the REAL remote (git ls-remote) rather than a
-// potentially-tampered local origin/main ref; an empty diff against
-// non-empty branch history, or any unresolvable git identity, fails closed.
+// LEASE check (R9) -- F15: ls-remote failure is now a HARD FAIL with no
+// local-ref advisory fallback (landing context always has network); a
+// failed rev-list is a HARD FAIL, never silently converted to -1 (which
+// round 1 did, defeating the "empty diff vs non-empty history" guard
+// whenever rev-list happened to fail).
 // =============================================================================
-function resolveRemoteMainSha(): { sha: string | null; source: 'ls-remote' | 'local-ref' | 'unavailable'; warning: string } {
+function resolveRemoteMainShaOrFail(): { ok: true; sha: string } | { ok: false; error: string } {
   const lsRemote = sh('git', ['ls-remote', 'origin', 'main']);
-  if (lsRemote.status === 0 && lsRemote.stdout.trim().length > 0) {
-    const sha = lsRemote.stdout.trim().split('\n')[0]?.split('\t')[0]?.trim();
-    if (sha && /^[0-9a-f]{40}$/i.test(sha)) {
-      const catCheck = sh('git', ['cat-file', '-e', sha]);
-      if (catCheck.status === 0) return { sha, source: 'ls-remote', warning: '' };
-      return { sha: null, source: 'unavailable', warning: `remote origin/main resolved to ${sha} via ls-remote but that commit is not present locally (needs fetch)` };
-    }
-  }
-  const localRef = sh('git', ['rev-parse', 'origin/main']);
-  if (localRef.status === 0 && localRef.stdout.trim().length > 0) {
-    return { sha: localRef.stdout.trim(), source: 'local-ref', warning: 'git ls-remote origin main was unavailable/unparseable -- fell back to the local refs/remotes/origin/main ref, which a local ref update could tamper with' };
-  }
-  return { sha: null, source: 'unavailable', warning: 'neither git ls-remote origin main nor local origin/main ref resolved' };
+  if (lsRemote.status !== 0) return { ok: false, error: `git ls-remote origin main failed (status=${lsRemote.status}): ${lsRemote.stderr} -- F15: no local-ref fallback permitted, landing context always has network` };
+  const sha = lsRemote.stdout.trim().split('\n')[0]?.split('\t')[0]?.trim();
+  if (!sha || !/^[0-9a-f]{40}$/i.test(sha)) return { ok: false, error: `git ls-remote origin main returned unparseable output: "${lsRemote.stdout}"` };
+  const catCheck = sh('git', ['cat-file', '-e', sha]);
+  if (catCheck.status !== 0) return { ok: false, error: `remote origin/main (${sha}) is not present locally -- fetch required before verification` };
+  return { ok: true, sha };
 }
 
-const remoteMain = resolveRemoteMainSha();
+const remoteMain = resolveRemoteMainShaOrFail();
 let baseCommit = '';
-let baseWarning = remoteMain.warning;
-if (remoteMain.sha) {
+if (remoteMain.ok) {
   const mb = sh('git', ['merge-base', remoteMain.sha, 'HEAD']);
   if (mb.status === 0 && mb.stdout.trim()) baseCommit = mb.stdout.trim();
-  else baseWarning += `${baseWarning ? '; ' : ''}merge-base against resolved main sha ${remoteMain.sha} failed (status=${mb.status}): ${mb.stderr}`;
 }
 const headShaResult = sh('git', ['rev-parse', 'HEAD']);
 const headSha = headShaResult.status === 0 ? headShaResult.stdout.trim() : '';
@@ -1912,15 +2451,19 @@ const LEASE_ALLOW_EXACT = ['scripts/waves/verify-w7.ts'];
 
 await (async () => {
   const startedAt = Date.now();
-  const command = `git diff --name-only <base resolved via git ls-remote origin main>...HEAD ⊆ leases.json[W7].allow`;
-  const assertion = 'no writes outside docs/specs/**, evals/**, scripts/waves/verify-w7.ts, docs/plans/waves/**; the base commit is resolved from the real remote when reachable (never silently trusted from a possibly-tampered local ref), every git invocation`s exit status is checked, and an empty diff against a non-empty commit range fails closed';
+  const command = `git diff --name-only <base resolved ONLY via git ls-remote origin main>...HEAD ⊆ leases.json[W7].allow`;
+  const assertion = `no writes outside docs/specs/**, evals/**, scripts/waves/verify-w7.ts, docs/plans/waves/**; the base commit is resolved EXCLUSIVELY from git ls-remote origin main (F15: no local-ref advisory fallback -- landing context always has network, so an unreachable remote is itself a fail, not a downgrade); every git invocation's exit status is checked including rev-list (F15: a failed rev-list is a hard fail, never silently treated as -1); an empty diff against a non-empty commit range fails closed`;
   try {
+    if (!remoteMain.ok) {
+      record('LEASE', command, assertion, 'fail', remoteMain.error, startedAt, 'F15: git ls-remote origin main is required and failed -- no fallback');
+      return;
+    }
     if (!gitIdentityOk) {
-      record('LEASE', command, assertion, 'fail', `cannot resolve HEAD sha (status=${headShaResult.status}, stdout="${headShaResult.stdout}"); refusing to trust an empty/ambiguous git identity`, startedAt, 'unresolvable HEAD');
+      record('LEASE', command, assertion, 'fail', `cannot resolve HEAD sha (status=${headShaResult.status}, stdout="${headShaResult.stdout}")`, startedAt, 'unresolvable HEAD');
       return;
     }
     if (!baseCommit) {
-      record('LEASE', command, assertion, 'fail', `cannot resolve a trustworthy base commit for the lease diff (${baseWarning || 'no remote/local main ref resolved'}); refusing to silently trust an empty diff`, startedAt, 'unresolvable base commit');
+      record('LEASE', command, assertion, 'fail', `merge-base against verified remote main sha ${remoteMain.sha} failed to resolve`, startedAt, 'unresolvable base commit');
       return;
     }
     const diffResult = sh('git', ['diff', '--name-only', `${baseCommit}...HEAD`]);
@@ -1928,23 +2471,23 @@ await (async () => {
       record('LEASE', command, assertion, 'fail', `git diff --name-only ${baseCommit}...HEAD failed (status=${diffResult.status}): ${diffResult.stderr}`, startedAt, 'git diff failed');
       return;
     }
-    const diffNames = diffResult.stdout.trim().split('\n').filter(Boolean);
     const commitCountResult = sh('git', ['rev-list', '--count', `${baseCommit}..HEAD`]);
-    const commitCount = commitCountResult.status === 0 ? parseInt(commitCountResult.stdout.trim(), 10) || 0 : -1;
-    if (diffNames.length === 0 && commitCount > 0) {
-      record('LEASE', command, assertion, 'fail', `empty file diff but ${commitCount} commit(s) between base and HEAD -- refusing to pass an empty lease diff against non-empty branch history (base=${baseCommit} source=${remoteMain.source})`, startedAt, 'suspicious empty diff');
+    if (commitCountResult.status !== 0) {
+      record('LEASE', command, assertion, 'fail', `git rev-list --count ${baseCommit}..HEAD failed (status=${commitCountResult.status}): ${commitCountResult.stderr} -- F15: a failed rev-list is a hard fail, never treated as -1`, startedAt, 'rev-list failed');
       return;
     }
-    if (baseCommit === headSha && remoteMain.source !== 'ls-remote') {
-      record('LEASE', command, assertion, 'fail', `base commit equals HEAD and the base could not be cross-verified against the real remote (source=${remoteMain.source}, warning=${baseWarning}); refusing to trust a possibly-tampered local origin/main ref`, startedAt, 'unverified base==HEAD');
+    const commitCount = parseInt(commitCountResult.stdout.trim(), 10);
+    if (!Number.isFinite(commitCount) || commitCount < 0) {
+      record('LEASE', command, assertion, 'fail', `git rev-list --count returned unparseable output: "${commitCountResult.stdout}"`, startedAt, 'rev-list unparseable');
+      return;
+    }
+    const diffNames = diffResult.stdout.trim().split('\n').filter(Boolean);
+    if (diffNames.length === 0 && commitCount > 0) {
+      record('LEASE', command, assertion, 'fail', `empty file diff but ${commitCount} commit(s) between verified base ${baseCommit} and HEAD -- refusing to pass an empty lease diff against non-empty branch history`, startedAt, 'suspicious empty diff');
       return;
     }
     const leaseViolations = diffNames.filter((f) => !LEASE_ALLOW.some((prefix) => f.startsWith(prefix)) && !LEASE_ALLOW_EXACT.includes(f));
-    const evidence = [
-      `base resolution: source=${remoteMain.source} baseCommit=${baseCommit}${baseWarning ? ` (warning: ${baseWarning})` : ''}`,
-      `commits base..HEAD: ${commitCount}`,
-      leaseViolations.join('\n') || `all ${diffNames.length} changed files inside the W7 lease`,
-    ].join('\n');
+    const evidence = [`base resolution: ls-remote-verified, baseCommit=${baseCommit}`, `commits base..HEAD: ${commitCount}`, leaseViolations.join('\n') || `all ${diffNames.length} changed files inside the W7 lease`].join('\n');
     record('LEASE', command, assertion, leaseViolations.length === 0 ? 'pass' : 'fail', evidence, startedAt);
   } catch (error) {
     record('LEASE', command, assertion, 'fail', `probe threw: ${(error as Error).stack ?? String(error)}`, startedAt, 'probe crashed instead of failing cleanly');
@@ -1952,11 +2495,42 @@ await (async () => {
 })();
 
 // =============================================================================
-// commit-bound manifest
+// commit-bound manifest -- F16: guarded temp+rename write with a fallback
+// dir and an emergency last-resort path; the exit code accounts for a
+// degraded manifest write (never exit 0 on a manifest that didn't land at
+// its primary, real location).
 // =============================================================================
+function writeManifestSafely(data: unknown): { path: string; wroteOk: boolean } {
+  const content = JSON.stringify(data, null, 2);
+  const primary = path.join(proofDir, 'manifest.json');
+  try {
+    const tmp = `${primary}.tmp-${process.pid}`;
+    fs.writeFileSync(tmp, content);
+    fs.renameSync(tmp, primary);
+    return { path: primary, wroteOk: true };
+  } catch (e1) {
+    console.error(`verify-w7: primary manifest write failed (${(e1 as Error).message}), trying fallback`);
+  }
+  try {
+    const fallbackDir = path.join(os.tmpdir(), `verify-w7-fallback-${process.pid}`);
+    fs.mkdirSync(fallbackDir, { recursive: true });
+    const fallbackPath = path.join(fallbackDir, 'manifest.json');
+    fs.writeFileSync(fallbackPath, content);
+    return { path: fallbackPath, wroteOk: false };
+  } catch (e2) {
+    console.error(`verify-w7: fallback manifest write failed (${(e2 as Error).message}), trying emergency path`);
+  }
+  try {
+    const emergencyPath = path.join(os.tmpdir(), `verify-w7-EMERGENCY-manifest-${Date.now()}.json`);
+    fs.writeFileSync(emergencyPath, content);
+    return { path: emergencyPath, wroteOk: false };
+  } catch (e3) {
+    console.error('verify-w7: CATASTROPHIC -- could not write the proof manifest anywhere:', e3);
+    return { path: '(none)', wroteOk: false };
+  }
+}
+
 const statusResult = sh('git', ['status', '--porcelain']);
-// Fail-closed: if `git status` itself errors, treat the tree as dirty rather
-// than silently assuming clean.
 const treeDirty = statusResult.status !== 0 || statusResult.stdout.trim().length > 0;
 const manifestOut = {
   wave: 'W7',
@@ -1964,15 +2538,21 @@ const manifestOut = {
   treeDirty,
   baseCommit,
   verifierSha256: selfSha256,
+  sealAccessBoundary: SEAL_ACCESS_BOUNDARY,
   toolchain: { node: process.version, pnpm: sh('pnpm', ['--version']).stdout.trim() },
   criteria: results,
 };
-fs.writeFileSync(path.join(proofDir, 'manifest.json'), JSON.stringify(manifestOut, null, 2));
+const manifestWrite = writeManifestSafely(manifestOut);
 
 const hardFailures = results.filter((r) => r.status === 'fail');
 const blocked = results.filter((r) => r.status === 'blocked-on-founder');
 const passed = results.filter((r) => r.status === 'pass');
-console.log(`\nverify-w7: ${passed.length} pass, ${blocked.length} blocked-on-founder, ${hardFailures.length} fail (of ${results.length}); treeDirty=${treeDirty}`);
+console.log(`\nverify-w7: ${passed.length} pass, ${blocked.length} blocked-on-founder, ${hardFailures.length} fail (of ${results.length}); treeDirty=${treeDirty}; manifest=${manifestWrite.path} (wroteOk=${manifestWrite.wroteOk})`);
 for (const r of results) console.log(`  [${r.status.toUpperCase()}] ${r.id} — ${r.assertion.slice(0, 140)}${r.assertion.length > 140 ? '…' : ''}`);
 if (treeDirty) console.log('  ⚠ tree is dirty: this run is advisory, never a wave pass (VERIFICATION-CONTRACT §2)');
-process.exit(hardFailures.length === 0 && !treeDirty ? 0 : 1);
+if (!manifestWrite.wroteOk) console.log('  ⚠ proof manifest degraded to a fallback/emergency path -- never a wave pass (F16)');
+process.exit(hardFailures.length === 0 && !treeDirty && manifestWrite.wroteOk ? 0 : 1);
+})().catch((e) => {
+  console.error('verify-w7: fatal error escaped the async IIFE', e);
+  process.exit(1);
+});
