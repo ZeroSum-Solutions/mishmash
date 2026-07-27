@@ -331,13 +331,21 @@ function canonicalJson(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
-function buildSourceNodes(caseId: string, source: SourceSpec): SnapshotNode[] {
+// nodeId is BREAKPOINT-SPECIFIC (a capture is a per-breakpoint session, even
+// though the DOM structure -- domPath -- is the same element across
+// viewports). This matters mechanically: a resolver checking the full
+// (nodeId, domPath, breakpoint) triple must be defeatable by deranging ANY
+// ONE field independently, including breakpoint alone -- which requires the
+// SAME domPath to have genuinely DIFFERENT nodeIds at different breakpoints,
+// or a breakpoint-only derangement has nothing to break (the node would
+// still validly exist, just "at the wrong breakpoint" in name only).
+function buildSourceNodes(source: SourceSpec, breakpoint: Breakpoint): SnapshotNode[] {
   const preset = STYLE_PRESETS[source.presetIndex % STYLE_PRESETS.length]!;
   const nodes: SnapshotNode[] = ROLES.map((r) => {
     const style: Record<string, string> = { color: preset.color, backgroundColor: preset.backgroundColor, fontFamily: preset.fontFamily };
     if (r.isContainer) Object.assign(style, containerStyleFor(source.layoutKind));
     return {
-      nodeId: `${source.id}-${r.role}`,
+      nodeId: `${source.id}-${r.role}-${breakpoint}`,
       domPath: `body > div.${source.id}-shell > ${r.role.replace(/-/g, '_')}.${source.id}-${r.role}`,
       computedStyle: style,
     };
@@ -345,18 +353,12 @@ function buildSourceNodes(caseId: string, source: SourceSpec): SnapshotNode[] {
   const extra = source.extraNodes ?? 0;
   for (let i = 0; i < extra; i++) {
     nodes.push({
-      nodeId: `${source.id}-list-item-${i}`,
+      nodeId: `${source.id}-list-item-${i}-${breakpoint}`,
       domPath: `body > div.${source.id}-shell > section.${source.id}-catalog > div.${source.id}-item-${i}`,
       computedStyle: { color: preset.color, backgroundColor: preset.backgroundColor, fontFamily: preset.fontFamily, display: 'block' },
     });
   }
   return nodes;
-}
-
-interface WriteTarget {
-  relPath: string; // repo-relative path this content is destined for (WITHOUT .enc for sealed -- .enc suffix added by caller)
-  content: string;
-  sha256: string;
 }
 
 function main(): void {
@@ -370,15 +372,26 @@ function main(): void {
   let sealedCount = 0;
 
   for (const c of CASES) {
+    // nodesBySourceByBp[sourceId][breakpoint] -- see buildSourceNodes for
+    // why nodeId must vary per breakpoint even though domPath does not.
+    const nodesBySourceByBp: Record<string, Partial<Record<Breakpoint, SnapshotNode[]>>> = {};
+    for (const s of c.sources) {
+      nodesBySourceByBp[s.id] = {};
+      for (const bp of c.breakpoints) nodesBySourceByBp[s.id]![bp] = buildSourceNodes(s, bp);
+    }
+    // Flat, breakpoint-agnostic view (by domPath) used only for the
+    // sourceSlots evidence-pointer listing and the phantom-scope check --
+    // domPath itself is identical across breakpoints, so any one
+    // breakpoint's list is representative for domPath enumeration.
     const nodesBySource: Record<string, SnapshotNode[]> = {};
-    for (const s of c.sources) nodesBySource[s.id] = buildSourceNodes(c.id, s);
+    for (const s of c.sources) nodesBySource[s.id] = nodesBySourceByBp[s.id]![c.breakpoints[0]!]!;
 
     // --- snapshots -----------------------------------------------------
     const sourcesOut: Array<{ id: string; snapshots: Record<string, { path: string; sha256: string; viewportWidth: number }> }> = [];
     for (const s of c.sources) {
       const snapshots: Record<string, { path: string; sha256: string; viewportWidth: number }> = {};
       for (const bp of c.breakpoints) {
-        const doc: SnapshotDoc = { nodes: nodesBySource[s.id]!, viewportWidth: VIEWPORTS[bp] };
+        const doc: SnapshotDoc = { nodes: nodesBySourceByBp[s.id]![bp]!, viewportWidth: VIEWPORTS[bp] };
         const content = canonicalJson(doc);
         const hash = sha256(content);
         const relPath = `evals/selector/corpus/snapshots/${c.id}/${s.id}/${bp}.json`;
@@ -460,9 +473,9 @@ function main(): void {
     const provenance: Array<{ elementId: string; sourceId: string; nodeId: string; domPath: string; breakpoint: string }> = [];
     let provenanceIndex = 0;
     for (const [i, d] of directiveInventory.entries()) {
-      const node = nodesBySource[d.source]?.find((n) => n.domPath === d.scope);
-      if (!node) continue; // phantom / unresolvable claim -- no provenance manufactured
       const bp = c.breakpoints[provenanceIndex % c.breakpoints.length]!;
+      const node = nodesBySourceByBp[d.source]?.[bp]?.find((n) => n.domPath === d.scope);
+      if (!node) continue; // phantom / unresolvable claim -- no provenance manufactured
       provenanceIndex++;
       provenance.push({ elementId: `${c.id}-di-${i}-${d.axis}`, sourceId: d.source, nodeId: node.nodeId, domPath: node.domPath, breakpoint: bp });
     }
