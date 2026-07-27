@@ -1,6 +1,6 @@
 # Selector eval corpus (W7 / S7-2)
 
-**Corpus freeze sha256: df57bcfc8b8540bd3eb93eb136df7189a53837dc2b7169318014fe5b4bea3f3b**
+**Corpus freeze sha256: 5eabdcab5354791fb97eea434f0d80f4f26e36f518b62cae09f9314a07700396**
 
 That hash is `sha256(evals/selector/corpus/manifest.json)` at the commit that freezes this
 document. `scripts/waves/verify-w7.ts` re-hashes the manifest at HEAD and requires an exact match
@@ -8,40 +8,55 @@ document. `scripts/waves/verify-w7.ts` re-hashes the manifest at HEAD and requir
 is the point: everything downstream (per-case IR instances, the scorer's population/counterfactual
 controls) is built against this exact, pinned manifest state.
 
-*Re-frozen five times.* The fifth: after the orchestrator re-sealed `sealed-marketing-alt` and
-`sealed-docs-widget` with the corrected v2 plaintext (`manifest.version` bumped 1 → 2, matching
-`eval-manifest.json.corpusVersion`), `manifest.json`'s sealed-case hashes were updated to match the
-now-actually-sealed ciphertext, which requires a fresh freeze; every non-sealed case's IR now also
-carries an informational `corpusVersion: 2` field so its own commit is a real, git-visible content
-change (a re-freeze that didn't touch non-sealed IR content would leave those commits *preceding*,
-not descending from, the new freeze point — see `docs/specs/selector-composition-ir.schema.json`'s
-`corpusVersion` property).
+## Revision history
 
-The third and fourth fixes both
-target the same C7-11 leak-scan false-positive class from different angles: a case-id *prefix*
-still left long identical prose suffixes (`"...axis in this case; no contention to resolve."`)
-that collided across cases; converging fix was (a) compact, non-indented JSON (pretty-printing
-padded every record with long content-free spans), (b) short case/axis/source-tagged tokens
-instead of prose sentences everywhere, (c) a compact string-array `evidencePointers` shape instead
-of an object array, and (d) dropping decorative `computedStyle` properties
-(`gridTemplateColumns`/`flexDirection`) that no check reads. Verified by reproducing
-`verify-w7.ts`'s exact `sampleWindows()` algorithm against the corrected sealed-case plaintext
-(prepared for re-seal, not yet applied) and every tracked non-sealed file: zero matches.
+**v3 (deliverable-review fix round 1).** The sealed held-out split is DONE and STABLE: the v2
+re-seal completed (seal commits `5abb5e357`/`d8caf813d`), and `sealed-marketing-alt` /
+`sealed-docs-widget` pass C7-1 (schema+hash), C7-4 (provenance resolution, including the
+breakpoint-derangement control), and C7-11 (content-binding, leak-scan, key permissions) as of that
+re-seal — this is settled, not open. `manifest.json.version` moves 2 → 3 for this revision; the two
+sealed cases' sub-objects are untouched (spliced back in byte-for-byte by
+`evals/selector/scripts/generate-corpus.ts`'s preserved-sealed-case step) — they will **not** be
+re-sealed again. Everything below in this section describes what changed for the **8 non-sealed**
+cases only, responding to both lanes' deliverable review
+(`~/.claude/goal-state/mishmash-w7-selector-foundations/reviews/`):
 
-The first two re-freezes fixed the same underlying issue in two layers: (1) the original generator hardcoded every IR's `provenance[].breakpoint` to `"desktop"`,
-making `verify-w7.ts` C7-4's breakpoint-only field-derangement control mechanically
-unconstructible (no fixed-point-free permutation exists over an all-identical array); (2) even
-after varying the recorded breakpoint per entry, `nodeId`/`domPath` were shared verbatim across
-both breakpoints' snapshot files, so the "wrong" breakpoint still validly resolved and the
-derangement control kept passing 100% instead of 0%. Fixed by (1) alternating breakpoint per
-provenance entry and (2) making `nodeId` breakpoint-specific
-(`evals/selector/scripts/generate-corpus.ts`); every **non-sealed** case's IR and snapshots were
-regenerated and re-committed. The two sealed cases' ciphertext was already committed and is frozen
-under the verifier's own frozen-path rule (F18) — their `manifest.json` entries intentionally still
-record the **original** (pre-fix) hashes, matching the ciphertext that is actually sealed. Those
-two cases will fail C7-4's breakpoint-derangement control until a founder-authorized re-seal lands
-with corrected plaintext (already prepared and handed off; see the milestone report to the
-orchestrator).
+- **Genre-specific structure (F6, both lanes REJECT → fixed).** Each genre now has its own role
+  vocabulary and information architecture — see the Quota table below. A marketing page has a
+  `hero`/`pricing-cta`/`testimonial`; an ecommerce page has a `product-gallery`/`price-badge`/
+  `add-to-cart`; a docs page has a `sidebar-nav`/`code-sample`/`toc-panel`; a dashboard has a
+  `nav-rail`/`metric-tile`/`chart-panel`. No two genres share a role name. The two SEALED cases
+  (`sealed-marketing-alt`, `sealed-docs-widget`) still use the original universal 8-role template —
+  frozen, not retrofitted — so `marketing`/`docs` genuinely have two role vocabularies in this
+  corpus (sealed vs. non-sealed) until/unless a future wave re-seals. That inconsistency is
+  disclosed, not hidden.
+- **Independent NL briefs (F2, both lanes REJECT → partially addressed).** `evals/selector/corpus/briefs/<case>.md`
+  now holds a hand-written natural-language brief per case, composed BEFORE cross-checking it
+  against `directiveInventory` (not derived from the JSON — contrast the prose below with the
+  field-by-field table). See "Brief grounding" below for the explicit sentence → directive trace.
+  **Standing limitation, stated plainly:** the brief and the inventory are still authored by the
+  same agent in the same session; this is process discipline (write brief first, trace second), not
+  a different author. A genuinely independent brief (a different session, a different model, or a
+  human) is a real gap this fix round narrows but does not close.
+- **Directive strength is consumed, not stored-and-ignored (Grok-N8).** `evals/selector/scorer/index.ts`
+  weights `directive_claim_coverage` and the per-axis fidelity scores by each claim's `strength`.
+- **Proportional hostile-DOM exercise (Grok-N5).** `hostile-heavy-dom-catalog` now carries 12
+  directive claims / 12 provenance entries (up from 2), 10 of them scoped to specific catalog rows
+  across both sources — against 236 total captured nodes, not 2 claims regardless of corpus size.
+- **v3 IR shape (Sol-N4, Grok-N7, item 7).** `snapshotIdentity` per source slot, a `state` dimension
+  on evidence pointers (`default`/`hover`/`scrolled` captured; `loaded` enumerated but not yet
+  captured — disclosed gap, not silent), directive-level `breakpoint` scoping, `scopeOverlap` on
+  conflict-resolution records, and a machine-checkable `predicate` on every constraint. All additive
+  and optional in the schema — see `docs/specs/selector-composition-ir.schema.json`'s per-field
+  "v3+, optional" notes — so the frozen sealed IR (v1 shape) still validates unchanged.
+
+*Re-frozen five times before v3* (v1/v2 history, kept for the record): (1)+(2) provenance
+breakpoints were hardcoded / nodeId was breakpoint-shared, both defeating C7-4's breakpoint-only
+derangement control; (3)+(4) pretty-printed JSON and near-identical boilerplate prose produced
+>64-byte spans that false-positived C7-11's leak scanner — fixed by compact JSON, short
+case-tagged tokens, and a string-array `evidencePointers` shape; (5) the v2 re-seal itself required
+a fresh freeze once `manifest.json`'s sealed-case hashes were updated to match the newly-sealed
+ciphertext.
 
 ## Provenance of the data
 
@@ -55,35 +70,39 @@ domPath-membership bleed, style-fingerprint bleed, single-axis-isolated diversit
 element counterfactual swaps — be constructed with **exact, deliberate, reproducible** node
 identity, which a live capture cannot guarantee case-by-case. The generator that produced every
 snapshot and IR file is committed at `evals/selector/scripts/generate-corpus.ts` and is
-deterministic (no randomness, no network) — running it again reproduces byte-identical output. The
-corpus is pinned regardless: nothing here depends on any site staying unchanged, because nothing
-here was captured from a live site.
+deterministic (no randomness, no network) — running it again reproduces byte-identical output for
+the 8 non-sealed cases (the 2 sealed cases are spliced in from the existing manifest, never
+regenerated). The corpus is pinned regardless: nothing here depends on any site staying unchanged,
+because nothing here was captured from a live site.
 
 Every snapshot node carries real, structurally meaningful `computedStyle` values (`display`,
-`position`, `color`, `backgroundColor`, `fontFamily`) — a css-grid-first case has a real node with
-`display: grid` somewhere in its capture, a flex-utility case a real node with `display: flex`, an
-absolute-canvas case a real node with `position: absolute`. These are checked mechanically by
-`verify-w7.ts` C7-5 against the corpus's own captured data, not asserted by label.
+`position`, `color`, `backgroundColor`, `fontFamily`, and — on each genre's motion-target role —
+`transitionDuration`) — a css-grid-first case has a real node with `display: grid` somewhere in its
+capture, a flex-utility case a real node with `display: flex`, an absolute-canvas case a real node
+with `position: absolute`. These are checked mechanically by `verify-w7.ts` C7-5 against the
+corpus's own captured data, not asserted by label. `transitionDuration` is what
+`evals/selector/scorer/index.ts`'s `motion_timing` axis validates a composition's `motionSignature`
+against (`transition:<duration>`) — an arbitrary free-form label no longer scores as validated
+motion evidence.
 
 ## Quota table (S7-2)
 
 | Dimension | Minimum | Actual |
 |---|---|---|
 | Layout systems | ≥3 distinct | 3: `css-grid-first`, `flex-utility`, `absolute-canvas` — each backed by a real captured `display`/`position` value |
-| Page genres | ≥4 | 4: `marketing`, `ecommerce`, `docs`, `app-dashboard` |
+| Page genres | ≥4, structurally distinct | 4, each with its OWN role vocabulary (no shared role names): `marketing` (hero/headline/subheadline/testimonial/features-grid/pricing-cta/footer-nav), `ecommerce` (product-gallery/product-title/price-badge/reviews-panel/size-selector/add-to-cart/shipping-footer), `docs` (sidebar-nav/breadcrumb-trail/article-title/code-sample/callout-box/toc-panel/edit-link), `app-dashboard` (nav-rail/metric-tile/chart-panel/data-grid/filter-controls/alert-banner/user-menu) |
 | Breakpoints scored | ≥2 per case | 2 per case (`mobile` @ 390px, `desktop` @ 1440px) for every non-skip case; every source has a pinned snapshot at every declared breakpoint |
-| Conflict pairs | ≥3 | 4 (`marketing-hero-grid` on `layout`, `ecommerce-product-flex` on `palette`, `dashboard-canvas-widgets` on `typography`, `docs-api-reference` on `section`) — each cross-referenced against that case's own IR `conflictResolution` record |
-| Degenerate cases | n=1 source; nonexistent-element directive; hostile/heavy DOM | 3: `single-source-landing` (1 source), `phantom-element-directive` (a directive scoped to a domPath that resolves to no captured node), `hostile-heavy-dom-catalog` (232 captured nodes across its sources/breakpoints) |
+| Conflict pairs | ≥3 | 4 (`marketing-hero-grid` on `layout`, `ecommerce-product-flex` on `palette`, `dashboard-canvas-widgets` on `typography`, `docs-api-reference` on `section`) — each cross-referenced against that case's own IR `conflictResolution` record, each with `scopeOverlap: "same-role-different-source"` |
+| Degenerate cases | n=1 source; nonexistent-element directive; hostile/heavy DOM | 3: `single-source-landing` (1 source), `phantom-element-directive` (a directive scoped to a domPath — a "promo ribbon" the brief asks for — that resolves to no captured node in the ecommerce role vocabulary), `hostile-heavy-dom-catalog` (236 captured nodes, 12 directive claims / 12 provenance entries proportional to that size) |
 | Documented skips | ≥1 | 1: `single-source-landing` also documents a bot-walled companion target (`skip.reason = "bot-walled"`) that was attempted and explicitly not captured, rather than silently ignored |
 
 ## Held-out split
 
 `manifest.json.sealedFraction = 0.2` (2 of 10 cases): `sealed-marketing-alt` and
 `sealed-docs-widget`. Sealed cases' IR and snapshot payloads are committed only as AES-256-CBC
-ciphertext (`.enc`) — see `evals/selector/SEALED-ACCESS.md` once the seal commit lands. The
-implementing agent for this wave authored the sealed cases' plaintext and handed it off
-out-of-band for encryption; it was never committed to this repository in plaintext and the
-implementing agent never held the seal key.
+ciphertext (`.enc`) — see `evals/selector/SEALED-ACCESS.md`. This split is settled: v2 re-seal
+completed, sealed cases pass C7-1/C7-4/C7-11, and per the deliverable-review response they will not
+be re-sealed again — any further corpus evolution applies to the 8 non-sealed cases only.
 
 ## Cases
 
@@ -97,11 +116,46 @@ implementing agent never held the seal key.
 | `single-source-landing` | marketing | flex-utility | land-solo-a | — | single-source | bot-walled | no |
 | `phantom-element-directive` | ecommerce | css-grid-first | phantom-grid-a, phantom-flex-b | — | nonexistent-element-directive | — | no |
 | `hostile-heavy-dom-catalog` | app-dashboard | absolute-canvas | hostile-abs-a, hostile-grid-b | — | hostile-heavy-dom | — | no |
-| `sealed-marketing-alt` | marketing | flex-utility | sealed-mkt-a, sealed-mkt-b | — | — | — | **yes** |
-| `sealed-docs-widget` | docs | absolute-canvas | sealed-docs-a, sealed-docs-b | — | — | — | **yes** |
+| `sealed-marketing-alt` | marketing (v1 role shape) | flex-utility | sealed-mkt-a, sealed-mkt-b | — | — | — | **yes** |
+| `sealed-docs-widget` | docs (v1 role shape) | absolute-canvas | sealed-docs-a, sealed-docs-b | — | — | — | **yes** |
 
 Every case's `directiveInventory` (in `manifest.json`) is the ground truth for what the case's IR
 must express — cross-checked field-by-field (`axis`, `source`, `scope`, `strength`) by
 `verify-w7.ts` C7-2. Every conflict case's `directiveInventory` contains **two** claims sharing the
 declared conflict axis, one from the winning source and one from the losing source — the conflict
 is a real property of two competing directive claims, not a label bolted onto an unrelated case.
+
+## Brief grounding (F2)
+
+Each non-sealed case's brief (`evals/selector/corpus/briefs/<id>.md`) was written first, as free
+natural-language prose. This table traces each brief's claims to the `directiveInventory` entries
+they ground, by hand, so the correspondence is auditable rather than asserted:
+
+| Case | Brief clause | directiveInventory entry |
+|---|---|---|
+| `marketing-hero-grid` | "grid features layout from mkt-grid-a... should win" | `layout, mkt-grid-a, strength 0.9` (winner) |
+| | "mkt-flex-b has its own features layout too but I don't want that one" | `layout, mkt-flex-b, strength 0.6` (loser) |
+| | "mkt-flex-b's colour palette on the hero" | `palette, mkt-flex-b` |
+| | "mkt-grid-a's headline typography as-is" | `typography, mkt-grid-a` |
+| `ecommerce-product-flex` | "ecom-flex-a's colour palette on the price badge... going with ecom-flex-a's" | `palette, ecom-flex-a, strength 0.85` (winner) |
+| | "looked at ecom-grid-b's price styling too" | `palette, ecom-grid-b, strength 0.5` (loser) |
+| | "ecom-grid-b's add-to-cart button motion" | `motion, ecom-grid-b` |
+| | "ecom-flex-a's reviews panel section structure and overall layout" | `section, ecom-flex-a` + `layout, ecom-flex-a` |
+| `dashboard-canvas-widgets` | "dash-abs-a's typography on the alert banner" | `typography, dash-abs-a, strength 0.9` (winner) |
+| | "dash-grid-b had its own competing type treatment... not choosing" | `typography, dash-grid-b, strength 0.55` (loser) |
+| | "dash-abs-a's data-grid interaction behaviour" | `interaction, dash-abs-a` |
+| | "its chart panel layout" | `layout, dash-abs-a` |
+| `docs-api-reference` | "docs-flex-a's table-of-contents section structure best" | `section, docs-flex-a, strength 0.8` (winner) |
+| | "docs-grid-b organizes its TOC differently... don't want that version" | `section, docs-grid-b, strength 0.45` (loser) |
+| | "docs-flex-a's overall layout" | `layout, docs-flex-a` |
+| | "callout box colours from docs-grid-b" | `palette, docs-grid-b` |
+| `blog-content-grid` | "blog-grid-a's features grid layout" | `layout, blog-grid-a` |
+| | "blog-flex-b's hero colour palette" | `palette, blog-flex-b` |
+| `single-source-landing` | "land-solo-a for the layout and colour palette" | `layout, land-solo-a` + `palette, land-solo-a` |
+| | "wanted a second reference... wouldn't let the crawler in" | `skip: {reason: "bot-walled"}` |
+| `phantom-element-directive` | "phantom-grid-a's reviews panel layout" | `layout, phantom-grid-a` |
+| | "its product title typography" | `typography, phantom-grid-a` |
+| | "phantom-flex-b's promo ribbon banner" | `palette, phantom-flex-b, scope=...promo-ribbon` (unresolvable — no such role exists; the degenerate case) |
+| `hostile-heavy-dom-catalog` | "hostile-abs-a's chart panel layout" | `layout, hostile-abs-a` |
+| | "hostile-grid-b's data-grid interaction" | `interaction, hostile-grid-b` |
+| | "first ten rows of BOTH catalogs... row by row, alternating" | 10 catalog-scoped entries (`catalog:0`..`catalog:9`), alternating `hostile-abs-a`/`hostile-grid-b`, cycling `palette`/`typography`/`motion`/`section` |
