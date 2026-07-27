@@ -139,6 +139,14 @@ const AXIS_ROLE: Record<DirectiveAxis, string> = {
   interaction: 'cta',
 };
 
+// Bumped when the corpus is regenerated after a sealed re-seal or any other
+// change to manifest.json that requires a fresh freeze -- see
+// evals/selector/CORPUS.md's "re-frozen N times" history. Embedded into
+// every non-sealed IR instance as `corpusVersion` (informational, not part
+// of the six required IR keys) so each freeze's IR commits carry a real,
+// git-visible content difference rather than an empty re-commit.
+const CORPUS_VERSION = 2;
+
 const CASES: CaseSpec[] = [
   {
     id: 'marketing-hero-grid',
@@ -558,7 +566,7 @@ function main(): void {
       { name: `${c.id}#breakpoint-behavior`, distanceMetric: `${c.id}#position-diff-breakpoint` },
     ];
 
-    const ir = { sourceSlots, directives: directiveInventory, constraints, conflictResolution, provenance, variantAxes };
+    const ir = { corpusVersion: CORPUS_VERSION, sourceSlots, directives: directiveInventory, constraints, conflictResolution, provenance, variantAxes };
     const irContent = canonicalJson(ir);
     const irHash = sha256(irContent);
     const irRelPath = `evals/selector/corpus/ir/${c.id}.json`;
@@ -593,7 +601,7 @@ function main(): void {
   }
 
   const sealedFraction = Math.round((sealedCount / CASES.length) * 1000) / 1000;
-  const manifest = { version: 1, sealedFraction, cases: manifestCases };
+  const manifest = { version: CORPUS_VERSION, sealedFraction, cases: manifestCases };
   const manifestContent = canonicalJson(manifest);
   fs.writeFileSync(path.join(CORPUS_DIR, 'manifest.json'), manifestContent);
 
