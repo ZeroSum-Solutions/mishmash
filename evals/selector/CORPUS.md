@@ -1,6 +1,6 @@
 # Selector eval corpus (W7 / S7-2)
 
-**Corpus freeze sha256: 6e699a6105b99d44e2f4b8770d19bf51448e9ca284056c9551ed3af001bbd78e**
+**Corpus freeze sha256: 958fc2feac278216eb223513cf902e504711ac64c6c7863df2f793a65a3969db**
 
 That hash is `sha256(evals/selector/corpus/manifest.json)` at the commit that freezes this
 document. `scripts/waves/verify-w7.ts` re-hashes the manifest at HEAD and requires an exact match
@@ -9,6 +9,51 @@ is the point: everything downstream (per-case IR instances, the scorer's populat
 controls) is built against this exact, pinned manifest state.
 
 ## Revision history
+
+**v5 (independent-audit + gate-amendment remediation round, round 3, corpus side).** A fresh,
+no-prior-involvement audit agent (pinned at commit `dcb3a7242`) passed 6 of 8 non-sealed cases and
+found three concrete, evidence-backed defects. All three fixed in `generate-corpus.ts` and
+regenerated (`manifest.json.version` stays 3 -- these are data fixes, not a schema/shape bump):
+
+- **phantom-element-directive's phantom claim was inconsistently treated as "won."** The palette
+  claim on `phantom-flex-b`'s "promo ribbon banner" was correctly EXCLUDED from `provenance` (no real
+  node resolves) but incorrectly appeared as a `conflictResolution` winner (sole-claimant-by-default
+  logic didn't check resolvability). This case is ABOUT phantom directives, so the honest fix is
+  explicit consistency: the claim stays in `directiveInventory` (the user's request is real and
+  should be recorded) but `conflictResolution`'s axis-presence check (and sole-claimant selection)
+  now both require the claim to actually resolve against a real captured node — `provenance`,
+  `conflictResolution`, and the brief's own "the one that runs across the top... " phrasing all now
+  agree this claim is unresolvable.
+- **hostile-heavy-dom-catalog's 50 rows per source were byte-for-byte identical, contradicting the
+  brief's row-by-row "alternating" premise, and gave 4 of the 10 catalog-scoped directive claims
+  (motion at rows 2/8, section at rows 3/9) zero supporting evidence** (no `transitionDuration`
+  anywhere, no state variation on any row). Rows now genuinely alternate by parity: even rows are
+  motion-flavored (a real, per-row-varied `transitionDuration` plus a real `hover` capture), odd rows
+  are section-flavored (a real `scrolled` capture at the same domPath, matching
+  `sectionEvidenceFactor`'s state-awareness). Not a coincidental fit: the claims' own axis cycle lands
+  motion at rows 2/8 (both even) and section at rows 3/9 (both odd).
+- **Systemic: winning layout/section conflict claims cited the breakpoint offering zero
+  differentiation from the losing rival.** `containerStyleFor` forces every container to `block` on
+  `mobile` regardless of `layoutSystem` (deliberate N1 responsive-divergence evidence — see v4 below)
+  — meaning `mobile` is a breakpoint where two competing sources' layout/section claims are
+  byte-identical, and the real "why did this one win" evidence only exists at `desktop`. Found in
+  `marketing-hero-grid`'s layout conflict and `docs-api-reference`'s section conflict. Fix: any
+  CONTESTED layout/section claim (2+ distinct sources on that axis) now always cites `desktop`; a
+  sole-claimant layout/section claim (no rival to differentiate from — e.g. `docs-api-reference`'s
+  own layout claim) is unaffected and keeps the regular alternation. The remaining claims are
+  assigned via a greedy breakpoint balance (not blind `i%2`) so the forced-`desktop` claims never tip
+  a case's overall breakpoint distribution into a majority C7-4's fixed-point-free-rotation
+  derangement control can't satisfy — caught directly by `assertBreakpointRotationDerangeable` on the
+  first (over-broad) attempt at this fix, which forced ALL layout/section claims to `desktop`
+  regardless of contest and produced a 3-of-4 majority for `docs-api-reference`.
+
+The gate itself was also amended in parallel (verify-w7.ts, not editable from this side): C7-2's
+freeze anchor moved from a single global "latest commit touching CORPUS.md" to a per-case anchor
+bound to each case's own brief content (fixing the GATE-DEFECT both review lanes found in round 2);
+`findRealNode`/`faithfulComposition`/`houseStyleComposition` now emit real per-claim-breakpoint
+resolution and real `styleFingerprint` evidence, closing the root causes `scorer/index.ts`'s round-2
+`BREAKPOINT_MISMATCH_CREDIT` and relaxed `axisRealized` compromises existed to work around (both
+removed this round — see the scorer's own revision history).
 
 **v4 (deliverable-review fix round 2, corpus side).** Three fixes bundled into one regen of the 8
 non-sealed cases (sealed cases untouched, spliced back in verbatim as always):
@@ -36,11 +81,11 @@ non-sealed cases (sealed cases untouched, spliced back in verbatim as always):
   both artifacts) is explicitly out of scope this round, closed instead by a separate
   orchestrator-dispatched independent audit agent.
 
-**Known residual, declared not hidden:** both review lanes ruled the C7-2 freeze-commit-ordering
-mechanical gap (see the git-ancestry note in the round-1 fix-round history) a GATE-DEFECT, not a
-deliverable-side defect — it is being amended on the verifier side, not fixed here. `manifest.json`'s
-hash is kept current above regardless (that half of C7-2's check is unaffected by the ordering
-issue).
+**Resolved residual:** the C7-2 freeze-commit-ordering mechanical gap both review lanes ruled a
+GATE-DEFECT in round 2 (see the git-ancestry note in the round-1 fix-round history) has been closed
+by the round-3 gate amendment — C7-2's freeze anchor is now per-case, bound to each case's own brief
+content, rather than a single global commit-topology anchor. Nothing further required on the corpus
+side.
 
 **v3 (deliverable-review fix round 1).** The sealed held-out split is DONE and STABLE: the v2
 re-seal completed (seal commits `5abb5e357`/`d8caf813d`), and `sealed-marketing-alt` /
@@ -136,7 +181,7 @@ of trusting a breakpoint string tag on otherwise-identical data.
 | Page genres | ≥4, structurally distinct | 4, each with its OWN role vocabulary AND its own structural shape (no shared role names, no shared slot/container/motion-target count — see "Genuinely distinct genre structure" above): `marketing` — 7 slots, 1 container, 1 motion target, flat (hero/headline/subheadline/testimonial/features-grid/pricing-cta/footer-nav); `ecommerce` — 9 slots, 2 containers, 1 role genuinely NESTED (`trust-badges` inside `reviews-panel`), 1 motion target (product-gallery/product-title/price-badge/reviews-panel/**trust-badges (nested)**/size-selector/add-to-cart/related-products/shipping-footer); `docs` — 6 slots (leanest), 1 container, 2 motion targets (sidebar-nav/article-title/code-sample/**callout-box (motion)**/toc-panel/**edit-link (motion)**); `app-dashboard` — 8 slots, 2 containers, 1 role genuinely NESTED (`data-grid` inside `chart-panel`), 1 motion target (nav-rail/metric-tile/chart-panel/**data-grid (nested)**/filter-controls/alert-banner/user-menu/export-button) |
 | Breakpoints scored | ≥2 per case | 2 per case (`mobile` @ 390px, `desktop` @ 1440px) for every non-skip case; every source has a pinned snapshot at every declared breakpoint |
 | Conflict pairs | ≥3 | 4 (`marketing-hero-grid` on `layout`, `ecommerce-product-flex` on `palette`, `dashboard-canvas-widgets` on `typography`, `docs-api-reference` on `section`) — each cross-referenced against that case's own IR `conflictResolution` record, each with `scopeOverlap: "same-role-different-source"` |
-| Degenerate cases | n=1 source; nonexistent-element directive; hostile/heavy DOM | 3: `single-source-landing` (1 source), `phantom-element-directive` (a directive scoped to a domPath — a "promo ribbon" the brief asks for — that resolves to no captured node in the ecommerce role vocabulary), `hostile-heavy-dom-catalog` (244 captured nodes as of v4's app-dashboard structural changes, 12 directive claims / 12 provenance entries proportional to that size) |
+| Degenerate cases | n=1 source; nonexistent-element directive; hostile/heavy DOM | 3: `single-source-landing` (1 source), `phantom-element-directive` (a directive scoped to a domPath — a "promo ribbon" the brief asks for — that resolves to no captured node in the ecommerce role vocabulary; excluded from `conflictResolution` as of v5), `hostile-heavy-dom-catalog` (444 captured nodes as of v5's genuinely-alternating catalog rows, 12 directive claims / 12 provenance entries proportional to that size, all 12 now evidenced) |
 | Documented skips | ≥1 | 1: `single-source-landing` also documents a bot-walled companion target (`skip.reason = "bot-walled"`) that was attempted and explicitly not captured, rather than silently ignored |
 
 ## Held-out split

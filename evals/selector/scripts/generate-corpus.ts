@@ -521,14 +521,40 @@ function buildSourceNodes(genre: Genre, source: SourceSpec, breakpoint: Breakpoi
       nodes.push({ nodeId: `${source.id}-${r.role}-${breakpoint}-scrolled`, domPath, state: 'scrolled', computedStyle: scrolledStyle });
     }
   }
+  // Independent-audit fix (round 3, hostile-heavy-dom-catalog): every row
+  // used to be byte-for-byte identical to every other row in its source --
+  // "contradicting the brief's row-by-row alternating-styling premise," and
+  // giving the row-level motion/section directive claims (i=2,3,8,9 in
+  // CASES' hostile-heavy-dom-catalog.directives -- 4 of the 10 catalog
+  // claims) NO supporting evidence at all (no transitionDuration anywhere,
+  // no state variation on any row). Rows now genuinely alternate by parity:
+  // EVEN rows are motion-flavored (real transitionDuration, per-row-varied
+  // via `i` so even rows also differ from each other, plus a real 'hover'
+  // capture); ODD rows are section-flavored (a real 'scrolled' capture at
+  // the same domPath, matching scorer/index.ts's sectionEvidenceFactor
+  // state-awareness requirement). This is not a coincidental fit: the axis
+  // cycle `['palette','typography','motion','section','palette','typography']`
+  // over i=0..9 lands motion at i=2,8 (both even) and section at i=3,9 (both
+  // odd), so the 4 previously-unevidenced claims now resolve against real,
+  // row-specific evidence.
   const extra = source.extraCatalogItems ?? 0;
   for (let i = 0; i < extra; i++) {
-    nodes.push({
-      nodeId: `${source.id}-list-item-${i}-${breakpoint}-default`,
-      domPath: domPathFor(source.id, `catalog:${i}`, genre),
-      state: 'default',
-      computedStyle: { sourceTag: source.id, display: 'block', color: preset.color, backgroundColor: preset.backgroundColor, fontFamily: preset.fontFamily },
-    });
+    const domPath = domPathFor(source.id, `catalog:${i}`, genre);
+    const isMotionRow = i % 2 === 0;
+    const baseStyle: Record<string, string> = { sourceTag: source.id, display: 'block', color: preset.color, backgroundColor: preset.backgroundColor, fontFamily: preset.fontFamily };
+    if (isMotionRow) {
+      baseStyle['transitionDuration'] = transitionDurationFor(source.presetIndex + i);
+    } else {
+      baseStyle['position'] = 'relative';
+    }
+    nodes.push({ nodeId: `${source.id}-list-item-${i}-${breakpoint}-default`, domPath, state: 'default', computedStyle: baseStyle });
+    if (isMotionRow) {
+      const hoverStyle = { ...baseStyle, transitionDuration: `${Math.max(60, parseInt(baseStyle['transitionDuration']!, 10) - 60)}ms` };
+      nodes.push({ nodeId: `${source.id}-list-item-${i}-${breakpoint}-hover`, domPath, state: 'hover', computedStyle: hoverStyle });
+    } else {
+      const scrolledStyle = { ...baseStyle, position: 'sticky' };
+      nodes.push({ nodeId: `${source.id}-list-item-${i}-${breakpoint}-scrolled`, domPath, state: 'scrolled', computedStyle: scrolledStyle });
+    }
   }
   return nodes;
 }
@@ -602,12 +628,56 @@ function main(): void {
 
     // --- directiveInventory (breakpoint alternated per entry; Sol-N4/coord
     // item 7: directive-level breakpoint scoping) -------------------------
+    //
+    // Independent-audit fix (round 3, "systemic, 3 cases"): a CONTESTED
+    // layout/section claim (2+ distinct sources claiming the same axis --
+    // i.e. a genuine winner-vs-rival situation) always cites 'desktop' -- the
+    // only breakpoint where a container's real layoutSystem value
+    // (grid/flex/absolute) actually shows up. containerStyleFor() forces
+    // EVERY container to 'block' on mobile regardless of layoutSystem (real,
+    // deliberate responsive-divergence evidence for N1 -- see the v4
+    // corpus-regen commit), which means mobile is a breakpoint where two
+    // competing sources' layout/section claims are BYTE-IDENTICAL ('block'
+    // vs 'block') -- zero differentiating evidence between a winner and its
+    // rival. The audit found this exact pattern in marketing-hero-grid's
+    // layout conflict and docs-api-reference's section conflict (winner
+    // cited mobile; evidence for why it should win only exists at desktop).
+    // A SOLE-claimant layout/section claim has no rival to differentiate
+    // from, so it is not forced -- only genuine contests are. Every
+    // non-forced claim (including palette/typography/motion, which don't
+    // vary by breakpoint in this corpus, and any sole-claimant layout/
+    // section) is assigned via a greedy balance (fewer-so-far wins ties to
+    // mobile) rather than blind i%2 alternation, so the forced 'desktop'
+    // claims don't tip a case's overall breakpoint distribution into a
+    // majority that C7-4's fixed-point-free-rotation derangement control
+    // (assertBreakpointRotationDerangeable below) cannot satisfy.
+    const distinctSourcesByAxis = new Map<DirectiveAxis, Set<string>>();
+    for (const d of c.directives) {
+      const set = distinctSourcesByAxis.get(d.axis) ?? new Set<string>();
+      set.add(d.source);
+      distinctSourcesByAxis.set(d.axis, set);
+    }
+    function isContestedLayoutOrSection(axis: DirectiveAxis): boolean {
+      return (axis === 'layout' || axis === 'section') && (distinctSourcesByAxis.get(axis)?.size ?? 0) >= 2;
+    }
+    const forcedBreakpoints: Array<Breakpoint | null> = c.directives.map((d) => (isContestedLayoutOrSection(d.axis) ? 'desktop' : null));
+    let desktopCount = forcedBreakpoints.filter((b) => b === 'desktop').length;
+    let mobileCount = 0;
+    const resolvedBreakpoints: Breakpoint[] = forcedBreakpoints.map((b) => {
+      if (b !== null) return b;
+      if (mobileCount <= desktopCount) {
+        mobileCount++;
+        return 'mobile';
+      }
+      desktopCount++;
+      return 'desktop';
+    });
     const directiveInventory = c.directives.map((d, i) => ({
       axis: d.axis,
       source: d.source,
       scope: domPathFor(d.source, d.role, c.genre),
       strength: d.strength,
-      breakpoint: c.breakpoints[i % c.breakpoints.length]!,
+      breakpoint: resolvedBreakpoints[i]!,
     }));
     if (c.degenerate === 'nonexistent-element-directive') {
       const phantomSource = c.sources[1]!.id;
@@ -634,7 +704,26 @@ function main(): void {
       { type: `${c.id}#responsive-behavior`, rule: `${c.id}#styled-at-every-breakpoint`, predicate: { property: 'display', pattern: '.+' } },
     ];
 
-    const axesPresent = [...new Set(directiveInventory.map((d) => d.axis))];
+    // Independent-audit fix (round 3, phantom-element-directive): a claim
+    // whose (source, scope, breakpoint) resolves to NO real captured node
+    // must never appear as a "won"/resolved claim in conflictResolution --
+    // this case is ABOUT phantom directives (degenerate="nonexistent-element-
+    // directive"), and the audit caught its own phantom palette claim being
+    // the sole "claimant" on that axis and therefore auto-declared
+    // "winningSource" by the old axesPresent-over-ALL-claims logic, even
+    // though it has no provenance entry (provenance already correctly
+    // excludes unresolvable claims -- see below -- so the inconsistency was
+    // specifically conflictResolution disagreeing with provenance about the
+    // same claim). The claim STAYS in directiveInventory (the user's request
+    // is real and should be recorded) but is now excluded from
+    // conflictResolution entirely when it is the axis's ONLY claim and it
+    // does not resolve -- consistent with provenance, consistent with the
+    // brief's own "the one that runs across the top... " phrasing describing
+    // something that was never actually captured.
+    function claimResolves(d: { source: string; scope: string; breakpoint: string }): boolean {
+      return !!nodesBySourceByBp[d.source]?.[d.breakpoint as Breakpoint]?.find((n) => n.domPath === d.scope && n.state === 'default');
+    }
+    const axesPresent = [...new Set(directiveInventory.filter((d) => claimResolves(d)).map((d) => d.axis))];
     const conflictResolution = axesPresent.map((axis) => {
       if (c.conflict && c.conflict.axis === axis) {
         return {
@@ -654,7 +743,7 @@ function main(): void {
           scopeOverlap: 'same-role-different-source',
         };
       }
-      const claimants = [...new Set(directiveInventory.filter((d) => d.axis === axis).map((d) => d.source))];
+      const claimants = [...new Set(directiveInventory.filter((d) => d.axis === axis && claimResolves(d)).map((d) => d.source))];
       return { axis, winningSource: claimants[0]!, rationale: `${c.id}#${axis}#sole-claimant:${claimants[0]}`, scopeOverlap: 'single-claimant' };
     });
 
