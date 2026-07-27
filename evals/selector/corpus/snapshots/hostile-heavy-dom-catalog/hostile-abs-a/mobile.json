@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-      "nodeId": "hostile-abs-a-header",
+      "nodeId": "hostile-abs-a-header-mobile",
       "domPath": "body > div.hostile-abs-a-shell > header.hostile-abs-a-header",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -10,7 +10,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-hero",
+      "nodeId": "hostile-abs-a-hero-mobile",
       "domPath": "body > div.hostile-abs-a-shell > hero.hostile-abs-a-hero",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -19,7 +19,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-hero-heading",
+      "nodeId": "hostile-abs-a-hero-heading-mobile",
       "domPath": "body > div.hostile-abs-a-shell > hero_heading.hostile-abs-a-hero-heading",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -28,7 +28,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-features",
+      "nodeId": "hostile-abs-a-features-mobile",
       "domPath": "body > div.hostile-abs-a-shell > features.hostile-abs-a-features",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -39,7 +39,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-feature-item-1",
+      "nodeId": "hostile-abs-a-feature-item-1-mobile",
       "domPath": "body > div.hostile-abs-a-shell > feature_item_1.hostile-abs-a-feature-item-1",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-feature-item-2",
+      "nodeId": "hostile-abs-a-feature-item-2-mobile",
       "domPath": "body > div.hostile-abs-a-shell > feature_item_2.hostile-abs-a-feature-item-2",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -57,7 +57,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-cta",
+      "nodeId": "hostile-abs-a-cta-mobile",
       "domPath": "body > div.hostile-abs-a-shell > cta.hostile-abs-a-cta",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -66,7 +66,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-footer",
+      "nodeId": "hostile-abs-a-footer-mobile",
       "domPath": "body > div.hostile-abs-a-shell > footer.hostile-abs-a-footer",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -75,7 +75,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-0",
+      "nodeId": "hostile-abs-a-list-item-0-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-0",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -85,7 +85,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-1",
+      "nodeId": "hostile-abs-a-list-item-1-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-1",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -95,7 +95,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-2",
+      "nodeId": "hostile-abs-a-list-item-2-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-2",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -105,7 +105,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-3",
+      "nodeId": "hostile-abs-a-list-item-3-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-3",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -115,7 +115,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-4",
+      "nodeId": "hostile-abs-a-list-item-4-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-4",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -125,7 +125,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-5",
+      "nodeId": "hostile-abs-a-list-item-5-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-5",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -135,7 +135,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-6",
+      "nodeId": "hostile-abs-a-list-item-6-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-6",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -145,7 +145,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-7",
+      "nodeId": "hostile-abs-a-list-item-7-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-7",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -155,7 +155,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-8",
+      "nodeId": "hostile-abs-a-list-item-8-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-8",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -165,7 +165,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-9",
+      "nodeId": "hostile-abs-a-list-item-9-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-9",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -175,7 +175,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-10",
+      "nodeId": "hostile-abs-a-list-item-10-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-10",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -185,7 +185,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-11",
+      "nodeId": "hostile-abs-a-list-item-11-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-11",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -195,7 +195,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-12",
+      "nodeId": "hostile-abs-a-list-item-12-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-12",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -205,7 +205,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-13",
+      "nodeId": "hostile-abs-a-list-item-13-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-13",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -215,7 +215,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-14",
+      "nodeId": "hostile-abs-a-list-item-14-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-14",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -225,7 +225,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-15",
+      "nodeId": "hostile-abs-a-list-item-15-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-15",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -235,7 +235,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-16",
+      "nodeId": "hostile-abs-a-list-item-16-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-16",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -245,7 +245,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-17",
+      "nodeId": "hostile-abs-a-list-item-17-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-17",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -255,7 +255,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-18",
+      "nodeId": "hostile-abs-a-list-item-18-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-18",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -265,7 +265,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-19",
+      "nodeId": "hostile-abs-a-list-item-19-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-19",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -275,7 +275,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-20",
+      "nodeId": "hostile-abs-a-list-item-20-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-20",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -285,7 +285,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-21",
+      "nodeId": "hostile-abs-a-list-item-21-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-21",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -295,7 +295,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-22",
+      "nodeId": "hostile-abs-a-list-item-22-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-22",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -305,7 +305,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-23",
+      "nodeId": "hostile-abs-a-list-item-23-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-23",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -315,7 +315,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-24",
+      "nodeId": "hostile-abs-a-list-item-24-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-24",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -325,7 +325,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-25",
+      "nodeId": "hostile-abs-a-list-item-25-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-25",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -335,7 +335,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-26",
+      "nodeId": "hostile-abs-a-list-item-26-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-26",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -345,7 +345,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-27",
+      "nodeId": "hostile-abs-a-list-item-27-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-27",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -355,7 +355,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-28",
+      "nodeId": "hostile-abs-a-list-item-28-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-28",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -365,7 +365,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-29",
+      "nodeId": "hostile-abs-a-list-item-29-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-29",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -375,7 +375,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-30",
+      "nodeId": "hostile-abs-a-list-item-30-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-30",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -385,7 +385,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-31",
+      "nodeId": "hostile-abs-a-list-item-31-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-31",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -395,7 +395,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-32",
+      "nodeId": "hostile-abs-a-list-item-32-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-32",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -405,7 +405,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-33",
+      "nodeId": "hostile-abs-a-list-item-33-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-33",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -415,7 +415,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-34",
+      "nodeId": "hostile-abs-a-list-item-34-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-34",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -425,7 +425,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-35",
+      "nodeId": "hostile-abs-a-list-item-35-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-35",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -435,7 +435,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-36",
+      "nodeId": "hostile-abs-a-list-item-36-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-36",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -445,7 +445,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-37",
+      "nodeId": "hostile-abs-a-list-item-37-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-37",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -455,7 +455,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-38",
+      "nodeId": "hostile-abs-a-list-item-38-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-38",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -465,7 +465,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-39",
+      "nodeId": "hostile-abs-a-list-item-39-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-39",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -475,7 +475,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-40",
+      "nodeId": "hostile-abs-a-list-item-40-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-40",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -485,7 +485,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-41",
+      "nodeId": "hostile-abs-a-list-item-41-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-41",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -495,7 +495,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-42",
+      "nodeId": "hostile-abs-a-list-item-42-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-42",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -505,7 +505,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-43",
+      "nodeId": "hostile-abs-a-list-item-43-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-43",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -515,7 +515,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-44",
+      "nodeId": "hostile-abs-a-list-item-44-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-44",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -525,7 +525,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-45",
+      "nodeId": "hostile-abs-a-list-item-45-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-45",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -535,7 +535,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-46",
+      "nodeId": "hostile-abs-a-list-item-46-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-46",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -545,7 +545,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-47",
+      "nodeId": "hostile-abs-a-list-item-47-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-47",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -555,7 +555,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-48",
+      "nodeId": "hostile-abs-a-list-item-48-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-48",
       "computedStyle": {
         "color": "#2a0e4a",
@@ -565,7 +565,7 @@
       }
     },
     {
-      "nodeId": "hostile-abs-a-list-item-49",
+      "nodeId": "hostile-abs-a-list-item-49-mobile",
       "domPath": "body > div.hostile-abs-a-shell > section.hostile-abs-a-catalog > div.hostile-abs-a-item-49",
       "computedStyle": {
         "color": "#2a0e4a",

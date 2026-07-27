@@ -2359,14 +2359,14 @@
     {
       "elementId": "hostile-heavy-dom-catalog-di-0-layout",
       "sourceId": "hostile-abs-a",
-      "nodeId": "hostile-abs-a-features",
+      "nodeId": "hostile-abs-a-features-mobile",
       "domPath": "body > div.hostile-abs-a-shell > features.hostile-abs-a-features",
       "breakpoint": "mobile"
     },
     {
       "elementId": "hostile-heavy-dom-catalog-di-1-interaction",
       "sourceId": "hostile-grid-b",
-      "nodeId": "hostile-grid-b-cta",
+      "nodeId": "hostile-grid-b-cta-desktop",
       "domPath": "body > div.hostile-grid-b-shell > cta.hostile-grid-b-cta",
       "breakpoint": "desktop"
     }
