@@ -75,6 +75,25 @@
 // tightened from "not an active contradiction" back to "=== VERIFIED",
 // uniformly with every other axis.
 //
+// v3.2 (deliverable-review fix round 4, F9/N4 re-review -- final authorized
+// round, decision-round tiebreaker): round 3's generic hasSelfReportedEvidence
+// gate (EITHER styleFingerprint OR motionSignature) was itself axis-agnostic
+// -- Sol's exact repro: "arbitrary non-empty motionSignature on real docs
+// provenance clears directive_claim_coverage at 0.707 without style
+// evidence." Removed; each axis now gates on the evidence KIND it actually
+// needs (hasStyleEvidence for layout_geometry/section_identity/
+// responsiveness/interaction; motion_timing and palette/typography already
+// gated on their own dedicated field directly, unaffected; broken_assets
+// requires genuinely VERIFIED evidence in either field, not just presence --
+// see hasVerifiedEvidence). resolve-conflicts.ts's grouping now consults
+// ir.conflictResolution[].scopeOverlap as the PRIMARY signal (was previously
+// declared in the IR but never read, approximated instead via an independent
+// role-key string heuristic). findNode requires an EXPLICIT
+// CANONICAL_EVIDENCE_STATE ('default') match, not just an implicit
+// consequence of nodeId's own naming convention -- a real hover/scrolled-
+// state node's own nodeId no longer resolves as equivalent evidence to the
+// claim's genuine default-state capture.
+//
 // v2 (deliverable-review fix round 1, carried forward): groundedness 2/1/0
 // classification; palette/type/motion evidence-gated against
 // styleFingerprint/motionSignature; strength-weighted, conflict-aware
@@ -87,7 +106,7 @@ import { scoreDiversity, type DiversityElement } from './diversity.ts';
 import { resolveConflicts } from './resolve-conflicts.ts';
 import { scoreSourceBleed, type BleedCompositionElement } from './source-bleed.ts';
 
-export const SCORER_VERSION = '3.1.0';
+export const SCORER_VERSION = '3.2.0';
 
 export interface CompositionElement {
   elementId: string;
@@ -136,11 +155,27 @@ function isNonEmpty(v: string | undefined): v is string {
   return typeof v === 'string' && v.length > 0;
 }
 
-// N1 (deliverable-review fix round 2): the ONE distinguishing test between a
-// genuine composition attempt and a bare IR-provenance dump. See the file
-// header for the full rationale.
-function hasSelfReportedEvidence(el: CompositionElement): boolean {
-  return isNonEmpty(el.styleFingerprint) || isNonEmpty(el.motionSignature);
+// Round 4 (deliverable-review fix round 4, F9/N1 re-review -- final
+// authorized round): round 2/3 used ONE generic gate --
+// hasSelfReportedEvidence(el), true if EITHER styleFingerprint OR
+// motionSignature is present -- to unlock layout/section/responsiveness/
+// broken_assets. Sol's exact repro: "arbitrary non-empty motionSignature on
+// real docs provenance clears directive_claim_coverage at 0.707 without
+// style evidence." A composition built from docs-api-reference's REAL
+// provenance (every domPath/nodeId/breakpoint genuinely correct) plus an
+// ARBITRARY, non-empty motionSignature on every element satisfied the
+// generic gate for its layout AND section claims -- axes that have NOTHING
+// to do with motion -- while its palette claim correctly stayed unrealized
+// (paletteEvidenceFactor needs styleFingerprint specifically, never used the
+// generic gate). Weighted: (0.8*1[section] + 0.65*1[layout] + 0.6*0[palette])
+// / 2.05 = 0.707 exactly. hasSelfReportedEvidence is REMOVED. Each axis now
+// gates on the evidence KIND it actually needs -- motion_timing and
+// palette/typography already gated correctly (motionEvidenceFactor/
+// paletteEvidenceFactor/typeEvidenceFactor check their own dedicated field
+// directly, never used the generic gate); layout_geometry/section_identity/
+// responsiveness/interaction did not, and are fixed below.
+function hasStyleEvidence(el: CompositionElement): boolean {
+  return isNonEmpty(el.styleFingerprint);
 }
 
 // Strength-weighted average -- Grok-N8: directive `strength` is consumed,
@@ -170,8 +205,30 @@ function groundScore(g: Groundedness): number {
   return 0.15;
 }
 
-function findNode(nodes: CapturedNode[], el: { nodeId: string; domPath: string; breakpoint: string }): CapturedNode | undefined {
-  return nodes.find((n) => n.nodeId === el.nodeId && n.domPath === el.domPath && n.breakpoint === el.breakpoint);
+// Sol-N4 (round 4): "state is not explicitly matched." CompositionElement has
+// no state field (the sealed blindInput() shape doesn't carry one -- see
+// CompositionElement above), so a composition can only ever cite a node's
+// identity via (nodeId, domPath, breakpoint). Before this fix, findNode
+// resolved purely on those three fields and never referenced
+// CapturedNode.state at all, even though every v3+ node carries one and this
+// corpus's own evidencePointers (generate-corpus.ts) record it explicitly
+// (`<domPath>@<breakpoint>@<state>`). That left state-matching IMPLICIT --
+// accidentally correct only because nodeId happens to embed the state as a
+// naming-convention suffix (e.g. "-hover"/"-default"/"-scrolled"), never
+// verified as a real constraint. CANONICAL_EVIDENCE_STATE makes it explicit:
+// a claim's evidence must resolve against the node's 'default' capture --
+// the ONE state every real corpus node has, and the state
+// generate-corpus.ts's own provenance construction exclusively uses (see
+// `n.state === 'default'` there). A composition that cites a real,
+// self-consistent HOVER- or SCROLLED-state node's own nodeId (instead of the
+// same domPath+breakpoint's 'default' capture) no longer resolves at all --
+// that specific node genuinely exists, but not in the state this resolution
+// path requires, so it must not be credited as equivalent to a genuine
+// default-state citation.
+const CANONICAL_EVIDENCE_STATE = 'default';
+
+function findNode(nodes: CapturedNode[], el: { nodeId: string; domPath: string; breakpoint: string }, expectedState: string = CANONICAL_EVIDENCE_STATE): CapturedNode | undefined {
+  return nodes.find((n) => n.nodeId === el.nodeId && n.domPath === el.domPath && n.breakpoint === el.breakpoint && n.state === expectedState);
 }
 
 function gradeComposition(composition: CompositionElement[], bySource: Record<string, CapturedNode[]>): GradedElement[] {
@@ -249,6 +306,18 @@ function motionEvidenceFactor(el: CompositionElement, node: CapturedNode | undef
   return el.motionSignature === `transition:${realDuration}` ? EVIDENCE_VERIFIED : EVIDENCE_MISMATCH;
 }
 
+// Round 4: broken_assets' "specific kind" (per the fix scope: "broken_assets/
+// a11y -> their specific kinds") isn't ONE dedicated field the way palette/
+// type/motion are -- asset integrity is demonstrated by EITHER a genuinely
+// VERIFIED style fingerprint OR a genuinely VERIFIED motion signature,
+// whichever the element actually carries. Critically this requires
+// VERIFICATION, not mere presence: an arbitrary/unverified value in either
+// field no longer counts (closing the same class of gap Sol's coverage
+// repro exposed -- an unverified label must not unlock an unrelated axis).
+function hasVerifiedEvidence(el: CompositionElement, node: CapturedNode | undefined): boolean {
+  return paletteEvidenceFactor(el, node) === EVIDENCE_VERIFIED || motionEvidenceFactor(el, node) === EVIDENCE_VERIFIED;
+}
+
 // Grok constraints_unscored / Sol-N4 (deliverable-review fix round 2):
 // constraints were generated per case but never loaded or evaluated by
 // anything -- dead weight. constraintMatches evaluates a real IR constraint
@@ -269,17 +338,23 @@ function constraintMatches(computedStyle: Record<string, string> | undefined, pr
   }
 }
 
-// N1 (deliverable-review fix round 2): layout_geometry now requires
-// hasSelfReportedEvidence -- Sol's repro was bare IR provenance (no
+// N1 (deliverable-review fix round 2, TIGHTENED round 4): layout_geometry
+// requires evidence -- Sol's original repro was bare IR provenance (no
 // styleFingerprint/motionSignature at all) scoring layout_geometry=1.0
 // purely because the resolved SOURCE node happened to be a real container.
-// A composition that supplies zero self-reported evidence contributes the
-// near-zero "absent" tier on this axis regardless of groundedness or what
-// the source node's own computedStyle looks like. When evidence IS present,
+// Round 2/3 gated on hasSelfReportedEvidence (EITHER field); round 4's
+// re-review found that gate itself axis-agnostic -- an ARBITRARY
+// motionSignature (a field with nothing to do with geometry) unlocked this
+// axis just as effectively as a genuine styleFingerprint. layout_geometry's
+// OWN evidence kind is "geometry/structural rendered evidence"; there is no
+// dedicated composition field for that, but styleFingerprint (the
+// composition's one general per-node rendered-property self-report) is the
+// axis-appropriate proxy -- motionSignature (narrowly about transitions) is
+// not. Gates on hasStyleEvidence specifically now. When evidence IS present,
 // the case's own grid-integrity constraint predicate is evaluated against
 // the resolved node (replacing round 1's hardcoded allowed-value set).
 function layoutEvidenceFactor(el: CompositionElement, node: CapturedNode | undefined, gridConstraint: CaseConstraint | undefined): number {
-  if (!hasSelfReportedEvidence(el)) return EVIDENCE_ABSENT_NODE;
+  if (!hasStyleEvidence(el)) return EVIDENCE_ABSENT_NODE;
   if (!node) return EVIDENCE_ABSENT_NODE;
   return constraintMatches(node.computedStyle, gridConstraint?.predicate) ? EVIDENCE_VERIFIED : EVIDENCE_UNVERIFIABLE;
 }
@@ -290,9 +365,11 @@ function layoutEvidenceFactor(el: CompositionElement, node: CapturedNode | undef
 // state-differentiated -- it has a genuine 'scrolled'-state capture at the
 // same domPath (this corpus's real scroll-lock pattern; see
 // generate-corpus.ts's buildSourceNodes) -- while a generic layout container
-// claim does not need one. Same hasSelfReportedEvidence gate as layout.
+// claim does not need one. Same hasStyleEvidence gate as layout (round 4 --
+// see layoutEvidenceFactor's comment for why motionSignature alone no
+// longer qualifies).
 function sectionEvidenceFactor(el: CompositionElement, node: CapturedNode | undefined, gridConstraint: CaseConstraint | undefined, bySource: Record<string, CapturedNode[]>): number {
-  if (!hasSelfReportedEvidence(el)) return EVIDENCE_ABSENT_NODE;
+  if (!hasStyleEvidence(el)) return EVIDENCE_ABSENT_NODE;
   if (!node) return EVIDENCE_ABSENT_NODE;
   const constraintOk = constraintMatches(node.computedStyle, gridConstraint?.predicate);
   if (!constraintOk) return EVIDENCE_MISMATCH;
@@ -404,7 +481,11 @@ export function scoreComposition(input: ScoringInput, siblings?: CompositionElem
       case 'section':
         return sectionEvidenceFactor(el, node, gridConstraint, bySource) === EVIDENCE_VERIFIED;
       case 'interaction':
-        return hasSelfReportedEvidence(el) && !!node && constraintMatches(node.computedStyle, responsiveConstraint?.predicate);
+        // 'interaction' maps to the responsiveness scorer axis
+        // (DIRECTIVE_AXIS_TO_SCORER_AXIS) -- per-breakpoint rendered
+        // evidence, same evidence kind as layout_geometry (round 4: gates on
+        // hasStyleEvidence, not the removed generic self-report check).
+        return hasStyleEvidence(el) && !!node && constraintMatches(node.computedStyle, responsiveConstraint?.predicate);
       default:
         return false;
     }
@@ -448,14 +529,17 @@ export function scoreComposition(input: ScoringInput, siblings?: CompositionElem
   // genuinely well-rendered; fidelity measures rendering quality, coverage
   // measures directive obedience, and conflating them was never the ask).
   // Falls back to a case-wide groundedness average when the case has no
-  // claim on that axis at all -- gated the same way (hasSelfReportedEvidence)
-  // for consistency, so a bare-provenance composition doesn't get a free
-  // pass on axes the case happens not to have a claim for.
-  function axisScoreFor(axis: DirectiveAxis, evidenceFactor: (el: CompositionElement, node: CapturedNode | undefined) => number, gateOnSelfReport: boolean): number {
+  // claim on that axis at all -- gated by the SAME axis-specific evidence
+  // predicate the axis's own evidenceFactor uses (round 4: was a generic
+  // hasSelfReportedEvidence boolean; now the caller passes the real
+  // axis-appropriate gate, e.g. hasStyleEvidence for layout/section), so a
+  // bare-provenance composition doesn't get a free pass on axes the case
+  // happens not to have a claim for, via a field that axis doesn't even use.
+  function axisScoreFor(axis: DirectiveAxis, evidenceFactor: (el: CompositionElement, node: CapturedNode | undefined) => number, gate?: (el: CompositionElement) => boolean): number {
     const claims = c.directiveInventory.filter((d) => d.axis === axis);
     if (claims.length === 0) {
-      const pool = gateOnSelfReport ? graded.filter((g) => hasSelfReportedEvidence(g.el)) : graded;
-      return pool.length > 0 ? avg(pool.map((g) => groundScore(g.groundedness))) : gateOnSelfReport ? 0.15 : 0.5;
+      const pool = gate ? graded.filter((g) => gate(g.el)) : graded;
+      return pool.length > 0 ? avg(pool.map((g) => groundScore(g.groundedness))) : gate ? 0.15 : 0.5;
     }
     const pairs = claims.map((claim) => {
       const match = graded.find((g) => g.el.domPath === claim.scope);
@@ -465,25 +549,35 @@ export function scoreComposition(input: ScoringInput, siblings?: CompositionElem
     return weightedAvg(pairs);
   }
 
-  // N1 (deliverable-review fix round 2): responsiveness now requires
-  // hasSelfReportedEvidence AND evaluates the case's OWN responsive-behavior
-  // constraint against the resolved node at each breakpoint, instead of
-  // counting mere breakpoint-tag presence. A bare-provenance composition
-  // (no self-report anywhere) contributes 0 coverage for every breakpoint.
+  // N1 (deliverable-review fix round 2, TIGHTENED round 4): responsiveness
+  // requires "per-breakpoint rendered evidence" and evaluates the case's OWN
+  // responsive-behavior constraint against the resolved node at each
+  // breakpoint, instead of counting mere breakpoint-tag presence.
+  // Responsiveness is fundamentally about whether LAYOUT genuinely differs
+  // per breakpoint, so it gates on the same evidence kind as
+  // layout_geometry (hasStyleEvidence) -- round 2/3's generic
+  // hasSelfReportedEvidence let an arbitrary motionSignature (irrelevant to
+  // breakpoint/layout behavior) unlock this axis too. A bare-provenance
+  // composition (no styleFingerprint anywhere) contributes 0 coverage for
+  // every breakpoint.
   function computeResponsiveness(): number {
     if (c.breakpoints.length === 0) return 0.5;
     let covered = 0;
     for (const bp of c.breakpoints) {
-      const ok = graded.some((g) => g.el.breakpoint === bp && g.groundedness >= 1 && hasSelfReportedEvidence(g.el) && constraintMatches(g.resolvedNode?.computedStyle, responsiveConstraint?.predicate));
+      const ok = graded.some((g) => g.el.breakpoint === bp && g.groundedness >= 1 && hasStyleEvidence(g.el) && constraintMatches(g.resolvedNode?.computedStyle, responsiveConstraint?.predicate));
       if (ok) covered++;
     }
     return covered / c.breakpoints.length;
   }
 
-  // N1: broken_assets now ALSO requires hasSelfReportedEvidence -- mere
-  // resolution (groundedness > 0) is real-node membership, not proof the
-  // composition rendered a genuine, verifiable asset.
-  const broken_assets = graded.length > 0 ? avg(graded.map((g) => (g.groundedness > 0 && hasSelfReportedEvidence(g.el) ? 1 : 0))) : 1;
+  // N1 (round 2, TIGHTENED round 4): broken_assets requires
+  // hasVerifiedEvidence -- mere resolution (groundedness > 0) is real-node
+  // membership, not proof the composition rendered a genuine, verifiable
+  // asset, and (round 4) an UNVERIFIED/arbitrary self-report doesn't prove
+  // it either -- only a genuinely VERIFIED palette or motion evidence factor
+  // counts (broken_assets' "specific kind" is EITHER, verified; see
+  // hasVerifiedEvidence's own comment).
+  const broken_assets = graded.length > 0 ? avg(graded.map((g) => (g.groundedness > 0 && hasVerifiedEvidence(g.el, g.resolvedNode) ? 1 : 0))) : 1;
   const a11y = computeA11y(graded, contrastConstraint);
 
   const sourceDomPaths: Record<string, string[]> = {};
@@ -538,11 +632,11 @@ export function scoreComposition(input: ScoringInput, siblings?: CompositionElem
   const structural_variant_diversity = scoreDiversity([diversityElements, ...siblingElements]).score;
 
   const axes: ScoringResult['axes'] = {
-    layout_geometry: clamp01(axisScoreFor('layout', (el, node) => layoutEvidenceFactor(el, node, gridConstraint), true)),
-    palette_fidelity: clamp01(axisScoreFor('palette', paletteEvidenceFactor, false)),
-    type_fidelity: clamp01(axisScoreFor('typography', typeEvidenceFactor, false)),
-    motion_timing: clamp01(axisScoreFor('motion', motionEvidenceFactor, false)),
-    section_identity: clamp01(axisScoreFor('section', (el, node) => sectionEvidenceFactor(el, node, gridConstraint, bySource), true)),
+    layout_geometry: clamp01(axisScoreFor('layout', (el, node) => layoutEvidenceFactor(el, node, gridConstraint), hasStyleEvidence)),
+    palette_fidelity: clamp01(axisScoreFor('palette', paletteEvidenceFactor)),
+    type_fidelity: clamp01(axisScoreFor('typography', typeEvidenceFactor)),
+    motion_timing: clamp01(axisScoreFor('motion', motionEvidenceFactor)),
+    section_identity: clamp01(axisScoreFor('section', (el, node) => sectionEvidenceFactor(el, node, gridConstraint, bySource), hasStyleEvidence)),
     responsiveness: clamp01(computeResponsiveness()),
     broken_assets: clamp01(broken_assets),
     a11y: clamp01(a11y),

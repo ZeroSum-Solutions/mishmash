@@ -78,7 +78,10 @@ export interface CaseConstraint {
 // exercised against sealed cases.
 export interface CaseIR {
   directives: Array<{ axis: string; source: string; scope: string; strength: number; breakpoint?: string }>;
-  conflictResolution: Array<{ axis: string; winningSource: string; losingSource?: string }>;
+  // Sol-N4 (round 4): scopeOverlap exposed -- resolve-conflicts.ts now reads
+  // it as the primary grouping signal. Optional: sealed v1-shape IR predates
+  // it, but scoreComposition never reads sealed IR anyway.
+  conflictResolution: Array<{ axis: string; winningSource: string; losingSource?: string; scopeOverlap?: string }>;
   // Sol-N4/Grok constraints_unscored (deliverable-review fix round 2):
   // constraints were generated (generate-corpus.ts) but never loaded or
   // evaluated by anything. Optional -- sealed v1-shape IR predates this

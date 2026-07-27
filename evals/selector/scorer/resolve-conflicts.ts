@@ -13,33 +13,36 @@
 // Sol-N4 (deliverable-review fix round 2): grouping by axis ALONE is too
 // coarse -- two claims can share an axis without genuinely competing for the
 // same slot (this corpus's own hostile-heavy-dom-catalog case has multiple
-// same-axis claims scattered across unrelated catalog rows). Two claims are
-// only a REAL contest when they share both the axis AND a role key -- the
-// scope with its source-id prefix stripped, so `ecom-flex-a-reviews-panel`
-// and `ecom-grid-b-reviews-panel` collapse to the same role
-// (`reviews-panel`) while `ecom-flex-a-reviews-panel` and
-// `ecom-flex-a-price-badge` do not. Claims that share an axis but NOT a role
-// key are independent sole-claimants within their own role, never pitted
-// against each other. This mirrors the scopeOverlap semantics
-// (`same-role-different-source` vs `single-claimant`) the IR's own
-// conflictResolution entries already record (see generate-corpus.ts) -- the
-// grouping now actually uses that distinction instead of ignoring it.
-// Selection logic within a genuine contest (declared-winner lookup,
+// same-axis claims scattered across unrelated catalog rows). Round 2 added a
+// role-key heuristic (scope with the source id stripped) to approximate
+// this. Selection logic within a genuine contest (declared-winner lookup,
 // fallback-to-first-claim-when-undeclared) is UNCHANGED from the
 // dual-APPROVED (F4) round-1 algorithm.
-
-// Strips a known source id from a domPath-shaped scope to recover the shared
-// "role" identity two different sources' claims on the same slot would both
-// reduce to. This corpus's domPath convention embeds the source id TWICE
-// (`body > div.<source>-shell > role.<source>-role`) -- a single-occurrence
-// strip leaves the second copy in place and two different sources' claims on
-// the identical role never collapse to the same key (verified: this was
-// wrong on first pass, caught by re-running C7-3's own real-corpus check
-// against all 4 conflict cases before committing). split/join strips EVERY
-// occurrence. Falls back to the raw scope when the source id isn't present
-// at all (unrecognized shape) -- never throws, worst case treats the claim
-// as its own singleton role, which is the SAME (safe, non-contesting)
-// behavior as before this fix for any scope this heuristic can't parse.
+//
+// Sol-N4 (deliverable-review fix round 4): "scopeOverlap is ignored" --
+// round 2's role-key heuristic approximated the SAME distinction
+// `ir.conflictResolution[].scopeOverlap` already declares explicitly
+// (`same-role-different-source` vs `single-claimant`; see
+// generate-corpus.ts), but never actually READ that field -- it re-derived
+// an independent guess via string manipulation instead of consulting the
+// IR's own ground truth. Grouping now consults the DECLARED scopeOverlap
+// for each axis as the PRIMARY signal: 'single-claimant' means the IR
+// itself asserts no genuine overlap on this axis, so every claim stands
+// alone (grouped individually) regardless of what role-key derivation might
+// suggest; any other declared value (e.g. 'same-role-different-source')
+// means the IR asserts every claim on this axis participates in ONE shared
+// contest, grouped together as a whole. Role-key grouping (below) is now
+// only the FALLBACK for an axis with no declared conflictResolution entry
+// at all (an authoring gap the IR itself doesn't speak to).
+//
+// roleKeyFor strips a known source id from a domPath-shaped scope to
+// recover the shared "role" identity two different sources' claims on the
+// same slot would both reduce to. This corpus's domPath convention embeds
+// the source id TWICE (`body > div.<source>-shell > role.<source>-role`) --
+// a single-occurrence strip leaves the second copy in place (verified: this
+// was wrong on first pass in round 2, caught by re-running C7-3's own
+// real-corpus check before committing). split/join strips EVERY occurrence.
+// Falls back to the raw scope when the source id isn't present at all.
 function roleKeyFor(scope: string, sourceId: string): string {
   if (!scope.includes(sourceId)) return scope;
   return scope.split(sourceId).join('');
@@ -58,6 +61,11 @@ export interface ConflictResolutionRecord {
   losingSource?: string;
   losingClaim?: string;
   rationale?: string;
+  // Sol-N4 (round 4): now actually READ by resolveConflicts below, not just
+  // carried through as IR-spec documentation. 'single-claimant' vs any other
+  // declared value (e.g. 'same-role-different-source') is the PRIMARY signal
+  // for whether an axis's claims form one shared contest.
+  scopeOverlap?: string;
 }
 
 export interface CompositionIRForConflicts {
@@ -77,59 +85,88 @@ export interface ConflictResolutionResult {
 }
 
 export function resolveConflicts(ir: CompositionIRForConflicts): ConflictResolutionResult {
-  // Sol-N4: group by (axis, roleKey), not axis alone -- two claims on the
-  // same axis but unrelated scopes (e.g. two different catalog rows) are
-  // independent sole-claimants, not competitors. groupKey is used only to
-  // bucket claims for selection below; `result` is re-keyed by that same
-  // composite string (nothing downstream reads `result` by bare axis --
-  // every consumer either checks non-null presence or reads `losingClaims`).
-  const byGroup = new Map<string, DirectiveClaim[]>();
+  // First pass: group by AXIS alone (the coarse pre-round-2 grouping). The
+  // scopeOverlap-aware SUB-grouping into genuine contests happens per axis,
+  // below, consulting the IR's own declared signal.
+  const byAxis = new Map<string, DirectiveClaim[]>();
   for (const d of ir.directives) {
-    const groupKey = `${d.axis}::${roleKeyFor(d.scope, d.source)}`;
-    const existing = byGroup.get(groupKey);
+    const existing = byAxis.get(d.axis);
     if (existing) existing.push(d);
-    else byGroup.set(groupKey, [d]);
+    else byAxis.set(d.axis, [d]);
   }
 
   const result: Record<string, DirectiveClaim | null> = {};
   const losingClaims: LosingClaim[] = [];
 
-  const groupKeys = [...byGroup.keys()].sort();
-  for (const groupKey of groupKeys) {
-    const claims = byGroup.get(groupKey) ?? [];
-    const axis = claims[0]!.axis;
-    const distinctSources = [...new Set(claims.map((c) => c.source))];
-
-    if (distinctSources.length <= 1) {
-      // No contention in this axis+role group -- the sole claim (if any)
-      // wins by default. No losingClaims entry: there is nothing to record
-      // as lost.
-      result[groupKey] = claims[0] ?? null;
-      continue;
-    }
-
+  const axisNames = [...byAxis.keys()].sort();
+  for (const axis of axisNames) {
+    const axisClaims = byAxis.get(axis) ?? [];
     const declared = ir.conflictResolution.find((r) => r.axis === axis);
-    if (!declared) {
-      // A real conflict with no declared precedence is a data-authoring
-      // defect, not something this resolver may paper over by guessing --
-      // fall back to the first claim deterministically (stable: claims
-      // preserves ir.directives' own order) and record every OTHER claim on
-      // this axis as losing against it, so the absence of a declared
-      // precedence is still visible in the output rather than silently
-      // dropped.
-      const fallbackWinner = claims[0]!;
-      result[groupKey] = fallbackWinner;
-      for (const c of claims) {
-        if (c.source !== fallbackWinner.source) losingClaims.push({ axis, winningSource: fallbackWinner.source, losingSource: c.source });
+
+    // Sol-N4 (round 4): scopeOverlap-aware grouping. The IR's own declared
+    // scopeOverlap for this axis is the PRIMARY signal, not a re-derived
+    // heuristic:
+    //   - declared.scopeOverlap === 'single-claimant': the IR itself asserts
+    //     no genuine overlap on this axis -- every claim stands alone (its
+    //     own group), regardless of what a role-key derivation might
+    //     otherwise suggest.
+    //   - declared.scopeOverlap is any OTHER value (e.g.
+    //     'same-role-different-source'): the IR asserts every claim on this
+    //     axis participates in ONE shared contest -- grouped together as a
+    //     whole, not sub-divided by role-key.
+    //   - no declared entry for this axis at all: an authoring gap the IR
+    //     doesn't speak to -- fall back to role-key grouping (the round-2
+    //     heuristic) as the best available signal.
+    let groups: DirectiveClaim[][];
+    if (declared?.scopeOverlap === 'single-claimant') {
+      groups = axisClaims.map((c) => [c]);
+    } else if (declared !== undefined) {
+      groups = [axisClaims];
+    } else {
+      const byRoleKey = new Map<string, DirectiveClaim[]>();
+      for (const d of axisClaims) {
+        const roleKey = roleKeyFor(d.scope, d.source);
+        const existing = byRoleKey.get(roleKey);
+        if (existing) existing.push(d);
+        else byRoleKey.set(roleKey, [d]);
       }
-      continue;
+      groups = [...byRoleKey.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, claims]) => claims);
     }
 
-    const winner = claims.find((c) => c.source === declared.winningSource) ?? claims[0]!;
-    result[groupKey] = winner;
-    for (const c of claims) {
-      if (c.source !== declared.winningSource) {
-        losingClaims.push({ axis, winningSource: declared.winningSource, losingSource: c.source });
+    for (const [groupIndex, claims] of groups.entries()) {
+      const groupKey = `${axis}::${groupIndex}::${roleKeyFor(claims[0]!.scope, claims[0]!.source)}`;
+      const distinctSources = [...new Set(claims.map((c) => c.source))];
+
+      if (distinctSources.length <= 1) {
+        // No contention in this group -- the sole claim (if any) wins by
+        // default. No losingClaims entry: there is nothing to record as
+        // lost.
+        result[groupKey] = claims[0] ?? null;
+        continue;
+      }
+
+      if (!declared) {
+        // A real conflict with no declared precedence is a data-authoring
+        // defect, not something this resolver may paper over by guessing --
+        // fall back to the first claim deterministically (stable: claims
+        // preserves ir.directives' own order) and record every OTHER claim
+        // on this axis as losing against it, so the absence of a declared
+        // precedence is still visible in the output rather than silently
+        // dropped.
+        const fallbackWinner = claims[0]!;
+        result[groupKey] = fallbackWinner;
+        for (const c of claims) {
+          if (c.source !== fallbackWinner.source) losingClaims.push({ axis, winningSource: fallbackWinner.source, losingSource: c.source });
+        }
+        continue;
+      }
+
+      const winner = claims.find((c) => c.source === declared.winningSource) ?? claims[0]!;
+      result[groupKey] = winner;
+      for (const c of claims) {
+        if (c.source !== declared.winningSource) {
+          losingClaims.push({ axis, winningSource: declared.winningSource, losingSource: c.source });
+        }
       }
     }
   }

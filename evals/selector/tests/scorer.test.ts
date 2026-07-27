@@ -92,3 +92,78 @@ test('Sol-N9 (F9): opposite-breakpoint provenance does not score directive_claim
   const result = scoreComposition({ caseId: OPPOSITE_CASE_ID, composition: opposite });
   assert.equal(result.axes.directive_claim_coverage, 0, `expected opposite-breakpoint directive_claim_coverage to be EXACTLY 0 (hard veto), got ${result.axes.directive_claim_coverage}`);
 });
+
+test('Sol-N9/F9 (round 4): arbitrary motion self-report on real provenance does not clear coverage at 0.707', () => {
+  // Sol's exact round-4 repro: "arbitrary non-empty motionSignature on real
+  // docs provenance clears directive_claim_coverage at 0.707 without style
+  // evidence." docs-api-reference's real provenance (every domPath/nodeId/
+  // breakpoint genuinely correct, groundedness=2 for all 4 elements) plus an
+  // ARBITRARY, non-empty motionSignature on every element (no
+  // styleFingerprint anywhere) used to satisfy the generic
+  // hasSelfReportedEvidence gate for the case's layout AND section claims
+  // (axes that have nothing to do with motion), while its palette claim
+  // correctly stayed unrealized -- weighted average landed at exactly 0.707
+  // (0.8*1[section] + 0.65*1[layout] + 0.6*0[palette]) / 2.05. Axis-specific
+  // gating (hasStyleEvidence, not the removed generic hasSelfReportedEvidence)
+  // must drop coverage to 0: motionSignature is not the evidence kind
+  // layout/section need.
+  const ir = loadCaseIR(loadManifest().cases.find((c) => c.id === CASE_ID)!);
+  const composition: CompositionElement[] = ir.provenance.map((p) => ({
+    elementId: p.elementId,
+    sourceId: p.sourceId,
+    domPath: p.domPath,
+    nodeId: p.nodeId,
+    breakpoint: p.breakpoint,
+    motionSignature: 'arbitrary-nonempty-label',
+  }));
+  const result = scoreComposition({ caseId: CASE_ID, composition });
+  assert.notEqual(result.axes.directive_claim_coverage, 0.7073170731707317, 'must not still be the pre-fix 0.707 value');
+  assert.equal(result.axes.directive_claim_coverage, 0, `expected coverage to drop to EXACTLY 0 (motionSignature does not evidence layout/section claims), got ${result.axes.directive_claim_coverage}`);
+});
+
+test('Sol-N4: a wrong-state citation (real hover-state nodeId cited where the claim needs default) is not credited', () => {
+  // ecommerce-product-flex's real 'motion' claim (source=ecom-grid-b, scope=
+  // add-to-cart, breakpoint=mobile) has TWO real captures at that exact
+  // (domPath, breakpoint): a 'default' state (transitionDuration=240ms) and
+  // a 'hover' state (transitionDuration=180ms). Both nodeIds are genuinely
+  // real, self-consistent captures -- citing the hover one is not a
+  // fabrication, just the WRONG state for this resolution path (which
+  // requires 'default' -- see CANONICAL_EVIDENCE_STATE in scorer/index.ts).
+  // A composition element built from the hover nodeId, even with a
+  // motionSignature that correctly matches THAT node's own real duration,
+  // must not resolve as if it were the claim's genuine default-state
+  // evidence.
+  const MOTION_CASE_ID = 'ecommerce-product-flex';
+  const manifest = loadManifest();
+  const c = manifest.cases.find((cc) => cc.id === MOTION_CASE_ID)!;
+  const bySource = buildSnapshotsBySource(c);
+  const motionClaim = c.directiveInventory.find((d) => d.axis === 'motion')!;
+  assert.ok(motionClaim, 'fixture sanity: ecommerce-product-flex has a motion claim');
+
+  const defaultNode = (bySource[motionClaim.source] ?? []).find((n) => n.domPath === motionClaim.scope && n.breakpoint === motionClaim.breakpoint && n.state === 'default');
+  const hoverNode = (bySource[motionClaim.source] ?? []).find((n) => n.domPath === motionClaim.scope && n.breakpoint === motionClaim.breakpoint && n.state === 'hover');
+  assert.ok(defaultNode && hoverNode, 'fixture sanity: the motion claim scope has both a real default and a real hover capture');
+  assert.notEqual(defaultNode!.computedStyle['transitionDuration'], hoverNode!.computedStyle['transitionDuration'], 'fixture sanity: default and hover carry genuinely different real durations');
+
+  const buildComposition = (motionNodeId: string, motionDuration: string): CompositionElement[] =>
+    c.directiveInventory.map((d, i) => {
+      const node = (bySource[d.source] ?? []).find((n) => n.domPath === d.scope && n.breakpoint === d.breakpoint && n.state === 'default');
+      const isMotionClaim = d.axis === 'motion';
+      const nodeId = isMotionClaim ? motionNodeId : (node?.nodeId ?? `unknown-${i}`);
+      const parts = ['color', 'backgroundColor', 'fontFamily'].map((k) => node?.computedStyle[k]).filter((v): v is string => typeof v === 'string' && v.length > 0);
+      const el: CompositionElement = { elementId: `wc-${i}-${d.axis}`, sourceId: d.source, domPath: d.scope, nodeId, breakpoint: d.breakpoint ?? 'mobile' };
+      if (parts.length === 3) el.styleFingerprint = parts.join('|');
+      if (isMotionClaim) el.motionSignature = `transition:${motionDuration}`;
+      return el;
+    });
+
+  const correctDefault = buildComposition(defaultNode!.nodeId, defaultNode!.computedStyle['transitionDuration']!);
+  const wrongState = buildComposition(hoverNode!.nodeId, hoverNode!.computedStyle['transitionDuration']!);
+
+  const correctResult = scoreComposition({ caseId: MOTION_CASE_ID, composition: correctDefault });
+  const wrongResult = scoreComposition({ caseId: MOTION_CASE_ID, composition: wrongState });
+
+  assert.equal(correctResult.axes.motion_timing, 1, `expected the correct default-state citation to fully verify motion_timing, got ${correctResult.axes.motion_timing}`);
+  assert.ok(wrongResult.axes.motion_timing < correctResult.axes.motion_timing, `expected wrong-state motion_timing (${wrongResult.axes.motion_timing}) < correct-state motion_timing (${correctResult.axes.motion_timing})`);
+  assert.ok(wrongResult.axes.directive_claim_coverage < correctResult.axes.directive_claim_coverage, `expected wrong-state coverage (${wrongResult.axes.directive_claim_coverage}) < correct-state coverage (${correctResult.axes.directive_claim_coverage})`);
+});
