@@ -1,0 +1,129 @@
+{
+  "$comment": "Machine-readable write leases. scripts/waves/verify-<wave>.ts asserts that `git diff --name-only <base>...HEAD` is a subset of the wave's globs. Prose explanation: VERIFICATION-CONTRACT.md section 4. Program scaffolding — delete with scripts/waves/ at program close.",
+  "version": 2,
+  "waves": {
+    "W-C": {
+      "slug": "mishmash-wc-clone-closeout",
+      "allow": [
+        "skills/web-clone/**",
+        "apps/daemon/tests/web-clone-*.test.ts",
+        "scripts/waves/verify-wc.ts",
+        "docs/plans/waves/**"
+      ],
+      "note": "Verified against `git diff --name-only main...feat/web-clone-capture-hardening`: all six daemon test files are web-clone-prefixed."
+    },
+    "W0": {
+      "slug": "mishmash-w0-substrate",
+      "allow": [
+        "scripts/waves/**",
+        "scripts/guard.ts",
+        "apps/daemon/src/backup/**",
+        "apps/daemon/src/security/**",
+        "apps/daemon/src/routes/library.ts",
+        "apps/daemon/tests/**",
+        "docs/security/**",
+        "docs/testing/**",
+        "docs/plans/waves/**"
+      ],
+      "deny": [
+        "apps/daemon/tests/web-clone-*.test.ts"
+      ],
+      "note": "Owns `pnpm guard` and the daemon test tree for Burst 1. W-C may not touch guard."
+    },
+    "W7": {
+      "slug": "mishmash-w7-selector-foundations",
+      "allow": [
+        "docs/specs/**",
+        "evals/**",
+        "scripts/waves/verify-w7.ts",
+        "docs/plans/waves/**"
+      ],
+      "note": "Neither docs/specs/ nor evals/ exists yet — W7 creates both. No product code, no root tooling, no package.json edits."
+    },
+    "W1": {
+      "slug": "mishmash-w1-routing-truth",
+      "allow": [
+        "apps/daemon/src/runtimes/**",
+        "apps/daemon/src/server.ts",
+        "apps/daemon/src/routes/usage*.ts",
+        "packages/contracts/**",
+        "apps/web/src/components/EntryShell.tsx",
+        "apps/web/src/components/agentModelSelection.ts",
+        "apps/web/src/components/AssistantMessage.tsx",
+        "apps/daemon/src/cli.ts",
+        "apps/daemon/tests/**",
+        "apps/web/tests/**",
+        "scripts/waves/verify-w1.ts"
+      ],
+      "note": "Owns EntryShell.tsx and server.ts outright for Burst 2. Executes W2's one-line newsletter fix (C2-1a) inside this lease."
+    },
+    "W2": {
+      "slug": "mishmash-w2-brand-honesty",
+      "allow": [
+        "apps/web/public/**",
+        "apps/web/app/layout.tsx",
+        "README.md",
+        "apps/web/src/i18n/**",
+        "clipper/**",
+        "docs/**",
+        "apps/daemon/src/routes/open-design-public-metadata.ts",
+        "scripts/check-brand-surfaces*.ts",
+        "scripts/waves/verify-w2.ts"
+      ],
+      "deny": [
+        "docs/security/**",
+        "docs/specs/**",
+        "apps/web/src/components/EntryShell.tsx",
+        "apps/daemon/src/server.ts",
+        "packages/contracts/**"
+      ],
+      "note": "EntryShell.tsx line 228 is W2 work executed under W1's lease. W2's verifier reads the landed tree to confirm it."
+    },
+    "W4": {
+      "slug": "mishmash-w4-project-covers",
+      "allow": [
+        "apps/web/src/components/project-cover.tsx",
+        "apps/web/src/components/DesignsTab*",
+        "apps/web/src/components/RecentProjectsStrip*",
+        "apps/web/src/providers/registry.ts",
+        "apps/daemon/src/covers/**",
+        "apps/daemon/src/routes/covers*.ts",
+        "apps/daemon/src/cli.ts",
+        "packages/contracts/**",
+        "apps/web/tests/**",
+        "apps/daemon/tests/**",
+        "scripts/waves/verify-w4.ts"
+      ],
+      "note": "Owns registry.ts. W3 runs after W4 lands — a shared lease across one 2,500-line module is not enforceable."
+    },
+    "W9-ingest": {
+      "slug": "mishmash-w9-ingest-tranche",
+      "allow": [
+        "apps/daemon/src/routes/library.ts",
+        "apps/daemon/src/library-store.ts",
+        "apps/daemon/tests/library-*.test.ts",
+        "docs/security/**",
+        "scripts/waves/verify-w9-ingest.ts"
+      ],
+      "note": "Runs beside W4; disjoint file sets. Must complete before W3 exposes the Library."
+    },
+    "W3": {
+      "slug": "mishmash-w3-library-launch",
+      "allow": [
+        "apps/web/src/features/libraryUi.ts",
+        "apps/web/src/components/Library*",
+        "apps/web/src/components/EntryNavRail*",
+        "apps/web/src/components/ComposerPlusMenu*",
+        "apps/web/src/components/DesignFilesPanel*",
+        "apps/web/src/components/DesignSystemAssetDropzone*",
+        "apps/web/src/router.ts",
+        "apps/web/src/providers/registry.ts",
+        "apps/daemon/src/cli.ts",
+        "apps/web/tests/**",
+        "apps/daemon/tests/**",
+        "scripts/waves/verify-w3.ts"
+      ],
+      "note": "Starts only after W4 has landed and released registry.ts, and after W9-ingest is green."
+    }
+  }
+}
