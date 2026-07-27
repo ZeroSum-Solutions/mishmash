@@ -592,15 +592,19 @@ async function main(): Promise<void> {
       if (add.status !== 0) {
         runResult = { ok: false, evidence: `git worktree add failed: ${add.stdout}` };
       } else {
-        // Round-4 F5: a wholesale node_modules symlink lets nested
-        // @open-design/* resolution walk back through the shared
+        // Round-4 F5 / Round-5 F5: a wholesale node_modules symlink lets
+        // nested @open-design/* resolution walk back through the shared
         // node_modules into the LIVE (HEAD-state) packages/apps, defeating
         // parent-red at every nesting level below the root re-point. Run a
         // real, store-cached `pnpm install --offline` in the worktree so
-        // every @open-design/* package resolves to baseCommit code at
-        // every level. Falls back to the old per-level symlink re-pointing
-        // only if the offline install genuinely cannot work (e.g. a store
-        // miss for a dependency added between baseCommit and HEAD).
+        // every @open-design/* package resolves to baseCommit code at every
+        // level. Round-5: NO fallback exists anymore -- a symlink fallback
+        // could still let package resolution walk back to HEAD code at some
+        // nesting level, which is exactly the isolation break this check
+        // exists to prevent. "Red evidence unavailable" (offline install
+        // failed, e.g. a store miss for a dependency added between
+        // baseCommit and HEAD) is NOT "red evidence obtained" -- it is a
+        // hard FAIL of this whole check, not a degraded-but-passable path.
         // A freshly created worktree carries its own untrusted mise.toml
         // (mise trust is a per-directory grant); without trusting it first,
         // the mise-shimmed `pnpm` binary refuses to run and the offline
@@ -608,48 +612,27 @@ async function main(): Promise<void> {
         sh('mise', ['trust', worktreeDir], { timeoutMs: 30_000 });
         const install = sh('pnpm', ['install', '--offline'], { cwd: worktreeDir, timeoutMs: 5 * 60_000 });
         if (install.status !== 0) {
-          for (const link of ['node_modules', 'apps/daemon/node_modules', 'apps/web/node_modules']) {
-            const src = path.join(repoRoot, link);
-            const dst = path.join(worktreeDir, link);
-            if (fs.existsSync(src) && !fs.existsSync(dst)) {
-              try { fs.mkdirSync(path.dirname(dst), { recursive: true }); fs.symlinkSync(src, dst, 'dir'); } catch { /* best effort */ }
-            }
+          runResult = { ok: false, evidence: `pnpm install --offline failed in the baseCommit worktree (exit=${install.status}) -- no fallback exists; baseCommit package isolation could not be established, so red-at-parent evidence is unavailable, which is a FAIL not a pass\n${install.stdout.slice(-2000)}` };
+        } else {
+          const relFiles: string[] = [];
+          for (const abs of uniqueFiles) {
+            const rel = path.relative(path.join(repoRoot, 'apps/daemon'), abs);
+            const dst = path.join(worktreeDir, 'apps/daemon', rel);
+            fs.mkdirSync(path.dirname(dst), { recursive: true });
+            fs.copyFileSync(abs, dst);
+            relFiles.push(rel);
           }
-          for (const scoped of ['node_modules/@open-design', 'apps/daemon/node_modules/@open-design', 'apps/web/node_modules/@open-design']) {
-            const scopeDir = path.join(worktreeDir, scoped);
-            if (!fs.existsSync(scopeDir)) continue;
-            for (const entry of fs.readdirSync(scopeDir)) {
-              const linkPath = path.join(scopeDir, entry);
-              let isSymlink = false;
-              try { isSymlink = fs.lstatSync(linkPath).isSymbolicLink(); } catch { /* ignore */ }
-              if (!isSymlink) continue;
-              const worktreePkg = path.join(worktreeDir, 'packages', entry);
-              const worktreeApp = path.join(worktreeDir, 'apps', entry);
-              const target = fs.existsSync(worktreePkg) ? worktreePkg : fs.existsSync(worktreeApp) ? worktreeApp : null;
-              if (target) {
-                try { fs.unlinkSync(linkPath); fs.symlinkSync(target, linkPath, 'dir'); } catch { /* best effort */ }
-              }
-            }
-          }
+          const redJsonPath = path.join(proofDir, `.red-parent-${label}-${process.pid}.json`);
+          const run = sh('pnpm', ['--filter', '@open-design/daemon', 'exec', 'vitest', 'run', '-c', 'vitest.config.ts', '--reporter=json', `--outputFile=${redJsonPath}`, ...relFiles], { cwd: worktreeDir, timeoutMs: 5 * 60_000 });
+          let redData: SuiteJson | null = null;
+          try { redData = JSON.parse(fs.readFileSync(redJsonPath, 'utf8')) as SuiteJson; } catch { redData = null; }
+          const namedHits = redData ? redData.testResults.flatMap((t) => t.assertionResults).filter((a) => a.fullName.includes(needle)) : [];
+          const INVALID_FAILURE_CLASS = /Cannot find module|MODULE_NOT_FOUND|SyntaxError|Cannot use import statement/i;
+          const genuineAssertionFailure =
+            namedHits.length > 0 &&
+            namedHits.every((a) => a.status === 'failed' && !(a.failureMessages ?? []).some((m) => INVALID_FAILURE_CLASS.test(m)));
+          runResult = { ok: genuineAssertionFailure, evidence: `worktree=${worktreeDir}\noffline-install exit=${install.status}\nfiles=${relFiles.join(', ')}\nparent=${baseCommit}\nexit=${run.status}\nnamed hits: ${JSON.stringify(namedHits)}\ngenuineAssertionFailure=${genuineAssertionFailure}\n${run.stdout.slice(-3000)}` };
         }
-        const relFiles: string[] = [];
-        for (const abs of uniqueFiles) {
-          const rel = path.relative(path.join(repoRoot, 'apps/daemon'), abs);
-          const dst = path.join(worktreeDir, 'apps/daemon', rel);
-          fs.mkdirSync(path.dirname(dst), { recursive: true });
-          fs.copyFileSync(abs, dst);
-          relFiles.push(rel);
-        }
-        const redJsonPath = path.join(proofDir, `.red-parent-${label}-${process.pid}.json`);
-        const run = sh('pnpm', ['--filter', '@open-design/daemon', 'exec', 'vitest', 'run', '-c', 'vitest.config.ts', '--reporter=json', `--outputFile=${redJsonPath}`, ...relFiles], { cwd: worktreeDir, timeoutMs: 5 * 60_000 });
-        let redData: SuiteJson | null = null;
-        try { redData = JSON.parse(fs.readFileSync(redJsonPath, 'utf8')) as SuiteJson; } catch { redData = null; }
-        const namedHits = redData ? redData.testResults.flatMap((t) => t.assertionResults).filter((a) => a.fullName.includes(needle)) : [];
-        const INVALID_FAILURE_CLASS = /Cannot find module|MODULE_NOT_FOUND|SyntaxError|Cannot use import statement/i;
-        const genuineAssertionFailure =
-          namedHits.length > 0 &&
-          namedHits.every((a) => a.status === 'failed' && !(a.failureMessages ?? []).some((m) => INVALID_FAILURE_CLASS.test(m)));
-        runResult = { ok: genuineAssertionFailure, evidence: `worktree=${worktreeDir}\noffline-install exit=${install.status}\nfiles=${relFiles.join(', ')}\nparent=${baseCommit}\nexit=${run.status}\nnamed hits: ${JSON.stringify(namedHits)}\ngenuineAssertionFailure=${genuineAssertionFailure}\n${run.stdout.slice(-3000)}` };
       }
     } finally {
       sh('git', ['worktree', 'remove', '--force', worktreeDir]);
@@ -792,83 +775,143 @@ async function main(): Promise<void> {
     return { ...process.env, OD_DATA_DIR: dataDir, OD_DAEMON_CLI_PATH: path.join(repoRoot, 'apps/daemon/dist/cli.js') };
   }
 
+  // Round-5 F32: the CLI chain and the HTTP chain must run through the
+  // IDENTICAL independent verification path so they cannot silently
+  // diverge (e.g. the HTTP surface being checked more leniently than the
+  // CLI surface). Every backup/restore outcome -- CLI-produced or
+  // HTTP-produced -- is graded by this one function.
+  async function verifyBackupRestoreOutcome(archivePath: string, restoreDir: string, fixture: SeededFixture): Promise<{ ok: boolean; problems: string[]; evidence: unknown }> {
+    const problems: string[] = [];
+    const dbPath = path.join(restoreDir, 'app.sqlite');
+    let integrityOutput = '';
+    if (fs.existsSync(dbPath)) {
+      const check = sh('sqlite3', [dbPath, 'PRAGMA integrity_check;']);
+      integrityOutput = check.stdout.trim();
+      if (check.status !== 0 || integrityOutput !== 'ok') problems.push(`integrity_check != ok (got: ${integrityOutput || `exit ${check.status}`})`);
+    } else {
+      problems.push(`restored app.sqlite not found at ${dbPath}`);
+    }
+    const httpCheck = await verifyProjectFilesViaHttp(restoreDir, fixture, 20);
+    problems.push(...httpCheck.problems);
+    const archiveIndex = readArchiveIndex(archivePath);
+    problems.push(...archiveIndex.problems);
+    return { ok: problems.length === 0, problems, evidence: { integrityOutput, httpCheck, archiveIndex } };
+  }
+
   let c01Fixture: SeededFixture | null = null;
   let c01ArchivePath: string | null = null;
 
   await checkCriterion(
     'C0-1',
-    `OD_DATA_DIR=<verifier-owned source> node ${odBinPath} backup create --out <archivePath> --json; OD_DATA_DIR=<verifier-owned fresh root> node ${odBinPath} restore --archive <archivePath> --json; independently, the daemon's live HTTP route inventory is searched for backup/restore-shaped routes and each is called`,
-    'verifier seeds real projects+files via the daemon\'s own HTTP API, invokes the real od backup/restore CLI, independently discovers+calls any HTTP backup/restore surface (mandatory shared-HTTP UI/CLI parity architecture), and independently runs PRAGMA integrity_check, >=20 file HTTP round-trip comparisons, and an asset fetch against a daemon it boots on the restored root -- fails "product surface missing: od backup"/"od restore" until those CLI subcommands exist, and fails "HTTP surface missing: ..." until the shared HTTP surface exists; both failure classes can be reported from the same run',
+    `OD_DATA_DIR=<verifier-owned source> node ${odBinPath} backup create --out <archivePath> --json; OD_DATA_DIR=<verifier-owned fresh root> node ${odBinPath} restore --archive <archivePath> --json; independently, EXACTLY POST /api/backup {outPath} and POST /api/restore {archivePath} (the parity-mandated HTTP contract this gate defines) are called against daemons the verifier boots itself`,
+    'verifier seeds real projects+files via the daemon\'s own HTTP API, invokes the real od backup/restore CLI, and separately drives the SAME full independent verification chain (PRAGMA integrity_check, >=20 file HTTP round-trip comparisons, archive-index re-read) through the exact HTTP contract routes -- fails "product surface missing: od backup"/"od restore" until those CLI subcommands exist, fails "HTTP surface missing: POST /api/backup"/"POST /api/restore" until those EXACT routes exist, and fails with a named reason if a route exists but does not actually perform backup/restore (checked by the identical verifyBackupRestoreOutcome function used for the CLI chain, not by status code alone)',
     async () => {
       const fixture = await seedRealSourceFixture();
       c01Fixture = fixture;
       const problems: string[] = [];
 
-      // Round-4 F32: the escalation architecture requires SHARED CLI+HTTP
-      // surfaces, not a CLI-only implementation hidden behind OD_DATA_DIR.
-      // Discover any backup/restore-shaped live route and CALL it --
-      // discovery alone (a route existing but never invoked) is not
-      // sufficient. Runs BEFORE the CLI early-returns below so a single
-      // run reports both missing-surface classes together.
-      let httpBackupRoute: { method: string; path: string } | undefined;
-      let httpRestoreRoute: { method: string; path: string } | undefined;
-      let httpBackupCallStatus = -1;
-      let httpRestoreCallStatus = -1;
-      const discoveryDaemon = await bootDaemonForProbing(fixture.sourceDir);
-      try {
-        httpBackupRoute = discoveryDaemon.routeInventory.find((r) => /backup/i.test(r.path));
-        httpRestoreRoute = discoveryDaemon.routeInventory.find((r) => /restore/i.test(r.path));
-        if (httpBackupRoute) {
-          const init: RequestInit = { method: httpBackupRoute.method, headers: { 'Content-Type': 'application/json' } };
-          if (httpBackupRoute.method !== 'GET' && httpBackupRoute.method !== 'DELETE') init.body = JSON.stringify({});
-          const res = await fetch(`${discoveryDaemon.url}${httpBackupRoute.path}`, init).catch(() => null);
-          httpBackupCallStatus = res?.status ?? -1;
-        }
-        if (httpRestoreRoute) {
-          const init: RequestInit = { method: httpRestoreRoute.method, headers: { 'Content-Type': 'application/json' } };
-          if (httpRestoreRoute.method !== 'GET' && httpRestoreRoute.method !== 'DELETE') init.body = JSON.stringify({});
-          const res = await fetch(`${discoveryDaemon.url}${httpRestoreRoute.path}`, init).catch(() => null);
-          httpRestoreCallStatus = res?.status ?? -1;
-        }
-      } finally {
-        await discoveryDaemon.kill();
-      }
-      if (!httpBackupRoute) problems.push('HTTP surface missing: POST /api/backup');
-      else if (httpBackupCallStatus < 200 || httpBackupCallStatus >= 500) problems.push(`HTTP backup route ${httpBackupRoute.method} ${httpBackupRoute.path} did not respond acceptably when called (status=${httpBackupCallStatus})`);
-      if (!httpRestoreRoute) problems.push('HTTP surface missing: POST /api/restore');
-      else if (httpRestoreCallStatus < 200 || httpRestoreCallStatus >= 500) problems.push(`HTTP restore route ${httpRestoreRoute.method} ${httpRestoreRoute.path} did not respond acceptably when called (status=${httpRestoreCallStatus})`);
-
+      // ---- CLI chain ----
       const archiveDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-archive-'));
       const archivePath = path.join(archiveDir, 'archive');
       const backupRun = odCli(['backup', 'create', '--out', archivePath, '--json'], odDataEnv(fixture.sourceDir));
+      let cliOutcome: { ok: boolean; problems: string[]; evidence: unknown } | null = null;
+      let restoreRunStatus = -1;
       if (backupRun.status !== 0) {
         problems.push('product surface missing: od backup');
-        record('C0-1', '', '', false, backupRun.stdout, { detail: problems.join('; '), exitCode: backupRun.status });
-        return;
-      }
-      c01ArchivePath = archivePath;
-      const restoreDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-restore-'));
-      const restoreRun = odCli(['restore', '--archive', archivePath, '--json'], odDataEnv(restoreDir));
-      if (restoreRun.status !== 0) {
-        problems.push('product surface missing: od restore');
-        record('C0-1', '', '', false, restoreRun.stdout, { detail: problems.join('; '), exitCode: restoreRun.status });
-        return;
-      }
-      const dbPath = path.join(restoreDir, 'app.sqlite');
-      let integrityOutput = '';
-      if (fs.existsSync(dbPath)) {
-        const check = sh('sqlite3', [dbPath, 'PRAGMA integrity_check;']);
-        integrityOutput = check.stdout.trim();
-        if (check.status !== 0 || integrityOutput !== 'ok') problems.push(`integrity_check != ok (got: ${integrityOutput || `exit ${check.status}`})`);
       } else {
-        problems.push(`restored app.sqlite not found at ${dbPath}`);
+        c01ArchivePath = archivePath;
+        const restoreDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-restore-'));
+        const restoreRun = odCli(['restore', '--archive', archivePath, '--json'], odDataEnv(restoreDir));
+        restoreRunStatus = restoreRun.status;
+        if (restoreRun.status !== 0) {
+          problems.push('product surface missing: od restore');
+        } else {
+          cliOutcome = await verifyBackupRestoreOutcome(archivePath, restoreDir, fixture);
+          problems.push(...cliOutcome.problems);
+        }
       }
-      const httpCheck = await verifyProjectFilesViaHttp(restoreDir, fixture, 20);
-      problems.push(...httpCheck.problems);
-      const archiveIndex = readArchiveIndex(archivePath);
-      problems.push(...archiveIndex.problems);
+
+      // ---- HTTP chain (round-5 F32) ----
+      // The exact parity-mandated contract this gate defines: EXACTLY
+      // `POST /api/backup` and `POST /api/restore` (no substring/status-code
+      // leniency -- a route named /api/backup-status or /api/restore-preview
+      // does not count). When both exist, the SAME verifyBackupRestoreOutcome
+      // function used above grades the HTTP-produced archive/restore, so the
+      // two chains cannot silently diverge in what "works" means. The daemon
+      // always operates on its OWN resolved OD_DATA_DIR (AGENTS.md "Daemon
+      // data directory contract") -- so the HTTP backup call runs against a
+      // daemon booted on the fixture source, and the HTTP restore call runs
+      // against a SEPARATE daemon booted on a verifier-owned fresh root, the
+      // same shape as the CLI chain's --out/--archive split.
+      let httpBackupRoute: { method: string; path: string } | undefined;
+      let httpRestoreRoute: { method: string; path: string } | undefined;
+      let httpArchivePath: string | null = null;
+      let httpBackupResponseStatus = -1;
+      let httpRestoreResponseStatus = -1;
+      let httpOutcome: { ok: boolean; problems: string[]; evidence: unknown } | null = null;
+
+      const backupDaemon = await bootDaemonForProbing(fixture.sourceDir);
+      try {
+        httpBackupRoute = backupDaemon.routeInventory.find((r) => r.method === 'POST' && r.path === '/api/backup');
+        if (httpBackupRoute) {
+          const httpArchiveDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-http-archive-'));
+          const outPath = path.join(httpArchiveDir, 'archive');
+          const res = await fetch(`${backupDaemon.url}/api/backup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ outPath }) }).catch(() => null);
+          httpBackupResponseStatus = res?.status ?? -1;
+          const body = res ? await res.json().catch(() => null) as { archivePath?: string } | null : null;
+          const returnedPath = body?.archivePath && typeof body.archivePath === 'string' ? body.archivePath : outPath;
+          if (res?.ok && fs.existsSync(returnedPath)) {
+            httpArchivePath = returnedPath;
+          } else {
+            problems.push(`HTTP backup route POST /api/backup did not produce a real archive (status=${httpBackupResponseStatus}, archiveExists=${fs.existsSync(returnedPath)})`);
+          }
+        }
+      } finally {
+        await backupDaemon.kill();
+      }
+      if (!httpBackupRoute) problems.push('HTTP surface missing: POST /api/backup');
+
+      if (httpArchivePath) {
+        const httpRestoreDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-http-restore-'));
+        const restoreDaemon = await bootDaemonForProbing(httpRestoreDir);
+        try {
+          httpRestoreRoute = restoreDaemon.routeInventory.find((r) => r.method === 'POST' && r.path === '/api/restore');
+          if (httpRestoreRoute) {
+            const res = await fetch(`${restoreDaemon.url}/api/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archivePath: httpArchivePath }) }).catch(() => null);
+            httpRestoreResponseStatus = res?.status ?? -1;
+            if (!res?.ok) {
+              problems.push(`HTTP restore route POST /api/restore returned an unsuccessful response (status=${httpRestoreResponseStatus})`);
+            }
+          }
+        } finally {
+          await restoreDaemon.kill();
+        }
+        if (!httpRestoreRoute) {
+          problems.push('HTTP surface missing: POST /api/restore');
+        } else if (httpRestoreResponseStatus >= 200 && httpRestoreResponseStatus < 300) {
+          // Same independent verification function as the CLI chain -- the
+          // HTTP-produced restore must satisfy the IDENTICAL check.
+          httpOutcome = await verifyBackupRestoreOutcome(httpArchivePath, httpRestoreDir, fixture);
+          problems.push(...httpOutcome.problems);
+        }
+      } else {
+        // No usable HTTP-produced archive to restore from; still report the
+        // restore route's own presence/absence so both missing-surface
+        // classes can appear together even when backup already failed.
+        const probeDaemon = await bootDaemonForProbing(fixture.sourceDir);
+        try {
+          httpRestoreRoute = probeDaemon.routeInventory.find((r) => r.method === 'POST' && r.path === '/api/restore');
+        } finally {
+          await probeDaemon.kill();
+        }
+        if (!httpRestoreRoute) problems.push('HTTP surface missing: POST /api/restore');
+      }
+
       const ok = problems.length === 0;
-      record('C0-1', '', '', ok, JSON.stringify({ integrityOutput, httpCheck, archiveIndex, httpBackupRoute, httpRestoreRoute, httpBackupCallStatus, httpRestoreCallStatus }, null, 2), { detail: ok ? undefined : problems.join('; '), exitCode: Math.max(backupRun.status, restoreRun.status) });
+      record('C0-1', '', '', ok, JSON.stringify({ cliOutcome, httpOutcome, httpBackupRoute, httpRestoreRoute, httpArchivePath, httpBackupResponseStatus, httpRestoreResponseStatus }, null, 2), {
+        detail: ok ? undefined : problems.join('; '),
+        exitCode: Math.max(backupRun.status, restoreRunStatus),
+      });
     },
   );
 
@@ -1245,11 +1288,11 @@ async function main(): Promise<void> {
         record('C0-7', '', '', false, '', { detail: `missing: ${rel}` });
         return;
       }
-      let routes: { method: string; path: string; dynamic?: boolean; file?: string; line?: number; probePath?: string }[] = [];
+      let routes: { method: string; path: string; dynamic?: boolean; file?: string; line?: number; probePath?: string; unreachable?: string }[] = [];
       try {
         const raw = JSON.parse(readRepoFile(rel));
         if (!Array.isArray(raw)) throw new Error('top-level value must be an array');
-        routes = raw as { method: string; path: string; dynamic?: boolean; file?: string; line?: number; probePath?: string }[];
+        routes = raw as { method: string; path: string; dynamic?: boolean; file?: string; line?: number; probePath?: string; unreachable?: string }[];
       } catch (err) {
         record('C0-7', '', '', false, '', { detail: `invalid JSON: ${String(err)}` });
         return;
@@ -1260,17 +1303,24 @@ async function main(): Promise<void> {
       const baselineKeys = new Set(guarded.map((b) => `${b.method} ${b.path}`));
       // Round-4 F7: a dynamic row is no longer acknowledged by COUNT alone --
       // it must bind to a specific {file, line} unresolvable-guard site
-      // discovered by the AST pass, matched 1:1. A dynamic row with no
-      // matching site, or a site with no matching row, both fail. This
-      // closes the "any unrelated dynamic:true row satisfies the count"
-      // gaming vector.
+      // discovered by the AST pass. Round-5 F7: the binding must be a
+      // strict 1:1 BIJECTION (two rows on one site = fail, same as a site
+      // with no row), and every dynamic row must additionally supply either
+      // a live-probable probePath OR an explicit "unreachable" reason --
+      // a row with file/line but neither is unbound, full stop, and can no
+      // longer silently escape both inventory validation and live probing.
       const dynamicRows = validRows.filter((r) => r.dynamic === true);
       const siteKey = (s: { file: string; line: number }) => `${s.file}:${s.line}`;
       const unresolvableKeys = new Set(unresolvable.map(siteKey));
       const dynamicRowKeys = dynamicRows.map((r) => (typeof r.file === 'string' && typeof r.line === 'number' ? `${r.file}:${r.line}` : null));
+      const dynamicRowsMissingProbePathOrReason = dynamicRows.filter((r) => typeof r.probePath !== 'string' && typeof r.unreachable !== 'string');
       const dynamicRowsUnbound = dynamicRows.filter((r, i) => dynamicRowKeys[i] === null || !unresolvableKeys.has(dynamicRowKeys[i] as string));
+      const keyCounts = new Map<string, number>();
+      for (const k of dynamicRowKeys) if (k !== null) keyCounts.set(k, (keyCounts.get(k) ?? 0) + 1);
+      const dynamicRowsDuplicateBinding = dynamicRows.filter((r, i) => dynamicRowKeys[i] !== null && (keyCounts.get(dynamicRowKeys[i] as string) ?? 0) > 1);
       const boundRowKeys = new Set(dynamicRowKeys.filter((k): k is string => k !== null));
       const unresolvableSitesUnacknowledged = unresolvable.filter((s) => !boundRowKeys.has(siteKey(s)));
+      const unreachableDynamicRows = dynamicRows.filter((r) => typeof r.unreachable === 'string' && r.unreachable.trim().length > 0);
 
       let daemon: BootedDaemon | null = null;
       const liveResults: { method: string; path: string; status: number }[] = [];
@@ -1280,8 +1330,13 @@ async function main(): Promise<void> {
         liveRouteKeys = new Set(daemon.routeInventory.map((r) => `${r.method} ${r.path}`));
         // Static rows are probed by their declared path. A dynamic row that
         // supplies a concrete probePath (a real, live-observed instance of
-        // the computed path) is probed the same way -- acknowledgement
-        // alone is not enough if the row also claims to know a real path.
+        // the computed path) is probed the SAME live 401/403 rejection set
+        // as static rows -- acknowledgement alone is not enough if the row
+        // also claims to know a real path. Dynamic rows with an
+        // "unreachable" reason instead of a probePath are legitimately
+        // excluded from live probing (that is the point of the reason
+        // field), but never both-absent -- that case is caught above as
+        // dynamicRowsMissingProbePathOrReason.
         for (const row of validRows.filter((r) => !r.dynamic || typeof r.probePath === 'string')) {
           const probePath = row.dynamic ? (row.probePath as string) : row.path;
           try {
@@ -1299,12 +1354,26 @@ async function main(): Promise<void> {
       const guardedRoutesMissingFromInventory = guarded.filter((b) => !dedupKeys.has(`${b.method} ${b.path}`));
       const iteration = needleReport('(C0-7/route)', Math.max(validRows.length, 1));
       const control = needleReport('(C0-7/control)', 1);
-      const ok = validRows.length >= 1 && validRows.length === routes.length && dedupKeys.size === validRows.length && inventoryRowsNotLive.length === 0 && guardedRoutesMissingFromInventory.length === 0 && dynamicRowsUnbound.length === 0 && unresolvableSitesUnacknowledged.length === 0 && iteration.ok && control.ok && liveRejectedAll;
+      const ok =
+        validRows.length >= 1 &&
+        validRows.length === routes.length &&
+        dedupKeys.size === validRows.length &&
+        inventoryRowsNotLive.length === 0 &&
+        guardedRoutesMissingFromInventory.length === 0 &&
+        dynamicRowsMissingProbePathOrReason.length === 0 &&
+        dynamicRowsUnbound.length === 0 &&
+        dynamicRowsDuplicateBinding.length === 0 &&
+        unresolvableSitesUnacknowledged.length === 0 &&
+        iteration.ok &&
+        control.ok &&
+        liveRejectedAll;
       record('C0-7', '', '', ok,
         `inventory rows: ${routes.length}\nAST guarded baseline: ${guarded.length}; missing: ${JSON.stringify(guardedRoutesMissingFromInventory)}\n` +
-          `unresolvable-path guarded registrations: ${JSON.stringify(unresolvable)}; dynamic rows: ${JSON.stringify(dynamicRows)}; unbound dynamic rows: ${JSON.stringify(dynamicRowsUnbound)}; unacknowledged sites: ${JSON.stringify(unresolvableSitesUnacknowledged)}\n` +
+          `unresolvable-path guarded registrations: ${JSON.stringify(unresolvable)}; dynamic rows: ${JSON.stringify(dynamicRows)}\n` +
+          `dynamic rows missing probePath/unreachable: ${JSON.stringify(dynamicRowsMissingProbePathOrReason)}; unbound dynamic rows: ${JSON.stringify(dynamicRowsUnbound)}; duplicate-binding dynamic rows: ${JSON.stringify(dynamicRowsDuplicateBinding)}; unacknowledged sites: ${JSON.stringify(unresolvableSitesUnacknowledged)}\n` +
+          `unreachable dynamic rows (reasons surfaced): ${JSON.stringify(unreachableDynamicRows.map((r) => ({ method: r.method, path: r.path, file: r.file, line: r.line, reason: r.unreachable })))}\n` +
           `inventory rows without a live route: ${JSON.stringify(inventoryRowsNotLive)}\nlive probe: ${JSON.stringify(liveResults)}\n-- per-route --\n${iteration.evidence}\n-- control --\n${control.evidence}`,
-        { detail: ok ? undefined : `rows=${validRows.length} unique=${dedupKeys.size} inventoryRowsNotLive=${inventoryRowsNotLive.length} guardedMissing=${guardedRoutesMissingFromInventory.length} dynamicRowsUnbound=${dynamicRowsUnbound.length} unresolvableSitesUnacknowledged=${unresolvableSitesUnacknowledged.length} iterationOk=${iteration.ok} controlOk=${control.ok} liveRejectedAll=${liveRejectedAll}` });
+        { detail: ok ? undefined : `rows=${validRows.length} unique=${dedupKeys.size} inventoryRowsNotLive=${inventoryRowsNotLive.length} guardedMissing=${guardedRoutesMissingFromInventory.length} dynamicRowsMissingProbePathOrReason=${dynamicRowsMissingProbePathOrReason.length} dynamicRowsUnbound=${dynamicRowsUnbound.length} dynamicRowsDuplicateBinding=${dynamicRowsDuplicateBinding.length} unresolvableSitesUnacknowledged=${unresolvableSitesUnacknowledged.length} iterationOk=${iteration.ok} controlOk=${control.ok} liveRejectedAll=${liveRejectedAll}` });
       void baselineKeys;
     },
   );
@@ -1345,11 +1414,11 @@ async function main(): Promise<void> {
   // C0-9 -- round-3 F9: corpus binding, 2xx requirement, machine fingerprint
   // match, toleranceBandPct capped at 50.
   // =======================================================================
-  await checkCriterion('C0-9', 'read docs/testing/scale-baseline-2026-07.md + .json; re-execute all 5 scenarios against the DECLARED corpus (not an empty store)', 'corpus content hash must match; HTTP scenarios require 2xx; machine fingerprint must match THIS machine; toleranceBandPct capped at 50 (larger declared bands fail)', async () => {
+  await checkCriterion('C0-9', 'read docs/testing/scale-baseline-2026-07.md + .json; re-execute all 5 scenarios against the DECLARED corpus (not an empty store)', 'corpus content hash must match; corpus must be >=900MB on disk (the wave\'s real ~987MB store scale) AND explicitly declared in the JSON as a snapshot of the real store with a recorded fingerprint -- a content-hashed unrelated filler directory of any size does not satisfy this; HTTP scenarios require 2xx; machine fingerprint must match THIS machine; toleranceBandPct capped at 50 (larger declared bands fail); BOTH live p50 and live p95 (recomputed from >=5 real R8 repetitions) must fall within the committed band, not p50 alone', async () => {
     const mdRel = 'docs/testing/scale-baseline-2026-07.md';
     const jsonRel = 'docs/testing/scale-baseline-2026-07.json';
     if (!fileExists(mdRel) || !fileExists(jsonRel)) { record('C0-9', '', '', false, '', { detail: `missing: ${!fileExists(mdRel) ? mdRel : ''} ${!fileExists(jsonRel) ? jsonRel : ''}`.trim() }); return; }
-    interface BaselineJson { corpus: { path: string; sha256: string }; machine: { fingerprint: string }; warmup: { iterations: number }; scenarios: { name: string; samplesMs: number[]; p50: number; p95: number; toleranceBandPct?: number }[]; nonRegressionCeiling: number; minimumImprovementThreshold: number; version: string }
+    interface BaselineJson { corpus: { path: string; sha256: string; isRealStoreSnapshot?: boolean; realStoreFingerprint?: string }; machine: { fingerprint: string }; warmup: { iterations: number }; scenarios: { name: string; samplesMs: number[]; p50: number; p95: number; toleranceBandPct?: number }[]; nonRegressionCeiling: number; minimumImprovementThreshold: number; version: string }
     let baseline: BaselineJson;
     try { baseline = JSON.parse(readRepoFile(jsonRel)) as BaselineJson; } catch (err) { record('C0-9', '', '', false, '', { detail: `invalid JSON: ${String(err)}` }); return; }
     const problems: string[] = [];
@@ -1375,17 +1444,21 @@ async function main(): Promise<void> {
     }
     // Round-4 F9: a path+size manifest can be satisfied by swapping in a
     // "tiny unrelated directory" whose own path/size list is then hashed and
-    // declared -- self-consistent but unrepresentative. Two independent
-    // hardenings: (1) the fingerprint is now CONTENT-addressed (sha256 of
-    // actual file bytes, not just names/sizes) over every file up to a
-    // deterministic cap; (2) a minimum real-byte-size floor rules out a
-    // trivial substitute corpus regardless of what the declared hash says.
-    const MIN_CORPUS_BYTES = 100_000_000; // 100MB floor -- rules out "tiny unrelated directory" swaps
+    // declared -- self-consistent but unrepresentative. Round-5 F9: bind the
+    // benchmark to the wave's REAL requirement -- the PRD's ~987MB store --
+    // by (1) raising the size floor to 900MB (a content-hashed unrelated
+    // filler directory of that scale is still not "the real store"), and
+    // (2) requiring the doc to explicitly DECLARE the corpus as a snapshot
+    // of the real store with its own recorded fingerprint, not just a
+    // self-consistent hash of whatever happens to be on disk.
+    const MIN_CORPUS_BYTES = 900_000_000; // 900MB floor -- the wave's real ~987MB store scale
     const MAX_HASHED_FILES = 3000; // deterministic sample cap for hashing runtime
     let corpusOk = false;
     let corpusTotalBytes = 0;
     if (!baseline.corpus?.path || !baseline.corpus?.sha256) {
       problems.push('missing corpus.path/corpus.sha256');
+    } else if (baseline.corpus.isRealStoreSnapshot !== true || typeof baseline.corpus.realStoreFingerprint !== 'string' || !baseline.corpus.realStoreFingerprint.trim()) {
+      problems.push('corpus is not declared as a snapshot of the real store: corpus.isRealStoreSnapshot must be true and corpus.realStoreFingerprint must be a recorded, non-empty fingerprint');
     } else if (fs.existsSync(baseline.corpus.path)) {
       const allFiles: { rel: string; abs: string; size: number }[] = [];
       (function walk(dir: string, base: string): void {
@@ -1400,7 +1473,7 @@ async function main(): Promise<void> {
         }
       })(baseline.corpus.path, baseline.corpus.path);
       if (allFiles.length === 0) problems.push('corpus.path is an empty store -- not declared/documented as intentionally empty');
-      if (corpusTotalBytes < MIN_CORPUS_BYTES) problems.push(`corpus total size ${corpusTotalBytes} bytes is below the ${MIN_CORPUS_BYTES}-byte scale floor -- not a real scale-baseline corpus`);
+      if (corpusTotalBytes < MIN_CORPUS_BYTES) problems.push(`corpus total size ${corpusTotalBytes} bytes is below the ${MIN_CORPUS_BYTES}-byte (900MB) scale floor -- not the real ~987MB scale-baseline store`);
       allFiles.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
       const sampled = allFiles.length <= MAX_HASHED_FILES ? allFiles : allFiles.filter((_, i) => i % Math.ceil(allFiles.length / MAX_HASHED_FILES) === 0);
       const contentPairs = sampled.map((f) => `${f.rel}:${sha256File(f.abs)}`);
@@ -1502,9 +1575,15 @@ async function main(): Promise<void> {
       if (name !== 'memory-high-water' && !observed.httpOkAll) { problems.push(`scenario "${name}": at least one repetition's HTTP response was not 2xx`); continue; }
       if (!baselineScenario) { problems.push(`scenario "${name}": no committed baseline entry`); continue; }
       const band = Math.min(baselineScenario.toleranceBandPct ?? 50, 50);
-      const lower = baselineScenario.p50 * (1 - band / 100);
-      const upper = baselineScenario.p50 * (1 + band / 100);
-      if (!(observed.p50 >= lower && observed.p50 <= upper)) problems.push(`scenario "${name}": recomputed live p50 ${observed.p50}ms outside [${lower.toFixed(1)}, ${upper.toFixed(1)}]`);
+      const lowerP50 = baselineScenario.p50 * (1 - band / 100);
+      const upperP50 = baselineScenario.p50 * (1 + band / 100);
+      if (!(observed.p50 >= lowerP50 && observed.p50 <= upperP50)) problems.push(`scenario "${name}": recomputed live p50 ${observed.p50}ms outside [${lowerP50.toFixed(1)}, ${upperP50.toFixed(1)}]`);
+      // Round-5 F9: p95 was recomputed but never compared -- a live run with
+      // a fast median and a severe tail regression could pass on p50 alone.
+      // Both percentiles must fall within the committed band.
+      const lowerP95 = baselineScenario.p95 * (1 - band / 100);
+      const upperP95 = baselineScenario.p95 * (1 + band / 100);
+      if (!(observed.p95 >= lowerP95 && observed.p95 <= upperP95)) problems.push(`scenario "${name}": recomputed live p95 ${observed.p95}ms outside [${lowerP95.toFixed(1)}, ${upperP95.toFixed(1)}]`);
     }
     const mdText = readRepoFile(mdRel);
     if (!/peak[\s\S]{0,20}RSS/i.test(mdText)) problems.push('markdown prose missing a peak RSS mention');
