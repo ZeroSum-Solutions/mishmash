@@ -1281,7 +1281,7 @@ async function main(): Promise<void> {
   await checkCriterion(
     'C0-7',
     'two-pass alias-aware AST extraction (local const aliases, property chains, constant paths) over apps/daemon/src/routes/** + server.ts; unresolvable-path guarded registrations must be explicitly acknowledged as dynamic in the inventory',
-    'inventory row without a live route = fail; guarded live route missing from inventory = fail; an unresolvable-path guarded registration not explicitly marked dynamic in the inventory = fail; every row live-probed',
+    'inventory row without a live route = fail; guarded live route missing from inventory = fail; an unresolvable-path guarded registration not explicitly marked dynamic in the inventory = fail; every row live-probed; a dynamic row\'s "unreachable" escape requires a non-whitespace reason string of >=20 characters (empty/whitespace/trivial strings do not count as a reason) and every unreachable row\'s {file, line, reason} plus a probed-vs-unreachable count is surfaced in the evidence; more than half of a nonempty dynamic-row set being unreachable is itself a fail -- majority-unreachable is a smell that needs a human, not a silent pass',
     async () => {
       const rel = 'apps/daemon/src/security/privileged-routes.json';
       if (!fileExists(rel)) {
@@ -1313,14 +1313,28 @@ async function main(): Promise<void> {
       const siteKey = (s: { file: string; line: number }) => `${s.file}:${s.line}`;
       const unresolvableKeys = new Set(unresolvable.map(siteKey));
       const dynamicRowKeys = dynamicRows.map((r) => (typeof r.file === 'string' && typeof r.line === 'number' ? `${r.file}:${r.line}` : null));
-      const dynamicRowsMissingProbePathOrReason = dynamicRows.filter((r) => typeof r.probePath !== 'string' && typeof r.unreachable !== 'string');
+      // Round-6 F7: "unreachable" is not an escape hatch for a blank string.
+      // The reason must be a real, non-whitespace explanation of >=20
+      // characters -- "" or "  " no longer count as acknowledgement, and a
+      // row that supplies neither a live-probable probePath nor a genuine
+      // reason is unbound just like a row with neither field at all.
+      const MIN_UNREACHABLE_REASON_LENGTH = 20;
+      const hasValidUnreachableReason = (r: { unreachable?: string }): boolean => typeof r.unreachable === 'string' && r.unreachable.trim().length >= MIN_UNREACHABLE_REASON_LENGTH;
+      const dynamicRowsMissingProbePathOrReason = dynamicRows.filter((r) => typeof r.probePath !== 'string' && !hasValidUnreachableReason(r));
       const dynamicRowsUnbound = dynamicRows.filter((r, i) => dynamicRowKeys[i] === null || !unresolvableKeys.has(dynamicRowKeys[i] as string));
       const keyCounts = new Map<string, number>();
       for (const k of dynamicRowKeys) if (k !== null) keyCounts.set(k, (keyCounts.get(k) ?? 0) + 1);
       const dynamicRowsDuplicateBinding = dynamicRows.filter((r, i) => dynamicRowKeys[i] !== null && (keyCounts.get(dynamicRowKeys[i] as string) ?? 0) > 1);
       const boundRowKeys = new Set(dynamicRowKeys.filter((k): k is string => k !== null));
       const unresolvableSitesUnacknowledged = unresolvable.filter((s) => !boundRowKeys.has(siteKey(s)));
-      const unreachableDynamicRows = dynamicRows.filter((r) => typeof r.unreachable === 'string' && r.unreachable.trim().length > 0);
+      // Round-6 F7: probed vs unreachable, both surfaced as an explicit
+      // count so an all-unreachable inventory is visible on its face, and a
+      // majority-unreachable inventory (a real smell -- the whole point of
+      // dynamic acknowledgement is that MOST guarded registrations should be
+      // statically resolvable or live-probable) is itself a hard fail.
+      const probedDynamicRows = dynamicRows.filter((r) => typeof r.probePath === 'string');
+      const unreachableDynamicRows = dynamicRows.filter((r) => typeof r.probePath !== 'string' && hasValidUnreachableReason(r));
+      const majorityUnreachable = dynamicRows.length > 0 && unreachableDynamicRows.length > dynamicRows.length / 2;
 
       let daemon: BootedDaemon | null = null;
       const liveResults: { method: string; path: string; status: number }[] = [];
@@ -1364,16 +1378,18 @@ async function main(): Promise<void> {
         dynamicRowsUnbound.length === 0 &&
         dynamicRowsDuplicateBinding.length === 0 &&
         unresolvableSitesUnacknowledged.length === 0 &&
+        !majorityUnreachable &&
         iteration.ok &&
         control.ok &&
         liveRejectedAll;
       record('C0-7', '', '', ok,
         `inventory rows: ${routes.length}\nAST guarded baseline: ${guarded.length}; missing: ${JSON.stringify(guardedRoutesMissingFromInventory)}\n` +
           `unresolvable-path guarded registrations: ${JSON.stringify(unresolvable)}; dynamic rows: ${JSON.stringify(dynamicRows)}\n` +
-          `dynamic rows missing probePath/unreachable: ${JSON.stringify(dynamicRowsMissingProbePathOrReason)}; unbound dynamic rows: ${JSON.stringify(dynamicRowsUnbound)}; duplicate-binding dynamic rows: ${JSON.stringify(dynamicRowsDuplicateBinding)}; unacknowledged sites: ${JSON.stringify(unresolvableSitesUnacknowledged)}\n` +
+          `dynamic rows missing probePath/unreachable(>=${MIN_UNREACHABLE_REASON_LENGTH} chars): ${JSON.stringify(dynamicRowsMissingProbePathOrReason)}; unbound dynamic rows: ${JSON.stringify(dynamicRowsUnbound)}; duplicate-binding dynamic rows: ${JSON.stringify(dynamicRowsDuplicateBinding)}; unacknowledged sites: ${JSON.stringify(unresolvableSitesUnacknowledged)}\n` +
+          `dynamic row counts: total=${dynamicRows.length} probed=${probedDynamicRows.length} unreachable=${unreachableDynamicRows.length} majorityUnreachable=${majorityUnreachable}\n` +
           `unreachable dynamic rows (reasons surfaced): ${JSON.stringify(unreachableDynamicRows.map((r) => ({ method: r.method, path: r.path, file: r.file, line: r.line, reason: r.unreachable })))}\n` +
           `inventory rows without a live route: ${JSON.stringify(inventoryRowsNotLive)}\nlive probe: ${JSON.stringify(liveResults)}\n-- per-route --\n${iteration.evidence}\n-- control --\n${control.evidence}`,
-        { detail: ok ? undefined : `rows=${validRows.length} unique=${dedupKeys.size} inventoryRowsNotLive=${inventoryRowsNotLive.length} guardedMissing=${guardedRoutesMissingFromInventory.length} dynamicRowsMissingProbePathOrReason=${dynamicRowsMissingProbePathOrReason.length} dynamicRowsUnbound=${dynamicRowsUnbound.length} dynamicRowsDuplicateBinding=${dynamicRowsDuplicateBinding.length} unresolvableSitesUnacknowledged=${unresolvableSitesUnacknowledged.length} iterationOk=${iteration.ok} controlOk=${control.ok} liveRejectedAll=${liveRejectedAll}` });
+        { detail: ok ? undefined : `rows=${validRows.length} unique=${dedupKeys.size} inventoryRowsNotLive=${inventoryRowsNotLive.length} guardedMissing=${guardedRoutesMissingFromInventory.length} dynamicRowsMissingProbePathOrReason=${dynamicRowsMissingProbePathOrReason.length} dynamicRowsUnbound=${dynamicRowsUnbound.length} dynamicRowsDuplicateBinding=${dynamicRowsDuplicateBinding.length} unresolvableSitesUnacknowledged=${unresolvableSitesUnacknowledged.length} dynamicRowCounts(total=${dynamicRows.length},probed=${probedDynamicRows.length},unreachable=${unreachableDynamicRows.length}) majorityUnreachable=${majorityUnreachable} iterationOk=${iteration.ok} controlOk=${control.ok} liveRejectedAll=${liveRejectedAll}` });
       void baselineKeys;
     },
   );
