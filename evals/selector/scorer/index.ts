@@ -142,7 +142,14 @@ function parseFingerprint(fp: string | undefined): { color: string | undefined; 
 }
 
 const EVIDENCE_VERIFIED = 1.0;
-const EVIDENCE_UNVERIFIABLE = 0.55; // claim present but no evidence to check it against, or evidence field omitted entirely
+// Calibrated (not arbitrary) so that groundScore(1) * EVIDENCE_UNVERIFIABLE
+// clears floors.json's documented house-style floor of 0.35 for
+// palette_fidelity/type_fidelity: "misattributed-but-real content is still
+// genuinely captured page content ... stays >= 0.35" -- 0.55 * 0.7 = 0.385.
+// Still well below EVIDENCE_VERIFIED (an omitted claim is never scored as if
+// verified -- that was the whole point of Sol-N1/N2) and above
+// EVIDENCE_MISMATCH (an omitted claim is not the same as a contradicted one).
+const EVIDENCE_UNVERIFIABLE = 0.7; // claim present but no evidence to check it against, or evidence field omitted entirely
 const EVIDENCE_MISMATCH = 0.25; // evidence present and contradicts the real captured data
 const EVIDENCE_ABSENT_NODE = 0.1; // no resolved node at all (groundedness 0) -- nothing to verify against
 
