@@ -61,6 +61,20 @@
 //      bare provenance (nothing verifies) and opposite-breakpoint
 //      provenance (breakpoint mismatch) no longer score 1.0.
 //
+// v3.1 (independent-audit + gate-amendment remediation round, round 3):
+// round 2's coverage/axisRealized carried two documented compromises,
+// BOTH forced by sealed-harness quirks the gate amendment (verify-w7.ts
+// commit 76f493f59) has since fixed at the root: findRealNode() now
+// PREFERS the claim's own breakpoint, and faithfulComposition()/
+// houseStyleComposition() now emit a REAL styleFingerprint (built from the
+// resolved node's own captured computedStyle) alongside a real
+// motionSignature. With both root causes fixed, both compromises are
+// removed: BREAKPOINT_MISMATCH_CREDIT (a 0.3 partial credit for a
+// wrong-breakpoint citation) is gone -- breakpoint mismatch is now a hard
+// coverage veto (score 0); axisRealized's palette/typography check is
+// tightened from "not an active contradiction" back to "=== VERIFIED",
+// uniformly with every other axis.
+//
 // v2 (deliverable-review fix round 1, carried forward): groundedness 2/1/0
 // classification; palette/type/motion evidence-gated against
 // styleFingerprint/motionSignature; strength-weighted, conflict-aware
@@ -73,7 +87,7 @@ import { scoreDiversity, type DiversityElement } from './diversity.ts';
 import { resolveConflicts } from './resolve-conflicts.ts';
 import { scoreSourceBleed, type BleedCompositionElement } from './source-bleed.ts';
 
-export const SCORER_VERSION = '3.0.0';
+export const SCORER_VERSION = '3.1.0';
 
 export interface CompositionElement {
   elementId: string;
@@ -363,35 +377,26 @@ export function scoreComposition(input: ScoringInput, siblings?: CompositionElem
   // Per-axis "was this claim's rendered property actually realized"
   // dispatcher -- Sol-N9 (F9): coverage must require MORE than domPath+
   // sourceId membership; it must require the axis-specific evidence to be
-  // genuinely VERIFIED (not merely unverifiable-but-present, and not merely
-  // resolved). Reuses the exact same evidence functions the fidelity axes
-  // below are built from, so "realized" means (with one deliberate,
-  // documented exception below) the identical thing in both places.
+  // genuinely VERIFIED (not merely resolved). Reuses the exact same evidence
+  // functions the fidelity axes below are built from, so "realized" means
+  // the identical thing in both places.
   //
-  // palette/typography use a DELIBERATELY looser bar than "=== VERIFIED":
-  // hasSelfReportedEvidence (via EITHER field) plus "not an active
-  // contradiction" (excludes EVIDENCE_MISMATCH, allows
-  // EVIDENCE_UNVERIFIABLE). Reason, not convenience: palette/typography's
-  // OWN dedicated evidence field is styleFingerprint specifically, but the
-  // SEALED verify-w7.ts's own faithfulComposition()/houseStyleComposition()
-  // test builders (C7-9, C7-6 -- this file cannot edit either) NEVER set
-  // styleFingerprint, only motionSignature. Requiring "=== VERIFIED" here
-  // makes coverage structurally unable to ever credit a palette/typography
-  // claim built by the sealed harness's own "faithful" (non-adversarial)
-  // control, driving C7-9's faithfulAbove check below the floor for the
-  // HONEST case, not just the adversarial one. hasSelfReportedEvidence still
-  // fully excludes Sol's bare-provenance repro (zero self-report on EITHER
-  // field); an explicit MISMATCH (styleFingerprint present and WRONG) still
-  // fully excludes a genuinely contradicted claim. Only "self-reported via
-  // motionSignature, but this axis's OWN field (styleFingerprint) was never
-  // supplied" is treated as realized -- narrower than round-1's plain
-  // resolution bar, not as narrow as full verification.
+  // Round 3 (gate-amendment enabling item): palette/typography previously
+  // used a deliberately looser bar here ("not an active contradiction"
+  // rather than "=== VERIFIED"), documented as a bounded compromise forced
+  // by the sealed verify-w7.ts's faithfulComposition()/houseStyleComposition()
+  // never setting styleFingerprint. The gate amendment (commit 76f493f59)
+  // fixed that root cause -- both builders now emit a REAL styleFingerprint
+  // (styleFingerprintOf, built from the resolved node's own captured
+  // computedStyle) alongside a real motionSignature. The relaxation is no
+  // longer needed and is removed: every axis now requires "=== VERIFIED",
+  // uniformly.
   function axisRealized(axis: string, el: CompositionElement, node: CapturedNode | undefined): boolean {
     switch (axis) {
       case 'palette':
-        return hasSelfReportedEvidence(el) && paletteEvidenceFactor(el, node) !== EVIDENCE_MISMATCH;
+        return paletteEvidenceFactor(el, node) === EVIDENCE_VERIFIED;
       case 'typography':
-        return hasSelfReportedEvidence(el) && typeEvidenceFactor(el, node) !== EVIDENCE_MISMATCH;
+        return typeEvidenceFactor(el, node) === EVIDENCE_VERIFIED;
       case 'motion':
         return motionEvidenceFactor(el, node) === EVIDENCE_VERIFIED;
       case 'layout':
@@ -405,44 +410,35 @@ export function scoreComposition(input: ScoringInput, siblings?: CompositionElem
     }
   }
 
-  // Sol-N9 (F9): "coverage awards a hit using only sourceId plus domPath...
-  // opposite-breakpoint provenance scores 1.0." A wrong-breakpoint citation
-  // discounts a claim's coverage credit -- it does NOT zero it outright.
-  // This is a deliberate, bounded compromise, not a half-measure: the
-  // SEALED verify-w7.ts's own faithfulComposition() helper (C7-9, which
-  // this file cannot edit) resolves every element's breakpoint via "first
-  // breakpoint where the domPath's snapshot happens to contain it," which
-  // does NOT track directiveInventory's own per-claim breakpoint field --
-  // an EXACT match requirement zeroes out roughly half of C7-9's own
-  // "faithful" (non-adversarial) test claims and drives coverage below the
-  // floor for a composition the sealed harness constructs as the honest
-  // control. A hard veto on breakpoint mismatch is therefore not available
-  // without editing the sealed gate. Partial credit still makes breakpoint
-  // meaningfully SCORE (Sol's literal ask -- it no longer scores identically
-  // to a correct-breakpoint claim) while remaining compatible with the
-  // sealed harness's own construction: verified evidence at the WRONG
-  // breakpoint contributes BREAKPOINT_MISMATCH_CREDIT, not full credit and
-  // not zero.
-  const BREAKPOINT_MISMATCH_CREDIT = 0.3;
-
   // directive_claim_coverage -- every NON-LOSING IR claim must resolve to
-  // attributed evidence at the CLAIMED source and CLAIMED scope, AND the
-  // claim's own axis-specific rendered property must be genuinely VERIFIED,
-  // not merely resolved (Sol-N9: "bare provenance scores 1.0" -- resolution
-  // alone is no longer sufficient). Weighted by strength. A losing claim
-  // contributes ZERO regardless of how well it resolves (it lost; the
-  // user's request was to honor the WINNER at that scope) and does not
-  // count in the denominator either -- coverage measures "were the claims
-  // that should have won, honored," not "were all claims, including
-  // declared losers, honored."
+  // attributed evidence at the CLAIMED source, CLAIMED scope, AND CLAIMED
+  // BREAKPOINT, AND the claim's own axis-specific rendered property must be
+  // genuinely VERIFIED, not merely resolved (Sol-N9: "bare provenance scores
+  // 1.0" / "opposite-breakpoint provenance scores 1.0" -- resolution alone
+  // is no longer sufficient, and a wrong-breakpoint citation is no longer
+  // partial-credited). Weighted by strength. A losing claim contributes
+  // ZERO regardless of how well it resolves (it lost; the user's request
+  // was to honor the WINNER at that scope) and does not count in the
+  // denominator either -- coverage measures "were the claims that should
+  // have won, honored," not "were all claims, including declared losers,
+  // honored."
+  //
+  // Round 3 (gate-amendment enabling item): breakpoint mismatch is now a
+  // HARD veto (score 0), not a discount (previously
+  // BREAKPOINT_MISMATCH_CREDIT=0.3). The discount existed only because the
+  // sealed faithfulComposition() resolved every element's breakpoint via
+  // "first breakpoint where the domPath happens to be captured," ignoring
+  // directiveInventory's own breakpoint field -- an exact-match veto drove
+  // the sealed harness's own honest "faithful" control below the coverage
+  // floor. The gate amendment (commit 76f493f59) fixed the root cause:
+  // findRealNode() now PREFERS the claim's own breakpoint field. The
+  // compromise is no longer needed.
   const coveragePairs: Array<{ score: number; weight: number }> = [];
   for (const claim of c.directiveInventory) {
     if (isLosingClaim(claim)) continue;
-    const match = graded.find((g) => g.el.domPath === claim.scope && g.el.sourceId === claim.source);
-    const verified = !!match && match.groundedness === 2 && axisRealized(claim.axis, match.el, match.resolvedNode);
-    const breakpointMatches = claim.breakpoint === undefined || match?.el.breakpoint === claim.breakpoint;
-    const score = verified ? (breakpointMatches ? 1 : BREAKPOINT_MISMATCH_CREDIT) : 0;
-    coveragePairs.push({ score, weight: claim.strength });
+    const match = graded.find((g) => g.el.domPath === claim.scope && g.el.sourceId === claim.source && (claim.breakpoint === undefined || g.el.breakpoint === claim.breakpoint));
+    const hit = !!match && match.groundedness === 2 && axisRealized(claim.axis, match.el, match.resolvedNode);
+    coveragePairs.push({ score: hit ? 1 : 0, weight: claim.strength });
   }
   const directive_claim_coverage = coveragePairs.length > 0 ? weightedAvg(coveragePairs) : graded.length > 0 ? avg(graded.map((g) => (g.groundedness === 2 ? 1 : 0))) : 0;
 
