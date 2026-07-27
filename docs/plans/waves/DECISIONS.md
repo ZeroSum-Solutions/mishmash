@@ -98,3 +98,42 @@ Rationale (tiebreaker, compressed): free-text length is evidence formatting, not
 invention of fake probe paths; the allowlist extends the already-accepted orchestrator trust
 anchor (approved-copy execution, W7 disposition records). Founder may veto; surfaced in session
 summaries.
+
+## 2026-07-27 — W7 completion-gate amendment: dual GATE-DEFECT ruling executed (record)
+
+Both review lanes independently ruled C7-2's `latestCommitTouching(CORPUS.md)` freeze anchor a
+GATE-DEFECT (Sol HIGH: "bind an explicit immutable freeze commit/hash or a separate immutable
+freeze-anchor artifact"; Grok MEDIUM: "same-commit allow or hash-only freeze is the honest fix,
+not commit-gaming"). Under the two-phase gate ruling's provision for completion-gate
+strengthening with re-review, a scoped amendment (5 commits, `dcb3a7242..6e2de6e7a`, confined
+to `scripts/waves/verify-w7.ts`) delivered: (1) per-case freeze anchor — brief content
+hash-bound to manifest `briefSha256`, brief-touching commit same-as-or-ancestor-of the case's
+IR-touching commit; (2) fixture builders emitting full v3 evidence (real styleFingerprints,
+`transition:<N>ms` motion, claim-matching breakpoints); (3) C7-8 semantic trios plus a
+load-bearing label-only negative control; (4) C7-6 within-case wrong populations load-bearing;
+(5) C7-12 asserts sha256(floors.json) ==
+`15701d8a345d34bec14e08a9ac987ed8c3ab03523cd6a51849f8c2ec9eca7965` (orchestrator-pinned frozen
+floors). Sol confirmation review: APPROVE, zero findings. Approved out-of-repo gate copy
+re-pinned at `6e2de6e7a` (sha `2d0c31364784f2d75e33c34af6ef35e9ea0ab50dfbf29cdead19a3ba174eedf5`),
+superseding the preflight pin at `b4bb0f59f`. Independent corpus audit (fresh agent, zero prior
+W7 involvement): round 1 at `dcb3a7242` — 6/8 non-sealed cases PASS, 2 FAIL with concrete
+fabrication-class defects; remediation landed (`20ae346f7`, `8373e1d83`); round-1 report
+archived in orchestrator goal-state, sha256
+`b672f6a0c1cc510b47d3c475165ce4b76d185a845ff2bdd362d25711eeb2864a`. Founder may veto.
+
+## 2026-07-27 — W0 lease amendment: `cli.ts` + `origin-validation.ts` (orchestrator ruling under standing directive)
+
+The W0 PRD requires `od backup`/`od restore` registered via `SUBCOMMAND_MAP` in
+`apps/daemon/src/cli.ts`, and the product-surface gate ruling makes the CLI chain load-bearing
+for C0-1..C0-4 — but `leases.json`'s W0 entry omitted `cli.ts` (a drafting gap; W1/W3/W4 grant
+it, and none of them run concurrently with W0 — W0's only burst partner is W7, which cannot
+touch daemon code). Additionally, the only capability-token mint path
+(`POST /api/library/pair/confirm`) is 403-blocked for genuine `chrome-extension://` origins by
+the global origin gate in `apps/daemon/src/origin-validation.ts` — a pre-existing product bug
+(reproduced with curl on unmodified code; `library.ts`'s own comment claims the exemption
+already exists) that makes the sealed gate's C0-5/C0-6 mint probe structurally unable to run.
+Ruling (VERIFICATION-CONTRACT §4-consistent, structurally required by stated criteria):
+W0's allow list gains exactly two entries — `apps/daemon/src/cli.ts` (one-line SUBCOMMAND_MAP
+wiring) and `apps/daemon/src/origin-validation.ts` (minimal allowlist addition of
+`pair/confirm`, restoring the behavior `library.ts` already documents). Both changes remain
+subject to adversarial review like all wave work. Founder may veto.

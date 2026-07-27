@@ -20,6 +20,8 @@
         "apps/daemon/src/backup/**",
         "apps/daemon/src/security/**",
         "apps/daemon/src/routes/library.ts",
+        "apps/daemon/src/cli.ts",
+        "apps/daemon/src/origin-validation.ts",
         "apps/daemon/tests/**",
         "docs/security/**",
         "docs/testing/**",
@@ -28,8 +30,7 @@
       "deny": [
         "apps/daemon/tests/web-clone-*.test.ts"
       ],
-      "note": "Owns `pnpm guard` and the daemon test tree for Burst 1. W-C may not touch guard."
-    },
+      "note": "Owns `pnpm guard` and the daemon test tree for Burst 1. W-C may not touch guard. cli.ts + origin-validation.ts added by 2026-07-27 lease-amendment ruling (DECISIONS.md): PRD-mandated SUBCOMMAND_MAP wiring + pair/confirm mint-path fix; no concurrent wave holds either file."
     "W7": {
       "slug": "mishmash-w7-selector-foundations",
       "allow": [
