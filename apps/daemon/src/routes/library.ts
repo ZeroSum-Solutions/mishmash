@@ -306,10 +306,15 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
   // an Origin IS present it must still match the token's bound identity, so
   // one extension can never revoke or rotate another's token. See
   // docs/security/daemon-threat-model.md [C0-6].
-  app.options('/api/library/pair/revoke', (req, res) => {
-    applyExtensionCors(req, res);
-    res.status(204).end();
-  });
+  //
+  // The POST handler is registered BEFORE its OPTIONS preflight sibling
+  // (deliberately, not incidentally): daemon.routeInventory reports routes
+  // in registration order, and anything doing endpoint discovery by path
+  // pattern alone (e.g. "find the revoke/rotate route for this path") needs
+  // the real action route to be the first match, not the CORS preflight
+  // stub. Express itself dispatches by method regardless of registration
+  // order, so this reordering changes nothing about runtime request
+  // handling -- only which route a path-only lookup finds first.
   app.post('/api/library/pair/revoke', (req, res) => {
     applyExtensionCors(req, res);
     const token = bearerToken(req);
@@ -324,11 +329,11 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
     const result = revokeLibraryTokenByHash(db, check.row.tokenHash);
     res.json({ ok: true, revoked: result.revoked });
   });
-
-  app.options('/api/library/pair/rotate', (req, res) => {
+  app.options('/api/library/pair/revoke', (req, res) => {
     applyExtensionCors(req, res);
     res.status(204).end();
   });
+
   app.post('/api/library/pair/rotate', (req, res) => {
     applyExtensionCors(req, res);
     const token = bearerToken(req);
@@ -345,6 +350,10 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
       return sendApiError(res, 500, 'LIBRARY_TOKEN_ROTATE_FAILED', result.error);
     }
     res.json({ ok: true, token: result.token });
+  });
+  app.options('/api/library/pair/rotate', (req, res) => {
+    applyExtensionCors(req, res);
+    res.status(204).end();
   });
 
   // --- backup / restore ------------------------------------------------------

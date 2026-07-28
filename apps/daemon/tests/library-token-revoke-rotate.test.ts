@@ -20,6 +20,7 @@ let daemon: http.Server | undefined;
 let daemonShutdown: (() => Promise<void> | void) | undefined;
 let baseUrl = '';
 let dataDir = '';
+let routeInventory: { method: string; path: string }[] = [];
 const PREV_DATA_DIR = process.env.OD_DATA_DIR;
 
 beforeEach(async () => {
@@ -30,10 +31,12 @@ beforeEach(async () => {
     url: string;
     server: http.Server;
     shutdown?: () => Promise<void> | void;
+    routeInventory: { method: string; path: string }[];
   };
   baseUrl = started.url;
   daemon = started.server;
   daemonShutdown = started.shutdown;
+  routeInventory = started.routeInventory;
 });
 
 afterEach(async () => {
@@ -117,6 +120,21 @@ describe('library token revoke / rotate (C0-6)', () => {
     const oldStatus = await ingestStatus(origin, oldToken);
     expect(oldStatus === 401 || oldStatus === 403).toBe(true);
     expect(await ingestStatus(origin, newToken)).toBe(200);
+  });
+
+  it('(C0-6/route-order) the POST action route is discoverable ahead of its OPTIONS preflight sibling by path pattern alone', () => {
+    // Regression coverage for a real bug: the wave gate discovers the
+    // revoke/rotate endpoint by scanning routeInventory (registration
+    // order) for the first entry whose path matches, without filtering by
+    // method -- the same shape as "find the route for this capability" done
+    // elsewhere in this codebase. Registering the OPTIONS preflight stub
+    // BEFORE the POST handler made that lookup resolve to OPTIONS, which
+    // only returns 204 and never touches the token, so revoke/rotate
+    // appeared to silently no-op. POST must sort first for both paths.
+    const revokeMatches = routeInventory.filter((r) => /library/i.test(r.path) && /revoke/i.test(r.path));
+    const rotateMatches = routeInventory.filter((r) => /library/i.test(r.path) && /rotate/i.test(r.path));
+    expect(revokeMatches[0]).toEqual({ method: 'POST', path: '/api/library/pair/revoke' });
+    expect(rotateMatches[0]).toEqual({ method: 'POST', path: '/api/library/pair/rotate' });
   });
 
   it('a token cannot be revoked or rotated by presenting it from a DIFFERENT origin than it is bound to', async () => {
