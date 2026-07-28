@@ -536,10 +536,17 @@ if (first && SUBCOMMAND_MAP[first]) {
   const idx = argv.indexOf(first);
   const rest = [...argv.slice(0, idx), ...argv.slice(idx + 1)];
   await SUBCOMMAND_MAP[first](rest);
-  process.exit(0);
-}
-
-if (argv[0] === 'tools' && argv[1] === 'live-artifacts') {
+  // Not process.exit(0): that tears down the event loop in the same tick,
+  // before a pending stdout write drains. Handlers that end with a bare
+  // `process.stdout.write(...)` (e.g. runLibraryList's `list --json`
+  // branch) return as soon as the write is *queued*, not flushed -- when
+  // stdout is a pipe (what execFile/spawn give any embedding process) and
+  // the payload exceeds the OS pipe buffer (~64KB), the unflushed tail was
+  // silently dropped. process.exitCode lets Node exit naturally once the
+  // event loop drains, same pattern already used at the `tools
+  // live-artifacts`/`tools connectors` dispatch below.
+  process.exitCode = 0;
+} else if (argv[0] === 'tools' && argv[1] === 'live-artifacts') {
   runLiveArtifactsToolCli(argv.slice(2))
     .then(({ exitCode }) => {
       process.exitCode = exitCode;

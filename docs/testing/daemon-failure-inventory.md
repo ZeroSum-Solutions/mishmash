@@ -13,7 +13,7 @@ failures.** All three layers ran clean on this measurement.
 
 | Layer | Command | Result |
 |---|---|---|
-| unit | `pnpm --filter @open-design/daemon test` (`vitest run -c vitest.config.ts`, 498 test files, 6232 assertions) | **unit: 0 failures** |
+| unit | `pnpm --filter @open-design/daemon test` (`vitest run -c vitest.config.ts`, 499 test files, 6233 assertions) | **unit: 0 failures** |
 | integration | `pnpm --filter e2e exec vitest run -c vitest.config.ts` (30 files, cross-app/cross-runtime consistency checks under `e2e/tests/` + `e2e/specs/`, 141 assertions) | **integration: 0 failures** |
 | e2e | `pnpm --filter e2e exec playwright test -c playwright.config.ts ui/critical-smoke.test.ts` (3 `[P0] @critical` specs, real `tools-dev` daemon+web+Chromium) | **e2e: 0 failures** (3 passed) |
 
@@ -29,7 +29,7 @@ flaky means intermittent, not "always red," and this run happening to be
 green does not retire the tracking:
 
 - **`apps/daemon/tests/project-upload-filenames.test.ts`** — passed in this
-  run (part of the 6232). No reproduction captured in this session.
+  run (part of the 6233). No reproduction captured in this session.
 - **`e2e/tests/amr/logout-state-persistence.test.ts`** (ENOTEMPTY cleanup
   race) — passed in this run (part of the integration layer's 141). The
   named failure mode is a directory-cleanup race in `afterEach`/teardown
