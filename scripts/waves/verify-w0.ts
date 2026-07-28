@@ -1382,18 +1382,18 @@ async function main(): Promise<void> {
   await checkCriterion(
     'C0-7',
     'two-pass alias-aware AST extraction (local const aliases, property chains, constant paths) over apps/daemon/src/routes/** + server.ts; unresolvable-path guarded registrations must be explicitly acknowledged as dynamic in the inventory',
-    'inventory row without a live route = fail; guarded live route missing from inventory = fail; an unresolvable-path guarded registration not explicitly marked dynamic in the inventory = fail; every row is probed TWICE -- once with an explicitly hostile browser Origin (https://evil.invalid), expecting rejection (401/403), and once with NO Origin header at all (the local CLI\'s own request shape), expecting the origin/local-request guard to NOT reject it -- requireLocalDaemonRequest exists to stop a malicious web page, not a genuine local caller, so origin-LESS success and hostile-Origin rejection are both required, honestly, against the current product; a dynamic row without probePath may skip probing ONLY when authorized by an orchestrator-owned allowlist (--unreachable-allowlist / W0_UNREACHABLE_ALLOWLIST) -- absent/unreadable/invalid allowlist = zero authorized skips (fail-closed); each allowlist entry binds to {file, line, method, path}, a source-line sha256 fingerprint recomputed from the CURRENT tree, AND a commit that must be (1) a full 40-char lowercase hex sha, (2) a real commit object in this repository that is an ancestor-or-equal of the evaluated HEAD, and (3) the commit the source line was AUTHORED against -- the fingerprint must independently match both the current tree AND `git show <commit>:<file>` at that line; any of these failing makes the entry INVALID, same hard-fail bucket as stale; entries must match exactly one claiming row 1:1 (duplicate entries, unused entries, and unauthorized claiming rows are all hard fails); a row\'s free-text "unreachable" string is surfaced in evidence but never authorizes anything; hard-fail when authorizedUnreachable*2 >= totalDynamic (nonempty set, exactly-half included)',
+    'inventory row without a live route = fail; guarded live route missing from inventory = fail; an unresolvable-path guarded registration not explicitly marked dynamic in the inventory = fail; every row is probed TWICE -- once with an explicitly hostile browser Origin (https://evil.invalid), expecting rejection (401/403), and once with NO Origin header at all (the local CLI\'s own request shape), expecting an EXPLICIT success: 2xx by default, or the row\'s own declared expectedLocalStatus for routes whose genuine local success is legitimately non-2xx (declared honestly, never widened by the check) -- transport failure (-1), 401/403, and 5xx are ALWAYS canary fails, never accepted as success; requireLocalDaemonRequest exists to stop a malicious web page, not a genuine local caller, so origin-LESS success and hostile-Origin rejection are both required, honestly, against the current product; every daemon reboot triggered mid-probe (e.g. a route with a genuine local side effect) is logged with the row/phase that triggered it, and settles that row\'s own result BEFORE the reboot -- a reboot can never retroactively convert a row\'s failure into a pass; a dynamic row without probePath may skip probing ONLY when authorized by an orchestrator-owned allowlist (--unreachable-allowlist / W0_UNREACHABLE_ALLOWLIST) -- absent/unreadable/invalid allowlist = zero authorized skips (fail-closed); each allowlist entry binds to {file, line, method, path}, a source-line sha256 fingerprint recomputed from the CURRENT tree, AND a commit that must be (1) a full 40-char lowercase hex sha, (2) a real commit object in this repository that is an ancestor-or-equal of the evaluated HEAD, and (3) the commit the source line was AUTHORED against -- the fingerprint must independently match both the current tree AND `git show <commit>:<file>` at that line; any of these failing makes the entry INVALID, same hard-fail bucket as stale; entries must match exactly one claiming row 1:1 (duplicate entries, unused entries, and unauthorized claiming rows are all hard fails); a row\'s free-text "unreachable" string is surfaced in evidence but never authorizes anything; hard-fail when authorizedUnreachable*2 >= totalDynamic (nonempty set, exactly-half included)',
     async () => {
       const rel = 'apps/daemon/src/security/privileged-routes.json';
       if (!fileExists(rel)) {
         record('C0-7', '', '', false, '', { detail: `missing: ${rel}` });
         return;
       }
-      let routes: { method: string; path: string; dynamic?: boolean; file?: string; line?: number; probePath?: string; unreachable?: string }[] = [];
+      let routes: { method: string; path: string; dynamic?: boolean; file?: string; line?: number; probePath?: string; unreachable?: string; expectedLocalStatus?: number }[] = [];
       try {
         const raw = JSON.parse(readRepoFile(rel));
         if (!Array.isArray(raw)) throw new Error('top-level value must be an array');
-        routes = raw as { method: string; path: string; dynamic?: boolean; file?: string; line?: number; probePath?: string; unreachable?: string }[];
+        routes = raw as { method: string; path: string; dynamic?: boolean; file?: string; line?: number; probePath?: string; unreachable?: string; expectedLocalStatus?: number }[];
       } catch (err) {
         record('C0-7', '', '', false, '', { detail: `invalid JSON: ${String(err)}` });
         return;
@@ -1485,26 +1485,47 @@ async function main(): Promise<void> {
       //       reject genuine local callers).
       const HOSTILE_ORIGIN = 'https://evil.invalid';
       let daemon: BootedDaemon | null = null;
+      // Round-10 C0-7-LOCAL-CANARY-FAILOPEN (Sol confirmation review):
+      // "not 401/403" accepted transport failure (-1) and 5xx as canary
+      // success, and a reboot on the NEXT row could happen without ever
+      // being recorded, making the run non-auditable. Canary success is now
+      // an EXPLICIT status match: 2xx by default, or the row's own declared
+      // expectedLocalStatus for routes whose genuine local success is
+      // legitimately non-2xx (declared honestly per-row, never widened by
+      // the check itself). -1 and 5xx are never accepted as success.
       const hostileOriginResults: { method: string; path: string; status: number }[] = [];
-      const localSuccessCanaryResults: { method: string; path: string; status: number }[] = [];
+      const localSuccessCanaryResults: { method: string; path: string; status: number; expected: number | '2xx'; ok: boolean }[] = [];
       let liveRouteKeys = new Set<string>();
+      const rebootLog: { triggeringRow: string; phase: 'hostile' | 'canary' }[] = [];
       // A local-success canary calling its intended real handler can have a
       // genuine side effect -- e.g. a daemon-admin route that legitimately
-      // shuts the process down when correctly authorized as local. That is
-      // the CORRECT observation for THAT row, but it must not corrupt every
-      // later row in the same pass. ensureDaemonAlive() re-boots a fresh
-      // daemon whenever the current one has stopped responding, so probing
-      // stays honest and complete regardless of which route causes it.
-      async function ensureDaemonAlive(current: BootedDaemon | null): Promise<BootedDaemon> {
+      // shuts the process down when correctly authorized as local. That IS
+      // the correct observation for THAT row (recorded above, before any
+      // reboot happens), but it must not corrupt every later row in the
+      // same pass. ensureDaemonAlive() re-boots a fresh daemon whenever the
+      // current one has stopped responding -- every reboot is logged with
+      // the row/phase that triggered it. A reboot only ever runs BEFORE the
+      // NEXT probe attempt; it can never retroactively change a result
+      // already pushed to hostileOriginResults/localSuccessCanaryResults.
+      async function ensureDaemonAlive(current: BootedDaemon | null, trigger: { triggeringRow: string; phase: 'hostile' | 'canary' }): Promise<BootedDaemon> {
         const alive = current ? await fetch(`${current.url}/api/health`).then(() => true).catch(() => false) : false;
         if (alive) return current as BootedDaemon;
+        rebootLog.push(trigger);
         if (current) await current.kill().catch(() => undefined);
         const fresh = await bootDaemonForProbing();
         liveRouteKeys = new Set(fresh.routeInventory.map((r) => `${r.method} ${r.path}`));
         return fresh;
       }
+      function isCanarySuccess(row: { expectedLocalStatus?: number }, status: number): boolean {
+        // Transport failure and 5xx are NEVER success, even if a row
+        // declares expectedLocalStatus in that range -- those signal the
+        // guard/handler broke, not a legitimate non-2xx success shape.
+        if (status === -1 || (status >= 500 && status < 600)) return false;
+        if (typeof row.expectedLocalStatus === 'number') return status === row.expectedLocalStatus;
+        return status >= 200 && status < 300;
+      }
       try {
-        daemon = await ensureDaemonAlive(daemon);
+        daemon = await ensureDaemonAlive(daemon, { triggeringRow: '(initial boot)', phase: 'hostile' });
         // Static rows are probed by their declared path. A dynamic row that
         // supplies a concrete probePath (a real, live-observed instance of
         // the computed path) is probed the SAME way as static rows --
@@ -1514,21 +1535,26 @@ async function main(): Promise<void> {
         // rows are excluded from probing too (there is no path to probe) but
         // are caught by dynamicRowsMissingProbePathOrReason above.
         for (const row of validRows.filter((r) => !r.dynamic || typeof r.probePath === 'string')) {
-          daemon = await ensureDaemonAlive(daemon);
           const probePath = row.dynamic ? (row.probePath as string) : row.path;
           const resolvedPath = probePath.replace(/:[a-zA-Z]+/g, 'w0-verifier-probe-id');
+          const rowLabel = `${row.method} ${probePath}`;
+          daemon = await ensureDaemonAlive(daemon, { triggeringRow: rowLabel, phase: 'hostile' });
           try {
             const res = await fetch(`${daemon.url}${resolvedPath}`, { method: row.method, headers: { Host: '127.0.0.1', Origin: HOSTILE_ORIGIN } });
             hostileOriginResults.push({ method: row.method, path: probePath, status: res.status });
           } catch {
             hostileOriginResults.push({ method: row.method, path: probePath, status: -1 });
           }
-          daemon = await ensureDaemonAlive(daemon);
+          daemon = await ensureDaemonAlive(daemon, { triggeringRow: rowLabel, phase: 'canary' });
           try {
             const res = await fetch(`${daemon.url}${resolvedPath}`, { method: row.method, headers: { Host: '127.0.0.1' } });
-            localSuccessCanaryResults.push({ method: row.method, path: probePath, status: res.status });
+            localSuccessCanaryResults.push({ method: row.method, path: probePath, status: res.status, expected: typeof row.expectedLocalStatus === 'number' ? row.expectedLocalStatus : '2xx', ok: isCanarySuccess(row, res.status) });
           } catch {
-            localSuccessCanaryResults.push({ method: row.method, path: probePath, status: -1 });
+            // Transport failure (-1) is NEVER success -- this row fails,
+            // full stop. It is recorded here, BEFORE the next row's
+            // ensureDaemonAlive call can reboot, so the failure cannot be
+            // masked by a subsequent fresh-daemon reboot.
+            localSuccessCanaryResults.push({ method: row.method, path: probePath, status: -1, expected: typeof row.expectedLocalStatus === 'number' ? row.expectedLocalStatus : '2xx', ok: false });
           }
         }
       } finally {
@@ -1544,8 +1570,11 @@ async function main(): Promise<void> {
       // not tuned away.
       const liveRejectedAll = hostileOriginResults.length > 0 && hostileOriginResults.every((r) => r.status === 401 || r.status === 403);
       const hostileOriginNotRejected = hostileOriginResults.filter((r) => r.status !== 401 && r.status !== 403);
-      const localSuccessCanaryOk = localSuccessCanaryResults.length > 0 && localSuccessCanaryResults.every((r) => r.status !== 401 && r.status !== 403);
-      const localSuccessCanaryRejected = localSuccessCanaryResults.filter((r) => r.status === 401 || r.status === 403);
+      // Round-10: canary success is now the row's explicit `ok` flag (2xx,
+      // or the row's declared expectedLocalStatus) -- -1/5xx/401/403 are all
+      // real fails now, not just 401/403.
+      const localSuccessCanaryOk = localSuccessCanaryResults.length > 0 && localSuccessCanaryResults.every((r) => r.ok);
+      const localSuccessCanaryRejected = localSuccessCanaryResults.filter((r) => !r.ok);
       const inventoryRowsNotLive = validRows.filter((r) => !r.dynamic && !liveRouteKeys.has(`${r.method} ${r.path}`));
       const guardedRoutesMissingFromInventory = guarded.filter((b) => !dedupKeys.has(`${b.method} ${b.path}`));
       const iteration = needleReport('(C0-7/route)', Math.max(validRows.length, 1));
@@ -1580,9 +1609,10 @@ async function main(): Promise<void> {
           `all claiming rows with free-text unreachable surfaced: ${JSON.stringify(claimingRows.map((r) => ({ method: r.method, path: r.path, file: r.file, line: r.line, freeTextUnreachable: r.unreachable, authorized: authorizedRows.includes(r) })))}\n` +
           `inventory rows without a live route: ${JSON.stringify(inventoryRowsNotLive)}\n` +
           `hostile-Origin probe (Origin: ${HOSTILE_ORIGIN}, expect 401/403): ${JSON.stringify(hostileOriginResults)}; NOT rejected (real fail if non-empty): ${JSON.stringify(hostileOriginNotRejected)}\n` +
-          `origin-less local-success canary (no Origin header, CLI's own shape, expect NOT 401/403): ${JSON.stringify(localSuccessCanaryResults)}; wrongly rejected (real fail if non-empty): ${JSON.stringify(localSuccessCanaryRejected)}\n` +
+          `origin-less local-success canary (no Origin header, CLI's own shape; expect 2xx or the row's declared expectedLocalStatus -- -1/401/403/5xx are all real fails now): ${JSON.stringify(localSuccessCanaryResults)}; failed (real fail if non-empty): ${JSON.stringify(localSuccessCanaryRejected)}\n` +
+          `daemon reboots during probing (each entry names the triggering row -- a reboot settles the PREVIOUS row's result first and never retroactively changes it): ${JSON.stringify(rebootLog)}\n` +
           `-- per-route --\n${iteration.evidence}\n-- control --\n${control.evidence}`,
-        { detail: ok ? undefined : `rows=${validRows.length} unique=${dedupKeys.size} inventoryRowsNotLive=${inventoryRowsNotLive.length} guardedMissing=${guardedRoutesMissingFromInventory.length} dynamicRowsMissingProbePathOrReason=${dynamicRowsMissingProbePathOrReason.length} dynamicRowsUnbound=${dynamicRowsUnbound.length} dynamicRowsDuplicateBinding=${dynamicRowsDuplicateBinding.length} unresolvableSitesUnacknowledged=${unresolvableSitesUnacknowledged.length} allowlistStatus=${allowlistStatus} duplicateAllowlistEntries=${duplicateAllowlistEntries.length} staleAllowlistEntries=${staleAllowlistEntries.length} unusedAllowlistEntries=${unusedAllowlistEntries.length} dynamicRowCounts(total=${dynamicRows.length},probed=${probedDynamicRows.length},claiming=${claimingRows.length},authorized=${authorizedRows.length}) majorityUnreachable=${majorityUnreachable} iterationOk=${iteration.ok} controlOk=${control.ok} liveRejectedAll=${liveRejectedAll} localSuccessCanaryOk=${localSuccessCanaryOk} hostileOriginNotRejected=${JSON.stringify(hostileOriginNotRejected)} localSuccessCanaryRejected=${JSON.stringify(localSuccessCanaryRejected)}` });
+        { detail: ok ? undefined : `rows=${validRows.length} unique=${dedupKeys.size} inventoryRowsNotLive=${inventoryRowsNotLive.length} guardedMissing=${guardedRoutesMissingFromInventory.length} dynamicRowsMissingProbePathOrReason=${dynamicRowsMissingProbePathOrReason.length} dynamicRowsUnbound=${dynamicRowsUnbound.length} dynamicRowsDuplicateBinding=${dynamicRowsDuplicateBinding.length} unresolvableSitesUnacknowledged=${unresolvableSitesUnacknowledged.length} allowlistStatus=${allowlistStatus} duplicateAllowlistEntries=${duplicateAllowlistEntries.length} staleAllowlistEntries=${staleAllowlistEntries.length} unusedAllowlistEntries=${unusedAllowlistEntries.length} dynamicRowCounts(total=${dynamicRows.length},probed=${probedDynamicRows.length},claiming=${claimingRows.length},authorized=${authorizedRows.length}) majorityUnreachable=${majorityUnreachable} iterationOk=${iteration.ok} controlOk=${control.ok} liveRejectedAll=${liveRejectedAll} localSuccessCanaryOk=${localSuccessCanaryOk} hostileOriginNotRejected=${JSON.stringify(hostileOriginNotRejected)} localSuccessCanaryRejected=${JSON.stringify(localSuccessCanaryRejected)} reboots=${rebootLog.length}` });
       void baselineKeys;
     },
   );
