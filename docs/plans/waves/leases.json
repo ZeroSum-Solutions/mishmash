@@ -23,6 +23,7 @@
         "apps/daemon/src/cli.ts",
         "apps/daemon/src/origin-validation.ts",
         "apps/daemon/tests/**",
+        "apps/web/tests/sidecar-proxy.test.ts",
         "docs/security/**",
         "docs/testing/**",
         "docs/plans/waves/**"
@@ -30,7 +31,7 @@
       "deny": [
         "apps/daemon/tests/web-clone-*.test.ts"
       ],
-      "note": "Owns `pnpm guard` and the daemon test tree for Burst 1. W-C may not touch guard. Amended 2026-07-27: added `apps/daemon/src/cli.ts` and `apps/daemon/src/origin-validation.ts` to `allow` — `cli.ts` registers the backup CLI subcommands exercised by the backup/restore criteria (C0-1..C0-4) and is graded for CLI↔HTTP parity by C0-10; `origin-validation.ts` is required by origin rejection (C0-7). `apps/daemon/tests/**` is also claimed by W1 and W4; Burst ordering serializes these writers — W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3."
+      "note": "Owns `pnpm guard` and the daemon test tree for Burst 1. W-C may not touch guard. Amended 2026-07-27: added `apps/daemon/src/cli.ts` and `apps/daemon/src/origin-validation.ts` to `allow` — `cli.ts` registers the backup CLI subcommands exercised by the backup/restore criteria (C0-1..C0-4) and is graded for CLI↔HTTP parity by C0-10; `origin-validation.ts` is required by origin rejection (C0-7). `apps/daemon/tests/**` is also claimed by W1 and W4; Burst ordering serializes these writers — W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3. Amended 2026-07-28: added the single file `apps/web/tests/sidecar-proxy.test.ts` — C0-14 requires the web unit suite to run cleanly inside the gate's constructed environment, and that one test derives an AF_UNIX socket path from os.tmpdir(), exceeding the ~104-byte sun_path cap under the gate's long staging TMPDIR; the fix (anchoring the socket dir to /tmp, mirroring production's SIDECAR_DEFAULTS.ipcBase) is the minimal web-side change W0's own criterion forces. Deliberately a single-file grant, not `apps/web/tests/**` — the web test tree remains W2/Burst-2 territory."
     },
     "W7": {
       "slug": "mishmash-w7-selector-foundations",
