@@ -133,6 +133,14 @@ function toRepoRelative(absFilePath: string): string {
   return path.relative(repoRoot, absFilePath).split(path.sep).join('/');
 }
 
+// Shared by checkC2_2 (defines the accepted inventory shape), checkC2_3 (the
+// mutation test's coverage must match what C2-2 accepts), and checkC2_9 (the
+// inventory-coverage cross-check must key off the same field, not any
+// string-valued property). Sol round-2 F2/F4: these three previously used
+// three different, silently-diverging notions of "the file/path field" --
+// this is the single source of truth all three now read.
+const INVENTORY_FILE_FIELD_PATTERN = /file|path|surface|location/i;
+
 // ---------------------------------------------------------------------------
 // Result plumbing (house pattern: verify-w7.ts's record()/probe())
 // ---------------------------------------------------------------------------
@@ -231,6 +239,17 @@ if (remoteMain.ok && gitIdentityOk) {
 function readFileAtCommit(commit: string, relPath: string): string | null {
   const r = sh('git', ['show', `${commit}:${relPath}`]);
   return r.status === 0 ? r.stdout : null;
+}
+
+// Enumerate every tracked file at a given commit via `git ls-tree`, NOT the
+// checked-out HEAD working tree. Sol round-2 F3: checkC2_7 previously
+// enumerated the huashu-*/humanize-ppt directory set with fs.readdirSync
+// against HEAD, so a directory deleted between baseCommit and HEAD silently
+// vanished from the comparison set instead of being flagged as lost content.
+function listRepoFilesAtCommit(commit: string): string[] | null {
+  const r = sh('git', ['ls-tree', '-r', '--name-only', commit]);
+  if (r.status !== 0) return null;
+  return r.stdout.split('\n').map((l) => l.trim()).filter(Boolean);
 }
 
 // ---------------------------------------------------------------------------
@@ -784,7 +803,7 @@ async function checkC2_2(): Promise<BrandSurfaceDiscovery | null> {
           for (const entry of arr) {
             const keys = Object.keys(entry);
             const hasRationale = keys.some((k) => /rationale|reason|why/i.test(k) && typeof entry[k] === 'string' && (entry[k] as string).trim().length > 0);
-            const fileKey = keys.find((k) => /file|path|surface|location/i.test(k) && typeof entry[k] === 'string' && (entry[k] as string).trim().length > 0);
+            const fileKey = keys.find((k) => INVENTORY_FILE_FIELD_PATTERN.test(k) && typeof entry[k] === 'string' && (entry[k] as string).trim().length > 0);
             if (!hasRationale) rationaleFieldsOk = false;
             if (!fileKey) fileFieldsOk = false;
             else if (fs.existsSync(abs((entry[fileKey] as string).replace(/^\/+/, '')))) realFileCount += 1;
@@ -816,16 +835,61 @@ async function checkC2_2(): Promise<BrandSurfaceDiscovery | null> {
 // Sol round-1 F2: a fixed, verifier-source-visible marker string
 // ("w2-verifier-mutation-probe") is exactly what a gaming stub would grep
 // for and special-case. Every run now generates a fresh random nonce and
-// picks one of two GENUINE old-brand-shaped payloads -- a URL under the
+// picks one of several GENUINE old-brand-shaped payloads -- a URL under the
 // actual frozen domain, or the actual display name checked elsewhere in
 // this file -- so the only thing a check can catch is the real signal, not
 // a memorable verifier-specific token.
+//
+// Sol round-2 F1: nonce-only variation left both payload FORMATS fixed
+// templates (`https://open-design.ai/<hex>` and `Open Design (ref <hex>)`),
+// which an opportunistic checker can pattern-match without implementing
+// genuine detection. Both the URL path shape and the display-name sentence
+// now vary per run too -- the only invariant is the real signal a correct
+// guard must key on (the `open-design.ai` host; the `Open Design` display
+// text), never a fixed surrounding shape.
 function randomMutationMarker(): { kind: 'url' | 'displayName'; text: string } {
   const nonce = crypto.randomBytes(6).toString('hex');
   if (crypto.randomInt(2) === 0) {
-    return { kind: 'url', text: `https://open-design.ai/${nonce}` };
+    const paths = [`/${nonce}`, `/subscribe?ref=${nonce}`, `/r/${nonce}`, `/${nonce}/join`, `/go/${nonce}`];
+    const prefixes = ['', 'Sign up at ', 'See ', 'Visit ', 'More: '];
+    const path = paths[crypto.randomInt(paths.length)]!;
+    const prefix = prefixes[crypto.randomInt(prefixes.length)]!;
+    return { kind: 'url', text: `${prefix}https://open-design.ai${path}` };
   }
-  return { kind: 'displayName', text: `Open Design (ref ${nonce})` };
+  const shapes = [
+    `Open Design (ref ${nonce})`,
+    `Powered by Open Design -- build ${nonce}`,
+    `The Open Design team -- ${nonce}`,
+    `Open Design v${nonce}`,
+    `© Open Design, build ${nonce}`,
+  ];
+  return { kind: 'displayName', text: shapes[crypto.randomInt(shapes.length)]! };
+}
+
+// Sol round-2 F1: for code files, the marker must land as a REAL AST string
+// literal / template literal a correct guard would see -- not a `//`
+// comment, which any AST-literal scanner (the same pattern this verifier's
+// own C2-9 scanFileForDisplayNameHits uses) correctly ignores as non-user-
+// visible. Structure varies (const, object property, array element,
+// function return, interpolated template) so a checker cannot special-case
+// one fixed shape either; every variant still produces a genuine
+// isStringLiteralLike or isTemplateExpression node containing the marker
+// text, which is exactly the node-kind surface a real guard must scan.
+function embedMutationLiteral(marker: { kind: 'url' | 'displayName'; text: string }): string {
+  const id = crypto.randomBytes(3).toString('hex');
+  const literal = JSON.stringify(marker.text);
+  const shapes = [
+    `const __w2MutationProbe_${id} = ${literal};`,
+    `const __w2MutationProbe_${id} = { label: ${literal} };`,
+    `const __w2MutationProbe_${id} = [${literal}];`,
+    `function __w2MutationProbe_${id}() { return ${literal}; }`,
+    // A genuinely interpolated template (head + spans), not a no-substitution
+    // template -- exercises the SAME template-middle/tail node shape C2-9's
+    // scanFileForDisplayNameHits hardens against (Sol round-1 F7), so a
+    // guard built on that same pattern is proven against it here too.
+    `const __w2MutationProbe_${id} = \`prefix-\${1}-${marker.text}-\${2}\`;`,
+  ];
+  return shapes[crypto.randomInt(shapes.length)]!;
 }
 
 function fisherYatesShuffle<T>(items: T[]): T[] {
@@ -842,8 +906,8 @@ function fisherYatesShuffle<T>(items: T[]): T[] {
 async function checkC2_3(discovery: BrandSurfaceDiscovery | null): Promise<void> {
   await probe(
     'C2-3',
-    'rsync-copy the repo (excluding node_modules/.git/dist/.next/.tmp) to a scratch dir; symlink node_modules read-only (mount-namespace-free best effort) but ALSO exclude any node_modules-rooted inventory path from mutation eligibility and realpath-verify every mutation target stays contained inside the scratch copy; run the discovered check function on the pristine copy (negative control, expect pass); mutate EVERY resolvable inventory entry (randomized order, generous cap) with a random-per-run, non-memorable old-brand-shaped marker, re-run (expect fail), then revert; the real repo tree is never written to',
-    'the check function passes on the unmutated copy (proving it is not vacuously failing) and fails on every mutated entry (proving each inventoried surface class is actually enforced by a check that cannot special-case a fixed probe string), and the real repository tree remains untouched throughout',
+    'rsync-copy the repo (excluding node_modules/.git/dist/.next/.tmp) to a scratch dir; symlink node_modules read-only (mount-namespace-free best effort) but ALSO exclude any node_modules-rooted inventory path from mutation eligibility and realpath-verify every mutation target stays contained inside the scratch copy; run the discovered check function on the pristine copy (negative control, expect pass); mutate EVERY resolvable inventory entry -- uncapped, matching C2-2\'s uncapped inventory shape, same file/path/surface/location field pattern C2-2 accepts -- injecting a random-per-run, structurally-varied, non-memorable old-brand-shaped marker as a REAL AST string/template literal for code files (never a `//` comment, which an AST-literal guard correctly ignores), re-run (expect fail), then revert; the real repo tree is never written to',
+    'the check function passes on the unmutated copy (proving it is not vacuously failing) and fails on every mutated entry across every inventory shape C2-2 accepts (proving each inventoried surface class is actually enforced by a check that cannot special-case a fixed probe string or a fixed accepted-field name), and the real repository tree remains untouched throughout',
     async () => {
       if (!discovery || !discovery.modulePath || !discovery.checkFnName || !discovery.inventoryExportName) {
         return { ok: false, evidence: 'C2-2 discovery did not find a usable check-brand-surfaces module/function/inventory -- cannot run the mutation test', detail: 'depends on C2-2' };
@@ -898,15 +962,16 @@ async function checkC2_3(discovery: BrandSurfaceDiscovery | null): Promise<void>
         const inventoryMod = (await import(pathToFileURL(copyModulePath).href + `?t=${Date.now()}-init`)) as Record<string, unknown>;
         const inventory = inventoryMod[inventoryExportName] as Array<Record<string, unknown>>;
         // Sol round-1 F2: no more "first 6" -- test every resolvable entry,
-        // in a RANDOMIZED order, with a generous cap that only guards
-        // against a pathologically huge inventory (nothing realistic here
-        // should ever hit it).
-        const MAX_MUTATIONS = 40;
+        // in a RANDOMIZED order. Sol round-2 F2: C2-2 places no cap on
+        // inventory size ("no max inventory size"), so a fixed MAX_MUTATIONS
+        // here silently exempted any entry past the cap from enforcement --
+        // a false pass hiding behind "every entry tested" language. There is
+        // no cap now: every resolvable entry in the inventory is mutated,
+        // full stop, matching C2-2's uncapped acceptance exactly.
         const shuffledInventory = fisherYatesShuffle(inventory);
         let mutationsAttempted = 0;
         for (const entry of shuffledInventory) {
-          if (mutationsAttempted >= MAX_MUTATIONS) break;
-          const fileKey = Object.keys(entry).find((k) => /file|path/i.test(k) && typeof entry[k] === 'string');
+          const fileKey = Object.keys(entry).find((k) => INVENTORY_FILE_FIELD_PATTERN.test(k) && typeof entry[k] === 'string');
           if (!fileKey) continue;
           const relTargetPath = (entry[fileKey] as string).replace(/^\/+/, '');
           // Sol round-1 F3: never mutate anything rooted under
@@ -940,12 +1005,27 @@ async function checkC2_3(discovery: BrandSurfaceDiscovery | null): Promise<void>
               parsed.__w2VerifierMutationProbe = marker.text;
               mutated = JSON.stringify(parsed, null, 2);
             } catch {
-              mutated = `${original}\n// ${marker.text}\n`;
+              // original wasn't parseable JSON to begin with; append the raw
+              // marker text (visible content, not a `//` comment -- JSON has
+              // no comment syntax anyway).
+              mutated = `${original}\n${marker.text}\n`;
             }
           } else if (relTargetPath.endsWith('.md')) {
+            // Prose file: the marker as visible text IS the real signal a
+            // content-scanning guard reads -- no AST-literal concept applies.
             mutated = `${marker.text}\n\n${original}`;
+          } else if (/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(relTargetPath)) {
+            // Sol round-2 F1: code files must receive the marker as a REAL
+            // string/template AST literal -- see embedMutationLiteral. A `//`
+            // comment is invisible to any guard that (correctly, per C2-2's
+            // stated user-visible/egress surface semantics) scans string
+            // literals rather than raw text, so a comment-only injection
+            // false-fails a genuinely correct implementation.
+            mutated = `${embedMutationLiteral(marker)}\n${original}`;
           } else {
-            mutated = `// ${marker.text}\n${original}`;
+            // Unknown/non-code file type (no reliable comment syntax, no JS
+            // AST either) -- visible raw text, same rationale as .md.
+            mutated = `${marker.text}\n${original}`;
           }
           fs.writeFileSync(targetInCopy, mutated);
           let mutatedResult: { ok: boolean; raw: unknown } | null = null;
@@ -1330,30 +1410,45 @@ async function checkC2_7(): Promise<void> {
       // Deliberate-content preservation: Sol round-1 F6 -- a 3-file sample
       // ignored the rest of the huashu-* set and all of humanize-ppt.
       // Compare EVERY file under the full set instead.
+      //
+      // Sol round-2 F3: the frozen comparison set must be enumerated from
+      // baseCommit, not HEAD -- otherwise a deleted directory or file simply
+      // isn't there to enumerate at HEAD and silently drops out of the
+      // comparison. It must also cover every tracked file under the roots,
+      // not a 5-extension allowlist (the pinned base is 79 files across the
+      // nine huashu-* roots + humanize-ppt; a .md/.ts/.py/.json/.js filter
+      // only sees 60 of them, missing every example.html and LICENSE file).
+      // And a file present at baseCommit but missing at HEAD is a FAILURE
+      // (wholesale deletion is not an acceptable way to remove foreign UI
+      // chrome), never a silent `continue`.
       if (baseCommit) {
-        const deliberateContentRoots = ['plugins/community/humanize-ppt'];
-        try {
-          for (const entry of fs.readdirSync(abs('plugins/_official/examples'), { withFileTypes: true })) {
-            if (entry.isDirectory() && entry.name.startsWith('huashu-')) deliberateContentRoots.push(`plugins/_official/examples/${entry.name}`);
+        const allFilesAtBase = listRepoFilesAtCommit(baseCommit);
+        if (allFilesAtBase === null) {
+          problems.push(`could not enumerate the repository tree at baseCommit (${baseCommit.slice(0, 12)}) via git ls-tree -- cannot verify deliberate-content preservation`);
+        } else {
+          const deliberateFileSet = allFilesAtBase.filter(
+            (rel) => /^plugins\/_official\/examples\/huashu-[^/]+\//.test(rel) || rel.startsWith('plugins/community/humanize-ppt/'),
+          );
+          let sampledCount = 0;
+          let changedCount = 0;
+          let deletedCount = 0;
+          for (const rel of deliberateFileSet) {
+            const before = readFileAtCommit(baseCommit, rel);
+            if (before === null) continue; // ls-tree already proved it exists at baseCommit; treat a read failure as inconclusive, not this check's concern
+            sampledCount += 1;
+            const after = readText(rel);
+            if (after === null) {
+              deletedCount += 1;
+              problems.push(`${rel}: present at baseCommit but missing at HEAD -- deliberate multilingual content was deleted, not retained`);
+            } else if (before !== after) {
+              changedCount += 1;
+              problems.push(`${rel}: deliberate multilingual content changed between baseCommit and HEAD -- collateral damage from the de-brand pass?`);
+            }
           }
-        } catch {
-          problems.push('could not list plugins/_official/examples to enumerate the full huashu-* set');
+          evidenceLines.push(
+            `deliberate-content preservation: ${sampledCount} file(s) enumerated from baseCommit's tree via git ls-tree (every tracked file under the huashu-* + humanize-ppt roots, no extension filter -- includes example.html and LICENSE), ${changedCount} changed, ${deletedCount} deleted`,
+          );
         }
-        const deliberateFiles = collectRepoFiles(deliberateContentRoots, { exts: ['.md', '.ts', '.py', '.json', '.js'] });
-        let sampledCount = 0;
-        let changedCount = 0;
-        for (const fileAbs of deliberateFiles) {
-          const rel = toRepoRelative(fileAbs);
-          const before = readFileAtCommit(baseCommit, rel);
-          const after = readText(rel);
-          if (before === null || after === null) continue; // file not present at one end; not this check's concern
-          sampledCount += 1;
-          if (before !== after) {
-            changedCount += 1;
-            problems.push(`${rel}: deliberate multilingual content changed between baseCommit and HEAD -- collateral damage from the de-brand pass?`);
-          }
-        }
-        evidenceLines.push(`deliberate-content preservation: ${sampledCount} file(s) compared across ${deliberateContentRoots.length} root(s) (full huashu-* set + humanize-ppt, not a sample), ${changedCount} changed`);
       }
 
       // A written retained-content rationale should exist somewhere under
@@ -1509,8 +1604,16 @@ async function checkC2_9(discovery: BrandSurfaceDiscovery | null): Promise<void>
         try {
           const mod = (await import(pathToFileURL(discovery.modulePath).href + `?t=${Date.now()}`)) as Record<string, unknown>;
           const arr = mod[discovery.inventoryExportName] as Array<Record<string, unknown>>;
+          // Sol round-2 F4: this previously collected EVERY string-valued
+          // property on an entry (ids, rationale prose, anything), so an
+          // entry could satisfy coverage by merely MENTIONING a path in its
+          // rationale while its actual file/path field pointed elsewhere --
+          // a false pass for the future-reintroduction guarantee. Only the
+          // same file/path-designating field(s) C2-2 itself accepts count.
           const inventoriedPaths = new Set(
-            arr.flatMap((entry) => Object.values(entry).filter((v): v is string => typeof v === 'string')).map((v) => v.replace(/^\/+/, '')),
+            arr
+              .flatMap((entry) => Object.keys(entry).filter((k) => INVENTORY_FILE_FIELD_PATTERN.test(k) && typeof entry[k] === 'string').map((k) => entry[k] as string))
+              .map((v) => v.replace(/^\/+/, '')),
           );
           const uncovered = namedFloor.filter((t) => fs.existsSync(abs(t)) && ![...inventoriedPaths].some((p) => p.includes(t) || t.includes(p)));
           if (uncovered.length > 0) problems.push(`the C2-2 inventory does not appear to cover: ${uncovered.join(', ')}`);
