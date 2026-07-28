@@ -71,7 +71,20 @@
         "docs/**",
         "apps/daemon/src/routes/open-design-public-metadata.ts",
         "scripts/check-brand-surfaces*.ts",
-        "scripts/waves/verify-w2.ts"
+        "scripts/waves/verify-w2.ts",
+        "apps/daemon/src/connectionTest.ts",
+        "apps/daemon/src/routes/chat.ts",
+        "apps/daemon/src/media/index.ts",
+        "scripts/guard.ts",
+        "apps/web/src/providers/registry.ts",
+        "apps/daemon/src/plugins/share-helpers.ts",
+        "apps/web/src/components/ChatPane.tsx",
+        "apps/web/src/components/FileWorkspace.tsx",
+        "apps/web/src/components/ProjectView.tsx",
+        "apps/web/src/components/DesignFilesPanel.tsx",
+        "apps/web/src/components/design-files/pluginFolderActions.ts",
+        "packages/sidecar-proto/src/index.ts",
+        "apps/daemon/src/services/open-design-public-metadata.ts"
       ],
       "deny": [
         "docs/security/**",
@@ -82,7 +95,7 @@
         "apps/daemon/src/server.ts",
         "packages/contracts/**"
       ],
-      "note": "EntryShell.tsx line 228 is W2 work executed under W1's lease. W2's verifier reads the landed tree to confirm it."
+      "note": "EntryShell.tsx line 228 is W2 work executed under W1's lease. W2's verifier reads the landed tree to confirm it. Amended 2026-07-28 (Sol verify-w2 r1 ruling): added the enumerated brand-fix sites the wave doc's criteria require but the original lease missed — the three X-Title header sites (connectionTest.ts, routes/chat.ts, media/index.ts), scripts/guard.ts (C2-2 brand-surface check wiring; W0 has landed so no writer conflict), the C2-6 metadata consumers/service (providers/registry.ts, services/open-design-public-metadata.ts), and the C2-9 residual-string surfaces (plugins/share-helpers.ts, ChatPane.tsx, FileWorkspace.tsx, ProjectView.tsx, DesignFilesPanel.tsx, design-files/pluginFolderActions.ts, sidecar-proto/src/index.ts). AssistantMessage.tsx is deliberately EXCLUDED: it is in W1's allow, so its brand-string fix executes under W1's lease (same pattern as EntryShell C2-1a, tagged C2-9a); W2's verifier grades the landed tree."
     },
     "W4": {
       "slug": "mishmash-w4-project-covers",
