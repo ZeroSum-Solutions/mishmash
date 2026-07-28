@@ -45,11 +45,11 @@
     },
     {
       "name": "search",
-      "samplesMs": [3, 2, 1, 2, 1],
+      "samplesMs": [5, 2, 2, 2, 2],
       "p50": 2,
-      "p95": 3,
+      "p95": 5,
       "toleranceBandPct": 50,
-      "note": "KNOWN GATE-LEVEL ISSUE, re-measured after the 2026-07-27 r2 verifier amendment (scripts/waves/verify-w0.ts commit e9cff6c52) -- see docs/testing/scale-baseline-2026-07.md 'Known issue: search scenario'. The amended selection logic now resolves POST /api/tools/library/search (daemon.routeInventory's first /library\\/search/i match), no longer the external X.AI route -- but that endpoint is an agent tool-track route gated by authorizeToolRequest, which 401s TOOL_TOKEN_MISSING for any caller without a live agent-run-scoped tool token (apps/daemon/src/tool-tokens.ts) -- the correct, expected state for an unauthenticated HTTP probe. Timings recorded are for that 401 response, still not a functioning search."
+      "note": "RESOLVED by the 2026-07-27/28 r2b verifier amendment (scripts/waves/verify-w0.ts commit c0d5c7d24) -- see docs/testing/scale-baseline-2026-07.md 'Known issue: search scenario' for the full history. The scenario now resolves a REAL project id from the booted corpus (GET /api/projects, first project with a string id) and times GET /api/projects/<id>/search?q=w0-verifier-smoke -- unauthenticated, real file search over PROJECTS_DIR, no external or tool-token credential required. Confirmed live: resolved project id bde3b40d-f47e-418f-b8d2-66701c4de690, probe returns 200 with body {\"query\":\"w0-verifier-smoke\",\"matches\":[]} (the query intentionally matches nothing in the corpus -- the search work happens regardless). httpOkAll=true across both measurement runs."
     }
   ]
 }
