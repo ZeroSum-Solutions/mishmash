@@ -938,6 +938,7 @@ function usageMarkerPrompt(usage: ProbeUsage, costUsd: number): string {
 }
 const FAKE_CLAUDE_SCRIPT = `#!/usr/bin/env node
 // fake claude CLI -- see verify-w1.ts header comment.
+const crypto = require('node:crypto');
 const args = process.argv.slice(2);
 if (args.includes('--version')) { process.stdout.write(${JSON.stringify(FAKE_CLAUDE_VERSION_STRING)} + '\\n'); process.exit(0); }
 const modelIdx = args.indexOf('--model');
@@ -972,10 +973,32 @@ function respond(promptText) {
     usage = { input_tokens: num(/input(\\d+)/, m, 1), output_tokens: num(/output(\\d+)/, m, 1), cache_creation_input_tokens: num(/cachecreate(\\d+)/, m, 0), cache_read_input_tokens: num(/cacheread(\\d+)/, m, 0) };
     costUsd = num(/costUSD([\\d.]+)/, m, 0);
   }
-  const sessionId = 'fake-session-' + Math.random().toString(16).slice(2);
+  // FIDELITY ROUND FIX (residual item 7, fixture literals -- 2 of 3): the
+  // session id used Math.random (non-cryptographic) with a fixed
+  // "fake-session-" prefix, and the message id was the fixed literal
+  // "msg_1" every time. Both now come from the CSPRNG \`crypto\` module
+  // required at the top of this script, with no fixed prefix at all.
+  // NOT CHANGED (deliberately): the assistant reply text keeps its exact
+  // "fake claude reply for <executedModel>" shape. Four PROTECTED,
+  // byte-stable criteria (C1-1, C1-2, C1-5, C1-11 -- confirmed by grepping
+  // every call site in this file) each independently regex-match this exact
+  // literal prefix (/^fake claude reply for (.+)$/) against the persisted
+  // message content as their sole independent ground truth for which model
+  // actually executed; none of those four bodies may be touched this round.
+  // Randomizing or removing the prefix would silently break all four
+  // (executedModel would stop being recoverable, false-failing criteria
+  // that are otherwise correctly structured). This is the same
+  // shared-helper-vs-protected-consumer constraint as findRunNumberField in
+  // the prior fidelity round: the model id itself already carries the
+  // per-invocation CSPRNG entropy (FAKE_CLAUDE_OWN_DEFAULT_MODEL / the
+  // caller-supplied requested model), so this fixed wrapper text is not a
+  // stable VALUE an implementation could key off of to fake a specific
+  // requested/resolved pair -- only the surrounding words are fixed.
+  const sessionId = crypto.randomBytes(8).toString('hex');
+  const assistantMsgId = crypto.randomBytes(8).toString('hex');
   function line(o) { process.stdout.write(JSON.stringify(o) + '\\n'); }
   line({ type: 'system', subtype: 'init', model: executedModel, session_id: sessionId });
-  line({ type: 'assistant', message: { id: 'msg_1', role: 'assistant', content: [{ type: 'text', text: 'fake claude reply for ' + executedModel }], stop_reason: 'end_turn' } });
+  line({ type: 'assistant', message: { id: assistantMsgId, role: 'assistant', content: [{ type: 'text', text: 'fake claude reply for ' + executedModel }], stop_reason: 'end_turn' } });
   line({ type: 'result', subtype: 'success', usage, total_cost_usd: costUsd, duration_ms: 5, stop_reason: 'end_turn' });
   setTimeout(() => process.exit(0), 30);
 }
@@ -1017,46 +1040,27 @@ setTimeout(() => { if (!responded) { responded = true; respond(''); } }, 2000);
 // dimension -- so exercising the PRD's "any non-zero tool-error field"
 // property, within that real constraint, means feeding it ARBITRARY,
 // per-run-randomized content strings (not a fixed enum of phrasings) and
-// requiring the guard to fail EVERY one. The content is base64url-encoded
-// into the model id (the only per-run channel available -- see the
-// process.env note above FAKE_CLAUDE_SCRIPT) since sanitizeCustomModel's
-// character class (`^[A-Za-z0-9][A-Za-z0-9._/:@-]*$`, confirmed by direct
-// regex testing) is exactly base64url's alphabet plus separators.
-function base64UrlEncode(s: string): string {
-  return Buffer.from(s, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-function base64UrlDecode(s: string): string {
-  const padded = s + '='.repeat((4 - (s.length % 4)) % 4);
-  return Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
-}
-// CEREMONY ROUND FIX (ruling item 4, "C1-10 tool-confound removal"): round 2
-// always ran every failure on `Write` and the ONE success on `Read` --
-// "permits a fail-all-Write implementation" (ruling finding 4) -- and the
-// model-id encoding baked in classifier-legible substrings ("-ctrl-success",
-// "-ctrl-marked-", "-rand-", named explicitly as forbidden in item 7). This
-// generates matched success/failure PAIRS per tool identity (Read and Write
-// mandatory; Edit and Bash included too, each also getting both a success
-// and a failure), CSPRNG-shuffles run order, and encodes each run's whole
-// spec (tool identity + outcome + failure content) as ONE opaque base64url
-// blob -- the fake CLI decodes it structurally; no regex-matchable tag
-// survives in the model id string the daemon itself ever sees.
-// FIDELITY ROUND FIX (residual items 4 + 7): `spec` used to carry only
-// {tool,ok,content} -- for the fixed literal content:'ok' every success
-// case, JSON.stringify(spec) (and hence the whole encoded model id) was
-// BYTE-IDENTICAL across every invocation, ever ("success model IDs are
-// identical across invocations"). `salt` is a fresh per-spec CSPRNG value
-// folded into the encoded blob so no two invocations -- success or failure,
-// this run or any other verifier run -- ever encode to the same string.
-interface KimiProbeSpec { tool: string; ok: boolean; content: string; salt: string }
-// FIDELITY ROUND FIX (residual item 7, second defect): the encoded blob no
-// longer carries a fixed leading 'm' marker character -- KIMI_SPEC_MARKER is
-// a fresh CSPRNG value per verifier invocation, threaded into both the
-// encoder here and the embedded decoder in FAKE_KIMI_SCRIPT below via
-// JSON.stringify(...) interpolation, exactly like USAGE_MARKER_START/END.
-const KIMI_SPEC_MARKER = randomNonce(4);
-function encodeKimiProbeSpec(spec: KimiProbeSpec): string {
-  return `${KIMI_SPEC_MARKER}${base64UrlEncode(JSON.stringify(spec))}`;
-}
+// requiring the guard to fail EVERY one.
+// FIDELITY ROUND FIX (residual item 4, deepest defect -- round 2): the
+// content used to be base64url-encoded INTO the model id alongside
+// {tool,ok,salt} -- "the requested model still contains reversible
+// base64url JSON... product code can decode model.slice(4) and classify ok
+// before observing the tool result." Reversibility itself was the defect:
+// ANY fixed decode procedure applied to the model string could recover the
+// outcome ahead of time, no matter how the bytes were shuffled or salted.
+// The model id every run actually sends (and the only thing the daemon or
+// any code under test ever sees) is now a PURE CSPRNG token
+// (`randomNonce`) with ZERO embedded structure -- there is nothing to
+// decode, by any procedure, because nothing is encoded. The real
+// {tool,ok,content} spec is delivered OUT-OF-BAND: written as a JSON file
+// at `${KIMI_SPEC_DIR}/<token>.json` by this verifier, on disk, BEFORE the
+// run starts, in a directory whose path is baked directly into the
+// generated fake CLI's own source text at generation time (see
+// buildFakeKimiScript below) -- never passed as a CLI argument, an env var,
+// or anything else the daemon forwards or could inspect. The fake CLI looks
+// itself up by the token it was invoked with, exactly the way a real CLI
+// might consult its own local session/config store keyed by an opaque id.
+interface KimiProbeSpec { tool: string; ok: boolean; content: string }
 // FIDELITY ROUND FIX (residual item 7, third defect): every Math.random()
 // call in this generator is replaced with crypto.randomInt -- Math.random is
 // a fast, non-cryptographic PRNG, not the CSPRNG the ruling requires.
@@ -1102,22 +1106,32 @@ function combinatorialToolErrorContent(): string {
 // KIMI_NEUTRAL_ASSISTANT_TEXT is one fresh CSPRNG value per verifier
 // invocation, used identically regardless of success/failure.
 const KIMI_NEUTRAL_ASSISTANT_TEXT = randomNonce(10);
-const FAKE_KIMI_SCRIPT = `#!/usr/bin/env node
+// FIDELITY ROUND FIX (residual item 4, deepest defect -- round 2):
+// FAKE_KIMI_SCRIPT is now a function of the out-of-band spec directory
+// (previously a fixed module-level template string) -- the directory's
+// path must be known at script-GENERATION time so it can be baked directly
+// into the generated source, exactly like the other CSPRNG markers
+// elsewhere in this file, never passed as a runtime argument or env var the
+// daemon could observe, forward, or correlate.
+function buildFakeKimiScript(specDir: string): string {
+  return `#!/usr/bin/env node
 // fake kimi CLI -- see verify-w1.ts header comment.
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
 const args = process.argv.slice(2);
 if (args.includes('--version')) { process.stdout.write(${JSON.stringify(`0.27.${randomNonce(4)}`)} + '\\n'); process.exit(0); }
-function b64urlDecode(s) {
-  const padded = s + '='.repeat((4 - (s.length % 4)) % 4);
-  return Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
-}
 const modelIdx = args.indexOf('--model');
 const requestedModel = (modelIdx >= 0 ? args[modelIdx + 1] : '') || '';
-const SPEC_MARKER = ${JSON.stringify(KIMI_SPEC_MARKER)};
+// The requested model is a PURE CSPRNG token with no embedded structure --
+// the real {tool,ok,content} spec lives out-of-band, in a file at this
+// generated script's own baked-in directory path (see
+// buildFakeKimiScript's comment in verify-w1.ts). Nothing about \`spec\` is
+// recoverable from \`requestedModel\` by any decode procedure -- the token
+// is only ever a lookup key into a store this verifier alone controls.
+const SPEC_DIR = ${JSON.stringify(specDir)};
 let spec = { tool: 'Read', ok: true, content: 'ok' };
-if (requestedModel.startsWith(SPEC_MARKER)) {
-  try { spec = JSON.parse(b64urlDecode(requestedModel.slice(SPEC_MARKER.length))); } catch {}
-}
+try { spec = JSON.parse(fs.readFileSync(path.join(SPEC_DIR, requestedModel + '.json'), 'utf8')); } catch {}
 const toolCallId = 'call_' + crypto.randomBytes(6).toString('hex');
 const sessionId = 'sess_' + crypto.randomBytes(6).toString('hex');
 function line(o) { process.stdout.write(JSON.stringify(o) + '\\n'); }
@@ -1127,25 +1141,36 @@ line({ role: 'assistant', content: ${JSON.stringify(KIMI_NEUTRAL_ASSISTANT_TEXT)
 line({ role: 'meta', type: 'session.resume_hint', session_id: sessionId });
 setTimeout(() => process.exit(0), 30);
 `;
+}
 // Builds the full battery: combinatorial-content pairs for Read/Write/Edit,
 // plus one Bash pair that RETAINS the real, already-correctly-classified
 // exact `Command failed with exit code: N.` marker shape as its failure
 // (ruling: "retain the real... negative control, but pair it with a
 // successful result using the same tool identity"). CSPRNG-shuffled order.
-function buildKimiProbePairs(): KimiProbeSpec[] {
+// Each returned entry's `model` is a pure CSPRNG token (see the out-of-band
+// delivery note above); its matching spec is written into `specDir` as a
+// side effect, keyed by that same token -- `model` carries no information
+// about `spec` at all, byte uniqueness included, since the token itself is
+// already fresh CSPRNG regardless of spec content.
+interface KimiProbeEntry { spec: KimiProbeSpec; model: string }
+function buildKimiProbePairs(specDir: string): KimiProbeEntry[] {
   const combinatorialTools = ['Read', 'Write', 'Edit'];
   const specs: KimiProbeSpec[] = [];
   for (const tool of combinatorialTools) {
-    specs.push({ tool, ok: true, content: 'ok', salt: randomNonce(6) });
-    specs.push({ tool, ok: false, content: combinatorialToolErrorContent(), salt: randomNonce(6) });
+    specs.push({ tool, ok: true, content: 'ok' });
+    specs.push({ tool, ok: false, content: combinatorialToolErrorContent() });
   }
-  specs.push({ tool: 'Bash', ok: true, content: 'ok', salt: randomNonce(6) });
-  specs.push({ tool: 'Bash', ok: false, content: `Command failed with exit code: ${1 + crypto.randomInt(200)}.`, salt: randomNonce(6) });
+  specs.push({ tool: 'Bash', ok: true, content: 'ok' });
+  specs.push({ tool: 'Bash', ok: false, content: `Command failed with exit code: ${1 + crypto.randomInt(200)}.` });
   for (let i = specs.length - 1; i > 0; i--) {
     const j = crypto.randomInt(i + 1);
     const tmp = specs[i]!; specs[i] = specs[j]!; specs[j] = tmp;
   }
-  return specs;
+  return specs.map((spec) => {
+    const model = randomNonce(16);
+    fs.writeFileSync(path.join(specDir, `${model}.json`), JSON.stringify(spec));
+    return { spec, model };
+  });
 }
 
 // Antigravity's daemon-side write-settings -> spawn -> agy-reads-settings
@@ -2085,36 +2110,48 @@ function findAggregateCandidates(root: unknown, excludeRunIds: string[]): Aggreg
   const out: AggregateCandidate[] = [];
   const AGGREGATE_TOKENS = ['total', 'aggregate', 'project'];
   const MONEY_TOKENS = ['cost', 'spend'];
-  // FIDELITY ROUND FIX (residual item 6, second defect): `Object.values(obj).
-  // includes(id)` only checked DIRECT (one-level) property values, so a run
-  // identity nested one level deeper (e.g. `{run:{id:runId}, decoyTotal:123}`)
-  // was invisible to the exclusion guard, letting a decoy aggregate sitting
-  // BESIDE a nested run reference through as if it were project-scoped. This
-  // recursively searches each direct value's own subtree for the run id.
-  // IMPORTANT (caught by this round's own empirical test, not a named
-  // citation): the exclusion is evaluated LOCALLY, on the object DIRECTLY
-  // containing the candidate leaf (`siblingObj` in pushIfCandidate) --
-  // never as a gate on whether `walk` recurses into a node's children at
-  // all. Gating recursion by "this node's subtree contains a run id
-  // ANYWHERE" would also exclude every UNRELATED sibling branch under a
-  // shared ancestor -- e.g. a completely ordinary `{runs:[...], total:
-  // {costUsd}}` shape, where `total` itself never mentions a run id, would
-  // have been wrongly killed just because its sibling `runs` array does.
-  // That would make the whole aggregate oracle unable to find even a
-  // correct implementation's response.
-  function subtreeContainsAnyId(node: unknown, ids: string[], _seen: Set<unknown> = new Set()): boolean {
+  // FIDELITY ROUND FIX (residual item 6, exclusion redesign): "local
+  // exclusion remains structurally unsound: {run:{id},total:{costUsd:12}}
+  // admits the nested decoy... while {totalCostUsd:12,runs:[{id}]} rejects
+  // a genuine aggregate with a run breakdown." Checking ONLY the leaf's
+  // immediate containing object (the prior round's fix) cannot tell these
+  // two apart -- structurally, both are "a run reference sitting beside the
+  // candidate's own container." The exclusion is now evaluated over the
+  // candidate's WHOLE ANCESTOR PATH FROM THE ROOT (every plain-object
+  // container from the root down to, and including, the object that
+  // directly holds the leaf), and each ancestor is checked with
+  // `subtreeCarriesIdIgnoringArrays`, which deliberately treats ARRAYS AS
+  // OPAQUE (it never recurses into array elements) while still following
+  // ordinary nested plain objects to any depth.
+  //   - {run:{id:RUNID},total:{costUsd:12}}: the ROOT ancestor's `run`
+  //     property is a PLAIN OBJECT resolving to RUNID -- the root itself is
+  //     "carrying" the run id, so `total.costUsd` (nested under that same
+  //     root) is EXCLUDED. This whole response is scoped to one run; a
+  //     `total` sitting beside that scoping reference is a decoy, not a
+  //     project aggregate.
+  //   - {totalCostUsd:12,runs:[{id:RUNID}]}: the ROOT ancestor's `runs`
+  //     property is an ARRAY -- a listing/breakdown, not a scoping
+  //     reference -- so it is never even inspected for a run id, and
+  //     `totalCostUsd` is NOT excluded. This is the ordinary "project
+  //     response that also lists its own runs" shape (and is exactly how
+  //     C1-7's own real project-usage probe body is structured -- a `runs`
+  //     array beside the aggregate), and gating on "this ancestor's subtree
+  //     contains a run id ANYWHERE, including inside arrays" would wrongly
+  //     kill it, exactly the regression this file's own empirical testing
+  //     caught in the prior fidelity round.
+  function subtreeCarriesIdIgnoringArrays(node: unknown, ids: string[], _seen: Set<unknown> = new Set()): boolean {
     if (typeof node === 'string') return ids.includes(node);
-    if (!isRecord(node) && !Array.isArray(node)) return false;
+    if (Array.isArray(node)) return false;
+    if (!isRecord(node)) return false;
     if (_seen.has(node)) return false;
     _seen.add(node);
-    if (isRecord(node)) return Object.values(node).some((v) => subtreeContainsAnyId(v, ids, _seen));
-    return (node as unknown[]).some((v) => subtreeContainsAnyId(v, ids, _seen));
+    return Object.values(node).some((v) => subtreeCarriesIdIgnoringArrays(v, ids, _seen));
   }
-  function objectCarriesRunId(obj: Record<string, unknown>): boolean {
-    return Object.values(obj).some((v) => subtreeContainsAnyId(v, excludeRunIds));
+  function ancestorPathCarriesRunId(ancestors: Record<string, unknown>[]): boolean {
+    return ancestors.some((anc) => Object.values(anc).some((v) => subtreeCarriesIdIgnoringArrays(v, excludeRunIds)));
   }
-  function pushIfCandidate(segPath: string[], numeric: number, siblingObj: Record<string, unknown>): void {
-    if (objectCarriesRunId(siblingObj)) return;
+  function pushIfCandidate(segPath: string[], numeric: number, siblingObj: Record<string, unknown>, ancestors: Record<string, unknown>[]): void {
+    if (ancestorPathCarriesRunId(ancestors)) return;
     const allTokens = segPath.flatMap(tokenizeSegment);
     const hasAggregateToken = AGGREGATE_TOKENS.some((t) => allTokens.includes(t));
     const hasMoneyToken = MONEY_TOKENS.some((t) => allTokens.includes(t));
@@ -2122,17 +2159,21 @@ function findAggregateCandidates(root: unknown, excludeRunIds: string[]): Aggreg
     const siblingCurrencyUsd = Object.entries(siblingObj).some(([kk, vv]) => tokenizeSegment(kk).includes('currency') && typeof vv === 'string' && vv.toUpperCase() === 'USD');
     if (siblingCurrencyUsd || allTokens.includes('usd')) out.push({ path: segPath.join('.'), value: numeric });
   }
-  function walk(node: unknown, pathSegs: string[]): void {
-    if (Array.isArray(node)) { node.forEach((v, i) => walk(v, [...pathSegs, String(i)])); return; }
+  function walk(node: unknown, pathSegs: string[], ancestors: Record<string, unknown>[]): void {
+    if (Array.isArray(node)) { node.forEach((v, i) => walk(v, [...pathSegs, String(i)], ancestors)); return; }
     if (!isRecord(node)) return;
+    // `node` becomes part of the ancestor path for everything reachable
+    // beneath it -- this is what lets `pushIfCandidate` see the FULL path
+    // from root down to (and including) the leaf's own container.
+    const nextAncestors = [...ancestors, node];
     for (const [k, v] of Object.entries(node)) {
       const segPath = [...pathSegs, k];
-      if (typeof v === 'number' && Number.isFinite(v) && v >= 0) pushIfCandidate(segPath, v, node);
-      else if (typeof v === 'string' && /^\d+(\.\d+)?$/.test(v)) pushIfCandidate(segPath, Number(v), node);
-      else walk(v, segPath);
+      if (typeof v === 'number' && Number.isFinite(v) && v >= 0) pushIfCandidate(segPath, v, node, nextAncestors);
+      else if (typeof v === 'string' && /^\d+(\.\d+)?$/.test(v)) pushIfCandidate(segPath, Number(v), node, nextAncestors);
+      else walk(v, segPath, nextAncestors);
     }
   }
-  walk(root, []);
+  walk(root, [], []);
   return out;
 }
 function readAggregateAtPath(root: unknown, fieldPath: string): number | null {
@@ -2154,32 +2195,55 @@ function projectRouteUrl(baseUrl: string, routePath: string, projectId: string):
 // (settled) and C1-8's own identity check still call it directly) returns
 // only the FIRST matching object it finds; it can prove "at least one cost
 // record exists" but never "EXACTLY one" -- a duplicated per-attempt record,
-// or a stray decoy sharing the run id, would silently pass. This walks the
-// WHOLE tree (no early return) and collects every match, so C1-7's own
-// retry/resume/cache-inclusive/main cost bindings can require the count to
-// be exactly 1 before trusting the value at all.
-function findAllRunNumberFields(root: unknown, runId: string, numberKeyPattern: RegExp, _seen: Set<unknown> = new Set()): number[] {
-  const out: number[] = [];
+// or a stray decoy sharing the run id, would silently pass.
+// FIDELITY ROUND FIX (residual item 1, second round -- records not fields):
+// the first attempt at this fix (`findAllRunNumberFields`) counted matching
+// NUMERIC FIELDS, not RECORDS -- "neither proves exactly one record nor
+// handles a single record with multiple cost fields correctly." Two decoy
+// records that each expose one matching field looked identical to one
+// legitimate record that happens to expose the same cost under two
+// redundant field names (e.g. `cost` and `costUsd` both reporting the same
+// number) -- both produced count=2, indistinguishable from each other.
+// `findRunScopedRecords` now finds every DISTINCT object anywhere in the
+// tree that directly holds the run id as one of its own property values
+// (the record unit itself, matching findRunScopedRecord's "mentions this
+// run" semantics but collecting every match instead of only the first).
+// `requireExactlyOneRunCost` requires EXACTLY ONE such record before
+// trusting anything about cost fields at all (recordCount != 1 is always a
+// hard failure). Only once record identity is unambiguous does it look at
+// THAT record's own numeric fields matching numberKeyPattern: a single
+// match is used directly; multiple matches within the one record are
+// accepted only if they all agree (redundant naming) -- genuinely
+// conflicting values within one record are still correctly flagged as
+// unusable (value stays null), but are never confused with "multiple
+// records" (recordCount is still reported as 1, fieldCount as the
+// disagreement count, so callers can tell the two failure modes apart).
+function findRunScopedRecords(root: unknown, runId: string, _seen: Set<unknown> = new Set()): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
   if (!isRecord(root) && !Array.isArray(root)) return out;
   if (_seen.has(root)) return out;
   _seen.add(root);
   if (isRecord(root)) {
     const mentionsRun = Object.values(root).some((v) => v === runId);
-    if (mentionsRun) {
-      for (const [k, v] of Object.entries(root)) {
-        if (typeof v === 'number' && Number.isFinite(v) && numberKeyPattern.test(k)) out.push(v);
-      }
-    }
-    for (const v of Object.values(root)) out.push(...findAllRunNumberFields(v, runId, numberKeyPattern, _seen));
+    if (mentionsRun) out.push(root);
+    for (const v of Object.values(root)) out.push(...findRunScopedRecords(v, runId, _seen));
     return out;
   }
-  for (const v of root as unknown[]) out.push(...findAllRunNumberFields(v, runId, numberKeyPattern, _seen));
+  for (const v of root as unknown[]) out.push(...findRunScopedRecords(v, runId, _seen));
   return out;
 }
-function requireExactlyOneRunCost(root: unknown, runId: string, numberKeyPattern: RegExp): { value: number; count: number } | { value: null; count: number } {
-  const all = findAllRunNumberFields(root, runId, numberKeyPattern);
-  if (all.length === 1) return { value: all[0]!, count: 1 };
-  return { value: null, count: all.length };
+interface RunCostLookup { value: number | null; recordCount: number; fieldCount: number }
+function requireExactlyOneRunCost(root: unknown, runId: string, numberKeyPattern: RegExp): RunCostLookup {
+  const records = findRunScopedRecords(root, runId);
+  if (records.length !== 1) return { value: null, recordCount: records.length, fieldCount: 0 };
+  const record = records[0]!;
+  const matches = Object.entries(record)
+    .filter(([k, v]) => typeof v === 'number' && Number.isFinite(v) && numberKeyPattern.test(k))
+    .map(([, v]) => v as number);
+  if (matches.length === 0) return { value: null, recordCount: 1, fieldCount: 0 };
+  const allAgree = matches.every((v) => Math.abs(v - matches[0]!) < 1e-9);
+  if (!allAgree) return { value: null, recordCount: 1, fieldCount: matches.length };
+  return { value: matches[0]!, recordCount: 1, fieldCount: matches.length };
 }
 // Used by the Codex cache-inclusive probe: navigates to the FIRST object
 // anywhere in `root` that mentions `runId` as one of its own values (reusing
@@ -2430,8 +2494,8 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
       const cost2Unique = requireExactlyOneRunCost(body, run2.runId, /cost|price|usd|spend/i);
       const cost1 = cost1Unique.value;
       const cost2 = cost2Unique.value;
-      if (cost1 === null) problems.push(`expected exactly one numeric cost/price field associated with run1's id (${run1.runId}) in the project usage response, found ${cost1Unique.count}`);
-      if (cost2 === null) problems.push(`expected exactly one numeric cost/price field associated with run2's id (${run2.runId}), found ${cost2Unique.count}`);
+      if (cost1 === null) problems.push(`expected exactly one run-scoped cost record for run1's id (${run1.runId}) in the project usage response, found recordCount=${cost1Unique.recordCount} fieldCount=${cost1Unique.fieldCount}`);
+      if (cost2 === null) problems.push(`expected exactly one run-scoped cost record for run2's id (${run2.runId}), found recordCount=${cost2Unique.recordCount} fieldCount=${cost2Unique.fieldCount}`);
       if (cost1 !== null && cost2 !== null && !(cost2 > cost1)) {
         problems.push(`run2 (far more tokens incl. cache: ${JSON.stringify(usage2)}) costs ${cost2}, not greater than run1's ${cost1} (${JSON.stringify(usage1)}) -- cost is not tracking token volume`);
       }
@@ -2490,8 +2554,19 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
         // -- read it BEFORE the retry-probe run exists, not synthesized in
         // JS, so the delta this run adds is measured against a real HTTP
         // observation, not merely an expected constant.
+        // FIDELITY ROUND FIX (residual item 1, second defect): a non-200
+        // status or a missing aggregate path used to silently substitute 0
+        // as the baseline -- "an unusable baseline can therefore pass as a
+        // genuine observation." Both are now a NAMED hard failure; the
+        // delta check below only runs when a real baseline was observed.
         const retryBeforeResp = await httpJson('GET', projectRouteUrl(retryDaemon.url, projectRoute.routePath, retryProjectId));
-        const retryAggregateBefore = retryBeforeResp.status === 200 ? (readAggregateAtPath(retryBeforeResp.json, fieldPath) ?? 0) : 0;
+        let retryAggregateBefore: number | null = null;
+        if (retryBeforeResp.status !== 200) {
+          problems.push(`RETRY: GET ${projectRoute.routePath} on the fresh retry-probe project (before baseline, before any run exists) did not return 200 (status=${retryBeforeResp.status}) -- cannot establish a real "before" baseline`);
+        } else {
+          retryAggregateBefore = readAggregateAtPath(retryBeforeResp.json, fieldPath);
+          if (retryAggregateBefore === null) problems.push(`RETRY: no value at the accepted aggregate field path ("${fieldPath}") in the fresh retry-probe project's "before" baseline response -- cannot establish a real "before" baseline`);
+        }
         const retryRun = await startRun(retryDaemon.url, { projectId: retryProjectId, agentId: 'claude', model: C17_KNOWN_MODEL, message: randomNonce(10) });
         const retryStatus = await pollRunTerminal(retryDaemon.url, retryRun.runId, 20_000);
         const retryEvents = await readRunEventsViaSse(retryDaemon.url, retryRun.runId, 15_000);
@@ -2520,7 +2595,9 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
           // EXACTLY one run-scoped cost record, not merely "at least one."
           const retryCostUnique = requireExactlyOneRunCost(retryUsageResp.json, retryRun.runId, /cost|price|usd|spend/i);
           if (retryCostUnique.value === null) {
-            problems.push(`RETRY: expected exactly one numeric cost/price field bound to the retry-probe run's id (${retryRun.runId}), found ${retryCostUnique.count}`);
+            problems.push(`RETRY: expected exactly one run-scoped cost record bound to the retry-probe run's id (${retryRun.runId}), found recordCount=${retryCostUnique.recordCount} fieldCount=${retryCostUnique.fieldCount}`);
+          } else if (retryAggregateBefore === null) {
+            problems.push('RETRY: cannot verify the aggregate delta because the "before" baseline was unavailable');
           } else {
             // FIDELITY ROUND FIX (residual items 1 + 6, before/after): the
             // AFTER aggregate minus the REAL, independently-observed BEFORE
@@ -2545,8 +2622,18 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
         // before ANY run exists -- the failed-turn and continued-turn
         // deltas below are each measured against a genuinely observed
         // prior snapshot, not a JS-computed expectation.
+        // FIDELITY ROUND FIX (residual item 1, second defect): a non-200
+        // status or a missing aggregate path used to silently substitute 0
+        // as the baseline -- both are now a NAMED hard failure; the mid-turn
+        // delta check below only runs when a real baseline was observed.
         const resumeBeforeResp = await httpJson('GET', projectRouteUrl(resumeDaemon.url, projectRoute.routePath, resumeProjectId));
-        const resumeAggregateBefore = resumeBeforeResp.status === 200 ? (readAggregateAtPath(resumeBeforeResp.json, fieldPath) ?? 0) : 0;
+        let resumeAggregateBefore: number | null = null;
+        if (resumeBeforeResp.status !== 200) {
+          problems.push(`RESUME: GET ${projectRoute.routePath} on the fresh resume-probe project (before baseline, before any run exists) did not return 200 (status=${resumeBeforeResp.status}) -- cannot establish a real "before" baseline`);
+        } else {
+          resumeAggregateBefore = readAggregateAtPath(resumeBeforeResp.json, fieldPath);
+          if (resumeAggregateBefore === null) problems.push(`RESUME: no value at the accepted aggregate field path ("${fieldPath}") in the fresh resume-probe project's "before" baseline response -- cannot establish a real "before" baseline`);
+        }
         // EMPIRICALLY CONFIRMED (scratchpad probe-resume.mjs): `model` is
         // deliberately OMITTED here. `od run continue` (cli.ts's `case
         // 'continue'`) never sends a `model` field in its POST body, so the
@@ -2576,7 +2663,9 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
         } else {
           const failedCostUnique = requireExactlyOneRunCost(resumeMidResp.json, failedRun.runId, /cost|price|usd|spend/i);
           if (failedCostUnique.value === null) {
-            problems.push(`RESUME: expected exactly one numeric cost bound to the failed run's id (${failedRun.runId}), found ${failedCostUnique.count} -- the controlled failed-turn usage was not bound to it`);
+            problems.push(`RESUME: expected exactly one run-scoped cost record bound to the failed run's id (${failedRun.runId}), found recordCount=${failedCostUnique.recordCount} fieldCount=${failedCostUnique.fieldCount} -- the controlled failed-turn usage was not bound to it`);
+          } else if (resumeAggregateBefore === null) {
+            problems.push('RESUME: cannot verify the failed turn\'s aggregate delta because the "before" baseline was unavailable');
           } else {
             resumeAggregateMid = readAggregateAtPath(resumeMidResp.json, fieldPath);
             if (resumeAggregateMid === null) problems.push(`RESUME: no value at the accepted aggregate field path ("${fieldPath}") in the mid (post-failed-turn) resume-probe response`);
@@ -2624,7 +2713,7 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
           } else {
             const continuedCostUnique = requireExactlyOneRunCost(resumeAfterResp.json, continuedRunId, /cost|price|usd|spend/i);
             if (continuedCostUnique.value === null) {
-              problems.push(`RESUME: expected exactly one numeric cost bound to the continued run's id (${continuedRunId}), found ${continuedCostUnique.count}`);
+              problems.push(`RESUME: expected exactly one run-scoped cost record bound to the continued run's id (${continuedRunId}), found recordCount=${continuedCostUnique.recordCount} fieldCount=${continuedCostUnique.fieldCount}`);
             } else if (resumeAggregateMid === null) {
               problems.push('RESUME: cannot verify the continued turn\'s aggregate delta because the mid (post-failed-turn) snapshot was unavailable');
             } else {
@@ -2655,8 +2744,19 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
         const codexProjectId = await createProject(codexDaemon.url, randomNonce(8));
         // FIDELITY ROUND FIX (residual items 1 + 6, before/after): a real
         // HTTP "before" baseline for this fresh, zero-run project.
+        // FIDELITY ROUND FIX (residual item 1, second defect): a non-200
+        // status or a missing aggregate path used to silently substitute 0
+        // as the baseline -- both are now a NAMED hard failure; both
+        // downstream delta checks below only run when a real baseline was
+        // observed.
         const codexBeforeResp = await httpJson('GET', projectRouteUrl(codexDaemon.url, projectRoute.routePath, codexProjectId));
-        const codexAggregateBefore = codexBeforeResp.status === 200 ? (readAggregateAtPath(codexBeforeResp.json, fieldPath) ?? 0) : 0;
+        let codexAggregateBefore: number | null = null;
+        if (codexBeforeResp.status !== 200) {
+          problems.push(`CACHE-INCLUSIVE: GET ${projectRoute.routePath} on the fresh codex-probe project (before baseline, before any run exists) did not return 200 (status=${codexBeforeResp.status}) -- cannot establish a real "before" baseline`);
+        } else {
+          codexAggregateBefore = readAggregateAtPath(codexBeforeResp.json, fieldPath);
+          if (codexAggregateBefore === null) problems.push(`CACHE-INCLUSIVE: no value at the accepted aggregate field path ("${fieldPath}") in the fresh codex-probe project's "before" baseline response -- cannot establish a real "before" baseline`);
+        }
         const codexRun = await startRun(codexDaemon.url, { projectId: codexProjectId, agentId: 'codex', model: 'gpt-5.6-codex', message: randomNonce(10), context: {} });
         const codexRunStatus = await pollRunTerminal(codexDaemon.url, codexRun.runId, 30_000);
         if (codexRunStatus.status !== 'succeeded') problems.push(`CACHE-INCLUSIVE: codex run status="${String(codexRunStatus.status)}", expected "succeeded"`);
@@ -2674,11 +2774,19 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
           // FIDELITY ROUND FIX (residual item 1, first defect): exactly one.
           const codexCostUnique = requireExactlyOneRunCost(codexUsageResp.json, codexRun.runId, /cost|price|usd|spend/i);
           const codexUnavailable = codexScoped ? findPricingUnavailableField(codexScoped) : null;
-          if (codexCostUnique.value === null && codexCostUnique.count > 0) problems.push(`CACHE-INCLUSIVE: expected exactly one numeric cost/price field bound to the codex run (${codexRun.runId}), found ${codexCostUnique.count}`);
-          if (codexCostUnique.value === null && codexCostUnique.count === 0 && !codexUnavailable) problems.push('CACHE-INCLUSIVE: the codex run has neither a numeric cost field nor an honest pricing-unavailable marker bound to its own record');
+          // A genuinely unpriced lane is exactly "one record, zero matching
+          // cost fields" (recordCount===1, fieldCount===0) -- any OTHER
+          // shape of failure (no/multiple records, or a single record with
+          // internally disagreeing cost fields) is always a hard problem
+          // regardless of whether a pricing-unavailable marker is present.
+          const codexUnpricedHonestly = codexCostUnique.recordCount === 1 && codexCostUnique.fieldCount === 0;
+          if (codexCostUnique.value === null && !codexUnpricedHonestly) problems.push(`CACHE-INCLUSIVE: expected exactly one run-scoped cost record bound to the codex run (${codexRun.runId}), found recordCount=${codexCostUnique.recordCount} fieldCount=${codexCostUnique.fieldCount}`);
+          if (codexCostUnique.value === null && codexUnpricedHonestly && !codexUnavailable) problems.push('CACHE-INCLUSIVE: the codex run has neither a numeric cost field nor an honest pricing-unavailable marker bound to its own record');
           const codexAggregateAfter = readAggregateAtPath(codexUsageResp.json, fieldPath);
           if (codexAggregateAfter === null) {
             problems.push(`CACHE-INCLUSIVE: no value at the accepted aggregate field path ("${fieldPath}") in the codex-probe project's usage response -- the codex lane is not participating in the same aggregate rules as the claude runs`);
+          } else if (codexAggregateBefore === null) {
+            problems.push('CACHE-INCLUSIVE: cannot verify the aggregate delta/invariance because the "before" baseline was unavailable');
           } else if (codexCostUnique.value !== null) {
             // FIDELITY ROUND FIX (residual items 1 + 6, before/after): the
             // real observed delta (after minus a real "before" baseline)
@@ -2997,18 +3105,29 @@ await checkCriterion('C1-8', 'cli.ts SUBCOMMAND_MAP diff + capability-manifest.j
                 // "require the surface to issue the manifest-bound usage GET").
                 // route.continue() lets the real request proceed unmodified --
                 // this observes, it does not mock/fulfill.
-                // FIDELITY ROUND FIX (residual item 5, third defect): the
-                // glob only matched the STATIC route shape, so any GET to
-                // that shape for ANY project (e.g. a stray background poll
-                // for a different project) satisfied it. The observed
-                // request's own URL must contain the SPECIFIC controlled
-                // project id this check created (uiProjectId) -- binding
-                // the observation to the actual controlled resource, not
-                // just the route pattern.
+                // FIDELITY ROUND FIX (residual item 5, third defect, round
+                // 2): the glob only matched the STATIC route shape, so any
+                // GET to that shape for ANY project satisfied it. The first
+                // fix (round 1) tightened this to `url().includes(uiProjectId)`
+                // -- but SUBSTRING containment anywhere in the URL is still
+                // satisfied by e.g. `/api/projects/other/usage?source=
+                // <uiProjectId>` (a request for a DIFFERENT project that
+                // merely happens to mention this one in its query string).
+                // This now PARSES the request URL and requires the
+                // project id to sit in the PATH POSITION the route
+                // template actually declares for it -- computed once via
+                // the same projectRouteUrl helper every other criterion in
+                // this file uses to build a concrete route URL from a
+                // template, applied with an empty base so it yields just
+                // the expected pathname -- and compares the observed
+                // request's own parsed pathname for EXACT equality, never
+                // substring containment anywhere in the URL.
                 let boundRequestObserved = false;
                 const boundPathGlob = `**${normalizeRoutePath(boundRoute.routePath).replace(/:param/g, '*')}*`;
+                const expectedBoundPathname = projectRouteUrl('', boundRoute.routePath, uiProjectId);
                 await page.route(boundPathGlob, async (route) => {
-                  if (route.request().method() === 'GET' && route.request().url().includes(uiProjectId)) boundRequestObserved = true;
+                  const reqUrl = new URL(route.request().url());
+                  if (route.request().method() === 'GET' && reqUrl.pathname === expectedBoundPathname) boundRequestObserved = true;
                   await route.continue();
                 });
                 await page.goto(`${webSuite.webUrl}${resolvedPath}`, { waitUntil: 'load', timeout: 30_000 });
@@ -3246,15 +3365,21 @@ await checkCriterion('C1-9', 'one priced fake-claude run + one unpriced fake-agy
 // -----------------------------------------------------------------------
 await checkCriterion('C1-10', 'matched success/failure fake-kimi pairs across Read/Write/Edit/Bash (CSPRNG-shuffled order, combinatorial failure content, one exact-marker Bash control), each independently CLI-followed via `od run watch` bound to its own HTTP-confirmed status', 'every failing pair (any tool identity, including a failing Read paired with a successful Write) ends up "failed" with a nonzero `od run watch` exit bound to that SPECIFIC run; every successful pair ends up "succeeded" with a zero exit', async () => {
   const fakeBinDir = mkFakeBinDir();
-  writeFakeBin(fakeBinDir, 'kimi', FAKE_KIMI_SCRIPT);
+  // FIDELITY ROUND FIX (residual item 4, deepest defect -- round 2): the
+  // spec directory is created BEFORE the fake CLI's own source is
+  // generated, so its path can be baked directly into that source (see
+  // buildFakeKimiScript's own comment) -- never passed as a runtime
+  // argument or env var.
+  const kimiSpecDir = fs.mkdtempSync(path.join(os.tmpdir(), randomNonce(8)));
+  writeFakeBin(fakeBinDir, 'kimi', buildFakeKimiScript(kimiSpecDir));
   const daemon = await bootDaemon({ extraPathDirs: [fakeBinDir] });
   try {
     const projectId = await createProject(daemon.url, randomNonce(8));
-    const specs = buildKimiProbePairs();
+    const entries = buildKimiProbePairs(kimiSpecDir);
     interface KimiProbeResult { spec: KimiProbeSpec; runId: string; httpStatus: string; watchExit: number }
     const probeResults: KimiProbeResult[] = [];
-    for (const spec of specs) {
-      const run = await startRun(daemon.url, { projectId, agentId: 'kimi', model: encodeKimiProbeSpec(spec), message: randomNonce(10) });
+    for (const entry of entries) {
+      const run = await startRun(daemon.url, { projectId, agentId: 'kimi', model: entry.model, message: randomNonce(10) });
       const status = await pollRunTerminal(daemon.url, run.runId, 15_000);
       // `od run watch <runId> --json` is bound to a SPECIFIC, already-HTTP-
       // confirmed run id -- not a fresh run the CLI itself started -- so a
@@ -3264,7 +3389,7 @@ await checkCriterion('C1-10', 'matched success/failure fake-kimi pairs across Re
       // today, it reads the SSE stream and returns unconditionally on
       // `event:end`).
       const watch = odCli(daemon.url, daemon.dataDir, ['run', 'watch', run.runId, '--json'], {}, 20_000);
-      probeResults.push({ spec, runId: run.runId, httpStatus: String(status.status), watchExit: watch.status });
+      probeResults.push({ spec: entry.spec, runId: run.runId, httpStatus: String(status.status), watchExit: watch.status });
     }
 
     const problems: string[] = [];
@@ -3291,7 +3416,7 @@ await checkCriterion('C1-10', 'matched success/failure fake-kimi pairs across Re
       if (cliInfoResp?.status !== 0) problems.push(`od run info --json exited ${cliInfoResp?.status} unexpectedly for the failing-Read probe`);
       if (!cliAgreesFailed) problems.push(`od run info --json reports status="${isRecord(cliInfoJson) ? String(cliInfoJson.status) : '(unparseable)'}" for the failing-Read probe, expected "failed"`);
     }
-    record('C1-10', 'matched success/failure fake-kimi pairs (Read/Write/Edit/Bash) + od run info/watch --json bound to each probe\'s own run', 'every failing pair (any tool identity) fails with a nonzero od run watch exit bound to that run; every successful pair succeeds with a zero exit; the failing-Read/succeeding-Write defeating pair ran', problems.length === 0, `specs=${JSON.stringify(specs)}\nprobeResults=${JSON.stringify(probeResults)}\ncliInfoJson=${JSON.stringify(cliInfoJson)}`, { detail: problems.length ? problems.join('; ') : undefined });
+    record('C1-10', 'matched success/failure fake-kimi pairs (Read/Write/Edit/Bash) + od run info/watch --json bound to each probe\'s own run', 'every failing pair (any tool identity) fails with a nonzero od run watch exit bound to that run; every successful pair succeeds with a zero exit; the failing-Read/succeeding-Write defeating pair ran', problems.length === 0, `specs=${JSON.stringify(entries.map((e) => e.spec))}\nprobeResults=${JSON.stringify(probeResults)}\ncliInfoJson=${JSON.stringify(cliInfoJson)}`, { detail: problems.length ? problems.join('; ') : undefined });
   } finally {
     await daemon.kill();
   }
