@@ -167,3 +167,41 @@ limited to (1) per-axis evidence-kind requirements in the scorer, (2) scopeOverl
 conflict grouping, (3) explicit captured-state matching; both lanes then confirm ONLY those
 items; F9 is disposed only on dual APPROVE; any non-APPROVE or out-of-scope finding goes
 directly to the founder with no further implementation rounds. Founder may veto.
+
+## 2026-07-27 — W0 final gate adjudication: subprocess isolation + typed allowlist classes + probe upgrades
+
+Adjudicated (founder-delegated, vetoable): **Q1 CONFIRMED-DEFECT** — every C0-10 od-CLI
+subprocess must receive `OD_DATA_DIR` bound to the booted isolated daemon's own dataDir plus
+`OD_DAEMON_URL`, with a regression proving no launch can resolve to `<repo>/.od`; restore
+product behavior unchanged. **Q2 per-case**: canary-unreachable → typed ALLOWLIST class waiving
+only the origin-less success canary per bound row (all structural checks mandatory,
+strict-less-than-half cap); mcp → typed ALLOWLIST sampling-exclusion (set-equality/structural
+mandatory, capability stays applicable); artifacts → PROBE-UPGRADE (gate-owned nonce binding,
+read-after-write both surfaces); figma → PROBE-UPGRADE (manifest-declared multipart with a
+gate-owned known-good `.fig` fixture). Implemented across `29b9db9cd`→`0bd9de3b1` under
+adversarial confirmation. Archived: goal-state reviews/final-adjudication-isolation-exceptions.txt.
+
+## 2026-07-27 — Founder decisions (interactive): W7 F9 micro-round AUTHORIZED; C7-16 = GO
+
+Per the F9 escalation ruling's terminal condition (split confirmation → founder), the founder
+chose **"Authorize micro-round"**: one scoped fix converting style-evidence gating from
+presence to verification against the resolved node's real evidence, then dual Grok+Sol
+confirmation; F9 disposed only on dual APPROVE. Separately the founder decided **C7-16 = GO**:
+build the selector feature on W7's foundations, recorded in `docs/specs/selector-go-no-go.md`
+(spike evidence hashes therein); selector product work is greenlit for a later wave — not W7.
+
+## 2026-07-27 — C0-10 escalation ceremony: ORCHESTRATOR-ANCHOR CLOSURE (stop-rule tiebreaker)
+
+The adjudicated-round confirmation loop hit the stop rule (r1: 3 findings, r2: 1, r3: 2 — all
+REJECT). The founder-delegated adjudicator ruled **orchestrator-anchor closure with fail-closed
+admission proof**: the gate of record executes ONLY the out-of-repo approved copy bound to the
+reviewed commit and SHA-256 — never the repository copy; hash mismatch/path substitution/
+unreviewed amendment refuse BEFORE the verifier executes. No change to `verify-w0.ts`; pinned
+at `0bd9de3b1`, sha256 `16265250c7e7cd2b3fa8906e5bda32e0f2b6113db3b38fbe5155f079a57ce564`. The
+in-file audit and scans remain defense-in-depth; no runtime interception, no scan-widening.
+Sol's r3 findings 1 and 2 are **OVERRULED** — each requires amending reviewed verifier bytes,
+which cannot reach the pinned artifact without a fresh adversarial confirmation and re-pin;
+that is a compound trust-anchor failure outside the calibrated lazy/opportunistic threat model.
+Proof obligations (launcher refusal test, repo-mutation non-reachability, launch-isolation
+runtime evidence) are orchestrator-owned; next confirmation round is scoped to those alone.
+Every later verifier amendment requires fresh confirmation and a new pin. Founder may veto.
