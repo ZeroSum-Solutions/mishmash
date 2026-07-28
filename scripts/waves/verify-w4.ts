@@ -1331,22 +1331,40 @@ async function checkC45(): Promise<{ ok: boolean; evidence: string; detail?: str
     await uploadProjectFile(daemon.url, memProjectId, 'index.html', MEMORY_HOG_HTML);
     const MEMORY_CEILING_KB = 3 * 1024 * 1024; // 3 GB outer sane bound on the AGGREGATE
     const rootPid = daemon.pid;
-    function aggregateDescendantRssKb(pid: number | undefined): number {
-      if (!pid) return 0;
+    // Confirmation-round bypass fix (C4-5): psSnapshot() silently converts a
+    // failed `ps` invocation into `[]`, and the old aggregator then silently
+    // converted THAT into `0` -- indistinguishable from "genuinely zero
+    // descendant RSS". `ps -A` lists the WHOLE system process table; a
+    // truly successful call can never return zero total rows (there are
+    // always hundreds of unrelated system processes), so an empty snapshot
+    // is a reliable signal that `ps` itself failed, not that RSS is zero.
+    // Each sample now carries an explicit validity flag instead of
+    // collapsing failure into a number indistinguishable from a real zero.
+    function aggregateDescendantRssKbChecked(pid: number | undefined): { rssKb: number; valid: boolean } {
+      if (!pid) return { rssKb: 0, valid: false };
       const snap = psSnapshot();
+      if (snap.length === 0) return { rssKb: 0, valid: false };
       const desc = descendantsOf(pid, snap);
-      return snap.filter((r) => desc.has(r.pid)).reduce((sum, r) => sum + r.rssKb, 0);
+      return { rssKb: snap.filter((r) => desc.has(r.pid)).reduce((sum, r) => sum + r.rssKb, 0), valid: true };
     }
     // Baseline taken IMMEDIATELY before submission, via the SAME
     // process-tree aggregation the poller uses below -- polling (and peak
     // tracking) starts before the job is submitted.
-    const baselineAggregateRssKb = aggregateDescendantRssKb(rootPid);
+    const baselineSample = aggregateDescendantRssKbChecked(rootPid);
+    const baselineValid = baselineSample.valid;
+    const baselineAggregateRssKb = baselineSample.rssKb;
     let peakAggregateRssKb = baselineAggregateRssKb;
+    let pollValidSamples = 0;
+    let pollTotalSamples = 0;
     const pollAbort = new AbortController();
     const poller = (async () => {
       while (!pollAbort.signal.aborted) {
-        const aggregate = aggregateDescendantRssKb(rootPid);
-        if (aggregate > peakAggregateRssKb) peakAggregateRssKb = aggregate;
+        pollTotalSamples++;
+        const sample = aggregateDescendantRssKbChecked(rootPid);
+        if (sample.valid) {
+          pollValidSamples++;
+          if (sample.rssKb > peakAggregateRssKb) peakAggregateRssKb = sample.rssKb;
+        }
         await sleep(400);
       }
     })();
@@ -1361,8 +1379,14 @@ async function checkC45(): Promise<{ ok: boolean; evidence: string; detail?: str
     }
     const memValidation = validateCoverErrorBody(memResp.body, 'RENDER_MEMORY_LIMIT');
     const rssGrowthKb = peakAggregateRssKb - baselineAggregateRssKb;
-    const memoryOk = memResp.status >= 400 && memValidation.ok && rssGrowthKb > 0 && peakAggregateRssKb < MEMORY_CEILING_KB;
-    rows.push(`memory-ceiling (aggregate descendant RSS): status=${memResp.status} typedError=${memValidation.ok} (${memValidation.reason ?? 'ok'}) baselineAggregateRssKb=${baselineAggregateRssKb} peakAggregateRssKb=${peakAggregateRssKb} rssGrowthKb=${rssGrowthKb} (must be >0) outerCeilingKb=${MEMORY_CEILING_KB} -> ${memoryOk ? 'PASS' : 'FAIL'}`);
+    // Confirmation-round bypass fix (C4-5): memoryOk now requires the
+    // BASELINE sample itself to be valid (never a `ps` failure silently
+    // read as a zero baseline that any later real reading would appear to
+    // "grow" from) AND the poller to have obtained at least one valid
+    // sample (a wholly failed polling window cannot pass either).
+    const pollerHealthy = pollValidSamples > 0;
+    const memoryOk = memResp.status >= 400 && memValidation.ok && baselineValid && pollerHealthy && rssGrowthKb > 0 && peakAggregateRssKb < MEMORY_CEILING_KB;
+    rows.push(`memory-ceiling (aggregate descendant RSS): status=${memResp.status} typedError=${memValidation.ok} (${memValidation.reason ?? 'ok'}) baselineValid=${baselineValid} baselineAggregateRssKb=${baselineAggregateRssKb} pollerHealthy=${pollerHealthy} (validSamples=${pollValidSamples}/${pollTotalSamples}) peakAggregateRssKb=${peakAggregateRssKb} rssGrowthKb=${rssGrowthKb} (must be >0) outerCeilingKb=${MEMORY_CEILING_KB} -> ${memoryOk ? 'PASS' : 'FAIL'}`);
 
     const ok = slowOkPass && perJobTimeoutOk && concurrencyOk && memoryOk;
     return { ok, evidence: rows.join('\n'), detail: ok ? undefined : 'renderer is not fully bounded (successful-slow-job control / typed timeout / throughput-inferred concurrency cap / typed aggregate memory ceiling)' };
@@ -2206,11 +2230,21 @@ async function checkC48(): Promise<{ ok: boolean; evidence: string; detail?: str
   const runtimeCsp = await probeCspRuntimeEvidence();
   const cspOk = runtimeCsp.ok;
   const nm35c = findNm35cThreatNote();
-  const ok = nm35c.found && (!anyLiveFrame || (allFramesCorrect && cspOk));
+  // Confirmation-round bypass fix (C4-8): cspOk is now UNCONDITIONALLY
+  // load-bearing -- previously `!anyLiveFrame` short-circuited the whole
+  // `(!anyLiveFrame || (allFramesCorrect && cspOk))` clause to true
+  // whenever no <iframe> was found in the scanned UI files, meaning the
+  // mandated runtime CSP result never had to pass at all in that case.
+  // The routes this probes (/raw/index.html,
+  // /live-artifacts/:id/preview) are reachable directly over HTTP
+  // regardless of whether the CURRENT frontend happens to render an
+  // iframe pointed at them, so their CSP correctness must hold
+  // unconditionally, not only when a live frame is presently detected.
+  const ok = nm35c.found && cspOk && (!anyLiveFrame || allFramesCorrect);
   return {
     ok,
-    evidence: `${rows.join('\n')}\nanyLiveFrame=${anyLiveFrame}\n[diagnostic-only, NOT pass authority] ${rawRouteCspStatic.evidence}\n[diagnostic-only, NOT pass authority] ${liveArtifactRouteCspStatic.evidence}\n[RUNTIME HTTP EVIDENCE -- pass authority for cspOk]\n${runtimeCsp.evidence}\n${nm35c.evidence}`,
-    detail: ok ? undefined : !nm35c.found ? 'no docs/security/*.md documents NM-35C with a recognizable deliberate allow-same-origin omission' : !allFramesCorrect ? 'a live iframe exists whose sandbox attribute does not match the frozen contract' : 'a live iframe is retained without a genuinely restrictive Content-Security-Policy on the route it loads (per real HTTP response evidence)',
+    evidence: `${rows.join('\n')}\nanyLiveFrame=${anyLiveFrame}\n[diagnostic-only, NOT pass authority] ${rawRouteCspStatic.evidence}\n[diagnostic-only, NOT pass authority] ${liveArtifactRouteCspStatic.evidence}\n[RUNTIME HTTP EVIDENCE -- pass authority for cspOk, UNCONDITIONALLY required]\n${runtimeCsp.evidence}\n${nm35c.evidence}`,
+    detail: ok ? undefined : !nm35c.found ? 'no docs/security/*.md documents NM-35C with a recognizable deliberate allow-same-origin omission' : !cspOk ? 'the real iframe-serving routes do not carry a genuinely restrictive Content-Security-Policy on their actual HTTP responses (unconditionally required, regardless of current iframe presence)' : 'a live iframe exists whose sandbox attribute does not match the frozen contract',
   };
 }
 
@@ -2269,6 +2303,13 @@ let concurrentFiles = 0;
 let peakFiles = 0;
 let liveArtifactCallLog: { projectId: string; failed: boolean }[] = [];
 let FAIL_PROJECT_ID = '__none__'; // set per-test; '__none__' never matches a real project id
+// Confirmation-round bypass fix (C4-9): a quiescence timeout must halt the
+// WHOLE file, not just fail the one test it occurred in -- Vitest's
+// afterEach runs unconditionally regardless of a thrown test, and later
+// it() blocks in this describe() run by default with no bail behavior.
+// Once set, this is checked by afterEach (skips resetCounters()) and by
+// every remaining it() body (throws immediately, before any assertion).
+let quiescenceTimedOut = false;
 
 vi.mock('../../src/providers/registry', () => ({
   deleteLiveArtifact: vi.fn(),
@@ -2352,6 +2393,7 @@ async function waitForQuiescence(timeoutMs = 15000): Promise<void> {
     }
     await new Promise((r) => setTimeout(r, 60));
   }
+  quiescenceTimedOut = true;
   throw new Error(\`waitForQuiescence timed out after \${timeoutMs}ms without reaching the required stable-zero streak of 20 (remaining: concurrentLiveArtifacts=\${concurrentLiveArtifacts} concurrentFiles=\${concurrentFiles} stableStreak=\${stableStreak}/20)\`);
 }
 
@@ -2362,9 +2404,19 @@ const FAIL_INDEX_2 = ${failIndex2};
 const N3 = ${n3};
 
 describe('C4-9 DesignsTab fan-out bound', () => {
-  afterEach(() => { cleanup(); resetCounters(); });
+  afterEach(() => {
+    cleanup();
+    // Confirmation-round bypass fix (C4-9): once a quiescence timeout has
+    // occurred (in this test or an earlier one), NO further counter reset
+    // may occur -- resetCounters() is skipped permanently for the rest of
+    // this file's execution, not just for the test that timed out.
+    if (!quiescenceTimedOut) resetCounters();
+  });
 
   it('bounds concurrent fetchLiveArtifacts/fetchProjectFiles calls regardless of project count', async () => {
+    // Confirmation-round bypass fix (C4-9): halt before any assertion runs
+    // if an earlier test in this file already hit a quiescence timeout.
+    if (quiescenceTimedOut) throw new Error('halted: a prior quiescence timeout forbids any further test in this file from running');
     render(
       <DesignsTab
         projects={makeProjects(N1)}
@@ -2392,6 +2444,9 @@ describe('C4-9 DesignsTab fan-out bound', () => {
   });
 
   it('does not blank the whole grid when a single project mid-page request fails, and proves the other requests completed', async () => {
+    // Confirmation-round bypass fix (C4-9): halt before any assertion runs
+    // if an earlier test in this file already hit a quiescence timeout.
+    if (quiescenceTimedOut) throw new Error('halted: a prior quiescence timeout forbids any further test in this file from running');
     const projects2 = makeProjects(N2);
     FAIL_PROJECT_ID = projects2[FAIL_INDEX_2].id;
     render(
@@ -2432,6 +2487,9 @@ describe('C4-9 DesignsTab fan-out bound', () => {
   });
 
   it('pagination/virtualization: a large project count does not render a card per project', async () => {
+    // Confirmation-round bypass fix (C4-9): halt before any assertion runs
+    // if an earlier test in this file already hit a quiescence timeout.
+    if (quiescenceTimedOut) throw new Error('halted: a prior quiescence timeout forbids any further test in this file from running');
     const projects3 = makeProjects(N3);
     const { container } = render(
       <DesignsTab
@@ -2637,6 +2695,15 @@ import { DesignsTab } from './components/DesignsTab';
     // sample (never a partial/degraded reading).
     const readinessMsSamples: number[] = [];
     const repFailures: string[] = [];
+    // Confirmation-round bypass fix (C4-10): the warmup (i===-1) must be
+    // load-bearing, not merely discarded-if-successful. Previously a
+    // failed warmup only pushed to repFailures with no other effect --
+    // since readinessMsSamples never receives an i===-1 entry regardless
+    // of outcome, five later valid timed reps alone satisfied the gate
+    // below even when the required warmup itself never started or never
+    // drained. warmupValid now tracks the warmup's own outcome explicitly
+    // and is required alongside the five timed samples.
+    let warmupValid = false;
     for (let i = -1; i < reps; i++) { // i===-1 is a discarded warmup (R8: warmup + >=5 timed reps)
       const page = await browser.newPage();
       try {
@@ -2684,6 +2751,7 @@ import { DesignsTab } from './components/DesignsTab';
 
         const elapsed = Date.now() - t0;
         if (i >= 0) readinessMsSamples.push(elapsed);
+        else warmupValid = true; // i === -1 reached here only via a started+drained warmup
       } finally {
         await page.close().catch(() => undefined);
       }
@@ -2693,9 +2761,10 @@ import { DesignsTab } from './components/DesignsTab';
     await poller;
     // Ceremony ruling item 5: R8 statistics only after warmup PLUS five
     // valid, started, and proven-quiescent timed repetitions -- a run with
-    // any failed repetition is an error, never a partial result.
-    if (readinessMsSamples.length < reps) {
-      return { error: `only ${readinessMsSamples.length}/${reps} timed repetitions were valid (started + proven-quiescent) -- R8 statistics require all ${reps}\n${repFailures.join('\n')}` };
+    // any failed repetition (including the warmup itself) is an error,
+    // never a partial result.
+    if (!warmupValid || readinessMsSamples.length < reps) {
+      return { error: `warmupValid=${warmupValid}, ${readinessMsSamples.length}/${reps} timed repetitions were valid (started + proven-quiescent) -- R8 statistics require a valid discarded warmup PLUS all ${reps} timed repetitions\n${repFailures.join('\n')}` };
     }
     return { readinessMsSamples, peakConcurrentRequests, peakCombinedRssKb, projectCount: sample.length };
   } finally {
