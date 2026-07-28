@@ -121,9 +121,11 @@ without that index an agent can approve every wave and demonstrate no program-le
 
 1. **NM-03 / NM-01** — internal identifiers and the `@open-design/*` scope: **Resolved 2026-07-27
    — KEEP** as deliberate (both auditors recommended keeping). W11 will not fire.
-2. **NM-24** — Instatic tether depth (MCP + Super Import seam vs deeper).
-3. **NM-21** — memory scope: Library embeddings only (recommended) vs managed RAG evaluation.
-4. **NM-25** — VoiceBox: scope a real voiceover workflow, or register the MCP and stop?
+2. **NM-24** — Instatic tether: **Resolved 2026-07-27** — seam = MCP + Super Import only; W10a
+   pinned to that seam; deeper coupling needs separate evidence.
+3. **NM-21** — memory scope: **Resolved 2026-07-27** — library embeddings only.
+4. **NM-25** — VoiceBox: **Resolved 2026-07-27** — register the MCP and stop; W10b shrinks to
+   registration only.
 5. **NM-29 / NM-30 / NM-31** — scroll-speed bug closure, mirror-width threshold override,
    `od2-debloat` worktree deletion.
 6. **NM-33** — Kimi Code paid membership: buy, or stay on print-mode.

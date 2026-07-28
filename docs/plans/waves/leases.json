@@ -30,7 +30,7 @@
       "deny": [
         "apps/daemon/tests/web-clone-*.test.ts"
       ],
-      "note": "Owns `pnpm guard` and the daemon test tree for Burst 1. W-C may not touch guard. Amended 2026-07-27: added `apps/daemon/src/cli.ts` and `apps/daemon/src/origin-validation.ts` to `allow` — structurally required by C0-2's dual-track CLI and C0-7's origin rejection. `apps/daemon/tests/**` is also claimed by W1 and W4; Burst ordering serializes these writers — W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3."
+      "note": "Owns `pnpm guard` and the daemon test tree for Burst 1. W-C may not touch guard. Amended 2026-07-27: added `apps/daemon/src/cli.ts` and `apps/daemon/src/origin-validation.ts` to `allow` — `cli.ts` registers the backup CLI subcommands exercised by the backup/restore criteria (C0-1..C0-4) and is graded for CLI↔HTTP parity by C0-10; `origin-validation.ts` is required by origin rejection (C0-7). `apps/daemon/tests/**` is also claimed by W1 and W4; Burst ordering serializes these writers — W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3."
     },
     "W7": {
       "slug": "mishmash-w7-selector-foundations",

@@ -47,7 +47,7 @@ register IDs.
 | NM-21 | Memory scope decision | **W10e** | **Resolved 2026-07-27** — library embeddings only |
 | NM-22 | Route hardening (340 registrations + 6 bootstrap) | W9 | **Split by threat boundary**; ingest tranche is its own gate on W3 |
 | NM-23 | Second de-bloat pass (`tools/pack`, `.tmp` 30 GB, `.od` 1.1 GB) | **W10f** | Open |
-| NM-24 | Instatic tether | **W10a** | **Resolved 2026-07-27** — seam = MCP + Super Import only (GPT-5.6 Sol verdict, founder-delegated); W10a pinned to that seam; deeper coupling needs separate evidence |
+| NM-24 | Instatic tether | **W10a** | **Resolved 2026-07-27** — seam = MCP + Super Import only; W10a pinned to that seam; deeper coupling needs separate evidence |
 | NM-25 | VoiceBox MCP tether (MCP already exists) | **W10b** | **Resolved 2026-07-27** — register the MCP and stop; W10b shrinks to registration only |
 | NM-26 | Documentation honesty (mark archived in-file) | W2 | Open |
 | NM-27 | Library/gallery organization policy (J1–J4) | **W10d** | Open |
