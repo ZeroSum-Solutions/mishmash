@@ -939,6 +939,7 @@ async function main(): Promise<void> {
       // inside the loop guaranteed fileUploadsDuringBackup === 0 -- the
       // criterion was structurally unsatisfiable by ANY implementation.
       const uploadDaemon = await bootDaemonForProbing(fixture.sourceDir).catch(() => null);
+      const childSpawnedAt = Date.now();
       const child = spawn('node', [odBinPath, 'backup', 'create', '--out', archivePath, '--json'], { cwd: repoRoot, env: odDataEnv(fixture.sourceDir) });
       let stdout = '';
       child.stdout?.on('data', (c: Buffer) => (stdout += c.toString('utf8')));
@@ -948,7 +949,7 @@ async function main(): Promise<void> {
       const writerInterval = setInterval(() => {
         const r = sh('sqlite3', [dbPath, `UPDATE projects SET updated_at = ${Date.now()} WHERE id = (SELECT id FROM projects LIMIT 1);`]);
         if (r.status === 0) writerWrites++;
-      }, 25);
+      }, 10); // r2b: 10ms cadence -- a correct backup completes in ~250ms, so 25ms could not honestly yield 10 in-window writes
       // Round-4 F2: the writer loop must ALSO upload real project FILES
       // during the backup window, not just mutate SQLite rows, since
       // "atomic under concurrent mutation" covers the file store too.
@@ -970,10 +971,16 @@ async function main(): Promise<void> {
         }
       })();
       const exitCode: number = await new Promise((resolve) => child.on('exit', (code) => resolve(code ?? 1)));
-      backupChildRunning = false;
-      await fileUploadLoop;
+      // r2b amendment 2026-07-28 (Sol REJECT r2-1): freeze ALL concurrency
+      // evidence at the moment the backup child exits -- writer ticks and
+      // uploads that land during upload-loop drain or daemon cleanup are
+      // post-window activity and must not count toward atomicity evidence.
+      const childDurationMs = Date.now() - childSpawnedAt;
       clearInterval(writerInterval);
       const writerDurationMs = Date.now() - writerStart;
+      const uploadsDuringWindow = fileUploadsDuringBackup;
+      backupChildRunning = false;
+      await fileUploadLoop;
 
       // Post-backup marker: a real new file, written to the source AFTER
       // the backup completed. It must NOT appear in the restored output.
@@ -1036,9 +1043,15 @@ async function main(): Promise<void> {
           if (orphanRows.length > 0) problems.push(`${orphanRows.length} restored project row(s) do not resolve to a real file: ${orphanRows.join(', ')}`);
         }
       }
-      if (writerWrites < 10) problems.push(`writer loop only achieved ${writerWrites} real DB updates (want >=10)`);
-      if (writerDurationMs < 300) problems.push(`writer loop ran only ${writerDurationMs}ms`);
-      if (fileUploadsDuringBackup < 1) problems.push('no real file uploads occurred during the backup window (want >=1)');
+      // r2b amendment 2026-07-28 (Sol REJECT r2-1): thresholds recalibrated to
+      // what a CORRECT ~250ms backup can honestly produce inside its own
+      // window (>=8 writes at 10ms cadence, snapshotted at child exit), and
+      // the absolute 300ms floor -- which rejected a correct fast backup --
+      // replaced by a coverage check that the writer window spanned the
+      // child's entire lifetime (50ms start-jitter allowance).
+      if (writerWrites < 8) problems.push(`writer loop only achieved ${writerWrites} real DB updates inside the backup window (want >=8 at 10ms cadence)`);
+      if (writerDurationMs + 50 < childDurationMs) problems.push(`writer window (${writerDurationMs}ms) did not cover the backup child's lifetime (${childDurationMs}ms)`);
+      if (uploadsDuringWindow < 1) problems.push('no real file uploads occurred during the backup window (want >=1)');
 
       const cliPath = path.join(repoRoot, 'apps/daemon/src/cli.ts');
       const entry = findSubcommandHandlerEntryPoint(cliPath, /^backup$/i);
@@ -1048,7 +1061,7 @@ async function main(): Promise<void> {
       else if (!reach.ok) problems.push(`no real .backup(...)/VACUUM INTO call reachable from the SUBCOMMAND_MAP "backup" handler (checked: ${reach.reachableFiles.join(', ')})`);
 
       const ok = problems.length === 0;
-      record('C0-2', '', '', ok, JSON.stringify({ before, after, writerWrites, writerDurationMs, fileUploadsDuringBackup, entry, reach }, null, 2), { detail: ok ? undefined : problems.join('; '), exitCode });
+      record('C0-2', '', '', ok, JSON.stringify({ before, after, writerWrites, writerDurationMs, childDurationMs, uploadsDuringWindow, entry, reach }, null, 2), { detail: ok ? undefined : problems.join('; '), exitCode });
     },
   );
 
@@ -1968,15 +1981,25 @@ async function main(): Promise<void> {
         const daemon = await bootDaemonForProbing(baseline.corpus.path);
         try {
           const fanoutRoute = daemon.routeInventory.find((r) => r.method === 'GET' && /projects\/:[a-zA-Z]+\/files/i.test(r.path));
-          // r2 amendment 2026-07-27: the generic /search/i first-match picked
-          // POST /api/xai/search (an external network API that 401s without
-          // credentials, registered before the library route), so httpOkAll
-          // could never be true -- documented as "Known issue" in the
-          // committed baseline. The scale scenario means the CORPUS search:
-          // prefer the library search route, then any non-external search row.
-          const searchRoute =
-            daemon.routeInventory.find((r) => /library\/search/i.test(r.path)) ??
-            daemon.routeInventory.find((r) => /search/i.test(r.path) && !/xai/i.test(r.path));
+          // r2/r2b amendment 2026-07-27/28: the original /search/i first-match
+          // picked POST /api/xai/search (external network API, 401 without
+          // credentials); the r2 preference for the library search route then
+          // resolved to POST /api/tools/library/search, which is tool-token
+          // gated BY DESIGN (agent tool track) and 401s for any bare local
+          // probe. Neither can ever satisfy httpOkAll. The daemon's genuinely
+          // locally-probeable real search surface is GET
+          // /api/projects/:id/search (unauthenticated, real file search over
+          // PROJECTS_DIR), so the scenario resolves a REAL project id from
+          // the booted corpus and times that search at store scale.
+          let searchProjectId: string | null = null;
+          try {
+            const pr = await fetch(`${daemon.url}/api/projects`).catch(() => null);
+            const pj = pr && pr.ok ? ((await pr.json().catch(() => null)) as { projects?: { id?: unknown }[] } | null) : null;
+            const first = Array.isArray(pj?.projects) ? pj.projects.find((p) => typeof p?.id === 'string' && (p.id as string).length > 0) : undefined;
+            searchProjectId = (first?.id as string | undefined) ?? null;
+          } catch {
+            searchProjectId = null;
+          }
 
           async function timedRun(fn: () => Promise<boolean>): Promise<{ samplesMs: number[]; httpOkAll: boolean }> {
             for (let w = 0; w < R8_WARMUP_ITERATIONS; w++) await fn().catch(() => false);
@@ -2011,11 +2034,9 @@ async function main(): Promise<void> {
             smoke['memory-high-water'] = { samplesMs: rssSamples, p50: percentile(sortedRss, 0.5), p95: percentile(sortedRss, 0.95), httpOkAll: rssSamples.length > 0 };
           } else smoke['memory-high-water'] = { samplesMs: [], p50: 0, p95: 0, httpOkAll: false };
 
-          if (searchRoute) {
+          if (searchProjectId) {
             const searchRun = await timedRun(async () => {
-              const init: RequestInit = { method: searchRoute.method, headers: { 'Content-Type': 'application/json' } };
-              if (searchRoute.method === 'POST') init.body = JSON.stringify({ query: 'w0-verifier-smoke' });
-              const r = await fetch(`${daemon.url}${searchRoute.path}`, init).catch(() => null);
+              const r = await fetch(`${daemon.url}/api/projects/${encodeURIComponent(searchProjectId)}/search?q=w0-verifier-smoke`).catch(() => null);
               return !!r && r.ok;
             });
             smoke['search'] = { ...searchRun, p50: percentile([...searchRun.samplesMs].sort((a, b) => a - b), 0.5), p95: percentile([...searchRun.samplesMs].sort((a, b) => a - b), 0.95) };
