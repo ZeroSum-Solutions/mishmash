@@ -205,3 +205,33 @@ that is a compound trust-anchor failure outside the calibrated lazy/opportunisti
 Proof obligations (launcher refusal test, repo-mutation non-reachability, launch-isolation
 runtime evidence) are orchestrator-owned; next confirmation round is scoped to those alone.
 Every later verifier amendment requires fresh confirmation and a new pin. Founder may veto.
+
+## 2026-07-28 — Escalation ceremony: verify-w0 amendment chain (C0-2/C0-9/C0-10), stop rule fired
+
+**Trigger.** The first full gate-of-record run (pin 0bd9de3b1) produced evidence that three criteria
+were unsatisfiable by any correct implementation: C0-2's upload window could never observe an upload
+(probe daemon boots in 1-3s vs a ~250ms backup), C0-9's search scenario targeted routes that 401 by
+design (external xai; tool-token-gated library search), and C0-10 crashed unconditionally on a TDZ
+reference. An evidence-based amendment chain followed, each round adversarially reviewed (GPT-5.6
+Sol): r2 e9cff6c52 → REJECT (C0-2 thresholds reject a correct fast backup / count post-exit
+activity) → r2b c0d5c7d24 → REJECT (expect-empty-200 search is gameable by an always-empty stub) →
+r2c dcf483dab → REJECT (list-only stub can special-case the marked nonce prefix and map filenames
+to matches). Three consecutive non-APPROVE verdicts fired the stop rule.
+
+**Ceremony.** Fresh founder-delegated GPT-5.6 adjudication (independent thread), 2026-07-28:
+
+> RULING: RATIFY — Subject to scoped confirmation that the committed baseline matches the inspected
+> distinctive corpus-bound line, r2d defeats lazy/list-only C0-9 stubs through request-independent
+> file/line/snippet proof, leaving only deliberate probe-specific hardcoding and no gameable or
+> unsatisfiable regression in C0-2/C0-10.
+
+**Closure design (r2d, 41c9dbf1a).** The negative search control is an unmarked random token
+(indistinguishable from a real query); the positive match must return content proof the request
+never carried — baseline-frozen expectFile + expectLine + expectSnippetContains, where the snippet
+slice strictly extends the needle (load-validated) and is anchored by the content-hash-bound corpus.
+Probe target frozen in a2eb154cc: needle "rings" (unique in file), phrase "red rings to close"
+(steady-landing.html:593), live-verified positive/negative across 3 independent runs.
+
+**Conditions.** One scoped implementation-fidelity confirmation by the round reviewer (code +
+baseline match the ratified design; no design re-litigation), then re-pin and rerun. This ruling,
+like all escalation rulings, is founder-vetoable.
