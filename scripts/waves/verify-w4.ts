@@ -671,6 +671,27 @@ function scratchCopyCorpus(corpusPath: string): string {
 // Structural, not behavioral: an <img> JSX element whose `src` binding
 // source text references "cover" case-insensitively, in any of the three
 // known cover-rendering surfaces.
+// Sol r2 finding (C4-1, MEDIUM): the prior check accepted ANY <img> whose
+// src text contained "cover" anywhere in the file, including a hidden
+// decoy unrelated to a real card. Scoped: the <img> must have a JSX
+// ANCESTOR (walking .parent, available because parseTs sets
+// setParentNodes=true) whose className references "card" or "thumb" --
+// the real card-container convention in all three known surfaces
+// (design-card, design-card-thumb, recent-projects__card-thumb).
+function jsxAncestorHasCardClassName(node: TsNode, sourceFile: TypeScriptModule.SourceFile): boolean {
+  let current: TsNode | undefined = node.parent;
+  while (current) {
+    if (ts.isJsxOpeningElement(current) || ts.isJsxSelfClosingElement(current)) {
+      for (const attr of current.attributes.properties) {
+        if (ts.isJsxAttribute(attr) && attr.name.getText(sourceFile) === 'className' && attr.initializer) {
+          if (/\b(card|thumb)\b/i.test(attr.initializer.getText(sourceFile))) return true;
+        }
+      }
+    }
+    current = current.parent;
+  }
+  return false;
+}
 function frontendRendersCoverImg(): { found: boolean; evidence: string } {
   const surfaces = ['apps/web/src/components/project-cover.tsx', 'apps/web/src/components/DesignsTab.tsx', 'apps/web/src/components/RecentProjectsStrip.tsx'];
   const rows: string[] = [];
@@ -680,6 +701,7 @@ function frontendRendersCoverImg(): { found: boolean; evidence: string } {
     if (!fs.existsSync(abs)) { rows.push(`${rel}: absent`); continue; }
     const { sourceFile, text } = parseTs(abs);
     let hit: number | null = null;
+    let unscopedDecoyLine: number | null = null;
     function visit(node: TsNode): void {
       if (hit !== null) return;
       const isImg = (ts.isJsxSelfClosingElement(node) && node.tagName.getText(sourceFile) === 'img')
@@ -691,7 +713,8 @@ function frontendRendersCoverImg(): { found: boolean; evidence: string } {
             const srcText = attr.initializer.getText(sourceFile);
             if (/cover/i.test(srcText)) {
               const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
-              hit = line + 1;
+              if (jsxAncestorHasCardClassName(node, sourceFile)) hit = line + 1;
+              else unscopedDecoyLine = line + 1;
             }
           }
         }
@@ -700,7 +723,7 @@ function frontendRendersCoverImg(): { found: boolean; evidence: string } {
     }
     visit(sourceFile);
     void text;
-    rows.push(`${rel}: <img src=...cover...> ${hit !== null ? `found at line ${hit}` : 'NOT found'}`);
+    rows.push(`${rel}: <img src=...cover...> inside a card/thumb-classed ancestor: ${hit !== null ? `found at line ${hit}` : 'NOT found'}${unscopedDecoyLine !== null ? ` (an UNSCOPED match outside any card/thumb ancestor exists at line ${unscopedDecoyLine} -- correctly ignored)` : ''}`);
     if (hit !== null) found = true;
   }
   return { found, evidence: rows.join('\n') };
@@ -800,14 +823,23 @@ async function makeSolidPng(rgb: [number, number, number]): Promise<Buffer> {
 // score a perfect "marker fraction" without ever rendering or cropping
 // anything -- a fixed-template oracle).
 //
-// FROZEN CONTRACT ASSUMPTION for this probe only (flagged for reviewer
-// confirmation, per ruling 6's "any fixture recalibration requires an
-// independently reviewed amendment"): the renderer captures at a FIXED
-// viewport, SOURCE_WIDTH x SOURCE_HEIGHT, before attention/entropy-cropping
-// to the cover's target dimensions. If the real implementation instead
-// full-page-captures arbitrarily tall pages, this probe's geometry
-// assumption needs a follow-up amendment; the underlying stripe-barcode
-// TECHNIQUE (below) still applies unchanged.
+// FROZEN CONTRACT, confirmed exactly by Sol r2 ruling 2: source viewport is
+// SOURCE_WIDTH x SOURCE_HEIGHT (1280x1600), target cover is TARGET_WIDTH x
+// TARGET_HEIGHT (1280x800), IoU threshold 0.45, fills-frame recall
+// threshold 0.95. Every fixture now validates BOTH the POST response
+// record's width/height AND the decoded PNG's actual pixel dimensions
+// against the fixed target before any geometry/IoU scoring runs -- Sol r2
+// finding 3: the prior oracle derived its "ideal window" height from the
+// OBSERVED reconstructed window, so a renderer that returned the complete
+// uncropped 1280x1600 source (never cropping at all) reconstructed a
+// [0,1600] window, computed an "ideal" window of that same 1600px height
+// (which clamps to exactly [0,1600] since SOURCE_HEIGHT-1600=0), and scored
+// a spurious IoU of 1.0 -- passing every fixture without ever cropping.
+// Now: (a) a dimension mismatch is a hard FAIL before scoring, so the
+// uncropped case is caught immediately (height 1600 != 800), and (b) the
+// ideal window is always computed against the FIXED TARGET_HEIGHT, never
+// the observed window height, so IoU can no longer be gamed by matching a
+// renderer's own (wrong) output size.
 //
 // Technique: the fixture page is a stack of STRIPE_COUNT horizontal, full-
 // width stripes. Every run, "hero" stripes get freshly randomized, mutually
@@ -828,6 +860,8 @@ async function makeSolidPng(rgb: [number, number, number]): Promise<Buffer> {
 // recognized), closing exactly the fixed-template gap Sol found.
 const SOURCE_WIDTH = 1280;
 const SOURCE_HEIGHT = 1600;
+const TARGET_WIDTH = 1280;
+const TARGET_HEIGHT = 800;
 const STRIPE_HEIGHT = 40;
 const STRIPE_COUNT = SOURCE_HEIGHT / STRIPE_HEIGHT; // 40
 const MIN_DETECTED_STRIPES = 5; // below this, geometry reconstruction is not trustworthy
@@ -919,17 +953,17 @@ interface C42Fixture {
   mode: 'iou' | 'recall'; // 'recall' for the trivial fills-frame control (see rationale below)
   threshold: number;
 }
-async function generateCoverAndReconstruct(daemon: BootedDaemon, projectId: string, html: string): Promise<{ png: { data: Buffer; info: { width: number; height: number; channels: number } } } | { error: string }> {
+async function generateCoverAndReconstruct(daemon: BootedDaemon, projectId: string, html: string): Promise<{ png: { data: Buffer; info: { width: number; height: number; channels: number } }; record: CoverRecord } | { error: string }> {
   await createProject(daemon.url, projectId, projectId);
   await uploadProjectFile(daemon.url, projectId, 'index.html', html);
   const gen = await postGenerate(daemon.url, projectId);
   const genValidation = validateCoverSuccessBody(gen.body);
-  if (gen.status < 200 || gen.status >= 300 || !genValidation.ok) return { error: `generate failed: status=${gen.status} record=${genValidation.reason ?? 'ok'}` };
+  if (gen.status < 200 || gen.status >= 300 || !genValidation.ok || !genValidation.record) return { error: `generate failed: status=${gen.status} record=${genValidation.reason ?? 'ok'}` };
   const got = await getCover(daemon.url, projectId);
   if (!got.ok || !got.bytes) return { error: `fetch cover failed: ${got.status}` };
   const sharp = resolveSharp();
   const { data, info } = await sharp(got.bytes).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  return { png: { data, info: { width: info.width, height: info.height, channels: info.channels } } };
+  return { png: { data, info: { width: info.width, height: info.height, channels: info.channels } }, record: genValidation.record };
 }
 async function checkC42(): Promise<{ ok: boolean; evidence: string; detail?: string | undefined }> {
   if (!coverBackendSurface().present) return backendGateFailure();
@@ -965,7 +999,19 @@ async function checkC42(): Promise<{ ok: boolean; evidence: string; detail?: str
       const projectId = `w4-c42-${fixture.name}-${crypto.randomBytes(4).toString('hex')}`;
       const result = await generateCoverAndReconstruct(daemon, projectId, stripesHtml(stripes));
       if ('error' in result) { allPass = false; outcomes.push(`${fixture.name}: FAIL (${result.error})`); continue; }
-      const recon = reconstructObservedWindow(result.png, heroStripes, fixture.fillerBase);
+      // Sol r2 finding 3 / ruling 2: dimension gate BEFORE any geometry
+      // scoring. A renderer that skips cropping entirely (e.g. returns the
+      // full 1280x1600 source untouched) must fail here, not slip through
+      // to IoU scoring where an observed-height-derived "ideal" window
+      // would trivially match its own output.
+      const { record, png } = result;
+      const dimsOk = record.width === TARGET_WIDTH && record.height === TARGET_HEIGHT && png.info.width === TARGET_WIDTH && png.info.height === TARGET_HEIGHT;
+      if (!dimsOk) {
+        allPass = false;
+        outcomes.push(`${fixture.name}: FAIL (dimension mismatch -- expected ${TARGET_WIDTH}x${TARGET_HEIGHT}, got record=${record.width}x${record.height} decodedPng=${png.info.width}x${png.info.height})`);
+        continue;
+      }
+      const recon = reconstructObservedWindow(png, heroStripes, fixture.fillerBase);
       if ('error' in recon) { allPass = false; outcomes.push(`${fixture.name}: FAIL (${recon.error})`); continue; }
       const scoredHeroY0 = fixture.scoredHeroRange.start * STRIPE_HEIGHT;
       const scoredHeroY1 = (fixture.scoredHeroRange.end + 1) * STRIPE_HEIGHT;
@@ -977,8 +1023,12 @@ async function checkC42(): Promise<{ ok: boolean; evidence: string; detail?: str
         score = observedSize <= 0 ? 0 : overlap / observedSize;
         scoreLabel = 'recall(observed-in-hero)';
       } else {
-        const windowHeight = recon.window[1] - recon.window[0];
-        const ideal = idealWindowFor(scoredHeroY0, scoredHeroY1, windowHeight);
+        // Fixed 800px source window, never the observed output height
+        // (Sol r2 ruling 2) -- grading against TARGET_HEIGHT means IoU can
+        // only reward a crop that both has the right size AND favors the
+        // hero, not merely a window shaped like whatever the renderer
+        // happened to emit.
+        const ideal = idealWindowFor(scoredHeroY0, scoredHeroY1, TARGET_HEIGHT);
         score = iou1d(recon.window, ideal);
         scoreLabel = `IoU(observed,ideal=[${ideal[0]},${ideal[1]}])`;
       }
@@ -1173,30 +1223,24 @@ async function runC43C44(): Promise<void> {
 // C4-5 -- renderer is bounded (concurrency cap, per-job timeout, memory
 // ceiling), including a deliberately pathological project.
 //
-// Sol r1 finding 1 fixes:
-//  (a) timeout now requires the TYPED `RENDER_TIMEOUT` error code (not any
-//      non-2xx), paired with a NEGATIVE CONTROL: a job that is slow but
-//      well within the timeout must succeed with a full valid record --
-//      otherwise "any failure" could pass a renderer that rejects
-//      everything indiscriminately.
-//  (b) concurrency is now measured by THROUGHPUT INFERENCE, not raw
-//      request-interval overlap: under a synchronous, network-denied
-//      contract, a client cannot observe "job dequeued and started" versus
-//      "job still queued" from HTTP timing alone -- every request's
-//      interval spans queue-wait PLUS actual work, so ALL of them overlap
-//      for the full duration even under a correct single-worker queue,
-//      which is exactly what made the prior overlap-based check false-red
-//      a correct bounded implementation. Instead: submit M jobs that each
-//      take a known, fixed BLOCK_MS of real work; total wall-clock T to
-//      complete all M gives effectiveConcurrency = (M*BLOCK_MS)/T --
-//      unbounded implies effectiveConcurrency ~= M, a real cap C implies
-//      effectiveConcurrency ~= C regardless of M. Run TWICE at M and 2M and
-//      require the inferred concurrency to plateau, not double.
-//  (c) memory now sums (aggregates) RSS across ALL matched daemon-
-//      descendant processes at each poll tick (not the single largest),
-//      and requires the TYPED `RENDER_MEMORY_LIMIT` error code as the
-//      pass condition -- a generic crash below some arbitrary observed
-//      ceiling no longer counts as proof of an enforced bound.
+// Sol r2 fixes (round-1 finding 1 was still broken):
+//  (a) timeout + successful-slow-job control unchanged (already correct).
+//  (b) the plateau oracle had two boundary bugs: `round1Bounded` compared
+//      round1 against `M*0.9`, which false-reds a genuinely correct cap
+//      EQUAL to M (ideal concurrency 8 at M=8 is NOT <7.2). And the 1.6x
+//      plateau tolerance was loose enough that an uncapped renderer merely
+//      slowed by CPU saturation (observed 7.1 then 10.65 across M/2M) still
+//      passed (10.65 <= 7.1*1.6=11.36). Fix: DROP the round1-vs-M
+//      comparison entirely -- boundedness is proven ONLY by the plateau
+//      ratio between round1 and round2, tightened to 1.25x (10.65 >
+//      7.1*1.25=8.875 now correctly fails; a real fixed cap of 8, round1
+//      ~8 round2 ~8, ratio ~1.0, correctly passes). Every job in both
+//      rounds must ALSO return a full VALIDATED cover record, not merely
+//      2xx (a stub returning empty 200s could otherwise pass).
+//  (c) memory now additionally requires OBSERVED RSS GROWTH (peak minus a
+//      pre-submission baseline sample) before trusting the typed error --
+//      an immediate RENDER_MEMORY_LIMIT with zero observed allocation
+//      proves nothing about a real ceiling being exercised.
 // =========================================================================
 function blockingScriptHtml(blockMs: number): string {
   return `<!doctype html><html><body><script>const s=Date.now();while(Date.now()-s<${blockMs}){}</script><div>blocked ${blockMs}ms</div></body></html>`;
@@ -1204,7 +1248,7 @@ function blockingScriptHtml(blockMs: number): string {
 const INFINITE_LOOP_HTML = '<!doctype html><html><body><script>while(true){}</script></body></html>';
 const MEMORY_HOG_HTML = '<!doctype html><html><body><script>let a=[];while(true){a.push(new Array(2000000).fill(7));}</script></body></html>';
 
-async function measureThroughputConcurrency(daemon: BootedDaemon, m: number, blockMs: number): Promise<{ effectiveConcurrency: number; wallClockMs: number; successCount: number }> {
+async function measureThroughputConcurrency(daemon: BootedDaemon, m: number, blockMs: number): Promise<{ effectiveConcurrency: number; wallClockMs: number; successCount: number; invalidRecordCount: number }> {
   const ids = Array.from({ length: m }, (_, i) => `w4-c45-conc-${m}-${i}-${crypto.randomBytes(3).toString('hex')}`);
   for (const id of ids) {
     await createProject(daemon.url, id, id);
@@ -1213,9 +1257,15 @@ async function measureThroughputConcurrency(daemon: BootedDaemon, m: number, blo
   const t0 = Date.now();
   const outcomes = await Promise.all(ids.map((id) => postGenerate(daemon.url, id, 60_000).catch(() => null)));
   const wallClockMs = Date.now() - t0;
-  const successCount = outcomes.filter((o) => o && o.status >= 200 && o.status < 300).length;
+  let successCount = 0;
+  let invalidRecordCount = 0;
+  for (const o of outcomes) {
+    if (!o || o.status < 200 || o.status >= 300) continue;
+    if (validateCoverSuccessBody(o.body).ok) successCount++;
+    else invalidRecordCount++;
+  }
   const effectiveConcurrency = wallClockMs <= 0 ? m : (m * blockMs) / wallClockMs;
-  return { effectiveConcurrency, wallClockMs, successCount };
+  return { effectiveConcurrency, wallClockMs, successCount, invalidRecordCount };
 }
 
 async function checkC45(): Promise<{ ok: boolean; evidence: string; detail?: string | undefined }> {
@@ -1387,65 +1437,257 @@ interface MinimalPwPage {
   addScriptTag(opts: { content: string }): Promise<unknown>;
   waitForTimeout(ms: number): Promise<void>;
   locator(selector: string): MinimalPwLocator;
+  close(): Promise<void>;
 }
 interface MinimalPwBrowser { newPage(): Promise<MinimalPwPage>; close(): Promise<void>; process(): { pid: number } | null }
 interface MinimalPwBrowserType { launch(opts?: Record<string, unknown>): Promise<MinimalPwBrowser> }
 function resolvePlaywright(): { chromium: MinimalPwBrowserType } {
   return createRequire(path.join(repoRoot, 'e2e/package.json'))('@playwright/test') as { chromium: MinimalPwBrowserType };
 }
-// Sol r1 finding 5, second half: S4-5 applies to ANY live preview in the
-// grid, not just HtmlProjectCoverFrame -- DesignsTab.tsx has its OWN
-// separate live-artifact iframe (line ~740, `sandbox="allow-scripts"`,
-// `src={liveArtifactPreviewUrl(...)}`). That route is tool-token-gated
-// (`/api/tools/live-artifacts/create` requires `authorizeToolRequest`, only
-// mintable from a live agent turn -- this verifier has no such turn and,
-// per AGENTS.md's app-boundary rule, must not reach into daemon internals
-// to forge one), so seeding a REAL live artifact end-to-end is not
-// practical here. This sub-check instead reproduces the iframe's REAL,
-// AST-extracted sandbox literal from DesignsTab.tsx's actual current
-// source (not a hardcoded guess -- if a future fix changes or removes it,
-// this check tracks that), pointed at the SAME real daemon-served tracker
-// content used for surface 1, sharing the SAME canary. This is a
-// mechanism-level proxy (does an iframe carrying this exact sandbox value,
-// loading server-provided HTML, leak network) rather than an end-to-end
-// live-artifact test -- flagged in the authoring report as a remaining
-// round-2 ambiguity for the reviewer to weigh in on.
-async function probeSecondIframeSurface(page: MinimalPwPage, daemonUrl: string, rawTrackerUrl: string, canary: CanaryServer): Promise<{ ok: boolean; evidence: string }> {
-  const designsTabPath = path.join(repoRoot, 'apps/web/src/components/DesignsTab.tsx');
-  const frames = findJsxIframeElements(designsTabPath);
-  if (frames.length === 0) return { ok: true, evidence: 'DesignsTab.tsx has no <iframe> -- second surface already removed, nothing to leak' };
-  const sandboxLiteral = frames[0]?.sandboxLiteral;
-  if (!sandboxLiteral) return { ok: false, evidence: `DesignsTab.tsx has an <iframe> at line ${frames[0]?.line} with no static sandbox literal -- cannot verify its containment` };
-  const hitsBefore = canary.hits.length;
-  await page.evaluate((args: { sandboxAttr: string; src: string }) => {
-    // No DOM lib in scripts/tsconfig.json -- `document` is reached via
-    // globalThis (same pattern used elsewhere in this file for `window`);
-    // this code only ever executes inside a real browser page, never here.
-    const doc = (globalThis as unknown as { document: { createElement(tag: string): { setAttribute(k: string, v: string): void; className: string }; body: { appendChild(el: unknown): void } } }).document;
-    const iframe = doc.createElement('iframe');
-    iframe.setAttribute('sandbox', args.sandboxAttr);
-    iframe.setAttribute('src', args.src);
-    iframe.className = 'c47-surface2-iframe';
-    doc.body.appendChild(iframe);
-  }, { sandboxAttr: sandboxLiteral, src: rawTrackerUrl });
-  await page.waitForTimeout(3000);
-  const hitsAfter = canary.hits.length;
-  const iframeCount = await page.locator('.c47-surface2-iframe').count();
-  const ok = iframeCount === 1 && hitsAfter === hitsBefore;
-  return { ok, evidence: `DesignsTab.tsx iframe sandbox="${sandboxLiteral}" (line ${frames[0]?.line}), mounted against daemon=${daemonUrl}: canary hits before=${hitsBefore} after=${hitsAfter} -> ${ok ? 'contained' : 'LEAKED or failed to mount'}` };
+
+// -----------------------------------------------------------------------
+// Isolated daemon boot with a live Node IPC channel, used ONLY by C4-7's
+// live-artifact surface (kept separate from the shared bootDaemonForProbing()
+// every other criterion relies on). Sol r2 ruling 1: the daemon child mints
+// a REAL token from its own in-process toolTokenRegistry singleton (the
+// SAME module instance server.ts wires into authorizeToolRequest, since
+// both are dynamically imported by the same child process) and reports it
+// back over IPC -- never stdout, never a proof file.
+//
+// IPC does NOT propagate through `pnpm exec tsx` (verified empirically:
+// `process.send` is undefined inside a child spawned that way). Bypassing
+// pnpm and spawning tsx's own CLI entry directly DOES work -- confirmed
+// both in isolated experimentation and end-to-end against a real
+// /api/tools/live-artifacts/create call before wiring this in.
+// -----------------------------------------------------------------------
+interface BootedDaemonWithIpc extends BootedDaemon {
+  mintToken(opts: { runId: string; projectId: string }): Promise<string>;
+  revokeToken(token: string): Promise<void>;
+}
+async function bootDaemonForProbingWithIpc(dataDir: string): Promise<BootedDaemonWithIpc> {
+  const bootScript = `
+import { pathToFileURL } from 'node:url';
+process.env.OD_DATA_DIR = ${JSON.stringify(dataDir)};
+process.env.OD_DAEMON_CLI_PATH = ${JSON.stringify(path.join(repoRoot, 'apps/daemon/dist/cli.js'))};
+const serverMod = await import(pathToFileURL(${JSON.stringify(path.join(repoRoot, 'apps/daemon/src/server.ts'))}).href);
+const tokensMod = await import(pathToFileURL(${JSON.stringify(path.join(repoRoot, 'apps/daemon/src/tool-tokens.ts'))}).href);
+const started = await serverMod.startServer({ port: 0, returnServer: true });
+process.on('message', (msg) => {
+  if (!msg || typeof msg !== 'object') return;
+  if (msg.type === 'mint') {
+    try {
+      const grant = tokensMod.toolTokenRegistry.mint({ runId: msg.runId, projectId: msg.projectId });
+      process.send({ type: 'minted', id: msg.id, token: grant.token });
+    } catch (err) {
+      process.send({ type: 'mint-error', id: msg.id, error: String(err) });
+    }
+  } else if (msg.type === 'revoke') {
+    tokensMod.toolTokenRegistry.revokeToken(msg.token);
+    process.send({ type: 'revoked', id: msg.id });
+  }
+});
+console.log('OD_W4_VERIFIER_READY ' + JSON.stringify({ url: started.url }));
+process.on('SIGTERM', async () => { await started.shutdown(); process.exit(0); });
+`;
+  const scriptPath = path.join(proofDir, `.boot-daemon-ipc.${process.pid}.${crypto.randomBytes(3).toString('hex')}.mjs`);
+  fs.writeFileSync(scriptPath, bootScript);
+  const tsxCliPath = createRequire(path.join(repoRoot, 'package.json')).resolve('tsx/cli');
+  const child = spawn(process.execPath, [tsxCliPath, scriptPath], { cwd: repoRoot, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+  let buffered = '';
+  const ready = await new Promise<{ url: string } | null>((resolve) => {
+    const timeout = setTimeout(() => resolve(null), 45_000);
+    child.stdout?.on('data', (chunk: Buffer) => {
+      buffered += chunk.toString('utf8');
+      const line = buffered.split('\n').find((l) => l.startsWith('OD_W4_VERIFIER_READY '));
+      if (line) {
+        clearTimeout(timeout);
+        try { resolve(JSON.parse(line.slice('OD_W4_VERIFIER_READY '.length))); } catch { resolve(null); }
+      }
+    });
+    child.on('exit', () => { clearTimeout(timeout); resolve(null); });
+  });
+  const kill = async (): Promise<void> => {
+    if (child.pid) { try { child.kill('SIGTERM'); } catch { /* already gone */ } }
+    await new Promise<void>((resolve) => {
+      const t = setTimeout(() => { try { if (child.pid) child.kill('SIGKILL'); } catch { /* gone */ } resolve(); }, 5_000);
+      child.on('exit', () => { clearTimeout(t); resolve(); });
+    });
+    try { fs.unlinkSync(scriptPath); } catch { /* best effort */ }
+  };
+  if (!ready) {
+    await kill();
+    throw new Error(`daemon (IPC variant) failed to boot within 45s (stdout tail: ${buffered.slice(-2000)})`);
+  }
+  let msgSeq = 0;
+  function sendAndAwait(msg: Record<string, unknown>, matchType: string): Promise<Record<string, unknown>> {
+    return new Promise((resolve, reject) => {
+      const id = ++msgSeq;
+      const timeout = setTimeout(() => { child.off('message', onMessage); reject(new Error(`IPC ${String(msg.type)} timed out`)); }, 15_000);
+      const onMessage = (m: unknown): void => {
+        if (!m || typeof m !== 'object') return;
+        const rec = m as Record<string, unknown>;
+        if (rec.id !== id) return;
+        if (rec.type === matchType || rec.type === `${String(msg.type)}-error`) {
+          clearTimeout(timeout);
+          child.off('message', onMessage);
+          if (String(rec.type).endsWith('-error')) reject(new Error(String(rec.error ?? 'IPC error')));
+          else resolve(rec);
+        }
+      };
+      child.on('message', onMessage);
+      child.send({ ...msg, id });
+    });
+  }
+  return {
+    url: ready.url, pid: child.pid, dataDir, routeInventory: [], kill,
+    mintToken: async ({ runId, projectId }) => {
+      const res = await sendAndAwait({ type: 'mint', runId, projectId }, 'minted');
+      return String(res.token);
+    },
+    revokeToken: async (token: string) => {
+      await sendAndAwait({ type: 'revoke', token }, 'revoked');
+    },
+  };
+}
+
+// Sol r2 ruling 1: a synthetic-injected-iframe proxy for this surface is
+// REJECTED -- final round must exercise the ACTUAL live-artifact route
+// end-to-end. This mints a REAL tool token from the isolated daemon
+// child's own toolTokenRegistry (over IPC, via bootDaemonForProbingWithIpc
+// above), POSTs the SAME tracker content used for surface 1 to the real
+// POST /api/tools/live-artifacts/create, revokes the token immediately,
+// then mounts the REAL (unmocked) DesignsTab.tsx so it performs its OWN
+// real fetchLiveArtifacts() call, discovers the artifact, and renders ITS
+// OWN live-artifact <iframe> pointed at the real liveArtifactPreviewUrl()
+// -- not a hand-built stand-in. AGENTS.md's app-boundary rule bars
+// apps/web/** from importing apps/daemon/src/** -- it does not bar a
+// verifier CHILD PROCESS (this script, under scripts/waves/) from using
+// daemon test infrastructure like the token registry; no paid agent turn
+// is required to mint a tool token.
+async function probeLiveArtifactSurface(browser: MinimalPwBrowser, daemon: BootedDaemonWithIpc, canary: CanaryServer): Promise<{ ok: boolean; evidence: string }> {
+  const projectId = `w4-c47-live-${crypto.randomBytes(6).toString('hex')}`;
+  await createProject(daemon.url, projectId, projectId);
+  // Live-artifact templates reject <script>/<iframe>/srcdoc=/on*=/javascript:
+  // outright (apps/daemon/src/live-artifacts/render.ts
+  // validateHtmlTemplateV1Security) -- unlike surface 1's raw-HTML tracker,
+  // this one can only use a plain <img> egress vector. That is still a
+  // genuine test: the real CSP's `img-src 'self' data: blob:` (no remote
+  // origin) must block it client-side before it ever reaches the canary.
+  const trackerHtml = `<!doctype html><html><body><img src="${canary.url}/pixel.gif"></body></html>`;
+
+  const token = await daemon.mintToken({ runId: `w4-c47-run-${crypto.randomBytes(4).toString('hex')}`, projectId });
+  const createResp = await fetch(`${daemon.url}/api/tools/live-artifacts/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      input: {
+        title: 'w4-c47-probe',
+        preview: { type: 'html', entry: 'index.html' },
+        document: {
+          format: 'html_template_v1',
+          templatePath: 'template.html',
+          generatedPreviewPath: 'index.html',
+          dataPath: 'data.json',
+          dataJson: {},
+        },
+      },
+      templateHtml: trackerHtml,
+    }),
+  });
+  const createStatus = createResp.status;
+  const createBody: unknown = await createResp.json().catch(() => null);
+  await daemon.revokeToken(token).catch(() => undefined);
+  const artifactId = isRecord(createBody) && isRecord(createBody.artifact) && typeof createBody.artifact.id === 'string' ? createBody.artifact.id : null;
+  if (createStatus < 200 || createStatus >= 300 || !artifactId) {
+    return { ok: false, evidence: `POST /api/tools/live-artifacts/create failed: status=${createStatus} body=${JSON.stringify(createBody)} -- cannot seed a real live artifact for this probe` };
+  }
+
+  // Real evidence the immediate revoke actually took effect (not
+  // load-bearing for the pass/fail verdict, which is about containment).
+  const postRevokeProbe = await fetch(`${daemon.url}/api/tools/live-artifacts/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ input: { title: 'post-revoke-probe', preview: { type: 'html', entry: 'index.html' }, document: { format: 'html_template_v1', templatePath: 'template.html', generatedPreviewPath: 'index.html', dataPath: 'data.json', dataJson: {} } } }),
+  }).catch(() => null);
+  const revokeConfirmedDead = postRevokeProbe !== null && postRevokeProbe.status === 401;
+
+  const harnessPath = path.join(repoRoot, 'apps/web/src/.verify-w4-c47-live-harness.tsx');
+  const page = await browser.newPage();
+  try {
+    // Bundles the REAL DesignsTab with the REAL (unmocked) registry.ts --
+    // same pattern as C4-9/C4-10's harnesses -- so it makes a genuine
+    // fetchLiveArtifacts() call against this daemon and renders whatever
+    // it actually finds, not a synthetic stand-in.
+    const harnessSource = `import { createRoot } from 'react-dom/client';
+import React from 'react';
+import { DesignsTab } from './components/DesignsTab';
+const el = document.getElementById('root');
+if (el) {
+  const root = createRoot(el);
+  const projects = (globalThis as any).__C47_LIVE_PROJECTS__ || [];
+  root.render(React.createElement(DesignsTab, {
+    projects, skills: [], designSystems: [],
+    onOpen: () => {}, onOpenLiveArtifact: () => {},
+    onDelete: async () => true, onRename: async () => {},
+  }));
+}
+`;
+    fs.writeFileSync(harnessPath, harnessSource);
+    const esbuild = resolveEsbuild();
+    const built = await esbuild.build({
+      entryPoints: [harnessPath], bundle: true, write: false, format: 'iife', platform: 'browser', jsx: 'automatic',
+      loader: { '.tsx': 'tsx', '.ts': 'ts' }, absWorkingDir: path.join(repoRoot, 'apps/web'),
+      define: { 'process.env.NODE_ENV': JSON.stringify('production') }, logLevel: 'silent',
+    });
+    const bundledJs = built.outputFiles?.[0]?.text;
+    if (!bundledJs) return { ok: false, evidence: 'esbuild produced no output for the DesignsTab live-artifact harness' };
+
+    const project = { id: projectId, name: projectId, skillId: null, designSystemId: null, createdAt: 0, updatedAt: 0, status: { value: 'not_started' } };
+    await page.goto(`${daemon.url}/api/projects`, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => undefined);
+    await page.setContent('<!doctype html><html><body><div id="root"></div></body></html>', { waitUntil: 'domcontentloaded' });
+    await page.evaluate((p: unknown) => { (globalThis as unknown as { __C47_LIVE_PROJECTS__: unknown[] }).__C47_LIVE_PROJECTS__ = [p]; }, project);
+
+    const hitsBefore = canary.hits.length;
+    await page.addScriptTag({ content: bundledJs });
+
+    // DesignsTab's OWN class (`thumb-iframe`) on an iframe whose src
+    // contains THIS artifact's real id -- proves DesignsTab genuinely
+    // discovered and rendered the artifact created via the tool API
+    // above, not a coincidental match.
+    const selector = `iframe.thumb-iframe[src*="${artifactId}"]`;
+    let iframeCount = 0;
+    for (let poll = 0; poll < 80; poll++) { // up to 8s for the real fetch + render
+      iframeCount = await page.locator(selector).count();
+      if (iframeCount >= 1) break;
+      await sleep(100);
+    }
+    await sleep(1500); // grace period for any delayed subresource loads inside the mounted iframe
+    const hitsAfter = canary.hits.length;
+
+    const ok = iframeCount >= 1 && hitsAfter === hitsBefore;
+    return {
+      ok,
+      evidence: `real live artifact created via POST /api/tools/live-artifacts/create: id=${artifactId} status=${createStatus}\ntool token revoked-and-confirmed-dead=${revokeConfirmedDead} (post-revoke status=${postRevokeProbe?.status ?? 'n/a'})\nDesignsTab (real, unmocked registry.ts) rendered iframe matching ${selector}: count=${iframeCount}\ncanary hits before=${hitsBefore} after=${hitsAfter} -> ${ok ? 'contained' : 'FAILED: DesignsTab did not render the real artifact iframe, or it leaked to the canary'}`,
+    };
+  } finally {
+    try { fs.unlinkSync(harnessPath); } catch { /* already clean */ }
+    await page.close().catch(() => undefined);
+  }
 }
 
 async function checkC47(): Promise<{ ok: boolean; evidence: string; detail?: string | undefined }> {
   const canary = await startCanaryServer();
   const harnessPath = path.join(repoRoot, 'apps/web/src/.verify-w4-c47-harness.tsx');
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w4-c47-'));
-  let daemon: BootedDaemon | undefined;
+  let daemon: BootedDaemonWithIpc | undefined;
   let browser: MinimalPwBrowser | undefined;
   try {
     const selfTest = await canarySelfTest(canary);
     if (!selfTest.ok) return { ok: false, evidence: `canary self-test failed: ${selfTest.evidence}`, detail: 'canary infrastructure is broken -- a zero-hit result cannot be trusted' };
 
-    daemon = await bootDaemonForProbing(dataDir);
+    // IPC variant (not the shared bootDaemonForProbing()) -- surface 2
+    // below needs the isolated daemon child's own toolTokenRegistry.
+    daemon = await bootDaemonForProbingWithIpc(dataDir);
     const projectId = `w4-c47-${crypto.randomBytes(6).toString('hex')}`;
     const trackerHtml = `<!doctype html><html><body>
 <img src="${canary.url}/pixel.gif">
@@ -1524,19 +1766,19 @@ if (el) {
     // hits. A real static-placeholder fix must render SOMETHING.
     const surface1Ok = mounted && glyphCount >= 1 && hitsAfter === hitsBefore;
 
-    const surface2 = await probeSecondIframeSurface(page, daemon.url, rawUrl, canary);
+    const surface2 = await probeLiveArtifactSurface(browser, daemon, canary);
 
     const ok = surface1Ok && surface2.ok;
     return {
       ok,
-      evidence: `[surface 1: HtmlProjectCoverFrame] mounted=${mounted}\nglyphRendered(count)=${glyphCount}\nliveIframeRendered(count)=${iframeCount}\ncanary hits before=${hitsBefore} after=${hitsAfter}\npageErrors=${JSON.stringify(pageErrors.slice(0, 5))}\n[surface 2: DesignsTab live-artifact iframe]\n${surface2.evidence}`,
+      evidence: `[surface 1: HtmlProjectCoverFrame] mounted=${mounted}\nglyphRendered(count)=${glyphCount}\nliveIframeRendered(count)=${iframeCount}\ncanary hits before=${hitsBefore} after=${hitsAfter}\npageErrors=${JSON.stringify(pageErrors.slice(0, 5))}\n[surface 2: DesignsTab real end-to-end live-artifact flow]\n${surface2.evidence}`,
       detail: ok
         ? undefined
         : !surface1Ok
           ? (iframeCount > 0
             ? 'surface 1: a live network-capable iframe is present for the not-yet-rendered state and it reached the canary -- S4-5 requires a static glyph/skeleton'
             : 'surface 1: no glyph was actually rendered (empty/crashed render trivially shows zero canary hits and must not pass)')
-          : 'surface 2 (DesignsTab live-artifact iframe): leaked to the canary, or failed to mount -- see evidence',
+          : 'surface 2 (real live-artifact flow through DesignsTab): the tool-created artifact leaked to the canary, or DesignsTab never rendered its own iframe for it -- see evidence',
     };
   } finally {
     try { fs.unlinkSync(harnessPath); } catch { /* already clean */ }
@@ -1556,9 +1798,152 @@ if (el) {
 // OPPOSITE policy (e.g. "allow-same-origin is required"). Two fixes below:
 // a route-level CSP header check (AST-scoped to the specific handler, not
 // the whole file), and a negation-aware proximity regex for the doc check.
-function routeHandlerHasCspHeader(routeFile: string, pathMatcher: RegExp): { found: boolean; evidence: string } {
+//
+// Sol r2 finding 5: that route-level check was itself both HELPER-BLIND
+// (only recognized a LITERAL `res.setHeader('Content-Security-Policy', ...)`
+// inline in the matched route handler -- the real live-artifact route
+// instead calls a named helper, `setLiveArtifactPreviewHeaders(res)`,
+// injected via `ctx.liveArtifacts` DI destructuring rather than a
+// traceable static import, so the old check false-red the real,
+// already-correct route) and VALUE-BLIND (never inspected what CSP was
+// actually being set, so a route that set a USELESS/wide-open CSP would
+// still false-green). Both are fixed below: `findCspSetHeaderInBody`
+// follows bare-identifier helper calls by NAME across the daemon's
+// route/live-artifact helper directories (full DI-graph resolution is not
+// practical to trace via AST alone) and resolves the CSP VALUE through
+// string literals, `[...].join('; ')` arrays, and local variable
+// references; `cspIsRestrictive` then checks that resolved value for
+// actual restrictiveness, matching the real `setLiveArtifactPreviewHeaders`
+// policy in apps/daemon/src/live-artifacts/http-helpers.ts.
+function stringLiteralArrayJoinValue(expr: TsNode): string | null {
+  // Matches `[ "a", "b", ... ].join('; ')`.
+  if (!ts.isCallExpression(expr)) return null;
+  if (!ts.isPropertyAccessExpression(expr.expression) || expr.expression.name.text !== 'join') return null;
+  const arr = expr.expression.expression;
+  if (!ts.isArrayLiteralExpression(arr)) return null;
+  const sepArg = expr.arguments[0];
+  const sep = sepArg && ts.isStringLiteral(sepArg) ? sepArg.text : ', ';
+  const parts: string[] = [];
+  for (const el of arr.elements) {
+    if (ts.isStringLiteral(el) || ts.isNoSubstitutionTemplateLiteral(el)) parts.push(el.text);
+    else return null; // a non-literal element -- cannot statically resolve, give up rather than guess
+  }
+  return parts.join(sep);
+}
+function resolveCspValueFromExpr(expr: TsNode, scopeChain: TsNode[]): string | null {
+  if (ts.isStringLiteral(expr) || ts.isNoSubstitutionTemplateLiteral(expr)) return expr.text;
+  const joined = stringLiteralArrayJoinValue(expr);
+  if (joined !== null) return joined;
+  if (ts.isIdentifier(expr)) {
+    // A variable reference (e.g. `res.setHeader('Content-Security-Policy',
+    // projectPreviewCsp)`) -- search each enclosing scope, innermost
+    // first, for `const <name> = <initializer>`.
+    for (const scope of scopeChain) {
+      let found: string | null = null;
+      const visit = (node: TsNode): void => {
+        if (found !== null) return;
+        if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === expr.text && node.initializer) {
+          found = resolveCspValueFromExpr(node.initializer, []);
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(scope);
+      if (found !== null) return found;
+    }
+  }
+  return null;
+}
+const CSP_HELPER_SEARCH_DIRS = ['apps/daemon/src/live-artifacts', 'apps/daemon/src/routes', 'apps/daemon/src/routes/project', 'apps/daemon/src/http'];
+function findNamedHelperFunctionBody(name: string): { body: TsNode; sourceFile: TypeScriptModule.SourceFile } | null {
+  for (const dir of CSP_HELPER_SEARCH_DIRS) {
+    const absDir = path.join(repoRoot, dir);
+    if (!fs.existsSync(absDir)) continue;
+    for (const f of fs.readdirSync(absDir)) {
+      if (!f.endsWith('.ts')) continue;
+      const abs = path.join(absDir, f);
+      if (!fs.statSync(abs).isFile()) continue;
+      const { sourceFile } = parseTs(abs);
+      let result: { body: TsNode; sourceFile: TypeScriptModule.SourceFile } | null = null;
+      const findFn = (node: TsNode): void => {
+        if (result) return;
+        if (ts.isFunctionDeclaration(node) && node.name?.text === name && node.body) { result = { body: node.body, sourceFile }; return; }
+        if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name && node.initializer && (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))) {
+          result = { body: node.initializer.body as TsNode, sourceFile };
+          return;
+        }
+        ts.forEachChild(node, findFn);
+      };
+      findFn(sourceFile);
+      if (result) return result;
+    }
+  }
+  return null;
+}
+function findCspSetHeaderInBody(body: TsNode, scopeChain: TsNode[], sourceFile: TypeScriptModule.SourceFile, depth = 0): { value: string; line: number; via: string } | null {
+  let result: { value: string; line: number; via: string } | null = null;
+  const helperCandidates: string[] = [];
+  const visit = (node: TsNode): void => {
+    if (result) return;
+    if (ts.isCallExpression(node)) {
+      if (ts.isPropertyAccessExpression(node.expression)) {
+        const m = node.expression.name.text;
+        const arg0 = node.arguments[0];
+        if ((m === 'setHeader' || m === 'header') && arg0 && ts.isStringLiteral(arg0) && arg0.text === 'Content-Security-Policy') {
+          const arg1 = node.arguments[1];
+          const value = arg1 ? resolveCspValueFromExpr(arg1, [body, ...scopeChain]) : null;
+          const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
+          if (value !== null) { result = { value, line, via: 'literal' }; return; }
+        }
+      } else if (ts.isIdentifier(node.expression)) {
+        helperCandidates.push(node.expression.text);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  if (result) return result;
+  if (depth >= 3) return null; // bound recursion into followed helpers
+  for (const name of helperCandidates) {
+    const helper = findNamedHelperFunctionBody(name);
+    if (!helper) continue;
+    const nested = findCspSetHeaderInBody(helper.body, [helper.sourceFile], helper.sourceFile, depth + 1);
+    if (nested) return { ...nested, via: `helper:${name}` };
+  }
+  return null;
+}
+function parseCspDirectives(csp: string): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const raw of csp.split(';')) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const spaceIdx = trimmed.indexOf(' ');
+    const name = spaceIdx === -1 ? trimmed : trimmed.slice(0, spaceIdx);
+    const value = spaceIdx === -1 ? '' : trimmed.slice(spaceIdx + 1).trim();
+    map.set(name, value);
+  }
+  return map;
+}
+// Restrictiveness, not mere presence: `connect-src 'none'` is the
+// directive that actually denies remote fetch/xhr/websocket/EventSource
+// egress from framed content (the same threat C4-6/C4-7's network canary
+// probes at the process level; this is the policy-level backstop), and no
+// directive may carry a bare wildcard or a bare http(s): scheme source
+// (either of which would allow loading from literally any remote origin
+// regardless of how restrictive the rest of the policy looks).
+function cspIsRestrictive(csp: string): { ok: boolean; reason: string } {
+  const directives = parseCspDirectives(csp);
+  const connectSrc = directives.get('connect-src');
+  if (connectSrc !== "'none'") return { ok: false, reason: `connect-src must be 'none' to deny remote fetch/xhr/websocket egress (got ${JSON.stringify(connectSrc ?? null)})` };
+  for (const [name, value] of directives) {
+    if (name === 'sandbox') continue; // CSP-level sandbox directive, not a source list
+    if (/(^|\s)\*(\s|$)/.test(value)) return { ok: false, reason: `${name} carries a bare wildcard source ("${value}")` };
+    if (/\bhttps?:(\s|\/\/|$)/.test(value)) return { ok: false, reason: `${name} allows a bare http(s): scheme source ("${value}")` };
+  }
+  return { ok: true, reason: "connect-src is 'none' and no directive carries a wildcard or bare scheme source" };
+}
+function routeHandlerHasCspHeader(routeFile: string, pathMatcher: RegExp): { found: boolean; restrictive: boolean; evidence: string } {
   const abs = path.join(repoRoot, routeFile);
-  if (!fs.existsSync(abs)) return { found: false, evidence: `${routeFile}: absent` };
+  if (!fs.existsSync(abs)) return { found: false, restrictive: false, evidence: `${routeFile}: absent` };
   const { sourceFile } = parseTs(abs);
   let handlerBody: TsNode | null = null;
   function findHandler(node: TsNode): void {
@@ -1575,23 +1960,15 @@ function routeHandlerHasCspHeader(routeFile: string, pathMatcher: RegExp): { fou
     ts.forEachChild(node, findHandler);
   }
   findHandler(sourceFile);
-  if (!handlerBody) return { found: false, evidence: `${routeFile}: no app.get() handler matched ${pathMatcher}` };
-  let found = false;
-  let line = -1;
-  function visit(node: TsNode): void {
-    if (found) return;
-    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
-      const m = node.expression.name.text;
-      const arg0 = node.arguments[0];
-      if ((m === 'setHeader' || m === 'header') && arg0 && ts.isStringLiteral(arg0) && arg0.text === 'Content-Security-Policy') {
-        found = true;
-        line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
-      }
-    }
-    ts.forEachChild(node, visit);
-  }
-  visit(handlerBody);
-  return { found, evidence: `${routeFile} (handler matching ${pathMatcher}): Content-Security-Policy header set=${found}${found ? ` (line ${line})` : ''}` };
+  if (!handlerBody) return { found: false, restrictive: false, evidence: `${routeFile}: no app.get() handler matched ${pathMatcher}` };
+  const csp = findCspSetHeaderInBody(handlerBody, [sourceFile], sourceFile);
+  if (!csp) return { found: false, restrictive: false, evidence: `${routeFile} (handler matching ${pathMatcher}): no Content-Security-Policy header set (checked the handler body and any bare-identifier helper functions it calls)` };
+  const restrictiveness = cspIsRestrictive(csp.value);
+  return {
+    found: true,
+    restrictive: restrictiveness.ok,
+    evidence: `${routeFile} (handler matching ${pathMatcher}): Content-Security-Policy set via ${csp.via} (line ${csp.line}) = "${csp.value}" -> restrictive=${restrictiveness.ok} (${restrictiveness.reason})`,
+  };
 }
 // Negation-aware: requires a negation/omission word within ~80 chars of
 // "allow-same-origin" on EITHER side, inside a window around each NM-35C
@@ -1641,15 +2018,20 @@ async function checkC48(): Promise<{ ok: boolean; evidence: string; detail?: str
       rows.push(`${rel}:${f.line}: sandbox=${JSON.stringify(f.sandboxLiteral)} hasSrc=${f.hasSrc} -> ${correct ? 'matches frozen contract (allow-scripts, no allow-same-origin)' : 'DOES NOT match frozen contract'}`);
     }
   }
+  // Sol r2 finding 5 / ruling 6: found-AND-restrictive, not just found --
+  // routeHandlerHasCspHeader now follows named helper calls (the real
+  // live-artifact route delegates to setLiveArtifactPreviewHeaders) and
+  // checks the resolved CSP VALUE for actual restrictiveness, not merely
+  // presence of a setHeader call.
   const rawRouteCsp = routeHandlerHasCspHeader('apps/daemon/src/routes/project/index.ts', /raw/);
   const liveArtifactRouteCsp = routeHandlerHasCspHeader('apps/daemon/src/routes/live-artifact.ts', /preview/);
-  const cspOk = rawRouteCsp.found && liveArtifactRouteCsp.found;
+  const cspOk = rawRouteCsp.found && rawRouteCsp.restrictive && liveArtifactRouteCsp.found && liveArtifactRouteCsp.restrictive;
   const nm35c = findNm35cThreatNote();
   const ok = nm35c.found && (!anyLiveFrame || (allFramesCorrect && cspOk));
   return {
     ok,
     evidence: `${rows.join('\n')}\nanyLiveFrame=${anyLiveFrame}\n${rawRouteCsp.evidence}\n${liveArtifactRouteCsp.evidence}\n${nm35c.evidence}`,
-    detail: ok ? undefined : !nm35c.found ? 'no docs/security/*.md documents NM-35C with a recognizable deliberate allow-same-origin omission' : !allFramesCorrect ? 'a live iframe exists whose sandbox attribute does not match the frozen contract' : 'a live iframe is retained without the required Content-Security-Policy header on the route it loads',
+    detail: ok ? undefined : !nm35c.found ? 'no docs/security/*.md documents NM-35C with a recognizable deliberate allow-same-origin omission' : !allFramesCorrect ? 'a live iframe exists whose sandbox attribute does not match the frozen contract' : 'a live iframe is retained without a genuinely restrictive Content-Security-Policy on the route it loads',
   };
 }
 
@@ -1757,6 +2139,36 @@ function appendResult(key: string, value: unknown): void {
   all[key] = value;
   fs.writeFileSync(RESULTS_PATH, JSON.stringify(all, null, 2));
 }
+// Sol r2 finding 6: a fixed Math.max(500, DELAY_MS*4) wait before afterEach's
+// counter reset could leave a correct bounded implementation (e.g. cap=1)
+// still processing a long remaining queue -- afterEach then zeroed the
+// SHARED counters out from under that still-running work, corrupting the
+// next test's peaks. Wait for actual quiescence (in-flight concurrency
+// observed at 0 for several consecutive polls) instead of a fixed sleep.
+//
+// The counters this polls are decremented INSIDE each individual mocked
+// fetch call, but DesignsTab's own state update runs one level up, in the
+// Promise.all(...).then callback that calls setLiveArtifactsByProject --
+// so "all counters are back to 0" is necessarily a beat EARLIER than
+// "React has committed the resulting re-render". An empirical dump of a
+// real run confirmed this: with a short stability window the container's
+// rendered text was consistently missing entries that were unambiguously
+// present a few hundred ms later. A longer confirmed-idle window (not a
+// size-proportional fixed sleep -- a small constant number of 60ms polls
+// once concurrency is ALREADY at zero) covers that gap.
+async function waitForQuiescence(timeoutMs = 15000): Promise<void> {
+  const start = Date.now();
+  let stableStreak = 0;
+  while (Date.now() - start < timeoutMs) {
+    if (concurrentLiveArtifacts === 0 && concurrentFiles === 0) {
+      stableStreak++;
+      if (stableStreak >= 20) return;
+    } else {
+      stableStreak = 0;
+    }
+    await new Promise((r) => setTimeout(r, 60));
+  }
+}
 
 const CONCURRENCY_CEILING = 12;
 const N1 = ${n1};
@@ -1785,7 +2197,7 @@ describe('C4-9 DesignsTab fan-out bound', () => {
       expect(peakFiles).toBeGreaterThan(0);
     }, { timeout: 8000 });
 
-    await new Promise((r) => setTimeout(r, Math.max(500, DELAY_MS * 4)));
+    await waitForQuiescence();
 
     appendResult('test1', { n1: N1, delayMs: DELAY_MS, peakLiveArtifacts, peakFiles, ceiling: CONCURRENCY_CEILING });
 
@@ -1811,7 +2223,7 @@ describe('C4-9 DesignsTab fan-out bound', () => {
     await waitFor(() => {
       expect(peakLiveArtifacts).toBeGreaterThan(0);
     }, { timeout: 8000 });
-    await new Promise((r) => setTimeout(r, Math.max(500, DELAY_MS * 4)));
+    await waitForQuiescence();
 
     const failingEntry = liveArtifactCallLog.find((e) => e.projectId === FAIL_PROJECT_ID);
     const otherIds = projects2.map((p) => p.id).filter((id) => id !== FAIL_PROJECT_ID);
@@ -1835,9 +2247,10 @@ describe('C4-9 DesignsTab fan-out bound', () => {
   });
 
   it('pagination/virtualization: a large project count does not render a card per project', async () => {
+    const projects3 = makeProjects(N3);
     const { container } = render(
       <DesignsTab
-        projects={makeProjects(N3)}
+        projects={projects3}
         skills={[]}
         designSystems={[]}
         onOpen={vi.fn()}
@@ -1849,10 +2262,29 @@ describe('C4-9 DesignsTab fan-out bound', () => {
     await waitFor(() => {
       expect(peakLiveArtifacts).toBeGreaterThan(0);
     }, { timeout: 8000 });
-    await new Promise((r) => setTimeout(r, Math.max(500, DELAY_MS * 4)));
-    const renderedCards = container.querySelectorAll('.design-card').length;
-    appendResult('test3', { n3: N3, renderedCards });
-    expect(renderedCards, 'a large project list must be paginated/virtualized, not render one .design-card per project').toBeLessThan(N3);
+    await waitForQuiescence();
+    // Sol r2 finding 7: counting the CSS class '.design-card' is bound to a
+    // renameable implementation detail -- deleting or CSS-Modulizing that
+    // class would pass this check even while rendering every project. Bind
+    // to rendered PROJECT IDENTITY instead: count how many of the actual
+    // (unique) project names appear as text anywhere in the rendered tree.
+    // A plain word-boundary regex (\\bProject N\\b) does NOT work here: an
+    // empirical dump of the real rendered container.textContent showed
+    // sibling elements' text concatenated with ZERO inserted whitespace
+    // (e.g. "...PPrototypeProject 224freeform..."), so there is no word
+    // boundary on EITHER side of the name and \\b\\bProject 224\\b\\b never
+    // matches, silently making the whole check pass vacuously (0 < N) on
+    // every run regardless of whether pagination exists. Instead: find
+    // every "Project <digits>" occurrence with a GREEDY digit capture --
+    // greedy \\d+ always consumes the full number at that position, so
+    // "Project 1" can never be spuriously extracted from inside
+    // "Project 100"/"Project 199" the way a plain substring search could,
+    // with no boundary assertion needed on either side.
+    const text = container.textContent ?? '';
+    const foundIndices = new Set([...text.matchAll(/Project (\\d+)/g)].map((m) => Number(m[1])));
+    const renderedNames = projects3.filter((_project, i) => foundIndices.has(i)).length;
+    appendResult('test3', { n3: N3, renderedNames });
+    expect(renderedNames, 'a large project list must be paginated/virtualized, not render every project identity into the DOM at once').toBeLessThan(N3);
   });
 });
 `;
@@ -1940,14 +2372,16 @@ async function measureDesignsTabActivation(rootDir: string, scratchCorpusDir: st
     // Bundle THIS root's REAL DesignsTab with a harness that mounts it
     // using the REAL (unmocked) registry.ts -- a genuine integration
     // measurement of real requests against a real daemon, not a unit test.
+    // Sol r2 finding 2: no `root` reuse across reps -- each rep below gets
+    // a genuinely fresh Playwright page (fresh document), so `createRoot`
+    // is always creating a first-ever root on that page.
     const harnessSource = `import { createRoot } from 'react-dom/client';
 import React from 'react';
 import { DesignsTab } from './components/DesignsTab';
-let root: ReturnType<typeof createRoot> | null = null;
 (globalThis as any).__C410_MOUNT__ = () => {
   const el = document.getElementById('root');
   if (!el) return;
-  if (!root) root = createRoot(el);
+  const root = createRoot(el);
   const projects = (globalThis as any).__C410_PROJECTS__ || [];
   root.render(React.createElement(DesignsTab, {
     projects, skills: [], designSystems: [],
@@ -1968,19 +2402,9 @@ let root: ReturnType<typeof createRoot> | null = null;
 
     const pw = resolvePlaywright();
     browser = await pw.chromium.launch();
-    const page = await browser.newPage();
-    let inFlight = 0;
-    let peakConcurrentRequests = 0;
     const daemonOrigin = daemon.url;
-    page.on('request', (req) => { if (req.url().startsWith(daemonOrigin)) { inFlight++; if (inFlight > peakConcurrentRequests) peakConcurrentRequests = inFlight; } });
-    page.on('requestfinished', (req) => { if (req.url().startsWith(daemonOrigin)) inFlight = Math.max(0, inFlight - 1); });
-    page.on('requestfailed', (req) => { if (req.url().startsWith(daemonOrigin)) inFlight = Math.max(0, inFlight - 1); });
 
-    await page.goto(`${daemon.url}/api/projects`, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => undefined);
-    await page.setContent('<!doctype html><html><body><div id="root"></div></body></html>', { waitUntil: 'domcontentloaded' });
-    await page.evaluate((projects: unknown[]) => { (globalThis as unknown as { __C410_PROJECTS__: unknown[] }).__C410_PROJECTS__ = projects; }, sample);
-    await page.addScriptTag({ content: bundledJs });
-
+    let peakConcurrentRequests = 0;
     let peakCombinedRssKb = 0;
     const rootPid = daemon.pid;
     const pollAbort = new AbortController();
@@ -1998,19 +2422,44 @@ let root: ReturnType<typeof createRoot> | null = null;
       }
     })();
 
+    // Sol r2 ruling 2 / finding 2: every timed repetition gets a genuinely
+    // FRESH page (`browser.newPage()`), not the same page/React root
+    // remounted -- reusing the root risked React's same-props bailout
+    // silently observing already-rendered content instead of re-fetching.
+    // Readiness is measured by REQUEST QUIESCENCE (this mount's own network
+    // burst starting, then draining to zero in-flight requests for a
+    // stable window), not a synchronous `.design-card` DOM count -- a
+    // paginated/virtualized grid may legitimately never satisfy
+    // `count >= sample.length`, which would hang or false-red forever.
     const readinessMsSamples: number[] = [];
-    // 1 discarded warmup + `reps` timed remounts (R8: warmup + >=5 reps).
-    for (let i = -1; i < reps; i++) {
-      const t0 = Date.now();
-      await page.evaluate(() => { (globalThis as unknown as { __C410_MOUNT__: () => void }).__C410_MOUNT__(); });
-      for (let poll = 0; poll < 60; poll++) {
-        const count = await page.locator('.design-card').count();
-        if (count >= sample.length) break;
-        await sleep(100);
+    for (let i = -1; i < reps; i++) { // i===-1 is a discarded warmup (R8: warmup + >=5 timed reps)
+      const page = await browser.newPage();
+      try {
+        let inFlight = 0;
+        let sawAnyRequest = false;
+        page.on('request', (req) => { if (req.url().startsWith(daemonOrigin)) { inFlight++; sawAnyRequest = true; if (inFlight > peakConcurrentRequests) peakConcurrentRequests = inFlight; } });
+        page.on('requestfinished', (req) => { if (req.url().startsWith(daemonOrigin)) inFlight = Math.max(0, inFlight - 1); });
+        page.on('requestfailed', (req) => { if (req.url().startsWith(daemonOrigin)) inFlight = Math.max(0, inFlight - 1); });
+
+        await page.goto(`${daemonOrigin}/api/projects`, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => undefined);
+        await page.setContent('<!doctype html><html><body><div id="root"></div></body></html>', { waitUntil: 'domcontentloaded' });
+        await page.evaluate((projects: unknown[]) => { (globalThis as unknown as { __C410_PROJECTS__: unknown[] }).__C410_PROJECTS__ = projects; }, sample);
+
+        const t0 = Date.now();
+        await page.addScriptTag({ content: bundledJs });
+        await page.evaluate(() => { (globalThis as unknown as { __C410_MOUNT__: () => void }).__C410_MOUNT__(); });
+
+        for (let poll = 0; poll < 50 && !sawAnyRequest; poll++) await sleep(20); // up to 1s for the request burst to start
+        let stableStreak = 0;
+        for (let poll = 0; poll < 300; poll++) { // up to 15s to drain to quiescence
+          if (inFlight === 0) { stableStreak++; if (stableStreak >= 5) break; } else { stableStreak = 0; }
+          await sleep(50);
+        }
+        const elapsed = Date.now() - t0;
+        if (i >= 0) readinessMsSamples.push(elapsed);
+      } finally {
+        await page.close().catch(() => undefined);
       }
-      const elapsed = Date.now() - t0;
-      if (i >= 0) readinessMsSamples.push(elapsed);
-      await sleep(150);
     }
 
     pollAbort.abort();
@@ -2066,25 +2515,26 @@ async function checkC410(): Promise<{ ok: boolean; evidence: string; detail?: st
     const headP50 = percentile(headResult.readinessMsSamples, 50);
     const headP95 = percentile(headResult.readinessMsSamples, 95);
 
-    // Reviewed thresholds -- flagged in the authoring report for round-2
-    // confirmation (same posture as C4-2's frozen geometry): readiness
-    // must improve by >=15% at p50 and never regress past +10%; combined
-    // RSS and peak concurrent requests (secondary axes here) must not
-    // regress past +25%/+50% respectively.
-    const MIN_IMPROVEMENT_PCT = 15;
-    const REGRESSION_CEILING_PCT = 10;
-    const improvementTargetMs = parentP50 * (1 - MIN_IMPROVEMENT_PCT / 100);
-    const regressionCeilingMs = parentP50 * (1 + REGRESSION_CEILING_PCT / 100);
+    // Sol r2 ruling 2 / finding 2: use the AUTHORITATIVE baseline JSON
+    // fields (docs/testing/scale-baseline-2026-07.json:22-23), not locally
+    // hardcoded percentages that had drifted from them (15%/10%/25%/50% vs
+    // the real 10%/25%) -- and GATE p95, not just record it.
+    const minImprovementPct = baseline.minimumImprovementThreshold;
+    const nonRegressionCeilingPct = baseline.nonRegressionCeiling;
+    const improvementTargetMs = parentP50 * (1 - minImprovementPct / 100);
+    const p50RegressionCeilingMs = parentP50 * (1 + nonRegressionCeilingPct / 100);
+    const p95RegressionCeilingMs = parentP95 * (1 + nonRegressionCeilingPct / 100);
     const readinessImproved = headP50 <= improvementTargetMs;
-    const readinessNotRegressed = headP50 <= regressionCeilingMs;
-    const rssNotRegressed = headResult.peakCombinedRssKb <= parentResult.peakCombinedRssKb * 1.25;
-    const requestCountNotRegressed = headResult.peakConcurrentRequests <= Math.max(parentResult.peakConcurrentRequests * 1.5, parentResult.peakConcurrentRequests + 5);
-    const ok = readinessImproved && readinessNotRegressed && rssNotRegressed && requestCountNotRegressed;
+    const p50NotRegressed = headP50 <= p50RegressionCeilingMs;
+    const p95NotRegressed = headP95 <= p95RegressionCeilingMs;
+    const rssNotRegressed = headResult.peakCombinedRssKb <= parentResult.peakCombinedRssKb * (1 + nonRegressionCeilingPct / 100);
+    const requestCountNotRegressed = headResult.peakConcurrentRequests <= parentResult.peakConcurrentRequests * (1 + nonRegressionCeilingPct / 100);
+    const ok = readinessImproved && p50NotRegressed && p95NotRegressed && rssNotRegressed && requestCountNotRegressed;
 
     return {
       ok,
-      evidence: `parent(${baseCommit.slice(0, 12)}, scratch corpus): readinessSamples=${JSON.stringify(parentResult.readinessMsSamples)} p50=${parentP50}ms p95=${parentP95}ms peakConcurrentRequests=${parentResult.peakConcurrentRequests} peakCombinedRssKb=${parentResult.peakCombinedRssKb} projectCount=${parentResult.projectCount}\nhead(${headSha.slice(0, 12)}, scratch corpus): readinessSamples=${JSON.stringify(headResult.readinessMsSamples)} p50=${headP50}ms p95=${headP95}ms peakConcurrentRequests=${headResult.peakConcurrentRequests} peakCombinedRssKb=${headResult.peakCombinedRssKb} projectCount=${headResult.projectCount}\nreadiness: minimumImprovementThreshold=${MIN_IMPROVEMENT_PCT}% (target<=${improvementTargetMs.toFixed(1)}ms) -> improved=${readinessImproved}; nonRegressionCeiling=${REGRESSION_CEILING_PCT}% (max<=${regressionCeilingMs.toFixed(1)}ms) -> notRegressed=${readinessNotRegressed}\npeak combined RSS non-regression (<=+25%): ${rssNotRegressed}\npeak concurrent requests non-regression: ${requestCountNotRegressed}`,
-      detail: ok ? undefined : 'does not beat the parent commit by the stated minimum readiness margin without regressing RSS/request-concurrency past their ceilings',
+      evidence: `parent(${baseCommit.slice(0, 12)}, scratch corpus): readinessSamples=${JSON.stringify(parentResult.readinessMsSamples)} p50=${parentP50}ms p95=${parentP95}ms peakConcurrentRequests=${parentResult.peakConcurrentRequests} peakCombinedRssKb=${parentResult.peakCombinedRssKb} projectCount=${parentResult.projectCount}\nhead(${headSha.slice(0, 12)}, scratch corpus): readinessSamples=${JSON.stringify(headResult.readinessMsSamples)} p50=${headP50}ms p95=${headP95}ms peakConcurrentRequests=${headResult.peakConcurrentRequests} peakCombinedRssKb=${headResult.peakCombinedRssKb} projectCount=${headResult.projectCount}\nbaseline authoritative fields: minimumImprovementThreshold=${minImprovementPct}% nonRegressionCeiling=${nonRegressionCeilingPct}%\np50: target<=${improvementTargetMs.toFixed(1)}ms -> improved=${readinessImproved}; ceiling<=${p50RegressionCeilingMs.toFixed(1)}ms -> notRegressed=${p50NotRegressed}\np95: ceiling<=${p95RegressionCeilingMs.toFixed(1)}ms -> notRegressed=${p95NotRegressed}\npeak combined RSS non-regression (<=+${nonRegressionCeilingPct}%): ${rssNotRegressed}\npeak concurrent requests non-regression (<=+${nonRegressionCeilingPct}%): ${requestCountNotRegressed}`,
+      detail: ok ? undefined : 'does not beat the parent commit by the baseline minimum p50 improvement threshold, or regresses p95/RSS/request-concurrency past the baseline non-regression ceiling',
     };
   } finally {
     if (parentWorktree) parentWorktree.cleanup();
@@ -2175,8 +2625,24 @@ async function checkC411(): Promise<{ ok: boolean; evidence: string; detail?: st
 //    SUPPLEMENTS this, it never replaces it.
 //  - The CLI is exercised for BOTH verbs the frozen HTTP contract defines:
 //    `generate` (POST .../cover/generate) and `show` (GET .../cover).
+//
+// Sol r2 ruling 3/4 / finding 8: the manifest check only required
+// httpPath to CONTAIN "cover" (a decoy path like "/api/uncover" would
+// pass), and the behavioral probe's sole proof was "CLI JSON output
+// contains the project id" -- explicitly called out as fabricatable by
+// any CLI that prints a plausible-looking response without ever calling
+// the daemon. Both are fixed below: the manifest now requires an EXACT
+// httpMethod/httpPath match against the frozen generate route, and the
+// behavioral probe proves each verb ACTUALLY issued a request to its
+// frozen endpoint by instrumenting the isolated daemon's raw
+// http.Server 'request' event (native Node infrastructure, not an
+// apps/daemon source modification) and reading back the resulting
+// request log -- CLI JSON content is no longer trusted as proof by
+// itself, only as supplementary evidence.
 // =========================================================================
 interface CapabilityManifestRow { capability?: unknown; uiEntryPoint?: unknown; httpMethod?: unknown; httpPath?: unknown; outputSchema?: unknown; cliArgs?: unknown; parityApplicable?: unknown; knownNamespaceRoutes?: unknown }
+const FROZEN_MANIFEST_HTTP_METHOD = 'POST';
+const FROZEN_MANIFEST_HTTP_PATH = '/api/projects/:id/cover/generate';
 function validateCapabilityManifestCoverRow(): { ok: boolean; evidence: string } {
   const manifestPath = path.join(repoRoot, 'scripts/waves/capability-manifest.json');
   if (!fs.existsSync(manifestPath)) return { ok: false, evidence: `${manifestPath}: absent` };
@@ -2191,8 +2657,71 @@ function validateCapabilityManifestCoverRow(): { ok: boolean; evidence: string }
   if (!Array.isArray(row.cliArgs) || row.cliArgs.length === 0 || !row.cliArgs.every((a) => typeof a === 'string')) violations.push('cliArgs must be a non-empty string array');
   if (typeof row.parityApplicable !== 'boolean') violations.push('parityApplicable must be a boolean');
   if (!Array.isArray(row.knownNamespaceRoutes) || !row.knownNamespaceRoutes.every((a) => typeof a === 'string')) violations.push('knownNamespaceRoutes must be a string array');
-  if (typeof row.httpPath === 'string' && !row.httpPath.includes('cover')) violations.push(`httpPath "${row.httpPath}" does not reference the frozen cover contract`);
+  if (row.httpMethod !== FROZEN_MANIFEST_HTTP_METHOD || row.httpPath !== FROZEN_MANIFEST_HTTP_PATH) {
+    violations.push(`httpMethod/httpPath must EXACTLY match the frozen generate route ${FROZEN_MANIFEST_HTTP_METHOD} ${FROZEN_MANIFEST_HTTP_PATH} -- got ${JSON.stringify(row.httpMethod)} ${JSON.stringify(row.httpPath)}`);
+  }
   return { ok: violations.length === 0, evidence: `capability-manifest.json 'cover' row: ${JSON.stringify(row)}\nviolations: ${violations.join('; ') || 'none'}` };
+}
+
+// Isolated daemon boot + a raw request log, used ONLY by C4-12's
+// behavioral probe (kept separate from the shared bootDaemonForProbing()
+// every other criterion relies on, to avoid any risk to those
+// already-working paths). Attaches to the Node http.Server's own
+// 'request' event -- fires for every inbound request before Express
+// routing runs, so this observes real requests without touching
+// apps/daemon source.
+interface BootedDaemonWithRequestLog extends BootedDaemon { requestLogPath: string }
+async function bootDaemonForProbingWithRequestLog(dataDir: string): Promise<BootedDaemonWithRequestLog> {
+  const requestLogPath = path.join(proofDir, `.c4-12-request-log.${process.pid}.${crypto.randomBytes(3).toString('hex')}.jsonl`);
+  fs.writeFileSync(requestLogPath, '');
+  const bootScript = `
+import fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
+process.env.OD_DATA_DIR = ${JSON.stringify(dataDir)};
+process.env.OD_DAEMON_CLI_PATH = ${JSON.stringify(path.join(repoRoot, 'apps/daemon/dist/cli.js'))};
+const mod = await import(pathToFileURL(${JSON.stringify(path.join(repoRoot, 'apps/daemon/src/server.ts'))}).href);
+const started = await mod.startServer({ port: 0, returnServer: true });
+started.server.on('request', (req) => {
+  try { fs.appendFileSync(${JSON.stringify(requestLogPath)}, JSON.stringify({ method: req.method, url: req.url }) + '\\n'); } catch {}
+});
+console.log('OD_W4_VERIFIER_READY ' + JSON.stringify({ url: started.url }));
+process.on('SIGTERM', async () => { await started.shutdown(); process.exit(0); });
+`;
+  const scriptPath = path.join(proofDir, `.boot-daemon-reqlog.${process.pid}.${crypto.randomBytes(3).toString('hex')}.mjs`);
+  fs.writeFileSync(scriptPath, bootScript);
+  const child = spawn('pnpm', ['exec', 'tsx', scriptPath], { cwd: repoRoot, stdio: ['ignore', 'pipe', 'pipe'] });
+  let buffered = '';
+  const ready = await new Promise<{ url: string } | null>((resolve) => {
+    const timeout = setTimeout(() => resolve(null), 45_000);
+    child.stdout?.on('data', (chunk: Buffer) => {
+      buffered += chunk.toString('utf8');
+      const line = buffered.split('\n').find((l) => l.startsWith('OD_W4_VERIFIER_READY '));
+      if (line) {
+        clearTimeout(timeout);
+        try { resolve(JSON.parse(line.slice('OD_W4_VERIFIER_READY '.length))); } catch { resolve(null); }
+      }
+    });
+    child.on('exit', () => { clearTimeout(timeout); resolve(null); });
+  });
+  const kill = async (): Promise<void> => {
+    if (child.pid) { try { child.kill('SIGTERM'); } catch { /* already gone */ } }
+    await new Promise<void>((resolve) => {
+      const t = setTimeout(() => { try { if (child.pid) child.kill('SIGKILL'); } catch { /* gone */ } resolve(); }, 5_000);
+      child.on('exit', () => { clearTimeout(t); resolve(); });
+    });
+    try { fs.unlinkSync(scriptPath); } catch { /* best effort */ }
+    try { fs.unlinkSync(requestLogPath); } catch { /* best effort */ }
+  };
+  if (!ready) {
+    await kill();
+    throw new Error(`daemon (request-log variant) failed to boot within 45s (stdout tail: ${buffered.slice(-2000)})`);
+  }
+  return { url: ready.url, pid: child.pid, dataDir, routeInventory: [], kill, requestLogPath };
+}
+function readRequestLog(logPath: string): { method: string; url: string }[] {
+  try {
+    return fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as { method: string; url: string });
+  } catch { return []; }
 }
 
 async function checkC412(): Promise<{ ok: boolean; evidence: string; detail?: string | undefined }> {
@@ -2207,34 +2736,51 @@ async function checkC412(): Promise<{ ok: boolean; evidence: string; detail?: st
   let cliHttpParityOk = false;
   if (coverKeyPresent && coverBackendSurface().present) {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w4-c412-'));
-    let daemon: BootedDaemon | undefined;
+    let daemon: BootedDaemonWithRequestLog | undefined;
     try {
-      daemon = await bootDaemonForProbing(dataDir);
+      daemon = await bootDaemonForProbingWithRequestLog(dataDir);
       const projectId = `w4-c412-${crypto.randomBytes(6).toString('hex')}`;
       await createProject(daemon.url, projectId, projectId);
       await uploadProjectFile(daemon.url, projectId, 'index.html', '<!doctype html><html><body>cli parity</body></html>');
 
-      // Verb 1: generate, through the CLI -- must drive the SAME
-      // POST .../cover/generate the HTTP surface uses.
-      const cliGenerate = odCli(['cover', 'generate', '--project', projectId, '--json'], odDataEnv(dataDir), 60_000);
+      // Pin the CLI at THIS isolated daemon explicitly. resolveDaemonUrl()
+      // (apps/daemon/src/daemon-url.ts) otherwise falls through to sidecar
+      // IPC discovery or `tools-dev status --json`, either of which could
+      // resolve to a DIFFERENT daemon (including the default namespace) --
+      // an explicit OD_DAEMON_URL removes that ambiguity and is required
+      // for the request-log proof below to mean anything.
+      const cliEnv: NodeJS.ProcessEnv = { ...odDataEnv(dataDir), OD_DAEMON_URL: daemon.url };
+      const expectedGeneratePath = coverGeneratePath(projectId);
+      const expectedFetchPath = coverFetchPath(projectId);
+
+      // Verb 1: generate, through the CLI. Sol r2 finding 8: "CLI JSON
+      // contains the project id" is fabricatable proof on its own (a CLI
+      // could print a plausible response without ever calling the
+      // daemon) -- the real proof is a REQUEST-LOG entry showing the CLI
+      // actually issued POST to the frozen generate endpoint.
+      const logBeforeGenerate = readRequestLog(daemon.requestLogPath).length;
+      const cliGenerate = odCli(['cover', 'generate', '--project', projectId, '--json'], cliEnv, 60_000);
+      const generateRequests = readRequestLog(daemon.requestLogPath).slice(logBeforeGenerate);
+      const generateHitFrozenEndpoint = generateRequests.some((r) => r.method === 'POST' && r.url.split('?')[0] === expectedGeneratePath);
       let cliGenerateParsed: unknown = null;
       try { const lines = cliGenerate.stdout.trim().split('\n').filter(Boolean); cliGenerateParsed = lines.length ? JSON.parse(lines[lines.length - 1] ?? '{}') : null; } catch { cliGenerateParsed = null; }
-      const cliGenerateMentionsProject = cliGenerate.status === 0 && isRecord(cliGenerateParsed) && JSON.stringify(cliGenerateParsed).includes(projectId);
+      const cliGenerateMentionsProject = isRecord(cliGenerateParsed) && JSON.stringify(cliGenerateParsed).includes(projectId);
 
-      // Verb 2: show/inspect, through the CLI -- must drive the SAME
-      // GET .../cover the HTTP surface uses. Value-level identity check
-      // (not a shape deep-equal -- CLI JSON and HTTP body are legitimately
-      // different shapes): the project id must appear in the CLI's own
-      // JSON output, and the HTTP surface must independently serve real
-      // bytes for the same project.
+      // Independent HTTP-surface confirmation that a cover now exists.
       const httpGet = await getCover(daemon.url, projectId);
-      const cliShow = odCli(['cover', 'show', '--project', projectId, '--json'], odDataEnv(dataDir), 60_000);
+
+      // Verb 2: show/inspect, through the CLI -- same request-log proof,
+      // bound to the frozen GET fetch endpoint.
+      const logBeforeShow = readRequestLog(daemon.requestLogPath).length;
+      const cliShow = odCli(['cover', 'show', '--project', projectId, '--json'], cliEnv, 60_000);
+      const showRequests = readRequestLog(daemon.requestLogPath).slice(logBeforeShow);
+      const showHitFrozenEndpoint = showRequests.some((r) => r.method === 'GET' && r.url.split('?')[0] === expectedFetchPath);
       let cliShowParsed: unknown = null;
       try { const lines = cliShow.stdout.trim().split('\n').filter(Boolean); cliShowParsed = lines.length ? JSON.parse(lines[lines.length - 1] ?? '{}') : null; } catch { cliShowParsed = null; }
-      const cliShowMentionsProject = cliShow.status === 0 && isRecord(cliShowParsed) && JSON.stringify(cliShowParsed).includes(projectId);
+      const cliShowMentionsProject = isRecord(cliShowParsed) && JSON.stringify(cliShowParsed).includes(projectId);
 
-      cliHttpParityOk = cliGenerateMentionsProject && cliShowMentionsProject && httpGet.ok && httpGet.bytes !== null && httpGet.bytes.length > 0;
-      rows.push(`od cover generate --project <id> --json: exit=${cliGenerate.status} mentionsProjectId=${cliGenerateMentionsProject}\nod cover show --project <id> --json: exit=${cliShow.status} mentionsProjectId=${cliShowMentionsProject}\nHTTP GET cover: ok=${httpGet.ok} bytes=${httpGet.bytes?.length ?? 0}\nparity=${cliHttpParityOk}`);
+      cliHttpParityOk = cliGenerate.status === 0 && cliShow.status === 0 && generateHitFrozenEndpoint && showHitFrozenEndpoint && httpGet.ok && httpGet.bytes !== null && httpGet.bytes.length > 0;
+      rows.push(`frozen endpoints: generate=POST ${expectedGeneratePath} show=GET ${expectedFetchPath}\nod cover generate --project <id> --json: exit=${cliGenerate.status} calledFrozenEndpoint=${generateHitFrozenEndpoint} (observed requests: ${JSON.stringify(generateRequests)}) mentionsProjectId(supplementary)=${cliGenerateMentionsProject}\nod cover show --project <id> --json: exit=${cliShow.status} calledFrozenEndpoint=${showHitFrozenEndpoint} (observed requests: ${JSON.stringify(showRequests)}) mentionsProjectId(supplementary)=${cliShowMentionsProject}\nHTTP GET cover: ok=${httpGet.ok} bytes=${httpGet.bytes?.length ?? 0}\nparity=${cliHttpParityOk}`);
     } finally {
       if (daemon) await daemon.kill().catch(() => undefined);
       fs.rmSync(dataDir, { recursive: true, force: true });
@@ -2297,8 +2843,8 @@ async function main(): Promise<void> {
     checkC46,
   );
   await runCriterion(
-    'C4-7', 'esbuild-bundle the REAL HtmlProjectCoverFrame from project-cover.tsx -> mount in a real Playwright Chromium page against a real daemon-served project referencing a real canary -> require an actual glyph render + assert zero canary hits; ALSO reproduce DesignsTab.tsx\'s separate live-artifact iframe (AST-extracted real sandbox literal) against the same tracker content',
-    'the not-yet-rendered fallback is not network-capable on BOTH live-preview surfaces in the grid: a project HTML referencing a remote tracker produces NO outbound request on first card view, AND an empty/crashed render (no glyph) does not trivially pass (today: FAILS, HtmlProjectCoverFrame unconditionally mounts a live network-capable iframe once the file HEAD-verifies)',
+    'C4-7', 'esbuild-bundle the REAL HtmlProjectCoverFrame from project-cover.tsx -> mount in a real Playwright Chromium page against a real daemon-served project referencing a real canary -> require an actual glyph render + assert zero canary hits; ALSO mint a real tool token over Node IPC from the isolated daemon child\'s own toolTokenRegistry -> POST the same tracker content to the real /api/tools/live-artifacts/create -> revoke the token -> mount the REAL (unmocked) DesignsTab.tsx so it fetches and renders its own live-artifact iframe end-to-end',
+    'the not-yet-rendered fallback is not network-capable on BOTH live-preview surfaces in the grid: a project HTML referencing a remote tracker produces NO outbound request on first card view, an empty/crashed render (no glyph) does not trivially pass (today: FAILS, HtmlProjectCoverFrame unconditionally mounts a live network-capable iframe once the file HEAD-verifies), AND a real end-to-end live artifact (created via the real tool endpoint, discovered and rendered by the real DesignsTab) does not leak to the canary either',
     checkC47,
   );
   await runCriterion(
@@ -2322,8 +2868,8 @@ async function main(): Promise<void> {
     checkC411,
   );
   await runCriterion(
-    'C4-12', "SUBCOMMAND_MAP AST scan for the EXACT 'cover' key -> load+validate the AUTHORITATIVE scripts/waves/capability-manifest.json 'cover' row -> bespoke CLI<->HTTP behavioral parity probe exercising BOTH generate and show verbs -> pnpm guard -> pnpm typecheck",
-    "od cover subcommand exists (exact key, not a decoy like 'coverage'), the authoritative capability manifest carries a valid 'cover' row, the CLI's generate AND show verbs agree on project identity with the HTTP surface (CLI calls the same endpoints, per AGENTS.md -- no import-closure reachability requirement), and pnpm guard + pnpm typecheck both exit 0",
+    'C4-12', "SUBCOMMAND_MAP AST scan for the EXACT 'cover' key -> load+validate the AUTHORITATIVE scripts/waves/capability-manifest.json 'cover' row against the EXACT frozen POST generate route -> instrument an isolated daemon's raw http.Server request stream -> run od cover generate/show and prove each verb's request log shows it hit its OWN frozen endpoint -> pnpm guard -> pnpm typecheck",
+    "od cover subcommand exists (exact key, not a decoy like 'coverage'), the authoritative capability manifest binds the exact frozen POST /api/projects/:id/cover/generate route (not merely a path containing \"cover\"), the CLI's generate AND show verbs are PROVEN (via a live request log, not just CLI JSON content) to call their respective frozen HTTP endpoints, and pnpm guard + pnpm typecheck both exit 0",
     checkC412,
   );
 
