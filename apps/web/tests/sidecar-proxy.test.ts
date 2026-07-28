@@ -145,7 +145,14 @@ describe('standalone backend binding', () => {
     const previousStandaloneRoot = process.env.OD_WEB_STANDALONE_ROOT;
     const previousStartupTimeout = process.env.OD_STANDALONE_STARTUP_TIMEOUT_MS;
     const standaloneRoot = await mkdtemp(join(tmpdir(), 'open-design-web-slow-http-'));
-    const runtimeRoot = await mkdtemp(join(tmpdir(), 'open-design-web-runtime-'));
+    // Anchor to /tmp directly rather than os.tmpdir(): `runtimeRoot` hosts a
+    // unix-domain IPC socket (`ipc: join(runtimeRoot, 'web.sock')` below),
+    // and AF_UNIX socket paths are capped at ~104 bytes on macOS (~108 on
+    // Linux) at the kernel level. A long/nested $TMPDIR (e.g. an
+    // orchestrator-scoped gate run) pushes that path past the cap and
+    // `server.listen()` throws EINVAL. /tmp stays short regardless of
+    // $TMPDIR.
+    const runtimeRoot = await mkdtemp(join('/tmp', 'open-design-web-runtime-'));
     const fakeWebRoot = join(standaloneRoot, 'apps', 'web');
 
     try {
@@ -201,7 +208,10 @@ process.on('SIGTERM', () => server.close(() => process.exit(0)));
     const previousStandaloneRoot = process.env.OD_WEB_STANDALONE_ROOT;
     const previousStartupTimeout = process.env.OD_STANDALONE_STARTUP_TIMEOUT_MS;
     const standaloneRoot = await mkdtemp(join(tmpdir(), 'open-design-web-hijacked-port-'));
-    const runtimeRoot = await mkdtemp(join(tmpdir(), 'open-design-web-hijacked-runtime-'));
+    // See the matching comment above ("accepts a listening standalone
+    // backend..."): `runtimeRoot` hosts a unix-domain IPC socket, so it must
+    // stay short regardless of $TMPDIR.
+    const runtimeRoot = await mkdtemp(join('/tmp', 'open-design-web-hijacked-runtime-'));
     const fakeWebRoot = join(standaloneRoot, 'apps', 'web');
     let handle: Awaited<ReturnType<typeof startWebSidecar>> | undefined;
 
