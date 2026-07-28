@@ -1452,13 +1452,24 @@ async function main(): Promise<void> {
       const probedDynamicRows = dynamicRows.filter((r) => typeof r.probePath === 'string');
       const claimingRows = dynamicRows.filter((r) => typeof r.probePath !== 'string');
       const { entries: allowlistEntries, status: allowlistStatus } = loadUnreachableAllowlist();
+      // Round-final coordinator ruling (Sol REJECT, finding 2): C0-7 must
+      // judge ONLY its own entryClasses (dynamic-row, canary-unreachable) --
+      // a sampling-excluded entry belongs to C0-10 exclusively, including
+      // its OWN staleness/duplicate/unused validation. The shared allowlist
+      // file is read once here (loadUnreachableAllowlist), but every check
+      // below that inspects "every entry" is scoped to c07OwnedEntries, not
+      // allowlistEntries, so a sampling-excluded entry -- stale, duplicate,
+      // or otherwise -- can never fail C0-7. No entry escapes validation
+      // entirely: C0-10 independently loads the same file and fully
+      // validates entryClass === 'sampling-excluded' entries on its own.
+      const c07OwnedEntries = allowlistEntries.filter((e) => e.entryClass === 'dynamic-row' || e.entryClass === 'canary-unreachable');
 
       // Duplicate entries: two entries on the same {file, line} are
       // ambiguous (which one governs the source fingerprint?) -- hard fail.
       const entryKey = (e: UnreachableAllowlistEntry) => `${e.file}:${e.line}`;
       const entryKeyCounts = new Map<string, number>();
-      for (const e of allowlistEntries) entryKeyCounts.set(entryKey(e), (entryKeyCounts.get(entryKey(e)) ?? 0) + 1);
-      const duplicateAllowlistEntriesByFileLine = allowlistEntries.filter((e) => (entryKeyCounts.get(entryKey(e)) ?? 0) > 1);
+      for (const e of c07OwnedEntries) entryKeyCounts.set(entryKey(e), (entryKeyCounts.get(entryKey(e)) ?? 0) + 1);
+      const duplicateAllowlistEntriesByFileLine = c07OwnedEntries.filter((e) => (entryKeyCounts.get(entryKey(e)) ?? 0) > 1);
 
       // Staleness: every entry's fingerprint is recomputed from the CURRENT
       // tree, never trusted from the entry itself. Round-8 F7: commit
@@ -1469,7 +1480,7 @@ async function main(): Promise<void> {
       // mismatched current-tree hash.
       const staleAllowlistEntries: { entry: UnreachableAllowlistEntry; reason: string }[] = [];
       const commitValidationByEntry = new Map<UnreachableAllowlistEntry, { status: CommitValidationStatus; detail?: string }>();
-      for (const e of allowlistEntries) {
+      for (const e of c07OwnedEntries) {
         const fp = computeSourceLineFingerprint(e.file, e.line);
         if (!fp.ok) staleAllowlistEntries.push({ entry: e, reason: fp.reason ?? 'unresolvable' });
         else if (fp.hash?.toLowerCase() !== e.sourceFingerprint.toLowerCase()) staleAllowlistEntries.push({ entry: e, reason: `fingerprint mismatch: recomputed ${fp.hash} != declared ${e.sourceFingerprint}` });
@@ -1488,7 +1499,7 @@ async function main(): Promise<void> {
       // site) and must never be judged "unused" from this class's
       // perspective, nor treated as authorizing a probing skip here.
       const rowMatchesEntry = (r: { file?: string; line?: number; method: string; path: string }, e: UnreachableAllowlistEntry) => r.file === e.file && r.line === e.line && r.method === e.method && r.path === e.path;
-      const dynamicRowClassEntries = allowlistEntries.filter((e) => e.entryClass === 'dynamic-row');
+      const dynamicRowClassEntries = c07OwnedEntries.filter((e) => e.entryClass === 'dynamic-row');
       const authorizedRows = claimingRows.filter((r) => dynamicRowClassEntries.some((e) => rowMatchesEntry(r, e)));
       const unauthorizedClaimingRows = claimingRows.filter((r) => !dynamicRowClassEntries.some((e) => rowMatchesEntry(r, e)));
       const unusedDynamicRowEntries = dynamicRowClassEntries.filter((e) => !claimingRows.some((r) => rowMatchesEntry(r, e)));
@@ -1516,7 +1527,7 @@ async function main(): Promise<void> {
       // unresolvable, so it cannot be probed at all; canary-unreachable:
       // the row CAN be probed, but its origin-less canary cannot honestly
       // succeed in this gate's environment).
-      const canaryUnreachableClassEntries = allowlistEntries.filter((e) => e.entryClass === 'canary-unreachable');
+      const canaryUnreachableClassEntries = c07OwnedEntries.filter((e) => e.entryClass === 'canary-unreachable');
       const rowMatchesCanaryEntry = (r: { method: string; path: string }, e: UnreachableAllowlistEntry) => r.method === e.method && r.path === e.path;
       const unusedCanaryUnreachableEntries = canaryUnreachableClassEntries.filter((e) => !validRows.some((r) => rowMatchesCanaryEntry(r, e)));
       // Duplicate: two canary-unreachable entries claiming the SAME
@@ -1794,7 +1805,7 @@ async function main(): Promise<void> {
           `dynamic rows missing probePath/authorization: ${JSON.stringify(dynamicRowsMissingProbePathOrReason)}; unbound dynamic rows: ${JSON.stringify(dynamicRowsUnbound)}; duplicate-binding dynamic rows: ${JSON.stringify(dynamicRowsDuplicateBinding)}; unacknowledged sites: ${JSON.stringify(unresolvableSitesUnacknowledged)}\n` +
           `allowlistStatus=${allowlistStatus} allowlistPath=${unreachableAllowlistPath ?? '(none)'}\n` +
           `duplicate allowlist entries: ${JSON.stringify(duplicateAllowlistEntries)}\nstale allowlist entries: ${JSON.stringify(staleAllowlistEntries)}\nunused allowlist entries: ${JSON.stringify(unusedAllowlistEntries)}\n` +
-          `per-entry commit-validation status: ${JSON.stringify(allowlistEntries.map((e) => ({ file: e.file, line: e.line, commit: e.commit, ...commitValidationByEntry.get(e) })))}\n` +
+          `per-entry commit-validation status: ${JSON.stringify(c07OwnedEntries.map((e) => ({ file: e.file, line: e.line, commit: e.commit, ...commitValidationByEntry.get(e) })))}\n` +
           `dynamic row counts: total=${dynamicRows.length} probed=${probedDynamicRows.length} claiming=${claimingRows.length} authorized=${authorizedRows.length} unauthorized=${unauthorizedClaimingRows.length} majorityUnreachable(authorized*2>=total)=${majorityUnreachable}\n` +
           `authorized rows (allowlist-cleared, free text is evidence-only): ${JSON.stringify(authorizedRows.map((r) => ({ method: r.method, path: r.path, file: r.file, line: r.line, freeTextUnreachable: r.unreachable })))}\n` +
           `all claiming rows with free-text unreachable surfaced: ${JSON.stringify(claimingRows.map((r) => ({ method: r.method, path: r.path, file: r.file, line: r.line, freeTextUnreachable: r.unreachable, authorized: authorizedRows.includes(r) })))}\n` +
@@ -2357,17 +2368,39 @@ async function main(): Promise<void> {
     // directory contract" -- subprocesses "must inherit the daemon's truth
     // source instead of guessing their own data path"; a missing
     // OD_DATA_DIR is a named forbidden-pattern escape that can fall through
-    // to a cwd-relative legacy default, i.e. <repo>/.od). buildOdCliEnv is
-    // the SINGLE construction point for every od CLI launch in this
-    // criterion -- OD_DATA_DIR is always the explicit, last-spread key, so
-    // it always wins over whatever (if anything) verify-w0.ts's own
-    // ambient process.env carries. Every actual launch this run performs is
-    // audited into odDataDirAudit below -- a real regression, proven
-    // against the real product on the real run, not just structurally --
-    // that OD_DATA_DIR was always explicitly bound to this boot's own
-    // isolated dataDir and could never resolve to <repo>/.od or repoRoot.
+    // to a cwd-relative legacy default, i.e. <repo>/.od).
+    //
+    // Sol REJECT, finding 1 (round-final confirmation): buildOdCliEnv alone
+    // only audits launches that actually CALL it -- a launch regressed to
+    // an inline { ...process.env, OD_DAEMON_URL: ... } would simply never
+    // appear in odDataDirAudit, and the old odDataDirLeaks check (computed
+    // only from what the audit DOES contain) would stay green while that
+    // launch silently used <repo>/.od. Two structural, independent
+    // enforcements close this:
+    //   (1) runOdCli is the ONLY function anywhere in this criterion that
+    //       may call execFileAsync with the od binary -- every launch site
+    //       below calls runOdCli, never execFileAsync directly. A
+    //       self-inspecting check (rawOdCliCallSiteCount below, after the
+    //       try/finally) reads THIS FILE'S OWN current source text and
+    //       counts literal execFileAsync(...odBinPath...) call sites,
+    //       hard-failing unless there is EXACTLY the one expected site --
+    //       runOdCli's own definition. A regressed direct call added
+    //       ANYWHERE else raises that count and is caught by name, before
+    //       it ever gets a chance to omit OD_DATA_DIR.
+    //   (2) requiredOdCliSitePatterns below enumerates every DISTINCT
+    //       call-site label this criterion is supposed to exercise every
+    //       run; missingRequiredOdCliSites hard-fails if any of them never
+    //       actually fired (catches a call being silently dropped from a
+    //       code path without regressing to a raw call at all).
+    // Also fixed: resolvesUnderRepoOd previously tested equality only --
+    // a dataDir resolving to a DESCENDANT of <repo>/.od (or of repoRoot)
+    // would not have been caught. Now checks startsWith too.
     const odDataDirAudit: { site: string; dataDir: string | undefined; matchesBootedDataDir: boolean; resolvesUnderRepoOd: boolean }[] = [];
     const repoOdDir = path.join(repoRoot, '.od');
+    function isUnderRepoOd(resolved: string | undefined): boolean {
+      if (typeof resolved !== 'string') return false;
+      return resolved === repoOdDir || resolved.startsWith(`${repoOdDir}${path.sep}`) || resolved === repoRoot || resolved.startsWith(`${repoRoot}${path.sep}`);
+    }
     function buildOdCliEnv(bootedDaemon: BootedDaemon, site: string): NodeJS.ProcessEnv {
       const env: NodeJS.ProcessEnv = { ...odDataEnv(bootedDaemon.dataDir), OD_DAEMON_URL: bootedDaemon.url };
       const resolved = typeof env.OD_DATA_DIR === 'string' ? path.resolve(env.OD_DATA_DIR) : undefined;
@@ -2375,10 +2408,23 @@ async function main(): Promise<void> {
         site,
         dataDir: env.OD_DATA_DIR,
         matchesBootedDataDir: env.OD_DATA_DIR === bootedDaemon.dataDir,
-        resolvesUnderRepoOd: resolved === repoOdDir || resolved === repoRoot,
+        resolvesUnderRepoOd: isUnderRepoOd(resolved),
       });
       return env;
     }
+    // The single, structurally-enforced execFileAsync call site for every
+    // od CLI launch this criterion performs -- see the self-inspecting
+    // rawOdCliCallSiteCount check below.
+    async function runOdCli(bootedDaemon: BootedDaemon, site: string, args: string[], timeoutMs: number): Promise<{ stdout: string }> {
+      return execFileAsync('node', [odBinPath, ...args], { env: buildOdCliEnv(bootedDaemon, site), timeout: timeoutMs });
+    }
+    const requiredOdCliSitePatterns: { label: string; matches: (site: string) => boolean }[] = [
+      { label: 'identity-canary', matches: (s) => s === 'identity-canary' },
+      { label: 'artifacts-nonce-binding:cli-create', matches: (s) => s === 'artifacts-nonce-binding:cli-create' },
+      { label: 'artifacts-nonce-binding:cli-observe', matches: (s) => s === 'artifacts-nonce-binding:cli-observe' },
+      { label: 'figma-multipart:cli', matches: (s) => s === 'figma-multipart:cli' },
+      { label: 'probeCapabilityEntry:*', matches: (s) => s.startsWith('probeCapabilityEntry:') },
+    ];
     try {
       daemon = await bootDaemonForProbing();
       const liveRouteKeys = new Set(daemon.routeInventory.map((r) => `${r.method} ${r.path}`));
@@ -2392,7 +2438,7 @@ async function main(): Promise<void> {
       const nonce = `w0-nonce-${crypto.randomBytes(8).toString('hex')}`;
       await fetch(`${daemon.url}/api/projects`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: nonce, name: nonce }) }).catch(() => null);
       try {
-        const { stdout } = await execFileAsync('node', [odBinPath, 'project', 'list', '--json'], { env: buildOdCliEnv(daemon, 'identity-canary'), timeout: 30_000 });
+        const { stdout } = await runOdCli(daemon, 'identity-canary', ['project', 'list', '--json'], 30_000);
         identityOk = stdout.includes(nonce);
       } catch (err) {
         identityOk = false;
@@ -2469,7 +2515,7 @@ async function main(): Promise<void> {
         fs.writeFileSync(inputFile, '<!doctype html><title>w0 artifacts nonce probe</title>');
         let cliCreateOk = false;
         try {
-          await execFileAsync('node', [odBinPath, 'artifacts', 'create', '--name', cliFileName, '--input', inputFile, '--project', cliProjectId], { env: buildOdCliEnv(bootedDaemon, 'artifacts-nonce-binding:cli-create'), timeout: 60_000 });
+          await runOdCli(bootedDaemon, 'artifacts-nonce-binding:cli-create', ['artifacts', 'create', '--name', cliFileName, '--input', inputFile, '--project', cliProjectId], 60_000);
           cliCreateOk = true;
         } catch (err) { problems.push(`CLI artifacts create failed: ${String(err)}`); }
         finally { try { fs.unlinkSync(inputFile); } catch { /* best effort */ } }
@@ -2484,7 +2530,7 @@ async function main(): Promise<void> {
         } catch (err) { problems.push(`HTTP artifacts create failed: ${String(err)}`); }
         async function cliListsFile(projectId: string, name: string): Promise<boolean> {
           try {
-            const { stdout } = await execFileAsync('node', [odBinPath, 'files', 'list', projectId, '--json'], { env: buildOdCliEnv(bootedDaemon, 'artifacts-nonce-binding:cli-observe'), timeout: 30_000 });
+            const { stdout } = await runOdCli(bootedDaemon, 'artifacts-nonce-binding:cli-observe', ['files', 'list', projectId, '--json'], 30_000);
             const parsed: unknown = JSON.parse(stdout);
             const files = isRecord(parsed) && Array.isArray(parsed.files) ? (parsed.files as unknown[]) : [];
             return files.some((f) => isRecord(f) && (f.name === name || f.path === name));
@@ -2523,8 +2569,19 @@ async function main(): Promise<void> {
       // Blob([bytes]), basename(file)); no other fields when --notes is
       // absent, which it is here).
       const figmaFixturePath = path.join(repoRoot, 'scripts/waves/fixtures/w0-figma-check.fig');
+      // Round-final coordinator ruling (Sol REJECT, finding 3): shape-only
+      // validation (label/snapshotDir/inventory/suggestedPrompt all
+      // present) is satisfied by a lazy handler returning a static,
+      // assets-only stub with inventory.decoded=false and
+      // inventory.nodeCount=0 -- the gate-owned fixture's own genuine
+      // decodability (verified offline: decoded=true, nodeCount=1) is not
+      // load-bearing unless the response is required to actually reflect
+      // it. Both success legs now require the REAL response to report
+      // inventory.decoded === true and inventory.nodeCount >= 1.
       function validateFigmaOutputShape(v: unknown): boolean {
-        return isRecord(v) && typeof v.label === 'string' && typeof v.snapshotDir === 'string' && isRecord(v.inventory) && typeof v.suggestedPrompt === 'string';
+        if (!isRecord(v) || typeof v.label !== 'string' || typeof v.snapshotDir !== 'string' || !isRecord(v.inventory) || typeof v.suggestedPrompt !== 'string') return false;
+        const inventory = v.inventory;
+        return inventory.decoded === true && typeof inventory.nodeCount === 'number' && inventory.nodeCount >= 1;
       }
       async function probeFigmaMultipart(bootedDaemon: BootedDaemon, nonceValue: string): Promise<{ ok: boolean; detail: string }> {
         const problems: string[] = [];
@@ -2538,7 +2595,7 @@ async function main(): Promise<void> {
         }
         let cliOk = false;
         try {
-          const { stdout } = await execFileAsync('node', [odBinPath, 'figma', 'import', '--project', cliProjectId, '--file', figmaFixturePath, '--json'], { env: buildOdCliEnv(bootedDaemon, 'figma-multipart:cli'), timeout: 60_000 });
+          const { stdout } = await runOdCli(bootedDaemon, 'figma-multipart:cli', ['figma', 'import', '--project', cliProjectId, '--file', figmaFixturePath, '--json'], 60_000);
           const cliJson: unknown = JSON.parse(stdout);
           cliOk = validateFigmaOutputShape(cliJson);
           if (!cliOk) problems.push(`CLI response missing declared outputSchema keys: ${stdout.slice(0, 500)}`);
@@ -2587,7 +2644,7 @@ async function main(): Promise<void> {
         let cliStdout = '', cliOk = false;
         try {
           const args = entry.cliArgs.map((a) => (a === '<nonceProjectId>' ? nonceValue : a));
-          const { stdout } = await execFileAsync('node', [odBinPath, ...args], { env: buildOdCliEnv(bootedDaemon, `probeCapabilityEntry:${entry.capability}`), timeout: 60_000 });
+          const { stdout } = await runOdCli(bootedDaemon, `probeCapabilityEntry:${entry.capability}`, args, 60_000);
           cliStdout = stdout;
           cliOk = true;
         } catch { cliOk = false; }
@@ -2715,20 +2772,44 @@ async function main(): Promise<void> {
     // Round-final coordinator ruling, item 1: a real regression, over every
     // launch this actual run performed -- proves OD_DATA_DIR was always
     // explicitly bound to the isolated boot's own dataDir and never absent
-    // or resolvable to <repo>/.od / repoRoot.
+    // or resolvable to <repo>/.od / repoRoot (now including descendants,
+    // not just exact equality).
     const odDataDirLeaks = odDataDirAudit.filter((a) => !a.matchesBootedDataDir || a.resolvesUnderRepoOd);
+    // Sol REJECT, finding 1 (round-final confirmation), enforcement (2):
+    // every distinct call-site label this criterion is supposed to
+    // exercise every run must actually appear in the audit -- a code path
+    // that stops calling runOdCli (without regressing to a raw call at
+    // all) would otherwise leave a silent gap instead of a caught leak.
+    const observedOdCliSites = odDataDirAudit.map((a) => a.site);
+    const missingRequiredOdCliSites = requiredOdCliSitePatterns.filter((p) => !observedOdCliSites.some((s) => p.matches(s))).map((p) => p.label);
+    // Sol REJECT, finding 1, enforcement (1): a self-inspecting count of
+    // this file's OWN current source text. execFileAsync spawning the od
+    // binary must appear EXACTLY ONCE anywhere in this file -- runOdCli's
+    // own definition -- so a regressed direct call added at any OTHER site
+    // (bypassing runOdCli/buildOdCliEnv entirely, and therefore invisible
+    // to odDataDirAudit) raises this count and is caught by name.
+    const selfSourcePath = fileURLToPath(import.meta.url);
+    const selfSourceText = fs.readFileSync(selfSourcePath, 'utf8');
+    const RAW_OD_CLI_CALL_SITE_PATTERN = /execFileAsync\(\s*['"]node['"]\s*,\s*\[\s*odBinPath/g;
+    const rawOdCliCallSiteCount = (selfSourceText.match(RAW_OD_CLI_CALL_SITE_PATTERN) ?? []).length;
+    const EXPECTED_RAW_OD_CLI_CALL_SITE_COUNT = 1; // runOdCli's own definition, nowhere else
+    const unexpectedRawOdCliCallSiteCount = rawOdCliCallSiteCount !== EXPECTED_RAW_OD_CLI_CALL_SITE_COUNT;
     const ok = problems.length === 0 && sampleResults.length > 0 && sampleResults.every((r) => r.ok) && redControlOk && identityOk &&
       artifactsNonceBindingOk && figmaMultipartOk &&
       odDataDirLeaks.length === 0 &&
+      missingRequiredOdCliSites.length === 0 &&
+      !unexpectedRawOdCliCallSiteCount &&
       staleSamplingExcludedEntries.length === 0 && duplicateSamplingExcludedEntries.length === 0 && unusedSamplingExcludedEntries.length === 0;
     record('C0-10', '', '', ok,
       `manifest: ${manifest.length}, applicable: ${applicable.length}, SUBCOMMAND_MAP: ${subcommandKeys.length}\nproblems: ${problems.join('; ') || 'none'}\nsample: ${JSON.stringify(sampleResults)}\nred control: ${redControlDetail}\n` +
         `artifacts nonce-binding (item 4a): ok=${artifactsNonceBindingOk} ${artifactsNonceBindingDetail}\n` +
         `figma multipart (item 4b): ok=${figmaMultipartOk} ${figmaMultipartDetail}\n` +
-        `OD_DATA_DIR audit (item 1 -- every od CLI launch this run performed; a leak is a launch that omitted OD_DATA_DIR, diverged from the booted daemon's own dataDir, or could resolve under <repo>/.od): ${JSON.stringify(odDataDirAudit)}; leaks: ${JSON.stringify(odDataDirLeaks)}\n` +
+        `OD_DATA_DIR audit (item 1 -- every od CLI launch this run performed; a leak is a launch that omitted OD_DATA_DIR, diverged from the booted daemon's own dataDir, or could resolve under or below <repo>/.od / repoRoot): ${JSON.stringify(odDataDirAudit)}; leaks: ${JSON.stringify(odDataDirLeaks)}\n` +
+        `required od CLI launch-site coverage (every distinct call site must fire at least once): required=${JSON.stringify(requiredOdCliSitePatterns.map((p) => p.label))} observed=${JSON.stringify(observedOdCliSites)} missing=${JSON.stringify(missingRequiredOdCliSites)}\n` +
+        `self-inspecting raw-call-site count (this file's own source; expected exactly ${EXPECTED_RAW_OD_CLI_CALL_SITE_COUNT}, inside runOdCli only): ${rawOdCliCallSiteCount}\n` +
         `sampling-excluded (item 3): allowlistStatus=${allowlistStatusC10} entries=${JSON.stringify(samplingExcludedEntries.map((e) => ({ capability: e.capability, file: e.file, line: e.line, reason: e.reason })))} excludedCapabilities=${JSON.stringify([...excludedCapabilityNames])} staleEntries=${JSON.stringify(staleSamplingExcludedEntries)} duplicateEntries=${JSON.stringify(duplicateSamplingExcludedEntries)} unusedEntries=${JSON.stringify(unusedSamplingExcludedEntries)} per-entry commit-validation=${JSON.stringify(samplingExcludedEntries.map((e) => ({ capability: e.capability, ...commitValidationBySamplingEntry.get(e) })))}`,
       {
-        detail: ok ? undefined : `problems=${problems.length} identityOk=${identityOk} sample=${JSON.stringify(sampleResults.map((r) => r.ok))} redControlOk=${redControlOk} artifactsNonceBindingOk=${artifactsNonceBindingOk} figmaMultipartOk=${figmaMultipartOk} odDataDirLeaks=${odDataDirLeaks.length} staleSamplingExcludedEntries=${staleSamplingExcludedEntries.length} duplicateSamplingExcludedEntries=${duplicateSamplingExcludedEntries.length} unusedSamplingExcludedEntries=${unusedSamplingExcludedEntries.length}`,
+        detail: ok ? undefined : `problems=${problems.length} identityOk=${identityOk} sample=${JSON.stringify(sampleResults.map((r) => r.ok))} redControlOk=${redControlOk} artifactsNonceBindingOk=${artifactsNonceBindingOk} figmaMultipartOk=${figmaMultipartOk} odDataDirLeaks=${odDataDirLeaks.length} missingRequiredOdCliSites=${JSON.stringify(missingRequiredOdCliSites)} rawOdCliCallSiteCount=${rawOdCliCallSiteCount} staleSamplingExcludedEntries=${staleSamplingExcludedEntries.length} duplicateSamplingExcludedEntries=${duplicateSamplingExcludedEntries.length} unusedSamplingExcludedEntries=${unusedSamplingExcludedEntries.length}`,
       });
   });
 
