@@ -321,7 +321,30 @@ interface BootedDaemon {
   kill: () => Promise<void>;
 }
 
+// F-10 (Sol round-1): boot infrastructure (mkdtemp, spawn, script writes) can
+// itself fail -- under a restricted sandbox this threw uncaught, which
+// propagated past every criterion probe and the manifest write entirely
+// (the outer async-IIFE catch is a last resort, not a substitute for a named
+// per-criterion result). `bootDaemonForProbing` is now a thin guard: it never
+// throws, and any infra failure becomes a normal `BootedDaemon.bootFailure`
+// string that C2-1/C2-6 already know how to fail cleanly on, while every
+// OTHER criterion and the manifest write still proceed.
 async function bootDaemonForProbing(): Promise<BootedDaemon> {
+  try {
+    return await bootDaemonForProbingUnguarded();
+  } catch (err) {
+    return {
+      url: '',
+      dataDir: '',
+      egressLogPath: '',
+      bootFailure: `daemon boot infrastructure crashed before any probe could run: ${String((err as Error)?.stack ?? err)}`,
+      readEgress: () => [],
+      kill: async () => {},
+    };
+  }
+}
+
+async function bootDaemonForProbingUnguarded(): Promise<BootedDaemon> {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w2-verify-data-'));
   const egressLogPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'od-w2-verify-egress-')), 'egress.jsonl');
   fs.writeFileSync(egressLogPath, '');
@@ -393,8 +416,14 @@ try {
   });
   let buffered = '';
   let bootFailure: string | null = null;
+  // 180s, not 60s: an isolated boot takes ~2s, but under real machine
+  // contention (this verifier is one process among many on a shared dev
+  // box) `pnpm exec tsx` startup + 455-plugin registration was observed to
+  // occasionally miss a 60s window even though nothing was actually wrong --
+  // C2-1/C2-6 depend on this boot succeeding, so a too-tight timeout would
+  // manufacture false fails, not catch real ones.
   const ready = await new Promise<{ url: string } | null>((resolve) => {
-    const timeout = setTimeout(() => resolve(null), 60_000);
+    const timeout = setTimeout(() => resolve(null), 180_000);
     child.stdout?.on('data', (chunk: Buffer) => {
       buffered += chunk.toString('utf8');
       const readyLine = buffered.split('\n').find((l) => l.startsWith('W2_VERIFIER_READY '));
@@ -643,14 +672,75 @@ function discoverCheckBrandSurfacesModule(): { path: string | null; candidates: 
   return { path: candidates[0] ?? null, candidates };
 }
 
-async function discoverBrandSurfacesShape(modulePath: string): Promise<BrandSurfaceDiscovery & { error?: string }> {
+// Sol round-1 F2: `checkFnName` and the guard-wiring proof used to be
+// discovered INDEPENDENTLY of each other -- any exported `check*`-named
+// function qualified for `checkFnName`, and separately any `run:` property
+// anywhere in guard.ts whose value matched an imported name from a
+// check-brand-surfaces-shaped module specifier counted as "wired." Those two
+// facts were never required to be the SAME function, so an unrelated
+// `{run: someOtherImportedFn}` property elsewhere in guard.ts (or an
+// unrelated decorative `check*` export) could satisfy both checks without
+// `pnpm guard` ever actually executing brand-surface enforcement. This now
+// derives the wired function's name FROM guard.ts's own `checks` ARRAY
+// LITERAL (the thing `runChecks()` actually iterates), and only that
+// specific exported name is treated as "the" check function everywhere else
+// (C2-3's mutation test in particular).
+function discoverGuardWiring(): { wired: boolean; wiredExportedName: string | null; evidence: string } {
+  const guardPath = abs('scripts/guard.ts');
+  if (!ts) return { wired: false, wiredExportedName: null, evidence: `TypeScript compiler API unavailable: ${tsLoadError}` };
+  if (!fs.existsSync(guardPath)) return { wired: false, wiredExportedName: null, evidence: 'scripts/guard.ts not found' };
+  const { sourceFile } = parseSource(guardPath);
+
+  // Step 1: named imports from a check-brand-surfaces-shaped module
+  // specifier, keeping BOTH the local binding name (used inside guard.ts)
+  // and the exported name in the source module (propertyName when aliased
+  // `{ x as y }`, otherwise the same as the local name).
+  const importedBindings = new Map<string, string>(); // localName -> exportedName
+  walkAst(sourceFile, (node) => {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) && /check-brand-surfaces/i.test(node.moduleSpecifier.text)) {
+      const clause = node.importClause;
+      if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+        for (const el of clause.namedBindings.elements) {
+          importedBindings.set(el.name.text, (el.propertyName ?? el.name).text);
+        }
+      }
+    }
+  });
+  if (importedBindings.size === 0) return { wired: false, wiredExportedName: null, evidence: 'scripts/guard.ts has no import from a module path matching /check-brand-surfaces/i' };
+
+  // Step 2: the ACTUAL `checks` array literal (`const checks: GuardCheck[] =
+  // [...]`), not just any object anywhere in the file. Only a `run:`
+  // property on an object literal that is itself an ELEMENT of that array
+  // counts.
+  let checksArrayFound = false;
+  let wiredExportedName: string | null = null;
+  walkAst(sourceFile, (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'checks' && node.initializer && ts.isArrayLiteralExpression(node.initializer)) {
+      checksArrayFound = true;
+      for (const element of node.initializer.elements) {
+        if (!ts.isObjectLiteralExpression(element)) continue;
+        for (const prop of element.properties) {
+          if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name) && prop.name.text === 'run' && ts.isIdentifier(prop.initializer) && importedBindings.has(prop.initializer.text)) {
+            wiredExportedName = importedBindings.get(prop.initializer.text) ?? null;
+          }
+        }
+      }
+    }
+  });
+  if (!checksArrayFound) return { wired: false, wiredExportedName: null, evidence: 'scripts/guard.ts has an import from check-brand-surfaces, but no `const checks: GuardCheck[] = [...]` array literal was found to check against' };
+  if (!wiredExportedName) return { wired: false, wiredExportedName: null, evidence: `imported binding(s) [${[...importedBindings.keys()].join(', ')}] found, but none appears as an ELEMENT of the \`checks\` array's \`run:\` property -- an unrelated run:<importedFn> elsewhere in the file does not count` };
+  return { wired: true, wiredExportedName, evidence: `checks array element's run: property resolves to imported export "${wiredExportedName}"` };
+}
+
+async function discoverBrandSurfacesShape(modulePath: string, wiredExportedName: string | null): Promise<BrandSurfaceDiscovery & { error?: string }> {
   try {
     const mod = (await import(pathToFileURL(modulePath).href + `?t=${Date.now()}`)) as Record<string, unknown>;
-    let checkFnName: string | null = null;
+    // Sol round-1 F2: checkFnName is now the guard-derived name, not an
+    // independent "any export starting with check" guess.
+    const checkFnName = wiredExportedName && typeof mod[wiredExportedName] === 'function' ? wiredExportedName : null;
     let inventoryExportName: string | null = null;
     let inventoryLength = 0;
     for (const [name, value] of Object.entries(mod)) {
-      if (!checkFnName && typeof value === 'function' && /^check/i.test(name)) checkFnName = name;
       if (!inventoryExportName && Array.isArray(value) && value.length > 0 && value.every((el) => el !== null && typeof el === 'object' && !Array.isArray(el))) {
         inventoryExportName = name;
         inventoryLength = value.length;
@@ -666,34 +756,40 @@ async function checkC2_2(): Promise<BrandSurfaceDiscovery | null> {
   let discovery: BrandSurfaceDiscovery | null = null;
   await probe(
     'C2-2',
-    'discover scripts/check-brand-surfaces*.ts; dynamic-import it; inspect its exported inventory array (rationale + file/path fields per entry) and exported check function; AST-parse scripts/guard.ts and confirm the check is wired into the `checks` array',
-    'an allowlist-shaped, typed brand-surface inventory (>=5 entries, each carrying a rationale-like and a file/path-like string field) exists and is exported; a check function is exported; scripts/guard.ts imports it and registers it in the checks array actually executed by `pnpm guard`',
+    'discover scripts/check-brand-surfaces*.ts; AST-parse scripts/guard.ts\'s ACTUAL `checks` array literal to find the specific imported function wired into it (not any check*-named export, not any unrelated run: property); dynamic-import the module and inspect its exported inventory array (rationale + file/path fields, file fields resolving to REAL repo files, per entry)',
+    'an allowlist-shaped, typed brand-surface inventory (>=5 entries, each carrying a rationale-like field and a file/path-like field that resolves to a real file) exists and is exported; the function actually registered as an ELEMENT of guard.ts\'s `checks` array (what `pnpm guard` executes) is a real export of the module',
     async () => {
       const { path: modulePath, candidates } = discoverCheckBrandSurfacesModule();
       if (!modulePath) {
         return { ok: false, evidence: `no file matching scripts/check-brand-surfaces*.ts found under ${toRepoRelative(abs('scripts'))}`, detail: 'inventory module missing' };
       }
-      const shape = await discoverBrandSurfacesShape(modulePath);
+      const wiring = discoverGuardWiring();
+      const shape = await discoverBrandSurfacesShape(modulePath, wiring.wiredExportedName);
       discovery = shape;
       const problems: string[] = [];
       if (shape.error) problems.push(`failed to import ${toRepoRelative(modulePath)}: ${shape.error}`);
-      if (!shape.checkFnName) problems.push('no exported function whose name starts with "check" was found');
+      if (!wiring.wired) problems.push(`guard.ts wiring: ${wiring.evidence}`);
+      if (wiring.wired && !shape.checkFnName) problems.push(`guard.ts wires in the export "${wiring.wiredExportedName}", but the module does not actually export a function by that name`);
       if (!shape.inventoryExportName) problems.push('no exported array-of-objects inventory was found');
       if (shape.inventoryExportName && shape.inventoryLength < 5) problems.push(`inventory "${shape.inventoryExportName}" has only ${shape.inventoryLength} entries (want >= 5 -- the PRD names at least the newsletter URL, 3+ X-Title sites, the metadata route, share-helpers, pluginFolderActions, and the sidecar handshake string as distinct surfaces)`);
 
       let rationaleFieldsOk = true;
       let fileFieldsOk = true;
+      let realFileRatio = 0;
       if (shape.inventoryExportName) {
         try {
           const mod = (await import(pathToFileURL(modulePath).href + `?t=${Date.now()}`)) as Record<string, unknown>;
           const arr = mod[shape.inventoryExportName] as Array<Record<string, unknown>>;
+          let realFileCount = 0;
           for (const entry of arr) {
             const keys = Object.keys(entry);
             const hasRationale = keys.some((k) => /rationale|reason|why/i.test(k) && typeof entry[k] === 'string' && (entry[k] as string).trim().length > 0);
-            const hasFile = keys.some((k) => /file|path|surface|location/i.test(k) && typeof entry[k] === 'string' && (entry[k] as string).trim().length > 0);
+            const fileKey = keys.find((k) => /file|path|surface|location/i.test(k) && typeof entry[k] === 'string' && (entry[k] as string).trim().length > 0);
             if (!hasRationale) rationaleFieldsOk = false;
-            if (!hasFile) fileFieldsOk = false;
+            if (!fileKey) fileFieldsOk = false;
+            else if (fs.existsSync(abs((entry[fileKey] as string).replace(/^\/+/, '')))) realFileCount += 1;
           }
+          realFileRatio = arr.length > 0 ? realFileCount / arr.length : 0;
         } catch {
           rationaleFieldsOk = false;
           fileFieldsOk = false;
@@ -701,37 +797,12 @@ async function checkC2_2(): Promise<BrandSurfaceDiscovery | null> {
       }
       if (shape.inventoryExportName && !rationaleFieldsOk) problems.push(`inventory "${shape.inventoryExportName}" has at least one entry missing a non-empty rationale-like string field`);
       if (shape.inventoryExportName && !fileFieldsOk) problems.push(`inventory "${shape.inventoryExportName}" has at least one entry missing a non-empty file/path-like string field`);
+      // Sol round-1 F2: require the file/path fields to mostly resolve to
+      // REAL files in the tree -- a decorative array of unrelated objects
+      // (gaming the "any array of objects" shape check) would not.
+      if (shape.inventoryExportName && fileFieldsOk && realFileRatio < 0.8) problems.push(`inventory "${shape.inventoryExportName}": only ${Math.round(realFileRatio * 100)}% of entries' file/path fields resolve to a real file in the repo (want >= 80%) -- this does not look like a real brand-surface inventory`);
 
-      // guard.ts wiring
-      let wiredIntoGuard = false;
-      const guardPath = abs('scripts/guard.ts');
-      if (ts && fs.existsSync(guardPath)) {
-        const { sourceFile } = parseSource(guardPath);
-        const importedLocalNames = new Set<string>();
-        walkAst(sourceFile, (node) => {
-          if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) && /check-brand-surfaces/i.test(node.moduleSpecifier.text)) {
-            const clause = node.importClause;
-            if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
-              for (const el of clause.namedBindings.elements) importedLocalNames.add(el.name.text);
-            }
-          }
-        });
-        if (importedLocalNames.size > 0) {
-          walkAst(sourceFile, (node) => {
-            if (wiredIntoGuard) return;
-            if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name) && node.name.text === 'run' && ts.isIdentifier(node.initializer) && importedLocalNames.has(node.initializer.text)) {
-              wiredIntoGuard = true;
-            }
-          });
-        }
-        if (!wiredIntoGuard) problems.push('scripts/guard.ts does not import a function from a check-brand-surfaces module and register it in the `checks` array\'s `run` field');
-      } else if (!fs.existsSync(guardPath)) {
-        problems.push('scripts/guard.ts not found');
-      } else {
-        problems.push(`TypeScript compiler API unavailable: ${tsLoadError}`);
-      }
-
-      const evidence = `module: ${toRepoRelative(modulePath)} (candidates: ${candidates.map(toRepoRelative).join(', ')})\ncheckFnName: ${shape.checkFnName}\ninventoryExportName: ${shape.inventoryExportName} (length ${shape.inventoryLength})\nwiredIntoGuard: ${wiredIntoGuard}\n\nPROBLEMS:\n${problems.join('\n') || '(none)'}`;
+      const evidence = `module: ${toRepoRelative(modulePath)} (candidates: ${candidates.map(toRepoRelative).join(', ')})\nguardWiring: ${wiring.evidence}\ncheckFnName (guard-derived): ${shape.checkFnName}\ninventoryExportName: ${shape.inventoryExportName} (length ${shape.inventoryLength}, realFileRatio=${realFileRatio.toFixed(2)})\n\nPROBLEMS:\n${problems.join('\n') || '(none)'}`;
       return { ok: problems.length === 0, evidence, detail: problems[0] };
     },
   );
@@ -742,11 +813,37 @@ async function checkC2_2(): Promise<BrandSurfaceDiscovery | null> {
 // C2-3 -- the guard actually catches reintroduction (mutation test on a
 // throwaway repo copy; the real tree is never touched).
 // ===========================================================================
+// Sol round-1 F2: a fixed, verifier-source-visible marker string
+// ("w2-verifier-mutation-probe") is exactly what a gaming stub would grep
+// for and special-case. Every run now generates a fresh random nonce and
+// picks one of two GENUINE old-brand-shaped payloads -- a URL under the
+// actual frozen domain, or the actual display name checked elsewhere in
+// this file -- so the only thing a check can catch is the real signal, not
+// a memorable verifier-specific token.
+function randomMutationMarker(): { kind: 'url' | 'displayName'; text: string } {
+  const nonce = crypto.randomBytes(6).toString('hex');
+  if (crypto.randomInt(2) === 0) {
+    return { kind: 'url', text: `https://open-design.ai/${nonce}` };
+  }
+  return { kind: 'displayName', text: `Open Design (ref ${nonce})` };
+}
+
+function fisherYatesShuffle<T>(items: T[]): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    const tmp = out[i]!;
+    out[i] = out[j]!;
+    out[j] = tmp;
+  }
+  return out;
+}
+
 async function checkC2_3(discovery: BrandSurfaceDiscovery | null): Promise<void> {
   await probe(
     'C2-3',
-    'rsync-copy the repo (excluding node_modules/.git/dist/.next/.tmp; node_modules symlinked read-only) to a scratch dir; run the discovered check function on the pristine copy (negative control, expect pass); for up to 6 inventory entries, mutate the copy\'s target file with an old-brand string, re-run (expect fail), then revert; the real repo tree is never written to',
-    'the check function passes on the unmutated copy (proving it is not vacuously failing) and fails on every mutated copy (proving each inventoried surface class is actually enforced), and the real repository tree remains untouched throughout',
+    'rsync-copy the repo (excluding node_modules/.git/dist/.next/.tmp) to a scratch dir; symlink node_modules read-only (mount-namespace-free best effort) but ALSO exclude any node_modules-rooted inventory path from mutation eligibility and realpath-verify every mutation target stays contained inside the scratch copy; run the discovered check function on the pristine copy (negative control, expect pass); mutate EVERY resolvable inventory entry (randomized order, generous cap) with a random-per-run, non-memorable old-brand-shaped marker, re-run (expect fail), then revert; the real repo tree is never written to',
+    'the check function passes on the unmutated copy (proving it is not vacuously failing) and fails on every mutated entry (proving each inventoried surface class is actually enforced by a check that cannot special-case a fixed probe string), and the real repository tree remains untouched throughout',
     async () => {
       if (!discovery || !discovery.modulePath || !discovery.checkFnName || !discovery.inventoryExportName) {
         return { ok: false, evidence: 'C2-2 discovery did not find a usable check-brand-surfaces module/function/inventory -- cannot run the mutation test', detail: 'depends on C2-2' };
@@ -772,6 +869,13 @@ async function checkC2_3(discovery: BrandSurfaceDiscovery | null): Promise<void>
         } catch (err) {
           return { ok: false, evidence: `could not symlink node_modules into the scratch copy: ${String(err)}`, detail: 'scratch copy cannot resolve its own imports' };
         }
+        // Sol round-1 F3: the node_modules symlink points at the REAL,
+        // shared node_modules -- a write through it would mutate the live
+        // dependency tree invisibly to `git status` (node_modules is
+        // gitignored). Never treat anything under it as a mutation target,
+        // and realpath-verify (below) that no mutation target resolves
+        // outside the scratch copy through it or any other symlink.
+        const realCopyRoot = fs.realpathSync(copyRoot);
 
         const relModulePath = path.relative(repoRoot, discovery.modulePath);
         const copyModulePath = path.join(copyRoot, relModulePath);
@@ -793,33 +897,55 @@ async function checkC2_3(discovery: BrandSurfaceDiscovery | null): Promise<void>
 
         const inventoryMod = (await import(pathToFileURL(copyModulePath).href + `?t=${Date.now()}-init`)) as Record<string, unknown>;
         const inventory = inventoryMod[inventoryExportName] as Array<Record<string, unknown>>;
-        const MAX_MUTATIONS = 6;
+        // Sol round-1 F2: no more "first 6" -- test every resolvable entry,
+        // in a RANDOMIZED order, with a generous cap that only guards
+        // against a pathologically huge inventory (nothing realistic here
+        // should ever hit it).
+        const MAX_MUTATIONS = 40;
+        const shuffledInventory = fisherYatesShuffle(inventory);
         let mutationsAttempted = 0;
-        for (const entry of inventory) {
+        for (const entry of shuffledInventory) {
           if (mutationsAttempted >= MAX_MUTATIONS) break;
           const fileKey = Object.keys(entry).find((k) => /file|path/i.test(k) && typeof entry[k] === 'string');
           if (!fileKey) continue;
           const relTargetPath = (entry[fileKey] as string).replace(/^\/+/, '');
+          // Sol round-1 F3: never mutate anything rooted under
+          // node_modules, regardless of what an inventory entry claims.
+          if (relTargetPath === 'node_modules' || relTargetPath.startsWith('node_modules/')) continue;
           const targetInRepo = abs(relTargetPath);
           if (!fs.existsSync(targetInRepo) || relTargetPath.endsWith('.png') || relTargetPath.endsWith('.jpg') || relTargetPath.endsWith('.svg')) continue;
           const targetInCopy = path.join(copyRoot, relTargetPath);
           if (!fs.existsSync(targetInCopy)) continue;
+          // Sol round-1 F3: realpath-containment -- refuse to mutate
+          // anything that resolves outside the scratch copy (a symlink
+          // escape from rsync-preserved links, or a path-traversal-shaped
+          // inventory entry).
+          let realTarget: string;
+          try {
+            realTarget = fs.realpathSync(targetInCopy);
+          } catch {
+            continue;
+          }
+          if (!(realTarget === realCopyRoot || realTarget.startsWith(realCopyRoot + path.sep))) {
+            problems.push(`${relTargetPath}: resolved outside the scratch copy (${realTarget}) -- refusing to mutate (symlink/traversal escape guard)`);
+            continue;
+          }
           mutationsAttempted += 1;
           const original = fs.readFileSync(targetInCopy, 'utf8');
-          const marker = 'https://open-design.ai/w2-verifier-mutation-probe';
+          const marker = randomMutationMarker();
           let mutated: string;
           if (relTargetPath.endsWith('.json')) {
             try {
               const parsed = JSON.parse(original) as Record<string, unknown>;
-              parsed.__w2VerifierMutationProbe = marker;
+              parsed.__w2VerifierMutationProbe = marker.text;
               mutated = JSON.stringify(parsed, null, 2);
             } catch {
-              mutated = `${original}\n// __w2_verifier_mutation_probe__: ${marker}\n`;
+              mutated = `${original}\n// ${marker.text}\n`;
             }
           } else if (relTargetPath.endsWith('.md')) {
-            mutated = `${marker}\n\n${original}`;
+            mutated = `${marker.text}\n\n${original}`;
           } else {
-            mutated = `export const __w2VerifierMutationProbe = ${JSON.stringify(marker)};\n${original}`;
+            mutated = `// ${marker.text}\n${original}`;
           }
           fs.writeFileSync(targetInCopy, mutated);
           let mutatedResult: { ok: boolean; raw: unknown } | null = null;
@@ -833,17 +959,17 @@ async function checkC2_3(discovery: BrandSurfaceDiscovery | null): Promise<void>
           const stillMatchesOriginal = fs.readFileSync(targetInCopy, 'utf8') === original;
           if (!stillMatchesOriginal) problems.push(`${relTargetPath}: revert verification failed after mutation`);
           if (threw) {
-            evidenceLines.push(`${relTargetPath}: mutation caused the check to throw (treated as a pass-through, not a confirmed catch): ${threw.slice(0, 300)}`);
+            evidenceLines.push(`${relTargetPath}: mutation (${marker.kind}) caused the check to throw (treated as a pass-through, not a confirmed catch): ${threw.slice(0, 300)}`);
             problems.push(`${relTargetPath}: check function threw instead of returning false on a mutated copy -- inconclusive, not a confirmed reintroduction catch`);
           } else if (mutatedResult) {
-            evidenceLines.push(`${relTargetPath}: mutated copy check result: ${JSON.stringify(mutatedResult.raw)}`);
-            if (mutatedResult.ok) problems.push(`${relTargetPath}: injecting an old-brand marker did NOT fail the check -- this surface class is not actually enforced`);
+            evidenceLines.push(`${relTargetPath}: mutation kind=${marker.kind} mutated copy check result: ${JSON.stringify(mutatedResult.raw)}`);
+            if (mutatedResult.ok) problems.push(`${relTargetPath}: injecting a random old-brand-shaped marker (${marker.kind}) did NOT fail the check -- this surface class is not actually enforced`);
           }
         }
         if (mutationsAttempted === 0) {
           problems.push('no inventory entry had a resolvable, mutable text file target -- the mutation test never exercised anything');
         }
-        evidenceLines.push(`mutations attempted: ${mutationsAttempted}`);
+        evidenceLines.push(`mutations attempted: ${mutationsAttempted} of ${inventory.length} inventory entries (randomized order)`);
       } finally {
         try {
           fs.rmSync(scratchRoot, { recursive: true, force: true });
@@ -905,16 +1031,19 @@ async function checkC2_4(): Promise<void> {
           problems.push(`apps/web/public/${rel} still matches an old-brand asset hash (${hash})`);
         }
       }
-      // Also directly check the two named legacy files regardless of what
-      // layout.tsx wires, since a "repointed to a new file but old files
-      // left in place with old bytes" state is still a partial fail if
-      // anything still references them.
+      // Also directly check the two named legacy files, UNCONDITIONALLY --
+      // Sol round-1 F4: this used to only log (never fail) when layout.tsx
+      // didn't happen to wire the file, which let logo.png sit in a
+      // user-visible public/ path still carrying the frozen old-brand bytes
+      // and pass anyway. Both frozen files are known old-brand assets by
+      // name; either one still matching its old hash is a hard fail
+      // regardless of what layout.tsx currently wires as the favicon.
       for (const known of ['app-icon.png', 'logo.png']) {
         const h = sha256File(abs(path.join('apps/web/public', known)));
-        if (h && (h === OLD_APP_ICON_SHA256 || h === OLD_LOGO_SHA256) && iconPaths.has(known)) {
-          // already counted above via iconPaths loop; no duplicate needed.
-        }
         evidenceLines.push(`apps/web/public/${known}: sha256=${h ?? '(missing)'}`);
+        if (h && (h === OLD_APP_ICON_SHA256 || h === OLD_LOGO_SHA256)) {
+          problems.push(`apps/web/public/${known} still matches an old-brand asset hash (${h}), regardless of whether layout.tsx currently wires it`);
+        }
       }
 
       const testRelPath = 'apps/web/tests/components/home-logo-assets.test.ts';
@@ -942,10 +1071,34 @@ async function checkC2_4(): Promise<void> {
             const webPkgJsonInWorktree = path.join(worktreeDir, 'apps/web/package.json');
             const vitestConfigInWorktree = path.join(worktreeDir, 'apps/web/vitest.config.ts');
             if (fs.existsSync(webPkgJsonInWorktree) && fs.existsSync(vitestConfigInWorktree)) {
-              const redRun = sh('pnpm', ['exec', 'vitest', 'run', '-c', 'vitest.config.ts', testRelPath.replace('apps/web/', '')], path.join(worktreeDir, 'apps/web'), undefined, 3 * 60_000);
-              evidenceLines.push(`red-at-parent (baseCommit=${baseCommit.slice(0, 12)}) run exit=${redRun.status}`);
+              // Sol round-1 F4: a bare nonzero exit doesn't prove the PNG
+              // assertion specifically caused it -- an unrelated crash (a
+              // missing SVG fixture, a module-resolution error) would also
+              // exit nonzero and look like a valid "red." Use the JSON
+              // reporter and require the failure MESSAGE actually names a
+              // PNG-shaped assertion (the icon filename or a hash
+              // comparison), not just "the process didn't exit 0."
+              const redJsonPath = path.join(proofDir, 'C2-4-red-at-parent.json');
+              const redRun = sh(
+                'pnpm',
+                ['exec', 'vitest', 'run', '-c', 'vitest.config.ts', '--reporter=json', `--outputFile=${redJsonPath}`, testRelPath.replace('apps/web/', '')],
+                path.join(worktreeDir, 'apps/web'),
+                undefined,
+                3 * 60_000,
+              );
+              let redFailureMessages: string[] = [];
+              try {
+                const redData = JSON.parse(fs.readFileSync(redJsonPath, 'utf8')) as { testResults: Array<{ assertionResults: Array<{ status: string; failureMessages?: string[] }> }> };
+                redFailureMessages = redData.testResults.flatMap((t) => t.assertionResults).filter((a) => a.status === 'failed').flatMap((a) => a.failureMessages ?? []);
+              } catch {
+                /* left empty, handled below */
+              }
+              const pngShapedFailure = redFailureMessages.some((m) => /\.png/i.test(m) || /sha256|hash/i.test(m));
+              evidenceLines.push(`red-at-parent (baseCommit=${baseCommit.slice(0, 12)}) run exit=${redRun.status}, pngShapedFailure=${pngShapedFailure}, failureMessages=${JSON.stringify(redFailureMessages).slice(0, 500)}`);
               if (redRun.status === 0) {
                 problems.push('extended home-logo-assets.test.ts passes even when run against baseCommit\'s public/*.png assets -- it is not distinguishing old bytes from new (no genuine red-before-green)');
+              } else if (!pngShapedFailure) {
+                problems.push('home-logo-assets.test.ts fails at baseCommit, but no failure message mentions a .png/sha256/hash assertion -- the red could be an unrelated crash, not proof the PNG check specifically caught the old bytes');
               }
             } else {
               problems.push('could not locate apps/web/package.json or vitest.config.ts inside the baseCommit worktree to run the red-at-parent check');
@@ -1049,6 +1202,14 @@ async function checkC2_6(daemon: BootedDaemon): Promise<void> {
         if (daemon.bootFailure) {
           problems.push(`route file still exists and the daemon could not be booted to inspect its live responses: ${daemon.bootFailure}`);
         } else {
+          // Sol round-1 F5: a response-body-only check is defeated by
+          // returning a different response TEXT while the service keeps
+          // calling the exact frozen upstream URLs -- egress is behavior,
+          // never documentation (VERIFICATION-CONTRACT S3 R5). Assert on the
+          // CAPTURED requests (same boundary as C2-1), not just what the
+          // route says back to the client. A 404/502/thrown request is also
+          // a fail here (not a skip): a route left present but broken is not
+          // a "repointed" pass.
           const checks: Array<{ path: string; badFields: RegExp[] }> = [
             { path: '/api/github/open-design', badFields: [/nexu-io\/open-design/i] },
             { path: '/api/github/open-design/releases/latest', badFields: [/nexu-io\/open-design/i] },
@@ -1059,15 +1220,37 @@ async function checkC2_6(daemon: BootedDaemon): Promise<void> {
               const resp = await fetch(`${daemon.url}${c.path}`);
               const text = await resp.text();
               evidenceLines.push(`GET ${c.path} -> ${resp.status}: ${text.slice(0, 300)}`);
-              if (resp.status < 500) {
+              if (resp.status < 200 || resp.status >= 300) {
+                problems.push(`GET ${c.path} returned non-2xx status ${resp.status} -- the route file is present but not serving a working repointed response (404/502/error is not a pass)`);
+              } else {
                 for (const bad of c.badFields) {
                   if (bad.test(text)) problems.push(`GET ${c.path} response still carries an upstream identifier matching ${bad}`);
                 }
               }
             } catch (err) {
-              evidenceLines.push(`GET ${c.path} threw: ${String(err)}`);
+              problems.push(`GET ${c.path} threw instead of returning a real response: ${String(err)}`);
             }
           }
+
+          const FROZEN_UPSTREAM_CALLS: Array<{ host: string; pathTest: RegExp; label: string }> = [
+            { host: 'api.github.com', pathTest: /\/repos\/nexu-io\/open-design(\/releases\/latest)?$/, label: 'GitHub repo/release stats for nexu-io/open-design' },
+            { host: 'discord.com', pathTest: /\/invites\/mHAjSMV6gz/, label: 'Discord invite lookup for mHAjSMV6gz' },
+          ];
+          const egress = daemon.readEgress();
+          for (const call of egress) {
+            let callPath = '';
+            try {
+              callPath = new URL(call.url).pathname;
+            } catch {
+              /* leave empty */
+            }
+            for (const frozen of FROZEN_UPSTREAM_CALLS) {
+              if (call.host === frozen.host && frozen.pathTest.test(callPath)) {
+                problems.push(`captured outbound call to the frozen upstream endpoint (${frozen.label}): ${call.method} ${call.url} -- the service still calls it even if the client-facing response text changed`);
+              }
+            }
+          }
+          evidenceLines.push(`captured ${egress.length} outbound call(s) while exercising the metadata routes; checked against ${FROZEN_UPSTREAM_CALLS.length} frozen upstream endpoint(s)`);
         }
       }
 
@@ -1082,8 +1265,8 @@ async function checkC2_6(daemon: BootedDaemon): Promise<void> {
 async function checkC2_7(): Promise<void> {
   await probe(
     'C2-7',
-    'AST-parse clipper/i18n.js: require LOCALES === [\'en\'] and the `overrides` object literal has zero populated non-English entries; grep-confirm settings.memoryEmptyHintZh is fully absent from en.ts and types.ts; sha256-compare a sample of deliberately-retained multilingual plugin content (huashu-*) between baseCommit and HEAD to prove it was not collaterally deleted',
-    'clipper/i18n.js ships English-only; the orphaned memoryEmptyHintZh key is gone from both en.ts and types.ts; sampled deliberate-content files (plugin examples) are byte-identical to baseCommit',
+    'AST-parse clipper/i18n.js: require LOCALES deep-equals [\'en\'] (not just length 1) and the `overrides` object literal has zero populated non-English entries; grep-confirm settings.memoryEmptyHintZh is fully absent from en.ts, types.ts, and everywhere else; sha256-compare EVERY file under the full huashu-* example set and humanize-ppt between baseCommit and HEAD to prove none of it was collaterally deleted; require a retained-content rationale doc outside docs/plans/**',
+    'clipper/i18n.js ships English-only (LOCALES===["en"]); the orphaned memoryEmptyHintZh key is gone everywhere; every sampled deliberate-content file (all huashu-* examples + humanize-ppt, not a 3-file sample) is byte-identical to baseCommit; the retained-content rationale lives in a real doc, not the W2 PRD describing the work',
     async () => {
       const problems: string[] = [];
       const evidenceLines: string[] = [];
@@ -1093,19 +1276,37 @@ async function checkC2_7(): Promise<void> {
         problems.push('clipper/i18n.js not found');
       } else if (ts) {
         const { sourceFile } = parseSource(clipperPath);
-        let localesArrayLength: number | null = null;
-        let overridesEntryCount: number | null = null;
-        walkAst(sourceFile, (node) => {
-          if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'LOCALES' && node.initializer && ts.isArrayLiteralExpression(node.initializer)) {
-            localesArrayLength = node.initializer.elements.length;
-          }
-          if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'overrides' && node.initializer && ts.isObjectLiteralExpression(node.initializer)) {
-            overridesEntryCount = node.initializer.properties.length;
-          }
-        });
-        evidenceLines.push(`clipper/i18n.js: LOCALES length=${localesArrayLength}, overrides entry count=${overridesEntryCount}`);
-        if (localesArrayLength === null) problems.push('clipper/i18n.js: could not find a LOCALES array literal via AST');
-        else if (localesArrayLength !== 1) problems.push(`clipper/i18n.js: LOCALES still advertises ${localesArrayLength} locale(s), want exactly 1 (en)`);
+        // Wrapped in helper functions that RETURN the discovered value
+        // (rather than a `let` mutated from inside the walkAst callback and
+        // narrowed at the call site) -- TS's control-flow analysis does not
+        // trace assignment through an arbitrary passed callback, so
+        // narrowing a closure-mutated `let` against `null` right after the
+        // call spuriously narrows the non-null branch to `never`.
+        function findLocalesArrayValues(): string[] | null {
+          let result: string[] | null = null;
+          walkAst(sourceFile, (node) => {
+            if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'LOCALES' && node.initializer && ts.isArrayLiteralExpression(node.initializer)) {
+              result = node.initializer.elements.map((el) => evalSimpleStringExpr(el) ?? `<unresolvable:${el.getText(sourceFile)}>`);
+            }
+          });
+          return result;
+        }
+        function findOverridesEntryCount(): number | null {
+          let result: number | null = null;
+          walkAst(sourceFile, (node) => {
+            if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'overrides' && node.initializer && ts.isObjectLiteralExpression(node.initializer)) {
+              result = node.initializer.properties.length;
+            }
+          });
+          return result;
+        }
+        const localesValues = findLocalesArrayValues();
+        const overridesEntryCount = findOverridesEntryCount();
+        evidenceLines.push(`clipper/i18n.js: LOCALES=${JSON.stringify(localesValues)}, overrides entry count=${overridesEntryCount}`);
+        // Sol round-1 F6: length===1 alone would pass LOCALES=['zh-CN'] --
+        // require the actual, sole element to be the string "en".
+        if (localesValues === null) problems.push('clipper/i18n.js: could not find a LOCALES array literal via AST');
+        else if (!(localesValues.length === 1 && localesValues[0] === 'en')) problems.push(`clipper/i18n.js: LOCALES is ${JSON.stringify(localesValues)}, want exactly ["en"]`);
         if (overridesEntryCount === null) {
           // no `overrides` object at all is also an acceptable English-only shape
           evidenceLines.push('clipper/i18n.js: no `overrides` object literal found (acceptable if the dictionary was collapsed to English-only some other way)');
@@ -1124,29 +1325,50 @@ async function checkC2_7(): Promise<void> {
       evidenceLines.push(`memoryEmptyHintZh: en.ts=${enTsHasKey}, types.ts=${typesTsHasKey}, elsewhere=${anyOtherReference}`);
       if (enTsHasKey) problems.push('apps/web/src/i18n/locales/en.ts still defines settings.memoryEmptyHintZh');
       if (typesTsHasKey) problems.push('apps/web/src/i18n/types.ts still declares settings.memoryEmptyHintZh');
+      if (anyOtherReference) problems.push('memoryEmptyHintZh is still referenced somewhere outside en.ts/types.ts');
 
-      // Deliberate-content preservation sample.
+      // Deliberate-content preservation: Sol round-1 F6 -- a 3-file sample
+      // ignored the rest of the huashu-* set and all of humanize-ppt.
+      // Compare EVERY file under the full set instead.
       if (baseCommit) {
-        const sampleRelPaths = ['plugins/_official/examples/huashu-keynote-black/SKILL.md', 'plugins/_official/examples/huashu-golden-circle/SKILL.md', 'plugins/_official/examples/huashu-bento-insight/SKILL.md'];
+        const deliberateContentRoots = ['plugins/community/humanize-ppt'];
+        try {
+          for (const entry of fs.readdirSync(abs('plugins/_official/examples'), { withFileTypes: true })) {
+            if (entry.isDirectory() && entry.name.startsWith('huashu-')) deliberateContentRoots.push(`plugins/_official/examples/${entry.name}`);
+          }
+        } catch {
+          problems.push('could not list plugins/_official/examples to enumerate the full huashu-* set');
+        }
+        const deliberateFiles = collectRepoFiles(deliberateContentRoots, { exts: ['.md', '.ts', '.py', '.json', '.js'] });
         let sampledCount = 0;
-        for (const rel of sampleRelPaths) {
+        let changedCount = 0;
+        for (const fileAbs of deliberateFiles) {
+          const rel = toRepoRelative(fileAbs);
           const before = readFileAtCommit(baseCommit, rel);
           const after = readText(rel);
           if (before === null || after === null) continue; // file not present at one end; not this check's concern
           sampledCount += 1;
-          if (before !== after) problems.push(`${rel}: deliberate multilingual content changed between baseCommit and HEAD -- collateral damage from the de-brand pass?`);
+          if (before !== after) {
+            changedCount += 1;
+            problems.push(`${rel}: deliberate multilingual content changed between baseCommit and HEAD -- collateral damage from the de-brand pass?`);
+          }
         }
-        evidenceLines.push(`deliberate-content preservation sample: ${sampledCount} file(s) compared`);
+        evidenceLines.push(`deliberate-content preservation: ${sampledCount} file(s) compared across ${deliberateContentRoots.length} root(s) (full huashu-* set + humanize-ppt, not a sample), ${changedCount} changed`);
       }
 
-      // A written retained-content rationale should exist somewhere under docs/.
-      const docsFiles = collectRepoFiles(['docs'], { exts: ['.md'] });
+      // A written retained-content rationale should exist somewhere under
+      // docs/, but NOT inside docs/plans/** -- Sol round-1 F6: the W2 PRD
+      // itself (docs/plans/waves/W2-brand-honesty.md) mentions "huashu" and
+      // "multilingual" while describing the WORK to do, which would
+      // satisfy a naive search vacuously without any actual written record
+      // of what was decided to keep.
+      const docsFiles = collectRepoFiles(['docs'], { exts: ['.md'] }).filter((f) => !toRepoRelative(f).startsWith('docs/plans/'));
       const hasRetainedContentDoc = docsFiles.some((f) => {
         const t = fs.readFileSync(f, 'utf8');
         return /huashu|retained/i.test(t) && /multilingual|non-english|foreign/i.test(t);
       });
-      evidenceLines.push(`written retained-content rationale found under docs/: ${hasRetainedContentDoc}`);
-      if (!hasRetainedContentDoc) problems.push('no docs/**/*.md file explicitly lists retained multilingual content with a rationale');
+      evidenceLines.push(`written retained-content rationale found under docs/ (excluding docs/plans/**): ${hasRetainedContentDoc}`);
+      if (!hasRetainedContentDoc) problems.push('no docs/**/*.md file (outside docs/plans/**) explicitly lists retained multilingual content with a rationale');
 
       return { ok: problems.length === 0, evidence: `${evidenceLines.join('\n')}\n\nPROBLEMS:\n${problems.join('\n') || '(none)'}`, detail: problems[0] };
     },
@@ -1213,48 +1435,75 @@ async function checkC2_8(): Promise<void> {
 // sidecar handshake strings). Landed-tree check -- see file header note on
 // out-of-lease targets.
 // ===========================================================================
+// Sol round-1 F7: the display-name scan must not depend on any hardcoded
+// file list -- report EVERY hit, and separately track whether it fell
+// inside the still-maintained named floor so evidence stays legible.
+function scanFileForDisplayNameHits(fileAbs: string): Array<{ line: number; kind: string; text: string }> {
+  const DISPLAY_NAME = /\bOpen Design\b/;
+  const { sourceFile } = parseSource(fileAbs);
+  const hits: Array<{ line: number; kind: string; text: string }> = [];
+  walkAst(sourceFile, (node) => {
+    if (ts.isStringLiteralLike(node) && DISPLAY_NAME.test(node.text)) {
+      hits.push({ line: lineOf(sourceFile, node), kind: 'string literal', text: node.text });
+    } else if (ts.isTemplateExpression(node)) {
+      // Sol round-1 F7: a multi-span template's non-head text (the pieces
+      // between/after `${...}` substitutions -- TemplateMiddle/TemplateTail)
+      // was previously never inspected; only `.head.text` was checked.
+      if (DISPLAY_NAME.test(node.head.text)) hits.push({ line: lineOf(sourceFile, node), kind: 'template head', text: node.head.text });
+      for (const span of node.templateSpans) {
+        if (DISPLAY_NAME.test(span.literal.text)) hits.push({ line: lineOf(sourceFile, span), kind: 'template span', text: span.literal.text });
+      }
+    } else if (ts.isJsxText(node) && DISPLAY_NAME.test(node.text)) {
+      hits.push({ line: lineOf(sourceFile, node), kind: 'JSX text', text: node.text.trim() });
+    }
+  });
+  return hits;
+}
+
 async function checkC2_9(discovery: BrandSurfaceDiscovery | null): Promise<void> {
   await probe(
     'C2-9',
-    'AST-walk string literals and template literals (never comments) in apps/daemon/src/plugins/share-helpers.ts, the pluginFolderActions-consuming web components, and packages/sidecar-proto/src/index.ts for the exact display-name pattern /\\bOpen Design\\b/; cross-check each file appears as a `file`/`path` entry in the C2-2 inventory',
-    'no user-visible string literal in these files still reads "Open Design" as a display name (internal kebab identifiers like open-design.json / @open-design/* / OD_* are explicitly out of scope per the NM-03 KEEP ruling); each of these files is represented in the C2-2 brand-surface inventory',
+    'AST-walk string/template/JSX-text literals (never comments; template MIDDLE/TAIL spans included, not just the head) for the display-name pattern /\\bOpen Design\\b/, across a named floor list PLUS a whole-repo sweep of apps/ and packages/ PLUS every C2-2 inventory-declared file -- never a hardcoded list alone',
+    'no user-visible string/template/JSX-text literal anywhere in apps/ or packages/ still reads "Open Design" as a display name (internal kebab identifiers like open-design.json / @open-design/* / OD_* are explicitly out of scope per the NM-03 KEEP ruling); the named floor files are all represented in the C2-2 brand-surface inventory',
     async () => {
       if (!ts) return { ok: false, evidence: `TypeScript compiler API unavailable: ${tsLoadError}`, detail: 'cannot AST-scan' };
-      const targets = [
+      // A named floor -- files the W2 PRD explicitly calls out. Sol round-1
+      // F7 caught that this floor was missing the ACTUAL pluginFolderActions
+      // implementation file (only test/component consumers were listed).
+      const namedFloor = [
         'apps/daemon/src/plugins/share-helpers.ts',
         'apps/web/src/components/AssistantMessage.tsx',
         'apps/web/src/components/ChatPane.tsx',
         'apps/web/src/components/FileWorkspace.tsx',
         'apps/web/src/components/ProjectView.tsx',
         'apps/web/src/components/DesignFilesPanel.tsx',
+        'apps/web/src/components/design-files/pluginFolderActions.ts',
         'packages/sidecar-proto/src/index.ts',
       ];
       const problems: string[] = [];
       const evidenceLines: string[] = [];
-      const DISPLAY_NAME = /\bOpen Design\b/;
 
-      for (const rel of targets) {
-        const fileAbs = abs(rel);
-        if (!fs.existsSync(fileAbs)) {
-          evidenceLines.push(`${rel}: not found (acceptable if the file was removed/merged away)`);
+      // Sol round-1 F7: derive the scan set from the floor + inventory +ONE +
+      // a whole-repo sweep, so a file this list never named (like the miss
+      // above) is still caught. The repo-wide sweep is authoritative; the
+      // floor/inventory checks below exist only to prove COVERAGE of the
+      // known surfaces, not to gate the scan itself.
+      const sweepFiles = collectRepoFiles(['apps', 'packages'], { exts: ['.ts', '.tsx'] });
+      let totalHits = 0;
+      for (const fileAbs of sweepFiles) {
+        let hits: Array<{ line: number; kind: string; text: string }>;
+        try {
+          hits = scanFileForDisplayNameHits(fileAbs);
+        } catch {
           continue;
         }
-        const { sourceFile } = parseSource(fileAbs);
-        let hits = 0;
-        walkAst(sourceFile, (node) => {
-          if (ts.isStringLiteralLike(node) && DISPLAY_NAME.test(node.text)) {
-            hits += 1;
-            problems.push(`${rel}:${lineOf(sourceFile, node)} -- string literal still reads "${node.text.slice(0, 120)}"`);
-          } else if (ts.isTemplateExpression(node) && DISPLAY_NAME.test(node.head.text)) {
-            hits += 1;
-            problems.push(`${rel}:${lineOf(sourceFile, node)} -- template literal head still reads "${node.head.text.slice(0, 120)}"`);
-          } else if (ts.isJsxText(node) && DISPLAY_NAME.test(node.text)) {
-            hits += 1;
-            problems.push(`${rel}:${lineOf(sourceFile, node)} -- JSX text still reads "${node.text.trim().slice(0, 120)}"`);
-          }
-        });
-        evidenceLines.push(`${rel}: ${hits} display-name hit(s)`);
+        if (hits.length === 0) continue;
+        totalHits += hits.length;
+        const rel = toRepoRelative(fileAbs);
+        for (const hit of hits) problems.push(`${rel}:${hit.line} -- ${hit.kind} still reads "${hit.text.slice(0, 120)}"`);
       }
+      evidenceLines.push(`whole-repo sweep (apps/, packages/, .ts/.tsx): ${sweepFiles.length} files scanned, ${totalHits} display-name hit(s)`);
+      for (const rel of namedFloor) evidenceLines.push(`named floor: ${rel}: exists=${fs.existsSync(abs(rel))}`);
 
       if (discovery?.inventoryExportName && discovery.modulePath) {
         try {
@@ -1263,14 +1512,14 @@ async function checkC2_9(discovery: BrandSurfaceDiscovery | null): Promise<void>
           const inventoriedPaths = new Set(
             arr.flatMap((entry) => Object.values(entry).filter((v): v is string => typeof v === 'string')).map((v) => v.replace(/^\/+/, '')),
           );
-          const uncovered = targets.filter((t) => fs.existsSync(abs(t)) && ![...inventoriedPaths].some((p) => p.includes(t) || t.includes(p)));
+          const uncovered = namedFloor.filter((t) => fs.existsSync(abs(t)) && ![...inventoriedPaths].some((p) => p.includes(t) || t.includes(p)));
           if (uncovered.length > 0) problems.push(`the C2-2 inventory does not appear to cover: ${uncovered.join(', ')}`);
-          evidenceLines.push(`inventory cross-check: ${uncovered.length} of ${targets.length} target(s) uncovered`);
+          evidenceLines.push(`inventory cross-check: ${uncovered.length} of ${namedFloor.length} named-floor target(s) uncovered`);
         } catch {
           evidenceLines.push('could not cross-check against the C2-2 inventory (import failed)');
         }
       } else {
-        evidenceLines.push('C2-2 inventory unavailable -- skipping the cross-check (still enforcing the direct string-literal scan above)');
+        evidenceLines.push('C2-2 inventory unavailable -- skipping the cross-check (the whole-repo sweep above still enforces the actual behavior)');
       }
 
       return { ok: problems.length === 0, evidence: `${evidenceLines.join('\n')}\n\nPROBLEMS:\n${problems.join('\n') || '(none)'}`, detail: problems[0] };
@@ -1307,9 +1556,16 @@ async function checkC2_10(): Promise<void> {
 async function checkC2_11(): Promise<void> {
   await probe(
     'C2-11',
-    'require a bold `**Status:**`-style field within the first 15 lines of docs/spec.md and docs/roadmap.md whose value contains "archiv" (case-insensitive), matching the repo\'s own existing decision-doc convention (e.g. docs/decisions/gsap-licensing.md\'s `**Status:** Accepted`)',
-    'both spec.md and roadmap.md carry an unambiguous, structurally-consistent archived marker at the top of the file, not just a caveat living only in AGENTS.md',
+    'require an unambiguous archived banner within the first 15 lines of docs/spec.md and docs/roadmap.md: a line mentioning "archiv" (case-insensitive) that is visually marked as a callout -- bold (`**...**`), a blockquote (`>` prefix), or a heading (`#` prefix) -- not buried in throwaway prose',
+    'both spec.md and roadmap.md carry an unambiguous archived marker at the top of the file, not just a caveat living only in AGENTS.md',
     async () => {
+      // Sol round-1 F8: an earlier draft required the specific
+      // decision-record `**Status:**` shape and false-red'd roadmap.md,
+      // which already carries a clear banner ("> **Archived plan:** ...",
+      // lines 5-7) in a different but equally unambiguous shape. Any
+      // visually-marked archived callout near the top now qualifies --
+      // this criterion is about honesty-of-signal, not matching one doc's
+      // formatting convention.
       const problems: string[] = [];
       const evidenceLines: string[] = [];
       for (const rel of ['docs/spec.md', 'docs/roadmap.md']) {
@@ -1318,10 +1574,10 @@ async function checkC2_11(): Promise<void> {
           problems.push(`${rel} not found`);
           continue;
         }
-        const topLines = text.split('\n').slice(0, 15).join('\n');
-        const hasStatusArchived = /\*\*Status:?\*\*[^\n]*archiv/i.test(topLines);
-        evidenceLines.push(`${rel}: has bold Status-field archived marker in first 15 lines = ${hasStatusArchived}`);
-        if (!hasStatusArchived) problems.push(`${rel} has no \`**Status:**\` field mentioning "archived" within its first 15 lines`);
+        const topLines = text.split('\n').slice(0, 15);
+        const bannerLine = topLines.find((line) => /archiv/i.test(line) && (/\*\*[^*]*\*\*/.test(line) || /^\s*>/.test(line) || /^\s*#/.test(line)));
+        evidenceLines.push(`${rel}: archived banner line found = ${bannerLine !== undefined}${bannerLine ? ` ("${bannerLine.trim().slice(0, 120)}")` : ''}`);
+        if (!bannerLine) problems.push(`${rel} has no visually-marked (bold/blockquote/heading) line mentioning "archived" within its first 15 lines`);
       }
       return { ok: problems.length === 0, evidence: `${evidenceLines.join('\n')}\n\nPROBLEMS:\n${problems.join('\n') || '(none)'}`, detail: problems[0] };
     },
@@ -1389,6 +1645,14 @@ async function checkC2_13(): Promise<void> {
         /* left as -1, handled below */
       }
       evidenceLines.push(`web test run exit=${webTestRun.status}, parsed numFailedTests=${webFailed}, numPassedTests=${webPassed}`);
+      // Sol round-1 F9: the JSON reporter's numFailedTests can read 0 even
+      // when the process itself exited nonzero (a crash before the suite
+      // ran, an unhandled rejection after JSON was written, etc.) or when
+      // zero tests ran at all (a vacuous "pass"). All three signals must
+      // agree: real exit 0, at least one test actually executed, and zero
+      // reported failures.
+      if (webTestRun.status !== 0) problems.push(`@open-design/web vitest process exited ${webTestRun.status} (nonzero exit is a fail regardless of what the JSON reporter says)`);
+      if (webPassed <= 0) problems.push(`@open-design/web test run reports ${webPassed} passed test(s) -- a suite that ran zero tests is not a green suite`);
       if (webFailed !== 0) problems.push(`@open-design/web test suite has ${webFailed === -1 ? 'an unparseable result (see run exit code)' : `${webFailed} failing test(s)`}`);
 
       if (baseCommit && gitIdentityOk) {
@@ -1482,8 +1746,8 @@ function globToRegExp(glob: string): RegExp {
 
 {
   const startedAt = Date.now();
-  const command = 'git diff --name-only <merge-base(origin/main, HEAD)>...HEAD subset of leases.json W2.allow, disjoint from W2.deny';
-  const assertion = 'every file changed on this branch relative to merge-base(origin/main, HEAD) matches at least one W2 allow glob and no W2 deny glob, read from docs/plans/waves/leases.json at runtime';
+  const command = 'git diff --name-only <merge-base(origin/main, HEAD)>...HEAD subset of leases.json@baseCommit W2.allow, disjoint from W2.deny';
+  const assertion = 'every file changed on this branch relative to merge-base(origin/main, HEAD) matches at least one W2 allow glob and no W2 deny glob, read from docs/plans/waves/leases.json AS IT EXISTED AT baseCommit (never the working tree) -- a lease is not self-authorizing: W2 cannot loosen its own allow/deny rules and have that same commit range grade against the loosened version';
   try {
     if (!remoteMain.ok) {
       record('LEASE', command, assertion, 'fail', remoteMain.error, startedAt, 'git ls-remote origin main failed');
@@ -1492,31 +1756,52 @@ function globToRegExp(glob: string): RegExp {
     } else if (!baseCommit) {
       record('LEASE', command, assertion, 'fail', `merge-base against ${remoteMain.sha} failed to resolve`, startedAt, 'unresolvable base commit');
     } else {
-      const leasesPath = abs('docs/plans/waves/leases.json');
-      const leasesRaw = fs.readFileSync(leasesPath, 'utf8');
-      const leases = JSON.parse(leasesRaw) as { waves: Record<string, { allow: string[]; deny?: string[] }> };
-      const w2Lease = leases.waves['W2'];
-      if (!w2Lease) {
-        record('LEASE', command, assertion, 'fail', `leases.json has no "W2" entry`, startedAt, 'missing lease entry');
+      // Sol round-1 F1: leases.json must be read from baseCommit via `git
+      // show`, not from the working tree via fs.readFileSync -- otherwise a
+      // branch that edits its own lease entry (widening allow, shrinking
+      // deny) would be graded against its own edit instead of the policy
+      // that was actually in force when the wave started.
+      const leasesShow = sh('git', ['show', `${baseCommit}:docs/plans/waves/leases.json`]);
+      if (leasesShow.status !== 0) {
+        record('LEASE', command, assertion, 'fail', `git show ${baseCommit}:docs/plans/waves/leases.json failed (status=${leasesShow.status}): ${leasesShow.stderr}`, startedAt, 'could not read leases.json at baseCommit');
       } else {
-        const allowRes = w2Lease.allow.map(globToRegExp);
-        const denyRes = (w2Lease.deny ?? []).map(globToRegExp);
-        const diffResult = sh('git', ['diff', '--name-only', `${baseCommit}...${headSha}`]);
-        const commitCountResult = sh('git', ['rev-list', '--count', `${baseCommit}..${headSha}`]);
-        const commitCount = parseInt(commitCountResult.stdout.trim(), 10);
-        const diffNames = diffResult.stdout.trim().split('\n').filter(Boolean);
-        if (diffNames.length === 0 && Number.isFinite(commitCount) && commitCount > 0) {
-          record('LEASE', command, assertion, 'fail', `empty file diff but ${commitCount} commit(s) between baseCommit and HEAD`, startedAt, 'suspicious empty diff');
+        let leases: { waves: Record<string, { allow: string[]; deny?: string[] }> };
+        try {
+          leases = JSON.parse(leasesShow.stdout) as { waves: Record<string, { allow: string[]; deny?: string[] }> };
+        } catch (err) {
+          record('LEASE', command, assertion, 'fail', `leases.json@${baseCommit} did not parse as JSON: ${String(err)}`, startedAt, 'unparseable lease policy');
+          leases = { waves: {} };
+        }
+        const w2Lease = leases.waves['W2'];
+        if (!w2Lease) {
+          record('LEASE', command, assertion, 'fail', `leases.json@${baseCommit} has no "W2" entry`, startedAt, 'missing lease entry');
         } else {
-          const violations = diffNames.filter((f) => !allowRes.some((re) => re.test(f)) || denyRes.some((re) => re.test(f)));
-          const evidence = [
-            `baseCommit=${baseCommit} (merge-base of verified origin/main=${remoteMain.sha} and HEAD=${headSha})`,
-            `changed files: ${diffNames.length}`,
-            `allow globs: ${w2Lease.allow.join(', ')}`,
-            `deny globs: ${(w2Lease.deny ?? []).join(', ')}`,
-            violations.length > 0 ? `VIOLATIONS:\n${violations.join('\n')}` : 'all changed files are inside the W2 lease',
-          ].join('\n');
-          record('LEASE', command, assertion, violations.length === 0 ? 'pass' : 'fail', evidence, startedAt);
+          const allowRes = w2Lease.allow.map(globToRegExp);
+          const denyRes = (w2Lease.deny ?? []).map(globToRegExp);
+          const diffResult = sh('git', ['diff', '--name-only', `${baseCommit}...${headSha}`]);
+          const commitCountResult = sh('git', ['rev-list', '--count', `${baseCommit}..${headSha}`]);
+          if (diffResult.status !== 0) {
+            record('LEASE', command, assertion, 'fail', `git diff --name-only ${baseCommit}...${headSha} failed (status=${diffResult.status}): ${diffResult.stderr}`, startedAt, 'git diff exit status not checked previously -- fixed');
+          } else if (commitCountResult.status !== 0) {
+            record('LEASE', command, assertion, 'fail', `git rev-list --count ${baseCommit}..${headSha} failed (status=${commitCountResult.status}): ${commitCountResult.stderr}`, startedAt, 'rev-list failed');
+          } else {
+            const commitCount = parseInt(commitCountResult.stdout.trim(), 10);
+            const diffNames = diffResult.stdout.trim().split('\n').filter(Boolean);
+            if (diffNames.length === 0 && Number.isFinite(commitCount) && commitCount > 0) {
+              record('LEASE', command, assertion, 'fail', `empty file diff but ${commitCount} commit(s) between baseCommit and HEAD`, startedAt, 'suspicious empty diff');
+            } else {
+              const violations = diffNames.filter((f) => !allowRes.some((re) => re.test(f)) || denyRes.some((re) => re.test(f)));
+              const evidence = [
+                `baseCommit=${baseCommit} (merge-base of verified origin/main=${remoteMain.sha} and HEAD=${headSha})`,
+                `leases.json read via: git show ${baseCommit}:docs/plans/waves/leases.json`,
+                `changed files: ${diffNames.length}`,
+                `allow globs: ${w2Lease.allow.join(', ')}`,
+                `deny globs: ${(w2Lease.deny ?? []).join(', ')}`,
+                violations.length > 0 ? `VIOLATIONS:\n${violations.join('\n')}` : 'all changed files are inside the W2 lease',
+              ].join('\n');
+              record('LEASE', command, assertion, violations.length === 0 ? 'pass' : 'fail', evidence, startedAt);
+            }
+          }
         }
       }
     }
