@@ -2284,6 +2284,11 @@ async function main(): Promise<void> {
     return problems;
   }
 
+  // Sol REJECT round 2, finding 1: this sentinel and its matching END
+  // comment below bound the scan span the identifier-scope audit (inside
+  // this criterion) reads from this file's own current source -- see that
+  // audit's comment for why the span exists and what it is checking.
+  /* C0-10-CRITERION-BEGIN */
   await checkCriterion('C0-10', 'SUBCOMMAND_MAP capability ids must be SET-EQUAL (exact, no substring) to manifest capability names; full structural validation of ALL rows, deterministic and independent of the random 3-row sample; live sampled invocations use a nonce-bearing value check, not shape-only, with equivalent HTTP bodies and declared canonicalizers where needed', 'set-equal capability ids, unique rows, every row structurally valid; httpMethod may be a concrete verb or the literal "ALL" (Express .all() registrations), in which case a concrete probeMethod AND a concrete probePath are BOTH REQUIRED declarations, checked over every row (not just the sample); any body-bearing effective method (POST/PUT/PATCH, or ALL whose probeMethod is body-bearing) REQUIRES a declared probeBody, also checked over every row; a row missing a required declaration fails BY NAME regardless of sampling; a row\'s declared valueComparison (unordered-array/composite/binary) canonicalizes BOTH surfaces before comparison -- absent or mode=exact stays a REAL, unrelaxed, ordered byte-level check (the preserved implementation duty); composite mode requires EVERY declared field to be present and non-empty in BOTH payloads (a field missing from either is a structural fail, never a silently-equal undefined projection); binary mode strictly validates the encoding (hex: /^[0-9a-f]+$/i even length; base64: charset+padding+round-trip re-encode) BEFORE decoding -- malformed input is a structural fail, never permissively decoded; sample invocations prove the CLI reaches the manifest\'s SAME handler via a nonce value, not just matching key shapes; a composite/binary precondition failure fails the entry regardless of nonce success (conjunctive, never masked); randomized red control exercises the SAME canonicalizer and precondition checks as its basis row and must still fail for a genuine mismatch -- the basis is required to have at least one leaf corruptValues can actually change (an empty-array/object payload is skipped), widening deterministically over the rest of the manifest, alphabetically, until a corruptible basis is found or all applicable capabilities are exhausted; every od CLI subprocess this criterion launches (identity canary, sampled/widened probes, and the bespoke artifacts/figma probes) receives the CURRENT isolated boot\'s own dataDir as OD_DATA_DIR, audited per-launch and hard-failed if any launch could resolve to <repo>/.od; a typed sampling-excluded allowlist entry (capability + source fingerprint + commit, same rigor as C0-7\'s allowlist classes) removes its capability from the random sample and the widened red-control search only, never from set-equality/structural/route-registration checks; the artifacts capability is graded by gate-owned nonce-bound create+observe read-after-write on both the CLI and HTTP surfaces, never response-body substring matching; the figma capability is graded by a real multipart probe against a gate-owned known-good .fig fixture, sending the same bytes and fields the CLI itself sends', async () => {
     if (!fileExists(capabilityManifestRel)) { record('C0-10', '', '', false, '', { detail: `missing: ${capabilityManifestRel}` }); return; }
     let manifest: CapabilityManifestEntry[] = [];
@@ -2370,31 +2375,32 @@ async function main(): Promise<void> {
     // OD_DATA_DIR is a named forbidden-pattern escape that can fall through
     // to a cwd-relative legacy default, i.e. <repo>/.od).
     //
-    // Sol REJECT, finding 1 (round-final confirmation): buildOdCliEnv alone
-    // only audits launches that actually CALL it -- a launch regressed to
-    // an inline { ...process.env, OD_DAEMON_URL: ... } would simply never
-    // appear in odDataDirAudit, and the old odDataDirLeaks check (computed
-    // only from what the audit DOES contain) would stay green while that
-    // launch silently used <repo>/.od. Two structural, independent
-    // enforcements close this:
-    //   (1) runOdCli is the ONLY function anywhere in this criterion that
-    //       may call execFileAsync with the od binary -- every launch site
-    //       below calls runOdCli, never execFileAsync directly. A
-    //       self-inspecting check (rawOdCliCallSiteCount below, after the
-    //       try/finally) reads THIS FILE'S OWN current source text and
-    //       counts literal execFileAsync(...odBinPath...) call sites,
-    //       hard-failing unless there is EXACTLY the one expected site --
-    //       runOdCli's own definition. A regressed direct call added
-    //       ANYWHERE else raises that count and is caught by name, before
-    //       it ever gets a chance to omit OD_DATA_DIR.
-    //   (2) requiredOdCliSitePatterns below enumerates every DISTINCT
-    //       call-site label this criterion is supposed to exercise every
-    //       run; missingRequiredOdCliSites hard-fails if any of them never
-    //       actually fired (catches a call being silently dropped from a
-    //       code path without regressing to a raw call at all).
-    // Also fixed: resolvesUnderRepoOd previously tested equality only --
-    // a dataDir resolving to a DESCENDANT of <repo>/.od (or of repoRoot)
-    // would not have been caught. Now checks startsWith too.
+    // Sol REJECT round 1, finding 1: buildOdCliEnv alone only audits
+    // launches that actually CALL it -- a regressed inline env construction
+    // would never appear in odDataDirAudit, and the old odDataDirLeaks
+    // check (computed only from what the audit DOES contain) would stay
+    // green while that launch silently used <repo>/.od.
+    //
+    // Sol REJECT round 2, same finding: the round-1 fix (a lexical count of
+    // one specific call SHAPE) was still not structural -- an equivalent
+    // one-line launch using a different call shape (spawn, a different
+    // program identifier, a wrapped/derived path expression, an array
+    // spread, etc.) would leave that lexical count unchanged while still
+    // reaching the SAME binary, because every such shape has to reference
+    // the SAME identifier to do so. The structural fix moves enforcement to
+    // the IDENTIFIER, not the call shape: see the sentinel-delimited
+    // identifier-scope audit after the try/finally below, which asserts
+    // that -- within this criterion's own sentinel-delimited extent -- the
+    // od-binary-path constant's bare identifier appears ONLY inside
+    // runOdCli's own sentinel-delimited body, catching any shape that
+    // references it anywhere else in this criterion, without having to
+    // enumerate call shapes. (An implementer who re-derives the binary path
+    // from scratch WITHOUT referencing this identifier at all is deliberate
+    // multi-step evasion, out of this check's scope by design.)
+    //
+    // Also fixed (round 1): resolvesUnderRepoOd previously tested equality
+    // only -- a dataDir resolving to a DESCENDANT of <repo>/.od (or of
+    // repoRoot) would not have been caught. Now checks startsWith too.
     const odDataDirAudit: { site: string; dataDir: string | undefined; matchesBootedDataDir: boolean; resolvesUnderRepoOd: boolean }[] = [];
     const repoOdDir = path.join(repoRoot, '.od');
     function isUnderRepoOd(resolved: string | undefined): boolean {
@@ -2413,11 +2419,16 @@ async function main(): Promise<void> {
       return env;
     }
     // The single, structurally-enforced execFileAsync call site for every
-    // od CLI launch this criterion performs -- see the self-inspecting
-    // rawOdCliCallSiteCount check below.
+    // od CLI launch this criterion performs -- see the sentinel-delimited
+    // identifier-scope audit after the try/finally below. The BEGIN/END
+    // comments immediately surrounding this function are load-bearing:
+    // that audit locates this exact span at gate-run time and treats it as
+    // the one place permitted to reference the od-binary-path constant.
+    /* RUNODCLI-BODY-BEGIN */
     async function runOdCli(bootedDaemon: BootedDaemon, site: string, args: string[], timeoutMs: number): Promise<{ stdout: string }> {
       return execFileAsync('node', [odBinPath, ...args], { env: buildOdCliEnv(bootedDaemon, site), timeout: timeoutMs });
     }
+    /* RUNODCLI-BODY-END */
     const requiredOdCliSitePatterns: { label: string; matches: (site: string) => boolean }[] = [
       { label: 'identity-canary', matches: (s) => s === 'identity-canary' },
       { label: 'artifacts-nonce-binding:cli-create', matches: (s) => s === 'artifacts-nonce-binding:cli-create' },
@@ -2782,23 +2793,104 @@ async function main(): Promise<void> {
     // all) would otherwise leave a silent gap instead of a caught leak.
     const observedOdCliSites = odDataDirAudit.map((a) => a.site);
     const missingRequiredOdCliSites = requiredOdCliSitePatterns.filter((p) => !observedOdCliSites.some((s) => p.matches(s))).map((p) => p.label);
-    // Sol REJECT, finding 1, enforcement (1): a self-inspecting count of
-    // this file's OWN current source text. execFileAsync spawning the od
-    // binary must appear EXACTLY ONCE anywhere in this file -- runOdCli's
-    // own definition -- so a regressed direct call added at any OTHER site
-    // (bypassing runOdCli/buildOdCliEnv entirely, and therefore invisible
-    // to odDataDirAudit) raises this count and is caught by name.
     const selfSourcePath = fileURLToPath(import.meta.url);
     const selfSourceText = fs.readFileSync(selfSourcePath, 'utf8');
-    const RAW_OD_CLI_CALL_SITE_PATTERN = /execFileAsync\(\s*['"]node['"]\s*,\s*\[\s*odBinPath/g;
+    // Sol REJECT round 1, finding 1, enforcement (1): a self-inspecting
+    // count of this file's OWN current source text. execFileAsync spawning
+    // the od binary must appear EXACTLY ONCE anywhere in this file --
+    // runOdCli's own definition -- so a regressed direct call added at any
+    // OTHER site (bypassing runOdCli/buildOdCliEnv entirely, and therefore
+    // invisible to odDataDirAudit) raises this count and is caught by name.
+    // Kept unchanged in shape per round-2 instruction; the identifier
+    // fragment below is split across a concatenation ONLY so this check's
+    // own source text does not itself trip the round-2 identifier-scope
+    // scan a few lines down (which -- correctly -- treats any bare
+    // occurrence of the identifier as a reportable reference; this
+    // detection code has to name the identifier to know what it is
+    // scanning for, without becoming a false positive against itself).
+    const RAW_OD_CLI_CALL_SITE_PATTERN = new RegExp(`execFileAsync\\(\\s*['"]node['"]\\s*,\\s*\\[\\s*${'od' + 'BinPath'}`, 'g');
     const rawOdCliCallSiteCount = (selfSourceText.match(RAW_OD_CLI_CALL_SITE_PATTERN) ?? []).length;
     const EXPECTED_RAW_OD_CLI_CALL_SITE_COUNT = 1; // runOdCli's own definition, nowhere else
     const unexpectedRawOdCliCallSiteCount = rawOdCliCallSiteCount !== EXPECTED_RAW_OD_CLI_CALL_SITE_COUNT;
+
+    // Sol REJECT round 2, same finding: the count above only matches ONE
+    // lexical call SHAPE (execFileAsync('node', [<identifier>, ...])) --
+    // Sol's confirmation named four other one-line shapes (spawn(), a
+    // different program identifier such as process.execPath, a wrapped
+    // path expression such as path.resolve(<identifier>), and an array
+    // spread) that all still have to reference the SAME bare identifier to
+    // reach the binary, yet none of them match that one lexical pattern.
+    // Rather than keep enumerating call shapes (a losing game -- there is
+    // always one more shape), this scan is structural over the IDENTIFIER
+    // itself, scoped to this criterion's own extent (the C0-10-CRITERION
+    // sentinels wrapping this entire checkCriterion call, above and below):
+    // within that extent, the bare token naming the od-binary-path
+    // constant may appear ONLY inside runOdCli's own sentinel-delimited
+    // body (the one place permitted to launch it) -- ANY other occurrence
+    // anywhere else in THIS criterion's source is a hard fail, by
+    // construction, regardless of call syntax. (Occurrences outside this
+    // criterion entirely -- e.g. the constant's own module-level
+    // declaration, and the separate, already-correct C0-1..C0-6
+    // restore-product call sites that thread OD_DATA_DIR through their own
+    // long-standing odDataEnv helper -- are out of scope for this check by
+    // design: the original ruling names "both C0-10 CLI launch sites"
+    // specifically, and "do not change restore product behavior" is a
+    // standing constraint from that same ruling.)
+    //
+    // Sentinel-integrity comes FIRST and is unconditional: if a sentinel is
+    // missing, duplicated, or out of order, the allowed region cannot be
+    // trusted at all (a widened/unbounded region would silently defeat the
+    // whole scan by making "everything after a deleted END sentinel" look
+    // allowed, or "everything if the criterion span itself can't be found"
+    // look allowed) -- so malformed sentinels are treated as zero allowed
+    // regions, never as "no restriction", and every identifier occurrence
+    // anywhere in the file is reported as out-of-scope in that case.
+    function countLiteralOccurrences(haystack: string, needle: string): number {
+      return needle.length === 0 ? 0 : haystack.split(needle).length - 1;
+    }
+    // Sentinel marker text, split across concatenation so these definition
+    // lines never contain the sentinels' own contiguous text -- otherwise
+    // each definition line would self-match its own "exactly one" search,
+    // corrupting the sentinel-integrity count.
+    const C0_10_CRITERION_BEGIN = '/* C0-10' + '-CRITERION-BEGIN */';
+    const C0_10_CRITERION_END = '/* C0-10' + '-CRITERION-END */';
+    const RUNODCLI_BODY_BEGIN = '/* RUNODCLI' + '-BODY-BEGIN */';
+    const RUNODCLI_BODY_END = '/* RUNODCLI' + '-BODY-END */';
+    const c010BeginCount = countLiteralOccurrences(selfSourceText, C0_10_CRITERION_BEGIN);
+    const c010EndCount = countLiteralOccurrences(selfSourceText, C0_10_CRITERION_END);
+    const c010BeginIndex = selfSourceText.indexOf(C0_10_CRITERION_BEGIN);
+    const c010EndIndex = selfSourceText.indexOf(C0_10_CRITERION_END);
+    const runOdCliBeginCount = countLiteralOccurrences(selfSourceText, RUNODCLI_BODY_BEGIN);
+    const runOdCliEndCount = countLiteralOccurrences(selfSourceText, RUNODCLI_BODY_END);
+    const runOdCliBeginIndex = selfSourceText.indexOf(RUNODCLI_BODY_BEGIN);
+    const runOdCliEndIndex = selfSourceText.indexOf(RUNODCLI_BODY_END);
+    const identifierScopeSentinelsOk =
+      c010BeginCount === 1 && c010EndCount === 1 && c010BeginIndex !== -1 && c010EndIndex !== -1 && c010BeginIndex < c010EndIndex &&
+      runOdCliBeginCount === 1 && runOdCliEndCount === 1 && runOdCliBeginIndex !== -1 && runOdCliEndIndex !== -1 && runOdCliBeginIndex < runOdCliEndIndex &&
+      runOdCliBeginIndex > c010BeginIndex && runOdCliEndIndex < c010EndIndex; // runOdCli's body must nest INSIDE this criterion's own extent
+    function withinRegion(index: number, start: number, endExclusive: number): boolean {
+      return index >= start && index < endExclusive;
+    }
+    const ODBINPATH_TOKEN_PATTERN = new RegExp(`\\b${'od' + 'BinPath'}\\b`, 'g');
+    const allOdBinPathOccurrenceIndices = [...selfSourceText.matchAll(ODBINPATH_TOKEN_PATTERN)]
+      .map((m) => m.index)
+      .filter((i): i is number => typeof i === 'number');
+    const c010RegionEnd = c010EndIndex + C0_10_CRITERION_END.length;
+    const runOdCliRegionEnd = runOdCliEndIndex + RUNODCLI_BODY_END.length;
+    const occurrencesInsideC010Extent = identifierScopeSentinelsOk
+      ? allOdBinPathOccurrenceIndices.filter((idx) => withinRegion(idx, c010BeginIndex, c010RegionEnd))
+      : allOdBinPathOccurrenceIndices; // sentinel integrity itself failed -- fail closed over EVERY occurrence in the file, never silently narrow the scan to nothing
+    const outOfScopeOdBinPathOccurrences = identifierScopeSentinelsOk
+      ? occurrencesInsideC010Extent.filter((idx) => !withinRegion(idx, runOdCliBeginIndex, runOdCliRegionEnd))
+      : occurrencesInsideC010Extent;
+    const odBinPathIdentifierScopeViolation = !identifierScopeSentinelsOk || outOfScopeOdBinPathOccurrences.length > 0;
+
     const ok = problems.length === 0 && sampleResults.length > 0 && sampleResults.every((r) => r.ok) && redControlOk && identityOk &&
       artifactsNonceBindingOk && figmaMultipartOk &&
       odDataDirLeaks.length === 0 &&
       missingRequiredOdCliSites.length === 0 &&
       !unexpectedRawOdCliCallSiteCount &&
+      !odBinPathIdentifierScopeViolation &&
       staleSamplingExcludedEntries.length === 0 && duplicateSamplingExcludedEntries.length === 0 && unusedSamplingExcludedEntries.length === 0;
     record('C0-10', '', '', ok,
       `manifest: ${manifest.length}, applicable: ${applicable.length}, SUBCOMMAND_MAP: ${subcommandKeys.length}\nproblems: ${problems.join('; ') || 'none'}\nsample: ${JSON.stringify(sampleResults)}\nred control: ${redControlDetail}\n` +
@@ -2807,11 +2899,13 @@ async function main(): Promise<void> {
         `OD_DATA_DIR audit (item 1 -- every od CLI launch this run performed; a leak is a launch that omitted OD_DATA_DIR, diverged from the booted daemon's own dataDir, or could resolve under or below <repo>/.od / repoRoot): ${JSON.stringify(odDataDirAudit)}; leaks: ${JSON.stringify(odDataDirLeaks)}\n` +
         `required od CLI launch-site coverage (every distinct call site must fire at least once): required=${JSON.stringify(requiredOdCliSitePatterns.map((p) => p.label))} observed=${JSON.stringify(observedOdCliSites)} missing=${JSON.stringify(missingRequiredOdCliSites)}\n` +
         `self-inspecting raw-call-site count (this file's own source; expected exactly ${EXPECTED_RAW_OD_CLI_CALL_SITE_COUNT}, inside runOdCli only): ${rawOdCliCallSiteCount}\n` +
+        `identifier-scope audit (round-2 closure -- the od-binary-path constant's bare identifier may appear ONLY on its declaration line or inside runOdCli's sentinel-delimited body, regardless of call syntax elsewhere): sentinelsOk=${identifierScopeSentinelsOk} totalOccurrences=${allOdBinPathOccurrenceIndices.length} outOfScopeOccurrences=${outOfScopeOdBinPathOccurrences.length}\n` +
         `sampling-excluded (item 3): allowlistStatus=${allowlistStatusC10} entries=${JSON.stringify(samplingExcludedEntries.map((e) => ({ capability: e.capability, file: e.file, line: e.line, reason: e.reason })))} excludedCapabilities=${JSON.stringify([...excludedCapabilityNames])} staleEntries=${JSON.stringify(staleSamplingExcludedEntries)} duplicateEntries=${JSON.stringify(duplicateSamplingExcludedEntries)} unusedEntries=${JSON.stringify(unusedSamplingExcludedEntries)} per-entry commit-validation=${JSON.stringify(samplingExcludedEntries.map((e) => ({ capability: e.capability, ...commitValidationBySamplingEntry.get(e) })))}`,
       {
-        detail: ok ? undefined : `problems=${problems.length} identityOk=${identityOk} sample=${JSON.stringify(sampleResults.map((r) => r.ok))} redControlOk=${redControlOk} artifactsNonceBindingOk=${artifactsNonceBindingOk} figmaMultipartOk=${figmaMultipartOk} odDataDirLeaks=${odDataDirLeaks.length} missingRequiredOdCliSites=${JSON.stringify(missingRequiredOdCliSites)} rawOdCliCallSiteCount=${rawOdCliCallSiteCount} staleSamplingExcludedEntries=${staleSamplingExcludedEntries.length} duplicateSamplingExcludedEntries=${duplicateSamplingExcludedEntries.length} unusedSamplingExcludedEntries=${unusedSamplingExcludedEntries.length}`,
+        detail: ok ? undefined : `problems=${problems.length} identityOk=${identityOk} sample=${JSON.stringify(sampleResults.map((r) => r.ok))} redControlOk=${redControlOk} artifactsNonceBindingOk=${artifactsNonceBindingOk} figmaMultipartOk=${figmaMultipartOk} odDataDirLeaks=${odDataDirLeaks.length} missingRequiredOdCliSites=${JSON.stringify(missingRequiredOdCliSites)} rawOdCliCallSiteCount=${rawOdCliCallSiteCount} identifierScopeSentinelsOk=${identifierScopeSentinelsOk} outOfScopeOdBinPathOccurrences=${outOfScopeOdBinPathOccurrences.length} staleSamplingExcludedEntries=${staleSamplingExcludedEntries.length} duplicateSamplingExcludedEntries=${duplicateSamplingExcludedEntries.length} unusedSamplingExcludedEntries=${unusedSamplingExcludedEntries.length}`,
       });
   });
+  /* C0-10-CRITERION-END */
 
   // Round-3 F13 (manifest-schema half): mutate a REAL manifest row (remove
   // its cliArgs) rather than adding a synthetic one.
