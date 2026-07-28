@@ -1355,6 +1355,7 @@ async function checkC45(): Promise<{ ok: boolean; evidence: string; detail?: str
     const baselineAggregateRssKb = baselineSample.rssKb;
     let peakAggregateRssKb = baselineAggregateRssKb;
     let pollValidSamples = 0;
+    let pollInvalidSamples = 0;
     let pollTotalSamples = 0;
     const pollAbort = new AbortController();
     const poller = (async () => {
@@ -1364,6 +1365,8 @@ async function checkC45(): Promise<{ ok: boolean; evidence: string; detail?: str
         if (sample.valid) {
           pollValidSamples++;
           if (sample.rssKb > peakAggregateRssKb) peakAggregateRssKb = sample.rssKb;
+        } else {
+          pollInvalidSamples++;
         }
         await sleep(400);
       }
@@ -1379,14 +1382,18 @@ async function checkC45(): Promise<{ ok: boolean; evidence: string; detail?: str
     }
     const memValidation = validateCoverErrorBody(memResp.body, 'RENDER_MEMORY_LIMIT');
     const rssGrowthKb = peakAggregateRssKb - baselineAggregateRssKb;
-    // Confirmation-round bypass fix (C4-5): memoryOk now requires the
-    // BASELINE sample itself to be valid (never a `ps` failure silently
-    // read as a zero baseline that any later real reading would appear to
-    // "grow" from) AND the poller to have obtained at least one valid
-    // sample (a wholly failed polling window cannot pass either).
-    const pollerHealthy = pollValidSamples > 0;
+    // Confirmation review #3 fix (C4-5, intermittent-polling-failure
+    // bypass): pollerHealthy previously required only `pollValidSamples >
+    // 0`, so ANY number of invalid (failed `ps`) snapshots anywhere in the
+    // polling window were silently skipped rather than counted against
+    // the predicate -- a single lucky valid sample amid many failures
+    // still passed. Every poll attempt in the window is now accounted
+    // for: pollerHealthy requires zero invalid attempts, not merely one
+    // valid one, so any failed snapshot anywhere in the window fails
+    // memoryOk.
+    const pollerHealthy = pollValidSamples > 0 && pollInvalidSamples === 0;
     const memoryOk = memResp.status >= 400 && memValidation.ok && baselineValid && pollerHealthy && rssGrowthKb > 0 && peakAggregateRssKb < MEMORY_CEILING_KB;
-    rows.push(`memory-ceiling (aggregate descendant RSS): status=${memResp.status} typedError=${memValidation.ok} (${memValidation.reason ?? 'ok'}) baselineValid=${baselineValid} baselineAggregateRssKb=${baselineAggregateRssKb} pollerHealthy=${pollerHealthy} (validSamples=${pollValidSamples}/${pollTotalSamples}) peakAggregateRssKb=${peakAggregateRssKb} rssGrowthKb=${rssGrowthKb} (must be >0) outerCeilingKb=${MEMORY_CEILING_KB} -> ${memoryOk ? 'PASS' : 'FAIL'}`);
+    rows.push(`memory-ceiling (aggregate descendant RSS): status=${memResp.status} typedError=${memValidation.ok} (${memValidation.reason ?? 'ok'}) baselineValid=${baselineValid} baselineAggregateRssKb=${baselineAggregateRssKb} pollerHealthy=${pollerHealthy} (validSamples=${pollValidSamples} invalidSamples=${pollInvalidSamples} totalSamples=${pollTotalSamples}, requires invalidSamples===0 and validSamples>0) peakAggregateRssKb=${peakAggregateRssKb} rssGrowthKb=${rssGrowthKb} (must be >0) outerCeilingKb=${MEMORY_CEILING_KB} -> ${memoryOk ? 'PASS' : 'FAIL'}`);
 
     const ok = slowOkPass && perJobTimeoutOk && concurrencyOk && memoryOk;
     return { ok, evidence: rows.join('\n'), detail: ok ? undefined : 'renderer is not fully bounded (successful-slow-job control / typed timeout / throughput-inferred concurrency cap / typed aggregate memory ceiling)' };
