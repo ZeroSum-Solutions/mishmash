@@ -1223,6 +1223,11 @@ async function runC43C44(): Promise<void> {
 // C4-5 -- renderer is bounded (concurrency cap, per-job timeout, memory
 // ceiling), including a deliberately pathological project.
 //
+// Ceremony ruling item 1 (2026-07-28): a prior round's report and this
+// comment block described this design, but the EXECUTABLE code below still
+// had the old round1Bounded/1.6x/no-RSS-baseline logic -- the code below is
+// the actual, re-verified fix; do not trust this comment on its own.
+//
 // Sol r2 fixes (round-1 finding 1 was still broken):
 //  (a) timeout + successful-slow-job control unchanged (already correct).
 //  (b) the plateau oracle had two boundary bugs: `round1Bounded` compared
@@ -1296,35 +1301,52 @@ async function checkC45(): Promise<{ ok: boolean; evidence: string; detail?: str
     rows.push(`per-job-timeout (infinite loop): status=${timeoutResp.status} elapsedMs=${timeoutElapsed} typedError=${timeoutValidation.ok} (${timeoutValidation.reason ?? 'ok'}) -> ${perJobTimeoutOk ? 'PASS' : 'FAIL'}`);
 
     // --- (b) concurrency cap via throughput inference at M and 2M. ---
+    // Ceremony ruling item 1: round1Bounded (an absolute round-one-vs-M
+    // predicate) is DELETED ENTIRELY, with NO replacement absolute
+    // predicate -- it false-red a genuinely correct cap equal to M. The
+    // SOLE plateau predicate is round2.effectiveConcurrency <=
+    // round1.effectiveConcurrency * 1.25. concurrencyOk additionally
+    // requires that round one produced EXACTLY M fully-validated success
+    // records and round two produced EXACTLY 2M, with zero invalid
+    // records in either round (a stub returning empty/malformed 200s
+    // must not pass).
     const M = 8;
     const BLOCK_MS = 1500;
     const round1 = await measureThroughputConcurrency(daemon, M, BLOCK_MS);
     const round2 = await measureThroughputConcurrency(daemon, M * 2, BLOCK_MS);
-    const round1Bounded = round1.effectiveConcurrency < M * 0.9; // meaningfully below M, not just noise under M
-    // Plateau check: doubling submitted load must not double the inferred
-    // concurrency (allow 60% headroom for measurement noise/scheduling
-    // jitter, still far short of the ~2x an unbounded queue would show).
-    const plateaus = round2.effectiveConcurrency <= round1.effectiveConcurrency * 1.6;
-    const concurrencyOk = round1Bounded && plateaus && round1.successCount === M && round2.successCount === M * 2;
-    rows.push(`concurrency (throughput-inferred): M=${M} blockMs=${BLOCK_MS} round1: wallClockMs=${round1.wallClockMs} effectiveConcurrency=${round1.effectiveConcurrency.toFixed(2)} successCount=${round1.successCount}/${M}; round2(M=${M * 2}): wallClockMs=${round2.wallClockMs} effectiveConcurrency=${round2.effectiveConcurrency.toFixed(2)} successCount=${round2.successCount}/${M * 2} -> boundedBelowM=${round1Bounded} plateaus(2x load did not ~2x concurrency)=${plateaus} -> ${concurrencyOk ? 'PASS' : 'FAIL'}`);
+    const plateauRatio = round1.effectiveConcurrency > 0 ? round2.effectiveConcurrency / round1.effectiveConcurrency : Infinity;
+    const plateaus = round2.effectiveConcurrency <= round1.effectiveConcurrency * 1.25;
+    const round1FullyValid = round1.successCount === M && round1.invalidRecordCount === 0;
+    const round2FullyValid = round2.successCount === M * 2 && round2.invalidRecordCount === 0;
+    const concurrencyOk = plateaus && round1FullyValid && round2FullyValid;
+    rows.push(`concurrency (throughput-inferred, NO round1Bounded predicate): M=${M} blockMs=${BLOCK_MS}\nround1: wallClockMs=${round1.wallClockMs} effectiveConcurrency=${round1.effectiveConcurrency.toFixed(4)} successCount=${round1.successCount}/${M} invalidRecordCount=${round1.invalidRecordCount} fullyValid=${round1FullyValid}\nround2(2M=${M * 2}): wallClockMs=${round2.wallClockMs} effectiveConcurrency=${round2.effectiveConcurrency.toFixed(4)} successCount=${round2.successCount}/${M * 2} invalidRecordCount=${round2.invalidRecordCount} fullyValid=${round2FullyValid}\nplateauRatio(round2/round1)=${plateauRatio.toFixed(4)} threshold<=1.25 plateaus=${plateaus}\n-> ${concurrencyOk ? 'PASS' : 'FAIL'}`);
 
     // --- (c) memory ceiling: AGGREGATE (summed) RSS across all daemon-
-    // descendant processes, requiring the TYPED RENDER_MEMORY_LIMIT error.
+    // descendant processes, requiring the TYPED RENDER_MEMORY_LIMIT error
+    // AND observed RSS growth over a pre-submission baseline (ceremony
+    // ruling item 1c) -- an immediate typed error at zero observed growth
+    // proves nothing about a real ceiling being exercised.
     const memProjectId = `w4-c45-mem-${crypto.randomBytes(4).toString('hex')}`;
     await createProject(daemon.url, memProjectId, memProjectId);
     await uploadProjectFile(daemon.url, memProjectId, 'index.html', MEMORY_HOG_HTML);
     const MEMORY_CEILING_KB = 3 * 1024 * 1024; // 3 GB outer sane bound on the AGGREGATE
-    let peakAggregateRssKb = 0;
     const rootPid = daemon.pid;
+    function aggregateDescendantRssKb(pid: number | undefined): number {
+      if (!pid) return 0;
+      const snap = psSnapshot();
+      const desc = descendantsOf(pid, snap);
+      return snap.filter((r) => desc.has(r.pid)).reduce((sum, r) => sum + r.rssKb, 0);
+    }
+    // Baseline taken IMMEDIATELY before submission, via the SAME
+    // process-tree aggregation the poller uses below -- polling (and peak
+    // tracking) starts before the job is submitted.
+    const baselineAggregateRssKb = aggregateDescendantRssKb(rootPid);
+    let peakAggregateRssKb = baselineAggregateRssKb;
     const pollAbort = new AbortController();
     const poller = (async () => {
       while (!pollAbort.signal.aborted) {
-        if (rootPid) {
-          const snap = psSnapshot();
-          const desc = descendantsOf(rootPid, snap);
-          const aggregate = snap.filter((r) => desc.has(r.pid)).reduce((sum, r) => sum + r.rssKb, 0);
-          if (aggregate > peakAggregateRssKb) peakAggregateRssKb = aggregate;
-        }
+        const aggregate = aggregateDescendantRssKb(rootPid);
+        if (aggregate > peakAggregateRssKb) peakAggregateRssKb = aggregate;
         await sleep(400);
       }
     })();
@@ -1338,8 +1360,9 @@ async function checkC45(): Promise<{ ok: boolean; evidence: string; detail?: str
       await poller;
     }
     const memValidation = validateCoverErrorBody(memResp.body, 'RENDER_MEMORY_LIMIT');
-    const memoryOk = memResp.status >= 400 && memValidation.ok && peakAggregateRssKb < MEMORY_CEILING_KB;
-    rows.push(`memory-ceiling (aggregate descendant RSS): status=${memResp.status} typedError=${memValidation.ok} (${memValidation.reason ?? 'ok'}) peakAggregateRssKb=${peakAggregateRssKb} ceilingKb=${MEMORY_CEILING_KB} -> ${memoryOk ? 'PASS' : 'FAIL'}`);
+    const rssGrowthKb = peakAggregateRssKb - baselineAggregateRssKb;
+    const memoryOk = memResp.status >= 400 && memValidation.ok && rssGrowthKb > 0 && peakAggregateRssKb < MEMORY_CEILING_KB;
+    rows.push(`memory-ceiling (aggregate descendant RSS): status=${memResp.status} typedError=${memValidation.ok} (${memValidation.reason ?? 'ok'}) baselineAggregateRssKb=${baselineAggregateRssKb} peakAggregateRssKb=${peakAggregateRssKb} rssGrowthKb=${rssGrowthKb} (must be >0) outerCeilingKb=${MEMORY_CEILING_KB} -> ${memoryOk ? 'PASS' : 'FAIL'}`);
 
     const ok = slowOkPass && perJobTimeoutOk && concurrencyOk && memoryOk;
     return { ok, evidence: rows.join('\n'), detail: ok ? undefined : 'renderer is not fully bounded (successful-slow-job control / typed timeout / throughput-inferred concurrency cap / typed aggregate memory ceiling)' };
@@ -1596,20 +1619,32 @@ async function probeLiveArtifactSurface(browser: MinimalPwBrowser, daemon: Boote
   });
   const createStatus = createResp.status;
   const createBody: unknown = await createResp.json().catch(() => null);
-  await daemon.revokeToken(token).catch(() => undefined);
+  // Ceremony ruling item 2: the IPC revoke acknowledgement failure must
+  // NOT be swallowed -- a revoke call that itself errors (IPC timeout,
+  // registry error) is tracked and folds into revokeConfirmedDead below,
+  // not silently discarded.
+  let revokeAckOk = true;
+  try {
+    await daemon.revokeToken(token);
+  } catch (err) {
+    revokeAckOk = false;
+    void err;
+  }
   const artifactId = isRecord(createBody) && isRecord(createBody.artifact) && typeof createBody.artifact.id === 'string' ? createBody.artifact.id : null;
   if (createStatus < 200 || createStatus >= 300 || !artifactId) {
-    return { ok: false, evidence: `POST /api/tools/live-artifacts/create failed: status=${createStatus} body=${JSON.stringify(createBody)} -- cannot seed a real live artifact for this probe` };
+    return { ok: false, evidence: `POST /api/tools/live-artifacts/create failed: status=${createStatus} body=${JSON.stringify(createBody)} revokeAckOk=${revokeAckOk} -- cannot seed a real live artifact for this probe` };
   }
 
-  // Real evidence the immediate revoke actually took effect (not
-  // load-bearing for the pass/fail verdict, which is about containment).
+  // Ceremony ruling item 2: replay the SAME revoked token against the
+  // protected create route and require an ACTUAL HTTP 401 -- network
+  // failure, a null response, any other status, or a failed revoke
+  // acknowledgement all count as failure here (no swallowing).
   const postRevokeProbe = await fetch(`${daemon.url}/api/tools/live-artifacts/create`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ input: { title: 'post-revoke-probe', preview: { type: 'html', entry: 'index.html' }, document: { format: 'html_template_v1', templatePath: 'template.html', generatedPreviewPath: 'index.html', dataPath: 'data.json', dataJson: {} } } }),
   }).catch(() => null);
-  const revokeConfirmedDead = postRevokeProbe !== null && postRevokeProbe.status === 401;
+  const revokeConfirmedDead = revokeAckOk && postRevokeProbe !== null && postRevokeProbe.status === 401;
 
   const harnessPath = path.join(repoRoot, 'apps/web/src/.verify-w4-c47-live-harness.tsx');
   const page = await browser.newPage();
@@ -1664,10 +1699,14 @@ if (el) {
     await sleep(1500); // grace period for any delayed subresource loads inside the mounted iframe
     const hitsAfter = canary.hits.length;
 
-    const ok = iframeCount >= 1 && hitsAfter === hitsBefore;
+    // Ceremony ruling item 2: revokeConfirmedDead is now LOAD-BEARING --
+    // joined into `ok` alongside real iframe discovery and zero new
+    // canary hits, so a failed revoke (or a revoke whose token still
+    // works) fails this probe, not just the evidence text.
+    const ok = iframeCount >= 1 && hitsAfter === hitsBefore && revokeConfirmedDead;
     return {
       ok,
-      evidence: `real live artifact created via POST /api/tools/live-artifacts/create: id=${artifactId} status=${createStatus}\ntool token revoked-and-confirmed-dead=${revokeConfirmedDead} (post-revoke status=${postRevokeProbe?.status ?? 'n/a'})\nDesignsTab (real, unmocked registry.ts) rendered iframe matching ${selector}: count=${iframeCount}\ncanary hits before=${hitsBefore} after=${hitsAfter} -> ${ok ? 'contained' : 'FAILED: DesignsTab did not render the real artifact iframe, or it leaked to the canary'}`,
+      evidence: `real live artifact created via POST /api/tools/live-artifacts/create: id=${artifactId} status=${createStatus}\nrevokeAckOk=${revokeAckOk} tool token revoked-and-confirmed-dead(load-bearing)=${revokeConfirmedDead} (post-revoke replay status=${postRevokeProbe?.status ?? 'n/a (network failure/null response)'}, required exactly 401)\nDesignsTab (real, unmocked registry.ts) rendered iframe matching ${selector}: count=${iframeCount}\ncanary hits before=${hitsBefore} after=${hitsAfter}\n-> ${ok ? 'contained AND revoke confirmed dead' : 'FAILED: DesignsTab did not render the real artifact iframe, it leaked to the canary, or the revoked token was not confirmed dead'}`,
     };
   } finally {
     try { fs.unlinkSync(harnessPath); } catch { /* already clean */ }
@@ -1997,6 +2036,147 @@ function findNm35cThreatNote(): { found: boolean; evidence: string } {
   }
   return { found: false, evidence: 'no docs/security/*.md|*.json mentions NM-35C with a recognizable deliberate-omission phrasing near "allow-same-origin"' };
 }
+// Ceremony ruling item 3: static name-based helper resolution is no longer
+// PASS AUTHORITY for the CSP half of C4-8 (kept below as diagnostic-only
+// evidence). The actual pass authority is now runtime HTTP evidence from a
+// freshly booted isolated daemon: seed real content, GET the two real
+// iframe-serving routes, read each response's ACTUAL Content-Security-
+// Policy header, and grade it against the exact tokenized-directive rules
+// the ruling specifies -- connect-src must be exactly 'none', default-src
+// must be present, and every effective fetch directive's source list must
+// contain no '*', no network scheme source, and no host-source form.
+// Quoted keyword/nonce/hash tokens (`'self'`, `'none'`, `'nonce-...'`,
+// `'sha256-...'`, etc.) and the non-network `data:`/`blob:` schemes are the
+// ONLY tokens treated as safe; anything else -- bare DNS names, wildcard
+// hosts, scheme-qualified or protocol-relative hosts, IP/localhost forms,
+// port/path-qualified hosts, bare `http:`/`https:`/`ws:`/`wss:`, or any
+// other unrecognized unquoted token -- fails closed.
+const CSP_EFFECTIVE_FETCH_DIRECTIVES = [
+  'default-src', 'child-src', 'connect-src', 'font-src', 'frame-src', 'img-src',
+  'manifest-src', 'media-src', 'object-src', 'prefetch-src', 'script-src',
+  'script-src-elem', 'script-src-attr', 'style-src', 'style-src-elem',
+  'style-src-attr', 'worker-src',
+];
+function classifyCspSourceToken(token: string): { safe: boolean; reason: string } {
+  if (token === '*') return { safe: false, reason: 'wildcard-all source (*)' };
+  // Per CSP grammar, a quoted token ('...') is always a keyword, nonce, or
+  // hash -- never a host source -- so it cannot carry any of the remote-
+  // egress risk this check exists to catch.
+  if (token.length >= 2 && token.startsWith("'") && token.endsWith("'")) {
+    return { safe: true, reason: 'quoted keyword/nonce/hash token' };
+  }
+  const lower = token.toLowerCase();
+  if (lower === 'data:' || lower === 'blob:') return { safe: true, reason: 'non-network data:/blob: scheme source' };
+  // Everything else: bare network schemes (http:/https:/ws:/wss:), bare DNS
+  // names, wildcard hosts, scheme-qualified/protocol-relative hosts,
+  // IP/localhost forms, port/path-qualified hosts, or any other
+  // unclassifiable unquoted token -- fail closed.
+  return { safe: false, reason: 'network scheme, host-source form, or unclassifiable unquoted token' };
+}
+function parseCspIntoDirectives(csp: string): Map<string, string[]> | null {
+  const map = new Map<string, string[]>();
+  const rawDirectives = csp.split(';').map((d) => d.trim()).filter((d) => d.length > 0);
+  if (rawDirectives.length === 0) return null;
+  for (const raw of rawDirectives) {
+    const parts = raw.split(/\s+/).filter((p) => p.length > 0);
+    const first = parts[0];
+    if (parts.length === 0 || first === undefined) continue;
+    const name = first.toLowerCase();
+    if (map.has(name)) return null; // duplicate directive -- ambiguous, fail closed
+    map.set(name, parts.slice(1));
+  }
+  return map;
+}
+function gradeCspForRemoteDenial(cspHeaderValue: string | null): { ok: boolean; reason: string } {
+  if (!cspHeaderValue || cspHeaderValue.trim().length === 0) {
+    return { ok: false, reason: 'Content-Security-Policy header missing or empty' };
+  }
+  const directives = parseCspIntoDirectives(cspHeaderValue);
+  if (!directives) return { ok: false, reason: 'unparsable or ambiguous CSP (duplicate directive or empty policy)' };
+  const connectSrc = directives.get('connect-src');
+  if (!connectSrc || connectSrc.length !== 1 || connectSrc[0] !== "'none'") {
+    return { ok: false, reason: `connect-src must be present with EXACTLY the single token 'none' (got ${JSON.stringify(connectSrc ?? null)})` };
+  }
+  if (!directives.has('default-src')) {
+    return { ok: false, reason: 'default-src is required so omitted fetch directives inherit a restrictive source list' };
+  }
+  const violations: string[] = [];
+  for (const dirName of CSP_EFFECTIVE_FETCH_DIRECTIVES) {
+    const values = directives.get(dirName);
+    if (values === undefined) continue; // absent -- inherits the already-checked default-src
+    if (values.length === 0) { violations.push(`${dirName}: present but empty (ambiguous)`); continue; }
+    for (const tok of values) {
+      const cls = classifyCspSourceToken(tok);
+      if (!cls.safe) violations.push(`${dirName}: unsafe source "${tok}" (${cls.reason})`);
+    }
+  }
+  if (violations.length > 0) return { ok: false, reason: violations.join('; ') };
+  return { ok: true, reason: "connect-src is exactly 'none', default-src present, every effective fetch directive source is safe" };
+}
+// Boots an isolated daemon, seeds a REAL project (for the /raw/ route) and
+// a REAL live artifact (for the /preview route, via the same real tool-
+// token mint/create/revoke flow C4-7 uses), then GETs both actual iframe-
+// serving routes and grades their ACTUAL response CSP headers. This is the
+// runtime evidence that is now C4-8's CSP pass authority.
+async function probeCspRuntimeEvidence(): Promise<{ ok: boolean; evidence: string }> {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w4-c48-'));
+  let daemon: BootedDaemonWithIpc | undefined;
+  try {
+    daemon = await bootDaemonForProbingWithIpc(dataDir);
+    const projectId = `w4-c48-${crypto.randomBytes(6).toString('hex')}`;
+    await createProject(daemon.url, projectId, projectId);
+    await uploadProjectFile(daemon.url, projectId, 'index.html', '<!doctype html><html><body>c4-8 csp probe</body></html>');
+
+    const rawUrl = `${daemon.url}/api/projects/${encodeURIComponent(projectId)}/raw/index.html`;
+    const rawResp = await fetch(rawUrl).catch(() => null);
+    const rawStatus = rawResp?.status ?? -1;
+    const rawCspHeader = rawResp?.headers.get('content-security-policy') ?? null;
+    const raw2xx = rawResp !== null && rawResp.status >= 200 && rawResp.status < 300;
+    const rawGrade = raw2xx ? gradeCspForRemoteDenial(rawCspHeader) : { ok: false, reason: `non-2xx or failed fetch (status=${rawStatus})` };
+
+    const token = await daemon.mintToken({ runId: `w4-c48-run-${crypto.randomBytes(4).toString('hex')}`, projectId });
+    const createResp = await fetch(`${daemon.url}/api/tools/live-artifacts/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        input: {
+          title: 'w4-c48-probe',
+          preview: { type: 'html', entry: 'index.html' },
+          document: { format: 'html_template_v1', templatePath: 'template.html', generatedPreviewPath: 'index.html', dataPath: 'data.json', dataJson: {} },
+        },
+        templateHtml: '<!doctype html><html><body>c4-8 live artifact csp probe</body></html>',
+      }),
+    });
+    const createBody: unknown = await createResp.json().catch(() => null);
+    await daemon.revokeToken(token).catch(() => undefined);
+    const artifactId = isRecord(createBody) && isRecord(createBody.artifact) && typeof createBody.artifact.id === 'string' ? createBody.artifact.id : null;
+
+    let liveGrade: { ok: boolean; reason: string };
+    let liveStatus = -1;
+    let liveCspHeader: string | null = null;
+    let previewUrl = '(not reached -- live artifact seeding failed)';
+    if (createResp.status < 200 || createResp.status >= 300 || !artifactId) {
+      liveGrade = { ok: false, reason: `failed to seed a live artifact: create status=${createResp.status} body=${JSON.stringify(createBody)}` };
+    } else {
+      previewUrl = `${daemon.url}/api/live-artifacts/${encodeURIComponent(artifactId)}/preview?projectId=${encodeURIComponent(projectId)}`;
+      const liveResp = await fetch(previewUrl).catch(() => null);
+      liveStatus = liveResp?.status ?? -1;
+      liveCspHeader = liveResp?.headers.get('content-security-policy') ?? null;
+      const live2xx = liveResp !== null && liveResp.status >= 200 && liveResp.status < 300;
+      liveGrade = live2xx ? gradeCspForRemoteDenial(liveCspHeader) : { ok: false, reason: `non-2xx or failed fetch (status=${liveStatus})` };
+    }
+
+    const ok = rawGrade.ok && liveGrade.ok;
+    return {
+      ok,
+      evidence: `GET ${rawUrl}\n  status=${rawStatus} Content-Security-Policy=${JSON.stringify(rawCspHeader)} -> ${rawGrade.ok ? 'PASS' : `FAIL (${rawGrade.reason})`}\nPOST /api/tools/live-artifacts/create: status=${createResp.status} artifactId=${artifactId ?? 'n/a'}\nGET ${previewUrl}\n  status=${liveStatus} Content-Security-Policy=${JSON.stringify(liveCspHeader)} -> ${liveGrade.ok ? 'PASS' : `FAIL (${liveGrade.reason})`}`,
+    };
+  } finally {
+    if (daemon) await daemon.kill().catch(() => undefined);
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+}
+
 async function checkC48(): Promise<{ ok: boolean; evidence: string; detail?: string | undefined }> {
   const surfaces = [
     'apps/web/src/components/project-cover.tsx',
@@ -2018,20 +2198,19 @@ async function checkC48(): Promise<{ ok: boolean; evidence: string; detail?: str
       rows.push(`${rel}:${f.line}: sandbox=${JSON.stringify(f.sandboxLiteral)} hasSrc=${f.hasSrc} -> ${correct ? 'matches frozen contract (allow-scripts, no allow-same-origin)' : 'DOES NOT match frozen contract'}`);
     }
   }
-  // Sol r2 finding 5 / ruling 6: found-AND-restrictive, not just found --
-  // routeHandlerHasCspHeader now follows named helper calls (the real
-  // live-artifact route delegates to setLiveArtifactPreviewHeaders) and
-  // checks the resolved CSP VALUE for actual restrictiveness, not merely
-  // presence of a setHeader call.
-  const rawRouteCsp = routeHandlerHasCspHeader('apps/daemon/src/routes/project/index.ts', /raw/);
-  const liveArtifactRouteCsp = routeHandlerHasCspHeader('apps/daemon/src/routes/live-artifact.ts', /preview/);
-  const cspOk = rawRouteCsp.found && rawRouteCsp.restrictive && liveArtifactRouteCsp.found && liveArtifactRouteCsp.restrictive;
+  // Static helper resolution: DIAGNOSTIC-ONLY per ceremony ruling item 3,
+  // never pass authority.
+  const rawRouteCspStatic = routeHandlerHasCspHeader('apps/daemon/src/routes/project/index.ts', /raw/);
+  const liveArtifactRouteCspStatic = routeHandlerHasCspHeader('apps/daemon/src/routes/live-artifact.ts', /preview/);
+  // Runtime HTTP evidence: THE pass authority for cspOk.
+  const runtimeCsp = await probeCspRuntimeEvidence();
+  const cspOk = runtimeCsp.ok;
   const nm35c = findNm35cThreatNote();
   const ok = nm35c.found && (!anyLiveFrame || (allFramesCorrect && cspOk));
   return {
     ok,
-    evidence: `${rows.join('\n')}\nanyLiveFrame=${anyLiveFrame}\n${rawRouteCsp.evidence}\n${liveArtifactRouteCsp.evidence}\n${nm35c.evidence}`,
-    detail: ok ? undefined : !nm35c.found ? 'no docs/security/*.md documents NM-35C with a recognizable deliberate allow-same-origin omission' : !allFramesCorrect ? 'a live iframe exists whose sandbox attribute does not match the frozen contract' : 'a live iframe is retained without a genuinely restrictive Content-Security-Policy on the route it loads',
+    evidence: `${rows.join('\n')}\nanyLiveFrame=${anyLiveFrame}\n[diagnostic-only, NOT pass authority] ${rawRouteCspStatic.evidence}\n[diagnostic-only, NOT pass authority] ${liveArtifactRouteCspStatic.evidence}\n[RUNTIME HTTP EVIDENCE -- pass authority for cspOk]\n${runtimeCsp.evidence}\n${nm35c.evidence}`,
+    detail: ok ? undefined : !nm35c.found ? 'no docs/security/*.md documents NM-35C with a recognizable deliberate allow-same-origin omission' : !allFramesCorrect ? 'a live iframe exists whose sandbox attribute does not match the frozen contract' : 'a live iframe is retained without a genuinely restrictive Content-Security-Policy on the route it loads (per real HTTP response evidence)',
   };
 }
 
@@ -2156,6 +2335,11 @@ function appendResult(key: string, value: unknown): void {
 // present a few hundred ms later. A longer confirmed-idle window (not a
 // size-proportional fixed sleep -- a small constant number of 60ms polls
 // once concurrency is ALREADY at zero) covers that gap.
+// Ceremony ruling item 4: on timeout this THROWS (carrying the remaining
+// counters and stable streak) instead of silently returning -- the throw
+// propagates out of the awaiting \`it()\` callback and fails that Vitest
+// test directly, so no result recording, counter reset, subsequent
+// assertion, or passing outcome can occur after a quiescence timeout.
 async function waitForQuiescence(timeoutMs = 15000): Promise<void> {
   const start = Date.now();
   let stableStreak = 0;
@@ -2168,6 +2352,7 @@ async function waitForQuiescence(timeoutMs = 15000): Promise<void> {
     }
     await new Promise((r) => setTimeout(r, 60));
   }
+  throw new Error(\`waitForQuiescence timed out after \${timeoutMs}ms without reaching the required stable-zero streak of 20 (remaining: concurrentLiveArtifacts=\${concurrentLiveArtifacts} concurrentFiles=\${concurrentFiles} stableStreak=\${stableStreak}/20)\`);
 }
 
 const CONCURRENCY_CEILING = 12;
@@ -2368,6 +2553,22 @@ async function measureDesignsTabActivation(rootDir: string, scratchCorpusDir: st
     const listJson = (await listResp.json()) as { projects?: { id?: unknown }[] };
     const sample = (listJson.projects ?? []).filter((p) => typeof p.id === 'string').slice(0, 30);
     if (sample.length === 0) return { error: 'no projects with a string id found in the scratch corpus' };
+    const sampleIds = new Set(sample.map((p) => String(p.id)));
+    // Ceremony ruling item 5: a timed mount is proven ONLY by a subsequent
+    // EXACT DesignsTab data request for a sampled project -- the real
+    // client (apps/web/src/providers/registry.ts) issues exactly
+    // `GET /api/live-artifacts?projectId=<id>` (fetchLiveArtifacts) and
+    // `GET /api/projects/<id>/files` (fetchProjectFiles) per project.
+    // Preparatory `GET /api/projects` traffic must never satisfy this.
+    function isQualifyingMountRequestUrl(url: string, origin: string): boolean {
+      if (!url.startsWith(origin)) return false;
+      const pathAndQuery = url.slice(origin.length);
+      const liveArtifactsMatch = /^\/api\/live-artifacts\?projectId=([^&]+)$/.exec(pathAndQuery);
+      if (liveArtifactsMatch?.[1] && sampleIds.has(decodeURIComponent(liveArtifactsMatch[1]))) return true;
+      const filesMatch = /^\/api\/projects\/([^/]+)\/files$/.exec(pathAndQuery);
+      if (filesMatch?.[1] && sampleIds.has(decodeURIComponent(filesMatch[1]))) return true;
+      return false;
+    }
 
     // Bundle THIS root's REAL DesignsTab with a harness that mounts it
     // using the REAL (unmocked) registry.ts -- a genuine integration
@@ -2422,39 +2623,65 @@ import { DesignsTab } from './components/DesignsTab';
       }
     })();
 
-    // Sol r2 ruling 2 / finding 2: every timed repetition gets a genuinely
+    // Ceremony ruling item 5: every timed repetition gets a genuinely
     // FRESH page (`browser.newPage()`), not the same page/React root
-    // remounted -- reusing the root risked React's same-props bailout
-    // silently observing already-rendered content instead of re-fetching.
-    // Readiness is measured by REQUEST QUIESCENCE (this mount's own network
-    // burst starting, then draining to zero in-flight requests for a
-    // stable window), not a synchronous `.design-card` DOM count -- a
-    // paginated/virtualized grid may legitimately never satisfy
-    // `count >= sample.length`, which would hang or false-red forever.
+    // remounted. ALL preparatory work (navigation, setContent, project-
+    // data injection) completes BEFORE any measurement listener is armed,
+    // so the preparatory `GET /api/projects` can never be visible to (or
+    // satisfy) the listeners that later prove a timed mount fired. `t0` is
+    // set immediately before script injection/mount. A timed mount is
+    // proven ONLY by a subsequent qualifying DesignsTab data request
+    // (isQualifyingMountRequestUrl, above) -- if none appears within the
+    // start timeout, or the in-flight count never drains to a stable zero
+    // within the drain deadline, the repetition FAILS and records NO
+    // sample (never a partial/degraded reading).
     const readinessMsSamples: number[] = [];
+    const repFailures: string[] = [];
     for (let i = -1; i < reps; i++) { // i===-1 is a discarded warmup (R8: warmup + >=5 timed reps)
       const page = await browser.newPage();
       try {
-        let inFlight = 0;
-        let sawAnyRequest = false;
-        page.on('request', (req) => { if (req.url().startsWith(daemonOrigin)) { inFlight++; sawAnyRequest = true; if (inFlight > peakConcurrentRequests) peakConcurrentRequests = inFlight; } });
-        page.on('requestfinished', (req) => { if (req.url().startsWith(daemonOrigin)) inFlight = Math.max(0, inFlight - 1); });
-        page.on('requestfailed', (req) => { if (req.url().startsWith(daemonOrigin)) inFlight = Math.max(0, inFlight - 1); });
-
         await page.goto(`${daemonOrigin}/api/projects`, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => undefined);
         await page.setContent('<!doctype html><html><body><div id="root"></div></body></html>', { waitUntil: 'domcontentloaded' });
         await page.evaluate((projects: unknown[]) => { (globalThis as unknown as { __C410_PROJECTS__: unknown[] }).__C410_PROJECTS__ = projects; }, sample);
+
+        // Listeners armed only now -- after every preparatory step above.
+        let inFlight = 0;
+        let sawQualifyingMountRequest = false;
+        page.on('request', (req) => {
+          const url = req.url();
+          if (!url.startsWith(daemonOrigin)) return;
+          inFlight++;
+          if (inFlight > peakConcurrentRequests) peakConcurrentRequests = inFlight;
+          if (isQualifyingMountRequestUrl(url, daemonOrigin)) sawQualifyingMountRequest = true;
+        });
+        page.on('requestfinished', (req) => { if (req.url().startsWith(daemonOrigin)) inFlight = Math.max(0, inFlight - 1); });
+        page.on('requestfailed', (req) => { if (req.url().startsWith(daemonOrigin)) inFlight = Math.max(0, inFlight - 1); });
 
         const t0 = Date.now();
         await page.addScriptTag({ content: bundledJs });
         await page.evaluate(() => { (globalThis as unknown as { __C410_MOUNT__: () => void }).__C410_MOUNT__(); });
 
-        for (let poll = 0; poll < 50 && !sawAnyRequest; poll++) await sleep(20); // up to 1s for the request burst to start
+        let started = false;
+        for (let poll = 0; poll < 50; poll++) { // up to 1s for a qualifying mount request to appear
+          if (sawQualifyingMountRequest) { started = true; break; }
+          await sleep(20);
+        }
+        if (!started) {
+          repFailures.push(`rep(i=${i}): FAILED -- no qualifying mount request (GET /api/live-artifacts?projectId=<sample-id> or GET /api/projects/<sample-id>/files) observed within the start timeout; no sample recorded`);
+          continue;
+        }
+
+        let drained = false;
         let stableStreak = 0;
         for (let poll = 0; poll < 300; poll++) { // up to 15s to drain to quiescence
-          if (inFlight === 0) { stableStreak++; if (stableStreak >= 5) break; } else { stableStreak = 0; }
+          if (inFlight === 0) { stableStreak++; if (stableStreak >= 5) { drained = true; break; } } else { stableStreak = 0; }
           await sleep(50);
         }
+        if (!drained) {
+          repFailures.push(`rep(i=${i}): FAILED -- drain-streak expiry (in-flight=${inFlight}, stableStreak=${stableStreak}/5); no sample recorded`);
+          continue;
+        }
+
         const elapsed = Date.now() - t0;
         if (i >= 0) readinessMsSamples.push(elapsed);
       } finally {
@@ -2464,11 +2691,49 @@ import { DesignsTab } from './components/DesignsTab';
 
     pollAbort.abort();
     await poller;
+    // Ceremony ruling item 5: R8 statistics only after warmup PLUS five
+    // valid, started, and proven-quiescent timed repetitions -- a run with
+    // any failed repetition is an error, never a partial result.
+    if (readinessMsSamples.length < reps) {
+      return { error: `only ${readinessMsSamples.length}/${reps} timed repetitions were valid (started + proven-quiescent) -- R8 statistics require all ${reps}\n${repFailures.join('\n')}` };
+    }
     return { readinessMsSamples, peakConcurrentRequests, peakCombinedRssKb, projectCount: sample.length };
   } finally {
     try { fs.unlinkSync(harnessPath); } catch { /* best effort */ }
     if (browser) await browser.close().catch(() => undefined);
     if (daemon) await daemon.kill().catch(() => undefined);
+  }
+}
+
+// Ceremony ruling item 5: recompute the corpus digest using the SAME
+// canonical walk W0 uses (scripts/waves/verify-w0.ts C0-9) -- deterministic
+// relative-path sort, `relativePath:fileSha256` pairs joined by newline and
+// hashed -- BEFORE any scratch copy or daemon boot. MAX_HASHED_FILES
+// mirrors W0's cap exactly; for the present 2,849-file corpus (well under
+// the 3000 cap) this hashes every single file, matching the ruling's
+// explicit requirement.
+function recomputeCorpusDigest(corpusPath: string): { sha256: string; fileCount: number } | { error: string } {
+  const MAX_HASHED_FILES = 3000;
+  const allFiles: { rel: string; abs: string }[] = [];
+  try {
+    (function walk(dir: string, base: string): void {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full, base);
+        else allFiles.push({ rel: path.relative(base, full), abs: full });
+      }
+    })(corpusPath, corpusPath);
+  } catch (err) {
+    return { error: `corpus walk failed: ${String(err)}` };
+  }
+  if (allFiles.length === 0) return { error: 'corpus walk found zero files' };
+  allFiles.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
+  const sampled = allFiles.length <= MAX_HASHED_FILES ? allFiles : allFiles.filter((_, i) => i % Math.ceil(allFiles.length / MAX_HASHED_FILES) === 0);
+  try {
+    const contentPairs = sampled.map((f) => `${f.rel}:${sha256File(f.abs)}`);
+    return { sha256: sha256Bytes(contentPairs.join('\n')), fileCount: allFiles.length };
+  } catch (err) {
+    return { error: `corpus file read/hash failed: ${String(err)}` };
   }
 }
 
@@ -2491,6 +2756,20 @@ async function checkC410(): Promise<{ ok: boolean; evidence: string; detail?: st
   if (!fs.existsSync(baseline.corpus.path)) return { ok: false, evidence: `corpus path from baseline JSON does not exist on this machine: ${baseline.corpus.path}`, detail: 'cannot run the R8 comparison without the frozen corpus' };
   const thisMachine = machineFingerprint();
   if (thisMachine !== baseline.machine.fingerprint) return { ok: false, evidence: `machine fingerprint mismatch: baseline=${baseline.machine.fingerprint} this run=${thisMachine}`, detail: 'R8 baselines are machine-local by design' };
+
+  // Ceremony ruling item 5: recompute the corpus digest BEFORE any scratch
+  // copy or daemon boot. A malformed declaration, walk/read error, or
+  // mismatch fails right here, before any copying or measurement.
+  if (!baseline.corpus.sha256 || typeof baseline.corpus.sha256 !== 'string') {
+    return { ok: false, evidence: `baseline.corpus.sha256 is missing or malformed: ${JSON.stringify(baseline.corpus.sha256)}`, detail: 'cannot verify the frozen corpus matches a malformed baseline declaration' };
+  }
+  const corpusDigest = recomputeCorpusDigest(baseline.corpus.path);
+  if ('error' in corpusDigest) {
+    return { ok: false, evidence: `corpus digest recomputation FAILED before any scratch copy/daemon boot: ${corpusDigest.error}\nstated baseline.corpus.sha256=${baseline.corpus.sha256}`, detail: 'cannot verify the frozen corpus matches the declared baseline -- refusing to measure against a possibly-different corpus' };
+  }
+  if (corpusDigest.sha256 !== baseline.corpus.sha256) {
+    return { ok: false, evidence: `corpus digest MISMATCH before any scratch copy/daemon boot: stated=${baseline.corpus.sha256} computed=${corpusDigest.sha256} (hashed ${corpusDigest.fileCount} files, same canonical walk as W0)`, detail: 'the on-disk corpus does not match the declared baseline.corpus.sha256 -- refusing to measure against a possibly-different corpus' };
+  }
 
   const REPS = 5;
   let parentScratch: string | undefined;
@@ -2533,7 +2812,7 @@ async function checkC410(): Promise<{ ok: boolean; evidence: string; detail?: st
 
     return {
       ok,
-      evidence: `parent(${baseCommit.slice(0, 12)}, scratch corpus): readinessSamples=${JSON.stringify(parentResult.readinessMsSamples)} p50=${parentP50}ms p95=${parentP95}ms peakConcurrentRequests=${parentResult.peakConcurrentRequests} peakCombinedRssKb=${parentResult.peakCombinedRssKb} projectCount=${parentResult.projectCount}\nhead(${headSha.slice(0, 12)}, scratch corpus): readinessSamples=${JSON.stringify(headResult.readinessMsSamples)} p50=${headP50}ms p95=${headP95}ms peakConcurrentRequests=${headResult.peakConcurrentRequests} peakCombinedRssKb=${headResult.peakCombinedRssKb} projectCount=${headResult.projectCount}\nbaseline authoritative fields: minimumImprovementThreshold=${minImprovementPct}% nonRegressionCeiling=${nonRegressionCeilingPct}%\np50: target<=${improvementTargetMs.toFixed(1)}ms -> improved=${readinessImproved}; ceiling<=${p50RegressionCeilingMs.toFixed(1)}ms -> notRegressed=${p50NotRegressed}\np95: ceiling<=${p95RegressionCeilingMs.toFixed(1)}ms -> notRegressed=${p95NotRegressed}\npeak combined RSS non-regression (<=+${nonRegressionCeilingPct}%): ${rssNotRegressed}\npeak concurrent requests non-regression (<=+${nonRegressionCeilingPct}%): ${requestCountNotRegressed}`,
+      evidence: `corpus digest (recomputed BEFORE any scratch copy/daemon boot, same canonical walk as W0): stated=${baseline.corpus.sha256} computed=${corpusDigest.sha256} filesHashed=${corpusDigest.fileCount} -> MATCH\nparent(${baseCommit.slice(0, 12)}, scratch corpus): readinessSamples=${JSON.stringify(parentResult.readinessMsSamples)} p50=${parentP50}ms p95=${parentP95}ms peakConcurrentRequests=${parentResult.peakConcurrentRequests} peakCombinedRssKb=${parentResult.peakCombinedRssKb} projectCount=${parentResult.projectCount}\nhead(${headSha.slice(0, 12)}, scratch corpus): readinessSamples=${JSON.stringify(headResult.readinessMsSamples)} p50=${headP50}ms p95=${headP95}ms peakConcurrentRequests=${headResult.peakConcurrentRequests} peakCombinedRssKb=${headResult.peakCombinedRssKb} projectCount=${headResult.projectCount}\nbaseline authoritative fields: minimumImprovementThreshold=${minImprovementPct}% nonRegressionCeiling=${nonRegressionCeilingPct}%\np50: target<=${improvementTargetMs.toFixed(1)}ms -> improved=${readinessImproved}; ceiling<=${p50RegressionCeilingMs.toFixed(1)}ms -> notRegressed=${p50NotRegressed}\np95: ceiling<=${p95RegressionCeilingMs.toFixed(1)}ms -> notRegressed=${p95NotRegressed}\npeak combined RSS non-regression (<=+${nonRegressionCeilingPct}%): ${rssNotRegressed}\npeak concurrent requests non-regression (<=+${nonRegressionCeilingPct}%): ${requestCountNotRegressed}`,
       detail: ok ? undefined : 'does not beat the parent commit by the baseline minimum p50 improvement threshold, or regresses p95/RSS/request-concurrency past the baseline non-regression ceiling',
     };
   } finally {
