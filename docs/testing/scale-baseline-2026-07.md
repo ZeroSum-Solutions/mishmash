@@ -40,6 +40,41 @@ path), and an explicit `isRealStoreSnapshot: true` declaration so this
 baseline cannot be silently satisfied by an unrelated same-sized directory
 later.
 
+### Fingerprint restatement (2026-07-28)
+
+The 2026-07-28 gate-of-record run failed C0-9's corpus binding: recomputed
+`b3a19b9bdf0b…` vs the stated 2026-07-27 value `a9e87b35c2e9…`. A read-only
+diagnosis (faithful reimplementation of the verifier's walk, exhaustive
+mtime-bucket audit of all 2,849 files, and exclusion-walk experiments)
+established:
+
+- File count and total bytes are **unchanged** (2,849 / 1,142,043,038) — the
+  drift is in-place content mutation of exactly three files: `app.sqlite`,
+  `app.sqlite-shm`, `app.sqlite-wal` (one mtime cluster, Jul 27 23:42:43–44).
+- The writers were daemon boots performed during sanctioned baseline
+  measurement and search-probe verification runs. Both those runs and the
+  verifier's own C0-9 scenarios boot with `OD_DATA_DIR` set **directly to
+  `corpus.path`** (no scratch copy), so opening the corpus's own SQLite store
+  read-write is a structural side effect of the current C0-9 design — a green
+  C0-9 run boots 7 daemons against the corpus after its hash check passes,
+  invalidating the fingerprint for any *subsequent* run.
+- No exclusion set reproduces the old hash (removing the sqlite triplet from
+  the walk yields `fe9ce13346d7…`, and also breaks the declared file/byte
+  counts): the pre-mutation sqlite bytes are gone, so restoring the 2026-07-27
+  value is impossible without a pristine backup, which does not exist.
+
+`corpus.sha256` is therefore restated to the full recomputed walk over the
+current tree: `b3a19b9bdf0b9525698018630db3fc3719ced317c0d802d6d1e0d867f5346638`.
+The document corpus (all 2,846 non-sqlite files) is bit-identical to the
+original snapshot; the timing samples below remain valid (SQLite WAL churn
+does not change the served project content or the scenarios' semantics).
+
+**Standing caveat:** nothing may boot a daemon against `corpus.path` between
+this restatement and the gate run that consumes it. The structural fix —
+having C0-9's scenario boots run against a scratch copy of the corpus — is
+deferred as a recorded follow-up (it requires a sealed-verifier amendment and
+is not needed for a single gate-of-record run).
+
 ## Machine
 
 `Devins-MacBook-Pro.local-darwin-arm64-16cpu` (`os.hostname()-platform()-arch()-cpus().length` +
