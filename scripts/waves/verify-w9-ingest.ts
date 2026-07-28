@@ -166,11 +166,18 @@ try {
 // the prior execFileSync-based version only ever surfaced stdout (its catch
 // block read e.stdout but never e.stderr), so any "stdout/stderr hash"
 // claim built from it was false on the stderr half.
+//
+// CEREMONY CONFIRMATION FIX (round 3): `processError` distinguishes a
+// spawn failure or a timeout-induced kill (spawnSync sets `.error` and/or
+// `.signal` in those cases) from an ORDINARY nonzero exit code -- the two
+// used to collapse into an indistinguishable `status:1`, so a caller
+// checking only `status !== 0` could not tell a genuine red exit from a
+// process that never ran a real test at all.
 function sh(
   cmd: string,
   args: string[],
   opts: { cwd?: string; timeoutMs?: number; env?: NodeJS.ProcessEnv } = {},
-): { status: number; stdout: string; stderr: string } {
+): { status: number; stdout: string; stderr: string; processError: boolean } {
   const result = spawnSync(cmd, args, {
     cwd: opts.cwd ?? repoRoot,
     encoding: 'utf8',
@@ -178,10 +185,11 @@ function sh(
     timeout: opts.timeoutMs ?? 10 * 60_000,
     env: opts.env ?? process.env,
   });
+  const processError = !!result.error || !!result.signal;
   if (result.error) {
-    return { status: 1, stdout: result.stdout ?? '', stderr: `${result.stderr ?? ''}\n${String(result.error)}` };
+    return { status: 1, stdout: result.stdout ?? '', stderr: `${result.stderr ?? ''}\n${String(result.error)}`, processError: true };
   }
-  return { status: result.status ?? 1, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
+  return { status: result.status ?? 1, stdout: result.stdout ?? '', stderr: result.stderr ?? '', processError };
 }
 
 function sha256Bytes(buf: Buffer | string): string {
@@ -656,6 +664,21 @@ function staticBooleanValue(expr: TsNode): boolean | undefined {
       if (l !== undefined && r !== undefined) return l || r;
       return undefined;
     }
+  }
+  // CEREMONY CONFIRMATION FIX (round 3): a ternary whose condition has a
+  // static value is itself statically the corresponding branch's static
+  // value (recursively) -- without this, `(true ? false : X) && Y` could
+  // not be recognized as statically-false-on-the-left, so `visitExprSubtree`'s
+  // `&&` handler (which calls staticBooleanValue to decide reachability of
+  // the RHS) would treat the left operand as "unknown" and still visit Y,
+  // even though the dead-arm-skipping walk itself never finds anything
+  // inside the ternary's own (correctly-skipped) dead arm. Dead arms stay
+  // skipped -- this only teaches the EVALUATOR what the WALKER already knew.
+  if (ts.isConditionalExpression(expr)) {
+    const condVal = staticBooleanValue(expr.condition);
+    if (condVal === true) return staticBooleanValue(expr.whenTrue);
+    if (condVal === false) return staticBooleanValue(expr.whenFalse);
+    return undefined;
   }
   return undefined;
 }
@@ -1162,18 +1185,29 @@ function hasDistinctSignalPair(candidates: readonly { fullName: string }[], matc
 // code. A bare "one assertion whose name matches an accept-shaped regex, a
 // different one matching a reject-shaped regex" is no longer sufficient on
 // its own; an unrelated or omnibus assertion name can no longer satisfy it.
+//
+// CEREMONY CONFIRMATION FIX (round 3): the numeric bindings were unbounded
+// substring tests -- `fullName.includes('10')` matches inside "100", and
+// `fullName.includes('429')` matches inside "1429" -- so a distinct,
+// wrong-magnitude number could still satisfy the binding. Matching is now
+// exact-token: the number must appear bounded by non-digit characters (or
+// string start/end) on both sides, via `\b<n>\b` (digits are word
+// characters, so a word boundary is exactly a digit boundary here).
+function containsExactNumericToken(text: string, n: number): boolean {
+  return new RegExp(`\\b${n}\\b`).test(text);
+}
 function matchesUnderLimitAssertion(fullName: string, routeTerms: readonly string[], parsed: EnforcedDeclaration): boolean {
   const nameLower = fullName.toLowerCase();
   const routeAssociated = routeTerms.length === 0 || routeTerms.some((t) => nameLower.includes(t.toLowerCase()));
-  const mentionsLimit = fullName.includes(String(parsed.limit));
+  const mentionsLimit = containsExactNumericToken(fullName, parsed.limit);
   return routeAssociated && mentionsLimit && UNDER_LIMIT_SIGNAL.test(fullName);
 }
 function matchesOverLimitAssertion(fullName: string, routeTerms: readonly string[], parsed: EnforcedDeclaration): boolean {
   const nameLower = fullName.toLowerCase();
   const routeAssociated = routeTerms.length === 0 || routeTerms.some((t) => nameLower.includes(t.toLowerCase()));
-  const mentionsLimit = fullName.includes(String(parsed.limit));
-  const overflowCode = parsed.overflow === 'reject-429' ? '429' : '413';
-  const mentionsOverflow = fullName.includes(overflowCode);
+  const mentionsLimit = containsExactNumericToken(fullName, parsed.limit);
+  const overflowCode = parsed.overflow === 'reject-429' ? 429 : 413;
+  const mentionsOverflow = containsExactNumericToken(fullName, overflowCode);
   return routeAssociated && mentionsLimit && mentionsOverflow && OVER_LIMIT_SIGNAL.test(fullName);
 }
 
@@ -1196,27 +1230,32 @@ const NEGATIVE_SIGNAL = /\b(reject|deny|denied|unauthoriz\w*|forbidden|invalid|4
 // `it`/`test` declaration (including modifier chains and `.each`'s outer
 // title call), string-literal or no-substitution-template only.
 //
-// CEREMONY CONFIRMATION FIX: the prior `rootIdentifierOfChain` walked
-// through CallExpressions as well as PropertyAccessExpressions, so for
-// `it.each('/api/library/ingest')('real title', fn)` it resolved BOTH the
-// outer title call AND the inner `it.each('/api/library/ingest')` factory
-// call to root 'it' -- recording the route-literal factory argument as a
-// second, false "title". It also accepted any property name at all
-// (`it.helper(...)`) as a valid modifier. Fixed by distinguishing the
-// structural shapes explicitly: a chained call's inner factory (the callee
-// of an outer CallExpression) is never independently treated as a
-// declaration, and only a fixed allowlist of real Vitest modifiers is
-// accepted between the root identifier and the call.
+// CEREMONY CONFIRMATION FIX (round 3): FACTORY modifiers (`each`, `for`,
+// `runIf`, `skipIf`) return a FUNCTION that must be invoked AGAIN with a
+// title to become a real declaration -- a call whose own direct callee
+// chain terminates in one of these must NEVER contribute its own arguments
+// as a title, in ANY context: standalone (`const factory =
+// it.each('/api/library/ingest')`), assigned, or as an unrecognized inner
+// link of a longer chain (`it.each('/api/library/ingest').helper('real
+// title', fn)`, `.skip(...)`). `isFactoryCall` is a pure, context-free
+// predicate on a call's own shape, so it rejects the SAME node identically
+// no matter where in the tree it is encountered -- no suppression
+// bookkeeping needed. TERMINAL modifiers (`concurrent`, `sequential`,
+// `skip`, `only`, `todo`, `fails`) take the title directly. Only the OUTER
+// invocation of a (possibly multi-level) factory chain's result -- i.e. a
+// call whose OWN callee is itself a CallExpression resolving, through
+// `isValidTestChainExpression`, back to a plain it/test-rooted chain of
+// known modifiers -- may contribute a title.
 // -----------------------------------------------------------------------
-const KNOWN_TEST_MODIFIERS = new Set(['concurrent', 'sequential', 'skip', 'only', 'todo', 'fails', 'each', 'for', 'runIf', 'skipIf']);
+const FACTORY_TEST_MODIFIERS = new Set(['each', 'for', 'runIf', 'skipIf']);
+const TERMINAL_TEST_MODIFIERS = new Set(['concurrent', 'sequential', 'skip', 'only', 'todo', 'fails']);
+const KNOWN_TEST_MODIFIERS = new Set<string>([...FACTORY_TEST_MODIFIERS, ...TERMINAL_TEST_MODIFIERS]);
 function extractStaticTestTitlesFromSource(sourceText: string, label: string): Set<string> {
   const sourceFile = ts.createSourceFile(label, sourceText, ts.ScriptTarget.Latest, true);
   const titles = new Set<string>();
-  // Unwraps ONLY identifier/property-access chains -- never descends
-  // through a CallExpression. Returns the root identifier text only if
-  // every intermediate property is a known modifier; an unknown helper
-  // (e.g. `it.helper`) or a non-it/test root returns null.
-  function resolveKnownTestChainRoot(expr: TsNode): string | null {
+  // Unwraps ONLY an identifier/property-access chain -- stops (returns
+  // null) the moment it hits anything else, including a CallExpression.
+  function directPropertyChain(expr: TsNode): { root: string; props: string[] } | null {
     let cur: TsNode = expr;
     const props: string[] = [];
     while (ts.isPropertyAccessExpression(cur)) {
@@ -1224,34 +1263,51 @@ function extractStaticTestTitlesFromSource(sourceText: string, label: string): S
       cur = cur.expression;
     }
     if (!ts.isIdentifier(cur)) return null;
-    const root = cur.text;
-    if (root !== 'it' && root !== 'test') return null;
-    if (props.some((p) => !KNOWN_TEST_MODIFIERS.has(p))) return null;
-    return root;
+    if (cur.text !== 'it' && cur.text !== 'test') return null;
+    return { root: cur.text, props };
+  }
+  // True iff this call's OWN direct callee (no nested calls) is a plain
+  // it/test-rooted chain whose LAST modifier is a factory modifier -- this
+  // call itself can never be a title-bearing declaration, full stop.
+  function isFactoryCall(call: TsNode & { expression: TsNode }): boolean {
+    const chain = directPropertyChain(call.expression);
+    if (!chain || chain.props.length === 0) return false;
+    return FACTORY_TEST_MODIFIERS.has(chain.props[chain.props.length - 1]!);
+  }
+  // Recursively validates that `expr` is a legitimate it/test declaration
+  // chain -- unwrapping through any depth of CallExpression/
+  // PropertyAccessExpression nesting, every modifier name known, rooted at
+  // exactly it/test. Used to confirm an OUTER call is genuinely invoking
+  // the result of a real (possibly multi-level) factory chain.
+  function isValidTestChainExpression(expr: TsNode): boolean {
+    if (ts.isCallExpression(expr)) return isValidTestChainExpression(expr.expression);
+    if (ts.isPropertyAccessExpression(expr)) {
+      if (!KNOWN_TEST_MODIFIERS.has(expr.name.text)) return false;
+      return isValidTestChainExpression(expr.expression);
+    }
+    if (ts.isIdentifier(expr)) return expr.text === 'it' || expr.text === 'test';
+    return false;
   }
   function addTitleFromFirstArg(args: readonly TsNode[]): void {
     const firstArg = args[0];
     if (firstArg && ts.isStringLiteral(firstArg)) titles.add(firstArg.text);
     else if (firstArg && ts.isNoSubstitutionTemplateLiteral(firstArg)) titles.add(firstArg.text);
   }
-  const suppressed = new Set<TsNode>();
   function visit(node: TsNode): void {
-    if (ts.isCallExpression(node) && !suppressed.has(node)) {
+    if (ts.isCallExpression(node) && !isFactoryCall(node)) {
       if (ts.isCallExpression(node.expression)) {
-        // Chained shape: it.each(arr)('title', fn). Only the OUTER call
-        // (this node) can bear a title; its inner factory call is marked
-        // suppressed so the generic walk below never re-examines it as an
-        // independent declaration.
-        const innerRoot = resolveKnownTestChainRoot(node.expression.expression);
-        if (innerRoot) {
-          suppressed.add(node.expression);
+        // Outer invocation of a (possibly multi-level) factory chain's
+        // result: it.each(arr)('title', fn), it.skipIf(x).each(arr)('t', fn).
+        if (isValidTestChainExpression(node.expression)) {
           addTitleFromFirstArg(node.arguments);
         }
       } else {
         // Plain shape: it(...), it.concurrent(...), test.fails(...). Only a
         // property chain wholly composed of known modifiers, rooted at
-        // exactly it/test, counts -- an unknown helper never does.
-        if (resolveKnownTestChainRoot(node.expression)) {
+        // exactly it/test, counts -- an unknown helper never does, and
+        // isFactoryCall above has already excluded a bare factory call.
+        const chain = directPropertyChain(node.expression);
+        if (chain && chain.props.every((p) => KNOWN_TEST_MODIFIERS.has(p))) {
           addTitleFromFirstArg(node.arguments);
         }
       }
@@ -1355,6 +1411,9 @@ interface FileTestResult {
   assertionResults: AssertionResult[];
 }
 interface SuiteJson {
+  success: boolean;
+  numTotalTestSuites: number;
+  numFailedTestSuites: number;
   numFailedTests: number;
   numPassedTests: number;
   numPendingTests?: number;
@@ -1454,7 +1513,18 @@ function replayRedEvidence(parentSha: string, containingFileRel: string, targetF
     // Both streams captured -- sh() now returns stderr too (ceremony
     // confirmation fix), so this hash is honestly what it claims to be.
     const outputHash = sha256Bytes(`${runResult.stdout}\n--- stderr ---\n${runResult.stderr}`);
-    evidenceLines.push(`exit=${runResult.status} stdout+stderr sha256=${outputHash}`);
+    evidenceLines.push(`exit=${runResult.status} processError=${runResult.processError} stdout+stderr sha256=${outputHash}`);
+
+    // CEREMONY CONFIRMATION FIX (round 3): a spawn error or a timeout-
+    // induced kill is NOT the expected red exit -- it means no genuine test
+    // run happened at all. Previously `sh()` collapsed this into an
+    // ordinary status:1, indistinguishable from a real failing test run;
+    // this must fail the replay outright, before even attempting to parse
+    // whatever (if anything) the reporter wrote.
+    if (runResult.processError) {
+      problems.push('replay child process reported a spawn error or was killed (timeout/signal) -- not a genuine test-driven red exit');
+      return { ok: false, problems, evidenceLines };
+    }
 
     let replayData: SuiteJson | null = null;
     try {
@@ -1482,6 +1552,20 @@ function replayRedEvidence(parentSha: string, containingFileRel: string, targetF
     }
     if (replayData.numFailedTests !== 1) {
       problems.push(`replay reporter numFailedTests is ${replayData.numFailedTests}, expected exactly 1 (the target only)`);
+    }
+
+    // CEREMONY CONFIRMATION FIX (round 3): reject reporter-level
+    // inconsistencies and suite-level failures the assertion-level checks
+    // above cannot see on their own -- a reporter claiming `success:true`
+    // while a test failed is self-contradictory output, and a replay that
+    // touches more than the one targeted file, or fails more than that one
+    // file, means something beyond the target test itself went wrong.
+    evidenceLines.push(`reporter success=${replayData.success} numTotalTestSuites=${replayData.numTotalTestSuites} numFailedTestSuites=${replayData.numFailedTestSuites}`);
+    if (replayData.success !== false) {
+      problems.push(`replay reporter's own "success" field is ${JSON.stringify(replayData.success)}, expected exactly false for a genuine failing run`);
+    }
+    if (replayData.numTotalTestSuites !== 1 || replayData.numFailedTestSuites !== 1) {
+      problems.push(`replay reporter suite-level counts are inconsistent with a single failing file (numTotalTestSuites=${replayData.numTotalTestSuites}, numFailedTestSuites=${replayData.numFailedTestSuites}, expected 1/1)`);
     }
 
     if (runResult.status === 0) problems.push('replay child process exited 0 (expected nonzero for a genuine red state)');
@@ -2144,9 +2228,26 @@ async function main(): Promise<void> {
     // CEREMONY CONFIRMATION FIX: a line must actually BE a Markdown list
     // item (unordered `-`/`*`/`+` or ordered `1.`), not merely contain the
     // `[C9-N]` tag anywhere -- a plain paragraph mentioning a tag no longer
-    // satisfies the ruled per-route "bullet line" requirement.
+    // satisfies the ruled per-route "bullet line" requirement. Round 3
+    // (confirmation #3): a line-regex match alone still accepted a bullet-
+    // looking line sitting inside a fenced code block or a 4+-space-indented
+    // code block -- neither is a rendered Markdown list item. Fence state is
+    // tracked while scanning; the fence delimiter lines themselves and any
+    // line between them are excluded, as is any line with 4+ leading spaces.
     const MARKDOWN_BULLET_LINE = /^\s*(?:[-*+]|\d+\.)\s+/;
-    const bulletLines = waveSection.split('\n').filter((l) => MARKDOWN_BULLET_LINE.test(l) && /\[C9-\d+\]/.test(l));
+    const FENCE_LINE = /^\s*```/;
+    const INDENTED_CODE_LINE = /^ {4,}/;
+    const bulletLines: string[] = [];
+    let insideFence = false;
+    for (const line of waveSection.split('\n')) {
+      if (FENCE_LINE.test(line)) {
+        insideFence = !insideFence;
+        continue; // the fence delimiter line itself is never a bullet
+      }
+      if (insideFence) continue;
+      if (INDENTED_CODE_LINE.test(line)) continue;
+      if (MARKDOWN_BULLET_LINE.test(line) && /\[C9-\d+\]/.test(line)) bulletLines.push(line);
+    }
     const problems: string[] = [];
     const p0Rows = matrixRows ? matrixRows.filter((r) => r.riskScore?.tier === 'P0') : [];
     const bulletsCoveringP0 = new Set<string>();
