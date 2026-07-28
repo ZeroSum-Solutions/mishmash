@@ -102,6 +102,19 @@ predictions above:
   a future miss requires honest re-measurement, never a band widen (the 50%
   cap is sealed in the verifier).
 
+### Third restatement (2026-07-28)
+
+The second gate execution went 16/17 (C0-9 itself PASSED — binding, all five
+scenarios including search at p50 1ms, content proof and negative control
+clean on every repetition) and, per the standing caveat's now-routine
+prediction, its own green C0-9 boots re-mutated the sqlite triplet.
+`corpus.sha256` restated to the post-run walk:
+`a5ce949ec33d6e00f1fa51bc512c99a17a7b352d32509e8330e570856836c58a`
+(file count and total bytes re-verified unchanged, 2,849 / 1,142,043,038).
+This recurrence — three restatements in one landing cycle — is the concrete
+case for prioritizing the deferred scratch-copy structural fix in the first
+post-landing verifier amendment.
+
 ## Machine
 
 `Devins-MacBook-Pro.local-darwin-arm64-16cpu` (`os.hostname()-platform()-arch()-cpus().length` +
