@@ -1498,15 +1498,26 @@ async function main(): Promise<void> {
       // a meaningless 400/404 blessed away by expectedLocalStatus.
       const BODY_BEARING_METHODS = new Set(['POST', 'PUT', 'PATCH']);
       const probedRowSet = validRows.filter((r) => !r.dynamic || typeof r.probePath === 'string');
-      // Round-12 C0-7-PROBEPATH-SUBSTITUTION (1c): a declared probePath that
-      // STILL contains route-parameter syntax (e.g. :connectorId) is not
-      // realistic either -- it is the templated path copy-pasted verbatim,
-      // not a concrete value. Caught the same as no declaration at all.
-      const rowsMissingRealisticProbePath = probedRowSet.filter((r) => {
-        if (r.dynamic || !/:[a-zA-Z]+/.test(r.path)) return false;
-        if (typeof r.probePath !== 'string') return true;
-        return /:[a-zA-Z]+/.test(r.probePath);
-      });
+      // Round-13 (Sol confirmation, single surviving finding): the
+      // parameterized-syntax check must apply to EVERY declared probePath,
+      // UNCONDITIONALLY -- regardless of row kind (static/dynamic) and
+      // regardless of whether the row's OWN path is parameterized. The
+      // round-12 version only checked static rows whose own path already
+      // had :param syntax, so (i) a static non-parameterized row with a
+      // parameterized probePath override, and (ii) any dynamic row whose
+      // declared probePath itself contains :param syntax, both bypassed
+      // the check and were silently rewritten to the dummy probe id.
+      // Simplified to two independent rules, one pass, no special-casing:
+      //   1. MISSING declaration -- only meaningful for a static row whose
+      //      own path is parameterized and supplies no probePath at all
+      //      (dynamic rows have their own F7 allowlist-governed
+      //      requirement for probePath, unrelated to this rule).
+      //   2. INVALID declaration -- ANY row, static or dynamic, whose
+      //      DECLARED probePath still contains :param syntax, independent
+      //      of whether the row's own base path is parameterized.
+      const rowsMissingProbePathDeclaration = probedRowSet.filter((r) => !r.dynamic && /:[a-zA-Z]+/.test(r.path) && typeof r.probePath !== 'string');
+      const rowsWithParameterizedProbePath = validRows.filter((r) => typeof r.probePath === 'string' && /:[a-zA-Z]+/.test(r.probePath));
+      const rowsMissingRealisticProbePath = [...rowsMissingProbePathDeclaration, ...rowsWithParameterizedProbePath];
       const rowsMissingProbeBody = probedRowSet.filter((r) => BODY_BEARING_METHODS.has(r.method) && r.probeBody === undefined);
       // Round-11 F1 / Round-12 (1d, C0-7-LOCAL-CANARY-FAILOPEN): a row can
       // no longer declare expectedLocalStatus in {-1, 400, 401, 403, 404} or
