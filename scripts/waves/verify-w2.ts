@@ -167,7 +167,12 @@ function resolveInventoryTargetPath(entry: Record<string, unknown>): ResolvedInv
   if (raw.includes('\0')) return { ok: false, error: `"${raw}": contains a NUL byte` };
   if (path.isAbsolute(raw) || /^[A-Za-z]:[\\/]/.test(raw)) return { ok: false, error: `"${raw}": absolute path is not permitted -- must be repo-relative` };
   const posixRaw = raw.split(path.sep).join('/').replace(/^\/+/, '');
-  if (posixRaw.split('/').some((seg) => seg === '..')) return { ok: false, error: `"${raw}": contains a ".." traversal segment` };
+  // Fidelity-round fix: the ruling requires no `.` OR `..` segment -- a raw
+  // "." segment (e.g. "./foo", "foo/./bar") was previously accepted and
+  // silently normalized away instead of rejected outright.
+  if (posixRaw.split('/').some((seg) => seg === '.' || seg === '..')) {
+    return { ok: false, error: `"${raw}": contains a "." or ".." segment -- no dot-segments are permitted` };
+  }
   const normalized = path.posix.normalize(posixRaw);
   if (normalized === '' || normalized === '.' || normalized === '..' || normalized.startsWith('../')) {
     return { ok: false, error: `"${raw}": normalizes to "${normalized}", which is empty or escapes the repo root` };
@@ -962,24 +967,35 @@ interface MutationCarrier {
   replacementFor: (payload: string) => string;
 }
 
-// Excludes import/export module specifiers, directive-prologue-shaped bare
-// string-expression-statements, and property-name positions (including
-// computed property names) -- exactly the exclusions I-W2-NO-PROBE-SIGNATURE
-// names.
+// Excludes import/export module specifiers (including dynamic `import()`
+// and `export =`/`export default` assignments), directive-prologue-shaped
+// bare string-expression-statements, and property-name positions (object/
+// class/interface member names, computed property names, AND element-access
+// keys like `obj["Open Design"]`) -- exactly the exclusions
+// I-W2-NO-PROBE-SIGNATURE names. Fidelity-round fix: dynamic-import
+// specifiers, export assignments, class property names, and element-access
+// keys were previously left eligible.
 function isExcludedCarrierPosition(node: TsNode): boolean {
   const p = node.parent;
   if (!p) return false;
   if ((ts.isImportDeclaration(p) || ts.isExportDeclaration(p)) && p.moduleSpecifier === node) return true;
   if (ts.isImportEqualsDeclaration(p) && ts.isExternalModuleReference(p.moduleReference) && p.moduleReference.expression === node) return true;
+  // Dynamic `import("specifier")`: a CallExpression whose callee is the
+  // `import` keyword token itself (ts.isImportCall exists at runtime but is
+  // not part of the public .d.ts, so match on SyntaxKind directly).
+  if (ts.isCallExpression(p) && p.expression.kind === ts.SyntaxKind.ImportKeyword && p.arguments[0] === node) return true;
+  if (ts.isExportAssignment(p) && p.expression === node) return true;
   if (ts.isExpressionStatement(p) && p.expression === node) return true;
   if (ts.isComputedPropertyName(p)) return true;
   if (ts.isPropertyAssignment(p) && p.name === node) return true;
   if (ts.isPropertySignature(p) && p.name === node) return true;
+  if (ts.isPropertyDeclaration(p) && p.name === node) return true;
   if (ts.isMethodDeclaration(p) && p.name === node) return true;
   if (ts.isMethodSignature(p) && p.name === node) return true;
   if (ts.isGetAccessorDeclaration(p) && p.name === node) return true;
   if (ts.isSetAccessorDeclaration(p) && p.name === node) return true;
   if (ts.isEnumMember(p) && p.name === node) return true;
+  if (ts.isElementAccessExpression(p) && p.argumentExpression === node) return true;
   return false;
 }
 
@@ -1172,12 +1188,18 @@ async function checkC2_3(discovery: BrandSurfaceDiscovery | null): Promise<void>
         // exactly one completed mutation attempt -- no `continue` may exempt
         // an accepted entry from being counted. Resolution/mutation failures
         // are surfaced per entry in `problems`, never converted into skips.
+        // Fidelity-round fix: `mutationsAttempted` now increments ONLY once
+        // a full mutate-run-revert cycle actually completes (not at the top
+        // of the loop before resolution is even attempted), so
+        // `mutationsAttempted === inventory.length` is a genuine signal --
+        // any entry that fails resolution, containment, or mutation makes
+        // the count fall short (in addition to its own per-entry problem),
+        // rather than being tautologically true by construction.
         let mutationsAttempted = 0;
-        for (const entry of shuffledInventory) {
-          mutationsAttempted += 1;
+        for (const [index, entry] of shuffledInventory.entries()) {
           const resolution = resolveInventoryTargetPath(entry);
           if (!resolution.ok) {
-            problems.push(`entry ${mutationsAttempted}/${shuffledInventory.length}: canonical-target resolution failed: ${resolution.error}`);
+            problems.push(`entry ${index + 1}/${shuffledInventory.length}: canonical-target resolution failed: ${resolution.error}`);
             continue;
           }
           const canonicalPath = resolution.canonicalPath;
@@ -1201,7 +1223,18 @@ async function checkC2_3(discovery: BrandSurfaceDiscovery | null): Promise<void>
             problems.push(`${canonicalPath}: resolved outside the scratch copy (${realTargetInCopy}) -- refusing to mutate (symlink/traversal escape guard)`);
             continue;
           }
-          const original = fs.readFileSync(targetInCopy, 'utf8');
+          // Fidelity-round fix: read as a Buffer and verify a lossless UTF-8
+          // round-trip BEFORE treating the content as text. A lossy decode
+          // (invalid UTF-8 / binary content) would otherwise let the
+          // eventual string-based restore silently corrupt the scratch
+          // original while a string comparison still reported "matches".
+          const originalBuffer = fs.readFileSync(targetInCopy);
+          const utf8RoundTrip = Buffer.from(originalBuffer.toString('utf8'), 'utf8');
+          if (!utf8RoundTrip.equals(originalBuffer)) {
+            problems.push(`${canonicalPath}: not valid UTF-8 (binary or lossy-decode content) -- unsupported/binary targets are hard failures, never skips`);
+            continue;
+          }
+          const original = originalBuffer.toString('utf8');
           const mutation = applyMutation(canonicalPath, original);
           if (!mutation.ok) {
             problems.push(`${canonicalPath}: ${mutation.error}`);
@@ -1215,9 +1248,16 @@ async function checkC2_3(discovery: BrandSurfaceDiscovery | null): Promise<void>
           } catch (err) {
             threw = String((err as Error)?.stack ?? err);
           }
-          fs.writeFileSync(targetInCopy, original);
-          const stillMatchesOriginal = fs.readFileSync(targetInCopy, 'utf8') === original;
-          if (!stillMatchesOriginal) problems.push(`${canonicalPath}: revert verification failed after mutation`);
+          // Restore the ORIGINAL BYTES (the Buffer captured before mutation),
+          // not a re-encoded string -- and verify the revert at the byte
+          // level (Buffer.equals), not via a UTF-8 string comparison that a
+          // lossy decode could make pass despite real corruption.
+          fs.writeFileSync(targetInCopy, originalBuffer);
+          const stillMatchesOriginal = fs.readFileSync(targetInCopy).equals(originalBuffer);
+          if (!stillMatchesOriginal) problems.push(`${canonicalPath}: revert verification failed after mutation (byte-level mismatch)`);
+          // A full mutate -> run -> revert cycle completed for this entry --
+          // this is the "completed mutation attempt" the ruling requires.
+          mutationsAttempted += 1;
           if (threw) {
             evidenceLines.push(`${canonicalPath}: mutation (${mutation.markerKind}) caused the check to throw (treated as a pass-through, not a confirmed catch): ${threw.slice(0, 300)}`);
             problems.push(`${canonicalPath}: check function threw instead of returning false on a mutated copy -- inconclusive, not a confirmed reintroduction catch`);
@@ -1227,9 +1267,9 @@ async function checkC2_3(discovery: BrandSurfaceDiscovery | null): Promise<void>
           }
         }
         if (mutationsAttempted !== inventory.length) {
-          problems.push(`mutationsAttempted (${mutationsAttempted}) !== inventory.length (${inventory.length}) -- every entry must receive exactly one completed mutation attempt, with no continue-exemption`);
+          problems.push(`mutationsAttempted (${mutationsAttempted}) !== inventory.length (${inventory.length}) -- every entry must receive exactly one COMPLETED mutation attempt, with no continue-exemption`);
         }
-        evidenceLines.push(`mutations attempted: ${mutationsAttempted} of ${inventory.length} inventory entries (randomized order, uncapped)`);
+        evidenceLines.push(`mutations attempted (completed cycles): ${mutationsAttempted} of ${inventory.length} inventory entries (randomized order, uncapped)`);
       } finally {
         try {
           fs.rmSync(scratchRoot, { recursive: true, force: true });
@@ -1813,7 +1853,12 @@ async function checkC2_9(discovery: BrandSurfaceDiscovery | null): Promise<void>
           problems.push(`could not cross-check against the C2-2 inventory (import failed): ${String((err as Error)?.message ?? err)} -- fails closed, not skipped`);
         }
       } else {
-        evidenceLines.push('C2-2 inventory unavailable -- skipping the cross-check (the whole-repo sweep above still enforces the actual behavior)');
+        // Fidelity-round fix: absent/unusable C2-2 discovery means inventory
+        // coverage can never be established -- the most extreme case of a
+        // resolver failure (zero entries resolvable). This must fail closed
+        // like every other resolver failure, not merely log a skip and let
+        // the whole-repo sweep's result alone decide pass/fail.
+        problems.push('C2-2 inventory unavailable (module/export not discovered) -- inventory coverage cannot be established; fails closed, not skipped');
       }
 
       return { ok: problems.length === 0, evidence: `${evidenceLines.join('\n')}\n\nPROBLEMS:\n${problems.join('\n') || '(none)'}`, detail: problems[0] };
