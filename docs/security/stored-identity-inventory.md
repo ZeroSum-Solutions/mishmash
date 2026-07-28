@@ -21,18 +21,18 @@ the counting script below to reproduce any number.
 
 | Category | Pattern | Count | What it covers |
 |---|---|---|---|
-| `.od/` paths | `/\.od\//g` | 109 | Literal `.od/`-relative path references (default data-dir fallback, docs, migration helpers, test fixtures). |
-| `OD_*` env vars | `/\bOD_[A-Z_]+\b/g` | 2693 | Every `OD_DATA_DIR`, `OD_BIND_HOST`, `OD_SANDBOX_MODE`, `OD_LEGACY_DATA_DIR`, etc. reference across daemon, web, tools, docs, and tests. |
+| `.od/` paths | `/\.od\//g` | 110 | Literal `.od/`-relative path references (default data-dir fallback, docs, migration helpers, test fixtures). |
+| `OD_*` env vars | `/\bOD_[A-Z_]+\b/g` | 2708 | Every `OD_DATA_DIR`, `OD_BIND_HOST`, `OD_SANDBOX_MODE`, `OD_LEGACY_DATA_DIR`, etc. reference across daemon, web, tools, docs, and tests. |
 | MCP server names | `` /\bSERVER_NAME\s*[:=]\s*['"`][\w-]+['"`]/g `` | 4 | Declared `SERVER_NAME` constants that name an MCP server (e.g. the live-artifacts MCP server, the `od mcp` tool surface). |
 | Project JSON keys | `/\bmetadata\.\w+\b/g` | 827 | `metadata.<key>` accesses against the project/asset metadata JSON blob (`metadata.baseDir`, `metadata.kind`, `metadata.odLibraryAssetId`, …) — the shape a stored project record's JSON column commits to. |
 | Connector credential fields | `` /\b(clientId|clientSecret|apiKey|accessToken|refreshToken)\b/g `` | 1577 | Field names used by the connector credential store (`connectors/credentials.json`) and OAuth/token flows throughout routes, MCP config, and library tokens. |
-| Sidecar stamp fields | `` /\b(app|mode|namespace|ipc|source)\s*:/g `` | 3920 | The five sidecar process-stamp fields (`app`, `mode`, `namespace`, `ipc`, `source` — see root `AGENTS.md` "Sidecar process stamps must have exactly five fields") wherever they appear as an object-literal key across the codebase. |
+| Sidecar stamp fields | `` /\b(app|mode|namespace|ipc|source)\s*:/g `` | 3926 | The five sidecar process-stamp fields (`app`, `mode`, `namespace`, `ipc`, `source` — see root `AGENTS.md` "Sidecar process stamps must have exactly five fields") wherever they appear as an object-literal key across the codebase. |
 
 ## Blast-radius notes (inventory only — no migration executed)
 
 - **`.od/` and `OD_*`** are the two categories any rename would actually
   need to touch mechanically: every literal `.od/` path assumption and
-  every `OD_*` env var name. Both are large (109 + 2693 sites) precisely
+  every `OD_*` env var name. Both are large (110 + 2708 sites) precisely
   because `AGENTS.md`'s "Daemon data directory contract" is threaded through
   nearly every daemon module, every `tools-dev`/`tools-pack` control-plane
   script, and a large fraction of the test suite (each test file that boots
