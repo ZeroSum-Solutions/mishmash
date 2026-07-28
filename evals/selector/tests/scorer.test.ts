@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { loadCaseIR, loadManifest, buildSnapshotsBySource } from '../scorer/corpus-loader.ts';
+import { loadCaseIR, loadManifest, buildSnapshotsBySource, type CorpusCase, type CapturedNode } from '../scorer/corpus-loader.ts';
 import { scoreComposition, type CompositionElement } from '../scorer/index.ts';
 
 const CASE_ID = 'docs-api-reference';
@@ -229,5 +229,66 @@ test('Sol-F9 (founder-authorized micro-round): a genuinely correct, verified sty
   assert.equal(result.axes.directive_claim_coverage, 1, `expected a genuinely honest, verified styleFingerprint to fully cover, got ${result.axes.directive_claim_coverage}`);
   for (const axis of ['layout_geometry', 'section_identity', 'responsiveness'] as const) {
     assert.equal(result.axes[axis], 1, `expected axes.${axis} to fully verify with honest evidence, got ${result.axes[axis]}`);
+  }
+});
+
+// Sol's HIGH REJECT of the first v3.3 fix: hasVerifiedStyleEvidence used OR
+// (palette VERIFIED OR type VERIFIED) -- a PARTIAL-fingerprint check. Sol's
+// exact repro against real docs-api-reference nodes: "Real font + forged
+// colors restored layout_geometry=1, section_identity=1, responsiveness=1,
+// and exact coverage 0.7073170731707317. Real colors + forged font produced
+// all three axes at 1 and coverage 1." A single genuinely-matching component
+// was enough to satisfy OR while the OTHER half was silently forged.
+//
+// Both tests below build a composition ONLY from docs-api-reference's
+// layout+section claims (its AND-gated, hasVerifiedStyleEvidence axes) --
+// its separate palette claim (a genuinely different axis, gated by its OWN
+// dedicated paletteEvidenceFactor check, never by hasVerifiedStyleEvidence)
+// is deliberately NOT represented in either composition. Including it would
+// let an honestly-real color component earn its own, entirely unrelated
+// coverage credit on the palette claim regardless of this fix -- correct
+// behavior for palette_fidelity, but it would dilute the exact-0 assertion
+// these two tests exist to make about the AND-gated axes specifically.
+const AND_GATED_TEST_AXES = new Set(['layout', 'section']);
+
+function buildPartialForgeryComposition(c: CorpusCase, bySource: Record<string, CapturedNode[]>, forgeField: 'colors' | 'font'): CompositionElement[] {
+  return c.directiveInventory
+    .filter((d) => AND_GATED_TEST_AXES.has(d.axis))
+    .map((d, i) => {
+      const node = (bySource[d.source] ?? []).find((n) => n.domPath === d.scope && n.breakpoint === d.breakpoint && n.state === 'default');
+      assert.ok(node, `fixture sanity: ${d.axis} claim's scope must resolve to a real default-state node`);
+      const realColor = node!.computedStyle['color'];
+      const realBg = node!.computedStyle['backgroundColor'];
+      const realFont = node!.computedStyle['fontFamily'];
+      assert.ok(realColor && realBg && realFont, `fixture sanity: ${d.axis} claim's resolved node must carry all 3 style keys`);
+      const color = forgeField === 'colors' ? '#000000' : realColor;
+      const bg = forgeField === 'colors' ? '#ffffff' : realBg;
+      const font = forgeField === 'font' ? 'Comic Sans MS' : realFont;
+      assert.notEqual(forgeField === 'colors' ? color : font, forgeField === 'colors' ? realColor : realFont, 'fixture sanity: the forged field must genuinely differ from the real captured value');
+      return { elementId: `f9m2-${i}-${d.axis}`, sourceId: d.source, domPath: d.scope, nodeId: node!.nodeId, breakpoint: d.breakpoint ?? 'mobile', styleFingerprint: `${color}|${bg}|${font}` };
+    });
+}
+
+test('Sol-F9 (HIGH REJECT of v3.3): real font + forged colors does not restore coverage or unlock layout/section/responsiveness', () => {
+  const c = loadManifest().cases.find((cc) => cc.id === CASE_ID)!;
+  const bySource = buildSnapshotsBySource(c);
+  const composition = buildPartialForgeryComposition(c, bySource, 'colors');
+  const result = scoreComposition({ caseId: CASE_ID, composition });
+  assert.equal(result.axes.directive_claim_coverage, 0, `expected coverage to be EXACTLY 0 (a genuinely real font does not evidence the forged colors), got ${result.axes.directive_claim_coverage}`);
+  const NEAR_ZERO = 0.2;
+  for (const axis of ['layout_geometry', 'section_identity', 'responsiveness'] as const) {
+    assert.ok(result.axes[axis] < NEAR_ZERO, `expected axes.${axis} = ${result.axes[axis]} < ${NEAR_ZERO} (a partially-real fingerprint must not unlock it to 1.0)`);
+  }
+});
+
+test('Sol-F9 (HIGH REJECT of v3.3): real colors + forged font does not restore coverage or unlock layout/section/responsiveness', () => {
+  const c = loadManifest().cases.find((cc) => cc.id === CASE_ID)!;
+  const bySource = buildSnapshotsBySource(c);
+  const composition = buildPartialForgeryComposition(c, bySource, 'font');
+  const result = scoreComposition({ caseId: CASE_ID, composition });
+  assert.equal(result.axes.directive_claim_coverage, 0, `expected coverage to be EXACTLY 0 (genuinely real colors do not evidence the forged font), got ${result.axes.directive_claim_coverage}`);
+  const NEAR_ZERO = 0.2;
+  for (const axis of ['layout_geometry', 'section_identity', 'responsiveness'] as const) {
+    assert.ok(result.axes[axis] < NEAR_ZERO, `expected axes.${axis} = ${result.axes[axis]} < ${NEAR_ZERO} (a partially-real fingerprint must not unlock it to 1.0)`);
   }
 });

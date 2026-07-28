@@ -111,6 +111,16 @@
 // match the resolved node's real captured computedStyle. An arbitrary/
 // unparseable/mismatched fingerprint (e.g. "x") no longer unlocks anything.
 //
+// v3.3.1 (founder-authorized F9 micro-round, Sol HIGH REJECT of v3.3): the
+// v3.3 hasVerifiedStyleEvidence used OR (palette VERIFIED OR type VERIFIED)
+// -- a PARTIAL-fingerprint check. Sol's repro: real font + forged colors, or
+// real colors + forged font, each independently restored the exploit (one
+// verified component was enough; the OTHER half of the fingerprint was
+// silently forged and never checked). Changed OR to AND -- both components
+// must independently verify, equivalent to full-fingerprint equality against
+// real evidence. Every call site inherits this automatically (none
+// re-implement verification; they all call hasVerifiedStyleEvidence itself).
+//
 // v2 (deliverable-review fix round 1, carried forward): groundedness 2/1/0
 // classification; palette/type/motion evidence-gated against
 // styleFingerprint/motionSignature; strength-weighted, conflict-aware
@@ -123,7 +133,7 @@ import { scoreDiversity, type DiversityElement } from './diversity.ts';
 import { resolveConflicts } from './resolve-conflicts.ts';
 import { scoreSourceBleed, type BleedCompositionElement } from './source-bleed.ts';
 
-export const SCORER_VERSION = '3.3.0';
+export const SCORER_VERSION = '3.3.1';
 
 export interface CompositionElement {
   elementId: string;
@@ -322,14 +332,30 @@ function hasVerifiedEvidence(el: CompositionElement, node: CapturedNode | undefi
 // palette/typography already use (paletteEvidenceFactor/typeEvidenceFactor,
 // both of which parse the claimed styleFingerprint and compare it against
 // the resolved node's REAL captured computedStyle), rather than inventing a
-// parallel verification mechanism. A styleFingerprint only counts once it
-// genuinely matches the resolved node on color+backgroundColor (palette) or
-// fontFamily (typography) -- an arbitrary/unparseable/mismatched value (e.g.
-// "x") now returns EVIDENCE_UNVERIFIABLE or EVIDENCE_MISMATCH from both
-// underlying factors, so hasVerifiedStyleEvidence is false and unlocks
-// nothing.
+// parallel verification mechanism.
+//
+// v3.3.1 (founder-authorized F9 micro-round, Sol HIGH REJECT of the v3.3
+// fix): the FIRST v3.3 draft used OR (palette VERIFIED OR type VERIFIED),
+// which is a PARTIAL-fingerprint check, not a full one -- Sol's exact repro:
+// "Real font + forged colors restored layout_geometry=1, section_identity=1,
+// responsiveness=1, and exact coverage 0.7073170731707317. Real colors +
+// forged font produced all three axes at 1 and coverage 1." A single
+// genuinely-matching component (either half of the 3-part fingerprint) was
+// enough to satisfy OR while the OTHER half was silently forged --
+// "a lazy single-field forgery, not deliberate multi-step evasion," per
+// Sol's own characterization, but still exploitable. Changed OR to AND: the
+// claimed styleFingerprint only counts once BOTH the palette component
+// (color+backgroundColor) AND the typography component (fontFamily)
+// independently verify against the resolved node's real captured
+// computedStyle -- equivalent to full-fingerprint equality against real
+// evidence, since parseFingerprint already requires the exact 3-part shape.
+// Every call site (layoutEvidenceFactor, sectionEvidenceFactor,
+// axisRealized's 'interaction' case via axisScoreFor's gate parameter,
+// computeResponsiveness) inherits the tightened gate automatically, since
+// none of them re-implement verification -- they all call
+// hasVerifiedStyleEvidence itself.
 function hasVerifiedStyleEvidence(el: CompositionElement, node: CapturedNode | undefined): boolean {
-  return paletteEvidenceFactor(el, node) === EVIDENCE_VERIFIED || typeEvidenceFactor(el, node) === EVIDENCE_VERIFIED;
+  return paletteEvidenceFactor(el, node) === EVIDENCE_VERIFIED && typeEvidenceFactor(el, node) === EVIDENCE_VERIFIED;
 }
 
 // Grok constraints_unscored / Sol-N4 (deliverable-review fix round 2):
