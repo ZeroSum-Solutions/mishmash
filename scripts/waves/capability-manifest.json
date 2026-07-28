@@ -16,7 +16,7 @@
     "httpPath": "/api/projects/:id/files",
     "outputSchema": "{ ok: true, ...artifact create response }",
     "parityApplicable": true,
-    "reason": "Only sub-verb is a non-idempotent file-creating write (apps/daemon/src/artifacts-cli.ts); safe under a fresh per-run project id since a nonce project is created new each gate run.",
+    "reason": "Only sub-verb is a non-idempotent file-creating write (apps/daemon/src/artifacts-cli.ts); safe under a fresh per-run project id since a nonce project is created new each gate run. NOTE (C0-10 live-sample finding): POST /api/projects/:id/files JSON response ({ok:true, file:{name,path,...}}) does not echo the parent project id anywhere in its body, and cliArgs \"<nonceProjectId>\" substitution is exact-match-only (no substring form exists for embedding the nonce into e.g. a filename with an extension -- tried and confirmed: a bare-nonce filename with no extension 400s on ARTIFACT_MANIFEST_REQUIRED). This means this row isProjectScoped nonce-substring identity check (verify-w0.ts) cannot structurally pass regardless of probeBody content -- reported, not forced. The route itself (apps/daemon/src/routes/project/index.ts) is outside this wave write lease.",
     "knownNamespaceRoutes": [
       "DELETE /api/projects/:param",
       "DELETE /api/projects/:param/files/:param",
@@ -40,7 +40,12 @@
       "POST /api/projects/:param/plugin-candidates/:param/dismiss",
       "POST /api/projects/:param/plugin-candidates/:param/draft",
       "POST /api/projects/:param/terminals"
-    ]
+    ],
+    "probeBody": {
+      "name": "w0-c10-manifest-check.html",
+      "content": "<!doctype html><title>w0 manifest check</title>",
+      "encoding": "utf8"
+    }
   },
   {
     "capability": "media",
@@ -85,7 +90,12 @@
       "POST /api/projects/:param/plugin-candidates/:param/dismiss",
       "POST /api/projects/:param/plugin-candidates/:param/draft",
       "POST /api/projects/:param/terminals"
-    ]
+    ],
+    "probeBody": {
+      "surface": "image",
+      "model": "gpt-image-2",
+      "prompt": "w0 manifest check"
+    }
   },
   {
     "capability": "mcp",
@@ -103,7 +113,8 @@
     "parityApplicable": true,
     "knownNamespaceRoutes": [
       "GET /api/mcp/install-info"
-    ]
+    ],
+    "reason": "CLI vs HTTP determination (C0-10, confirmed live): \"od mcp install <agent> --print\" (apps/daemon/src/cli.ts resolveMcpLaunchSpec) calls GET /api/mcp/install-info (this row declared endpoint, confirmed the correct and only HTTP call it makes) to get this daemon instance raw launch descriptor ({command,args,env,...}), then performs a LOCAL filesystem read of the target agent own existing MCP config file (e.g. ~/.cursor/mcp.json) and merges the two into a higher-level \"preview\" of the full file it would write. This is legitimate, architecturally necessary reshaping -- a stateless HTTP endpoint cannot see or replicate the caller local config file, so the CLI richer output is not the daemon dropping data, it is the CLI adding data the daemon structurally cannot have. The divergence is total at the top level (CLI: ok/agent/kind/configPath/preview/message; HTTP: command/args/env/daemonUrl/webBaseUrl/platform/cliExists/nodeExists/buildHint -- zero shared keys), and the genuinely-comparable fields (command/args/env) are only reachable by parsing a JSON string nested inside the CLI own \"preview\" field, which none of the four supported valueComparison modes (exact/unordered-array/composite/binary) can express -- composite in particular requires every declared field to be present in BOTH payloads, and none are. No valueComparison is declared: this row is left at the strict default (which will legitimately fail if sample-selected) and reported here as a real, understood gate-comparator-vocabulary gap rather than forced with an inapplicable mode."
   },
   {
     "capability": "amr",
@@ -123,7 +134,16 @@
       "GET /api/integrations/vela/wallet:param",
       "POST /api/integrations/vela/message-center/messages/:param/read",
       "POST /api/integrations/vela/message-center/read-all"
-    ]
+    ],
+    "valueComparison": {
+      "mode": "composite",
+      "fields": [
+        "loggedIn",
+        "profile",
+        "configPath"
+      ]
+    },
+    "reason": "CLI vs HTTP determination (C0-10, confirmed live): \"od amr status\" (apps/daemon/src/cli.ts runAmr) makes TWO fetches -- GET /api/integrations/vela/status (this row declared endpoint) AND a separate GET /api/integrations/vela/wallet, then merges the second call result into its own \"wallet\" field. This is legitimate client-side aggregation, not a parity bug: the daemon /status endpoint never carried wallet data by design (that is a distinct endpoint), so the CLI enriches its own output rather than dropping data users need. Declared composite comparison over the fields genuinely shared by both payloads (loggedIn, profile, configPath -- all guaranteed present/non-empty regardless of login state); \"user\" is excluded (null when signed out, which fails the composite present-non-empty precondition) and \"wallet\" is excluded (CLI-only, sourced from a different endpoint entirely)."
   },
   {
     "capability": "message-center",
@@ -133,7 +153,7 @@
       "list",
       "--json"
     ],
-    "httpMethod": "GET",
+    "httpMethod": "ALL",
     "httpPath": "/api/integrations/vela/message-center/*splat",
     "outputSchema": "{ messages: [...], nextCursor?, unreadCount? }",
     "parityApplicable": true,
@@ -144,7 +164,9 @@
       "GET /api/integrations/vela/wallet:param",
       "POST /api/integrations/vela/message-center/messages/:param/read",
       "POST /api/integrations/vela/message-center/read-all"
-    ]
+    ],
+    "probeMethod": "GET",
+    "probePath": "/api/integrations/vela/message-center/messages?locale=en&filter=all&limit=100"
   },
   {
     "capability": "research",
@@ -160,7 +182,10 @@
     "outputSchema": "{ query, summary, sources: [...], provider, depth, fetchedAt }",
     "parityApplicable": true,
     "reason": "Only sub-verb, hard-gated on a configured TAVILY_API_KEY / OD_TAVILY_API_KEY (apps/daemon/src/research/index.ts); no credential-free verb exists.",
-    "knownNamespaceRoutes": []
+    "knownNamespaceRoutes": [],
+    "probeBody": {
+      "query": "w0 manifest check"
+    }
   },
   {
     "capability": "plugin",
@@ -259,7 +284,8 @@
     "parityApplicable": true,
     "knownNamespaceRoutes": [
       "POST /api/social-share"
-    ]
+    ],
+    "probeBody": {}
   },
   {
     "capability": "brand",
@@ -588,7 +614,8 @@
       "POST /api/projects/:param/plugin-candidates/:param/dismiss",
       "POST /api/projects/:param/plugin-candidates/:param/draft",
       "POST /api/projects/:param/terminals"
-    ]
+    ],
+    "probeBody": {}
   },
   {
     "capability": "deploy",
@@ -628,7 +655,10 @@
       "POST /api/projects/:param/plugin-candidates/:param/dismiss",
       "POST /api/projects/:param/plugin-candidates/:param/draft",
       "POST /api/projects/:param/terminals"
-    ]
+    ],
+    "probeBody": {
+      "fileName": "index.html"
+    }
   },
   {
     "capability": "daemon",
@@ -774,7 +804,10 @@
       "POST /api/projects/:param/plugin-candidates/:param/dismiss",
       "POST /api/projects/:param/plugin-candidates/:param/draft",
       "POST /api/projects/:param/terminals"
-    ]
+    ],
+    "probeBody": {
+      "fileName": "index.html"
+    }
   },
   {
     "capability": "status",
@@ -900,7 +933,7 @@
     "httpPath": "/api/projects/:id/figma/import",
     "outputSchema": "{ label, snapshotDir, inventory: {...}, suggestedPrompt }",
     "parityApplicable": true,
-    "reason": "Only sub-verb; the offline --file path needs no Figma API token but requires a real local .fig file and creates a real snapshot dir in the target project (non-idempotent within one project, safe under a fresh nonce project per run).",
+    "reason": "Only sub-verb; the offline --file path needs no Figma API token but requires a real local .fig file and creates a real snapshot dir in the target project (non-idempotent within one project, safe under a fresh nonce project per run). NOTE (C0-10 live-sample finding): POST /api/projects/:id/figma/import (apps/daemon/src/server.ts:2988) is multipart/form-data-only (figmaUpload.single(\"file\")) -- the live-sample probe mechanism (verify-w0.ts probeCapabilityEntry) only ever sends application/json bodies, with no multipart support. Any probeBody here is structurally unable to reach a genuine success; the route always sees no file and 400s. Reported, not forced -- this is a gate-mechanism limitation (JSON-only probing), not fixable via manifest data.",
     "knownNamespaceRoutes": [
       "DELETE /api/projects/:param",
       "DELETE /api/projects/:param/files/:param",
@@ -924,7 +957,8 @@
       "POST /api/projects/:param/plugin-candidates/:param/dismiss",
       "POST /api/projects/:param/plugin-candidates/:param/draft",
       "POST /api/projects/:param/terminals"
-    ]
+    ],
+    "probeBody": {}
   },
   {
     "capability": "backup",
@@ -933,14 +967,17 @@
       "backup",
       "create",
       "--out",
-      "<tmpArchivePath>"
+      "/tmp/w0-c10-capability-manifest-backup-probe.tar"
     ],
     "httpMethod": "POST",
     "httpPath": "/api/backup",
     "outputSchema": "{ ok: true, archivePath: string, classes: string[] }",
     "parityApplicable": true,
     "reason": "od backup create (apps/daemon/src/backup/cli.ts) calls the engine (create.ts) directly against the resolved data directory instead of issuing an HTTP request, so a backup can be taken even when the daemon isn't running; cli.ts therefore has no fetch() call into this namespace and knownNamespaceRoutes is empty by construction.",
-    "knownNamespaceRoutes": []
+    "knownNamespaceRoutes": [],
+    "probeBody": {
+      "outPath": "/tmp/w0-c10-capability-manifest-backup-probe.tar"
+    }
   },
   {
     "capability": "restore",
@@ -948,13 +985,16 @@
     "cliArgs": [
       "restore",
       "--archive",
-      "<tmpArchivePath>"
+      "/tmp/w0-c10-capability-manifest-backup-probe.tar"
     ],
     "httpMethod": "POST",
     "httpPath": "/api/restore",
     "outputSchema": "{ ok: true, restoredClasses: string[], destination: string }",
     "parityApplicable": true,
-    "reason": "od restore (apps/daemon/src/backup/cli.ts) calls the engine (restore.ts) directly against the resolved data directory instead of issuing an HTTP request, so a restore can run even when the daemon isn't running; cli.ts therefore has no fetch() call into this namespace and knownNamespaceRoutes is empty by construction. Also refuses to run against a data dir that already holds a payload, so it is not safely re-runnable in a shared live-probe loop -- another reason this capability stays out of any live-sample probe.",
-    "knownNamespaceRoutes": []
+    "reason": "od restore (apps/daemon/src/backup/cli.ts) calls the engine (restore.ts) directly against the resolved data directory instead of issuing an HTTP request, so a restore can run even when the daemon is not running; cli.ts therefore has no fetch() call into this namespace and knownNamespaceRoutes is empty by construction. Also refuses to run against a data dir that already holds a payload. CRITICAL SAFETY FINDING (C0-10 live-sample mechanism, confirmed live, gate-mechanism issue outside this wave write lease -- verify-w0.ts): capability-manifest.json rows cannot be marked parityApplicable:false without dropping below the SUBCOMMAND_MAP floor check (applicable.length must be >= subcommandKeys.length, one row per key), so restore cannot be excluded from the random 3-sample draw. When sampled, verify-w0.ts spawns the CLI subprocess with only OD_DAEMON_URL set (no OD_DATA_DIR override) -- apps/daemon/src/ backup/restore.ts unconditionally fs.mkdirSync(dataDir) + writes into resolveDataDir(undefined, projectRoot) in that case, which resolves to <repo-root>/.od, NOT the isolated per-boot temp daemon data dir the HTTP side uses. Confirmed via a live repro (boot an isolated daemon, invoke od restore the same way verify-w0.ts does): the CLI call genuinely writes into the checked-out worktree own .od/ directory -- a real, unisolated side effect, not just a doomed-to-fail probe. (od backup does not have this exposure -- its read-only sqlite-open on a missing file fails closed without ever creating the directory; restore is a write path and always mkdirSync-creates its destination.) The HTTP side still correctly targets the isolated daemon (which has a real seeded project) and 422s as expected; the mismatch between the CLI side (targets the worktree .od/) and the HTTP side (targets the isolated daemon) makes cliOk and httpOk diverge, so this row cannot pass regardless -- but the more important finding is the safety exposure itself. This is a verify-w0.ts subprocess-spawn defect (missing an explicit OD_DATA_DIR override for CLI-invoked capabilities), not fixable via manifest data; reported to the coordinator for the gate-defect track, not forced or worked around here.",
+    "knownNamespaceRoutes": [],
+    "probeBody": {
+      "archivePath": "/tmp/w0-c10-capability-manifest-backup-probe.tar"
+    }
   }
 ]
