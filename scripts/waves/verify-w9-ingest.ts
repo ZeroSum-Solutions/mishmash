@@ -1727,6 +1727,24 @@ async function main(): Promise<void> {
   const preArchiveManifest = buildManifest(true, treeDirty, false);
   const archiveResult = archiveRunArtifacts(preArchiveManifest);
   const finalManifest: ManifestShape = { ...preArchiveManifest, archiveOk: archiveResult.ok };
+  // Self-referential correction: archiveRunArtifacts wrote its own copy of
+  // the manifest BEFORE archival's own outcome could be known (the same
+  // class of chicken-and-egg this run already fixed once for C9-10), so
+  // that copy's `archiveOk` is necessarily stale (always false). Once the
+  // true outcome is known, correct the archived copy in place -- the
+  // canonical proof/manifest.json (written next) is authoritative
+  // regardless, but the archived copy should not misreport its own result.
+  if (archiveResult.ok) {
+    try {
+      const archivedManifestPath = path.join(archiveResult.runDir, 'manifest.json');
+      const archivedRaw = JSON.parse(fs.readFileSync(archivedManifestPath, 'utf8')) as ManifestShape;
+      archivedRaw.archiveOk = true;
+      fs.writeFileSync(archivedManifestPath, JSON.stringify(archivedRaw, null, 2));
+      fs.writeFileSync(path.join(archiveResult.runDir, 'manifest.sha256.txt'), `${sha256File(archivedManifestPath)}\n`);
+    } catch {
+      /* best-effort correction only; canonical manifest.json is authoritative regardless */
+    }
+  }
   const { written: manifestWritten, sha256: manifestSha256 } = writeManifestFile(finalManifest);
 
   const failures = results.filter((r) => r.status === 'fail');
