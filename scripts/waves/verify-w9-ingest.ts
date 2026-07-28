@@ -7,102 +7,92 @@
 //
 // Run: pnpm exec tsx scripts/waves/verify-w9-ingest.ts [--repo <path>]
 // Exit 0 only when every C9 criterion passes, the tree is clean, the initial
-// manifest placeholder wrote successfully, archival succeeded, and the three
-// named infra checks (GATE-INTEGRITY / LEASE / HEAD-DRIFT) pass. The
-// commit-bound proof manifest is written to the wave's goal-state proof
-// directory either way -- W3's own verifier (criterion C3-4) reads that
-// manifest directly per docs/plans/waves/W9-ingest-tranche.md's "Definition
-// of green"; it must not re-run this tranche's checks itself.
+// manifest placeholder wrote successfully, archival succeeded (construct +
+// reread-verify), and the three named infra checks (GATE-INTEGRITY / LEASE /
+// HEAD-DRIFT) pass. The commit-bound proof manifest is written to the wave's
+// goal-state proof directory either way -- W3's own verifier (criterion
+// C3-4) reads that manifest directly per docs/plans/waves/
+// W9-ingest-tranche.md's "Definition of green"; it must not re-run this
+// tranche's checks itself.
 //
-// ROUND 2 FIX (Sol REJECT again, verbatim record at ~/.claude/goal-state/
-// mishmash-w9-ingest-tranche/reviews/sol-r2-findings.md). Round 1's fixes for
-// F1/F4/F7/F8/F9's core mechanisms held (baseCommit route derivation, exact
-// fullName binding, arithmetic/duplicate enforcement, corrected ground
-// facts) but left gaps and introduced two new blocking defects:
-//   F2 (still not fixed) -- the six attribution fields accepted any
-//     non-empty string ("x" passed), and `decisionRef` used substring
-//     containment against DECISIONS.md ("x" matches something, somewhere).
-//     Fixed: PLACEHOLDER_DENYLIST + length/anti-repetition floor on every
-//     field; `authn` additionally must contain the keyword matching its
-//     mechanically-derived exposure class; `acceptedRisk.decisionRef` must
-//     equal a UNIQUE, fully-structured `### W9-ACCEPT-*` entry in
-//     DECISIONS.md@baseCommit (Route/Accepted risk/Accepter/Date/Rationale
-//     all present), whose Route field matches the row and whose Accepter is
-//     not any commit author across baseCommit..HEAD.
-//   F3 (still not fixed) -- exact fullName binding didn't stop the SAME test
-//     covering every row, "new test" was decided by whole-FILE existence (so
-//     an appended test to an old file skipped red evidence), the red
-//     "transcript" was any 100-char file with RED/FAIL, ">=2 assertions"
-//     counted anything, C9-6 accepted "no rate limit exists" (contains
-//     rate+limit), C9-7 accepted route names anywhere in prose. Fixed: a
-//     primary testRef must be unique per row; "new" is keyed on whether the
-//     exact test TITLE string existed in the file's baseCommit content
-//     (not file existence); the red transcript is a structured
-//     PARENT_SHA/COMMAND/TEST header (PARENT_SHA must resolve and be a real
-//     ancestor of HEAD, TEST must exactly match); the pairing check requires
-//     an actual positive-signal AND negative-signal passing assertion in the
-//     same file, not a raw count; C9-6's mechanism text is checked for an
-//     enforcement pattern AND rejected on a negation pattern; C9-7 requires
-//     the P0 route's own key inside the SAME cited-and-valid bullet line.
-//   F5 (still not fixed) -- the stale-proof drift check named only two
-//     files; the initial wroteOk:false write's result was discarded. Fixed:
-//     the PRD's "Definition of green" predicate 9 now names every evidence
-//     path (tests, attribution JSON, threat model, review record,
-//     DECISIONS.md, this verifier); the initial placeholder write's result
-//     is checked and a failure now aborts the run instead of being ignored.
-//   NEW DEFECT -- C9-10 required an in-repo file to contain its OWN
-//     commit's SHA, which is structurally impossible, and bound "reviewer"
-//     only to HEAD's own author. Redesigned: the review record names
-//     `reviewedCommit`, a STRICT ancestor of HEAD; the gate verifies (a) it
-//     resolves and is a real ancestor, (b) nothing in the tranche's owned
-//     implementation/evidence paths changed between reviewedCommit and HEAD
-//     (the review, committed later, necessarily covers the reviewed
-//     commit's full, final state), and (c) reviewer is distinct from every
-//     commit author across baseCommit..reviewedCommit (not just the tip).
-//     This makes a clean green run feasible (commit the implementation,
-//     THEN commit a review record naming that already-real commit) while
-//     the record can no longer spoof authorship or self-reference.
-//   NEW DEFECT -- `GET /api/library/assets` was frozen at impact 0/P2 but
-//     calls `runReconcile(false)`, which inserts library-asset rows
-//     (library-sync.ts). Its floor is corrected to 2 (score 5, P0); every
-//     other GET route was re-audited for the same hidden-mutation pattern
-//     and none other qualifies (see W9-ingest-tranche.md S9-2).
-//   NEW DEFECT -- the AST classifier counted `authorizeToolRequest()` and
-//     the bearer pattern from ANYWHERE in the handler, so dead/unreachable
-//     code (a decoy inside an `if(false)` block, after an unconditional
-//     return, or nested in an unrelated callback) still counted as a live
-//     gate. Fixed: guard-signal collection is now scoped to the handler's
-//     OWN top-level statements, stops at the first unconditional top-level
-//     return/throw, and never descends into a nested function/arrow
-//     literal's own body. Separately, the self-service-bearer pattern is
-//     now vetoed by the presence of `isLocalSameOrigin` ANYWHERE in the
-//     handler -- POST /api/library/ingest calls both `bearerToken` and
-//     `validateLibraryToken` at top level too, but its token check is one
-//     branch of a three-way decision with a loopback ALTERNATIVE
-//     (`isLocalSameOrigin`), which is not the self-service-bearer shape
-//     (proof of possession as the ONLY accepted path) -- this exact
-//     misclassification was caught and fixed here before submission, not
-//     just the reviewer's named finding.
-//   Verifier-integrity -- GATE-INTEGRITY's advisory-when-unpinned state is
-//     now an explicit top-level manifest field (`gateIntegrityPinned`), not
-//     buried in one criterion's prose.
-//   MEDIUM -- archived per-run manifests now rewrite their own
-//     `criteria[].artifact` paths to point at the run-dir-local copies (
-//     fully self-contained, independently re-verifiable without touching
-//     the canonical, overwrite-prone proof/ paths), and archive failure now
-//     fails the run (`archiveOk` is a top-level manifest field and a hard
-//     exit-code contributor).
+// CEREMONY FIX (founder-delegated escalation ruling, verbatim record at
+// ~/.claude/goal-state/mishmash-w9-ingest-tranche/reviews/
+// w9i-ceremony-ruling.md, after the stop rule fired on three consecutive
+// non-APPROVEs). Six mechanical defects, ruled with exact fix semantics:
+//
+//   1. EXPOSURE CLASSIFIER. The old recursive `containsDirectCallToAny`
+//      search let a guard call buried in dead/unreachable code (an
+//      `if(false){...}` block, a branch that never dominates, code after an
+//      unconditional return) still count as positive evidence. Replaced with
+//      a straight-line dominance GRAMMAR: only two exact statement
+//      sequences, as DIRECT children of the handler's own
+//      `body.statements` (never a recursive descendant search), with at
+//      most one `applyExtensionCors(req, res)` prelude statement before
+//      them, count as positive exposure evidence. The `isLocalSameOrigin`
+//      veto keeps a bounded recursive walk but now performs real dead-branch
+//      elimination (statically-false `if`/`while`/`for` conditions are
+//      skipped; `do...while` always executes once; unknown conditions keep
+//      both branches). Nine self-probe fixtures (below) exercise both real
+//      shapes and every named decoy class; a failed probe fails C9-1/C9-8.
+//   2. RED EVIDENCE. Checked-in PARENT_SHA/COMMAND/TEST/output text is now
+//      DESCRIPTIVE ONLY -- never executed, never trusted as proof. The
+//      verifier independently determines the test's true introduction
+//      commit (the first commit in baseCommit..HEAD whose AST contains the
+//      exact new declaration) and requires the checked-in PARENT_SHA to
+//      equal that commit's first parent, then REPLAYS: an isolated detached
+//      temp worktree at PARENT_SHA, a frozen offline `pnpm install`, the
+//      HEAD version of the containing file overlaid on top, run with a
+//      verifier-constructed argv through vitest's JSON reporter. Passes only
+//      on a nonzero exit, the cited test showing `failed`, and a named
+//      CONTROL_TEST from the same file showing `passed`. The replay's own
+//      argv/commits/statuses/output-hash/exit-code are captured in C9-5's
+//      OWN artifact -- the implementer-authored transcript text can no
+//      longer substitute as evidence.
+//   3. HISTORICAL TITLE PARSING. Whether a cited test's title "existed at
+//      baseCommit" is now AST-derived (TypeScript parse of the file at that
+//      commit), matching only the static first argument of a real `it`/
+//      `test` declaration (including modifier chains and `.each`'s outer
+//      title call), string-literal or no-substitution-template only --
+//      never a naive "this quoted string appears somewhere in the file"
+//      scan, which let an ordinary route-path string falsely grant the
+//      pre-existing-test exemption. Unavailable/dynamic titles fail closed
+//      (treated as new, replay required).
+//   4. CITATION UNIQUENESS / C9-7. One global fullName->routeKey map now
+//      covers every row.testRef AND every row.control.testRef together
+//      (round 2 only deduped primaries); cross-route reuse fails C9-5.
+//      C9-7 now requires each P0 route's own bullet line to name EXACTLY
+//      one P0 route key and cite EXACTLY that row's expected reference
+//      (control.testRef for a controlled row, primary testRef for an
+//      accepted-risk row) -- a bullet naming several P0 routes, or reusing
+//      an unrelated passing citation, no longer counts.
+//   5. C9-6 ENFORCEMENT GRAMMAR. The permissive rate/limit keyword regex
+//      (which let "no rate limit exists" pass because it contains both
+//      words) is replaced by a strict anchored declaration: `ENFORCED
+//      kind=... scope=... limit=... windowMs=... overflow=...`, with
+//      request-rate/pair-attempt requiring a positive windowMs and
+//      byte-volume requiring windowMs=none. The declaration remains
+//      descriptive; C9-6 passes only when the route-unique control.testRef
+//      passes the full C9-5 bar (including replay for a new control) AND
+//      the same file's real-transport (current HEAD suite) coverage shows
+//      both an under-limit-accepted and an over-limit-rejected assertion.
+//   6. ARCHIVE FINALIZATION. The prior round's post-success "best-effort
+//      correction" (which could itself be silently swallowed) is removed.
+//      `archiveRunArtifacts` now constructs the archived manifest with
+//      `archiveOk:true` BEFORE writing, then rereads and verifies: the file
+//      parses, `archiveOk===true`, the recorded hash matches, and every
+//      archived artifact exists with a matching hash. Only after every
+//      reread-verify step succeeds does it return `ok:true`; any failure
+//      (copy, rewrite, parse, hash, or verify) returns `ok:false` with no
+//      catch permitted to restore `true`. The canonical manifest is built
+//      from that real result and a false result exits 1 regardless of
+//      criterion outcomes.
 //
 // PORTABILITY: repoRoot comes from `process.cwd()`/`--repo`, never
-// `import.meta.url` -- matches the verify-w0.ts / verify-w7.ts convention so
-// this file can be copied to an orchestrator-approved out-of-repo location
-// and still run correctly with cwd set to the target worktree.
-//
-// Isolation: every daemon this verifier boots binds to port 0 (OS-assigned
-// ephemeral port) with a fresh mkdtemp OD_DATA_DIR, and is killed by its own
-// exact child PID on teardown. This verifier never touches a default-
-// namespace daemon (ports 7456/51012) and never issues a `git fetch`/`git
-// push` -- git context is resolved from local refs only.
+// `import.meta.url`. Isolation: every daemon/worktree this verifier creates
+// is isolated (port 0, fresh mkdtemp data dirs, detached temp worktrees) and
+// torn down by its own exact handle. This verifier never touches a
+// default-namespace daemon (ports 7456/51012) and never issues a `git
+// fetch`/`git push` -- git context is resolved from local refs only.
 
 import { execFileSync, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -401,13 +391,12 @@ function commitAuthorsBetween(fromExclusive: string, toInclusive: string): Set<s
 const gateIntegrityPinned = fs.existsSync(path.join(os.homedir(), '.claude', 'goal-state', WAVE_SLUG, 'approved-gate.sha256'));
 
 // =========================================================================
-// F5 fix: two-phase manifest write. A wroteOk:false placeholder is written
-// IMMEDIATELY (before any criterion runs), overwriting whatever manifest.json
-// a PRIOR run left behind, so a crash/interruption after this point can never
-// leave a stale-but-complete-looking prior green manifest on disk. Round 2:
-// the write's own result is checked -- if the placeholder itself cannot be
-// written, this run aborts rather than silently proceeding while a possibly
-// stale prior manifest sits unflagged.
+// F5 fix (round 2, unchanged by the ceremony): two-phase manifest write. A
+// wroteOk:false placeholder is written IMMEDIATELY (before any criterion
+// runs), overwriting whatever manifest.json a PRIOR run left behind, so a
+// crash/interruption after this point can never leave a stale-but-complete-
+// looking prior green manifest on disk. The write's own result is checked --
+// if the placeholder itself cannot be written, this run aborts.
 // =========================================================================
 interface ManifestShape {
   wave: string;
@@ -452,41 +441,280 @@ function writeManifestFile(manifest: ManifestShape): { written: boolean; sha256:
     return { written: false, sha256: 'unavailable' };
   }
 }
-// Round 2 fix: the archived copy is now SELF-CONTAINED -- every
-// criteria[].artifact path is rewritten to the run-dir-local copy before
-// writing the archived manifest, so it remains independently re-verifiable
-// even after later runs overwrite the canonical proof/<ID>.txt paths.
-// Archive failure is no longer swallowed: the caller treats a non-ok result
-// as a run failure.
+
+// =========================================================================
+// CEREMONY ITEM 6 -- archive finalization. Constructs the archived manifest
+// with archiveOk:true BEFORE writing, copies every criterion artifact into
+// the run directory, rewrites artifact paths (self-contained), writes
+// atomically, writes its SHA-256, then REREADS AND VERIFIES every one of
+// those facts from disk. Returns ok:true only after every reread-verify
+// step succeeds. No catch may preserve or restore `true` -- any exception or
+// failed verification step returns ok:false. The prior round's post-success
+// "best-effort correction" is REMOVED per the ruling; this function is now
+// the single source of truth for its own result.
+// =========================================================================
 function archiveRunArtifacts(manifest: ManifestShape): { runDir: string; ok: boolean } {
   const runDir = path.join(proofDir, 'runs', `${manifest.commit}-${Date.now()}-${process.pid}`);
   try {
     fs.mkdirSync(runDir, { recursive: true });
-    const selfContainedCriteria = manifest.criteria.map((r) => {
-      if (!r.artifact || !fs.existsSync(r.artifact)) return r;
+    const rewrittenCriteria: CriterionResult[] = [];
+    for (const r of manifest.criteria) {
+      if (!r.artifact || !fs.existsSync(r.artifact)) {
+        rewrittenCriteria.push(r);
+        continue;
+      }
       const dest = path.join(runDir, path.basename(r.artifact));
       fs.copyFileSync(r.artifact, dest);
-      return { ...r, artifact: dest };
-    });
-    const selfContainedManifest: ManifestShape = { ...manifest, criteria: selfContainedCriteria };
+      rewrittenCriteria.push({ ...r, artifact: dest });
+    }
+    // Constructed with archiveOk:true BEFORE writing, per the ruling.
+    const selfContainedManifest: ManifestShape = { ...manifest, archiveOk: true, criteria: rewrittenCriteria };
     const manifestJsonPath = path.join(runDir, 'manifest.json');
-    fs.writeFileSync(manifestJsonPath, JSON.stringify(selfContainedManifest, null, 2));
-    fs.writeFileSync(path.join(runDir, 'manifest.sha256.txt'), `${sha256File(manifestJsonPath)}\n`);
+    const tmpPath = path.join(runDir, `.manifest.tmp.${process.pid}.json`);
+    fs.writeFileSync(tmpPath, JSON.stringify(selfContainedManifest, null, 2));
+    fs.renameSync(tmpPath, manifestJsonPath);
+    const computedSha = sha256File(manifestJsonPath);
+    fs.writeFileSync(path.join(runDir, 'manifest.sha256.txt'), `${computedSha}\n`);
+
+    // Reread and verify -- nothing here is assumed from the write above.
+    const rereadRaw = fs.readFileSync(manifestJsonPath, 'utf8');
+    const reread = JSON.parse(rereadRaw) as ManifestShape;
+    if (reread.archiveOk !== true) return { runDir, ok: false };
+    const rereadHash = sha256Bytes(rereadRaw);
+    const recordedHash = fs.readFileSync(path.join(runDir, 'manifest.sha256.txt'), 'utf8').trim();
+    if (rereadHash !== recordedHash) return { runDir, ok: false };
+    for (const r of reread.criteria) {
+      if (!r.artifact) continue; // a criterion with no artifact is already a criterion-level failure, not an archival one
+      if (!fs.existsSync(r.artifact)) return { runDir, ok: false };
+      if (!r.artifactSha256 || sha256File(r.artifact) !== r.artifactSha256) return { runDir, ok: false };
+    }
     return { runDir, ok: true };
   } catch (err) {
-    console.error(`verify-w9-ingest: run-archive copy FAILED (this now fails the run): ${String(err)}`);
+    console.error(`verify-w9-ingest: run-archive FAILED (this fails the run, no catch may restore ok:true): ${String(err)}`);
     return { runDir, ok: false };
   }
 }
 
-// -----------------------------------------------------------------------
-// Round 1+2 fix: AST route-registration collector, scoped strictly to
-// registerLibraryRoutes's own body, duplicate-registration-aware,
-// comment-blind by construction, and (round 2) reachability-aware --
-// guard-signal detection is scoped to the handler's own TOP-LEVEL
-// statements and stops at the first unconditional return/throw, so a
-// decoy call inside dead code or a nested callback cannot count.
-// -----------------------------------------------------------------------
+// =========================================================================
+// CEREMONY ITEM 1 -- exposure classifier: straight-line dominance grammar.
+// Positive guard detection inspects ONLY direct children of the handler's
+// own `body.statements` -- never a recursive descendant search. Only the
+// two exact sequences below count; anything else (a call inside an `if`,
+// loop, callback, nested function, or after an unconditional return) is not
+// positive evidence. The `isLocalSameOrigin` veto keeps a bounded recursive
+// walk with real dead-branch elimination.
+// =========================================================================
+function isApplyExtensionCorsPrelude(stmt: TsNode): boolean {
+  return (
+    ts.isExpressionStatement(stmt) &&
+    ts.isCallExpression(stmt.expression) &&
+    ts.isIdentifier(stmt.expression.expression) &&
+    stmt.expression.expression.text === 'applyExtensionCors'
+  );
+}
+function isNegationOfIdentifier(expr: TsNode, varName: string): boolean {
+  return (
+    ts.isPrefixUnaryExpression(expr) &&
+    expr.operator === ts.SyntaxKind.ExclamationToken &&
+    ts.isIdentifier(expr.operand) &&
+    expr.operand.text === varName
+  );
+}
+function isFalsyOkPropertyCheck(expr: TsNode, varName: string): boolean {
+  const isCheckOkAccess = (n: TsNode): boolean =>
+    ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === varName && n.name.text === 'ok';
+  if (ts.isPrefixUnaryExpression(expr) && expr.operator === ts.SyntaxKind.ExclamationToken && isCheckOkAccess(expr.operand)) {
+    return true;
+  }
+  if (ts.isBinaryExpression(expr) && expr.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken) {
+    const isFalseLiteral = (n: TsNode): boolean => n.kind === ts.SyntaxKind.FalseKeyword;
+    if (isCheckOkAccess(expr.left) && isFalseLiteral(expr.right)) return true;
+    if (isCheckOkAccess(expr.right) && isFalseLiteral(expr.left)) return true;
+  }
+  return false;
+}
+/** The consequent must, taken whole, unconditionally return or throw -- a bare statement or a block whose LAST statement is Return/Throw with no branch/loop/switch/try before it. */
+function consequentUnconditionallyExits(stmt: TsNode): boolean {
+  if (ts.isReturnStatement(stmt) || ts.isThrowStatement(stmt)) return true;
+  if (ts.isBlock(stmt)) {
+    const stmts = stmt.statements;
+    if (stmts.length === 0) return false;
+    const last = stmts[stmts.length - 1]!;
+    if (!(ts.isReturnStatement(last) || ts.isThrowStatement(last))) return false;
+    for (let i = 0; i < stmts.length - 1; i++) {
+      const s = stmts[i]!;
+      if (
+        ts.isIfStatement(s) ||
+        ts.isForStatement(s) ||
+        ts.isForInStatement(s) ||
+        ts.isForOfStatement(s) ||
+        ts.isWhileStatement(s) ||
+        ts.isDoStatement(s) ||
+        ts.isSwitchStatement(s) ||
+        ts.isTryStatement(s)
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return false;
+}
+/** `const X = authorizeToolRequest(...)` at statements[startIdx], `if (!X) { unconditional exit }` at statements[startIdx+1]. */
+function matchToolTokenGuard(statements: readonly TsNode[], startIdx: number): boolean {
+  const s0 = statements[startIdx];
+  if (!s0 || !ts.isVariableStatement(s0)) return false;
+  const decls = s0.declarationList.declarations;
+  if (decls.length !== 1) return false;
+  const decl = decls[0]!;
+  if (!ts.isIdentifier(decl.name) || !decl.initializer || !ts.isCallExpression(decl.initializer)) return false;
+  if (!ts.isIdentifier(decl.initializer.expression) || decl.initializer.expression.text !== 'authorizeToolRequest') return false;
+  const varName = decl.name.text;
+  const s1 = statements[startIdx + 1];
+  if (!s1 || !ts.isIfStatement(s1)) return false;
+  if (!isNegationOfIdentifier(s1.expression, varName)) return false;
+  return consequentUnconditionallyExits(s1.thenStatement);
+}
+/** `const token = bearerToken(req)`, `const check = validateLibraryToken(..., token)`, `if (!check.ok) { unconditional exit }`. */
+function matchBearerGuard(statements: readonly TsNode[], startIdx: number): boolean {
+  const s0 = statements[startIdx];
+  if (!s0 || !ts.isVariableStatement(s0)) return false;
+  const d0 = s0.declarationList.declarations;
+  if (d0.length !== 1 || !ts.isIdentifier(d0[0]!.name)) return false;
+  const tokenVar = d0[0]!.name.text;
+  const init0 = d0[0]!.initializer;
+  if (!init0 || !ts.isCallExpression(init0) || !ts.isIdentifier(init0.expression) || init0.expression.text !== 'bearerToken') return false;
+
+  const s1 = statements[startIdx + 1];
+  if (!s1 || !ts.isVariableStatement(s1)) return false;
+  const d1 = s1.declarationList.declarations;
+  if (d1.length !== 1 || !ts.isIdentifier(d1[0]!.name)) return false;
+  const checkVar = d1[0]!.name.text;
+  const init1 = d1[0]!.initializer;
+  if (!init1 || !ts.isCallExpression(init1) || !ts.isIdentifier(init1.expression) || init1.expression.text !== 'validateLibraryToken') return false;
+  const referencesToken = init1.arguments.some((a) => ts.isIdentifier(a) && a.text === tokenVar);
+  if (!referencesToken) return false;
+
+  const s2 = statements[startIdx + 2];
+  if (!s2 || !ts.isIfStatement(s2)) return false;
+  if (!isFalsyOkPropertyCheck(s2.expression, checkVar)) return false;
+  return consequentUnconditionallyExits(s2.thenStatement);
+}
+function matchStraightLineGuards(statements: readonly TsNode[]): { authorizeToolRequest: boolean; bearer: boolean } {
+  const startIdx = statements.length > 0 && isApplyExtensionCorsPrelude(statements[0]!) ? 1 : 0;
+  return {
+    authorizeToolRequest: matchToolTokenGuard(statements, startIdx),
+    bearer: matchBearerGuard(statements, startIdx),
+  };
+}
+
+/** Compile-time-determinable boolean value of a condition expression, or undefined if not determinable. */
+function staticBooleanValue(expr: TsNode): boolean | undefined {
+  if (ts.isParenthesizedExpression(expr)) return staticBooleanValue(expr.expression);
+  if (expr.kind === ts.SyntaxKind.TrueKeyword) return true;
+  if (expr.kind === ts.SyntaxKind.FalseKeyword) return false;
+  if (ts.isPrefixUnaryExpression(expr) && expr.operator === ts.SyntaxKind.ExclamationToken) {
+    const v = staticBooleanValue(expr.operand);
+    return v === undefined ? undefined : !v;
+  }
+  if (ts.isBinaryExpression(expr)) {
+    const op = expr.operatorToken.kind;
+    if (op === ts.SyntaxKind.AmpersandAmpersandToken) {
+      const l = staticBooleanValue(expr.left);
+      if (l === false) return false;
+      const r = staticBooleanValue(expr.right);
+      if (l === true && r !== undefined) return r;
+      if (l !== undefined && r !== undefined) return l && r;
+      return undefined;
+    }
+    if (op === ts.SyntaxKind.BarBarToken) {
+      const l = staticBooleanValue(expr.left);
+      if (l === true) return true;
+      const r = staticBooleanValue(expr.right);
+      if (l === false && r !== undefined) return r;
+      if (l !== undefined && r !== undefined) return l || r;
+      return undefined;
+    }
+  }
+  return undefined;
+}
+const NESTED_FUNCTION_KINDS = new Set([
+  ts.SyntaxKind.FunctionExpression,
+  ts.SyntaxKind.ArrowFunction,
+  ts.SyntaxKind.FunctionDeclaration,
+  ts.SyntaxKind.ClassDeclaration,
+  ts.SyntaxKind.ClassExpression,
+  ts.SyntaxKind.MethodDeclaration,
+]);
+/** Bounded recursive reachability walk for the isLocalSameOrigin veto: never enters nested function/class bodies, stops after an unconditional top-level return/throw, and eliminates only statically-provable dead branches (if/while/for false conditions; do-while always runs once). */
+function isLocalSameOriginReachable(root: TsNode): boolean {
+  let found = false;
+  function visitExprSubtree(node: TsNode): void {
+    if (found) return;
+    if (NESTED_FUNCTION_KINDS.has(node.kind)) return;
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'isLocalSameOrigin') {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visitExprSubtree);
+  }
+  function visitStatements(stmts: readonly TsNode[]): void {
+    for (const s of stmts) {
+      if (found) return;
+      visitStatement(s);
+      if (found) return;
+      if (ts.isReturnStatement(s) || ts.isThrowStatement(s)) return; // rest of this sibling list is unreachable
+    }
+  }
+  function visitStatement(s: TsNode): void {
+    if (found) return;
+    if (NESTED_FUNCTION_KINDS.has(s.kind)) return;
+    if (ts.isBlock(s)) {
+      visitStatements(s.statements);
+      return;
+    }
+    if (ts.isIfStatement(s)) {
+      visitExprSubtree(s.expression);
+      if (found) return;
+      const v = staticBooleanValue(s.expression);
+      if (v !== false) visitStatement(s.thenStatement);
+      if (found) return;
+      if (s.elseStatement && v !== true) visitStatement(s.elseStatement);
+      return;
+    }
+    if (ts.isWhileStatement(s)) {
+      visitExprSubtree(s.expression);
+      if (found) return;
+      const v = staticBooleanValue(s.expression);
+      if (v !== false) visitStatement(s.statement);
+      return;
+    }
+    if (ts.isForStatement(s)) {
+      if (s.condition) {
+        visitExprSubtree(s.condition);
+        if (found) return;
+      }
+      const v = s.condition ? staticBooleanValue(s.condition) : undefined;
+      if (v !== false) visitStatement(s.statement);
+      return;
+    }
+    if (ts.isDoStatement(s)) {
+      // Always executes at least once, regardless of the condition.
+      visitStatement(s.statement);
+      if (found) return;
+      visitExprSubtree(s.expression);
+      return;
+    }
+    // Generic statement (ExpressionStatement, VariableStatement, SwitchStatement,
+    // TryStatement, etc.) -- no elimination rule specified, so walk normally,
+    // still respecting the nested-function-body exclusion throughout.
+    visitExprSubtree(s);
+  }
+  if (ts.isBlock(root)) visitStatements(root.statements);
+  else visitExprSubtree(root);
+  return found;
+}
+
 interface RouteRegistration {
   method: string;
   routePath: string;
@@ -513,71 +741,18 @@ function findFunctionBody(sourceFile: TypeScriptModule.SourceFile, fnName: strin
   return found;
 }
 
-/**
- * Real AST search for a CallExpression `name(...)` under `root`, never
- * descending into a nested function/arrow-function literal's own body -- a
- * guard call hidden inside an unrelated inline callback does not count as
- * "directly in this statement."
- */
-function containsDirectCallToAny(root: TsNode, names: string[]): boolean {
-  let found = false;
-  function visit(node: TsNode): void {
-    if (found) return;
-    if (ts.isFunctionExpression(node) || ts.isArrowFunction(node) || ts.isFunctionDeclaration(node)) return;
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && names.includes(node.expression.text)) {
-      found = true;
-      return;
-    }
-    ts.forEachChild(node, visit);
+/** Only a block-bodied final handler is inspected at all; anything else supplies no positive evidence. */
+function collectRouteGuardSignals(finalHandler: TsNode): { hasAuthorizeToolRequest: boolean; hasSelfServiceBearerPattern: boolean } {
+  if (!(ts.isArrowFunction(finalHandler) || ts.isFunctionExpression(finalHandler)) || !finalHandler.body || !ts.isBlock(finalHandler.body)) {
+    return { hasAuthorizeToolRequest: false, hasSelfServiceBearerPattern: false };
   }
-  visit(root);
-  return found;
-}
-
-/**
- * Round 2 fix (reachability): only the handler's OWN top-level statements
- * are scanned for authorizeToolRequest / bearerToken / validateLibraryToken
- * (never nested inside an if/loop/function, so dead/decoy code cannot
- * count), and the scan stops at the first unconditional top-level
- * return/throw -- anything after is genuinely unreachable JS.
- * `isLocalSameOrigin` is checked over the WHOLE handler (any branch)
- * because its mere presence is what disqualifies the self-service-bearer
- * shape: that pattern means "token possession is the ONLY accepted proof,
- * no loopback alternative." POST /api/library/ingest calls both
- * bearerToken and validateLibraryToken at its own top level too, but it
- * ALSO calls isLocalSameOrigin as an alternative acceptance branch, so it
- * must NOT classify as the bearer pattern -- verified directly against the
- * real handler before this file was submitted, not just from the
- * reviewer's named finding.
- */
-function collectTopLevelGuardSignals(handler: TsNode): {
-  authorizeToolRequest: boolean;
-  bearerToken: boolean;
-  validateLibraryToken: boolean;
-  isLocalSameOrigin: boolean;
-} {
-  const out = { authorizeToolRequest: false, bearerToken: false, validateLibraryToken: false, isLocalSameOrigin: false };
-  let fnBody: TsNode | undefined;
-  if ((ts.isArrowFunction(handler) || ts.isFunctionExpression(handler)) && handler.body && ts.isBlock(handler.body)) {
-    fnBody = handler.body;
-  }
-  if (!fnBody) return out; // cannot reason about it -- fail closed (no signals found)
-  // BUG FIXED BEFORE SUBMISSION (caught by a direct dry-run against the real
-  // handler, not just re-reading the diff): searching from `handler` itself
-  // is wrong -- containsDirectCallToAny's own function-boundary guard fires
-  // on the FIRST node it visits when that node IS a function/arrow literal,
-  // so passing the handler (always an arrow function here) as `root` made
-  // the search return false immediately without ever descending. Search
-  // from `fnBody` (a Block, not a function literal) instead, so the
-  // boundary guard only fires on NESTED function literals as intended.
-  out.isLocalSameOrigin = containsDirectCallToAny(fnBody, ['isLocalSameOrigin']);
-  for (const stmt of (fnBody as unknown as { statements: TsNode[] }).statements) {
-    if (containsDirectCallToAny(stmt, ['authorizeToolRequest'])) out.authorizeToolRequest = true;
-    if (containsDirectCallToAny(stmt, ['bearerToken'])) out.bearerToken = true;
-    if (containsDirectCallToAny(stmt, ['validateLibraryToken'])) out.validateLibraryToken = true;
-    if (ts.isReturnStatement(stmt) || ts.isThrowStatement(stmt)) break;
-  }
-  return out;
+  const fnBody = finalHandler.body;
+  const guards = matchStraightLineGuards(fnBody.statements);
+  const vetoed = isLocalSameOriginReachable(fnBody);
+  return {
+    hasAuthorizeToolRequest: guards.authorizeToolRequest,
+    hasSelfServiceBearerPattern: guards.bearer && !vetoed,
+  };
 }
 
 function collectRouteRegistrations(sourceText: string, label: string): CollectResult {
@@ -603,16 +778,15 @@ function collectRouteRegistrations(sourceText: string, label: string): CollectRe
         const hasRequireLocalDaemonRequest = middlewareArgs.some(
           (a) => ts.isIdentifier(a) && a.text === 'requireLocalDaemonRequest',
         );
-        const signals = collectTopLevelGuardSignals(finalHandler);
-        const hasSelfServiceBearerPattern = signals.bearerToken && signals.validateLibraryToken && !signals.isLocalSameOrigin;
+        const signals = collectRouteGuardSignals(finalHandler);
         const key = `${method.toUpperCase()} ${pathArg.text}`;
         seen.set(key, (seen.get(key) ?? 0) + 1);
         registrations.push({
           method: method.toUpperCase(),
           routePath: pathArg.text,
           hasRequireLocalDaemonRequest,
-          hasAuthorizeToolRequest: signals.authorizeToolRequest,
-          hasSelfServiceBearerPattern,
+          hasAuthorizeToolRequest: signals.hasAuthorizeToolRequest,
+          hasSelfServiceBearerPattern: signals.hasSelfServiceBearerPattern,
         });
       }
     }
@@ -632,16 +806,190 @@ function classifyExposure(reg: RouteRegistration): number {
 }
 
 // -----------------------------------------------------------------------
-// Reviewer-owned, frozen impact FLOORS (ruling 5). Round 2 fix: `GET
-// /api/library/assets` was wrongly frozen at 0 -- it calls
-// `runReconcile(false)` (library.ts:537), which inserts library_assets rows
-// via library-sync.ts (a real, if throttled, mutation: RECONCILE_THROTTLE_MS
-// caps it to once per 10s program-wide, not per caller -- see PRD S9-2 for
-// the full note). Corrected to floor 2 (score 5, P0). Every other GET route
-// was re-audited for the same hidden-mutation shape and none other
-// qualifies: GET /connection, /assets/:id, /clipper-probe are pure reads;
-// /raw, /figma, /element stream stored bytes with no write; /events adds an
-// in-memory (non-persisted, non-cross-request) SSE listener only.
+// CEREMONY ITEM 1 (continued) -- self-probe fixtures. Sol's r3 review cited
+// two dead-branch decoy examples (not reproduced verbatim in the ruling
+// text available to this session); the fixtures below are representative
+// constructions covering the same classes the ruling names explicitly --
+// dead-if-false, dead-negated-boolean, branch-only (non-dominating but
+// live), ignored result, post-response placement -- plus both real positive
+// shapes and both isLocalSameOrigin-veto directions, run through the SAME
+// collectRouteRegistrations/classifyExposure pipeline the real routes use
+// (never a separate mock). A failed probe fails C9-1 and C9-8.
+// -----------------------------------------------------------------------
+interface SelfProbeFixture {
+  name: string;
+  source: string;
+  route: string;
+  expectedExposure: number;
+}
+const SELF_PROBE_FIXTURES: SelfProbeFixture[] = [
+  {
+    name: 'real-tool-token-shape',
+    route: 'POST /probe/tool-token',
+    expectedExposure: 1,
+    source: `
+export function registerLibraryRoutes(app, ctx) {
+  app.post('/probe/tool-token', async (req, res) => {
+    const grant = authorizeToolRequest(req, res, 'library:search');
+    if (!grant) return;
+    res.json({ ok: true });
+  });
+}`,
+  },
+  {
+    name: 'real-bearer-shape-with-prelude',
+    route: 'POST /probe/bearer',
+    expectedExposure: 2,
+    source: `
+export function registerLibraryRoutes(app, ctx) {
+  app.post('/probe/bearer', (req, res) => {
+    applyExtensionCors(req, res);
+    const token = bearerToken(req);
+    const check = validateLibraryToken(db, token);
+    if (!check.ok) {
+      return sendApiError(res, 401, 'X', 'y');
+    }
+    res.json({ ok: true });
+  });
+}`,
+  },
+  {
+    name: 'dead-branch-guard-if-false',
+    route: 'POST /probe/dead-if-false',
+    expectedExposure: 3,
+    source: `
+export function registerLibraryRoutes(app, ctx) {
+  app.post('/probe/dead-if-false', (req, res) => {
+    if (false) {
+      const grant = authorizeToolRequest(req, res, 'library:search');
+      if (!grant) return;
+    }
+    res.json({ ok: true });
+  });
+}`,
+  },
+  {
+    name: 'dead-branch-guard-negated-true',
+    route: 'POST /probe/dead-negated-true',
+    expectedExposure: 3,
+    source: `
+export function registerLibraryRoutes(app, ctx) {
+  app.post('/probe/dead-negated-true', (req, res) => {
+    if (!true) {
+      const token = bearerToken(req);
+      const check = validateLibraryToken(db, token);
+      if (!check.ok) return;
+    }
+    res.json({ ok: true });
+  });
+}`,
+  },
+  {
+    name: 'branch-only-guard-live-conditional',
+    route: 'POST /probe/branch-only',
+    expectedExposure: 3,
+    source: `
+export function registerLibraryRoutes(app, ctx) {
+  app.post('/probe/branch-only', (req, res) => {
+    if (req.query.strict) {
+      const grant = authorizeToolRequest(req, res, 'library:search');
+      if (!grant) return;
+    }
+    res.json({ ok: true });
+  });
+}`,
+  },
+  {
+    name: 'ignored-guard-result',
+    route: 'POST /probe/ignored-result',
+    expectedExposure: 3,
+    source: `
+export function registerLibraryRoutes(app, ctx) {
+  app.post('/probe/ignored-result', (req, res) => {
+    authorizeToolRequest(req, res, 'library:search');
+    res.json({ ok: true });
+  });
+}`,
+  },
+  {
+    name: 'guard-after-response-operation',
+    route: 'POST /probe/after-response',
+    expectedExposure: 3,
+    source: `
+export function registerLibraryRoutes(app, ctx) {
+  app.post('/probe/after-response', (req, res) => {
+    res.json({ ok: true });
+    const grant = authorizeToolRequest(req, res, 'library:search');
+    if (!grant) return;
+  });
+}`,
+  },
+  {
+    name: 'isLocalSameOrigin-reachable-vetoes-bearer',
+    route: 'POST /probe/veto-reachable',
+    expectedExposure: 3,
+    source: `
+export function registerLibraryRoutes(app, ctx) {
+  app.post('/probe/veto-reachable', (req, res) => {
+    const token = bearerToken(req);
+    const check = validateLibraryToken(db, token);
+    const bound = check.ok && check.row.origin === req.get('origin');
+    if (bound) {
+      res.json({ ok: true });
+    } else if (isLocalSameOrigin(req, port)) {
+      res.json({ ok: true });
+    } else {
+      return sendApiError(res, 401, 'X', 'y');
+    }
+  });
+}`,
+  },
+  {
+    name: 'isLocalSameOrigin-dead-does-not-veto',
+    route: 'POST /probe/veto-dead',
+    expectedExposure: 2,
+    source: `
+export function registerLibraryRoutes(app, ctx) {
+  app.post('/probe/veto-dead', (req, res) => {
+    const token = bearerToken(req);
+    const check = validateLibraryToken(db, token);
+    if (!check.ok) {
+      return sendApiError(res, 401, 'X', 'y');
+    }
+    if (false) {
+      isLocalSameOrigin(req, port);
+    }
+    res.json({ ok: true });
+  });
+}`,
+  },
+];
+interface SelfProbeOutcome {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+function runExposureSelfProbes(): SelfProbeOutcome[] {
+  return SELF_PROBE_FIXTURES.map((fixture) => {
+    try {
+      const collected = collectRouteRegistrations(fixture.source, `self-probe:${fixture.name}`);
+      if (collected.duplicates.length > 0) {
+        return { name: fixture.name, ok: false, detail: `unexpected duplicate registrations in fixture: ${collected.duplicates.join(', ')}` };
+      }
+      const reg = collected.registrations.find((r) => `${r.method} ${r.routePath}` === fixture.route);
+      if (!reg) return { name: fixture.name, ok: false, detail: `route ${fixture.route} not found in probe fixture` };
+      const actual = classifyExposure(reg);
+      const ok = actual === fixture.expectedExposure;
+      return { name: fixture.name, ok, detail: `expected exposure ${fixture.expectedExposure}, got ${actual}` };
+    } catch (err) {
+      return { name: fixture.name, ok: false, detail: `probe crashed: ${String(err)}` };
+    }
+  });
+}
+
+// -----------------------------------------------------------------------
+// Reviewer-owned, frozen impact FLOORS (unchanged by the ceremony ruling --
+// r3 confirmed the round-2 floor corrections and residuals as settled).
 // -----------------------------------------------------------------------
 const FROZEN_IMPACT_FLOORS: Record<string, number> = {
   'POST /api/library/pair': 0,
@@ -676,10 +1024,7 @@ function tierFor(score: number): 'P0' | 'P1' | 'P2' {
 }
 
 // -----------------------------------------------------------------------
-// F2 fix: attribution-authority hardening. Every required field must clear
-// a placeholder floor ("x" no longer passes); `authn` must additionally
-// contain a keyword matching the row's own mechanically-derived exposure
-// class -- the one field the PRD claims IS partially mechanical.
+// Attribution-field placeholder floor (round 2, unchanged by the ceremony).
 // -----------------------------------------------------------------------
 const PLACEHOLDER_DENYLIST = new Set([
   'x', 'xx', 'xxx', 'n/a', 'na', 'tbd', 'todo', 'none', 'unknown', 'owner',
@@ -692,7 +1037,7 @@ function isPlaceholderText(raw: unknown): boolean {
   const t = raw.trim().toLowerCase();
   if (t.length < MIN_FIELD_LENGTH) return true;
   if (PLACEHOLDER_DENYLIST.has(t)) return true;
-  if (/^(.)\1*$/.test(t)) return true; // any single character repeated
+  if (/^(.)\1*$/.test(t)) return true;
   return false;
 }
 const AUTHN_KEYWORD_BY_EXPOSURE: Record<number, RegExp> = {
@@ -701,10 +1046,6 @@ const AUTHN_KEYWORD_BY_EXPOSURE: Record<number, RegExp> = {
   2: /bearer|self-service|proof of possession/i,
   3: /\bnone\b|no gate|ungated|zero-config|pairing code/i,
 };
-
-// F3 fix: mechanical route/mechanism association for testRef binding --
-// derived from the route's OWN path (never a hand-authored per-row table),
-// so a cited test must textually relate to the route it attributes.
 function routeAssociationTerms(routeKey: string): string[] {
   const routePath = routeKey.split(' ').slice(1).join(' ');
   const stripped = routePath.replace(/^\/api\/(?:tools\/)?library\//, '').replace(/:id/g, '');
@@ -714,92 +1055,91 @@ function routeAssociationTerms(routeKey: string): string[] {
     .filter((s) => s.length >= 3);
 }
 
-// F3 fix: semantic (not substring) validation for C9-6's rate/volume
-// control mechanism text. "no rate limit exists" contains "rate" and
-// "limit" but is a NEGATION, not an enforcement claim -- the negation
-// pattern independently vetoes it even though the enforcement pattern
-// would otherwise match.
-const RATE_ENFORCEMENT_PATTERN =
-  /\b(rate|volume|throttl\w*)\b[^.\n]{0,30}\b(limit|cap|control)s?\b|\b(limit|cap)s?\b[^.\n]{0,30}\b(enforc\w*|reject|429|block|throttl\w*)/i;
-const RATE_NEGATION_PATTERN = /\b(no|not|n't|lacks?|absen[ct]|without|missing|does\s+not|doesn't)\b[^.\n]{0,40}\b(rate|volume|throttl\w*|limit|cap)\b/i;
-
-// F3 fix: a paired positive+negative control signal, replacing the raw
-// ">=2 passing assertions" count with real content.
-const POSITIVE_SIGNAL = /\b(accept|success|succeed|allow|valid|ok|round-trip|correctly)\b/i;
-const NEGATIVE_SIGNAL = /\b(reject|den(?:y|ied)|forbid|invalid|fail|block|refus\w*)\b/i;
-
-// F3 fix: structured red-transcript header (PARENT_SHA / COMMAND / TEST),
-// replacing "any 100-char file containing RED or FAIL."
-function parseRedTranscript(content: string): {
-  parentSha: string | undefined;
-  command: string | undefined;
-  test: string | undefined;
-  body: string;
-} {
-  const lines = content.split('\n');
-  let parentSha: string | undefined;
-  let command: string | undefined;
-  let test: string | undefined;
-  let bodyStartIdx = lines.length;
-  for (let i = 0; i < lines.length; i++) {
-    const l = lines[i]!;
-    if (/^---+\s*$/.test(l)) {
-      bodyStartIdx = i + 1;
-      break;
-    }
-    const pm = /^PARENT_SHA:\s*(\S+)/.exec(l);
-    if (pm) parentSha = pm[1];
-    const cm = /^COMMAND:\s*(.+)$/.exec(l);
-    if (cm) command = cm[1]!.trim();
-    const tm = /^TEST:\s*(.+)$/.exec(l);
-    if (tm) test = tm[1]!.trim();
+// -----------------------------------------------------------------------
+// CEREMONY ITEM 5 -- anchored ENFORCED declaration grammar, replacing the
+// permissive keyword regex.
+// -----------------------------------------------------------------------
+interface EnforcedDeclaration {
+  kind: 'request-rate' | 'byte-volume' | 'pair-attempt';
+  scope: 'token-hash' | 'origin' | 'pairing-attempt';
+  limit: number;
+  windowMs: number | 'none';
+  overflow: 'reject-429' | 'reject-413';
+}
+function parseEnforcedDeclaration(mechanism: string): EnforcedDeclaration | null {
+  const m =
+    /^ENFORCED kind=(request-rate|byte-volume|pair-attempt) scope=(token-hash|origin|pairing-attempt) limit=(\d+) windowMs=(\d+|none) overflow=(reject-429|reject-413)$/.exec(
+      mechanism.trim(),
+    );
+  if (!m) return null;
+  const kind = m[1] as EnforcedDeclaration['kind'];
+  const scope = m[2] as EnforcedDeclaration['scope'];
+  const limit = Number(m[3]);
+  const windowMsStr = m[4]!;
+  const overflow = m[5] as EnforcedDeclaration['overflow'];
+  if (!Number.isInteger(limit) || limit <= 0) return null;
+  if (windowMsStr === 'none') {
+    if (kind !== 'byte-volume') return null; // only byte-volume may use windowMs=none
+    return { kind, scope, limit, windowMs: 'none', overflow };
   }
-  return { parentSha, command, test, body: lines.slice(bodyStartIdx).join('\n') };
+  const windowMs = Number(windowMsStr);
+  if (!Number.isInteger(windowMs) || windowMs <= 0) return null;
+  if (kind === 'byte-volume') return null; // byte-volume MUST be windowMs=none
+  return { kind, scope, limit, windowMs, overflow };
 }
+const UNDER_LIMIT_SIGNAL = /\b(accept|allow|within.?limit|under.?limit|below.?limit|not.?rate.?limited)\b/i;
+const OVER_LIMIT_SIGNAL = /\b(reject|429|413|exceed|over.?limit|throttl\w*|rate.?limited|too.?many|too.?large)\b/i;
 
-// F2 fix: structured DECISIONS.md accepted-risk entries. `decisionRef` must
-// equal a UNIQUE `### W9-ACCEPT-<slug>` heading whose block carries all five
-// required fields -- a substring match against arbitrary prose no longer
-// qualifies.
-interface DecisionEntry {
-  id: string;
-  route: string;
-  acceptedRisk: string;
-  accepter: string;
-  date: string;
-  rationale: string;
-}
-function parseDecisionEntries(text: string): { entries: Map<string, DecisionEntry>; duplicateIds: Set<string> } {
-  const headingRe = /^###\s+(W9-ACCEPT-[A-Za-z0-9-]+)\s*$/gm;
-  const matches = [...text.matchAll(headingRe)];
-  const idCounts = new Map<string, number>();
-  for (const m of matches) idCounts.set(m[1]!, (idCounts.get(m[1]!) ?? 0) + 1);
-  const duplicateIds = new Set([...idCounts.entries()].filter(([, n]) => n > 1).map(([id]) => id));
-  const entries = new Map<string, DecisionEntry>();
-  for (const m of matches) {
-    const id = m[1]!;
-    if (duplicateIds.has(id)) continue; // ambiguous -- never resolvable
-    const start = m.index! + m[0].length;
-    const rest = text.slice(start);
-    const nextHeadingRel = rest.search(/^#{2,3}\s+/m);
-    const blockText = nextHeadingRel === -1 ? rest : rest.slice(0, nextHeadingRel);
-    const routeM = /^-\s*Route:\s*`([^`]+)`\s*$/im.exec(blockText);
-    const riskM = /^-\s*Accepted risk:\s*(.+)$/im.exec(blockText);
-    const accepterM = /^-\s*Accepter:\s*(.+)$/im.exec(blockText);
-    const dateM = /^-\s*Date:\s*(\d{4}-\d{2}-\d{2})/im.exec(blockText);
-    const rationaleM = /^-\s*Rationale:\s*(.+)$/im.exec(blockText);
-    if (routeM && riskM && accepterM && dateM && rationaleM) {
-      entries.set(id, {
-        id,
-        route: routeM[1]!.trim(),
-        acceptedRisk: riskM[1]!.trim(),
-        accepter: accepterM[1]!.trim(),
-        date: dateM[1]!,
-        rationale: rationaleM[1]!.trim(),
-      });
+// -----------------------------------------------------------------------
+// S9-3's generic paired positive/negative-control signal (round 2,
+// UNCHANGED by the ceremony -- one of the three r3 accepted-LOW residuals
+// ("a name-pattern proxy, not true semantic verification") the ceremony's
+// coordinator message confirmed settled and must not change). Distinct
+// from the item-5 rate/volume-specific UNDER_LIMIT_SIGNAL/OVER_LIMIT_SIGNAL
+// pair above: this one applies to EVERY row's `control.testRef` (any
+// exposure-3 attribution control, not just P0 rate-limit rows) and looks
+// for generic accept-vs-reject naming, not rate-limit-specific language.
+// -----------------------------------------------------------------------
+const POSITIVE_SIGNAL = /\b(accept|allow|success|valid|authoriz\w*|grant\w*|permit\w*|200|passes?)\b/i;
+const NEGATIVE_SIGNAL = /\b(reject|deny|denied|unauthoriz\w*|forbidden|invalid|401|403|429|error|fail\w*)\b/i;
+
+// -----------------------------------------------------------------------
+// CEREMONY ITEM 3 -- historical test-declaration parsing. A historical
+// title exists ONLY as the static first argument of a syntactic Vitest
+// `it`/`test` declaration (including modifier chains and `.each`'s outer
+// title call), string-literal or no-substitution-template only.
+// -----------------------------------------------------------------------
+function extractStaticTestTitlesFromSource(sourceText: string, label: string): Set<string> {
+  const sourceFile = ts.createSourceFile(label, sourceText, ts.ScriptTarget.Latest, true);
+  const titles = new Set<string>();
+  function rootIdentifierOfChain(expr: TsNode): string | null {
+    let cur: TsNode = expr;
+    for (;;) {
+      if (ts.isIdentifier(cur)) return cur.text;
+      if (ts.isPropertyAccessExpression(cur)) {
+        cur = cur.expression;
+        continue;
+      }
+      if (ts.isCallExpression(cur)) {
+        cur = cur.expression;
+        continue;
+      }
+      return null;
     }
   }
-  return { entries, duplicateIds };
+  function visit(node: TsNode): void {
+    if (ts.isCallExpression(node)) {
+      const rootName = rootIdentifierOfChain(node.expression);
+      if (rootName === 'it' || rootName === 'test') {
+        const firstArg = node.arguments[0];
+        if (firstArg && ts.isStringLiteral(firstArg)) titles.add(firstArg.text);
+        else if (firstArg && ts.isNoSubstitutionTemplateLiteral(firstArg)) titles.add(firstArg.text);
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return titles;
 }
 
 // -----------------------------------------------------------------------
@@ -887,6 +1227,7 @@ function discoverLibraryTestFiles(): string[] {
 }
 interface AssertionResult {
   fullName: string;
+  title: string;
   status: string;
 }
 interface FileTestResult {
@@ -899,20 +1240,13 @@ interface SuiteJson {
   numPendingTests?: number;
   testResults: FileTestResult[];
 }
-function runLibrarySuite(testFiles: string[], attempt: number): { suite: { status: number }; data: SuiteJson | null } {
-  const jsonPath = path.join(proofDir, `suite-run.attempt-${attempt}.json`);
-  const suite = sh('pnpm', [
-    '--filter',
-    '@open-design/daemon',
-    'exec',
-    'vitest',
-    'run',
-    '-c',
-    'vitest.config.ts',
-    '--reporter=json',
-    `--outputFile=${jsonPath}`,
-    ...testFiles,
-  ]);
+function runLibrarySuite(testFiles: string[], attempt: number, cwd?: string, outPath?: string): { suite: { status: number }; data: SuiteJson | null } {
+  const jsonPath = outPath ?? path.join(proofDir, `suite-run.attempt-${attempt}.json`);
+  const suite = sh(
+    'pnpm',
+    ['--filter', '@open-design/daemon', 'exec', 'vitest', 'run', '-c', 'vitest.config.ts', '--reporter=json', `--outputFile=${jsonPath}`, ...testFiles],
+    cwd ? { cwd, timeoutMs: 3 * 60_000 } : {},
+  );
   let data: SuiteJson | null = null;
   try {
     data = JSON.parse(fs.readFileSync(jsonPath, 'utf8')) as SuiteJson;
@@ -922,22 +1256,162 @@ function runLibrarySuite(testFiles: string[], attempt: number): { suite: { statu
   return { suite, data };
 }
 
+// =========================================================================
+// CEREMONY ITEM 2 -- red-evidence replay. Checked-in COMMAND/output text is
+// descriptive only; the verifier determines the true introduction commit,
+// requires PARENT_SHA to equal its first parent, then replays in an
+// isolated detached temp worktree with a frozen offline install and the
+// HEAD test file overlaid on top.
+// =========================================================================
+function findIntroductionCommit(relPath: string, leafTitle: string): { introducedAt: string; parentOfIntroduction: string } | null {
+  const logResult = sh('git', ['log', '--reverse', '--format=%H', `${baseCommit}..${headSha}`, '--', relPath]);
+  if (logResult.status !== 0) return null;
+  const commits = logResult.stdout.trim().split('\n').filter(Boolean);
+  for (const commit of commits) {
+    let content: string;
+    try {
+      content = readFileAtCommit(commit, relPath);
+    } catch {
+      continue;
+    }
+    if (extractStaticTestTitlesFromSource(content, `${commit}:${relPath}`).has(leafTitle)) {
+      const parentResult = sh('git', ['rev-parse', `${commit}^`]);
+      if (parentResult.status !== 0) return null;
+      return { introducedAt: commit, parentOfIntroduction: parentResult.stdout.trim() };
+    }
+  }
+  return null;
+}
+interface ReplayOutcome {
+  ok: boolean;
+  problems: string[];
+  evidenceLines: string[];
+}
+function replayRedEvidence(parentSha: string, containingFileRel: string, targetFullName: string, controlTestFullName: string): ReplayOutcome {
+  const problems: string[] = [];
+  const evidenceLines: string[] = [];
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w9-ingest-replay-'));
+  let worktreeAdded = false;
+  try {
+    const addResult = sh('git', ['worktree', 'add', '--detach', tempDir, parentSha], { timeoutMs: 5 * 60_000 });
+    evidenceLines.push(`git worktree add --detach ${tempDir} ${parentSha} => exit=${addResult.status}`);
+    if (addResult.status !== 0) {
+      problems.push(`git worktree add failed (exit=${addResult.status}): ${addResult.stdout.slice(-500)}`);
+      return { ok: false, problems, evidenceLines };
+    }
+    worktreeAdded = true;
+
+    // mise.toml trust is per-directory; the temp worktree is untrusted by
+    // default and pnpm/vitest are mise-shimmed, so install/run would
+    // otherwise fail closed with an unrelated "config not trusted" error.
+    sh('mise', ['trust'], { cwd: tempDir, timeoutMs: 30_000 });
+
+    const installResult = sh('pnpm', ['install', '--offline', '--frozen-lockfile'], { cwd: tempDir, timeoutMs: 5 * 60_000 });
+    evidenceLines.push(`pnpm install --offline --frozen-lockfile => exit=${installResult.status}`);
+    if (installResult.status !== 0) {
+      problems.push(`frozen offline install failed (exit=${installResult.status}): ${installResult.stdout.slice(-1000)}`);
+      return { ok: false, problems, evidenceLines };
+    }
+
+    const headFileAbs = path.join(repoRoot, 'apps/daemon', containingFileRel);
+    const targetFileAbs = path.join(tempDir, 'apps/daemon', containingFileRel);
+    try {
+      fs.mkdirSync(path.dirname(targetFileAbs), { recursive: true });
+      fs.copyFileSync(headFileAbs, targetFileAbs);
+    } catch (err) {
+      problems.push(`could not overlay HEAD test file: ${String(err)}`);
+      return { ok: false, problems, evidenceLines };
+    }
+    evidenceLines.push(`overlay: HEAD:apps/daemon/${containingFileRel} -> ${targetFileAbs}`);
+
+    const jsonOutPath = path.join(tempDir, '.replay-result.json');
+    const argvList = [
+      '--filter', '@open-design/daemon', 'exec', 'vitest', 'run', '-c', 'vitest.config.ts',
+      '--reporter=json', `--outputFile=${jsonOutPath}`, `tests/${path.basename(containingFileRel)}`,
+    ];
+    evidenceLines.push(`argv: pnpm ${argvList.join(' ')} (cwd=${path.join(tempDir, 'apps/daemon')})`);
+    const runResult = sh('pnpm', argvList, { cwd: path.join(tempDir, 'apps/daemon'), timeoutMs: 3 * 60_000 });
+    const outputHash = sha256Bytes(runResult.stdout);
+    evidenceLines.push(`exit=${runResult.status} stdout/stderr sha256=${outputHash}`);
+
+    let replayData: SuiteJson | null = null;
+    try {
+      replayData = JSON.parse(fs.readFileSync(jsonOutPath, 'utf8')) as SuiteJson;
+    } catch (err) {
+      problems.push(`replay JSON reporter output could not be parsed: ${String(err)}`);
+      return { ok: false, problems, evidenceLines };
+    }
+    const replayAssertions = replayData.testResults.flatMap((t) => t.assertionResults);
+    const targetAssertion = replayAssertions.find((a) => a.fullName === targetFullName);
+    const controlAssertion = replayAssertions.find((a) => a.fullName === controlTestFullName);
+    evidenceLines.push(`target="${targetFullName}" status=${targetAssertion?.status ?? 'MISSING'}`);
+    evidenceLines.push(`CONTROL_TEST="${controlTestFullName}" status=${controlAssertion?.status ?? 'MISSING'}`);
+
+    if (runResult.status === 0) problems.push('replay child process exited 0 (expected nonzero for a genuine red state)');
+    if (!targetAssertion) problems.push(`target test "${targetFullName}" not found in replay results`);
+    else if (targetAssertion.status !== 'failed') problems.push(`target test status in replay is "${targetAssertion.status}", expected "failed"`);
+    if (!controlAssertion) problems.push(`CONTROL_TEST "${controlTestFullName}" not found in replay results`);
+    else if (controlAssertion.status !== 'passed') problems.push(`CONTROL_TEST status in replay is "${controlAssertion.status}", expected "passed"`);
+
+    return { ok: problems.length === 0, problems, evidenceLines };
+  } catch (err) {
+    problems.push(`replay crashed: ${String(err)}`);
+    return { ok: false, problems, evidenceLines };
+  } finally {
+    if (worktreeAdded) {
+      sh('git', ['worktree', 'remove', '--force', tempDir], { timeoutMs: 60_000 });
+    }
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch {
+      /* best effort */
+    }
+  }
+}
+/** Structured red-transcript header. COMMAND and the output body are descriptive only, per the ruling -- never executed, never trusted as proof; PARENT_SHA and TEST are validated, and TEST/CONTROL_TEST drive the actual replay. */
+function parseRedTranscript(content: string): {
+  parentSha: string | undefined;
+  command: string | undefined;
+  test: string | undefined;
+  controlTest: string | undefined;
+  body: string;
+} {
+  const lines = content.split('\n');
+  let parentSha: string | undefined;
+  let command: string | undefined;
+  let test: string | undefined;
+  let controlTest: string | undefined;
+  let bodyStartIdx = lines.length;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i]!;
+    if (/^---+\s*$/.test(l)) {
+      bodyStartIdx = i + 1;
+      break;
+    }
+    const pm = /^PARENT_SHA:\s*(\S+)/.exec(l);
+    if (pm) parentSha = pm[1];
+    const cm = /^COMMAND:\s*(.+)$/.exec(l);
+    if (cm) command = cm[1]!.trim();
+    const tm = /^TEST:\s*(.+)$/.exec(l);
+    if (tm) test = tm[1]!.trim();
+    const ctm = /^CONTROL_TEST:\s*(.+)$/.exec(l);
+    if (ctm) controlTest = ctm[1]!.trim();
+  }
+  return { parentSha, command, test, controlTest, body: lines.slice(bodyStartIdx).join('\n') };
+}
+
 async function main(): Promise<void> {
-  // F5 fix: the placeholder write's OWN result is now checked. If even the
-  // wroteOk:false placeholder cannot be written, abort -- proceeding would
-  // risk leaving an earlier run's stale manifest as the only evidence on
-  // disk, unflagged.
   const placeholderWrite = writeManifestFile(buildManifest(false, true, false));
   if (!placeholderWrite.written) {
     console.error('verify-w9-ingest: FATAL: could not write the initial wroteOk:false placeholder manifest -- aborting rather than risk leaving a stale prior manifest unflagged.');
     process.exit(1);
   }
 
-  // -----------------------------------------------------------------------
-  // Shared, computed once: baseCommit-derived route registrations (the
-  // frozen ground truth) and HEAD-derived route registrations (what the
-  // matrix, built during implementation, actually describes).
-  // -----------------------------------------------------------------------
+  // Exposure-classifier self-probes (ceremony item 1) -- run once, gate
+  // both C9-1 and C9-8.
+  const selfProbeResults = runExposureSelfProbes();
+  const selfProbeFailures = selfProbeResults.filter((p) => !p.ok);
+
   let baseCommitCollect: CollectResult | null = null;
   let baseCommitError = '';
   try {
@@ -961,9 +1435,20 @@ async function main(): Promise<void> {
     }
   }
 
-  // C9-1: route snapshot frozen at baseCommit, drift-checked against a real
-  // daemon boot's live registration -- never a HEAD literal compared to HEAD.
+  // C9-1: route snapshot frozen at baseCommit, drift-checked, gated on the
+  // exposure-classifier self-probes.
   await checkCriterion('C9-1', async () => {
+    if (selfProbeFailures.length > 0) {
+      record(
+        'C9-1',
+        'exposure-classifier self-probes (9 fixtures) run through the real collectRouteRegistrations/classifyExposure pipeline',
+        'every self-probe fixture classifies at its expected exposure',
+        false,
+        selfProbeResults.map((p) => `[${p.ok ? 'PASS' : 'FAIL'}] ${p.name}: ${p.detail}`).join('\n'),
+        { detail: `${selfProbeFailures.length}/${selfProbeResults.length} self-probes failed -- exposure classifier is not trustworthy this run` },
+      );
+      return;
+    }
     if (!baseCommitCollect) {
       record('C9-1', `git show ${baseCommit}:apps/daemon/src/routes/library.ts`, 'frozen route set derives from baseCommit, not a HEAD literal', false, '', {
         detail: `could not derive baseCommit route set: ${baseCommitError}`,
@@ -996,25 +1481,20 @@ async function main(): Promise<void> {
     const liveKeys = new Set(scopedLive.map((r) => `${r.method} ${r.path}`));
     const added = [...liveKeys].filter((k) => !FROZEN_ROUTE_KEYS.has(k));
     const removed = [...FROZEN_ROUTE_KEYS].filter((k) => !liveKeys.has(k));
-    // Informational exposure histogram (baseCommit-derived), so a reader can
-    // see the classifier's actual per-route output without needing a matrix
-    // to exist yet -- C9-8 is the only criterion that GATES on this, but
-    // nothing before it exercised the values themselves pre-implementation.
     const exposureHistogram = baseCommitCollect.registrations
       .map((r) => `${r.method} ${r.routePath} => exposure ${classifyExposure(r)}`)
       .join('\n');
     const ok = liveDuplicates.length === 0 && added.length === 0 && removed.length === 0;
     record(
       'C9-1',
-      'baseCommit AST self-consistency + boot real daemon (port 0, isolated data dir) -> routeInventory filtered to /api/library/* + /api/tools/library/*',
-      '23-route frozen snapshot (derived from baseCommit, self-consistent with the reviewer-frozen impact table) matches the live daemon\'s own route registration, zero drift, zero duplicate registrations',
+      'self-probes (9/9 pass) + baseCommit AST self-consistency + boot real daemon -> routeInventory filtered to /api/library/* + /api/tools/library/*',
+      '23-route frozen snapshot matches the live daemon\'s own route registration, zero drift, zero duplicate registrations, exposure classifier self-verified',
       ok,
-      `frozen=${FROZEN_ROUTE_KEYS.size} live(scoped)=${liveKeys.size} liveRaw=${scopedLive.length}\nlive duplicates: ${liveDuplicates.join(', ') || 'none'}\nadded (drift, not in frozen set): ${added.join(', ') || 'none'}\nremoved (frozen route missing from live daemon): ${removed.join(', ') || 'none'}\n\nbaseCommit exposure histogram (informational):\n${exposureHistogram}`,
+      `self-probes: ${selfProbeResults.length}/${selfProbeResults.length} pass\nfrozen=${FROZEN_ROUTE_KEYS.size} live(scoped)=${liveKeys.size} liveRaw=${scopedLive.length}\nlive duplicates: ${liveDuplicates.join(', ') || 'none'}\nadded (drift): ${added.join(', ') || 'none'}\nremoved: ${removed.join(', ') || 'none'}\n\nbaseCommit exposure histogram:\n${exposureHistogram}`,
     );
   });
 
-  // C9-2: existing suite green over a GLOBBED file set, pending/skipped
-  // reporter counts checked, broadened skip-marker regex.
+  // C9-2: existing suite green over a GLOBBED file set.
   const testFiles = discoverLibraryTestFiles();
   let suiteRun = runLibrarySuite(testFiles, 1);
   let suiteAttempts = 1;
@@ -1049,9 +1529,13 @@ async function main(): Promise<void> {
     );
   });
 
-  // F3 fix: "new test" is now keyed on the exact test TITLE existing in the
-  // file's baseCommit content, not whole-file existence -- a test appended
-  // to an already-existing file no longer skips red evidence.
+  function findAssertion(fullName: string): { rel: string; title: string } | null {
+    for (const t of suiteRun.data?.testResults ?? []) {
+      const a = t.assertionResults.find((x) => x.fullName === fullName);
+      if (a) return { rel: path.relative(path.join(repoRoot, 'apps/daemon'), t.name), title: a.title };
+    }
+    return null;
+  }
   const fileTextAtBaseCache = new Map<string, string | null>();
   function readFileAtCommitCached(commit: string, relPath: string): string | null {
     const cacheKey = `${commit}:${relPath}`;
@@ -1065,21 +1549,12 @@ async function main(): Promise<void> {
       return null;
     }
   }
-  function testTitleExistedAtBaseCommit(rel: string, fullName: string): boolean {
+  // CEREMONY ITEM 3: exact test title existed at baseCommit, AST-derived.
+  function titleExistedAtBaseCommit(rel: string, leafTitle: string): boolean {
+    if (!leafTitle) return false;
     const baseContent = readFileAtCommitCached(baseCommit, `apps/daemon/${rel}`);
     if (baseContent === null) return false;
-    const title = fullName.split(' > ').pop() ?? fullName;
-    const titleEscaped = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`['"\`]${titleEscaped}['"\`]`);
-    return re.test(baseContent);
-  }
-  function findContainingFile(fullName: string): { rel: string } | null {
-    for (const t of suiteRun.data?.testResults ?? []) {
-      if (t.assertionResults.some((a) => a.fullName === fullName)) {
-        return { rel: path.relative(path.join(repoRoot, 'apps/daemon'), t.name) };
-      }
-    }
-    return null;
+    return extractStaticTestTitlesFromSource(baseContent, `${baseCommit}:${rel}`).has(leafTitle);
   }
 
   // Attribution matrix: parsed once, reused across C9-3..C9-8.
@@ -1135,7 +1610,47 @@ async function main(): Promise<void> {
     );
   });
 
-  // DECISIONS.md@baseCommit, parsed once for both C9-4 and C9-6.
+  // DECISIONS.md@baseCommit, parsed once for both C9-4 and C9-6 (unchanged mechanism from round 2).
+  interface DecisionEntry {
+    id: string;
+    route: string;
+    acceptedRisk: string;
+    accepter: string;
+    date: string;
+    rationale: string;
+  }
+  function parseDecisionEntries(text: string): { entries: Map<string, DecisionEntry>; duplicateIds: Set<string> } {
+    const headingRe = /^###\s+(W9-ACCEPT-[A-Za-z0-9-]+)\s*$/gm;
+    const matches = [...text.matchAll(headingRe)];
+    const idCounts = new Map<string, number>();
+    for (const m of matches) idCounts.set(m[1]!, (idCounts.get(m[1]!) ?? 0) + 1);
+    const duplicateIds = new Set([...idCounts.entries()].filter(([, n]) => n > 1).map(([id]) => id));
+    const entries = new Map<string, DecisionEntry>();
+    for (const m of matches) {
+      const id = m[1]!;
+      if (duplicateIds.has(id)) continue;
+      const start = m.index! + m[0].length;
+      const rest = text.slice(start);
+      const nextHeadingRel = rest.search(/^#{2,3}\s+/m);
+      const blockText = nextHeadingRel === -1 ? rest : rest.slice(0, nextHeadingRel);
+      const routeM = /^-\s*Route:\s*`([^`]+)`\s*$/im.exec(blockText);
+      const riskM = /^-\s*Accepted risk:\s*(.+)$/im.exec(blockText);
+      const accepterM = /^-\s*Accepter:\s*(.+)$/im.exec(blockText);
+      const dateM = /^-\s*Date:\s*(\d{4}-\d{2}-\d{2})/im.exec(blockText);
+      const rationaleM = /^-\s*Rationale:\s*(.+)$/im.exec(blockText);
+      if (routeM && riskM && accepterM && dateM && rationaleM) {
+        entries.set(id, {
+          id,
+          route: routeM[1]!.trim(),
+          acceptedRisk: riskM[1]!.trim(),
+          accepter: accepterM[1]!.trim(),
+          date: dateM[1]!,
+          rationale: rationaleM[1]!.trim(),
+        });
+      }
+    }
+    return { entries, duplicateIds };
+  }
   let decisionsAtBase = '';
   let decisionsAtBaseError = '';
   try {
@@ -1176,11 +1691,7 @@ async function main(): Promise<void> {
     return problems;
   }
 
-  // C9-4: full attribution per S6. Round 2 fix: fields must clear a
-  // placeholder floor (not just be non-empty); `authn` must additionally
-  // match the mechanically-derived exposure class's keyword; `acceptedRisk`
-  // is now a structured, unique, route-bound, non-self-accepted DECISIONS.md
-  // entry, never a substring match.
+  // C9-4: full attribution per S6.
   await checkCriterion('C9-4', () => {
     if (!matrixRows) {
       record('C9-4', '', 'every row carries all six structured fields; exposure===3 rows carry control XOR a structured DECISIONS.md-at-baseCommit acceptedRisk reference', false, '', {
@@ -1221,7 +1732,7 @@ async function main(): Promise<void> {
       const hasAcceptedRisk = row.acceptedRisk != null;
       if (noGateMechanically) {
         if (hasControl === hasAcceptedRisk) {
-          problems.push(`${key}: exposure===3 (mechanically no route-level gate) requires exactly one of control/acceptedRisk (control=${hasControl}, acceptedRisk=${hasAcceptedRisk})`);
+          problems.push(`${key}: exposure===3 requires exactly one of control/acceptedRisk (control=${hasControl}, acceptedRisk=${hasAcceptedRisk})`);
         } else if (hasAcceptedRisk) {
           const ar = row.acceptedRisk as { decisionRef?: unknown };
           const ref = typeof ar.decisionRef === 'string' ? ar.decisionRef.trim() : '';
@@ -1247,79 +1758,129 @@ async function main(): Promise<void> {
     );
   });
 
-  // C9-5: exact-fullName + route-association + uniqueness test binding.
-  // New tests (title not present at baseCommit) require a structured red
-  // transcript (PARENT_SHA resolves + is an ancestor of HEAD, COMMAND looks
-  // like a real vitest invocation, TEST matches exactly) plus a genuine
-  // paired positive+negative control in the same file.
+  // CEREMONY ITEM 4: one global fullName->routeKey map over every
+  // row.testRef AND row.control.testRef, built once and shared by C9-5
+  // (cross-route reuse fails it) and C9-7 (bullet association).
+  const globalCitationMap = new Map<string, Set<string>>();
+  if (matrixRows) {
+    for (const row of matrixRows) {
+      const key = `${String(row.method)} ${String(row.path)}`;
+      if (typeof row.testRef === 'string' && row.testRef.trim()) {
+        const ref = row.testRef.trim();
+        if (!globalCitationMap.has(ref)) globalCitationMap.set(ref, new Set());
+        globalCitationMap.get(ref)!.add(key);
+      }
+      if (row.control && typeof row.control.testRef === 'string' && row.control.testRef.trim()) {
+        const ref = row.control.testRef.trim();
+        if (!globalCitationMap.has(ref)) globalCitationMap.set(ref, new Set());
+        globalCitationMap.get(ref)!.add(key);
+      }
+    }
+  }
+
+  // CEREMONY ITEM 2+3: full testRef validation -- exact match, route
+  // association, GLOBAL cross-route-reuse (item 4), historical-title
+  // determination (item 3), and replayed red evidence for new tests
+  // (item 2). Every control reference gets the identical checks.
   const redDir = path.join(repoRoot, 'docs/security/library-ingest-red');
-  function checkTestRef(ref: string, routeKey: string): string[] {
+  function checkTestRef(ref: string, routeKey: string, opts: { isControl?: boolean } = {}): string[] {
     const problems: string[] = [];
     if (!passedTestNames.has(ref)) {
       problems.push(`testRef does not exactly match any PASSED test fullName this run: "${ref}"`);
       return problems;
+    }
+    const associatedRoutes = globalCitationMap.get(ref);
+    if (!associatedRoutes || associatedRoutes.size !== 1 || !associatedRoutes.has(routeKey)) {
+      problems.push(`testRef "${ref}" is cited by ${associatedRoutes?.size ?? 0} route(s) globally (must be exactly 1: this row's own route)`);
     }
     const terms = routeAssociationTerms(routeKey);
     const refLower = ref.toLowerCase();
     if (terms.length > 0 && !terms.some((t) => refLower.includes(t.toLowerCase()))) {
       problems.push(`testRef "${ref}" is not associated with route ${routeKey} by any path-derived term (${terms.join(', ')})`);
     }
-    const containing = findContainingFile(ref);
-    if (!containing) {
-      problems.push(`testRef matched a passed test but its containing file could not be resolved: "${ref}"`);
+    const assertion = findAssertion(ref);
+    if (!assertion) {
+      problems.push(`testRef matched a passed test but its containing file/title could not be resolved: "${ref}"`);
       return problems;
     }
-    const isNew = !testTitleExistedAtBaseCommit(containing.rel, ref);
-    if (isNew) {
-      const artifactPath = path.join(redDir, `${slugify(ref)}.txt`);
-      if (!fs.existsSync(artifactPath)) {
-        problems.push(`new test (title not present at baseCommit in ${containing.rel}) cited by testRef "${ref}" has no red-transcript artifact at docs/security/library-ingest-red/${slugify(ref)}.txt`);
-      } else {
-        const content = fs.readFileSync(artifactPath, 'utf8');
-        const parsed = parseRedTranscript(content);
-        if (!parsed.parentSha || !/^[0-9a-f]{7,40}$/i.test(parsed.parentSha)) {
-          problems.push(`red transcript for "${ref}": PARENT_SHA missing or not a plausible git SHA`);
-        } else if (!resolveCommit(parsed.parentSha)) {
-          problems.push(`red transcript for "${ref}": PARENT_SHA "${parsed.parentSha}" does not resolve to a real commit`);
-        } else if (!isAncestor(parsed.parentSha, headSha)) {
-          problems.push(`red transcript for "${ref}": PARENT_SHA "${parsed.parentSha}" is not an ancestor of HEAD`);
-        }
-        if (!parsed.command || !/vitest/i.test(parsed.command)) {
-          problems.push(`red transcript for "${ref}": COMMAND missing or does not look like a vitest invocation`);
-        }
-        if (parsed.test !== ref) {
-          problems.push(`red transcript for "${ref}": TEST field ("${parsed.test ?? ''}") does not exactly match this testRef`);
-        }
-        if (parsed.body.trim().length < 80 || !/\b(RED|FAIL(?:ED)?)\b/i.test(parsed.body)) {
-          problems.push(`red transcript for "${ref}": output body too short or lacks a RED/FAIL marker`);
-        }
-      }
+    if (opts.isControl) {
+      // Settled S9-3 requirement, unchanged by the ceremony: the SAME file
+      // as the control's cited test must contain a genuine paired
+      // positive+negative signal among its own passing assertions -- proof
+      // that the mechanism accepts a right caller and rejects a wrong one,
+      // not just a raw assertion count.
       const fileResult = (suiteRun.data?.testResults ?? []).find(
-        (t) => path.relative(path.join(repoRoot, 'apps/daemon'), t.name) === containing.rel,
+        (t) => path.relative(path.join(repoRoot, 'apps/daemon'), t.name) === assertion.rel,
       );
       const passedInFile = fileResult ? fileResult.assertionResults.filter((a) => a.status === 'passed') : [];
       const hasPositive = passedInFile.some((a) => POSITIVE_SIGNAL.test(a.fullName));
       const hasNegative = passedInFile.some((a) => NEGATIVE_SIGNAL.test(a.fullName));
-      if (passedInFile.length < 2 || !hasPositive || !hasNegative) {
+      if (!hasPositive || !hasNegative) {
         problems.push(
-          `new-control testRef "${ref}"'s file must contain a paired positive+negative control (found ${passedInFile.length} passing, positive-signal=${hasPositive}, negative-signal=${hasNegative}) -- R4`,
+          `control.testRef "${ref}": ${assertion.rel} must contain a genuine paired positive+negative control among its passing assertions (positive=${hasPositive}, negative=${hasNegative})`,
         );
       }
     }
+    const isNew = !titleExistedAtBaseCommit(assertion.rel, assertion.title);
+    if (isNew) {
+      const artifactPath = path.join(redDir, `${slugify(ref)}.txt`);
+      if (!fs.existsSync(artifactPath)) {
+        problems.push(`new test (title "${assertion.title}" not statically present at baseCommit in ${assertion.rel}) cited by testRef "${ref}" has no red-evidence artifact at docs/security/library-ingest-red/${slugify(ref)}.txt`);
+        return problems;
+      }
+      const content = fs.readFileSync(artifactPath, 'utf8');
+      const parsed = parseRedTranscript(content);
+      if (!parsed.parentSha || !/^[0-9a-f]{40}$/i.test(parsed.parentSha)) {
+        problems.push(`red evidence for "${ref}": PARENT_SHA missing or not a full 40-hex commit`);
+        return problems;
+      }
+      if (!resolveCommit(parsed.parentSha)) {
+        problems.push(`red evidence for "${ref}": PARENT_SHA "${parsed.parentSha}" does not resolve to a real commit`);
+        return problems;
+      }
+      if (parsed.parentSha === headSha || !isAncestor(baseCommit, parsed.parentSha) || !isAncestor(parsed.parentSha, headSha)) {
+        problems.push(`red evidence for "${ref}": PARENT_SHA must satisfy baseCommit <= PARENT_SHA < HEAD and differ from HEAD`);
+        return problems;
+      }
+      if (!parsed.test || parsed.test !== ref) {
+        problems.push(`red evidence for "${ref}": TEST field ("${parsed.test ?? ''}") does not exactly match this testRef`);
+        return problems;
+      }
+      if (!parsed.controlTest) {
+        problems.push(`red evidence for "${ref}": CONTROL_TEST field missing`);
+        return problems;
+      }
+      const introduction = findIntroductionCommit(`apps/daemon/${assertion.rel}`, assertion.title);
+      if (!introduction) {
+        problems.push(`red evidence for "${ref}": could not independently determine the introduction commit for title "${assertion.title}" in baseCommit..HEAD`);
+        return problems;
+      }
+      if (introduction.parentOfIntroduction !== parsed.parentSha) {
+        problems.push(`red evidence for "${ref}": PARENT_SHA "${parsed.parentSha}" does not equal the introduction commit's first parent "${introduction.parentOfIntroduction}" (introduced at ${introduction.introducedAt})`);
+        return problems;
+      }
+      // Checked-in COMMAND/output are descriptive only -- never executed,
+      // never trusted. The verifier constructs its own argv and replays.
+      const replay = replayRedEvidence(parsed.parentSha, assertion.rel, ref, parsed.controlTest);
+      if (!replay.ok) {
+        problems.push(`red-evidence replay failed for "${ref}": ${replay.problems.join('; ')}`);
+      }
+      replayEvidenceLog.push(`--- replay for "${ref}" ---\n${replay.evidenceLines.join('\n')}\n${replay.ok ? 'REPLAY OK' : `REPLAY FAILED: ${replay.problems.join('; ')}`}`);
+    }
     return problems;
   }
+  const replayEvidenceLog: string[] = [];
+
   await checkCriterion('C9-5', () => {
     if (!matrixRows) {
-      record('C9-5', '', 'every testRef exactly matches a passed, route-associated test, unique per row; new tests carry structured red evidence + a paired control', false, '', {
+      record('C9-5', '', 'every testRef exactly matches a passed, route-associated, globally-unique-per-route test; new tests carry independently-replayed red evidence', false, '', {
         detail: 'no matrix to check',
       });
       return;
     }
-    const primaryRefs = matrixRows.map((r) => (typeof r.testRef === 'string' ? r.testRef.trim() : ''));
-    const dupPrimary = new Set(primaryRefs.filter((r, i) => r && primaryRefs.indexOf(r) !== i));
     const problems: string[] = [];
-    if (dupPrimary.size > 0) {
-      problems.push(`primary testRef must be unique per row; duplicated across multiple rows: ${[...dupPrimary].join(', ')}`);
+    for (const [ref, routes] of globalCitationMap) {
+      if (routes.size > 1) problems.push(`testRef "${ref}" is cited by ${routes.size} different routes (must be exactly 1): ${[...routes].join(', ')}`);
     }
     let citedCount = 0;
     for (const row of matrixRows) {
@@ -1330,24 +1891,25 @@ async function main(): Promise<void> {
       }
       if (row.control && typeof row.control.testRef === 'string' && row.control.testRef.trim()) {
         citedCount += 1;
-        problems.push(...checkTestRef(row.control.testRef.trim(), key).map((p) => `${key} control.testRef: ${p}`));
+        problems.push(...checkTestRef(row.control.testRef.trim(), key, { isControl: true }).map((p) => `${key} control.testRef: ${p}`));
       }
     }
     record(
       'C9-5',
-      'exact fullName + route-association-term match against the C9-2 vitest run; primary testRef unique per row; new-file testRefs cross-checked against docs/security/library-ingest-red/',
-      'every cited testRef exactly matches a real PASSED, route-associated test; no two rows share a primary testRef; new controls carry structured red evidence and a genuine paired control',
+      'exact fullName + global cross-route-uniqueness + route-association-term match; new-file testRefs independently replayed (isolated detached worktree at the AST-verified introduction parent, frozen offline install, HEAD test file overlay, vitest JSON reporter)',
+      'every cited testRef exactly matches a real PASSED, uniquely-route-associated test; new controls pass an independent red-state replay proving the exact test failed and a named CONTROL_TEST passed at PARENT_SHA',
       problems.length === 0 && citedCount > 0,
-      `citations checked=${citedCount}\n${problems.join('\n') || 'all citations matched and (where new) carried valid red evidence'}`,
+      `citations checked=${citedCount}\n${problems.join('\n') || 'all citations matched and validated'}\n\n${replayEvidenceLog.join('\n\n') || '(no new-test replays triggered this run)'}`,
     );
   });
 
-  // C9-6: every row whose mechanically-verified tier is P0 must resolve its
-  // sizeRateLimit dimension with a REAL, semantically-enforcement-shaped,
-  // passing volume/rate-control test reference, or a verified acceptedRisk.
+  // C9-6: every P0-tier row's sizeRateLimit resolved via the anchored
+  // ENFORCED grammar + full C9-5-grade control.testRef validation + a
+  // real-transport under/over-limit pairing in the same file, or a
+  // verified acceptedRisk.
   await checkCriterion('C9-6', () => {
     if (!matrixRows) {
-      record('C9-6', '', 'every P0-tier row resolves sizeRateLimit with a real, semantically-validated control test or verified acceptedRisk', false, '', {
+      record('C9-6', '', 'every P0-tier row resolves sizeRateLimit with a grammar-valid ENFORCED declaration, a fully-validated control.testRef, and real-transport under/over-limit coverage, or a verified acceptedRisk', false, '', {
         detail: 'no matrix to check',
       });
       return;
@@ -1356,8 +1918,7 @@ async function main(): Promise<void> {
     let p0Count = 0;
     for (const row of matrixRows) {
       const key = `${String(row.method)} ${String(row.path)}`;
-      const tier = row.riskScore?.tier;
-      if (tier !== 'P0') continue;
+      if (row.riskScore?.tier !== 'P0') continue;
       p0Count += 1;
       const hasControl = row.control != null;
       const hasAcceptedRisk = row.acceptedRisk != null;
@@ -1368,16 +1929,30 @@ async function main(): Promise<void> {
       if (hasControl) {
         const c = row.control as { mechanism?: unknown; testRef?: unknown };
         const mechanism = typeof c.mechanism === 'string' ? c.mechanism : '';
-        const enforced = RATE_ENFORCEMENT_PATTERN.test(mechanism) && !RATE_NEGATION_PATTERN.test(mechanism);
-        if (!enforced) {
-          problems.push(`${key} (P0): control.mechanism "${mechanism}" does not read as an ENFORCED rate/volume/throttle control (must match an enforcement pattern and not a negation)`);
+        const parsed = parseEnforcedDeclaration(mechanism);
+        if (!parsed) {
+          problems.push(`${key} (P0): control.mechanism "${mechanism}" does not match the required grammar "ENFORCED kind=... scope=... limit=... windowMs=... overflow=..."`);
         }
         const ref = typeof c.testRef === 'string' ? c.testRef.trim() : '';
         if (!ref) {
           problems.push(`${key} (P0): control.testRef missing`);
-        } else {
-          const testProblems = checkTestRef(ref, key);
-          if (testProblems.length > 0) problems.push(`${key} (P0) control.testRef: ${testProblems.join('; ')}`);
+          continue;
+        }
+        const testProblems = checkTestRef(ref, key, { isControl: true });
+        if (testProblems.length > 0) {
+          problems.push(`${key} (P0) control.testRef: ${testProblems.join('; ')}`);
+          continue;
+        }
+        // Real-transport coverage: under-limit-accepted AND over-limit-rejected
+        // signals among the current HEAD suite's passed assertions in the
+        // same file as the control test.
+        const assertion = findAssertion(ref);
+        const fileResult = assertion ? (suiteRun.data?.testResults ?? []).find((t) => path.relative(path.join(repoRoot, 'apps/daemon'), t.name) === assertion.rel) : undefined;
+        const passedInFile = fileResult ? fileResult.assertionResults.filter((a) => a.status === 'passed') : [];
+        const hasUnder = passedInFile.some((a) => UNDER_LIMIT_SIGNAL.test(a.fullName));
+        const hasOver = passedInFile.some((a) => OVER_LIMIT_SIGNAL.test(a.fullName));
+        if (!hasUnder || !hasOver) {
+          problems.push(`${key} (P0): real-transport coverage in ${assertion?.rel ?? '(unresolved file)'} must show both an under-limit-accepted and an over-limit-rejected passing assertion (under=${hasUnder}, over=${hasOver})`);
         }
       } else if (hasAcceptedRisk) {
         const ar = row.acceptedRisk as { decisionRef?: unknown };
@@ -1388,20 +1963,22 @@ async function main(): Promise<void> {
     }
     record(
       'C9-6',
-      "every row with riskScore.tier === 'P0' resolves sizeRateLimit with a semantically-enforced, verified rate/volume control test or a verified accepted risk",
-      'mechanism text must match an enforcement pattern and NOT a negation pattern ("no rate limit exists" fails); control.testRef and acceptedRisk both fully re-validated',
+      "every row with riskScore.tier === 'P0': control.mechanism matches the anchored ENFORCED grammar, control.testRef passes full C9-5 validation (incl. replay), and real-transport under/over-limit coverage exists in the same file -- or a verified acceptedRisk",
+      'a bare keyword match ("no rate limit exists") no longer passes; mechanism text is descriptive only, enforcement is proven by the associated test',
       problems.length === 0 && p0Count > 0,
       `P0 rows found: ${p0Count}\n${problems.join('\n') || 'all P0 rows resolved'}`,
     );
   });
 
-  // C9-7: threat-model doc extended, section boundary correctly extracted,
-  // exact fullName citations, and every P0 route named inside the SAME
-  // cited-and-valid bullet line (not merely present anywhere in prose).
+  // C9-7: threat-model doc extended. CEREMONY ITEM 4: each P0 route's own
+  // bullet must name EXACTLY one P0 route key and cite EXACTLY that row's
+  // expected reference (control.testRef for a controlled row, primary
+  // testRef for an accepted-risk row), already globally associated with
+  // that same route.
   await checkCriterion('C9-7', () => {
     const threatModelPath = path.join(repoRoot, 'docs/security/daemon-threat-model.md');
     if (!fs.existsSync(threatModelPath)) {
-      record('C9-7', '', 'daemon-threat-model.md carries a bounded Wave 9 section whose [C9-N] bullets exactly cite real passing tests, one per P0 route, in the SAME bullet', false, '', {
+      record('C9-7', '', 'daemon-threat-model.md carries a bounded Wave 9 section; each P0 route has its own bullet naming exactly that route and citing its exact expected reference', false, '', {
         detail: 'daemon-threat-model.md does not exist',
       });
       return;
@@ -1417,7 +1994,7 @@ async function main(): Promise<void> {
     }
     const bulletLines = waveSection.split('\n').filter((l) => /\[C9-\d+\]/.test(l));
     const problems: string[] = [];
-    const p0Keys = matrixRows ? matrixRows.filter((r) => r.riskScore?.tier === 'P0').map((r) => `${String(r.method)} ${String(r.path)}`) : [];
+    const p0Rows = matrixRows ? matrixRows.filter((r) => r.riskScore?.tier === 'P0') : [];
     const bulletsCoveringP0 = new Set<string>();
     for (const line of bulletLines) {
       const backtickMatches = [...line.matchAll(/`([^`]+)`/g)].map((m) => m[1] ?? '');
@@ -1427,28 +2004,63 @@ async function main(): Promise<void> {
         continue;
       }
       if (!passedTestNames.has(cited)) {
-        problems.push(`cited test is not an exact match to any PASSED test this run: "${cited.slice(0, 160)}"`);
+        problems.push(`cited test not an exact PASSED match: "${cited.slice(0, 160)}"`);
         continue;
       }
       const lineLower = line.toLowerCase();
-      for (const k of p0Keys) if (lineLower.includes(k.toLowerCase())) bulletsCoveringP0.add(k);
+      const p0KeysInLine = p0Rows.map((r) => `${String(r.method)} ${String(r.path)}`).filter((k) => lineLower.includes(k.toLowerCase()));
+      if (p0KeysInLine.length === 0) continue; // not a P0-covering bullet -- fine
+      if (p0KeysInLine.length > 1) {
+        problems.push(`bullet names ${p0KeysInLine.length} P0 route keys in one line (must be exactly one): ${line.slice(0, 160)}`);
+        continue;
+      }
+      const routeKey = p0KeysInLine[0]!;
+      const row = p0Rows.find((r) => `${String(r.method)} ${String(r.path)}` === routeKey)!;
+      const hasControl = row.control != null;
+      const expectedRef = hasControl
+        ? typeof row.control?.testRef === 'string'
+          ? row.control.testRef.trim()
+          : ''
+        : typeof row.testRef === 'string'
+          ? row.testRef.trim()
+          : '';
+      if (cited !== expectedRef) {
+        problems.push(`bullet for ${routeKey} cites "${cited}", expected exactly "${expectedRef}" (this row's ${hasControl ? 'control.testRef' : 'primary testRef'})`);
+        continue;
+      }
+      const associatedRoutes = globalCitationMap.get(cited);
+      if (!associatedRoutes || associatedRoutes.size !== 1 || !associatedRoutes.has(routeKey)) {
+        problems.push(`bullet for ${routeKey} cites "${cited}", which is not globally associated with exactly this route`);
+        continue;
+      }
+      bulletsCoveringP0.add(routeKey);
     }
+    const p0Keys = p0Rows.map((r) => `${String(r.method)} ${String(r.path)}`);
     const uncoveredP0 = p0Keys.filter((k) => !bulletsCoveringP0.has(k));
-    const ok = bulletLines.length > 0 && problems.length === 0 && (p0Keys.length === 0 || uncoveredP0.length === 0);
+    const ok = bulletLines.length > 0 && problems.length === 0 && uncoveredP0.length === 0;
     record(
       'C9-7',
-      `read ${path.relative(repoRoot, threatModelPath)}, section bounded to the next "## " heading, cross-check bullets against C9-2's vitest run`,
-      'every [C9-N] bullet exactly cites a PASSED test; every P0-tier route\'s own key appears inside a valid, test-cited bullet line (not merely elsewhere in the section)',
+      `read ${path.relative(repoRoot, threatModelPath)}, section bounded to the next "## " heading, one-P0-key-per-bullet + exact-expected-citation check`,
+      'every P0 route has its own bullet naming exactly that route and citing exactly its expected reference, already globally associated with only that route',
       ok,
-      `[C9-N] bullets found: ${bulletLines.length}\nP0 routes: ${p0Keys.join(', ') || 'none'}\nuncovered P0 routes (no valid bullet names this exact route): ${uncoveredP0.join(', ') || 'none'}\n${problems.join('\n') || 'all citations matched'}`,
+      `[C9-N] bullets found: ${bulletLines.length}\nP0 routes: ${p0Keys.join(', ') || 'none'}\nuncovered P0 routes: ${uncoveredP0.join(', ') || 'none'}\n${problems.join('\n') || 'all citations matched'}`,
     );
   });
 
-  // C9-8: full risk-score formula enforcement -- exposure exact (AST,
-  // scoped+dedup'd, comment-blind, reachability-aware), impact >= frozen
-  // floor, score === exposure+impact exactly, tier === tierFor(score)
-  // exactly.
+  // C9-8: full risk-score formula enforcement, gated on the same
+  // exposure-classifier self-probes as C9-1.
   await checkCriterion('C9-8', () => {
+    if (selfProbeFailures.length > 0) {
+      record(
+        'C9-8',
+        'exposure-classifier self-probes (shared with C9-1)',
+        'every self-probe fixture classifies at its expected exposure',
+        false,
+        selfProbeResults.map((p) => `[${p.ok ? 'PASS' : 'FAIL'}] ${p.name}: ${p.detail}`).join('\n'),
+        { detail: `${selfProbeFailures.length}/${selfProbeResults.length} self-probes failed -- exposure classifier is not trustworthy this run` },
+      );
+      return;
+    }
     if (!matrixRows) {
       record('C9-8', '', 'exposure/impact/score/tier all mechanically enforced per row', false, '', { detail: 'no matrix to check' });
       return;
@@ -1501,10 +2113,10 @@ async function main(): Promise<void> {
     }
     record(
       'C9-8',
-      'AST scan of registerLibraryRoutes at HEAD (scoped, comment-blind, duplicate-checked, reachability-aware) cross-checked against FROZEN_IMPACT_FLOORS',
+      'AST scan of registerLibraryRoutes at HEAD (straight-line dominance grammar, self-probe-verified) cross-checked against FROZEN_IMPACT_FLOORS',
       'every row: exposure exact match, impact >= frozen floor, score === exposure+impact, tier === tierFor(score)',
       problems.length === 0,
-      problems.join('\n') || `all ${matrixRows.length} rows' exposure/impact/score/tier independently confirmed`,
+      `self-probes: ${selfProbeResults.length}/${selfProbeResults.length} pass\n${problems.join('\n') || `all ${matrixRows.length} rows' exposure/impact/score/tier independently confirmed`}`,
     );
   });
 
@@ -1522,21 +2134,9 @@ async function main(): Promise<void> {
     );
   });
 
-  // C9-10 (redesigned, round 2): commit-bound adversarial implementation
-  // review. The record names `reviewedCommit` -- a STRICT ancestor of HEAD
-  // (never HEAD itself, which is structurally impossible to self-reference)
-  // -- and the gate verifies it resolves, is a real ancestor, that nothing
-  // in the tranche's owned implementation/evidence paths changed between
-  // reviewedCommit and HEAD (so the review, committed later, necessarily
-  // covers the FINAL state of what it reviewed), and that the reviewer is
-  // distinct from every commit author across baseCommit..reviewedCommit
-  // (not just HEAD's own tip author, which a same-author later commit could
-  // trivially dodge). Design rationale: commit the full implementation
-  // first (routes, store, tests, matrix, threat-model doc) as some real
-  // commit P; a distinct reviewer reviews P; the review record naming P is
-  // then committed afterward (possibly as HEAD itself, adding only that one
-  // file) -- P's SHA is already real and stable by construction, so there
-  // is no chicken-and-egg problem, and a clean green run is feasible.
+  // C9-10: commit-bound adversarial implementation review (unchanged from
+  // round 2's reviewedCommit redesign -- not part of this ceremony's six
+  // ruled items; r3 confirmed the redesign FIXED).
   await checkCriterion('C9-10', () => {
     const reviewPath = path.join(repoRoot, 'docs/security/library-ingest-implementation-review.json');
     if (!fs.existsSync(reviewPath)) {
@@ -1568,7 +2168,7 @@ async function main(): Promise<void> {
     } else if (!resolveCommit(reviewedCommit)) {
       problems.push(`reviewedCommit "${reviewedCommit}" does not resolve to a real commit`);
     } else if (reviewedCommit === headSha) {
-      problems.push('reviewedCommit equals HEAD exactly -- a commit cannot review itself (the record could not have existed at that commit yet); reviewedCommit must be a STRICT ancestor of HEAD');
+      problems.push('reviewedCommit equals HEAD exactly -- a commit cannot review itself; reviewedCommit must be a STRICT ancestor of HEAD');
     } else if (!isAncestor(reviewedCommit, headSha)) {
       problems.push(`reviewedCommit "${reviewedCommit}" is not an ancestor of HEAD (${headSha})`);
     } else {
@@ -1608,17 +2208,6 @@ async function main(): Promise<void> {
   // GATE-INTEGRITY / LEASE / HEAD-DRIFT
   // =======================================================================
   await checkCriterion('GATE-INTEGRITY', () => {
-    // Advisory-when-absent by the same two-phase design every other wave
-    // verifier uses: an orchestrator pins approved-gate.sha256 only AFTER
-    // this expansion is approved, which cannot have happened before the
-    // approval this run is part of. Round 2: the pin's absence is now ALSO
-    // an explicit top-level manifest field (`gateIntegrityPinned`), not
-    // buried in this criterion's prose evidence alone -- a consumer does
-    // not need to parse text to know whether floor-table/collector
-    // tampering is currently detectable. The route-set collusion Sol found
-    // in round 1 is independently closed by C9-1/C9-8 deriving the frozen
-    // set from baseCommit via git show, not from a HEAD literal, regardless
-    // of pin timing.
     const selfPath = process.argv[1] ? path.resolve(process.argv[1]) : path.join(repoRoot, 'scripts/waves/verify-w9-ingest.ts');
     let selfSha256: string;
     try {
@@ -1705,8 +2294,9 @@ async function main(): Promise<void> {
   });
 
   // -----------------------------------------------------------------------
-  // Commit-bound manifest. Tamper re-check, archive (self-contained, round
-  // 2), then the FINAL write (wroteOk:true).
+  // Commit-bound manifest. Tamper re-check, then archival (ceremony item
+  // 6: construct-then-reread-verify, no post-success correction), then the
+  // FINAL canonical write built from the actual archival result.
   // -----------------------------------------------------------------------
   for (const r of results) {
     if (!r.artifact || !r.artifactSha256) continue;
@@ -1727,31 +2317,13 @@ async function main(): Promise<void> {
   const preArchiveManifest = buildManifest(true, treeDirty, false);
   const archiveResult = archiveRunArtifacts(preArchiveManifest);
   const finalManifest: ManifestShape = { ...preArchiveManifest, archiveOk: archiveResult.ok };
-  // Self-referential correction: archiveRunArtifacts wrote its own copy of
-  // the manifest BEFORE archival's own outcome could be known (the same
-  // class of chicken-and-egg this run already fixed once for C9-10), so
-  // that copy's `archiveOk` is necessarily stale (always false). Once the
-  // true outcome is known, correct the archived copy in place -- the
-  // canonical proof/manifest.json (written next) is authoritative
-  // regardless, but the archived copy should not misreport its own result.
-  if (archiveResult.ok) {
-    try {
-      const archivedManifestPath = path.join(archiveResult.runDir, 'manifest.json');
-      const archivedRaw = JSON.parse(fs.readFileSync(archivedManifestPath, 'utf8')) as ManifestShape;
-      archivedRaw.archiveOk = true;
-      fs.writeFileSync(archivedManifestPath, JSON.stringify(archivedRaw, null, 2));
-      fs.writeFileSync(path.join(archiveResult.runDir, 'manifest.sha256.txt'), `${sha256File(archivedManifestPath)}\n`);
-    } catch {
-      /* best-effort correction only; canonical manifest.json is authoritative regardless */
-    }
-  }
   const { written: manifestWritten, sha256: manifestSha256 } = writeManifestFile(finalManifest);
 
   const failures = results.filter((r) => r.status === 'fail');
   console.log(`\nverify-w9-ingest: ${results.length - failures.length}/${results.length} criteria pass (treeDirty=${treeDirty}, wroteOk=true, gateIntegrityPinned=${gateIntegrityPinned}, archiveOk=${archiveResult.ok})`);
   for (const r of results) console.log(`  [${r.status.toUpperCase()}] ${r.id}${r.detail ? ` (${r.detail})` : ''}`);
   if (treeDirty) console.log('  ⚠ tree is dirty: this run is advisory, never a wave pass (VERIFICATION-CONTRACT.md §2)');
-  if (!archiveResult.ok) console.log('  ⚠ per-run archival FAILED -- this fails the run (round-2 fix, was previously non-fatal)');
+  if (!archiveResult.ok) console.log('  ⚠ per-run archival FAILED (construct-then-reread-verify) -- this fails the run');
   console.log(`MANIFEST_SHA256=${manifestSha256}`);
   console.log(`RUN_ARCHIVE=${archiveResult.runDir}`);
   process.exit(failures.length === 0 && !treeDirty && manifestWritten && archiveResult.ok ? 0 : 1);
