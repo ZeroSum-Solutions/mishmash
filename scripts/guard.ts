@@ -1381,6 +1381,13 @@ async function checkRemovedWorkflows(): Promise<boolean> {
 const capabilityManifestPath = path.join(repoRoot, "scripts/waves/capability-manifest.json");
 const capabilityManifestCliSourcePath = path.join(repoRoot, "apps/daemon/src/cli.ts");
 
+type CapabilityManifestValueComparison = {
+  mode: "exact" | "unordered-array" | "composite" | "binary";
+  sortKey?: string;
+  fields?: string[];
+  encoding?: "base64" | "hex";
+};
+
 type CapabilityManifestRow = {
   capability: string;
   uiEntryPoint: string;
@@ -1391,6 +1398,10 @@ type CapabilityManifestRow = {
   parityApplicable: boolean;
   reason?: string;
   knownNamespaceRoutes: string[];
+  probeMethod?: string;
+  probePath?: string;
+  probeBody?: unknown;
+  valueComparison?: CapabilityManifestValueComparison;
 };
 
 const CAPABILITY_MANIFEST_REQUIRED_STRING_FIELDS = [
@@ -1400,6 +1411,12 @@ const CAPABILITY_MANIFEST_REQUIRED_STRING_FIELDS = [
   "httpPath",
   "outputSchema",
 ] as const;
+
+const CAPABILITY_MANIFEST_VALID_HTTP_METHODS = /^(GET|POST|PUT|PATCH|DELETE|OPTIONS|ALL)$/;
+const CAPABILITY_MANIFEST_VALID_CONCRETE_METHODS = /^(GET|POST|PUT|PATCH|DELETE|OPTIONS)$/;
+const CAPABILITY_MANIFEST_VALID_VALUE_COMPARISON_MODES = ["exact", "unordered-array", "composite", "binary"];
+const isCapabilityManifestBodyBearingMethod = (method: string): boolean =>
+  method === "POST" || method === "PUT" || method === "PATCH";
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
@@ -1438,6 +1455,63 @@ function validateCapabilityManifestRowShape(row: unknown, index: number): string
   }
   if (!isStringArray(record.knownNamespaceRoutes)) {
     violations.push(`${label("knownNamespaceRoutes")} must be a string array`);
+  }
+  if (typeof record.httpMethod === "string" && !CAPABILITY_MANIFEST_VALID_HTTP_METHODS.test(record.httpMethod)) {
+    violations.push(`${label("httpMethod")} must be one of GET|POST|PUT|PATCH|DELETE|OPTIONS|ALL`);
+  }
+
+  // C0-10 live-probe declarations (2026-07-27 gate amendment): a "ALL"
+  // httpMethod (an Express .all() registration) cannot itself be sent as an
+  // HTTP request method, so it structurally requires a concrete probeMethod
+  // AND a concrete probePath to be live-probed at all.
+  const isAllMethod = record.httpMethod === "ALL";
+  const hasConcreteProbeMethod = typeof record.probeMethod === "string" && CAPABILITY_MANIFEST_VALID_CONCRETE_METHODS.test(record.probeMethod);
+  if (isAllMethod && !hasConcreteProbeMethod) {
+    violations.push(`${label("probeMethod")} is required (GET|POST|PUT|PATCH|DELETE|OPTIONS) when httpMethod is "ALL"`);
+  }
+  if (isAllMethod && !(typeof record.probePath === "string" && record.probePath.startsWith("/"))) {
+    violations.push(`${label("probePath")} is required (starting with "/") when httpMethod is "ALL"`);
+  }
+  if (record.probeMethod !== undefined && !(typeof record.probeMethod === "string" && CAPABILITY_MANIFEST_VALID_CONCRETE_METHODS.test(record.probeMethod))) {
+    violations.push(`${label("probeMethod")} must be a concrete HTTP method (GET|POST|PUT|PATCH|DELETE|OPTIONS) when present`);
+  }
+  if (record.probePath !== undefined && !(typeof record.probePath === "string" && record.probePath.startsWith("/"))) {
+    violations.push(`${label("probePath")} must start with "/" when present`);
+  }
+
+  // A body-bearing effective method (POST/PUT/PATCH directly, or ALL whose
+  // declared probeMethod is body-bearing) requires a declared probeBody for
+  // live probing -- mirrors verify-w0.ts's own C0-10 shape validation so a
+  // missing declaration is caught by `pnpm guard` before a full gate run.
+  const effectiveMethodForBodyCheck = isAllMethod
+    ? (typeof record.probeMethod === "string" ? record.probeMethod : undefined)
+    : (typeof record.httpMethod === "string" ? record.httpMethod : undefined);
+  if (
+    typeof effectiveMethodForBodyCheck === "string" &&
+    isCapabilityManifestBodyBearingMethod(effectiveMethodForBodyCheck) &&
+    record.probeBody === undefined
+  ) {
+    violations.push(`${label("probeBody")} is required for a body-bearing method (${effectiveMethodForBodyCheck})`);
+  }
+
+  if (record.valueComparison !== undefined) {
+    if (!isRecord(record.valueComparison)) {
+      violations.push(`${label("valueComparison")} must be an object when present`);
+    } else {
+      const vc = record.valueComparison;
+      if (typeof vc.mode !== "string" || !CAPABILITY_MANIFEST_VALID_VALUE_COMPARISON_MODES.includes(vc.mode)) {
+        violations.push(`${label("valueComparison.mode")} must be one of ${CAPABILITY_MANIFEST_VALID_VALUE_COMPARISON_MODES.join("|")}`);
+      }
+      if (vc.mode === "composite" && (!Array.isArray(vc.fields) || vc.fields.length === 0 || !vc.fields.every((f) => typeof f === "string"))) {
+        violations.push(`${label("valueComparison.fields")} must be a non-empty string array when mode is "composite"`);
+      }
+      if (vc.sortKey !== undefined && typeof vc.sortKey !== "string") {
+        violations.push(`${label("valueComparison.sortKey")} must be a string when present`);
+      }
+      if (vc.encoding !== undefined && vc.encoding !== "base64" && vc.encoding !== "hex") {
+        violations.push(`${label("valueComparison.encoding")} must be "base64" or "hex" when present`);
+      }
+    }
   }
 
   return violations;
