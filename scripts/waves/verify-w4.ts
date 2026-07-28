@@ -799,8 +799,17 @@ async function triggerRegeneration(daemon: BootedDaemon, routes: { generatePath:
   void genResp;
   return pollCoverHash(daemon, routes.fetchPath, projectId, 3, 500) ?? viewHash;
 }
-async function checkC43and44(): Promise<{ ok: boolean; evidence: string; detail?: string | undefined }> {
-  if (!coverBackendSurface().present) return backendGateFailure();
+// Returns per-criterion verdicts (C4-3 transitive invalidation, C4-4
+// content-driven-not-mtime invalidation) from ONE shared probe run -- the
+// two share a fixture and trigger mechanism, but VERIFICATION-CONTRACT S2
+// ("every criterion ID in the PRD must appear") means they still need
+// separate manifest rows, not one combined "C4-3/C4-4" row.
+interface C43C44Result { ok43: boolean; ok44: boolean; evidence: string; gated: boolean }
+async function probeC43C44(): Promise<C43C44Result> {
+  if (!coverBackendSurface().present) {
+    const gate = backendGateFailure();
+    return { ok43: false, ok44: false, evidence: gate.evidence, gated: true };
+  }
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w4-c34-'));
   let daemon: BootedDaemon | undefined;
   try {
@@ -814,16 +823,9 @@ async function checkC43and44(): Promise<{ ok: boolean; evidence: string; detail?
     await uploadProjectFile(daemon.url, projectId, 'styles.css', cssV1, 'text/css');
 
     const genResp = await fetch(`${daemon.url}${fillPath(routes.generatePath, projectId)}`, { method: 'POST', signal: AbortSignal.timeout(30_000) });
-    if (!genResp.ok) return { ok: false, evidence: `initial generate failed: ${genResp.status}`, detail: 'cannot establish a baseline cover to invalidate' };
+    if (!genResp.ok) return { ok43: false, ok44: false, evidence: `initial generate failed: ${genResp.status}`, gated: false };
     const h1 = await pollCoverHash(daemon, routes.fetchPath, projectId, 1, 0);
-    if (!h1) return { ok: false, evidence: 'no baseline cover hash obtained', detail: 'GET cover failed after generation' };
-
-    const indexAbs = (() => {
-      const before = walkDataDir(dataDir);
-      void before;
-      return null;
-    })();
-    void indexAbs;
+    if (!h1) return { ok43: false, ok44: false, evidence: 'no baseline cover hash obtained (GET cover failed after generation)', gated: false };
 
     // --- C4-4a: mtime touch WITHOUT byte change must NOT regenerate. ---
     // We cannot directly touch the daemon's on-disk copy without knowing its
@@ -858,15 +860,42 @@ async function checkC43and44(): Promise<{ ok: boolean; evidence: string; detail?
     const h6 = await triggerRegeneration(daemon, routes, projectId);
     const c43img = h6 !== null && h6 !== h5;
 
-    const ok = c44a && c44b && c43css && c43img;
     return {
-      ok,
+      ok43: c43css && c43img,
+      ok44: c44a && c44b,
       evidence: `h1=${h1} h2(mtime-touch-no-byte-change)=${h2} h3(byte-change)=${h3} h4(css-only-edit)=${h4} h5(before-img-edit)=${h5} h6(after-img-edit)=${h6}\nC4-4a(mtime-only-must-NOT-regen)=${c44a}\nC4-4b(byte-change-must-regen)=${c44b}\nC4-3-css(transitive-css-must-regen)=${c43css}\nC4-3-img(transitive-image-must-regen)=${c43img}`,
-      detail: ok ? undefined : 'invalidation is not both transitive (CSS/image edits regenerate) and content-driven (byte-identical re-upload does not regenerate, real byte changes do)',
+      gated: false,
     };
   } finally {
     if (daemon) await daemon.kill().catch(() => undefined);
     fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+}
+
+async function runC43C44(): Promise<void> {
+  const startedAt = Date.now();
+  const command = 'generate -> byte-identical re-upload / CSS-only edit / image-only edit -> re-check cover hash (one shared probe run, graded as two criteria)';
+  try {
+    const result = await probeC43C44();
+    const durationMs = Date.now() - startedAt;
+    record(
+      'C4-3', command,
+      'invalidation spans the TRANSITIVE render graph: editing ONLY linked local CSS or a linked local image regenerates the cover even when index.html itself is byte-identical',
+      result.ok43, result.evidence,
+      { durationMs, detail: result.ok43 ? undefined : result.gated ? 'product surface missing: apps/daemon/src/covers/** and/or apps/daemon/src/routes/covers*.ts are not implemented yet -- correct, honest pre-implementation result' : 'entry-hash-only invalidation serves a stale cover after a CSS or image edit' },
+    );
+    record(
+      'C4-4', command,
+      'invalidation is content-hash-driven, not mtime-driven: a byte-identical re-upload never regenerates, and a real byte change always does',
+      result.ok44, result.evidence,
+      { durationMs, detail: result.ok44 ? undefined : result.gated ? 'product surface missing: apps/daemon/src/covers/** and/or apps/daemon/src/routes/covers*.ts are not implemented yet -- correct, honest pre-implementation result' : 'invalidation is not purely content-driven' },
+    );
+  } catch (err) {
+    const durationMs = Date.now() - startedAt;
+    const evidence = String((err as Error)?.stack ?? err);
+    const detail = `criterion crashed: ${String(err)}`;
+    record('C4-3', command, 'invalidation spans the TRANSITIVE render graph', false, evidence, { detail, durationMs, exitCode: 1 });
+    record('C4-4', command, 'invalidation is content-hash-driven, not mtime-driven', false, evidence, { detail, durationMs, exitCode: 1 });
   }
 }
 
@@ -1605,11 +1634,10 @@ async function main(): Promise<void> {
     'crop favors the hero region (measured as dominant marker-color pixel fraction in the final cover) on off-center, left-nav, and dark-background fixtures, plus a trivial hero-fills-frame control',
     checkC42,
   );
-  await runCriterion(
-    'C4-3/C4-4', 'generate -> byte-identical re-upload / mtime games / CSS-only edit / image-only edit -> re-check cover hash',
-    'invalidation is content-hash-driven (byte-identical re-upload never regenerates, real byte changes always do) and spans the TRANSITIVE render graph (linked local CSS and image edits regenerate even when index.html itself is untouched)',
-    checkC43and44,
-  );
+  // C4-3 and C4-4 share one probe run (same fixture, same trigger) but are
+  // recorded as two separate manifest rows -- VERIFICATION-CONTRACT S2
+  // requires every PRD criterion ID to appear individually.
+  await runC43C44();
   await runCriterion(
     'C4-5', 'infinite-loop project (timeout) / 8 concurrent 1.2s-blocking projects (concurrency cap) / memory-hog project (ceiling), each against a live daemon with process-tree RSS sampling',
     'the renderer enforces a per-job timeout, a concurrency cap strictly below the submitted job count, and a real memory ceiling -- each proven against a deliberately pathological project, not a 1s timeout on a trivial fixture',
