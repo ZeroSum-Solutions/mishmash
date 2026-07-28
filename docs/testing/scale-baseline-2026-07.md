@@ -115,6 +115,13 @@ This recurrence — three restatements in one landing cycle — is the concrete
 case for prioritizing the deferred scratch-copy structural fix in the first
 post-landing verifier amendment.
 
+### Fourth restatement (2026-07-28)
+
+Same routine cause: the third gate execution (16/17, C0-9 green) re-mutated
+the sqlite triplet via its own boots. Frozen post-run state:
+`131667ba6809b7d09e0cc83f7d9f52831e73bc1831da0da951ca550afb0946e7`
+(counts re-verified unchanged, 2,849 / 1,142,043,038).
+
 ## Machine
 
 `Devins-MacBook-Pro.local-darwin-arm64-16cpu` (`os.hostname()-platform()-arch()-cpus().length` +
