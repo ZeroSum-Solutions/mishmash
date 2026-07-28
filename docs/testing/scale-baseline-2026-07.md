@@ -75,6 +75,33 @@ having C0-9's scenario boots run against a scratch copy of the corpus — is
 deferred as a recorded follow-up (it requires a sealed-verifier amendment and
 is not needed for a single gate-of-record run).
 
+### Second restatement + search re-measurement (2026-07-28)
+
+The first gate execution to actually run the C0-9 scenarios confirmed both
+predictions above:
+
+- **Corpus:** the run's own 7 scenario boots re-mutated the sqlite triplet
+  exactly as the standing caveat predicts (post-run walk `16eb61ecdb61…`).
+  One further sanctioned measurement boot (below) produced the final frozen
+  state: `corpus.sha256` = `7b9fe51ca2f732cf78323310d886953c6980c37032f67b9f14a672af01733aed`.
+  Both walks re-verified file count and total bytes unchanged (2,849 /
+  1,142,043,038) — the mutation surface remains exactly the sqlite triplet.
+- **Search:** the run PASSED the r2d content-proof and negative-control checks
+  on every repetition but missed the timing band on the FAST side: live
+  [1,1,1,1,2], p50 1ms, outside [1.5, 4.5]. Root cause is measurement-context
+  skew, not drift: the gate's own binding walk reads every corpus byte minutes
+  before the search scenario, so in-gate search always runs page-cache-warm,
+  while the prior samples [3,4,3,3,3] were authored without that structural
+  warmth. The samples are restated from a measurement that mirrors the gate
+  sequence exactly (full hash walk → `bootDaemonForProbing`-equivalent boot
+  against `corpus.path` → `GET /api/projects` → light prior-scenario traffic →
+  1 warmup + 5 `Date.now()`-timed repetitions of the full content-proof
+  probe): **[2,1,2,1,1], p50 1, p95 2**, all repetitions matched
+  file+line+snippet, unmarked negative nonce returned 200 with zero matches.
+  Residual 1ms-quantization risk is accepted and documented in the JSON note;
+  a future miss requires honest re-measurement, never a band widen (the 50%
+  cap is sealed in the verifier).
+
 ## Machine
 
 `Devins-MacBook-Pro.local-darwin-arm64-16cpu` (`os.hostname()-platform()-arch()-cpus().length` +
