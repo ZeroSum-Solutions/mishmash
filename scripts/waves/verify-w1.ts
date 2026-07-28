@@ -921,7 +921,11 @@ const USAGE_MARKER_END = randomNonce(12);
 // CEREMONY ROUND FIX (ruling item 7): "model-ID carrier prefixes/suffixes
 // used only by the fake" must also be fresh per invocation, not a fixed
 // literal an implementation could pattern-match against.
-const FAKE_CLAUDE_OWN_DEFAULT_MODEL = `agentdefault${randomNonce(10)}`;
+// FIDELITY ROUND FIX (residual item 7, first defect): the round-2 value
+// still carried a STABLE "agentdefault" prefix in front of the random
+// suffix -- every invocation's value started with the same recognizable
+// word. No fixed prefix survives now; the whole value is opaque CSPRNG.
+const FAKE_CLAUDE_OWN_DEFAULT_MODEL = randomNonce(16);
 const FAKE_CLAUDE_VERSION_STRING = `1.0.${randomNonce(4)}`;
 interface ProbeUsage { input_tokens: number; output_tokens: number; cache_creation_input_tokens: number; cache_read_input_tokens: number }
 // ROUND 2 FIX (finding 11): dropped the round-1 `label` parameter (e.g.
@@ -1036,24 +1040,40 @@ function base64UrlDecode(s: string): string {
 // spec (tool identity + outcome + failure content) as ONE opaque base64url
 // blob -- the fake CLI decodes it structurally; no regex-matchable tag
 // survives in the model id string the daemon itself ever sees.
-interface KimiProbeSpec { tool: string; ok: boolean; content: string }
+// FIDELITY ROUND FIX (residual items 4 + 7): `spec` used to carry only
+// {tool,ok,content} -- for the fixed literal content:'ok' every success
+// case, JSON.stringify(spec) (and hence the whole encoded model id) was
+// BYTE-IDENTICAL across every invocation, ever ("success model IDs are
+// identical across invocations"). `salt` is a fresh per-spec CSPRNG value
+// folded into the encoded blob so no two invocations -- success or failure,
+// this run or any other verifier run -- ever encode to the same string.
+interface KimiProbeSpec { tool: string; ok: boolean; content: string; salt: string }
+// FIDELITY ROUND FIX (residual item 7, second defect): the encoded blob no
+// longer carries a fixed leading 'm' marker character -- KIMI_SPEC_MARKER is
+// a fresh CSPRNG value per verifier invocation, threaded into both the
+// encoder here and the embedded decoder in FAKE_KIMI_SCRIPT below via
+// JSON.stringify(...) interpolation, exactly like USAGE_MARKER_START/END.
+const KIMI_SPEC_MARKER = randomNonce(4);
 function encodeKimiProbeSpec(spec: KimiProbeSpec): string {
-  return `m${base64UrlEncode(JSON.stringify(spec))}`;
+  return `${KIMI_SPEC_MARKER}${base64UrlEncode(JSON.stringify(spec))}`;
 }
+// FIDELITY ROUND FIX (residual item 7, third defect): every Math.random()
+// call in this generator is replaced with crypto.randomInt -- Math.random is
+// a fast, non-cryptographic PRNG, not the CSPRNG the ruling requires.
 // Runtime/combinatorial failure-content generator (replaces the closed
 // seven-template pool): error CLASS, casing, punctuation, wrapper, path, and
 // status/errno code are all independently randomized per call, and the
 // wrapper composition varies the field ORDERING within the message.
 function randomCase(s: string): string {
-  const mode = Math.floor(Math.random() * 3);
+  const mode = crypto.randomInt(3);
   return mode === 0 ? s.toUpperCase() : mode === 1 ? s.toLowerCase() : s;
 }
 function combinatorialToolErrorContent(): string {
-  const errnoNum = 1 + Math.floor(Math.random() * 90);
-  const statusCode = 1 + Math.floor(Math.random() * 200);
-  const ext = ['txt', 'py', 'json', 'log'][Math.floor(Math.random() * 4)];
+  const errnoNum = 1 + crypto.randomInt(90);
+  const statusCode = 1 + crypto.randomInt(200);
+  const ext = ['txt', 'py', 'json', 'log'][crypto.randomInt(4)];
   const p = `/${randomNonce(3)}/${randomNonce(4)}.${ext}`;
-  const punctuation = [':', ' -', ',', ''][Math.floor(Math.random() * 4)]!;
+  const punctuation = [':', ' -', ',', ''][crypto.randomInt(4)]!;
   const bodies: Array<() => string> = [
     () => `${randomCase('EPERM')}${punctuation} operation not permitted, open '${p}'`,
     () => `${randomCase('ENOENT')}${punctuation} no such file or directory, stat '${p}'`,
@@ -1061,19 +1081,27 @@ function combinatorialToolErrorContent(): string {
     () => `${randomCase('fatal')}${punctuation} ${randomNonce(6)}: unable to write new object`,
     () => `${randomCase('OSError')}${punctuation} [Errno ${errnoNum}] ${randomNonce(6)}`,
     () => `${randomCase('Error')}${punctuation} ${randomNonce(8)} exited with status ${statusCode}`,
-    () => `${randomCase('TimeoutError')}${punctuation} operation timed out after ${1 + Math.floor(Math.random() * 9000)}ms (${randomNonce(4)})`,
+    () => `${randomCase('TimeoutError')}${punctuation} operation timed out after ${1 + crypto.randomInt(9000)}ms (${randomNonce(4)})`,
   ];
   const wrappers: Array<(inner: string) => string> = [
     (inner) => inner,
     (inner) => `${randomCase('Error')}${punctuation} ${inner}`,
     (inner) => `[tool-error] ${inner}`,
     (inner) => `${inner}\nexit status ${statusCode}`,
-    (inner) => `Traceback (most recent call last):\n  File "${randomNonce(4)}.py", line ${1 + Math.floor(Math.random() * 900)}\n${inner}`,
+    (inner) => `Traceback (most recent call last):\n  File "${randomNonce(4)}.py", line ${1 + crypto.randomInt(900)}\n${inner}`,
   ];
-  const body = bodies[Math.floor(Math.random() * bodies.length)]!();
-  const wrapper = wrappers[Math.floor(Math.random() * wrappers.length)]!;
+  const body = bodies[crypto.randomInt(bodies.length)]!();
+  const wrapper = wrappers[crypto.randomInt(wrappers.length)]!;
   return wrapper(body);
 }
+// FIDELITY ROUND FIX (residual item 4, third defect): the final assistant
+// text used to branch on spec.ok ('all good' vs "I couldn't complete
+// that.") -- "the final assistant text also differs by outcome, so
+// tool-result content is not the sole distinction" (ruling: only the
+// tool-result outcome/content may distinguish a matched pair's two cases).
+// KIMI_NEUTRAL_ASSISTANT_TEXT is one fresh CSPRNG value per verifier
+// invocation, used identically regardless of success/failure.
+const KIMI_NEUTRAL_ASSISTANT_TEXT = randomNonce(10);
 const FAKE_KIMI_SCRIPT = `#!/usr/bin/env node
 // fake kimi CLI -- see verify-w1.ts header comment.
 const crypto = require('node:crypto');
@@ -1085,16 +1113,17 @@ function b64urlDecode(s) {
 }
 const modelIdx = args.indexOf('--model');
 const requestedModel = (modelIdx >= 0 ? args[modelIdx + 1] : '') || '';
+const SPEC_MARKER = ${JSON.stringify(KIMI_SPEC_MARKER)};
 let spec = { tool: 'Read', ok: true, content: 'ok' };
-if (requestedModel[0] === 'm') {
-  try { spec = JSON.parse(b64urlDecode(requestedModel.slice(1))); } catch {}
+if (requestedModel.startsWith(SPEC_MARKER)) {
+  try { spec = JSON.parse(b64urlDecode(requestedModel.slice(SPEC_MARKER.length))); } catch {}
 }
 const toolCallId = 'call_' + crypto.randomBytes(6).toString('hex');
 const sessionId = 'sess_' + crypto.randomBytes(6).toString('hex');
 function line(o) { process.stdout.write(JSON.stringify(o) + '\\n'); }
 line({ role: 'assistant', tool_calls: [{ type: 'function', id: toolCallId, function: { name: spec.tool, arguments: '{}' } }] });
 line({ role: 'tool', tool_call_id: toolCallId, content: spec.ok ? 'ok' : spec.content });
-line({ role: 'assistant', content: spec.ok ? 'all good' : "I couldn't complete that." });
+line({ role: 'assistant', content: ${JSON.stringify(KIMI_NEUTRAL_ASSISTANT_TEXT)} });
 line({ role: 'meta', type: 'session.resume_hint', session_id: sessionId });
 setTimeout(() => process.exit(0), 30);
 `;
@@ -1107,11 +1136,11 @@ function buildKimiProbePairs(): KimiProbeSpec[] {
   const combinatorialTools = ['Read', 'Write', 'Edit'];
   const specs: KimiProbeSpec[] = [];
   for (const tool of combinatorialTools) {
-    specs.push({ tool, ok: true, content: 'ok' });
-    specs.push({ tool, ok: false, content: combinatorialToolErrorContent() });
+    specs.push({ tool, ok: true, content: 'ok', salt: randomNonce(6) });
+    specs.push({ tool, ok: false, content: combinatorialToolErrorContent(), salt: randomNonce(6) });
   }
-  specs.push({ tool: 'Bash', ok: true, content: 'ok' });
-  specs.push({ tool: 'Bash', ok: false, content: `Command failed with exit code: ${1 + Math.floor(Math.random() * 200)}.` });
+  specs.push({ tool: 'Bash', ok: true, content: 'ok', salt: randomNonce(6) });
+  specs.push({ tool: 'Bash', ok: false, content: `Command failed with exit code: ${1 + crypto.randomInt(200)}.`, salt: randomNonce(6) });
   for (let i = specs.length - 1; i > 0; i--) {
     const j = crypto.randomInt(i + 1);
     const tmp = specs[i]!; specs[i] = specs[j]!; specs[j] = tmp;
@@ -2038,25 +2067,64 @@ interface AggregateCandidate { path: string; value: number }
 function normalizePathToken(seg: string): string {
   return seg.replace(/[_-]/g, '').toLowerCase();
 }
+// FIDELITY ROUND FIX (residual item 6, first defect): `normalizedFull.includes(t)`
+// matched TOKEN AS SUBSTRING of the whole joined path, so a decoy path like
+// "projectile.costume.usd" passed -- "projectile".includes("project") and
+// "costume".includes("cost") are both true by coincidence, with zero real
+// aggregate/cost semantics. This tokenizes each path SEGMENT into its own
+// camelCase/snake_case/kebab-case WORDS and requires an EXACT token match
+// (not substring containment) against the aggregate/money/usd vocabularies.
+function tokenizeSegment(seg: string): string[] {
+  return seg
+    .split(/[_-]+/)
+    .flatMap((part) => part.split(/(?<=[a-z0-9])(?=[A-Z])/))
+    .map((t) => t.toLowerCase())
+    .filter((t) => t.length > 0);
+}
 function findAggregateCandidates(root: unknown, excludeRunIds: string[]): AggregateCandidate[] {
   const out: AggregateCandidate[] = [];
   const AGGREGATE_TOKENS = ['total', 'aggregate', 'project'];
   const MONEY_TOKENS = ['cost', 'spend'];
+  // FIDELITY ROUND FIX (residual item 6, second defect): `Object.values(obj).
+  // includes(id)` only checked DIRECT (one-level) property values, so a run
+  // identity nested one level deeper (e.g. `{run:{id:runId}, decoyTotal:123}`)
+  // was invisible to the exclusion guard, letting a decoy aggregate sitting
+  // BESIDE a nested run reference through as if it were project-scoped. This
+  // recursively searches each direct value's own subtree for the run id.
+  // IMPORTANT (caught by this round's own empirical test, not a named
+  // citation): the exclusion is evaluated LOCALLY, on the object DIRECTLY
+  // containing the candidate leaf (`siblingObj` in pushIfCandidate) --
+  // never as a gate on whether `walk` recurses into a node's children at
+  // all. Gating recursion by "this node's subtree contains a run id
+  // ANYWHERE" would also exclude every UNRELATED sibling branch under a
+  // shared ancestor -- e.g. a completely ordinary `{runs:[...], total:
+  // {costUsd}}` shape, where `total` itself never mentions a run id, would
+  // have been wrongly killed just because its sibling `runs` array does.
+  // That would make the whole aggregate oracle unable to find even a
+  // correct implementation's response.
+  function subtreeContainsAnyId(node: unknown, ids: string[], _seen: Set<unknown> = new Set()): boolean {
+    if (typeof node === 'string') return ids.includes(node);
+    if (!isRecord(node) && !Array.isArray(node)) return false;
+    if (_seen.has(node)) return false;
+    _seen.add(node);
+    if (isRecord(node)) return Object.values(node).some((v) => subtreeContainsAnyId(v, ids, _seen));
+    return (node as unknown[]).some((v) => subtreeContainsAnyId(v, ids, _seen));
+  }
   function objectCarriesRunId(obj: Record<string, unknown>): boolean {
-    return excludeRunIds.some((id) => Object.values(obj).includes(id));
+    return Object.values(obj).some((v) => subtreeContainsAnyId(v, excludeRunIds));
   }
   function pushIfCandidate(segPath: string[], numeric: number, siblingObj: Record<string, unknown>): void {
-    const normalizedFull = segPath.map(normalizePathToken).join('.');
-    const hasAggregateToken = AGGREGATE_TOKENS.some((t) => normalizedFull.includes(t));
-    const hasMoneyToken = MONEY_TOKENS.some((t) => normalizedFull.includes(t));
+    if (objectCarriesRunId(siblingObj)) return;
+    const allTokens = segPath.flatMap(tokenizeSegment);
+    const hasAggregateToken = AGGREGATE_TOKENS.some((t) => allTokens.includes(t));
+    const hasMoneyToken = MONEY_TOKENS.some((t) => allTokens.includes(t));
     if (!hasAggregateToken || !hasMoneyToken) return;
-    const siblingCurrencyUsd = Object.entries(siblingObj).some(([kk, vv]) => /currency/i.test(kk) && typeof vv === 'string' && vv.toUpperCase() === 'USD');
-    if (siblingCurrencyUsd || normalizedFull.includes('usd')) out.push({ path: segPath.join('.'), value: numeric });
+    const siblingCurrencyUsd = Object.entries(siblingObj).some(([kk, vv]) => tokenizeSegment(kk).includes('currency') && typeof vv === 'string' && vv.toUpperCase() === 'USD');
+    if (siblingCurrencyUsd || allTokens.includes('usd')) out.push({ path: segPath.join('.'), value: numeric });
   }
   function walk(node: unknown, pathSegs: string[]): void {
     if (Array.isArray(node)) { node.forEach((v, i) => walk(v, [...pathSegs, String(i)])); return; }
     if (!isRecord(node)) return;
-    if (objectCarriesRunId(node)) return;
     for (const [k, v] of Object.entries(node)) {
       const segPath = [...pathSegs, k];
       if (typeof v === 'number' && Number.isFinite(v) && v >= 0) pushIfCandidate(segPath, v, node);
@@ -2080,6 +2148,38 @@ function readAggregateAtPath(root: unknown, fieldPath: string): number | null {
 }
 function projectRouteUrl(baseUrl: string, routePath: string, projectId: string): string {
   return `${baseUrl}${routePath.replace(/:\w+/, encodeURIComponent(projectId))}`;
+}
+// FIDELITY ROUND FIX (residual item 1, first defect): `findRunNumberField`
+// (defined above, near findRunScopedRecord -- LEFT UNCHANGED here since C1-9
+// (settled) and C1-8's own identity check still call it directly) returns
+// only the FIRST matching object it finds; it can prove "at least one cost
+// record exists" but never "EXACTLY one" -- a duplicated per-attempt record,
+// or a stray decoy sharing the run id, would silently pass. This walks the
+// WHOLE tree (no early return) and collects every match, so C1-7's own
+// retry/resume/cache-inclusive/main cost bindings can require the count to
+// be exactly 1 before trusting the value at all.
+function findAllRunNumberFields(root: unknown, runId: string, numberKeyPattern: RegExp, _seen: Set<unknown> = new Set()): number[] {
+  const out: number[] = [];
+  if (!isRecord(root) && !Array.isArray(root)) return out;
+  if (_seen.has(root)) return out;
+  _seen.add(root);
+  if (isRecord(root)) {
+    const mentionsRun = Object.values(root).some((v) => v === runId);
+    if (mentionsRun) {
+      for (const [k, v] of Object.entries(root)) {
+        if (typeof v === 'number' && Number.isFinite(v) && numberKeyPattern.test(k)) out.push(v);
+      }
+    }
+    for (const v of Object.values(root)) out.push(...findAllRunNumberFields(v, runId, numberKeyPattern, _seen));
+    return out;
+  }
+  for (const v of root as unknown[]) out.push(...findAllRunNumberFields(v, runId, numberKeyPattern, _seen));
+  return out;
+}
+function requireExactlyOneRunCost(root: unknown, runId: string, numberKeyPattern: RegExp): { value: number; count: number } | { value: null; count: number } {
+  const all = findAllRunNumberFields(root, runId, numberKeyPattern);
+  if (all.length === 1) return { value: all[0]!, count: 1 };
+  return { value: null, count: all.length };
 }
 // Used by the Codex cache-inclusive probe: navigates to the FIRST object
 // anywhere in `root` that mentions `runId` as one of its own values (reusing
@@ -2127,6 +2227,7 @@ function writeRetryProbeClaude(dir: string, name: string, usage: ProbeUsage, cos
   const counterPath = path.join(dir, `${name}-attempts`);
   const script = `#!/usr/bin/env node
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const counterPath = ${JSON.stringify(counterPath)};
 const args = process.argv.slice(2);
 if (args.includes('--version')) { process.stdout.write(${JSON.stringify(`1.0.${randomNonce(4)}`)} + '\\n'); process.exit(0); }
@@ -2141,7 +2242,7 @@ if (attempts === 0) {
   setTimeout(() => process.exit(1), 20);
 } else {
   line({ type: 'system', subtype: 'init', model: ${JSON.stringify(C17_KNOWN_MODEL)} });
-  line({ type: 'assistant', message: { id: 'msg_retry', role: 'assistant', content: [{ type: 'text', text: 'recovered after retry' }], stop_reason: 'end_turn' } });
+  line({ type: 'assistant', message: { id: 'msg_' + crypto.randomBytes(6).toString('hex'), role: 'assistant', content: [{ type: 'text', text: 'recovered after retry' }], stop_reason: 'end_turn' } });
   line({ type: 'result', subtype: 'success', usage: ${JSON.stringify(usage)}, total_cost_usd: ${JSON.stringify(costUsd)}, duration_ms: 5, stop_reason: 'end_turn' });
   setTimeout(() => process.exit(0), 30);
 }
@@ -2160,12 +2261,17 @@ if (attempts === 0) {
 // then fails with an upstream drop. Every later invocation succeeds.
 // Records argv per invocation so the criterion can assert --session-id /
 // --resume.
+// FIDELITY ROUND FIX (residual item 7): both this and the retry fake above
+// generate their assistant/tool_use message ids with crypto.randomBytes
+// inside the spawned script, not the fixed literals ('msg_retry',
+// 'msg_resume0'/'toolu_resume0'/'msg_resume') a prior round left in place.
 function writeResumeProbeClaude(dir: string, name: string, failUsage: ProbeUsage, failCostUsd: number, resumeUsage: ProbeUsage, resumeCostUsd: number): { bin: string; argsLogPath: string } {
   const bin = path.join(dir, name);
   const counterPath = path.join(dir, `${name}-attempts`);
   const argsLogPath = path.join(dir, `${name}-args.jsonl`);
   const script = `#!/usr/bin/env node
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const counterPath = ${JSON.stringify(counterPath)};
 const argsLogPath = ${JSON.stringify(argsLogPath)};
 const args = process.argv.slice(2);
@@ -2179,7 +2285,7 @@ fs.appendFileSync(argsLogPath, JSON.stringify(args) + '\\n');
 function line(o) { process.stdout.write(JSON.stringify(o) + '\\n'); }
 line({ type: 'system', subtype: 'init', model: ${JSON.stringify(C17_KNOWN_MODEL)} });
 if (attempts === 0) {
-  line({ type: 'assistant', message: { id: 'msg_resume0', role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_resume0', name: 'Bash', input: { command: 'echo working' } }], stop_reason: 'tool_use' } });
+  line({ type: 'assistant', message: { id: 'msg_' + crypto.randomBytes(6).toString('hex'), role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_' + crypto.randomBytes(6).toString('hex'), name: 'Bash', input: { command: 'echo working' } }], stop_reason: 'tool_use' } });
   // EMPIRICALLY CONFIRMED (scratchpad probe-resume.mjs, live daemon):
   // stop_reason MUST be 'tool_use' here. apps/daemon/src/runtimes/
   // chat-run-lifecycle.ts's applyClaudeStreamJsonRunBookkeeping treats ANY
@@ -2195,7 +2301,7 @@ if (attempts === 0) {
   process.stderr.write('Upstream request failed: HTTP 503 stream disconnected before completion.\\n');
   setTimeout(() => process.exit(1), 20);
 } else {
-  line({ type: 'assistant', message: { id: 'msg_resume', role: 'assistant', content: [{ type: 'text', text: 'recovered after resume' }], stop_reason: 'end_turn' } });
+  line({ type: 'assistant', message: { id: 'msg_' + crypto.randomBytes(6).toString('hex'), role: 'assistant', content: [{ type: 'text', text: 'recovered after resume' }], stop_reason: 'end_turn' } });
   line({ type: 'result', subtype: 'success', usage: ${JSON.stringify(resumeUsage)}, total_cost_usd: ${JSON.stringify(resumeCostUsd)}, duration_ms: 5, stop_reason: 'end_turn' });
   setTimeout(() => process.exit(0), 30);
 }
@@ -2316,10 +2422,16 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
       // run's own id and reading a cost/price/usd-shaped numeric sibling
       // from THAT SAME object -- not a generic "any number anywhere" scan,
       // which would be too easily satisfied by an unrelated field.
-      const cost1 = findRunNumberField(body, run1.runId, /cost|price|usd|spend/i);
-      const cost2 = findRunNumberField(body, run2.runId, /cost|price|usd|spend/i);
-      if (cost1 === null) problems.push(`no numeric cost/price field found associated with run1's id (${run1.runId}) in the project usage response`);
-      if (cost2 === null) problems.push(`no numeric cost/price field found associated with run2's id (${run2.runId})`);
+      // FIDELITY ROUND FIX (residual item 1, first defect): requires the
+      // match to be UNAMBIGUOUS (exactly one run-scoped record), not merely
+      // "at least one" (findRunNumberField's first-match semantics could
+      // never distinguish one correct record from a duplicated/decoy one).
+      const cost1Unique = requireExactlyOneRunCost(body, run1.runId, /cost|price|usd|spend/i);
+      const cost2Unique = requireExactlyOneRunCost(body, run2.runId, /cost|price|usd|spend/i);
+      const cost1 = cost1Unique.value;
+      const cost2 = cost2Unique.value;
+      if (cost1 === null) problems.push(`expected exactly one numeric cost/price field associated with run1's id (${run1.runId}) in the project usage response, found ${cost1Unique.count}`);
+      if (cost2 === null) problems.push(`expected exactly one numeric cost/price field associated with run2's id (${run2.runId}), found ${cost2Unique.count}`);
       if (cost1 !== null && cost2 !== null && !(cost2 > cost1)) {
         problems.push(`run2 (far more tokens incl. cache: ${JSON.stringify(usage2)}) costs ${cost2}, not greater than run1's ${cost1} (${JSON.stringify(usage1)}) -- cost is not tracking token volume`);
       }
@@ -2373,6 +2485,13 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
         writeRetryProbeClaude(retryFakeBinDir, 'claude', retryUsage, 0);
         retryDaemon = await bootDaemon({ extraPathDirs: [retryFakeBinDir] });
         const retryProjectId = await createProject(retryDaemon.url, randomNonce(8));
+        // FIDELITY ROUND FIX (residual items 1 + 6, before/after): a fresh
+        // project with ZERO runs is a genuine, queryable "before" baseline
+        // -- read it BEFORE the retry-probe run exists, not synthesized in
+        // JS, so the delta this run adds is measured against a real HTTP
+        // observation, not merely an expected constant.
+        const retryBeforeResp = await httpJson('GET', projectRouteUrl(retryDaemon.url, projectRoute.routePath, retryProjectId));
+        const retryAggregateBefore = retryBeforeResp.status === 200 ? (readAggregateAtPath(retryBeforeResp.json, fieldPath) ?? 0) : 0;
         const retryRun = await startRun(retryDaemon.url, { projectId: retryProjectId, agentId: 'claude', model: C17_KNOWN_MODEL, message: randomNonce(10) });
         const retryStatus = await pollRunTerminal(retryDaemon.url, retryRun.runId, 20_000);
         const retryEvents = await readRunEventsViaSse(retryDaemon.url, retryRun.runId, 15_000);
@@ -2397,13 +2516,20 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
         if (retryUsageResp.status !== 200) {
           problems.push(`RETRY: GET ${projectRoute.routePath} on the retry-probe project did not return 200 (status=${retryUsageResp.status})`);
         } else {
-          const retryCost = findRunNumberField(retryUsageResp.json, retryRun.runId, /cost|price|usd|spend/i);
-          if (retryCost === null) {
-            problems.push(`RETRY: no numeric cost/price field bound to the retry-probe run's id (${retryRun.runId})`);
+          // FIDELITY ROUND FIX (residual item 1, first defect): require
+          // EXACTLY one run-scoped cost record, not merely "at least one."
+          const retryCostUnique = requireExactlyOneRunCost(retryUsageResp.json, retryRun.runId, /cost|price|usd|spend/i);
+          if (retryCostUnique.value === null) {
+            problems.push(`RETRY: expected exactly one numeric cost/price field bound to the retry-probe run's id (${retryRun.runId}), found ${retryCostUnique.count}`);
           } else {
-            const retryAggregate = readAggregateAtPath(retryUsageResp.json, fieldPath);
-            if (retryAggregate === null) problems.push(`RETRY: no value at the accepted aggregate field path ("${fieldPath}") in the retry-probe project's usage response`);
-            else if (Math.abs(retryAggregate - retryCost) > 1e-6) problems.push(`RETRY: project aggregate (${retryAggregate}) does not equal exactly the one successful attempt's own cost (${retryCost}) in a project containing only that one run -- attempt 0's (unemitted) usage was charged, or the successful attempt was double-counted`);
+            // FIDELITY ROUND FIX (residual items 1 + 6, before/after): the
+            // AFTER aggregate minus the REAL, independently-observed BEFORE
+            // baseline must equal exactly the one successful attempt's own
+            // cost -- proving the ruled increase, not just a post-hoc
+            // equality against a JS-computed constant.
+            const retryAggregateAfter = readAggregateAtPath(retryUsageResp.json, fieldPath);
+            if (retryAggregateAfter === null) problems.push(`RETRY: no value at the accepted aggregate field path ("${fieldPath}") in the retry-probe project's usage response`);
+            else if (Math.abs((retryAggregateAfter - retryAggregateBefore) - retryCostUnique.value) > 1e-6) problems.push(`RETRY: aggregate delta (before=${retryAggregateBefore}, after=${retryAggregateAfter}, delta=${retryAggregateAfter - retryAggregateBefore}) does not equal exactly the one successful attempt's own cost (${retryCostUnique.value}) -- attempt 0's (unemitted) usage was charged, or the successful attempt was double-counted`);
           }
         }
 
@@ -2414,6 +2540,13 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
         const { argsLogPath: resumeArgsLogPath } = writeResumeProbeClaude(resumeFakeBinDir, 'claude', failUsage, 0, resumeUsage, 0);
         resumeDaemon = await bootDaemon({ extraPathDirs: [resumeFakeBinDir] });
         const resumeProjectId = await createProject(resumeDaemon.url, randomNonce(8));
+        // FIDELITY ROUND FIX (residual items 1 + 6, before/after): a real
+        // HTTP "before" baseline for a fresh, zero-run project, queried
+        // before ANY run exists -- the failed-turn and continued-turn
+        // deltas below are each measured against a genuinely observed
+        // prior snapshot, not a JS-computed expectation.
+        const resumeBeforeResp = await httpJson('GET', projectRouteUrl(resumeDaemon.url, projectRoute.routePath, resumeProjectId));
+        const resumeAggregateBefore = resumeBeforeResp.status === 200 ? (readAggregateAtPath(resumeBeforeResp.json, fieldPath) ?? 0) : 0;
         // EMPIRICALLY CONFIRMED (scratchpad probe-resume.mjs): `model` is
         // deliberately OMITTED here. `od run continue` (cli.ts's `case
         // 'continue'`) never sends a `model` field in its POST body, so the
@@ -2431,6 +2564,25 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
         if (failedStatus.resumable !== true) problems.push(`RESUME: first turn resumable=${String(failedStatus.resumable)}, expected true`);
         const nativeRecovery = failedStatus.nativeSessionRecovery;
         if (!isRecord(nativeRecovery) || nativeRecovery.state !== 'captured_not_resumed') problems.push(`RESUME: first turn nativeSessionRecovery.state="${isRecord(nativeRecovery) ? String(nativeRecovery.state) : '(absent)'}", expected "captured_not_resumed"`);
+        // FIDELITY ROUND FIX (residual items 1 + 6, before/after): a MID
+        // snapshot taken right after the failed turn, BEFORE the continue
+        // call -- binds the failed-turn usage's own before/after delta at
+        // its own point in time, independent of whatever the continuation
+        // later adds.
+        const resumeMidResp = await httpJson('GET', projectRouteUrl(resumeDaemon.url, projectRoute.routePath, resumeProjectId));
+        let resumeAggregateMid: number | null = null;
+        if (resumeMidResp.status !== 200) {
+          problems.push(`RESUME: GET ${projectRoute.routePath} on the resume-probe project (mid, after the failed turn) did not return 200 (status=${resumeMidResp.status})`);
+        } else {
+          const failedCostUnique = requireExactlyOneRunCost(resumeMidResp.json, failedRun.runId, /cost|price|usd|spend/i);
+          if (failedCostUnique.value === null) {
+            problems.push(`RESUME: expected exactly one numeric cost bound to the failed run's id (${failedRun.runId}), found ${failedCostUnique.count} -- the controlled failed-turn usage was not bound to it`);
+          } else {
+            resumeAggregateMid = readAggregateAtPath(resumeMidResp.json, fieldPath);
+            if (resumeAggregateMid === null) problems.push(`RESUME: no value at the accepted aggregate field path ("${fieldPath}") in the mid (post-failed-turn) resume-probe response`);
+            else if (Math.abs((resumeAggregateMid - resumeAggregateBefore) - failedCostUnique.value) > 1e-6) problems.push(`RESUME: aggregate delta after the failed turn (before=${resumeAggregateBefore}, mid=${resumeAggregateMid}) does not equal exactly its own cost (${failedCostUnique.value})`);
+          }
+        }
         const continueResp = odCli(resumeDaemon.url, resumeDaemon.dataDir, ['run', 'continue', failedRun.runId, '--json'], {}, 30_000);
         let continueJson: unknown = null;
         // EMPIRICALLY CONFIRMED (scratchpad probe): `od run continue --json`
@@ -2462,18 +2614,23 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
             if (!secondResumeId) problems.push(`RESUME: second invocation's argv carries no --resume flag (argv=${JSON.stringify(argvLog[1])})`);
             else if (secondResumeId !== firstSessionId) problems.push(`RESUME: second invocation's --resume value ("${secondResumeId}") does not equal the first invocation's --session-id ("${firstSessionId}")`);
           }
-          const resumeUsageResp = await httpJson('GET', projectRouteUrl(resumeDaemon.url, projectRoute.routePath, resumeProjectId));
-          if (resumeUsageResp.status !== 200) {
-            problems.push(`RESUME: GET ${projectRoute.routePath} on the resume-probe project did not return 200 (status=${resumeUsageResp.status})`);
+          // FIDELITY ROUND FIX (residual items 1 + 6, before/after): the
+          // FINAL snapshot's delta is measured against the MID snapshot
+          // (immediately after the failed turn), not synthesized -- proving
+          // the continued turn's own addition in isolation.
+          const resumeAfterResp = await httpJson('GET', projectRouteUrl(resumeDaemon.url, projectRoute.routePath, resumeProjectId));
+          if (resumeAfterResp.status !== 200) {
+            problems.push(`RESUME: GET ${projectRoute.routePath} on the resume-probe project (final, after the continued turn) did not return 200 (status=${resumeAfterResp.status})`);
           } else {
-            const failedCost = findRunNumberField(resumeUsageResp.json, failedRun.runId, /cost|price|usd|spend/i);
-            const continuedCost = findRunNumberField(resumeUsageResp.json, continuedRunId, /cost|price|usd|spend/i);
-            if (failedCost === null) problems.push(`RESUME: no numeric cost bound to the failed run's id (${failedRun.runId}) -- the controlled failed-turn usage was not bound to it`);
-            if (continuedCost === null) problems.push(`RESUME: no numeric cost bound to the continued run's id (${continuedRunId})`);
-            if (failedCost !== null && continuedCost !== null) {
-              const resumeAggregate = readAggregateAtPath(resumeUsageResp.json, fieldPath);
-              if (resumeAggregate === null) problems.push(`RESUME: no value at the accepted aggregate field path ("${fieldPath}") in the resume-probe project's usage response`);
-              else if (Math.abs(resumeAggregate - (failedCost + continuedCost)) > 1e-6) problems.push(`RESUME: project aggregate (${resumeAggregate}) does not equal failed-turn cost + continued-turn cost (${failedCost + continuedCost})`);
+            const continuedCostUnique = requireExactlyOneRunCost(resumeAfterResp.json, continuedRunId, /cost|price|usd|spend/i);
+            if (continuedCostUnique.value === null) {
+              problems.push(`RESUME: expected exactly one numeric cost bound to the continued run's id (${continuedRunId}), found ${continuedCostUnique.count}`);
+            } else if (resumeAggregateMid === null) {
+              problems.push('RESUME: cannot verify the continued turn\'s aggregate delta because the mid (post-failed-turn) snapshot was unavailable');
+            } else {
+              const resumeAggregateAfter = readAggregateAtPath(resumeAfterResp.json, fieldPath);
+              if (resumeAggregateAfter === null) problems.push(`RESUME: no value at the accepted aggregate field path ("${fieldPath}") in the final resume-probe response`);
+              else if (Math.abs((resumeAggregateAfter - resumeAggregateMid) - continuedCostUnique.value) > 1e-6) problems.push(`RESUME: aggregate delta after the continued turn (mid=${resumeAggregateMid}, after=${resumeAggregateAfter}) does not equal exactly its own cost (${continuedCostUnique.value})`);
             }
           }
         }
@@ -2482,12 +2639,24 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
         // NAMED failure (the GET-status/field-lookup problems pushed) --
         // never a substituted pure-function call.
         const codexFakeBinDir = mkFakeBinDir();
-        const codexHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w1-verify-codex-home-'));
+        // FIDELITY ROUND FIX (residual item 7, fourth defect): the prefix
+        // "od-w1-verify-codex-home-" carried stable classifier words
+        // ("w1", "verify") into CODEX_HOME, a value the REAL daemon reads
+        // (spawnEnvForAgent passes it through to the codex child, and the
+        // future usage route's own codex-rollout-usage.ts reads it via
+        // opts.codexHome) -- product code could pattern-match on it. No
+        // descriptive prefix at all now; mkdtempSync still appends its own
+        // random suffix to whatever prefix path is given.
+        const codexHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), randomNonce(6)));
         const rolloutInputTokens = 1000;
         const rolloutCachedTokens = 400;
         writeFakeCodexRolloutScript(codexFakeBinDir, 'codex', rolloutInputTokens, rolloutCachedTokens);
         codexDaemon = await bootDaemon({ extraPathDirs: [codexFakeBinDir], extraEnv: { CODEX_HOME: codexHomeDir } });
         const codexProjectId = await createProject(codexDaemon.url, randomNonce(8));
+        // FIDELITY ROUND FIX (residual items 1 + 6, before/after): a real
+        // HTTP "before" baseline for this fresh, zero-run project.
+        const codexBeforeResp = await httpJson('GET', projectRouteUrl(codexDaemon.url, projectRoute.routePath, codexProjectId));
+        const codexAggregateBefore = codexBeforeResp.status === 200 ? (readAggregateAtPath(codexBeforeResp.json, fieldPath) ?? 0) : 0;
         const codexRun = await startRun(codexDaemon.url, { projectId: codexProjectId, agentId: 'codex', model: 'gpt-5.6-codex', message: randomNonce(10), context: {} });
         const codexRunStatus = await pollRunTerminal(codexDaemon.url, codexRun.runId, 30_000);
         if (codexRunStatus.status !== 'succeeded') problems.push(`CACHE-INCLUSIVE: codex run status="${String(codexRunStatus.status)}", expected "succeeded"`);
@@ -2502,18 +2671,27 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
           if (codexCacheRead === null) problems.push(`CACHE-INCLUSIVE: no cache_read_input_tokens/cacheReadInputTokens field found bound to the codex run (${codexRun.runId})`);
           else if (codexCacheRead !== rolloutCachedTokens) problems.push(`CACHE-INCLUSIVE: codex run's cache_read_input_tokens = ${codexCacheRead}, expected ${rolloutCachedTokens}`);
           const codexScoped = findRunScopedRecord(codexUsageResp.json, codexRun.runId);
-          const codexCost = findRunNumberField(codexUsageResp.json, codexRun.runId, /cost|price|usd|spend/i);
+          // FIDELITY ROUND FIX (residual item 1, first defect): exactly one.
+          const codexCostUnique = requireExactlyOneRunCost(codexUsageResp.json, codexRun.runId, /cost|price|usd|spend/i);
           const codexUnavailable = codexScoped ? findPricingUnavailableField(codexScoped) : null;
-          if (codexCost === null && !codexUnavailable) problems.push('CACHE-INCLUSIVE: the codex run has neither a numeric cost field nor an honest pricing-unavailable marker bound to its own record');
-          const codexAggregate = readAggregateAtPath(codexUsageResp.json, fieldPath);
-          if (codexAggregate === null) {
+          if (codexCostUnique.value === null && codexCostUnique.count > 0) problems.push(`CACHE-INCLUSIVE: expected exactly one numeric cost/price field bound to the codex run (${codexRun.runId}), found ${codexCostUnique.count}`);
+          if (codexCostUnique.value === null && codexCostUnique.count === 0 && !codexUnavailable) problems.push('CACHE-INCLUSIVE: the codex run has neither a numeric cost field nor an honest pricing-unavailable marker bound to its own record');
+          const codexAggregateAfter = readAggregateAtPath(codexUsageResp.json, fieldPath);
+          if (codexAggregateAfter === null) {
             problems.push(`CACHE-INCLUSIVE: no value at the accepted aggregate field path ("${fieldPath}") in the codex-probe project's usage response -- the codex lane is not participating in the same aggregate rules as the claude runs`);
-          } else if (codexCost !== null) {
-            if (Math.abs(codexAggregate - codexCost) > 1e-6) problems.push(`CACHE-INCLUSIVE: project aggregate (${codexAggregate}) does not match the codex run's own cost (${codexCost}) in a project containing only that one run`);
+          } else if (codexCostUnique.value !== null) {
+            // FIDELITY ROUND FIX (residual items 1 + 6, before/after): the
+            // real observed delta (after minus a real "before" baseline)
+            // must equal exactly the codex run's own cost.
+            if (Math.abs((codexAggregateAfter - codexAggregateBefore) - codexCostUnique.value) > 1e-6) problems.push(`CACHE-INCLUSIVE: aggregate delta (before=${codexAggregateBefore}, after=${codexAggregateAfter}) does not equal exactly the codex run's own cost (${codexCostUnique.value})`);
           } else {
             const bodyText = JSON.stringify(codexUsageResp.json).toLowerCase();
             const hasPartialityMarker = ['partial', 'incomplete', 'unavailable', 'unpricedcount', 'unavailablecount'].some((m) => bodyText.includes(m));
             if (!hasPartialityMarker) problems.push('CACHE-INCLUSIVE: no numeric cost was found for the codex run and no partiality/unavailable marker is present -- an unpriced lane must be explained, not silent');
+            // An unpriced/partial lane must leave the aggregate GENUINELY
+            // unchanged (before === after), not merely carry a marker while
+            // silently drifting the number.
+            else if (Math.abs(codexAggregateAfter - codexAggregateBefore) > 1e-6) problems.push(`CACHE-INCLUSIVE: the codex run has no cost and a partiality marker, but the aggregate still changed (before=${codexAggregateBefore}, after=${codexAggregateAfter}) -- an unpriced lane must not silently move the aggregate`);
           }
         }
       }
@@ -2633,11 +2811,18 @@ function fillUiEntryPointPlaceholders(template: string, values: { projectId: str
 interface RenderedMoneyMatch { raw: string; value: number; fractionDigits: number; bound: 'exact' | 'lt' | 'lte' }
 function extractRenderedMoneyMatches(text: string): RenderedMoneyMatch[] {
   const out: RenderedMoneyMatch[] = [];
-  const re = /(<=|≤|<)?\s*(?:\$|US\$|USD)?\s*([0-9][0-9,.\s ']*[0-9]|[0-9])\s*(?:\$|USD)?/g;
+  // FIDELITY ROUND FIX (residual item 5, first defect): the currency
+  // marker used to be optional on BOTH sides at once ((?:$|US$|USD)?
+  // before AND after), so a bare number with no $/USD anywhere satisfied
+  // the money oracle. This requires a marker on at least one side via
+  // two mutually exclusive alternatives -- prefix-currency+number, or
+  // number+suffix-currency -- never both absent.
+  const NUM = "[0-9][0-9,.\\s\u00a0']*[0-9]|[0-9]";
+  const re = new RegExp(`(<=|≤|<)?\\s*(?:(?:\\$|US\\$|USD)\\s*(${NUM})|(${NUM})\\s*(?:\\$|USD))`, 'g');
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
     const boundToken = m[1];
-    const numRaw = m[2]!;
+    const numRaw = (m[2] ?? m[3])!;
     const cleaned = numRaw.replace(/[\s ']/g, '');
     const lastDot = cleaned.lastIndexOf('.');
     const lastComma = cleaned.lastIndexOf(',');
@@ -2649,9 +2834,11 @@ function extractRenderedMoneyMatches(text: string): RenderedMoneyMatch[] {
       fractionPart = '';
     } else {
       const after = cleaned.slice(decimalIdx + 1);
-      // Only treat as a decimal separator when 1-4 digits follow (a real
-      // fractional amount); otherwise it is pure grouping (e.g. "1,234").
-      if (after.length >= 1 && after.length <= 4 && /^[0-9]+$/.test(after)) {
+      // FIDELITY ROUND FIX (residual item 5, second defect): the upper
+      // bound (<=4 digits) contradicted "arbitrary displayed precision" --
+      // any 1+ digit run after the last separator is now accepted as the
+      // fraction; otherwise (no digits following) it is pure grouping.
+      if (after.length >= 1 && /^[0-9]+$/.test(after)) {
         integerPart = cleaned.slice(0, decimalIdx).replace(/[.,]/g, '');
         fractionPart = after;
       } else {
@@ -2810,10 +2997,18 @@ await checkCriterion('C1-8', 'cli.ts SUBCOMMAND_MAP diff + capability-manifest.j
                 // "require the surface to issue the manifest-bound usage GET").
                 // route.continue() lets the real request proceed unmodified --
                 // this observes, it does not mock/fulfill.
+                // FIDELITY ROUND FIX (residual item 5, third defect): the
+                // glob only matched the STATIC route shape, so any GET to
+                // that shape for ANY project (e.g. a stray background poll
+                // for a different project) satisfied it. The observed
+                // request's own URL must contain the SPECIFIC controlled
+                // project id this check created (uiProjectId) -- binding
+                // the observation to the actual controlled resource, not
+                // just the route pattern.
                 let boundRequestObserved = false;
                 const boundPathGlob = `**${normalizeRoutePath(boundRoute.routePath).replace(/:param/g, '*')}*`;
                 await page.route(boundPathGlob, async (route) => {
-                  if (route.request().method() === 'GET') boundRequestObserved = true;
+                  if (route.request().method() === 'GET' && route.request().url().includes(uiProjectId)) boundRequestObserved = true;
                   await route.continue();
                 });
                 await page.goto(`${webSuite.webUrl}${resolvedPath}`, { waitUntil: 'load', timeout: 30_000 });
@@ -3663,7 +3858,18 @@ const manifestOut = {
 const manifestWrite = writeManifestSafely(manifestOut);
 let manifestSha256 = 'unavailable';
 if (manifestWrite.wroteOk) {
-  try { manifestSha256 = sha256File(manifestWrite.path); fs.writeFileSync(path.join(proofDir, 'manifest.sha256.txt'), `${manifestSha256}\n`); } catch { manifestSha256 = 'unavailable'; }
+  // FIDELITY ROUND FIX (residual item 8, first defect): this used to write
+  // manifest.sha256.txt directly (fs.writeFileSync straight to the final
+  // path), unlike manifest.json's own tmp-then-rename write in
+  // writeManifestSafely above -- a crash mid-write could leave a truncated
+  // sha256 sidecar. Same tmp+rename atomic pattern now.
+  try {
+    manifestSha256 = sha256File(manifestWrite.path);
+    const shaPath = path.join(proofDir, 'manifest.sha256.txt');
+    const shaTmp = `${shaPath}.tmp-${process.pid}`;
+    fs.writeFileSync(shaTmp, `${manifestSha256}\n`);
+    fs.renameSync(shaTmp, shaPath);
+  } catch { manifestSha256 = 'unavailable'; }
 }
 
 // =============================================================================
@@ -3677,13 +3883,27 @@ if (manifestWrite.wroteOk) {
 // this chain forces a nonzero exit regardless of the criteria results
 // above.
 // =============================================================================
+// FIDELITY ROUND FIX (residual item 8, second defect): rereading an
+// artifact's hash proved the FILE was unchanged, but never that the file
+// actually lived inside THIS invocation's exclusive archive directory --
+// artifactFor()'s own fallback write path (see its definition above) can
+// degrade to a REUSED, non-exclusive /tmp location when the primary write
+// fails, and that degraded artifact would still reread/verify cleanly.
+// Every artifact must be contained within `runDir` or it is a violation,
+// regardless of whether its hash matches.
+function isContainedInRunDir(candidate: string): boolean {
+  const rel = path.relative(runDir, candidate);
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
 function verifyArchiveIntegrity(criteria: CriterionResult[], writtenManifestPath: string, writtenManifestWroteOk: boolean, expectedManifestSha256: string): string[] {
   const violations: string[] = [];
   if (!writtenManifestWroteOk) { violations.push('run manifest.json was not written successfully to the archive directory'); return violations; }
+  if (!isContainedInRunDir(writtenManifestPath)) violations.push(`manifest path ${writtenManifestPath} is not contained within this invocation's exclusive archive directory (${runDir})`);
   const rereadManifestSha = sha256FileSafe(writtenManifestPath);
   if (rereadManifestSha !== expectedManifestSha256) violations.push(`rereading ${writtenManifestPath} produced sha256 ${String(rereadManifestSha)}, expected ${expectedManifestSha256} (manifest write did not verify)`);
   for (const r of criteria) {
     if (r.artifact === null || r.artifactSha256 === null) { violations.push(`criterion ${r.id} has no artifact on disk (artifact write failed at record time)`); continue; }
+    if (!isContainedInRunDir(r.artifact)) { violations.push(`criterion ${r.id}'s artifact ${r.artifact} is not contained within this invocation's exclusive archive directory (${runDir}) -- likely a degraded fallback write outside the immutable archive`); continue; }
     const rereadSha = sha256FileSafe(r.artifact);
     if (rereadSha === null) violations.push(`criterion ${r.id}'s artifact ${r.artifact} could not be reread from disk`);
     else if (rereadSha !== r.artifactSha256) violations.push(`criterion ${r.id}'s artifact ${r.artifact} rereads as sha256 ${rereadSha}, expected ${r.artifactSha256} (artifact changed after being recorded)`);
@@ -3705,20 +3925,27 @@ function promoteCanonicalManifestCopies(archivedManifestPath: string, expectedMa
     return `canonical manifest replacement failed: ${String((err as Error)?.message ?? err)}`;
   }
 }
+// FIDELITY ROUND FIX (residual item 8, third defect): canonical promotion
+// used to happen BEFORE prior-archive hashes were reverified, so if THIS
+// run had somehow disturbed a PRIOR run's evidence, the canonical
+// manifest.json could already point at a compromised "latest" run before
+// that violation was even detected. Both checks -- this run's own
+// artifacts/manifest AND every previously-archived file's hash-snapshot --
+// are now gathered BEFORE any promotion decision is made.
 if (manifestSha256 === 'unavailable') archiveIntegrityViolations.push('manifest.sha256.txt could not be computed/written for this run\'s archive');
 archiveIntegrityViolations.push(...verifyArchiveIntegrity(results, manifestWrite.path, manifestWrite.wroteOk, manifestSha256));
-if (archiveIntegrityViolations.length === 0) {
-  const promoteError = promoteCanonicalManifestCopies(manifestWrite.path, manifestSha256);
-  if (promoteError) archiveIntegrityViolations.push(promoteError);
-} else {
-  console.log(`  ⚠ archive integrity violation(s) before promotion -- canonical manifest.json/manifest.sha256.txt left untouched: ${archiveIntegrityViolations.join('; ')}`);
-}
 // Re-verify every file a PRIOR invocation already archived is still exactly
 // what the startup snapshot recorded -- this run must not have collided
 // with, overwritten, or otherwise disturbed another run's evidence.
 for (const [f, expectedHash] of preExistingArchiveHashes) {
   const nowHash = sha256FileSafe(f);
   if (nowHash !== expectedHash) archiveIntegrityViolations.push(`previously-archived file changed during this run: ${f} (was ${String(expectedHash)}, now ${String(nowHash)})`);
+}
+if (archiveIntegrityViolations.length === 0) {
+  const promoteError = promoteCanonicalManifestCopies(manifestWrite.path, manifestSha256);
+  if (promoteError) archiveIntegrityViolations.push(promoteError);
+} else {
+  console.log(`  ⚠ archive integrity violation(s) -- canonical manifest.json/manifest.sha256.txt left untouched: ${archiveIntegrityViolations.join('; ')}`);
 }
 
 const hardFailures = results.filter((r) => r.status === 'fail');
