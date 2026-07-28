@@ -1884,7 +1884,7 @@ async function main(): Promise<void> {
     const mdRel = 'docs/testing/scale-baseline-2026-07.md';
     const jsonRel = 'docs/testing/scale-baseline-2026-07.json';
     if (!fileExists(mdRel) || !fileExists(jsonRel)) { record('C0-9', '', '', false, '', { detail: `missing: ${!fileExists(mdRel) ? mdRel : ''} ${!fileExists(jsonRel) ? jsonRel : ''}`.trim() }); return; }
-    interface BaselineJson { corpus: { path: string; sha256: string; isRealStoreSnapshot?: boolean; realStoreFingerprint?: string }; machine: { fingerprint: string }; warmup: { iterations: number }; scenarios: { name: string; samplesMs: number[]; p50: number; p95: number; toleranceBandPct?: number }[]; nonRegressionCeiling: number; minimumImprovementThreshold: number; version: string }
+    interface BaselineJson { corpus: { path: string; sha256: string; isRealStoreSnapshot?: boolean; realStoreFingerprint?: string }; machine: { fingerprint: string }; warmup: { iterations: number }; scenarios: { name: string; samplesMs: number[]; p50: number; p95: number; toleranceBandPct?: number }[]; searchProbe?: { projectId: string; needle: string; expectFile: string }; nonRegressionCeiling: number; minimumImprovementThreshold: number; version: string }
     let baseline: BaselineJson;
     try { baseline = JSON.parse(readRepoFile(jsonRel)) as BaselineJson; } catch (err) { record('C0-9', '', '', false, '', { detail: `invalid JSON: ${String(err)}` }); return; }
     const problems: string[] = [];
@@ -1981,24 +1981,29 @@ async function main(): Promise<void> {
         const daemon = await bootDaemonForProbing(baseline.corpus.path);
         try {
           const fanoutRoute = daemon.routeInventory.find((r) => r.method === 'GET' && /projects\/:[a-zA-Z]+\/files/i.test(r.path));
-          // r2/r2b amendment 2026-07-27/28: the original /search/i first-match
-          // picked POST /api/xai/search (external network API, 401 without
-          // credentials); the r2 preference for the library search route then
-          // resolved to POST /api/tools/library/search, which is tool-token
-          // gated BY DESIGN (agent tool track) and 401s for any bare local
-          // probe. Neither can ever satisfy httpOkAll. The daemon's genuinely
-          // locally-probeable real search surface is GET
-          // /api/projects/:id/search (unauthenticated, real file search over
-          // PROJECTS_DIR), so the scenario resolves a REAL project id from
-          // the booted corpus and times that search at store scale.
-          let searchProjectId: string | null = null;
-          try {
+          // r2/r2b/r2c amendments 2026-07-27/28: the original /search/i
+          // first-match picked POST /api/xai/search (external, 401 without
+          // credentials); r2's library-search preference resolved to the
+          // tool-token-gated agent route (401 by design); r2b's first-project
+          // + expect-empty-200 was itself gameable (the route returns 200/[]
+          // even for a missing directory, so a list-only/always-empty search
+          // passes -- Sol r3 REJECT). The committed baseline now BINDS a
+          // frozen probe target {projectId, needle, expectFile} whose needle
+          // provably exists in the content-hash-bound corpus: the scenario
+          // requires a POSITIVE hit (needle -> >=1 match naming expectFile)
+          // and a NEGATIVE control (random nonce -> 2xx with zero matches),
+          // both against the declared project. Timing measures the positive
+          // probe -- the real search work.
+          const searchProbe = baseline.searchProbe;
+          let searchProbeUsable = false;
+          if (!searchProbe || typeof searchProbe.projectId !== 'string' || !searchProbe.projectId || typeof searchProbe.needle !== 'string' || !searchProbe.needle || typeof searchProbe.expectFile !== 'string' || !searchProbe.expectFile) {
+            problems.push('baseline.searchProbe {projectId, needle, expectFile} is required for the search scenario and is missing or invalid');
+          } else {
             const pr = await fetch(`${daemon.url}/api/projects`).catch(() => null);
             const pj = pr && pr.ok ? ((await pr.json().catch(() => null)) as { projects?: { id?: unknown }[] } | null) : null;
-            const first = Array.isArray(pj?.projects) ? pj.projects.find((p) => typeof p?.id === 'string' && (p.id as string).length > 0) : undefined;
-            searchProjectId = (first?.id as string | undefined) ?? null;
-          } catch {
-            searchProjectId = null;
+            const listed = Array.isArray(pj?.projects) && pj.projects.some((p) => p?.id === searchProbe.projectId);
+            if (!listed) problems.push(`searchProbe.projectId ${searchProbe.projectId} is not present in GET /api/projects on the booted corpus`);
+            else searchProbeUsable = true;
           }
 
           async function timedRun(fn: () => Promise<boolean>): Promise<{ samplesMs: number[]; httpOkAll: boolean }> {
@@ -2034,12 +2039,26 @@ async function main(): Promise<void> {
             smoke['memory-high-water'] = { samplesMs: rssSamples, p50: percentile(sortedRss, 0.5), p95: percentile(sortedRss, 0.95), httpOkAll: rssSamples.length > 0 };
           } else smoke['memory-high-water'] = { samplesMs: [], p50: 0, p95: 0, httpOkAll: false };
 
-          if (searchProjectId) {
+          if (searchProbeUsable && searchProbe) {
+            const searchUrl = (q: string) => `${daemon.url}/api/projects/${encodeURIComponent(searchProbe.projectId)}/search?q=${encodeURIComponent(q)}`;
             const searchRun = await timedRun(async () => {
-              const r = await fetch(`${daemon.url}/api/projects/${encodeURIComponent(searchProjectId)}/search?q=w0-verifier-smoke`).catch(() => null);
-              return !!r && r.ok;
+              const r = await fetch(searchUrl(searchProbe.needle)).catch(() => null);
+              if (!r || !r.ok) return false;
+              const body = (await r.json().catch(() => null)) as { matches?: { file?: unknown }[] } | null;
+              const matches = Array.isArray(body?.matches) ? body.matches : [];
+              // A real search must FIND the frozen needle in the declared file;
+              // matches.length alone is not enough (an always-match stub is
+              // killed by the negative control below).
+              return matches.length >= 1 && matches.some((m) => String(m?.file ?? '') === searchProbe.expectFile);
             });
-            smoke['search'] = { ...searchRun, p50: percentile([...searchRun.samplesMs].sort((a, b) => a - b), 0.5), p95: percentile([...searchRun.samplesMs].sort((a, b) => a - b), 0.95) };
+            // Negative control (unmatched nonce): a genuine search returns 2xx
+            // with ZERO matches; an always-match stub fails here.
+            const negNonce = `w0-neg-${crypto.randomBytes(6).toString('hex')}`;
+            const neg = await fetch(searchUrl(negNonce)).catch(() => null);
+            const negBody = neg && neg.ok ? ((await neg.json().catch(() => null)) as { matches?: unknown[] } | null) : null;
+            const negOk = !!neg && neg.ok && Array.isArray(negBody?.matches) && negBody.matches.length === 0;
+            if (!negOk) problems.push('search negative control failed: an unmatched nonce query must return 2xx with zero matches');
+            smoke['search'] = { ...searchRun, httpOkAll: searchRun.httpOkAll && negOk, p50: percentile([...searchRun.samplesMs].sort((a, b) => a - b), 0.5), p95: percentile([...searchRun.samplesMs].sort((a, b) => a - b), 0.95) };
           } else smoke['search'] = { samplesMs: [], p50: 0, p95: 0, httpOkAll: false };
         } finally {
           await daemon.kill();
