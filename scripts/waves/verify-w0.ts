@@ -1857,6 +1857,7 @@ async function main(): Promise<void> {
   const VALID_HTTP_METHODS = /^(GET|POST|PUT|PATCH|DELETE|OPTIONS|ALL)$/;
   const VALID_CONCRETE_METHODS = /^(GET|POST|PUT|PATCH|DELETE|OPTIONS)$/;
   const VALID_VALUE_COMPARISON_MODES = ['exact', 'unordered-array', 'composite', 'binary'];
+  const isBodyBearingMethod = (m: string): boolean => m === 'POST' || m === 'PUT' || m === 'PATCH';
   // Nonce placeholder substitution for probeBody, mirroring the existing
   // '<nonceProjectId>' convention already used for cliArgs.
   function substituteNoncePlaceholder(value: unknown, nonce: string): unknown {
@@ -1865,10 +1866,84 @@ async function main(): Promise<void> {
     if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value as object).map(([k, v]) => [k, substituteNoncePlaceholder(v, nonce)]));
     return value;
   }
+  // A "present, non-empty" value: rejects undefined/null/'' /empty array/
+  // empty object, but accepts legitimate falsy-but-real values like 0/false.
+  function isPresentNonEmpty(v: unknown): boolean {
+    if (v === undefined || v === null || v === '') return false;
+    if (Array.isArray(v) && v.length === 0) return false;
+    if (isRecord(v) && Object.keys(v).length === 0) return false;
+    return true;
+  }
+  // Round-10 C0-10-BINARY-FAILOPEN (Sol confirmation review): Buffer.from
+  // decodes permissively (invalid characters silently dropped, wrong
+  // padding tolerated), so distinct malformed/truncated strings could
+  // canonicalize to identical bytes. Validate the encoding STRICTLY before
+  // ever decoding.
+  function isValidStrictHex(s: string): boolean {
+    return s.length > 0 && s.length % 2 === 0 && /^[0-9a-f]+$/i.test(s);
+  }
+  function isValidStrictBase64(s: string): boolean {
+    if (s.length === 0 || s.length % 4 !== 0) return false;
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(s)) return false;
+    const padIndex = s.indexOf('=');
+    if (padIndex !== -1 && padIndex < s.length - 2) return false; // '=' only allowed in the final 2 chars
+    try {
+      // Round-trip: strict base64 must re-encode to the EXACT same string.
+      // Buffer.from's permissive decode can accept e.g. non-canonical
+      // padding bits that Node still parses -- the round-trip check catches
+      // those even though the charset/padding regex alone would not.
+      return Buffer.from(s, 'base64').toString('base64') === s;
+    } catch {
+      return false;
+    }
+  }
+  function validateAndDecodeBinary(v: unknown, encoding: 'base64' | 'hex'): { ok: boolean; hex: string | null; reason?: string } {
+    if (typeof v !== 'string') return { ok: false, hex: null, reason: 'value is not a string' };
+    if (encoding === 'hex') {
+      if (!isValidStrictHex(v)) return { ok: false, hex: null, reason: 'not valid strict hex (must match /^[0-9a-f]+$/i with a nonzero even length)' };
+      return { ok: true, hex: v.toLowerCase() };
+    }
+    if (!isValidStrictBase64(v)) return { ok: false, hex: null, reason: 'not valid strict base64 (charset/padding/round-trip re-encode check failed)' };
+    return { ok: true, hex: Buffer.from(v, 'base64').toString('hex') };
+  }
+  // Structural PRECONDITIONS for a declared valueComparison mode, checked
+  // BEFORE canonicalization+comparison. A failure here is a hard fail on
+  // its own -- it is never silently absorbed into a passing comparison.
+  //   - composite (round-10 C0-10-COMPOSITE-ESCAPE): every declared field
+  //     must be PRESENT AND NON-EMPTY in BOTH payloads. A field missing
+  //     from either payload can no longer canonicalize to an equal
+  //     "undefined === undefined" projection.
+  //   - binary (round-10 C0-10-BINARY-FAILOPEN): both payloads must be
+  //     strictly valid encoded strings; malformed input is a structural
+  //     fail, never permissively decoded.
+  function validateValueComparisonPreconditions(cliValue: unknown, httpValue: unknown, spec: ValueComparisonSpec | undefined): { ok: boolean; problems: string[] } {
+    if (!spec) return { ok: true, problems: [] };
+    const problems: string[] = [];
+    if (spec.mode === 'composite') {
+      for (const f of spec.fields ?? []) {
+        const cliVal = isRecord(cliValue) ? (cliValue as Record<string, unknown>)[f] : undefined;
+        const httpVal = isRecord(httpValue) ? (httpValue as Record<string, unknown>)[f] : undefined;
+        if (!isPresentNonEmpty(cliVal)) problems.push(`composite field "${f}" missing/empty in CLI payload`);
+        if (!isPresentNonEmpty(httpVal)) problems.push(`composite field "${f}" missing/empty in HTTP payload`);
+      }
+    }
+    if (spec.mode === 'binary') {
+      const encoding = spec.encoding ?? 'base64';
+      const cliCheck = validateAndDecodeBinary(cliValue, encoding);
+      const httpCheck = validateAndDecodeBinary(httpValue, encoding);
+      if (!cliCheck.ok) problems.push(`binary CLI value invalid: ${cliCheck.reason}`);
+      if (!httpCheck.ok) problems.push(`binary HTTP value invalid: ${httpCheck.reason}`);
+    }
+    return { ok: problems.length === 0, problems };
+  }
   // Canonicalizes a value per a row's DECLARED comparator before
   // deepValueEqual runs. Absent spec (or mode='exact') is a no-op --
   // value-parity stays a REAL, unrelaxed, ordered check by default. Only an
   // EXPLICIT declaration relaxes the comparison, and only in the declared way.
+  // Callers MUST run validateValueComparisonPreconditions first -- this
+  // function alone does not reject malformed/missing composite or binary
+  // input (it degrades gracefully so it never throws), which is exactly why
+  // the precondition gate exists as a separate, mandatory hard-fail check.
   function canonicalizeForComparison(v: unknown, spec: ValueComparisonSpec | undefined): unknown {
     if (!spec || spec.mode === 'exact') return v;
     if (spec.mode === 'unordered-array') {
@@ -1882,8 +1957,8 @@ async function main(): Promise<void> {
       return Object.fromEntries(fields.map((f) => [f, (v as Record<string, unknown>)[f]]));
     }
     if (spec.mode === 'binary') {
-      if (typeof v !== 'string') return v;
-      try { return Buffer.from(v, spec.encoding ?? 'base64').toString('hex'); } catch { return v; }
+      const decoded = validateAndDecodeBinary(v, spec.encoding ?? 'base64');
+      return decoded.ok ? decoded.hex : v;
     }
     return v;
   }
@@ -1935,10 +2010,30 @@ async function main(): Promise<void> {
     if (e.httpMethod === 'ALL' && !(typeof e.probeMethod === 'string' && VALID_CONCRETE_METHODS.test(e.probeMethod))) {
       problems.push('httpMethod=ALL requires a concrete probeMethod (GET|POST|PUT|PATCH|DELETE|OPTIONS) declared for live probing');
     }
+    // Round-10 C0-10-MISSING-DECLARATIONS-NONSTRUCTURAL (Sol confirmation
+    // review): probePath was only type-checked when present, never REQUIRED
+    // -- an ALL row could omit it entirely and escape detection until (or
+    // unless) it happened to land in the random 3-row sample. This check
+    // runs over every row in the manifest deterministically, independent of
+    // sampling, and fails BY NAME.
+    if (e.httpMethod === 'ALL' && !(typeof e.probePath === 'string' && e.probePath.startsWith('/'))) {
+      problems.push('httpMethod=ALL requires a concrete probePath declared for live probing (the literal "ALL" registration pattern is not itself a probeable instance) -- missing declaration');
+    }
     if (e.probeMethod !== undefined && !(typeof e.probeMethod === 'string' && VALID_CONCRETE_METHODS.test(e.probeMethod))) {
       problems.push('probeMethod must be a concrete HTTP method (GET|POST|PUT|PATCH|DELETE|OPTIONS) when present');
     }
     if (e.probePath !== undefined && !(typeof e.probePath === 'string' && e.probePath.startsWith('/'))) problems.push('probePath must start with / when present');
+    // Round-10 C0-10-MISSING-DECLARATIONS-NONSTRUCTURAL: a body-bearing
+    // effective method (POST/PUT/PATCH directly, or ALL whose declared
+    // probeMethod is body-bearing) now REQUIRES probeBody -- deterministic
+    // over every row, so a body-bearing capability can no longer silently
+    // probe with an empty body just because it wasn't in the sample.
+    {
+      const effectiveMethodForBodyCheck = e.httpMethod === 'ALL' ? (typeof e.probeMethod === 'string' ? e.probeMethod : undefined) : (typeof e.httpMethod === 'string' ? e.httpMethod : undefined);
+      if (typeof effectiveMethodForBodyCheck === 'string' && isBodyBearingMethod(effectiveMethodForBodyCheck) && e.probeBody === undefined) {
+        problems.push(`body-bearing method (${effectiveMethodForBodyCheck}) requires a declared probeBody for live probing -- missing declaration`);
+      }
+    }
     if (e.valueComparison !== undefined) {
       if (!isRecord(e.valueComparison)) {
         problems.push('valueComparison must be an object when present');
@@ -1957,7 +2052,7 @@ async function main(): Promise<void> {
     return problems;
   }
 
-  await checkCriterion('C0-10', 'SUBCOMMAND_MAP capability ids must be SET-EQUAL (exact, no substring) to manifest capability names; full structural validation of ALL rows; live sampled invocations use a nonce-bearing value check, not shape-only, with equivalent HTTP bodies and declared canonicalizers where needed', 'set-equal capability ids, unique rows, every row structurally valid; httpMethod may be a concrete verb or the literal "ALL" (Express .all() registrations), in which case a concrete probeMethod is REQUIRED for live probing; probeBody, when declared, is sent as the sample fetch\'s JSON body with \'<nonceProjectId>\' substitution; a row\'s declared valueComparison (unordered-array/composite/binary) canonicalizes BOTH surfaces before comparison -- absent or mode=exact stays a REAL, unrelaxed, ordered byte-level check (the preserved implementation duty); a row that needs a declaration and lacks one fails on that row with the missing declaration named; sample invocations prove the CLI reaches the manifest\'s SAME handler via a nonce value, not just matching key shapes; randomized red control exercises the SAME canonicalizer as its basis row and must still fail for a genuine mismatch', async () => {
+  await checkCriterion('C0-10', 'SUBCOMMAND_MAP capability ids must be SET-EQUAL (exact, no substring) to manifest capability names; full structural validation of ALL rows, deterministic and independent of the random 3-row sample; live sampled invocations use a nonce-bearing value check, not shape-only, with equivalent HTTP bodies and declared canonicalizers where needed', 'set-equal capability ids, unique rows, every row structurally valid; httpMethod may be a concrete verb or the literal "ALL" (Express .all() registrations), in which case a concrete probeMethod AND a concrete probePath are BOTH REQUIRED declarations, checked over every row (not just the sample); any body-bearing effective method (POST/PUT/PATCH, or ALL whose probeMethod is body-bearing) REQUIRES a declared probeBody, also checked over every row; a row missing a required declaration fails BY NAME regardless of sampling; a row\'s declared valueComparison (unordered-array/composite/binary) canonicalizes BOTH surfaces before comparison -- absent or mode=exact stays a REAL, unrelaxed, ordered byte-level check (the preserved implementation duty); composite mode requires EVERY declared field to be present and non-empty in BOTH payloads (a field missing from either is a structural fail, never a silently-equal undefined projection); binary mode strictly validates the encoding (hex: /^[0-9a-f]+$/i even length; base64: charset+padding+round-trip re-encode) BEFORE decoding -- malformed input is a structural fail, never permissively decoded; sample invocations prove the CLI reaches the manifest\'s SAME handler via a nonce value, not just matching key shapes; randomized red control exercises the SAME canonicalizer and precondition checks as its basis row and must still fail for a genuine mismatch', async () => {
     if (!fileExists(capabilityManifestRel)) { record('C0-10', '', '', false, '', { detail: `missing: ${capabilityManifestRel}` }); return; }
     let manifest: CapabilityManifestEntry[] = [];
     try {
@@ -2072,12 +2167,19 @@ async function main(): Promise<void> {
         // must match byte-for-byte on values. Round-9: canonicalized per the
         // row's DECLARED valueComparison first -- absent/exact stays a real,
         // unrelaxed, ordered check (the preserved implementation duty).
+        // Round-10 C0-10-COMPOSITE-ESCAPE / C0-10-BINARY-FAILOPEN (Sol
+        // confirmation review): a composite field missing from either
+        // payload, or a binary value that isn't strictly valid encoded
+        // data, is a STRUCTURAL fail in its own right -- checked BEFORE
+        // canonicalization+comparison, never absorbed into a passing
+        // deepValueEqual via a silently-equal undefined/permissive decode.
+        const precondition = validateValueComparisonPreconditions(cliJson, httpBody, entry.valueComparison);
         const canonicalCli = canonicalizeForComparison(cliJson, entry.valueComparison);
         const canonicalHttp = canonicalizeForComparison(httpBody, entry.valueComparison);
-        const valueEqual = cliOk && httpOk && deepValueEqual(canonicalCli, canonicalHttp);
+        const valueEqual = cliOk && httpOk && precondition.ok && deepValueEqual(canonicalCli, canonicalHttp);
         const entryOk = nonceCheck.attempted ? nonceCheck.ok : valueEqual;
         capturedSamples.push({ capability: entry.capability, cliOk, httpOk, cliJson, httpBody, valueComparison: entry.valueComparison });
-        sampleResults.push({ capability: entry.capability, ok: entryOk, detail: `nonceAttempted=${nonceCheck.attempted} nonceOk=${nonceCheck.ok} valueEqual=${valueEqual} valueComparisonMode=${entry.valueComparison?.mode ?? 'exact(default)'} cliOk=${cliOk} httpOk=${httpOk}` });
+        sampleResults.push({ capability: entry.capability, ok: entryOk, detail: `nonceAttempted=${nonceCheck.attempted} nonceOk=${nonceCheck.ok} valueEqual=${valueEqual} valueComparisonMode=${entry.valueComparison?.mode ?? 'exact(default)'} preconditionOk=${precondition.ok} preconditionProblems=${JSON.stringify(precondition.problems)} cliOk=${cliOk} httpOk=${httpOk}` });
       }
 
       // Round-4 F11: the red control now exercises the SAME comparator used
@@ -2095,11 +2197,15 @@ async function main(): Promise<void> {
         // row declaring e.g. unordered-array/composite/binary gets a red
         // control that is honest about what that mode actually compares.
         const shapeStillMatches = JSON.stringify(deepKeyStructure(controlBasis.cliJson)) === JSON.stringify(deepKeyStructure(corrupted));
+        const controlPrecondition = validateValueComparisonPreconditions(controlBasis.cliJson, corrupted, controlBasis.valueComparison);
         const canonicalCliForControl = canonicalizeForComparison(controlBasis.cliJson, controlBasis.valueComparison);
         const canonicalCorrupted = canonicalizeForComparison(corrupted, controlBasis.valueComparison);
-        const valueCheckRejectsIt = !deepValueEqual(canonicalCliForControl, canonicalCorrupted);
+        // A precondition failure on the corrupted pair is ALSO a legitimate
+        // "rejected" outcome for a red control -- the goal is that a
+        // genuinely corrupted pair must fail one way or another.
+        const valueCheckRejectsIt = !controlPrecondition.ok || !deepValueEqual(canonicalCliForControl, canonicalCorrupted);
         redControlOk = shapeStillMatches && valueCheckRejectsIt;
-        redControlDetail = `basis=${controlBasis.capability} valueComparisonMode=${controlBasis.valueComparison?.mode ?? 'exact(default)'} shapeStillMatches=${shapeStillMatches} valueCheckRejectsIt=${valueCheckRejectsIt}`;
+        redControlDetail = `basis=${controlBasis.capability} valueComparisonMode=${controlBasis.valueComparison?.mode ?? 'exact(default)'} shapeStillMatches=${shapeStillMatches} controlPreconditionOk=${controlPrecondition.ok} valueCheckRejectsIt=${valueCheckRejectsIt}`;
       } else {
         redControlOk = false;
         redControlDetail = 'no captured sample produced both a real CLI JSON value and a real HTTP JSON value to build a red control from';
