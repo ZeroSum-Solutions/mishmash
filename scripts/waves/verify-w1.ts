@@ -3730,7 +3730,17 @@ if (treeDirty) console.log('  ⚠ tree is dirty: this run is advisory, never a w
 if (!manifestWrite.wroteOk) console.log('  ⚠ proof manifest degraded to a fallback path -- never a wave pass');
 if (archiveIntegrityViolations.length > 0) { console.log('  ⚠ ARCHIVE INTEGRITY VIOLATIONS (forces a fail regardless of criteria results):'); for (const v of archiveIntegrityViolations) console.log(`    - ${v}`); }
 console.log(`MANIFEST_SHA256=${manifestSha256}`);
-process.exit(hardFailures.length === 0 && !treeDirty && manifestWrite.wroteOk && archiveIntegrityViolations.length === 0 ? 0 : 1);
+const finalExitCode = hardFailures.length === 0 && !treeDirty && manifestWrite.wroteOk && archiveIntegrityViolations.length === 0 ? 0 : 1;
+// RELIABILITY FIX (found empirically this round, not a named ruling item,
+// but load-bearing for honest reporting): when stdout is piped (tee,
+// redirection -- not a TTY), Node's writes to it can be asynchronous;
+// calling process.exit() immediately after a burst of console.log calls
+// can truncate output before it reaches the pipe, silently dropping most
+// of the per-criterion result lines even though the manifest itself (the
+// actual proof artifact) was already written complete and correct. Exit
+// only after an empty stdout.write's callback confirms every prior write
+// has fully drained.
+process.stdout.write('', () => { process.exit(finalExitCode); });
 
 }
 
