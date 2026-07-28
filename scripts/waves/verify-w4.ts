@@ -1132,8 +1132,12 @@ if (el) {
     // Navigate to the daemon's own origin FIRST so the harness's relative
     // src resolves same-origin (matching production's own relative
     // projectFileUrl()/projectRawUrl() usage) -- avoids an unrelated
-    // cross-origin CORS failure masquerading as "network denied".
-    await page.goto(daemon.url, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => undefined);
+    // cross-origin CORS failure masquerading as "network denied". Root `/`
+    // 404s with `Content-Security-Policy: default-src 'none'` (verified via
+    // direct curl against a booted daemon), which blocks the later inline
+    // addScriptTag injection; a real 2xx API route carries no CSP header,
+    // so navigate there instead -- same origin, no inherited restriction.
+    await page.goto(`${daemon.url}/api/projects`, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => undefined);
     await page.setContent('<!doctype html><html><body><div id="root"></div></body></html>', { waitUntil: 'domcontentloaded' });
     await page.evaluate((src: string) => { (globalThis as unknown as { __C47_SRC__: string }).__C47_SRC__ = src; }, rawUrl);
 
@@ -1235,7 +1239,7 @@ let concurrentLiveArtifacts = 0;
 let peakLiveArtifacts = 0;
 let concurrentFiles = 0;
 let peakFiles = 0;
-const FAIL_PROJECT_ID = 'project-39';
+const FAIL_PROJECT_ID = 'project-2';
 
 vi.mock('../../src/providers/registry', () => ({
   deleteLiveArtifact: vi.fn(),
@@ -1318,12 +1322,12 @@ describe('C4-9 DesignsTab fan-out bound', () => {
       expect(peakFiles).toBeGreaterThan(0);
     }, { timeout: 5000 });
     await new Promise((r) => setTimeout(r, 500));
-    // The other 4 (non-failing) projects' names must still render even
-    // though project-39-style id never exists in this 5-project set --
-    // this sub-test's real assertion is that no unhandled rejection tears
-    // down the whole render tree. document.body having content for every
-    // project name is the closest DOM-observable proxy available without
-    // reaching into component internals.
+    // FAIL_PROJECT_ID ('project-2') genuinely exists in this 5-project set,
+    // so fetchLiveArtifacts really does reject mid-batch here. The other 4
+    // (non-failing) projects' names must still render -- proving a single
+    // rejection does not tear down the whole render tree. document.body
+    // having content for every project name is the closest DOM-observable
+    // proxy available without reaching into component internals.
     for (let i = 0; i < 5; i++) {
       expect(document.body.textContent).toContain(\`Project \${i}\`);
     }
