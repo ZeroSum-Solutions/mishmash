@@ -1008,6 +1008,13 @@ function collectMutationCarriers(sourceFile: TypeScriptModule.SourceFile): Mutat
       return;
     }
     if (ts.isTemplateExpression(node)) {
+      // Fidelity-round fix: apply the SAME exclusion predicate used for
+      // string literals to the TemplateExpression itself -- import(`pkg-
+      // ${x}`), export default `name-${x}`, a computed property name, and
+      // obj[`key-${x}`] were previously left eligible because this branch
+      // added carriers unconditionally, bypassing isExcludedCarrierPosition
+      // entirely for any interpolated template.
+      if (isExcludedCarrierPosition(node)) return;
       // Each literal piece (head, and every span's middle/tail) is an
       // independently eligible carrier -- overwriting one preserves the
       // surrounding `${...}` interpolations and backtick delimiters.
