@@ -124,9 +124,10 @@
         "apps/daemon/src/library-store.ts",
         "apps/daemon/tests/library-*.test.ts",
         "docs/security/**",
-        "scripts/waves/verify-w9-ingest.ts"
+        "scripts/waves/verify-w9-ingest.ts",
+        "docs/plans/waves/DECISIONS.md"
       ],
-      "note": "Runs beside W4; disjoint file sets. Must complete before W3 exposes the Library. `apps/daemon/src/routes/library.ts` and `docs/security/**` are also claimed by W0; W9-ingest does not begin until W0 lands on `main` (Burst 1, before Burst 3), so the two claims are temporally serialized, never concurrent."
+      "note": "Runs beside W4; disjoint file sets. Must complete before W3 exposes the Library. `apps/daemon/src/routes/library.ts` and `docs/security/**` are also claimed by W0; W9-ingest does not begin until W0 lands on `main` (Burst 1, before Burst 3), so the two claims are temporally serialized, never concurrent. Amended 2026-07-28 (Sol W9-ingest expansion r1 ruling 2): `docs/plans/waves/DECISIONS.md` added so accepted-risk attribution rows reference a founder/orchestrator-authorized decision entry there — the attribution JSON alone is never a founder decision record, and the wave verifier fails closed on an implementation-authored JSON assertion. Same ruling declined to lease the ingest-adjacent security modules (library-tokens, token-lifecycle, library-sync, safe-fetch): attribution without modification suffices; any proven necessity requires a separate exact-file amendment on main before modification."
     },
     "W3": {
       "slug": "mishmash-w3-library-launch",
