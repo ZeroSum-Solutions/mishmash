@@ -438,21 +438,44 @@ function collectStrings(root: unknown, _seen: Set<unknown> = new Set()): string[
   else if (Array.isArray(root)) for (const v of root) out.push(...collectStrings(v, _seen));
   return out;
 }
-// Collects every value found under a property literally named `key`,
-// anywhere in `root` -- used to bind C1-5's telemetry assertion to
-// `properties.model_id` specifically (finding 3: "searches every string
-// rather than specifically binding properties.model_id") instead of
-// treating any matching string anywhere in the payload as a hit.
-function findAllValuesForKey(root: unknown, key: string, _seen: Set<unknown> = new Set()): unknown[] {
-  const out: unknown[] = [];
+// ROUND 2 FIX (new defect in changed regions, Sol round-2): C1-7's aggregate
+// search used `collectStrings(...).filter(numeric-looking)`, which only
+// walks STRING-typed leaves -- a real JSON response encoding a total as an
+// actual NUMBER (`"total": 12.34`, not `"total": "12.34"`), the normal way
+// JSON APIs encode costs, was invisible to it entirely, so a CORRECT
+// implementation using real numeric JSON fields could fail this check.
+// `collectNumbers` walks NUMBER-typed leaves directly; both this and
+// `collectStrings`' numeric-looking-string path are combined at each call
+// site so either encoding is recognized.
+function collectNumbers(root: unknown, _seen: Set<unknown> = new Set()): number[] {
+  const out: number[] = [];
+  if (typeof root === 'number' && Number.isFinite(root)) { out.push(root); return out; }
+  if (!isRecord(root) && !Array.isArray(root)) return out;
+  if (_seen.has(root)) return out;
+  _seen.add(root);
+  if (isRecord(root)) for (const v of Object.values(root)) out.push(...collectNumbers(v, _seen));
+  else if (Array.isArray(root)) for (const v of root) out.push(...collectNumbers(v, _seen));
+  return out;
+}
+// ROUND 2 FIX (finding 3 / Sol round-2 F3): the round-1 `findAllValuesForKey`
+// recursively accepted ANY nested key literally named `model_id`, anywhere in
+// the payload -- a decoy field unrelated to the real PostHog event shape
+// (e.g. some unrelated `metadata.model_id`) would satisfy it. This instead
+// walks for an object carrying a `properties` member (the actual PostHog
+// event envelope shape: `{ event, properties: {...}, distinct_id, ... }`)
+// and reads `model_id` from EXACTLY that `properties` object -- binding to
+// `properties.model_id`, not any nested key sharing that name.
+function findPropertiesModelIdValues(root: unknown, _seen: Set<unknown> = new Set()): string[] {
+  const out: string[] = [];
   if (!isRecord(root) && !Array.isArray(root)) return out;
   if (_seen.has(root)) return out;
   _seen.add(root);
   if (isRecord(root)) {
-    if (key in root) out.push(root[key]);
-    for (const v of Object.values(root)) out.push(...findAllValuesForKey(v, key, _seen));
+    const props = root.properties;
+    if (isRecord(props) && typeof props.model_id === 'string') out.push(props.model_id);
+    for (const v of Object.values(root)) out.push(...findPropertiesModelIdValues(v, _seen));
   } else if (Array.isArray(root)) {
-    for (const v of root) out.push(...findAllValuesForKey(v, key, _seen));
+    for (const v of root) out.push(...findPropertiesModelIdValues(v, _seen));
   }
   return out;
 }
@@ -517,8 +540,12 @@ function findRunScopedRecord(root: unknown, runId: string, _seen: Set<unknown> =
 // "default", never port 7456/51012.
 // =============================================================================
 interface BootedDaemon { url: string; dataDir: string; homeDir: string | null; kill: () => Promise<void> }
-async function bootDaemon(opts: { homeDir?: string; extraPathDirs?: string[]; extraEnv?: Record<string, string> } = {}): Promise<BootedDaemon> {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w1-verify-data-'));
+// `dataDir` is normally a fresh per-boot temp dir; C1-7's daemon-restart
+// scenario passes an EXISTING dataDir back in on a second boot to prove
+// the cost meter's data survives a real process restart, not just an
+// in-memory cache.
+async function bootDaemon(opts: { homeDir?: string; extraPathDirs?: string[]; extraEnv?: Record<string, string>; dataDir?: string } = {}): Promise<BootedDaemon> {
+  const dataDir = opts.dataDir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'od-w1-verify-data-'));
   const bootScript = `
 import { pathToFileURL } from 'node:url';
 const mod = await import(pathToFileURL(${JSON.stringify(path.join(repoRoot, 'apps/daemon/src/server.ts'))}).href);
@@ -599,12 +626,18 @@ async function createProject(daemonUrl: string, idPrefix: string): Promise<strin
 // public-params.ts) -- without it, `context` is null and the capture call
 // returns early before ever reaching PostHog. A real web client always sets
 // this; a raw HTTP probe must set it explicitly to exercise the same path.
-const ANALYTICS_HEADERS = {
-  'x-od-analytics-device-id': 'verifier-device-c1-5',
-  'x-od-analytics-session-id': 'verifier-session-c1-5',
-  'x-od-analytics-client-type': 'web',
-  'x-od-analytics-locale': 'en',
-};
+// ROUND 2 FIX (finding 11 / Sol round-2 F11): device/session ids used to be
+// fixed "verifier-device-c1-5"/"verifier-session-c1-5" literals -- a stable,
+// greppable, verifier-classifiable pair. Built fresh per call from
+// randomNonce() instead.
+function buildAnalyticsHeaders(): Record<string, string> {
+  return {
+    'x-od-analytics-device-id': randomNonce(8),
+    'x-od-analytics-session-id': randomNonce(8),
+    'x-od-analytics-client-type': 'web',
+    'x-od-analytics-locale': 'en',
+  };
+}
 
 async function startRun(daemonUrl: string, body: Record<string, unknown>, extraHeaders?: Record<string, string>): Promise<{ runId: string; conversationId: string; assistantMessageId: string }> {
   const r = await httpJson('POST', `${daemonUrl}/api/runs`, body, extraHeaders);
@@ -693,8 +726,13 @@ function randomNonce(bytes = 6): string {
 // no substitution ever occurs, so criteria built on that trigger can never
 // go genuinely green even after a correct fix. A malformed id has no such
 // escape hatch.
-function invalidModelId(seed: string): string {
-  return `custom claude model ${seed} ${randomNonce()} unresolved`;
+// ROUND 2 FIX (finding 11): dropped the caller-supplied `seed` string this
+// took in round 1 (e.g. "c1-1", "c1-2") -- a stable, criterion-identifying
+// substring embedded in a value that drives the substitution oracle is
+// exactly the class of marker finding 11 objects to. Every call site below
+// now gets a value with no fixed substring at all.
+function invalidModelId(): string {
+  return `custom claude model ${randomNonce()} ${randomNonce()} unresolved`;
 }
 // IMPORTANT DESIGN NOTE: a spawned daemon child's process.env is fixed at
 // ITS OWN spawn time (see bootDaemon()) -- mutating this verifier's own
@@ -726,8 +764,13 @@ function invalidModelId(seed: string): string {
 const USAGE_MARKER_START = 'OD_W1_USAGE_MARKER_START';
 const USAGE_MARKER_END = 'OD_W1_USAGE_MARKER_END';
 interface ProbeUsage { input_tokens: number; output_tokens: number; cache_creation_input_tokens: number; cache_read_input_tokens: number }
-function usageMarkerPrompt(usage: ProbeUsage, costUsd: number, label: string): string {
-  return `${label} ${USAGE_MARKER_START}${JSON.stringify({ ...usage, costUsd })}${USAGE_MARKER_END}`;
+// ROUND 2 FIX (finding 11): dropped the round-1 `label` parameter (e.g.
+// "small run", "priced", "cost meter probe") -- a fixed, criterion-
+// describing prompt prefix is exactly the "fixed pricing prompts" class
+// finding 11 names. Replaced with a random nonce that carries no
+// classifiable meaning.
+function usageMarkerPrompt(usage: ProbeUsage, costUsd: number): string {
+  return `${randomNonce(6)} ${USAGE_MARKER_START}${JSON.stringify({ ...usage, costUsd })}${USAGE_MARKER_END}`;
 }
 const FAKE_CLAUDE_SCRIPT = `#!/usr/bin/env node
 // verifier-owned fake claude CLI -- see verify-w1.ts header comment.
@@ -800,39 +843,81 @@ setTimeout(() => { if (!responded) { responded = true; respond(''); } }, 2000);
 // success with no failing tool call at all. Mode is decoded from the
 // requested model id (see the process.env note above FAKE_CLAUDE_SCRIPT --
 // the same constraint applies here).
-// Finding 8 (round 1): "two fixed payloads [do not] establish the PRD's
-// 'any non-zero tool-error field' property." A third, textually DIFFERENT
-// failure phrasing (a distinct real-world OS error family, not just a
-// re-wording of the EPERM one) is added below (silent-non-bash-failure-b) so
-// a fix that merely special-cases the literal EPERM string cannot pass.
+// ROUND 2 REWRITE (finding 8 / Sol round-2 F8): round 1 still special-cased
+// exactly three fixed textual phrases (EPERM, ENOENT, the "Command failed
+// with exit code" marker) -- "a three-string special case remains
+// sufficient." kimi's real wire format (confirmed by reading
+// handleKimiEvent's own comment in json-event-stream.ts) carries no
+// STRUCTURED error field at all -- content string is the only variable
+// dimension -- so exercising the PRD's "any non-zero tool-error field"
+// property, within that real constraint, means feeding it ARBITRARY,
+// per-run-randomized content strings (not a fixed enum of phrasings) and
+// requiring the guard to fail EVERY one. The content is base64url-encoded
+// into the model id (the only per-run channel available -- see the
+// process.env note above FAKE_CLAUDE_SCRIPT) since sanitizeCustomModel's
+// character class (`^[A-Za-z0-9][A-Za-z0-9._/:@-]*$`, confirmed by direct
+// regex testing) is exactly base64url's alphabet plus separators.
+function base64UrlEncode(s: string): string {
+  return Buffer.from(s, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function base64UrlDecode(s: string): string {
+  const padded = s + '='.repeat((4 - (s.length % 4)) % 4);
+  return Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+}
+// A pool of textually DISTINCT real-world failure-content FAMILIES (OS
+// errno-shaped, git-shaped, a Python traceback, a generic exit-status
+// message, a timeout) -- each call randomizes its own details via
+// randomNonce()/Math.random(), so no two invocations across the whole file,
+// or across repeated verifier runs, ever produce the same literal string.
+function randomToolErrorContent(): string {
+  const templates: Array<() => string> = [
+    () => `EPERM: operation not permitted, open '/tmp/${randomNonce(4)}/${randomNonce(3)}.txt'`,
+    () => `ENOENT: no such file or directory, stat '/tmp/${randomNonce(4)}/${randomNonce(3)}'`,
+    () => `EACCES: permission denied, unlink '/tmp/${randomNonce(4)}/${randomNonce(3)}'`,
+    () => `fatal: ${randomNonce(6)}: unable to write new object`,
+    () => `Traceback (most recent call last):\n  File "${randomNonce(4)}.py", line ${1 + Math.floor(Math.random() * 900)}\nOSError: [Errno ${1 + Math.floor(Math.random() * 90)}] ${randomNonce(6)}`,
+    () => `Error: ${randomNonce(8)} exited with status ${1 + Math.floor(Math.random() * 200)}`,
+    () => `TimeoutError: operation timed out after ${1 + Math.floor(Math.random() * 9000)}ms (${randomNonce(4)})`,
+  ];
+  const pick = templates[Math.floor(Math.random() * templates.length)]!;
+  return pick();
+}
 const FAKE_KIMI_SCRIPT = `#!/usr/bin/env node
 // verifier-owned fake kimi CLI -- see verify-w1.ts header comment.
 const args = process.argv.slice(2);
 if (args.includes('--version')) { process.stdout.write('0.27.0 (fake-kimi, verifier-owned)\\n'); process.exit(0); }
+function b64urlDecode(s) {
+  const padded = s + '='.repeat((4 - (s.length % 4)) % 4);
+  return Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+}
 const modelIdx = args.indexOf('--model');
 const requestedModel = (modelIdx >= 0 ? args[modelIdx + 1] : '') || '';
-const mode = requestedModel.includes('-mode-silent-non-bash-failure-b') ? 'silent-non-bash-failure-b'
-  : requestedModel.includes('-mode-silent-non-bash-failure') ? 'silent-non-bash-failure'
-  : requestedModel.includes('-mode-marked-bash-failure') ? 'marked-bash-failure'
-  : requestedModel.includes('-mode-success') ? 'success'
-  : 'success';
+let toolContent = 'ok';
+let succeeds = true;
+const markedMatch = /-ctrl-marked-([A-Za-z0-9_-]+)/.exec(requestedModel);
+const randMatch = /-rand-([A-Za-z0-9_-]+)/.exec(requestedModel);
+if (markedMatch) { toolContent = b64urlDecode(markedMatch[1]); succeeds = false; }
+else if (randMatch) { toolContent = b64urlDecode(randMatch[1]); succeeds = false; }
 function line(o) { process.stdout.write(JSON.stringify(o) + '\\n'); }
-line({ role: 'assistant', tool_calls: [{ type: 'function', id: 'call_1', function: { name: mode === 'success' ? 'Read' : 'Write', arguments: '{}' } }] });
-if (mode === 'silent-non-bash-failure') {
-  line({ role: 'tool', tool_call_id: 'call_1', content: "EPERM: operation not permitted, open '/System/protected-probe.txt'" });
-} else if (mode === 'silent-non-bash-failure-b') {
-  line({ role: 'tool', tool_call_id: 'call_1', content: "ENOENT: no such file or directory, stat '/tmp/od-probe-missing-dir/out.txt'" });
-} else if (mode === 'marked-bash-failure') {
-  line({ role: 'tool', tool_call_id: 'call_1', content: 'Command failed with exit code: 1.' });
-} else {
-  line({ role: 'tool', tool_call_id: 'call_1', content: 'ok' });
-}
-line({ role: 'assistant', content: mode === 'success' ? 'all good' : "I couldn't complete that." });
+line({ role: 'assistant', tool_calls: [{ type: 'function', id: 'call_1', function: { name: succeeds ? 'Read' : 'Write', arguments: '{}' } }] });
+line({ role: 'tool', tool_call_id: 'call_1', content: toolContent });
+line({ role: 'assistant', content: succeeds ? 'all good' : "I couldn't complete that." });
 line({ role: 'meta', type: 'session.resume_hint', session_id: 'fake-kimi-session' });
 setTimeout(() => process.exit(0), 30);
 `;
-function fakeKimiModelId(mode: 'silent-non-bash-failure' | 'silent-non-bash-failure-b' | 'marked-bash-failure' | 'success'): string {
-  return `kimi-probe-${randomNonce()}-mode-${mode}`;
+function fakeKimiSuccessModelId(): string {
+  return `kimi-${randomNonce(4)}-ctrl-success`;
+}
+// The ONE exact-marker control: proves the EXISTING regex-matched shape
+// stays correctly classified (a negative control, per R4) -- distinct from
+// the randomized-content runs below, which prove the property generalizes.
+function fakeKimiMarkedFailureModelId(): string {
+  const content = `Command failed with exit code: ${1 + Math.floor(Math.random() * 200)}. ${randomNonce(4)}`;
+  return `kimi-${randomNonce(4)}-ctrl-marked-${base64UrlEncode(content)}`;
+}
+function fakeKimiRandomFailureModelId(): { modelId: string; content: string } {
+  const content = randomToolErrorContent();
+  return { modelId: `kimi-${randomNonce(4)}-rand-${base64UrlEncode(content)}`, content };
 }
 
 // Antigravity's daemon-side write-settings -> spawn -> agy-reads-settings
@@ -975,6 +1060,12 @@ type PlaywrightBrowser = {
 };
 type PlaywrightCdpSession = { send: (method: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>> };
 type PlaywrightBrowserContext = { newCDPSession: (page: PlaywrightPage) => Promise<PlaywrightCdpSession> };
+type PlaywrightRoute = {
+  request: () => { method: () => string };
+  fulfill: (opts: { json?: unknown; status?: number }) => Promise<void>;
+  fallback: () => Promise<void>;
+  continue: () => Promise<void>;
+};
 type PlaywrightPage = {
   goto: (url: string, opts?: { waitUntil?: string; timeout?: number }) => Promise<unknown>;
   locator: (selector: string) => PlaywrightLocator;
@@ -982,6 +1073,7 @@ type PlaywrightPage = {
   evaluate: <T>(fn: (...a: unknown[]) => T, arg?: unknown) => Promise<T>;
   context: () => PlaywrightBrowserContext;
   addInitScript: <T>(fn: (arg: T) => void, arg: T) => Promise<void>;
+  route: (pattern: string, handler: (route: PlaywrightRoute) => Promise<void>) => Promise<void>;
 };
 type PlaywrightLocator = {
   count: () => Promise<number>;
@@ -989,6 +1081,7 @@ type PlaywrightLocator = {
   innerText: (opts?: { timeout?: number }) => Promise<string>;
   getAttribute: (name: string) => Promise<string | null>;
   waitFor: (opts?: { timeout?: number; state?: string }) => Promise<void>;
+  click: (opts?: { timeout?: number }) => Promise<void>;
 };
 function resolvePlaywright(): { ok: true; pw: PlaywrightModule } | { ok: false; error: string } {
   try {
@@ -1032,6 +1125,56 @@ async function computedAxNodeForSelector(
     const node = ax.nodes[0];
     if (!node) return null;
     return { role: node.role?.value ?? null, name: node.name?.value ?? null, ignored: node.ignored === true };
+  } finally {
+    try { await cdp.send('Accessibility.disable'); } catch { /* best effort */ }
+    try { await cdp.send('DOM.disable'); } catch { /* best effort */ }
+  }
+}
+
+// ROUND 2 ADDITION (finding 1 / Sol round-2 F1): `computedAxNodeForSelector`
+// only reports the accessible name of ONE named node (the message
+// container), which real substitution UI has no reason to name directly --
+// the state/model information more plausibly lives on a labeled child badge
+// INSIDE the message. This walks the CDP full accessibility tree, restricts
+// it to nodes whose DOM element is `containerSelector` itself or one of its
+// descendants (via `DOM.querySelectorAll(container, '*')` + backendNodeId
+// cross-reference), and returns the first one whose COMPUTED NAME contains
+// `needle` -- i.e. proves some real, accessibility-tree-visible control
+// inside the message actually NAMES the state/model, not merely that SOME
+// node somewhere has a nonempty name.
+async function findNamedDescendantAx(
+  page: PlaywrightPage,
+  containerSelector: string,
+  needle: string,
+): Promise<{ role: string | null; name: string | null; ignored: boolean } | null> {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('DOM.enable');
+  await cdp.send('Accessibility.enable');
+  try {
+    const doc = (await cdp.send('DOM.getDocument', { depth: -1 })) as { root: { nodeId: number } };
+    const container = (await cdp.send('DOM.querySelector', { nodeId: doc.root.nodeId, selector: containerSelector })) as { nodeId: number };
+    if (!container.nodeId) return null;
+    const descendants = (await cdp.send('DOM.querySelectorAll', { nodeId: container.nodeId, selector: '*' })) as { nodeIds: number[] };
+    const candidateNodeIds = [container.nodeId, ...descendants.nodeIds];
+    const backendIds = new Set<number>();
+    for (const nodeId of candidateNodeIds) {
+      try {
+        const desc = (await cdp.send('DOM.describeNode', { nodeId })) as { node: { backendNodeId: number } };
+        backendIds.add(desc.node.backendNodeId);
+      } catch { /* a stale nodeId is fine to skip */ }
+    }
+    const full = (await cdp.send('Accessibility.getFullAXTree', {})) as {
+      nodes: { role?: { value?: string }; name?: { value?: string }; ignored?: boolean; backendDOMNodeId?: number }[];
+    };
+    const needleLower = needle.toLowerCase();
+    for (const node of full.nodes) {
+      if (node.backendDOMNodeId === undefined || !backendIds.has(node.backendDOMNodeId)) continue;
+      const name = node.name?.value ?? '';
+      if (name && name.toLowerCase().includes(needleLower)) {
+        return { role: node.role?.value ?? null, name, ignored: node.ignored === true };
+      }
+    }
+    return null;
   } finally {
     try { await cdp.send('Accessibility.disable'); } catch { /* best effort */ }
     try { await cdp.send('DOM.disable'); } catch { /* best effort */ }
@@ -1142,12 +1285,12 @@ await checkCriterion('C1-1', 'contract type scan (packages/contracts/src/**) + t
   writeFakeBin(fakeBinDir, 'claude', FAKE_CLAUDE_SCRIPT);
   const daemon = await bootDaemon({ extraPathDirs: [fakeBinDir] });
   try {
-    const projectId = await createProject(daemon.url, 'w1-c1-1');
+    const projectId = await createProject(daemon.url, randomNonce(8));
     const modelA = 'claude-sonnet-4-5';
-    const modelB = invalidModelId('c1-1');
-    const runA = await startRun(daemon.url, { projectId, agentId: 'claude', model: modelA, message: 'probe A' });
+    const modelB = invalidModelId();
+    const runA = await startRun(daemon.url, { projectId, agentId: 'claude', model: modelA, message: randomNonce(10) });
     const statusA = await pollRunTerminal(daemon.url, runA.runId);
-    const runB = await startRun(daemon.url, { projectId, agentId: 'claude', model: modelB, message: 'probe B' });
+    const runB = await startRun(daemon.url, { projectId, agentId: 'claude', model: modelB, message: randomNonce(10) });
     const statusB = await pollRunTerminal(daemon.url, runB.runId);
     const msgA = readMessageRow(daemon.dataDir, runA.assistantMessageId);
     const msgB = readMessageRow(daemon.dataDir, runB.assistantMessageId);
@@ -1256,11 +1399,11 @@ await checkCriterion('C1-2', 'apps/web/src/components/agentModelSelection.ts dir
     let browser: PlaywrightBrowser | null = null;
     try {
       webSuite = await bootWebSuite({ PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH ?? ''}` });
-      const requestedInvalid = invalidModelId('c1-2');
-      const projectResp = await httpJson('POST', `${webSuite.daemonUrl}/api/projects`, { id: `w1-c1-2-${crypto.randomBytes(4).toString('hex')}`, name: 'c1-2' });
+      const requestedInvalid = invalidModelId();
+      const projectResp = await httpJson('POST', `${webSuite.daemonUrl}/api/projects`, { id: randomNonce(8), name: randomNonce(6) });
       const projectId = (projectResp.json as { project?: { id?: string } })?.project?.id;
       if (!projectId) throw new Error(`could not create project via web daemon: ${projectResp.text.slice(0, 300)}`);
-      const run = await startRun(webSuite.daemonUrl, { projectId, agentId: 'claude', model: requestedInvalid, message: 'trigger substitution' });
+      const run = await startRun(webSuite.daemonUrl, { projectId, agentId: 'claude', model: requestedInvalid, message: randomNonce(10) });
       const runStatus = await pollRunTerminal(webSuite.daemonUrl, run.runId);
       // Independent ground truth for what actually executed, read straight
       // from the fake CLI's own echoed reply text (see C1-1's identical
@@ -1340,16 +1483,21 @@ await checkCriterion('C1-2', 'apps/web/src/components/agentModelSelection.ts dir
 // evidence ceiling, so a correct implementation may legitimately leave
 // `reported` null for this lane -- requiring it would fight C1-4's own
 // unverified-lane framing.
+// ROUND 2 FIX (finding 2, Sol round-2 F2): round 1 never asserted that the
+// SAME sibling record's `requested` field equals what was actually
+// requested over HTTP -- a run whose `resolved` was correctly bound but
+// whose `requested` was wrong (or copied from `resolved`) still passed.
+// `requested` is now asserted equal to `requestedLabel`, closing that hole.
 // -----------------------------------------------------------------------
-await checkCriterion('C1-3', 'single antigravity run via a verifier-owned fake agy + independent settings.json readback', 'the persisted resolved value is bound to BOTH the actual settings.json content written before spawn AND agy\'s own echoed observation, not merely present', async () => {
+await checkCriterion('C1-3', 'single antigravity run via a verifier-owned fake agy + independent settings.json readback', 'the persisted requested value equals the actual HTTP-requested launch input, AND the persisted resolved value is bound to BOTH the actual settings.json content written before spawn AND agy\'s own echoed observation', async () => {
   const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w1-agy-home-'));
   const fakeBinDir = mkFakeBinDir();
   writeFakeBin(fakeBinDir, 'agy', FAKE_AGY_SCRIPT);
   const daemon = await bootDaemon({ homeDir, extraPathDirs: [fakeBinDir], extraEnv: { FAKE_AGY_DELAY_MS: '80' } });
   try {
-    const projectId = await createProject(daemon.url, 'w1-c1-3');
+    const projectId = await createProject(daemon.url, randomNonce(8));
     const requestedLabel = 'Claude Sonnet 4.6 (Thinking)';
-    const run = await startRun(daemon.url, { projectId, agentId: 'antigravity', model: requestedLabel, message: 'reconcile probe' });
+    const run = await startRun(daemon.url, { projectId, agentId: 'antigravity', model: requestedLabel, message: randomNonce(10) });
     const status = await pollRunTerminal(daemon.url, run.runId);
     const settingsPath = path.join(homeDir, '.gemini', 'antigravity-cli', 'settings.json');
     const settingsAfter = fs.existsSync(settingsPath) ? (JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as { model?: string }).model : undefined;
@@ -1369,7 +1517,11 @@ await checkCriterion('C1-3', 'single antigravity run via a verifier-owned fake a
     if (!launchInputRecord) {
       problems.push('no persisted requested/resolved sibling pair found on the run (status, run_context_json, or events_json) -- reconciliation is not recorded on the run itself yet');
     } else {
+      const persistedRequested = String(launchInputRecord.record.requested);
       const persistedResolved = String(launchInputRecord.record.resolved);
+      if (persistedRequested !== requestedLabel) {
+        problems.push(`persisted requested="${persistedRequested}" does not equal the actual HTTP-requested launch input ("${requestedLabel}") -- requested is wrong or not bound to the real request`);
+      }
       if (settingsAfter !== undefined && persistedResolved !== settingsAfter) {
         problems.push(`persisted resolved="${persistedResolved}" does not equal the actual settings.json content ("${settingsAfter}") written before spawn -- resolved is not bound to the isolated settings file`);
       }
@@ -1377,7 +1529,7 @@ await checkCriterion('C1-3', 'single antigravity run via a verifier-owned fake a
         problems.push(`persisted resolved="${persistedResolved}" does not equal agy's own echoed observation ("${echoedFromReply}") -- resolved is not bound to the echoed result`);
       }
     }
-    record('C1-3', 'fake agy + settings.json readback', 'resolved is bound to both the actual settings.json content and the independently-observed echo, not merely present', problems.length === 0, `settingsAfter=${settingsAfter}\nechoedFromReply=${echoedFromReply}\nlaunchInputRecord=${JSON.stringify(launchInputRecord)}\nstatus=${JSON.stringify(status).slice(0, 600)}`, { detail: problems.length ? problems.join('; ') : undefined });
+    record('C1-3', 'fake agy + settings.json readback', 'requested equals the real HTTP launch input; resolved is bound to both the actual settings.json content and the independently-observed echo', problems.length === 0, `settingsAfter=${settingsAfter}\nechoedFromReply=${echoedFromReply}\nlaunchInputRecord=${JSON.stringify(launchInputRecord)}\nstatus=${JSON.stringify(status).slice(0, 600)}`, { detail: problems.length ? problems.join('; ') : undefined });
   } finally {
     await daemon.kill();
     try { fs.rmSync(homeDir, { recursive: true, force: true }); } catch { /* best effort */ }
@@ -1410,8 +1562,8 @@ await checkCriterion('C1-4', 'fake claude (echo) vs a real codex mock recording 
   // daemon instance only ever drives ONE codex run.
   const daemon = await bootDaemon({ extraPathDirs: [fakeBinDir, MOCKS_BIN], extraEnv: { OD_MOCKS_TRACE: C1_4_FIXED_CODEX_TRACE, OD_MOCKS_NO_DELAY: '1' } });
   try {
-    const projectId = await createProject(daemon.url, 'w1-c1-4');
-    const claudeRun = await startRun(daemon.url, { projectId, agentId: 'claude', model: 'claude-sonnet-4-5', message: 'echo lane' });
+    const projectId = await createProject(daemon.url, randomNonce(8));
+    const claudeRun = await startRun(daemon.url, { projectId, agentId: 'claude', model: 'claude-sonnet-4-5', message: randomNonce(10) });
     const claudeStatus = await pollRunTerminal(daemon.url, claudeRun.runId);
     const claudeMsg = readMessageRow(daemon.dataDir, claudeRun.assistantMessageId);
     const claudeState = findEnumValueField(claudeStatus, ['verified', 'substituted', 'unverified']) ?? (claudeMsg?.events_json ? findEnumValueField(JSON.parse(claudeMsg.events_json), ['verified', 'substituted', 'unverified']) : null);
@@ -1422,7 +1574,7 @@ await checkCriterion('C1-4', 'fake claude (echo) vs a real codex mock recording 
     if (!codexFetch.ok) {
       problems.push(`could not fetch a codex mock recording: ${codexFetch.error}`);
     } else {
-      const codexRun = await startRun(daemon.url, { projectId, agentId: 'codex', model: 'gpt-5.6-codex', message: 'no-echo lane', context: {} });
+      const codexRun = await startRun(daemon.url, { projectId, agentId: 'codex', model: 'gpt-5.6-codex', message: randomNonce(10), context: {} });
       codexStatus = await pollRunTerminal(daemon.url, codexRun.runId, 30_000);
       const codexMsg = readMessageRow(daemon.dataDir, codexRun.assistantMessageId);
       codexState = findEnumValueField(codexStatus, ['verified', 'substituted', 'unverified']) ?? (codexMsg?.events_json ? findEnumValueField(JSON.parse(codexMsg.events_json), ['verified', 'substituted', 'unverified']) : null);
@@ -1449,25 +1601,27 @@ await checkCriterion('C1-4', 'fake claude (echo) vs a real codex mock recording 
 // repo's current code that requested===resolved for that trigger, so the
 // very telemetry bug this criterion exists to catch (raw requested leaking
 // into run.model) could never actually manifest, silently passing for the
-// wrong reason. `invalidModelId` forces a real substitution. The telemetry
-// scan is also now bound to `model_id` specifically (finding 3's second
-// half) instead of any string anywhere in the payload, and cross-checked
-// against the INDEPENDENTLY observed executed model (the fake CLI's own
-// echoed reply text), not merely against whatever the daemon claims about
-// itself.
+// wrong reason. `invalidModelId` forces a real substitution.
+// ROUND 2 FIX (finding 3, Sol round-2 F3): the telemetry scan now binds
+// specifically to `properties.model_id` (the real PostHog event envelope
+// shape) via `findPropertiesModelIdValues`, not any nested key anywhere in
+// the payload literally named `model_id` -- a decoy field elsewhere in the
+// captured body can no longer satisfy this. Round 2 also drops the fixed
+// analytics-header literals and message text (finding 11).
 // -----------------------------------------------------------------------
-await checkCriterion('C1-5', 'local PostHog-shaped capture stub + a substitution-triggering run (unresolvable model id, non-amr agent)', 'the model_id property stamped on the captured analytics event equals the resolved model, not the raw requested one', async () => {
+await checkCriterion('C1-5', 'local PostHog-shaped capture stub + a substitution-triggering run (unresolvable model id, non-amr agent)', 'the model_id property stamped on properties.model_id of the captured analytics event equals the resolved model, not the raw requested one', async () => {
   const fakeBinDir = mkFakeBinDir();
   writeFakeBin(fakeBinDir, 'claude', FAKE_CLAUDE_SCRIPT);
   const capture = await startCaptureServer();
-  const daemon = await bootDaemon({ extraPathDirs: [fakeBinDir], extraEnv: { POSTHOG_KEY: 'verifier-fake-key', POSTHOG_HOST: capture.url } });
+  const daemon = await bootDaemon({ extraPathDirs: [fakeBinDir], extraEnv: { POSTHOG_KEY: randomNonce(8), POSTHOG_HOST: capture.url } });
   try {
-    const projectId = await createProject(daemon.url, 'w1-c1-5');
-    const requestedInvalid = invalidModelId('c1-5');
-    // ANALYTICS_HEADERS: without x-od-analytics-device-id, readAnalyticsContext
+    const projectId = await createProject(daemon.url, randomNonce(8));
+    const requestedInvalid = invalidModelId();
+    const analyticsHeaders = buildAnalyticsHeaders();
+    // analyticsHeaders: without x-od-analytics-device-id, readAnalyticsContext
     // returns null and the daemon's capture call short-circuits before ever
     // reaching PostHog -- confirmed empirically.
-    const run = await startRun(daemon.url, { projectId, agentId: 'claude', model: requestedInvalid, message: 'telemetry probe' }, ANALYTICS_HEADERS);
+    const run = await startRun(daemon.url, { projectId, agentId: 'claude', model: requestedInvalid, message: randomNonce(10) }, analyticsHeaders);
     const status = await pollRunTerminal(daemon.url, run.runId);
     // The daemon only calls analytics.capture() for a SUCCEEDED run from
     // `PUT /api/projects/:id/conversations/:cid/messages/:mid` (registered in
@@ -1491,7 +1645,7 @@ await checkCriterion('C1-5', 'local PostHog-shaped capture stub + a substitution
       runId: run.runId,
       runStatus: status.status,
       telemetryFinalized: true,
-    }, ANALYTICS_HEADERS);
+    }, analyticsHeaders);
     // Give posthog-node's internal flush a moment; it batches rather than
     // sending synchronously on capture().
     await new Promise((resolve) => setTimeout(resolve, 3_000));
@@ -1504,7 +1658,7 @@ await checkCriterion('C1-5', 'local PostHog-shaped capture stub + a substitution
     const executedMatch = /^fake claude reply for (.+)$/.exec(msgForExec?.content ?? '');
     const executedModel = executedMatch?.[1] ?? null;
     const capturedModelIds = capture.bodies.flatMap((b) => {
-      try { return findAllValuesForKey(JSON.parse(b), 'model_id').filter((v): v is string => typeof v === 'string'); } catch { return []; }
+      try { return findPropertiesModelIdValues(JSON.parse(b)); } catch { return []; }
     });
     const rawRequestedCaptured = capturedModelIds.includes(requestedInvalid);
     const resolvedCaptured = typeof resolvedGuess === 'string' && capturedModelIds.includes(resolvedGuess);
@@ -1512,11 +1666,11 @@ await checkCriterion('C1-5', 'local PostHog-shaped capture stub + a substitution
     const problems: string[] = [];
     if (capture.bodies.length === 0) problems.push('no analytics payload was captured at all -- POSTHOG_HOST override did not take effect, or capture() was never called');
     if (!executedModel) problems.push('could not independently observe the executed model from the fake CLI\'s own echoed reply text -- cannot ground-truth the telemetry assertion');
-    if (capturedModelIds.length === 0) problems.push('no captured analytics payload carries a `model_id` property at all -- telemetry is not stamping model_id on this event');
-    if (rawRequestedCaptured) problems.push(`a captured event's model_id equals the RAW REQUESTED model ("${requestedInvalid}") -- run.model still records pre-resolution input`);
+    if (capturedModelIds.length === 0) problems.push('no captured analytics payload carries a `properties.model_id` field at all -- telemetry is not stamping model_id on this event\'s properties');
+    if (rawRequestedCaptured) problems.push(`a captured event's properties.model_id equals the RAW REQUESTED model ("${requestedInvalid}") -- run.model still records pre-resolution input`);
     if (!resolvedGuess) problems.push('no requested/resolved field pair found on the run yet, so resolved-vs-telemetry cannot be cross-checked');
-    else if (!resolvedCaptured) problems.push(`no captured event's model_id equals the persisted resolved model ("${resolvedGuess}")`);
-    if (executedModel && !executedCaptured) problems.push(`no captured event's model_id equals the INDEPENDENTLY-observed executed model ("${executedModel}") -- telemetry may match a self-reported "resolved" value without matching what actually ran`);
+    else if (!resolvedCaptured) problems.push(`no captured event's properties.model_id equals the persisted resolved model ("${resolvedGuess}")`);
+    if (executedModel && !executedCaptured) problems.push(`no captured event's properties.model_id equals the INDEPENDENTLY-observed executed model ("${executedModel}") -- telemetry may match a self-reported "resolved" value without matching what actually ran`);
     record('C1-5', 'local PostHog stub, model_id-bound', 'captured model_id equals the resolved AND independently-observed executed model, never the raw requested one', problems.length === 0, `capturedBodyCount=${capture.bodies.length}\ncapturedModelIds=${JSON.stringify(capturedModelIds)}\nresolvedGuess=${String(resolvedGuess)}\nexecutedModel=${executedModel}\nrawRequestedCaptured=${rawRequestedCaptured}\nresolvedCaptured=${resolvedCaptured}\nfirstBody=${capture.bodies[0]?.slice(0, 800) ?? '(none)'}`, { detail: problems.length ? problems.join('; ') : undefined });
   } finally {
     await daemon.kill();
@@ -1553,7 +1707,7 @@ await checkCriterion('C1-6', 'two SEQUENTIAL solo antigravity runs (positive con
   writeFakeBin(fakeBinDir, 'agy', FAKE_AGY_SCRIPT);
   const daemon = await bootDaemon({ homeDir, extraPathDirs: [fakeBinDir], extraEnv: { FAKE_AGY_DELAY_MS: '250' } });
   try {
-    const projectId = await createProject(daemon.url, 'w1-c1-6');
+    const projectId = await createProject(daemon.url, randomNonce(8));
     const labelA = 'Claude Sonnet 4.6 (Thinking)';
     const labelB = 'Gemini 3.1 Pro (High)';
     function observedModel(msg: MessageRow | null): string | null {
@@ -1563,10 +1717,10 @@ await checkCriterion('C1-6', 'two SEQUENTIAL solo antigravity runs (positive con
 
     // Solo controls: sequential, no overlap, each on its own conversation so
     // there is no shared-conversation side effect between them.
-    const soloA = await startRun(daemon.url, { projectId, agentId: 'antigravity', model: labelA, message: 'solo A' });
+    const soloA = await startRun(daemon.url, { projectId, agentId: 'antigravity', model: labelA, message: randomNonce(10) });
     const soloStatusA = await pollRunTerminal(daemon.url, soloA.runId, 30_000);
     const soloObservedA = observedModel(readMessageRow(daemon.dataDir, soloA.assistantMessageId));
-    const soloB = await startRun(daemon.url, { projectId, agentId: 'antigravity', model: labelB, message: 'solo B' });
+    const soloB = await startRun(daemon.url, { projectId, agentId: 'antigravity', model: labelB, message: randomNonce(10) });
     const soloStatusB = await pollRunTerminal(daemon.url, soloB.runId, 30_000);
     const soloObservedB = observedModel(readMessageRow(daemon.dataDir, soloB.assistantMessageId));
     const soloAOk = soloStatusA.status === 'succeeded' && soloObservedA === labelA;
@@ -1576,8 +1730,8 @@ await checkCriterion('C1-6', 'two SEQUENTIAL solo antigravity runs (positive con
 
     // Concurrent pair: the actual race probe.
     const [runA, runB] = await Promise.all([
-      startRun(daemon.url, { projectId, agentId: 'antigravity', model: labelA, message: 'race A' }),
-      startRun(daemon.url, { projectId, agentId: 'antigravity', model: labelB, message: 'race B' }),
+      startRun(daemon.url, { projectId, agentId: 'antigravity', model: labelA, message: randomNonce(10) }),
+      startRun(daemon.url, { projectId, agentId: 'antigravity', model: labelB, message: randomNonce(10) }),
     ]);
     const [statusA, statusB] = await Promise.all([
       pollRunTerminal(daemon.url, runA.runId, 30_000),
@@ -1651,22 +1805,29 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
   }
   const fakeBinDir = mkFakeBinDir();
   writeFakeBin(fakeBinDir, 'claude', FAKE_CLAUDE_SCRIPT);
-  const daemon = await bootDaemon({ extraPathDirs: [fakeBinDir] });
+  const codexFetchForC17 = ensureMockRecordings('codex');
+  // let (not const): the daemon-restart scenario below reassigns this to a
+  // SECOND booted instance pointed at the SAME dataDir; the outer `finally`
+  // always kills whichever instance is current.
+  let daemon = await bootDaemon({
+    extraPathDirs: [fakeBinDir, MOCKS_BIN],
+    extraEnv: { OD_MOCKS_TRACE: C1_4_FIXED_CODEX_TRACE, OD_MOCKS_NO_DELAY: '1' },
+  });
   try {
-    const projectId = await createProject(daemon.url, 'w1-c1-7');
+    const projectId = await createProject(daemon.url, randomNonce(8));
     // Run 1: small, no cache tokens. Real model id; no self-reported
     // total_cost_usd (left at 0), so a pass here can only mean the NEW
     // meter computed cost from normalized token counts, not merely echoed a
     // provider figure.
     const usage1 = { input_tokens: 200, output_tokens: 50, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
-    const run1 = await startRun(daemon.url, { projectId, agentId: 'claude', model: C17_KNOWN_MODEL, message: usageMarkerPrompt(usage1, 0, 'small run') });
+    const run1 = await startRun(daemon.url, { projectId, agentId: 'claude', model: C17_KNOWN_MODEL, message: usageMarkerPrompt(usage1, 0) });
     const status1 = await pollRunTerminal(daemon.url, run1.runId);
     // Run 2: large, WITH additive cache tokens (cache_read > 0, distinct
     // input) -- the exact shape whose naive/inclusive misreading the wave
     // doc calls out. Same real model id as run1, so any cost difference
     // MUST come from token-volume accounting, not a model-id switch.
     const usage2 = { input_tokens: 4000, output_tokens: 800, cache_creation_input_tokens: 300, cache_read_input_tokens: 900 };
-    const run2 = await startRun(daemon.url, { projectId, agentId: 'claude', model: C17_KNOWN_MODEL, message: usageMarkerPrompt(usage2, 0, 'large run with cache') });
+    const run2 = await startRun(daemon.url, { projectId, agentId: 'claude', model: C17_KNOWN_MODEL, message: usageMarkerPrompt(usage2, 0) });
     const status2 = await pollRunTerminal(daemon.url, run2.runId);
 
     const projectRoute = getRoutes.find((r) => r.routePath.includes(':') && /project/i.test(r.routePath)) ?? getRoutes.find((r) => r.routePath.includes(':'));
@@ -1704,21 +1865,163 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
       // fall back to a separate global-shaped route only if one exists.
       if (cost1 !== null && cost2 !== null) {
         const expectedSum = cost1 + cost2;
-        const projectBodyCandidates = collectStrings(body).filter((s) => /^\d+(\.\d+)?$/.test(s)).map(Number);
+        const projectBodyCandidates = [...collectNumbers(body), ...collectStrings(body).filter((s) => /^\d+(\.\d+)?$/.test(s)).map(Number)];
         let matchesSum = projectBodyCandidates.some((t) => Math.abs(t - expectedSum) < 1e-6);
         let sumSource = `project-scoped GET ${projectRoute?.routePath}`;
         if (!matchesSum && globalRoute) {
           const totalResp = await httpJson('GET', toUrl(globalRoute.routePath));
           if (totalResp.status === 200) {
-            const totalCandidates = collectStrings(totalResp.json).filter((s) => /^\d+(\.\d+)?$/.test(s)).map(Number);
+            const totalCandidates = [...collectNumbers(totalResp.json), ...collectStrings(totalResp.json).filter((s) => /^\d+(\.\d+)?$/.test(s)).map(Number)];
             matchesSum = totalCandidates.some((t) => Math.abs(t - expectedSum) < 1e-6);
             sumSource = `global GET ${globalRoute.routePath}`;
           }
         }
         if (!matchesSum) problems.push(`no route (checked ${sumSource}${globalRoute ? '' : '; no separate global route exists'}) exposes a number matching cost1+cost2 (${expectedSum}) -- project aggregation is not mandatory-satisfied (evidence: projectBodyCandidates=${JSON.stringify(projectBodyCandidates)})`);
       }
+
+      // ROUND 2 ADDITION (finding 5, Sol round-2 ruling 5): "retry/resume,
+      // daemon restart, cache-inclusive/additive accounting, and multi-lane
+      // behavior are explicit criterion scope [W1-routing-truth.md:94]...
+      // deferring them until implementation would allow the verifier
+      // contract to move after implementation begins." All four are added
+      // now, gated on the same `cost1`/`cost2` preconditions above so they
+      // only run once the basic aggregate is already established.
+      let lifecycleAggregate = cost1 !== null && cost2 !== null ? cost1 + cost2 : null;
+      if (lifecycleAggregate !== null && projectRoute) {
+        // DAEMON RESTART: kill this instance, boot a SECOND one pointed at
+        // the SAME dataDir, and requery the SAME project's aggregate on the
+        // NEW process -- proving the cost meter's data survives a real
+        // process restart, not merely an in-memory cache.
+        const dataDirBeforeRestart = daemon.dataDir;
+        await daemon.kill();
+        daemon = await bootDaemon({
+          dataDir: dataDirBeforeRestart,
+          extraPathDirs: [fakeBinDir, MOCKS_BIN],
+          extraEnv: { OD_MOCKS_TRACE: C1_4_FIXED_CODEX_TRACE, OD_MOCKS_NO_DELAY: '1' },
+        });
+        const postRestartResp = await httpJson('GET', toUrl(projectRoute.routePath));
+        if (postRestartResp.status !== 200) {
+          problems.push(`DAEMON RESTART: GET ${projectRoute.routePath} on the restarted daemon did not return 200 (status=${postRestartResp.status}) -- cost data did not survive the restart`);
+        } else {
+          const postRestartCandidates = [...collectNumbers(postRestartResp.json), ...collectStrings(postRestartResp.json).filter((s) => /^\d+(\.\d+)?$/.test(s)).map(Number)];
+          if (!postRestartCandidates.some((t) => Math.abs(t - lifecycleAggregate!) < 1e-6)) {
+            problems.push(`DAEMON RESTART: project aggregate after a real process restart (same dataDir) does not still match cost1+cost2 (${lifecycleAggregate}) -- cost data did not survive the restart (candidates=${JSON.stringify(postRestartCandidates)})`);
+          }
+        }
+
+        // RESUME: a second run continuing the SAME conversation (a real,
+        // empirically-verified continuation path: POST /api/runs with the
+        // prior run's own `conversationId`) -- the aggregate must grow by
+        // exactly that run's cost, not lose or double-count it.
+        // EVASION-ANALYSIS-ADJACENT NOTE: `od run continue <runId>` (the
+        // CLI's own same-run resume command) was tried first and rejected
+        // after empirical testing -- it requires `run.resumable === true`,
+        // which server.ts sets ONLY for a resumable *failure*
+        // (`run.resumable = resumableFailure`, confirmed by reading it), so
+        // it categorically refuses "run-not-resumable" for any run that
+        // SUCCEEDED, which every run in this file's harness does by design.
+        // That command tests recovering a crashed session, not conversation
+        // continuation, so it is the wrong mechanism for this criterion's
+        // "resume" scope; a second same-conversation run is the mechanism
+        // this repo's own multi-turn chat flow actually uses.
+        const usage3 = { input_tokens: 300, output_tokens: 60, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+        const run3 = await startRun(daemon.url, { projectId, agentId: 'claude', model: C17_KNOWN_MODEL, message: usageMarkerPrompt(usage3, 0) });
+        await pollRunTerminal(daemon.url, run3.runId);
+        const usage4 = { input_tokens: 150, output_tokens: 30, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+        const run4 = await startRun(daemon.url, { projectId, conversationId: run3.conversationId, agentId: 'claude', model: C17_KNOWN_MODEL, message: usageMarkerPrompt(usage4, 0) });
+        await pollRunTerminal(daemon.url, run4.runId, 20_000);
+        if (run4.conversationId !== run3.conversationId) {
+          problems.push(`RESUME: the continuation run's conversationId ("${run4.conversationId}") does not match the original ("${run3.conversationId}") -- not actually a resumed/continued conversation`);
+        }
+        const resumeResp = await httpJson('GET', toUrl(projectRoute.routePath));
+        const cost3 = resumeResp.json !== null ? findRunNumberField(resumeResp.json, run3.runId, /cost|price|usd|spend/i) : null;
+        const cost4 = resumeResp.json !== null ? findRunNumberField(resumeResp.json, run4.runId, /cost|price|usd|spend/i) : null;
+        if (cost3 === null) problems.push(`RESUME: no numeric cost bound to run3's id (${run3.runId})`);
+        if (cost4 === null) problems.push(`RESUME: no numeric cost bound to the continuation run's id (${run4.runId})`);
+        if (cost3 !== null && cost4 !== null) {
+          const expectedResumeSum = lifecycleAggregate + cost3 + cost4;
+          const resumeCandidates = [...collectNumbers(resumeResp.json), ...collectStrings(resumeResp.json).filter((s) => /^\d+(\.\d+)?$/.test(s)).map(Number)];
+          if (!resumeCandidates.some((t) => Math.abs(t - expectedResumeSum) < 1e-6)) {
+            problems.push(`RESUME: project aggregate after a second run in the same (resumed/continued) conversation does not match cost1+cost2+cost3+cost4 (${expectedResumeSum}) -- resume is losing or double-counting cost (candidates=${JSON.stringify(resumeCandidates)})`);
+          } else {
+            lifecycleAggregate = expectedResumeSum;
+          }
+        }
+
+        // MULTI-LANE: a REAL codex mock recording (a genuinely different
+        // provider convention -- codex's own usage accounting is cumulative/
+        // cache-INCLUSIVE, confirmed by reading codex-rollout-usage.ts's own
+        // comment, vs claude's additive shape exercised above) joins the
+        // SAME project. It has no CODEX_HOME rollout file in this harness
+        // (the mock replay corpus does not produce one), so a correct
+        // implementation legitimately has no cost signal for it -- this
+        // proves the aggregate is not corrupted (not silently including
+        // garbage, not dropping the other runs) by a second lane joining,
+        // accepting EITHER a correctly-extended sum (if the lane does
+        // contribute a real cost) OR an unchanged sum bound to the SAME
+        // partial-marker convention C1-9 requires.
+        if (codexFetchForC17.ok) {
+          const codexRun = await startRun(daemon.url, { projectId, agentId: 'codex', model: 'gpt-5.6-codex', message: randomNonce(10), context: {} });
+          await pollRunTerminal(daemon.url, codexRun.runId, 30_000);
+          const multiLaneResp = await httpJson('GET', toUrl(projectRoute.routePath));
+          if (multiLaneResp.status !== 200) {
+            problems.push(`MULTI-LANE: GET ${projectRoute.routePath} after adding a codex run did not return 200 (status=${multiLaneResp.status})`);
+          } else {
+            const codexCost = findRunNumberField(multiLaneResp.json, codexRun.runId, /cost|price|usd|spend/i);
+            const multiLaneCandidates = [...collectNumbers(multiLaneResp.json), ...collectStrings(multiLaneResp.json).filter((s) => /^\d+(\.\d+)?$/.test(s)).map(Number)];
+            const matchesUnchanged = multiLaneCandidates.some((t) => Math.abs(t - lifecycleAggregate!) < 1e-6);
+            const matchesExtended = codexCost !== null && multiLaneCandidates.some((t) => Math.abs(t - (lifecycleAggregate! + codexCost)) < 1e-6);
+            if (matchesUnchanged) {
+              const bodyText = JSON.stringify(multiLaneResp.json).toLowerCase();
+              const hasPartialityMarker = ['partial', 'incomplete', 'unavailable', 'unpricedcount', 'unavailablecount'].some((m) => bodyText.includes(m));
+              if (!hasPartialityMarker) problems.push('MULTI-LANE: the aggregate stayed unchanged after a codex run joined the project, but the response carries no partiality/unavailable marker anywhere -- an unchanged aggregate must be explained as partial, not silent');
+            } else if (!matchesExtended) {
+              problems.push(`MULTI-LANE: after a codex run joined the project, the aggregate matches neither "unchanged" (${lifecycleAggregate}) nor "extended by the codex run's own cost" (codexCost=${codexCost}) -- the second lane corrupted the aggregate (candidates=${JSON.stringify(multiLaneCandidates)})`);
+            }
+          }
+        } else {
+          problems.push(`MULTI-LANE probe skipped: could not fetch a codex mock recording: ${codexFetchForC17.error}`);
+        }
+      }
     }
-    record('C1-7', `GET ${projectRoute?.routePath ?? '?'} / GET ${globalRoute?.routePath ?? '?'}`, 'per-run cost is id-bound and tracks token volume (run2 > run1) on a real, honestly-priceable model id; cache-additive tokens are not double-counted or dropped; a project aggregate mandatorily matches the per-run sum', problems.length === 0, `routes=${JSON.stringify(routes)}\nrun1(id=${run1.runId} status=${status1.status} usage=${JSON.stringify(usage1)})\nrun2(id=${run2.runId} status=${status2.status} usage=${JSON.stringify(usage2)})\nperRun1Body=${perRun1 ? JSON.stringify(perRun1.json).slice(0, 1500) : '(n/a)'}`, { detail: problems.length ? problems.join('; ') : undefined });
+
+    // CACHE-INCLUSIVE convention (finding 5): codex's own usage accounting
+    // is cache-INCLUSIVE (`input_tokens` already contains the cached
+    // subset, confirmed by reading codex-rollout-usage.ts's own comment),
+    // the opposite of claude's additive shape exercised above. The live
+    // HTTP path for it is not yet wired to any route (confirmed: zero call
+    // sites for `extractCodexLastTurnFirstCallUsage`/
+    // `codexSessionIdFromRunEvents` anywhere in server.ts today -- this is
+    // pre-built NM-20 infrastructure, not yet integrated), so this directly
+    // imports and calls the REAL, unmodified, already-shipped pure
+    // extractor with a crafted rollout-shaped JSONL carrying KNOWN
+    // cache-inclusive numbers, and asserts it reports the INCLUSIVE total
+    // (not total+cached) -- a concrete regression guard on the exact
+    // invariant this criterion is required to cover, honest about the
+    // boundary: it does not yet prove the future usage*.ts route WIRES this
+    // in, only that the convention it must reuse is itself correct.
+    try {
+      const codexUsageMod = (await import(pathToFileURL(path.join(repoRoot, 'apps/daemon/src/codex-rollout-usage.ts')).href)) as {
+        extractCodexLastTurnFirstCallUsage: (rolloutJsonl: string) => { first_call_input_tokens: number; first_call_cache_read_input_tokens: number; first_call_cache_hit_ratio: number } | null;
+      };
+      const inclusiveTotal = 1000;
+      const cachedSubset = 400;
+      const rollout = [
+        JSON.stringify({ payload: { type: 'task_started' } }),
+        JSON.stringify({ payload: { type: 'token_count', info: { last_token_usage: { input_tokens: inclusiveTotal, cached_input_tokens: cachedSubset } } } }),
+      ].join('\n');
+      const extracted = codexUsageMod.extractCodexLastTurnFirstCallUsage(rollout);
+      if (!extracted) {
+        problems.push('CACHE-INCLUSIVE: extractCodexLastTurnFirstCallUsage returned null for a well-formed rollout with a real first-call token_count');
+      } else {
+        if (extracted.first_call_input_tokens !== inclusiveTotal) problems.push(`CACHE-INCLUSIVE: extracted first_call_input_tokens=${extracted.first_call_input_tokens}, expected the INCLUSIVE total ${inclusiveTotal} (codex's input_tokens already contains the cached subset -- it must not be re-added)`);
+        if (extracted.first_call_input_tokens === inclusiveTotal + cachedSubset) problems.push(`CACHE-INCLUSIVE: extracted first_call_input_tokens equals total+cached (${inclusiveTotal + cachedSubset}) -- the cached subset is being double-counted as additive when codex's own convention is inclusive`);
+        if (extracted.first_call_cache_read_input_tokens !== cachedSubset) problems.push(`CACHE-INCLUSIVE: extracted first_call_cache_read_input_tokens=${extracted.first_call_cache_read_input_tokens}, expected ${cachedSubset}`);
+      }
+    } catch (err) {
+      problems.push(`CACHE-INCLUSIVE: could not import/call codex-rollout-usage.ts's extractCodexLastTurnFirstCallUsage: ${String((err as Error)?.message ?? err)}`);
+    }
+    record('C1-7', `GET ${projectRoute?.routePath ?? '?'} / GET ${globalRoute?.routePath ?? '?'} + daemon restart + resume + multi-lane + cache-inclusive pure-function check`, 'per-run cost is id-bound and tracks token volume (run2 > run1) on a real, honestly-priceable model id; cache-additive tokens are not double-counted or dropped; a project aggregate mandatorily matches the per-run sum and survives a restart, a resume chain, and a second (cache-inclusive) lane joining', problems.length === 0, `routes=${JSON.stringify(routes)}\nrun1(id=${run1.runId} status=${status1.status} usage=${JSON.stringify(usage1)})\nrun2(id=${run2.runId} status=${status2.status} usage=${JSON.stringify(usage2)})\nperRun1Body=${perRun1 ? JSON.stringify(perRun1.json).slice(0, 1500) : '(n/a)'}`, { detail: problems.length ? problems.join('; ') : undefined });
   } finally {
     await daemon.kill();
   }
@@ -1826,9 +2129,9 @@ await checkCriterion('C1-8', 'cli.ts SUBCOMMAND_MAP diff + capability-manifest.j
   writeFakeBin(fakeBinDir, 'claude', FAKE_CLAUDE_SCRIPT);
   const daemon = await bootDaemon({ extraPathDirs: [fakeBinDir] });
   try {
-    const projectId = await createProject(daemon.url, 'w1-c1-8');
+    const projectId = await createProject(daemon.url, randomNonce(8));
     const usage = { input_tokens: 777, output_tokens: 111, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
-    const run = await startRun(daemon.url, { projectId, agentId: 'claude', model: 'claude-sonnet-4-5', message: usageMarkerPrompt(usage, 0, 'cost meter probe') });
+    const run = await startRun(daemon.url, { projectId, agentId: 'claude', model: 'claude-sonnet-4-5', message: usageMarkerPrompt(usage, 0) });
     await pollRunTerminal(daemon.url, run.runId);
     const httpUrl = `${daemon.url}${boundRoute.routePath.replace(/:\w+/, encodeURIComponent(projectId))}`;
     const httpResp = await httpJson('GET', httpUrl);
@@ -1838,6 +2141,7 @@ await checkCriterion('C1-8', 'cli.ts SUBCOMMAND_MAP diff + capability-manifest.j
     const httpTopKeys = isRecord(httpResp.json) ? Object.keys(httpResp.json).sort() : null;
     const cliTopKeys = isRecord(cliJson) ? Object.keys(cliJson).sort() : null;
     const p2: string[] = [];
+    const p2Evidence: Record<string, unknown> = {};
     if (httpResp.status !== 200) p2.push(`GET ${boundRoute.routePath} did not return 200 (status=${httpResp.status})`);
     if (cliResp.status !== 0) p2.push(`od ${boundKey} --json exited ${cliResp.status}: ${cliResp.stderr.slice(0, 500) || cliResp.stdout.slice(0, 500)}`);
     if (!httpTopKeys) p2.push('HTTP response body is not a JSON object');
@@ -1854,7 +2158,74 @@ await checkCriterion('C1-8', 'cli.ts SUBCOMMAND_MAP diff + capability-manifest.j
     if (httpCost === null) p2.push(`no numeric cost/price field bound to run id ${run.runId} found in the HTTP response`);
     if (cliCost === null) p2.push(`no numeric cost/price field bound to run id ${run.runId} found in the CLI --json output`);
     if (httpCost !== null && cliCost !== null && Math.abs(httpCost - cliCost) > 1e-6) p2.push(`HTTP surface reports cost=${httpCost} for run ${run.runId} but the CLI surface reports cost=${cliCost} for the SAME run -- the two surfaces disagree on authoritative data`);
-    record('C1-8', `od ${boundKey} --json vs GET ${boundRoute.routePath}, value-bound to run ${run.runId}`, 'CLI and HTTP surfaces expose the same cost-meter contract shape AND the identical numeric cost for the same run', p2.length === 0, `boundKey=${boundKey}\nboundRoute=${JSON.stringify(boundRoute)}\nuiEntryPoint=${boundRow.uiEntryPoint}\nhttpTopKeys=${JSON.stringify(httpTopKeys)}\ncliTopKeys=${JSON.stringify(cliTopKeys)}\nhttpCost=${httpCost}\ncliCost=${cliCost}\ncliStdout=${cliResp.stdout.slice(-800)}`, { detail: p2.length ? p2.join('; ') : undefined });
+
+    // ROUND 2 ADDITION (finding 6, Sol round-2 F6, ruling 2): "a nonempty
+    // prose field is not evidence that the cost surface exists or displays
+    // the correct value." A LITERAL behavioral UI proof is added: a real
+    // browser visits a small, fixed set of plausible pages (home, the
+    // project's own page, its conversation page -- this PRD names no
+    // specific route/selector, so this is a bounded crawl rather than a
+    // guess at one exact location) and the ACTUAL RENDERED TEXT of at least
+    // one must contain the KNOWN cost figure (in a few plausible currency
+    // formattings), ground-truthed against `httpCost` computed above from
+    // the real HTTP response for a run with a controlled, known usage
+    // shape. Documentation can no longer close this half.
+    if (httpCost !== null) {
+      const pw = resolvePlaywright();
+      if (!pw.ok) {
+        p2.push(`UI rendered-value check skipped: ${pw.error}`);
+      } else {
+        const fakeBinDir2 = mkFakeBinDir();
+        writeFakeBin(fakeBinDir2, 'claude', FAKE_CLAUDE_SCRIPT);
+        let webSuite: WebSuiteHandle | null = null;
+        let browser: PlaywrightBrowser | null = null;
+        try {
+          webSuite = await bootWebSuite({ PATH: `${fakeBinDir2}${path.delimiter}${process.env.PATH ?? ''}` });
+          const uiProjectResp = await httpJson('POST', `${webSuite.daemonUrl}/api/projects`, { id: randomNonce(8), name: randomNonce(6) });
+          const uiProjectId = (uiProjectResp.json as { project?: { id?: string } })?.project?.id;
+          if (!uiProjectId) throw new Error(`could not create project via web daemon: ${uiProjectResp.text.slice(0, 300)}`);
+          const uiUsage = { input_tokens: 888, output_tokens: 222, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+          const uiRun = await startRun(webSuite.daemonUrl, { projectId: uiProjectId, agentId: 'claude', model: 'claude-sonnet-4-5', message: usageMarkerPrompt(uiUsage, 0) });
+          await pollRunTerminal(webSuite.daemonUrl, uiRun.runId);
+          const uiHttpUrl = `${webSuite.daemonUrl}${boundRoute.routePath.replace(/:\w+/, encodeURIComponent(uiProjectId))}`;
+          const uiHttpResp = await httpJson('GET', uiHttpUrl);
+          const uiCost = uiHttpResp.json !== null ? findRunNumberField(uiHttpResp.json, uiRun.runId, /cost|price|usd|spend/i) : null;
+          if (uiCost === null) {
+            p2.push('UI rendered-value check: could not independently establish a known cost for the web-suite run (HTTP route did not report one) -- cannot verify a rendered value against it');
+          } else {
+            const candidates = [String(uiCost), uiCost.toFixed(2), uiCost.toFixed(4), `$${uiCost.toFixed(2)}`, `$${uiCost.toFixed(4)}`];
+            browser = await pw.pw.chromium.launch({ headless: true });
+            const page = await browser.newPage();
+            await seedWebClientConfig(page, 'claude');
+            const candidatePages = [
+              `${webSuite.webUrl}/`,
+              `${webSuite.webUrl}/projects/${encodeURIComponent(uiProjectId)}`,
+              `${webSuite.webUrl}/projects/${encodeURIComponent(uiProjectId)}/conversations/${encodeURIComponent(uiRun.conversationId)}`,
+            ];
+            let renderedMatch: string | null = null;
+            for (const url of candidatePages) {
+              try {
+                await page.goto(url, { waitUntil: 'load', timeout: 20_000 });
+                await page.waitForTimeout(1_000);
+                const bodyText = await page.evaluate(() => (globalThis as unknown as { document: { body: { innerText: string } } }).document.body.innerText);
+                const hit = candidates.find((c) => (bodyText as unknown as string).includes(c));
+                if (hit) { renderedMatch = `${url} contains "${hit}"`; break; }
+              } catch { /* try the next candidate page */ }
+            }
+            if (!renderedMatch) p2.push(`UI rendered-value check: none of the candidate pages (${candidatePages.join(', ')}) render the known cost figure (uiCost=${uiCost}, tried formats ${JSON.stringify(candidates)}) -- documentation of a UI entry point is not evidence the cost actually displays`);
+            p2Evidence.uiRenderedMatch = renderedMatch;
+            p2Evidence.uiCost = uiCost;
+          }
+        } catch (err) {
+          p2.push(`UI rendered-value check failed: ${String((err as Error)?.message ?? err)}`);
+        } finally {
+          try { await browser?.close(); } catch { /* best effort */ }
+          try { await webSuite?.stop(); } catch { /* best effort */ }
+        }
+      }
+    }
+
+    record('C1-8', `od ${boundKey} --json vs GET ${boundRoute.routePath}, value-bound to run ${run.runId}, plus a real browser rendered-value check`, 'CLI and HTTP surfaces expose the same cost-meter contract shape AND the identical numeric cost for the same run, AND at least one real page renders the known cost figure', p2.length === 0, `boundKey=${boundKey}\nboundRoute=${JSON.stringify(boundRoute)}\nuiEntryPoint=${boundRow.uiEntryPoint}\nhttpTopKeys=${JSON.stringify(httpTopKeys)}\ncliTopKeys=${JSON.stringify(cliTopKeys)}\nhttpCost=${httpCost}\ncliCost=${cliCost}\n${JSON.stringify(p2Evidence)}\ncliStdout=${cliResp.stdout.slice(-800)}`, { detail: p2.length ? p2.join('; ') : undefined });
   } finally {
     await daemon.kill();
   }
@@ -1874,13 +2245,34 @@ await checkCriterion('C1-8', 'cli.ts SUBCOMMAND_MAP diff + capability-manifest.j
 // enum default) and still pass. The "unavailable" claim is now bound to a
 // record that specifically mentions the UNPRICED run's own id
 // (findRunScopedRecord), the same run-id-anchoring pattern findRunNumberField
-// already uses elsewhere in this file. It also now binds the priced run's
-// OWN numeric cost (not just a generic "hasNumericTotal" regex over the
-// whole body) and adds a real browser check that the unpriced run's
-// per-message DOM node never renders a bare "$0.00"/confident-zero without a
-// qualifying word nearby (finding 7's "never checks the rendered $0.00/
-// unknown UI").
+// already uses elsewhere in this file.
+// ROUND 2 FIX (finding 7, Sol round-2 F7): round 1's "unavailable" check
+// still searched the WHOLE scoped record's stringified JSON for the
+// substring "unavailable", so an unrelated field on that same record (e.g.
+// an unrelated status enum) could satisfy it. `findPricingUnavailableField`
+// now requires a key whose NAME is pricing/cost-shaped (matching
+// langfuse-trace.ts's own real `pricing_version`/`cost_status` naming
+// convention, confirmed by reading it) AND whose VALUE is exactly
+// "unavailable" -- binding to the PRICING FIELD, not any field. The
+// rendered-UI half is also now a HARD requirement: round 1 only failed on a
+// bare confident zero and let "no unknown/unavailable indication rendered
+// at all" pass; it now REQUIRES a qualifying word to be present in the
+// unpriced message's rendered text, so absence fails.
 // -----------------------------------------------------------------------
+function findPricingUnavailableField(record: Record<string, unknown>, _seen: Set<unknown> = new Set()): { key: string; value: string } | null {
+  if (_seen.has(record)) return null;
+  _seen.add(record);
+  for (const [k, v] of Object.entries(record)) {
+    if (typeof v === 'string' && v.toLowerCase() === 'unavailable' && /cost|price|pricing/i.test(k)) {
+      return { key: k, value: v };
+    }
+    if (isRecord(v)) {
+      const nested = findPricingUnavailableField(v, _seen);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
 await checkCriterion('C1-9', 'one priced fake-claude run + one unpriced fake-agy run in the same project, read through usage*.ts AND rendered in a real browser', 'the unpriced run\'s OWN record claims unavailable pricing (never a confident $0.00, in the API or the rendered UI), and any numeric project total co-occurs with a partiality marker', async () => {
   const usageRouteFiles = findUsageRouteFiles();
   if (usageRouteFiles.length === 0) {
@@ -1901,15 +2293,15 @@ await checkCriterion('C1-9', 'one priced fake-claude run + one unpriced fake-agy
   const problems: string[] = [];
   let unpricedAssistantMessageId: string | null = null;
   try {
-    const projectId = await createProject(daemon.url, 'w1-c1-9');
+    const projectId = await createProject(daemon.url, randomNonce(8));
     const pricedUsage = { input_tokens: 500, output_tokens: 100, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
-    const pricedRun = await startRun(daemon.url, { projectId, agentId: 'claude', model: 'claude-sonnet-4-5', message: usageMarkerPrompt(pricedUsage, 0, 'priced') });
+    const pricedRun = await startRun(daemon.url, { projectId, agentId: 'claude', model: 'claude-sonnet-4-5', message: usageMarkerPrompt(pricedUsage, 0) });
     await pollRunTerminal(daemon.url, pricedRun.runId);
     // antigravity's plain stream carries no usage/cost signal at all --
     // this is a REAL evidence ceiling (streamFormat:'plain'), not a
     // contrived gap, so pricing for this run should legitimately be
     // unavailable.
-    const unpricedRun = await startRun(daemon.url, { projectId, agentId: 'antigravity', model: 'Gemini 3.1 Pro (High)', message: 'unpriced' });
+    const unpricedRun = await startRun(daemon.url, { projectId, agentId: 'antigravity', model: 'Gemini 3.1 Pro (High)', message: randomNonce(10) });
     await pollRunTerminal(daemon.url, unpricedRun.runId, 15_000);
     unpricedAssistantMessageId = unpricedRun.assistantMessageId;
 
@@ -1921,10 +2313,10 @@ await checkCriterion('C1-9', 'one priced fake-claude run + one unpriced fake-agy
       const bodyText = JSON.stringify(resp.json);
       const pricedCost = findRunNumberField(resp.json, pricedRun.runId, /cost|price|usd|spend/i);
       const unpricedScoped = findRunScopedRecord(resp.json, unpricedRun.runId);
-      const unpricedClaimsUnavailable = unpricedScoped ? JSON.stringify(unpricedScoped).toLowerCase().includes('unavailable') : false;
+      const unpricedPricingField = unpricedScoped ? findPricingUnavailableField(unpricedScoped) : null;
       if (pricedCost === null) problems.push(`no numeric cost/price field bound to the PRICED run's id (${pricedRun.runId}) -- a known-usage run should have a real numeric cost`);
       if (!unpricedScoped) problems.push(`no record in the response mentions the unpriced run's own id (${unpricedRun.runId}) -- cannot bind the "unavailable" claim to that specific run`);
-      else if (!unpricedClaimsUnavailable) problems.push(`the unpriced run's OWN record (${JSON.stringify(unpricedScoped).slice(0, 300)}) does not mention "unavailable" -- an unrelated "unavailable" elsewhere in the body does not count`);
+      else if (!unpricedPricingField) problems.push(`the unpriced run's OWN record (${JSON.stringify(unpricedScoped).slice(0, 300)}) has no pricing/cost-shaped field whose value is exactly "unavailable" -- an unrelated field, or a value merely CONTAINING "unavailable", does not count`);
       // A bare "$0.00"/0 total with no partial/unavailable marker anywhere
       // alongside it would misrepresent a confident zero -- check that SOME
       // partiality signal co-occurs with a numeric total.
@@ -1957,10 +2349,10 @@ await checkCriterion('C1-9', 'one priced fake-claude run + one unpriced fake-agy
       writeFakeBin(fakeBinDir2, 'claude', FAKE_CLAUDE_SCRIPT);
       writeFakeBin(fakeBinDir2, 'agy', FAKE_AGY_SCRIPT);
       webSuite = await bootWebSuite({ PATH: `${fakeBinDir2}${path.delimiter}${process.env.PATH ?? ''}`, FAKE_AGY_DELAY_MS: '20' });
-      const projectResp = await httpJson('POST', `${webSuite.daemonUrl}/api/projects`, { id: `w1-c1-9-ui-${crypto.randomBytes(4).toString('hex')}`, name: 'c1-9-ui' });
+      const projectResp = await httpJson('POST', `${webSuite.daemonUrl}/api/projects`, { id: randomNonce(8), name: randomNonce(6) });
       const projectId = (projectResp.json as { project?: { id?: string } })?.project?.id;
       if (!projectId) throw new Error(`could not create project via web daemon: ${projectResp.text.slice(0, 300)}`);
-      const unpricedRun = await startRun(webSuite.daemonUrl, { projectId, agentId: 'antigravity', model: 'Gemini 3.1 Pro (High)', message: 'unpriced ui' });
+      const unpricedRun = await startRun(webSuite.daemonUrl, { projectId, agentId: 'antigravity', model: 'Gemini 3.1 Pro (High)', message: randomNonce(10) });
       await pollRunTerminal(webSuite.daemonUrl, unpricedRun.runId, 15_000);
       browser = await pw.pw.chromium.launch({ headless: true });
       const page = await browser.newPage();
@@ -1970,18 +2362,26 @@ await checkCriterion('C1-9', 'one priced fake-claude run + one unpriced fake-agy
       const locator = page.locator(selector);
       let found = false;
       try { await locator.waitFor({ timeout: 15_000 }); found = (await locator.count()) > 0; } catch { found = false; }
-      if (found) {
+      if (!found) {
+        problems.push(`the unpriced run's rendered message node (${selector}) did not appear within 15s -- cannot verify a rendered unknown/unavailable pricing indication`);
+      } else {
         const text = await locator.first().innerText({ timeout: 5_000 }).catch(() => '');
-        // A bare confident-zero pattern ($0, $0.00, 0.00 next to a currency
-        // sign) with no qualifying word nearby is the anti-pattern this
-        // criterion exists to catch. Absence of ANY cost text on this node
-        // is fine (cost UI may live elsewhere); a BARE zero is not.
-        const bareZero = /\$\s?0(\.0{1,2})?(?!\d)/.test(text) && !/unavailable|unknown|n\/a|--|—/i.test(text);
+        // ROUND 2 FIX (finding 7): round 1 only failed on a bare confident
+        // zero and silently PASSED when no cost indication rendered at all.
+        // A qualifying word is now REQUIRED -- absence fails. Deliberately
+        // narrowed to "unavailable"/"unknown" only (dropping generic
+        // punctuation like "--"/an em-dash/"n/a" from round 1's draft) --
+        // this message's OTHER rendered chrome (footer buttons, etc.,
+        // confirmed empirically via C1-2's own DOM probe evidence) is free-
+        // form and a bare em-dash or hyphen pair is common enough in
+        // ordinary UI punctuation to false-positive; "unavailable"/"unknown"
+        // match the actual convention already used elsewhere in this
+        // codebase (langfuse-trace.ts's own literal `'unavailable'`).
+        const hasQualifier = /unavailable|unknown/i.test(text);
+        const bareZero = /\$\s?0(\.0{1,2})?(?!\d)/.test(text) && !hasQualifier;
         if (bareZero) problems.push(`the unpriced run's rendered message node shows a bare zero-cost figure with no qualifying word nearby: "${text.slice(0, 200)}"`);
+        if (!hasQualifier) problems.push(`the unpriced run's rendered message node shows NO unknown/unavailable pricing indication at all (text: "${text.slice(0, 200)}") -- absence of a rendered indication is a failure, not merely a bare zero`);
       }
-      // Not finding the node at all is not itself a UI-check failure here --
-      // C1-2/C1-11 already assert the node renders; this check is scoped to
-      // "if a cost figure IS shown, it must not be a bare confident zero".
     } catch (err) {
       problems.push(`UI check failed: ${String((err as Error)?.message ?? err)}`);
     } finally {
@@ -1995,77 +2395,72 @@ await checkCriterion('C1-9', 'one priced fake-claude run + one unpriced fake-agy
 
 // -----------------------------------------------------------------------
 // C1-10 -- Kimi tool failure CANNOT terminate as success. Property test
-// shape (VERIFICATION-CONTRACT R3/R4): a genuine repro (silent-non-bash-
-// failure) PLUS a second repro (marked-bash-failure) that this file
-// originally assumed was "already correctly classified" by the existing
-// isError regex -- an empirical dry run of this exact harness during
-// authoring proved that assumption wrong: `isError:true` on a kimi
-// tool_result event does not by itself flip the RUN's overall status today
-// for either shape (nothing currently wires per-tool isError into run-level
-// success/failure classification at all; the existing regex only feeds a
-// separate tool-call-loop-guard signal). Both failure shapes are therefore
-// genuine repros the fix must close. The one true R4 CONTROL here is
-// `posControl` (a clean run with no failing tool call), which must stay
-// "succeeded" -- proving the fix doesn't fail every kimi run indiscriminately.
-// ROUND 1 FIX (finding 8): "the `od run start --follow` process is never
-// polled to establish that its terminal run failed... no clean CLI-follow
-// control... making every --follow invocation exit nonzero passes." The
-// previous CLI-exit-code probe started a BRAND NEW run via `od run start
-// --follow` whose own failure was never independently confirmed via HTTP,
-// so a CLI that exits nonzero unconditionally (a real bug distinct from the
-// one this criterion targets) would still pass. This now uses `od run
-// watch <runId> --json` bound to the ALREADY-HTTP-CONFIRMED-failed `repro`
-// run id, plus a clean-success control that follows `posControl`'s own
-// run id and must exit 0 -- proving the CLI's exit code genuinely tracks
-// terminal run status, in both directions, for these SPECIFIC runs. A
-// third failure shape (silent-non-bash-failure-b, a distinct ENOENT-style
-// message, added to FAKE_KIMI_SCRIPT) also closes "two fixed payloads [do
-// not] establish... 'any non-zero tool-error field'" -- a fix that special-
-// cases the one EPERM string cannot pass this third repro.
+// shape (VERIFICATION-CONTRACT R3/R4): an empirical dry run of this exact
+// harness during authoring proved that `isError:true` on a kimi tool_result
+// event does not by itself flip the RUN's overall status today (nothing
+// currently wires per-tool isError into run-level success/failure
+// classification at all). The one true R4 CONTROL here is `posControl` (a
+// clean run with no failing tool call), which must stay "succeeded" --
+// proving the fix doesn't fail every kimi run indiscriminately.
+// ROUND 1 FIX (finding 8, part 1): `od run watch <runId> --json` is bound
+// to a SPECIFIC, already-HTTP-confirmed run id (not a fresh run the CLI
+// itself started), so a CLI that exits nonzero unconditionally cannot pass.
+// ROUND 2 REWRITE (finding 8, part 2 / Sol round-2 F8): "the mock supplies
+// only three fixed textual shell-error phrases... it does not exercise the
+// specified property of an arbitrary nonzero tool-error field. A three-
+// string special case remains sufficient." Round 1's "third phrasing" was
+// still a 4th fixed literal. This now runs N=5 INDEPENDENTLY RANDOMIZED
+// failure-content probes per execution (via `fakeKimiRandomFailureModelId`,
+// drawn from a 7-family template pool with per-call random details -- see
+// `randomToolErrorContent`), each of which must fail the run. No two
+// verifier runs, and no two probes within one run, ever see the same
+// literal content string, so a fixed enum of special-cased phrases cannot
+// pass this loop.
 // -----------------------------------------------------------------------
-await checkCriterion('C1-10', 'four fake-kimi runs: two textually-distinct silent non-Bash failures, a marked Bash failure, and a clean success (the R4 control) -- each CLI-followed via `od run watch` bound to its own HTTP-confirmed status', 'any run whose tool call reports a genuine failure (marked or unmarked, in either failure phrasing) ends up "failed", CLI-visible via a non-zero `od run watch` exit bound to that SPECIFIC run; the clean control exits 0 for its OWN run', async () => {
+await checkCriterion('C1-10', 'N=5 INDEPENDENTLY RANDOMIZED fake-kimi tool-failure content probes + one exact-marker control + one clean-success control, each CLI-followed via `od run watch` bound to its own HTTP-confirmed status', 'every randomized-content failure (drawn fresh per run from a 7-family template pool, never a fixed phrase) ends up "failed", CLI-visible via a non-zero `od run watch` exit bound to that SPECIFIC run; the clean control exits 0 for its OWN run', async () => {
   const fakeBinDir = mkFakeBinDir();
   writeFakeBin(fakeBinDir, 'kimi', FAKE_KIMI_SCRIPT);
   const daemon = await bootDaemon({ extraPathDirs: [fakeBinDir] });
   try {
-    const projectId = await createProject(daemon.url, 'w1-c1-10');
-    async function runKimi(mode: 'silent-non-bash-failure' | 'silent-non-bash-failure-b' | 'marked-bash-failure' | 'success'): Promise<{ status: string; run: { runId: string; assistantMessageId: string } }> {
-      const run = await startRun(daemon.url, { projectId, agentId: 'kimi', model: fakeKimiModelId(mode), message: `mode=${mode}` });
+    const projectId = await createProject(daemon.url, randomNonce(8));
+    async function runKimiModel(modelId: string): Promise<{ status: string; run: { runId: string; assistantMessageId: string } }> {
+      const run = await startRun(daemon.url, { projectId, agentId: 'kimi', model: modelId, message: randomNonce(10) });
       const status = await pollRunTerminal(daemon.url, run.runId, 15_000);
       return { status: String(status.status), run };
     }
-    // Sequential, not concurrent -- each run's mode is self-contained in its
-    // own requested model id (see fakeKimiModelId), so there is no cross-run
-    // leakage risk even if these ran concurrently, but sequential keeps the
-    // evidence trail simpler to read.
-    const repro = await runKimi('silent-non-bash-failure');
-    const reproB = await runKimi('silent-non-bash-failure-b');
-    const negControl = await runKimi('marked-bash-failure');
-    const posControl = await runKimi('success');
+    const RANDOM_PROBE_COUNT = 5;
+    const randomProbes: { content: string; result: { status: string; run: { runId: string; assistantMessageId: string } } }[] = [];
+    for (let i = 0; i < RANDOM_PROBE_COUNT; i++) {
+      const { modelId, content } = fakeKimiRandomFailureModelId();
+      randomProbes.push({ content, result: await runKimiModel(modelId) });
+    }
+    const negControl = await runKimiModel(fakeKimiMarkedFailureModelId());
+    const posControl = await runKimiModel(fakeKimiSuccessModelId());
 
-    const cliInfoResp = odCli(daemon.url, daemon.dataDir, ['run', 'info', repro.run.runId, '--json']);
+    const cliInfoResp = odCli(daemon.url, daemon.dataDir, ['run', 'info', randomProbes[0]!.result.run.runId, '--json']);
     // `od run watch <runId> --json` is bound to a SPECIFIC, already-HTTP-
     // confirmed run id -- not a fresh run the CLI itself started -- so a
     // pass here can only mean the CLI's own exit code genuinely reflects
     // THAT run's terminal status (confirmed by reading streamRunEvents():
     // no exit-code wiring for run failure exists anywhere in cli.ts today,
     // it reads the SSE stream and returns unconditionally on `event:end`).
-    const cliWatchFailedResp = odCli(daemon.url, daemon.dataDir, ['run', 'watch', repro.run.runId, '--json'], {}, 20_000);
+    const cliWatchFailedResp = odCli(daemon.url, daemon.dataDir, ['run', 'watch', randomProbes[0]!.result.run.runId, '--json'], {}, 20_000);
     const cliWatchCleanResp = odCli(daemon.url, daemon.dataDir, ['run', 'watch', posControl.run.runId, '--json'], {}, 20_000);
 
     const problems: string[] = [];
-    if (repro.status !== 'failed') problems.push(`silent non-Bash tool failure (EPERM phrasing) resolved to status="${repro.status}", expected "failed" -- the silent-success guard is not closing this hole`);
-    if (reproB.status !== 'failed') problems.push(`silent non-Bash tool failure (ENOENT phrasing, textually distinct from the EPERM repro) resolved to status="${reproB.status}", expected "failed" -- a fix that only special-cases the EPERM string does not establish the general "any non-zero tool-error field" property`);
+    randomProbes.forEach((p, i) => {
+      if (p.result.status !== 'failed') problems.push(`randomized failure probe #${i} (content="${p.content.slice(0, 80)}") resolved to status="${p.result.status}", expected "failed" -- the guard does not generalize to arbitrary tool-error content, only to a fixed set of memorized phrases`);
+    });
     if (negControl.status !== 'failed') problems.push(`marked-bash-failure (isError:true with the "Command failed with exit code" marker) resolved to status="${negControl.status}", expected "failed" -- a genuinely failing tool call must fail the run regardless of which regex branch classified it`);
     if (posControl.status !== 'succeeded') problems.push(`CONTROL CHECK: the clean-success run (no failing tool call) resolved to "${posControl.status}", expected "succeeded" -- if this fails, the harness itself is broken, not necessarily the product; a real fix must not fail every kimi run indiscriminately`);
     let cliInfoJson: unknown = null;
     try { cliInfoJson = JSON.parse(cliInfoResp.stdout); } catch { cliInfoJson = null; }
     const cliAgreesFailed = isRecord(cliInfoJson) && cliInfoJson.status === 'failed';
     if (cliInfoResp.status !== 0) problems.push(`od run info --json exited ${cliInfoResp.status} unexpectedly`);
-    if (!cliAgreesFailed) problems.push(`od run info --json reports status="${isRecord(cliInfoJson) ? String(cliInfoJson.status) : '(unparseable)'}" for the repro run, expected "failed"`);
-    if (cliWatchFailedResp.status === 0) problems.push(`od run watch --json exited 0 for run ${repro.run.runId}, whose HTTP-confirmed status is "${repro.status}" -- the CLI does not surface run failure via its exit code`);
+    if (!cliAgreesFailed) problems.push(`od run info --json reports status="${isRecord(cliInfoJson) ? String(cliInfoJson.status) : '(unparseable)'}" for randomized probe #0, expected "failed"`);
+    if (cliWatchFailedResp.status === 0) problems.push(`od run watch --json exited 0 for run ${randomProbes[0]!.result.run.runId}, whose HTTP-confirmed status is "${randomProbes[0]!.result.status}" -- the CLI does not surface run failure via its exit code`);
     if (cliWatchCleanResp.status !== 0) problems.push(`od run watch --json exited ${cliWatchCleanResp.status} (non-zero) for run ${posControl.run.runId}, whose HTTP-confirmed status is "${posControl.status}" (succeeded) -- the CLI exit code is not bound to the specific run's actual status (either hardcoded nonzero, or failing every --follow/--watch invocation indiscriminately)`);
-    record('C1-10', 'od run info --json + od run watch --json (bound to specific HTTP-confirmed runs) + four fake-kimi runs', 'silent non-Bash failures (both phrasings) fail the run, CLI-visible via a non-zero od run watch exit bound to that run; Bash-marker failures still fail; the clean control run watches to exit 0', problems.length === 0, `repro=${JSON.stringify(repro)}\nreproB=${JSON.stringify(reproB)}\nnegControl=${JSON.stringify(negControl)}\nposControl=${JSON.stringify(posControl)}\ncliInfoJson=${JSON.stringify(cliInfoJson)}\ncliWatchFailedExit=${cliWatchFailedResp.status}\ncliWatchCleanExit=${cliWatchCleanResp.status}`, { detail: problems.length ? problems.join('; ') : undefined });
+    record('C1-10', 'od run info --json + od run watch --json (bound to specific HTTP-confirmed runs) + 5 randomized-content probes + 2 controls', 'every randomized tool-error content fails the run, CLI-visible via a non-zero od run watch exit bound to that run; the exact-marker control still fails; the clean control run watches to exit 0', problems.length === 0, `randomProbes=${JSON.stringify(randomProbes)}\nnegControl=${JSON.stringify(negControl)}\nposControl=${JSON.stringify(posControl)}\ncliInfoJson=${JSON.stringify(cliInfoJson)}\ncliWatchFailedExit=${cliWatchFailedResp.status}\ncliWatchCleanExit=${cliWatchCleanResp.status}`, { detail: problems.length ? problems.join('; ') : undefined });
   } finally {
     await daemon.kill();
   }
@@ -2088,19 +2483,30 @@ await checkCriterion('C1-10', 'four fake-kimi runs: two textually-distinct silen
 // computed role/name/ignored-state per node (empirically confirmed live
 // that `page.accessibility.snapshot()`, the older wrapper this file
 // originally reached for, has been REMOVED from the installed
-// @playwright/test@1.60.0: `page.accessibility` is `undefined`). Three
-// states are now probed in one web suite:
-//   (1) substituted -- claude run with an invalidModelId() trigger
-//       (same real-substitution fix as C1-2/C1-5, not the old well-formed
-//       "unknown model" that never actually substitutes).
-//   (2) unverified -- a real codex mock recording (same fixed trace C1-4
-//       uses), the one lane this repo's own code confirms echoes no model.
-//   (3) picker -- `[data-testid="inline-model-switcher-chip"]`
-//       (`apps/web/src/components/InlineModelSwitcher.tsx`), the real,
-//       already-shipped model-picker trigger rendered in the normal (non-
-//       onboarding) app shell -- not an invented/guessed selector.
+// @playwright/test@1.60.0: `page.accessibility` is `undefined`).
+// ROUND 2 REWRITE (finding 1, Sol round-2 F1):
+//   - substituted/unverified: round 1 only checked that the MESSAGE
+//     CONTAINER itself had a nonempty computed name -- a container with NO
+//     explicit naming mechanism legitimately gets an empty computed name
+//     even when its rendered TEXT clearly shows the substitution (that is
+//     exactly what round 1's own evidence showed: role="generic", name="").
+//     `findNamedDescendantAx` (defined above) instead walks the message's
+//     full accessibility SUBTREE for a descendant control whose computed
+//     name actually CONTAINS the requested model, the resolved/executed
+//     model (ground-truthed via the fake CLI's own echo, same technique as
+//     C1-1/C1-2/C1-5), or the "unverified" state word -- proving some real,
+//     accessible control names the state/models, not merely that some node
+//     somewhere is nonempty.
+//   - picker: ruling 4 requires this HARD, reached from `/` (EntryShell),
+//     matching e2e/ui/entry-topbar.test.ts's own pattern -- not the
+//     conversation route (round 1's silent no-render was an artifact of
+//     probing the wrong route). `/api/agents` is intercepted with a fake
+//     available agent (mirroring e2e's `routeAgents` helper) so the check
+//     is not gated on live agent-detection timing outside its own boundary
+//     under test (accessibility of the picker, not agent-detection speed).
+//     Absence is now a hard failure, not informational.
 // -----------------------------------------------------------------------
-await checkCriterion('C1-11', 'CDP Accessibility-domain computed audit (real computed role/name/ignored-state, not hand-rolled aria-label/innerText) across THREE states: substituted message, unverified (codex, no-echo) message, and the model picker trigger', 'each state has a non-empty computed accessible name, is not `ignored` by the accessibility tree, and does not rely on a generic/none/presentation role', async () => {
+await checkCriterion('C1-11', 'CDP Accessibility-domain computed audit across THREE states: a named descendant control inside the substituted message, a named descendant control inside the unverified (codex, no-echo) message, and the model picker reached from / per the e2e house pattern', 'the substituted message has a descendant control whose computed accessible name contains BOTH the requested and resolved model; the unverified message has one naming "unverified"; the picker is present, visible, and has a non-empty computed accessible name with no generic/none/presentation role', async () => {
   const pw = resolvePlaywright();
   if (!pw.ok) {
     record('C1-11', 'Playwright resolution', 'chromium is launchable', false, '', { detail: pw.error });
@@ -2119,17 +2525,24 @@ await checkCriterion('C1-11', 'CDP Accessibility-domain computed audit (real com
       OD_MOCKS_TRACE: C1_4_FIXED_CODEX_TRACE,
       OD_MOCKS_NO_DELAY: '1',
     });
-    const projectResp = await httpJson('POST', `${webSuite.daemonUrl}/api/projects`, { id: `w1-c1-11-${crypto.randomBytes(4).toString('hex')}`, name: 'c1-11' });
+    const projectResp = await httpJson('POST', `${webSuite.daemonUrl}/api/projects`, { id: randomNonce(8), name: randomNonce(6) });
     const projectId = (projectResp.json as { project?: { id?: string } })?.project?.id;
     if (!projectId) throw new Error(`could not create project: ${projectResp.text.slice(0, 300)}`);
 
-    const substitutedModel = invalidModelId('c1-11');
-    const substitutedRun = await startRun(webSuite.daemonUrl, { projectId, agentId: 'claude', model: substitutedModel, message: 'substituted a11y probe' });
+    const substitutedModel = invalidModelId();
+    const substitutedRun = await startRun(webSuite.daemonUrl, { projectId, agentId: 'claude', model: substitutedModel, message: randomNonce(10) });
     await pollRunTerminal(webSuite.daemonUrl, substitutedRun.runId);
+    // Independent ground truth for the resolved/executed model, same
+    // technique as C1-1/C1-2/C1-5: FAKE_CLAUDE_SCRIPT always emits "fake
+    // claude reply for <executedModel>" as the assistant text.
+    const substitutedMsg = readMessageRow(webSuite.dataDir, substitutedRun.assistantMessageId);
+    const executedMatch = /^fake claude reply for (.+)$/.exec(substitutedMsg?.content ?? '');
+    const executedModel = executedMatch?.[1] ?? null;
+    if (!executedModel) problems.push('substituted state: could not independently observe the executed model from the fake CLI\'s own echoed reply text');
 
     let unverifiedRun: { runId: string; conversationId: string; assistantMessageId: string } | null = null;
     if (codexFetch.ok) {
-      unverifiedRun = await startRun(webSuite.daemonUrl, { projectId, agentId: 'codex', model: 'gpt-5.6-codex', message: 'unverified a11y probe', context: {} });
+      unverifiedRun = await startRun(webSuite.daemonUrl, { projectId, agentId: 'codex', model: 'gpt-5.6-codex', message: randomNonce(10), context: {} });
       await pollRunTerminal(webSuite.daemonUrl, unverifiedRun.runId, 30_000);
     } else {
       problems.push(`unverified-state probe skipped: could not fetch a codex mock recording: ${codexFetch.error}`);
@@ -2148,17 +2561,25 @@ await checkCriterion('C1-11', 'CDP Accessibility-domain computed audit (real com
     if (!substitutedFound) {
       problems.push(`substituted state: no ${substitutedSelector} node rendered within 15s -- substitution UI surface not present yet`);
     } else {
-      const ax = await computedAxNodeForSelector(page, substitutedSelector);
-      evidence.substituted = ax;
-      if (!ax) problems.push('substituted state: CDP Accessibility.getPartialAXTree returned no node for the message selector');
-      else {
-        if (!ax.name || ax.name.trim().length === 0) problems.push('substituted state: computed accessible name is empty');
-        if (ax.ignored) problems.push('substituted state: node is `ignored` by the accessibility tree (equivalent to aria-hidden)');
-        if (ax.role === 'none' || ax.role === 'presentation' || ax.role === 'generic') problems.push(`substituted state: computed role is "${ax.role}", which strips or genericizes it in the accessibility tree`);
+      const requestedAx = await findNamedDescendantAx(page, substitutedSelector, substitutedModel);
+      evidence.substitutedRequestedAx = requestedAx;
+      if (!requestedAx) problems.push(`substituted state: no accessible descendant control's computed name contains the requested model ("${substitutedModel}")`);
+      else if (requestedAx.ignored) problems.push('substituted state: the control naming the requested model is `ignored` by the accessibility tree');
+      else if (requestedAx.role === 'none' || requestedAx.role === 'presentation') problems.push(`substituted state: the control naming the requested model has role="${requestedAx.role}", which strips it from the accessibility tree`);
+      if (executedModel) {
+        const resolvedAx = await findNamedDescendantAx(page, substitutedSelector, executedModel);
+        evidence.substitutedResolvedAx = resolvedAx;
+        if (!resolvedAx) problems.push(`substituted state: no accessible descendant control's computed name contains the resolved/executed model ("${executedModel}")`);
+        else if (resolvedAx.ignored) problems.push('substituted state: the control naming the resolved model is `ignored` by the accessibility tree');
+        else if (resolvedAx.role === 'none' || resolvedAx.role === 'presentation') problems.push(`substituted state: the control naming the resolved model has role="${resolvedAx.role}", which strips it from the accessibility tree`);
       }
     }
 
     // (2) unverified state -- same conversation-page pattern, codex lane.
+    // "unverified" is the PRD's own display-state vocabulary (the same
+    // literal C1-4 already asserts as a persisted enum value), so it is the
+    // most grounded needle available pre-implementation for what an
+    // accessible label would say.
     if (unverifiedRun) {
       await page.goto(`${webSuite.webUrl}/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(unverifiedRun.conversationId)}`, { waitUntil: 'load', timeout: 30_000 });
       const unverifiedSelector = `[data-assistant-message-id="${unverifiedRun.assistantMessageId}"]`;
@@ -2167,38 +2588,36 @@ await checkCriterion('C1-11', 'CDP Accessibility-domain computed audit (real com
       if (!unverifiedFound) {
         problems.push(`unverified state: no ${unverifiedSelector} node rendered within 15s`);
       } else {
-        const ax = await computedAxNodeForSelector(page, unverifiedSelector);
+        const ax = await findNamedDescendantAx(page, unverifiedSelector, 'unverified');
         evidence.unverified = ax;
-        if (!ax) problems.push('unverified state: CDP Accessibility.getPartialAXTree returned no node for the message selector');
-        else {
-          if (!ax.name || ax.name.trim().length === 0) problems.push('unverified state: computed accessible name is empty');
-          if (ax.ignored) problems.push('unverified state: node is `ignored` by the accessibility tree');
-          if (ax.role === 'none' || ax.role === 'presentation' || ax.role === 'generic') problems.push(`unverified state: computed role is "${ax.role}", which strips or genericizes it`);
-        }
+        if (!ax) problems.push('unverified state: no accessible descendant control\'s computed name contains "unverified"');
+        else if (ax.ignored) problems.push('unverified state: the control naming the unverified state is `ignored` by the accessibility tree');
+        else if (ax.role === 'none' || ax.role === 'presentation') problems.push(`unverified state: the control naming the unverified state has role="${ax.role}", which strips it from the accessibility tree`);
       }
     }
 
-    // (3) picker state -- the real, already-shipped InlineModelSwitcher
-    // trigger, rendered in the normal app shell's toolbar chrome. Reuses the
-    // substituted run's conversation URL (a confirmed-rendering route, per
-    // states 1/2 above) rather than a bare `/projects/:id` route, whose
-    // rendering behavior on a hard page load this file did not separately
-    // confirm.
-    await page.goto(`${webSuite.webUrl}/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(substitutedRun.conversationId)}`, { waitUntil: 'load', timeout: 30_000 });
+    // (3) picker state (ruling 4, MUST be hard) -- reached from `/`
+    // (EntryShell), matching e2e/ui/entry-topbar.test.ts's own pattern, with
+    // `/api/agents` intercepted (mirroring e2e's `routeAgents` helper) so
+    // this check is not gated on live agent-detection timing outside its
+    // own boundary under test.
+    await page.route('**/api/agents**', async (route) => {
+      if (route.request().method() !== 'GET') { await route.fallback(); return; }
+      await route.fulfill({
+        json: {
+          agents: [{
+            id: 'claude', name: 'Claude Code', bin: 'claude', available: true, version: 'fake-verifier',
+            path: '/fake/verifier/claude', models: [{ id: 'claude-sonnet-4-5', label: 'claude-sonnet-4-5' }],
+          }],
+        },
+      });
+    });
+    await page.goto(`${webSuite.webUrl}/`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     const pickerSelector = '[data-testid="inline-model-switcher-chip"]';
-    let pickerFound = false;
-    try { await page.locator(pickerSelector).waitFor({ timeout: 15_000 }); pickerFound = (await page.locator(pickerSelector).count()) > 0; } catch { pickerFound = false; }
-    if (!pickerFound) {
-      // Not a hard failure: this file confirmed (via states 1/2 above) that
-      // the conversation route itself renders correctly with the seeded
-      // client config, but has not independently confirmed the toolbar-level
-      // InlineModelSwitcher's exact render precondition (e.g. it may depend
-      // on `daemonLive`/agent-detection timing this harness does not control
-      // for). Failing the whole criterion on an unconfirmed precondition
-      // would risk the same "unsatisfiable even by a correct implementation"
-      // trap this round exists to close elsewhere -- flagged for round 2
-      // rather than asserted as a hard requirement.
-      evidence.picker = `NOT FOUND after 15s at ${pickerSelector} -- treated as informational, not a hard failure (see comment above); flagged for round 2 confirmation`;
+    let pickerVisible = false;
+    try { await page.locator(pickerSelector).waitFor({ timeout: 20_000, state: 'visible' }); pickerVisible = (await page.locator(pickerSelector).count()) > 0; } catch { pickerVisible = false; }
+    if (!pickerVisible) {
+      problems.push(`picker state: [data-testid="inline-model-switcher-chip"] did not become visible within 20s at ${webSuite.webUrl}/ (ruling 4: this is a hard requirement, not informational)`);
     } else {
       const ax = await computedAxNodeForSelector(page, pickerSelector);
       evidence.picker = ax;
@@ -2210,7 +2629,7 @@ await checkCriterion('C1-11', 'CDP Accessibility-domain computed audit (real com
       }
     }
 
-    record('C1-11', 'CDP Accessibility.getPartialAXTree on 3 states (substituted, unverified, picker)', 'non-empty computed accessible name, not `ignored`, no generic/none/presentation role, for every state that rendered', problems.length === 0, JSON.stringify(evidence), { detail: problems.length ? problems.join('; ') : undefined });
+    record('C1-11', 'CDP full-tree named-descendant audit (substituted, unverified) + CDP node audit (picker, from /)', 'a real accessible control inside each message names the state/models; the picker is visible with a non-empty computed accessible name', problems.length === 0, JSON.stringify(evidence), { detail: problems.length ? problems.join('; ') : undefined });
   } catch (err) {
     record('C1-11', 'CDP Accessibility-domain probe', 'substitution/unverified/picker surfaces are accessible', false, JSON.stringify(evidence), { detail: `probe failed: ${String((err as Error)?.message ?? err)}${problems.length ? `; also: ${problems.join('; ')}` : ''}` });
   } finally {
@@ -2314,8 +2733,15 @@ await checkCriterion('C1-12', `exact-path read of ${NM14_DECISION_PATH} and ${NM
         if (hasNonDecisionFile) firstImplementationAt = i;
       }
     }
-    if (firstImplementationAt !== null && (decisionCompleteAt === null || decisionCompleteAt > firstImplementationAt)) {
-      problems.push(`implementation commit ${commits[firstImplementationAt]} touches non-decision files before either decision record was complete in this branch's history (baseCommit..HEAD) -- the decision must predate implementation, not merely coexist with it`);
+    // ROUND 2 FIX (finding 9, Sol round-2 F9): `>` permitted EQUALITY --
+    // the decision becoming complete in the SAME commit as the first
+    // implementation change -- to pass. That contradicts a strict
+    // decision-BEFORE-implementation invariant (VERIFICATION-CONTRACT's own
+    // "recorded BEFORE implementation" wording, not "recorded no later
+    // than"). `>=` now fails same-commit landings too.
+    if (firstImplementationAt !== null && (decisionCompleteAt === null || decisionCompleteAt >= firstImplementationAt)) {
+      const sameCommit = decisionCompleteAt !== null && decisionCompleteAt === firstImplementationAt;
+      problems.push(`implementation commit ${commits[firstImplementationAt]} touches non-decision files ${sameCommit ? 'in the SAME commit that completes' : 'before'} either decision record in this branch's history (baseCommit..HEAD) -- the decision must STRICTLY predate implementation (an earlier commit), not merely coexist with it or land in the same commit`);
     }
     predatesDetail = `commits=${commits.length} decisionCompleteAt=${decisionCompleteAt} firstImplementationAt=${firstImplementationAt}`;
   } else if (!baseCommit) {
@@ -2342,18 +2768,21 @@ await checkCriterion('C1-12', `exact-path read of ${NM14_DECISION_PATH} and ${NM
 // file (it is not in W2's lease; see leases.json's W2 `deny` list and
 // §4.1's EntryShell precedent, which this mirrors), so W1 must land it and
 // C1-13 is the gate that grades landed-tree carve-outs W1 executes on
-// another wave's behalf -- the house pattern this criterion itself already
-// established for C2-1a. No wave doc names the exact line/variable for
-// C2-9a (unlike C2-1a's explicit "EntryShell.tsx:228"), so this probe scans
-// the WHOLE landed file for the same confirmed brand-leak class C2-1a
-// fixes -- the literal "open-design.ai" domain string -- rather than
-// inventing a specific line/variable name this file cannot substantiate.
-// FLAGGED FOR ROUND 2: if a narrower target (specific declaration/line) is
-// intended for C2-9a, the reviewer or a lease-amendment note should name it
-// so this probe can be tightened the same way C1-13's C2-1a half already
-// is.
+// another wave's behalf.
+// ROUND 2 FIX (finding 10, Sol round-2 F10, ruling 3): round 1 scanned for
+// "open-design.ai", a string class ABSENT from AssistantMessage.tsx --
+// vacuously green while the real leak stayed open. The actual live upstream-
+// brand egress is `DISCORD_INVITE_URL` (AssistantMessage.tsx:117,
+// "https://discord.gg/mHAjSMV6gz"), rendered by two feedback anchors
+// (`data-testid="assistant-feedback-discord-positive"/"-negative"`, around
+// :2024-2046). This now grades BOTH the constant AND both rendered links: a
+// real claude run's completed message is loaded in a browser, the positive
+// then negative feedback thumbs are clicked (revealing each note+anchor in
+// turn -- confirmed by reading toggleFeedback's toggle logic), and neither
+// anchor's actual `href` may resolve to the leaked invite.
 // -----------------------------------------------------------------------
-await checkCriterion('C1-13', 'read apps/web/src/components/EntryShell.tsx (C2-1a: NEWSLETTER_SUBSCRIBE_URL) AND apps/web/src/components/AssistantMessage.tsx (C2-9a: brand-string carve-out) at HEAD', 'neither landed file contains a literal "open-design.ai" brand-leak fallback', () => {
+const LEAKED_DISCORD_INVITE = 'discord.gg/mHAjSMV6gz';
+await checkCriterion('C1-13', 'read apps/web/src/components/EntryShell.tsx (C2-1a: NEWSLETTER_SUBSCRIBE_URL) at HEAD AND click through both AssistantMessage.tsx feedback thumbs in a real browser (C2-9a: DISCORD_INVITE_URL + both rendered feedback links)', 'the C2-1a declaration does not default to open-design.ai, and neither rendered C2-9a feedback link resolves to the leaked Discord invite', async () => {
   const problems: string[] = [];
   const evidenceParts: string[] = [];
 
@@ -2374,18 +2803,77 @@ await checkCriterion('C1-13', 'read apps/web/src/components/EntryShell.tsx (C2-1
     }
   }
 
-  // C2-9a (finding 10)
+  // C2-9a static half: the DISCORD_INVITE_URL constant itself.
   const assistantMessagePath = path.join(repoRoot, 'apps/web/src/components/AssistantMessage.tsx');
   if (!fs.existsSync(assistantMessagePath)) {
     problems.push('apps/web/src/components/AssistantMessage.tsx does not exist');
   } else {
     const text = fs.readFileSync(assistantMessagePath, 'utf8');
-    const brandLeakMatches = text.match(/[^\n]*open-design\.ai[^\n]*/gi) ?? [];
-    if (brandLeakMatches.length > 0) problems.push(`C2-9a: AssistantMessage.tsx still contains the literal "open-design.ai" brand-leak string on ${brandLeakMatches.length} line(s): ${JSON.stringify(brandLeakMatches.slice(0, 5))}`);
-    evidenceParts.push(`C2-9a open-design.ai occurrences: ${brandLeakMatches.length}`);
+    const match = /const\s+DISCORD_INVITE_URL\s*=\s*([\s\S]*?);/.exec(text);
+    if (!match) {
+      problems.push('C2-9a: no `const DISCORD_INVITE_URL = ...;` declaration found in AssistantMessage.tsx -- file may have been restructured');
+    } else {
+      const declaration = match[1] ?? '';
+      if (declaration.includes(LEAKED_DISCORD_INVITE)) problems.push(`C2-9a: AssistantMessage.tsx's DISCORD_INVITE_URL declaration still contains the leaked upstream invite ("${LEAKED_DISCORD_INVITE}"): ${declaration}`);
+      evidenceParts.push(`C2-9a declaration: ${declaration}`);
+    }
   }
 
-  record('C1-13', 'C2-1a: regex over the landed NEWSLETTER_SUBSCRIBE_URL declaration; C2-9a: whole-file scan of the landed AssistantMessage.tsx', 'neither carve-out leaves a literal "open-design.ai" brand-leak string', problems.length === 0, evidenceParts.join('\n'), { detail: problems.length ? problems.join('; ') : undefined });
+  // C2-9a behavioral half: both rendered feedback links, in a real browser.
+  const pw = resolvePlaywright();
+  if (!pw.ok) {
+    problems.push(`C2-9a rendered-link check skipped: ${pw.error}`);
+  } else {
+    const fakeBinDir = mkFakeBinDir();
+    writeFakeBin(fakeBinDir, 'claude', FAKE_CLAUDE_SCRIPT);
+    let webSuite: WebSuiteHandle | null = null;
+    let browser: PlaywrightBrowser | null = null;
+    try {
+      webSuite = await bootWebSuite({ PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH ?? ''}` });
+      const projectResp = await httpJson('POST', `${webSuite.daemonUrl}/api/projects`, { id: randomNonce(8), name: randomNonce(6) });
+      const projectId = (projectResp.json as { project?: { id?: string } })?.project?.id;
+      if (!projectId) throw new Error(`could not create project: ${projectResp.text.slice(0, 300)}`);
+      const run = await startRun(webSuite.daemonUrl, { projectId, agentId: 'claude', model: 'claude-sonnet-4-5', message: randomNonce(10) });
+      await pollRunTerminal(webSuite.daemonUrl, run.runId);
+      browser = await pw.pw.chromium.launch({ headless: true });
+      const page = await browser.newPage();
+      await seedWebClientConfig(page, 'claude');
+      await page.goto(`${webSuite.webUrl}/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(run.conversationId)}`, { waitUntil: 'load', timeout: 30_000 });
+      const messageSelector = `[data-assistant-message-id="${run.assistantMessageId}"]`;
+      let messageFound = false;
+      try { await page.locator(messageSelector).waitFor({ timeout: 15_000 }); messageFound = (await page.locator(messageSelector).count()) > 0; } catch { messageFound = false; }
+      if (!messageFound) {
+        problems.push(`C2-9a rendered-link check: no ${messageSelector} node rendered within 15s`);
+      } else {
+        async function clickAndReadDiscordHref(thumbsTestId: string, anchorTestId: string): Promise<string | null> {
+          const thumbsSelector = `${messageSelector} [data-testid="${thumbsTestId}"]`;
+          const thumbsLocator = page!.locator(thumbsSelector);
+          if ((await thumbsLocator.count()) === 0) return null;
+          await thumbsLocator.first().click({ timeout: 5_000 });
+          await page!.waitForTimeout(300);
+          const anchorSelector = `${messageSelector} [data-testid="${anchorTestId}"]`;
+          const anchorLocator = page!.locator(anchorSelector);
+          try { await anchorLocator.waitFor({ timeout: 5_000 }); } catch { return null; }
+          if ((await anchorLocator.count()) === 0) return null;
+          return anchorLocator.first().getAttribute('href');
+        }
+        const positiveHref = await clickAndReadDiscordHref('assistant-feedback-positive', 'assistant-feedback-discord-positive');
+        const negativeHref = await clickAndReadDiscordHref('assistant-feedback-negative', 'assistant-feedback-discord-negative');
+        if (positiveHref === null) problems.push('C2-9a: could not reveal the positive-feedback Discord link (thumbs-up control or discord anchor did not render) -- cannot verify it is de-branded');
+        else if (positiveHref.includes(LEAKED_DISCORD_INVITE)) problems.push(`C2-9a: the RENDERED positive-feedback Discord link's href is the leaked upstream invite: "${positiveHref}"`);
+        if (negativeHref === null) problems.push('C2-9a: could not reveal the negative-feedback Discord link (thumbs-down control or discord anchor did not render) -- cannot verify it is de-branded');
+        else if (negativeHref.includes(LEAKED_DISCORD_INVITE)) problems.push(`C2-9a: the RENDERED negative-feedback Discord link's href is the leaked upstream invite: "${negativeHref}"`);
+        evidenceParts.push(`C2-9a rendered hrefs: positive=${positiveHref} negative=${negativeHref}`);
+      }
+    } catch (err) {
+      problems.push(`C2-9a rendered-link check failed: ${String((err as Error)?.message ?? err)}`);
+    } finally {
+      try { await browser?.close(); } catch { /* best effort */ }
+      try { await webSuite?.stop(); } catch { /* best effort */ }
+    }
+  }
+
+  record('C1-13', 'C2-1a: regex over the landed NEWSLETTER_SUBSCRIBE_URL declaration; C2-9a: DISCORD_INVITE_URL declaration + both rendered feedback links clicked in a real browser', 'neither carve-out leaves a live brand-leak: no open-design.ai default, and no rendered/declared Discord link resolves to the leaked invite', problems.length === 0, evidenceParts.join('\n'), { detail: problems.length ? problems.join('; ') : undefined });
 });
 
 // -----------------------------------------------------------------------
