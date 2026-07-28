@@ -144,6 +144,22 @@ function sha256Bytes(buf: Buffer | string): string {
 function sha256File(absPath: string): string {
   return sha256Bytes(fs.readFileSync(absPath));
 }
+// CEREMONY ROUND FIX (ruling item 8): non-throwing variant used by the
+// immutable-archive integrity checks below -- a reread/verify step must
+// record a named mismatch, never crash the verifier.
+function sha256FileSafe(absPath: string): string | null {
+  try { return sha256File(absPath); } catch { return null; }
+}
+function walkAllFiles(dir: string): string[] {
+  const out: string[] = [];
+  if (!fs.existsSync(dir)) return out;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walkAllFiles(full));
+    else if (entry.isFile()) out.push(full);
+  }
+  return out;
+}
 
 interface CriterionResult {
   id: string; command: string; assertion: string; artifact: string | null; artifactSha256: string | null;
@@ -246,6 +262,75 @@ function readFileAtCommit(commit: string, relPath: string): { ok: true; text: st
   const r = sh('git', ['show', `${commit}:${relPath}`]);
   if (r.status !== 0) return { ok: false, error: `git show ${commit}:${relPath} failed (exit=${r.status}): ${r.stderr}` };
   return { ok: true, text: r.stdout };
+}
+
+// =============================================================================
+// CEREMONY ROUND FIX (ruling item 8, "Immutable proof archive"): round 2's
+// artifacts all shared ONE top-level proofDir, so a second run silently
+// overwrote the first run's evidence files even though this file's OWN
+// manifest.json snapshot differed run to run -- "distinct manifest hashes
+// without retained hash-matching artifacts do not provide two independently
+// auditable runs" (ruling finding 8). Every invocation now gets an
+// EXCLUSIVE, never-reused proof/runs/<UTC>-<shortHead>-<nonce>/ directory;
+// `proofDir` (declared in the init try/catch above) is reassigned to it
+// HERE, before any criterion runs, so artifactFor()/record()/
+// writeManifestSafely() below -- all of which read the `proofDir` binding
+// at CALL time, not at parse time -- transparently write into the new
+// exclusive directory with no further changes needed at their call sites.
+// The canonical proof/manifest.json and proof/manifest.sha256.txt paths
+// become latest-run COPIES only, atomically replaced from the archive AFTER
+// it verifies (see the reread/verify/promote block near the manifest tail).
+// =============================================================================
+const CANONICAL_PROOF_DIR = proofDir; // goalStateDir/proof, from the init try/catch
+const RUNS_ROOT = path.join(CANONICAL_PROOF_DIR, 'runs');
+const archiveIntegrityViolations: string[] = [];
+let preExistingArchiveHashes = new Map<string, string | null>();
+let runDir = '';
+try {
+  fs.mkdirSync(RUNS_ROOT, { recursive: true });
+  // Startup snapshot: every file a PRIOR invocation already archived,
+  // hashed before THIS invocation writes anything of its own (its own
+  // not-yet-created run directory is naturally excluded from this walk).
+  for (const f of walkAllFiles(RUNS_ROOT)) preExistingArchiveHashes.set(f, sha256FileSafe(f));
+
+  const shortHead = gitIdentityOk ? headSha.slice(0, 12) : `unresolved${crypto.randomBytes(4).toString('hex')}`;
+  const utcStamp = new Date().toISOString().replace(/[^0-9TZ]/g, '');
+  let created = false;
+  for (let attempt = 0; attempt < 5 && !created; attempt++) {
+    const candidate = path.join(RUNS_ROOT, `${utcStamp}-${shortHead}-${crypto.randomBytes(6).toString('hex')}`);
+    try {
+      fs.mkdirSync(candidate, { recursive: false });
+      runDir = candidate;
+      created = true;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException)?.code !== 'EEXIST') throw err;
+      // Nonce collision -- vanishingly unlikely; retry with a fresh nonce.
+    }
+  }
+  if (!created) throw new Error('could not create an exclusive proof/runs/<UTC>-<shortHead>-<nonce> directory after 5 attempts (repeated nonce collisions)');
+  proofDir = runDir;
+
+  // Preserve whatever manifest currently sits at the canonical path (round
+  // 2's -- the last surviving evidence; round 1's own manifest was already
+  // unrecoverably overwritten by round 2 before this archiving scheme
+  // existed, per the ceremony ruling's own finding 8: "lost run-1 artifacts
+  // cannot be reconstructed") as an explicit, clearly-labeled historical
+  // snapshot, exactly once, before this run's own canonical replacement
+  // would otherwise clobber it a second time with no trace at all.
+  const preArchiveManifestPath = path.join(CANONICAL_PROOF_DIR, 'manifest.json');
+  const historicalManifestPath = path.join(CANONICAL_PROOF_DIR, 'historical-pre-archive-manifest.json');
+  if (fs.existsSync(preArchiveManifestPath) && !fs.existsSync(historicalManifestPath)) {
+    try {
+      fs.copyFileSync(preArchiveManifestPath, historicalManifestPath);
+      const preArchiveShaPath = path.join(CANONICAL_PROOF_DIR, 'manifest.sha256.txt');
+      const historicalShaPath = path.join(CANONICAL_PROOF_DIR, 'historical-pre-archive-manifest.sha256.txt');
+      if (fs.existsSync(preArchiveShaPath)) fs.copyFileSync(preArchiveShaPath, historicalShaPath);
+    } catch (err) {
+      archiveIntegrityViolations.push(`could not preserve the pre-existing canonical manifest as historical evidence: ${String((err as Error)?.message ?? err)}`);
+    }
+  }
+} catch (err) {
+  emergencyExit(`immutable proof archive setup failed: ${String((err as Error)?.stack ?? err)}`);
 }
 
 // =============================================================================
@@ -457,25 +542,28 @@ function collectNumbers(root: unknown, _seen: Set<unknown> = new Set()): number[
   else if (Array.isArray(root)) for (const v of root) out.push(...collectNumbers(v, _seen));
   return out;
 }
-// ROUND 2 FIX (finding 3 / Sol round-2 F3): the round-1 `findAllValuesForKey`
-// recursively accepted ANY nested key literally named `model_id`, anywhere in
-// the payload -- a decoy field unrelated to the real PostHog event shape
-// (e.g. some unrelated `metadata.model_id`) would satisfy it. This instead
-// walks for an object carrying a `properties` member (the actual PostHog
-// event envelope shape: `{ event, properties: {...}, distinct_id, ... }`)
-// and reads `model_id` from EXACTLY that `properties` object -- binding to
-// `properties.model_id`, not any nested key sharing that name.
-function findPropertiesModelIdValues(root: unknown, _seen: Set<unknown> = new Set()): string[] {
-  const out: string[] = [];
-  if (!isRecord(root) && !Array.isArray(root)) return out;
-  if (_seen.has(root)) return out;
-  _seen.add(root);
-  if (isRecord(root)) {
-    const props = root.properties;
-    if (isRecord(props) && typeof props.model_id === 'string') out.push(props.model_id);
-    for (const v of Object.values(root)) out.push(...findPropertiesModelIdValues(v, _seen));
-  } else if (Array.isArray(root)) {
-    for (const v of root) out.push(...findPropertiesModelIdValues(v, _seen));
+// CEREMONY ROUND FIX (ruling item 3): round 2's `findPropertiesModelIdValues`
+// still recursively walked the WHOLE payload for any object carrying a
+// `properties` member -- an unrelated event elsewhere in the same batch (a
+// `run_created`, a retry event, a DIFFERENT run's `run_finished`) could still
+// satisfy it. "Parse only actual PostHog envelopes: either a root
+// {event, properties} object or direct elements of a root batch array. Do
+// not recursively discover arbitrary event-like objects." This extracts
+// ONLY those two legitimate envelope shapes (one level, no recursion into
+// arbitrary nesting), and the call site below filters to
+// event==="run_finished" && properties.run_id===probeRunId, requiring
+// EXACTLY ONE match before trusting its properties.model_id at all.
+interface PostHogEnvelopeEvent { event: unknown; properties: unknown }
+function extractPostHogEnvelopeEvents(parsedBody: unknown): PostHogEnvelopeEvent[] {
+  const out: PostHogEnvelopeEvent[] = [];
+  if (!isRecord(parsedBody)) return out;
+  if ('event' in parsedBody && 'properties' in parsedBody) {
+    out.push({ event: parsedBody.event, properties: parsedBody.properties });
+  }
+  if (Array.isArray(parsedBody.batch)) {
+    for (const el of parsedBody.batch) {
+      if (isRecord(el) && 'event' in el && 'properties' in el) out.push({ event: el.event, properties: el.properties });
+    }
   }
   return out;
 }
@@ -553,7 +641,11 @@ const started = await mod.startServer({ port: 0, returnServer: true });
 console.log('OD_W1_VERIFIER_READY ' + JSON.stringify({ url: started.url }));
 process.on('SIGTERM', async () => { try { await started.shutdown(); } catch {} process.exit(0); });
 `;
-  const scriptPath = path.join(proofDir, `.boot-daemon.${process.pid}.${crypto.randomBytes(3).toString('hex')}.mjs`);
+  // CEREMONY ROUND FIX (ruling item 8): this is disposable spawn scratch,
+  // not a proof artifact -- keep it out of the immutable per-run archive
+  // directory (os.tmpdir() instead of proofDir) so it never has to be
+  // reasoned about by the archive's reread/verify/hash-snapshot logic.
+  const scriptPath = path.join(os.tmpdir(), `od-w1-boot-daemon.${process.pid}.${crypto.randomBytes(3).toString('hex')}.mjs`);
   fs.writeFileSync(scriptPath, bootScript);
   const pathPrefix = (opts.extraPathDirs ?? []).join(path.delimiter);
   const env: NodeJS.ProcessEnv = {
@@ -662,6 +754,63 @@ async function pollRunTerminal(daemonUrl: string, runId: string, timeoutMs = 20_
   throw new Error(`run ${runId} did not reach a terminal status within ${timeoutMs}ms (last seen: ${JSON.stringify(last).slice(0, 500)})`);
 }
 
+// CEREMONY ROUND FIX (ruling item 1a, C1-7 same-run retry): mirrors
+// apps/daemon/tests/run-retry-runtime.test.ts's own readRunEvents almost
+// exactly -- asserting exact event COUNTS (two `start`, one `run_retry_
+// attempted`, etc.) must read the daemon's live in-memory ring buffer via
+// GET /api/runs/:id/events (SSE replay), never events.jsonl: disk
+// persistence is explicitly best-effort (that test file's own comment:
+// "ensureLogStream drops buffered writes when the stream errors under fd
+// pressure"), so early events can be legitimately absent from the file
+// while the ring buffer -- what SSE clients actually consume -- is
+// complete. Called only after the run is terminal, so the replay is finite
+// and closes on the terminal `end` event.
+interface RunEventRecord { event: string; data: Record<string, unknown> }
+async function readRunEventsViaSse(daemonUrl: string, runId: string, timeoutMs = 10_000): Promise<RunEventRecord[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const events: RunEventRecord[] = [];
+  try {
+    const res = await fetch(`${daemonUrl}/api/runs/${encodeURIComponent(runId)}/events`, {
+      signal: controller.signal,
+      headers: { accept: 'text/event-stream' },
+    });
+    if (!res.ok || !res.body) return events;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let sawEnd = false;
+    while (!sawEnd) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sep = buffer.indexOf('\n\n');
+      while (sep >= 0) {
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        sep = buffer.indexOf('\n\n');
+        let event = 'message';
+        let data = '';
+        for (const line of frame.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim();
+          else if (line.startsWith('data:')) data += line.slice(5).trim();
+        }
+        if (!event || frame.startsWith(':')) continue;
+        let parsed: Record<string, unknown> = {};
+        try { parsed = JSON.parse(data) as Record<string, unknown>; } catch { /* keepalives/no-payload events replay without JSON data */ }
+        events.push({ event, data: parsed });
+        if (event === 'end') sawEnd = true;
+      }
+    }
+  } catch { /* timeout/abort: return whatever replayed so assertions fail with real data */ }
+  finally { clearTimeout(timer); controller.abort(); }
+  return events;
+}
+function matchesObjectSubset(actual: unknown, expected: Record<string, unknown>): boolean {
+  if (!isRecord(actual)) return false;
+  return Object.entries(expected).every(([k, v]) => actual[k] === v);
+}
+
 // sqlite3 CLI read (matches verify-w0.ts's pattern) -- the daemon's own
 // on-disk messages table is the ground-truth persisted record, independent
 // of whatever the HTTP status endpoint chooses to expose.
@@ -761,8 +910,19 @@ function invalidModelId(): string {
 // STRUCTURED `usage`/`total_cost_usd` fields FAKE_CLAUDE_SCRIPT emits on its
 // `result` event, the same as it would from a real claude CLI -- so there is
 // no oracle for an implementation to special-case against.
-const USAGE_MARKER_START = 'OD_W1_USAGE_MARKER_START';
-const USAGE_MARKER_END = 'OD_W1_USAGE_MARKER_END';
+// CEREMONY ROUND FIX (ruling item 7, "Randomization boundary"): these were
+// fixed literal strings ("OD_W1_USAGE_MARKER_START/END") -- exactly the
+// stable-classifier-word class the ruling forbids ("OD_W1", "marker-start",
+// "marker-end" are named explicitly). Fresh CSPRNG values per invocation now;
+// every downstream use already threads them through JSON.stringify(...) into
+// the generated fake-CLI source, so no other structural change is needed.
+const USAGE_MARKER_START = randomNonce(12);
+const USAGE_MARKER_END = randomNonce(12);
+// CEREMONY ROUND FIX (ruling item 7): "model-ID carrier prefixes/suffixes
+// used only by the fake" must also be fresh per invocation, not a fixed
+// literal an implementation could pattern-match against.
+const FAKE_CLAUDE_OWN_DEFAULT_MODEL = `agentdefault${randomNonce(10)}`;
+const FAKE_CLAUDE_VERSION_STRING = `1.0.${randomNonce(4)}`;
 interface ProbeUsage { input_tokens: number; output_tokens: number; cache_creation_input_tokens: number; cache_read_input_tokens: number }
 // ROUND 2 FIX (finding 11): dropped the round-1 `label` parameter (e.g.
 // "small run", "priced", "cost meter probe") -- a fixed, criterion-
@@ -773,18 +933,19 @@ function usageMarkerPrompt(usage: ProbeUsage, costUsd: number): string {
   return `${randomNonce(6)} ${USAGE_MARKER_START}${JSON.stringify({ ...usage, costUsd })}${USAGE_MARKER_END}`;
 }
 const FAKE_CLAUDE_SCRIPT = `#!/usr/bin/env node
-// verifier-owned fake claude CLI -- see verify-w1.ts header comment.
+// fake claude CLI -- see verify-w1.ts header comment.
 const args = process.argv.slice(2);
-if (args.includes('--version')) { process.stdout.write('1.0.0 (fake-claude, verifier-owned)\\n'); process.exit(0); }
+if (args.includes('--version')) { process.stdout.write(${JSON.stringify(FAKE_CLAUDE_VERSION_STRING)} + '\\n'); process.exit(0); }
 const modelIdx = args.indexOf('--model');
 const requestedModel = modelIdx >= 0 ? args[modelIdx + 1] : null;
 // A real installed claude CLI, launched with no --model flag, still runs
 // SOME concrete account/config-default model and reports it in its own
-// init event -- never a bare null. This fixed id stands in for that CLI's
+// init event -- never a bare null. This id (a fresh CSPRNG value per
+// verifier invocation, per ceremony ruling item 7) stands in for that CLI's
 // own hardcoded config default. The daemon cannot see or guess this value
 // before spawn (it only learns it from this fake's stdout, exactly like a
 // real CLI's echo), so it is legitimate ground truth, not an oracle leak.
-const OWN_DEFAULT_MODEL = 'fake-claude-installed-cli-own-default';
+const OWN_DEFAULT_MODEL = ${JSON.stringify(FAKE_CLAUDE_OWN_DEFAULT_MODEL)};
 const executedModel = requestedModel || OWN_DEFAULT_MODEL;
 function num(re, s, fallback) { const mm = re.exec(s); return mm ? Number(mm[1]) : fallback; }
 function respond(promptText) {
@@ -864,60 +1025,98 @@ function base64UrlDecode(s: string): string {
   const padded = s + '='.repeat((4 - (s.length % 4)) % 4);
   return Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
 }
-// A pool of textually DISTINCT real-world failure-content FAMILIES (OS
-// errno-shaped, git-shaped, a Python traceback, a generic exit-status
-// message, a timeout) -- each call randomizes its own details via
-// randomNonce()/Math.random(), so no two invocations across the whole file,
-// or across repeated verifier runs, ever produce the same literal string.
-function randomToolErrorContent(): string {
-  const templates: Array<() => string> = [
-    () => `EPERM: operation not permitted, open '/tmp/${randomNonce(4)}/${randomNonce(3)}.txt'`,
-    () => `ENOENT: no such file or directory, stat '/tmp/${randomNonce(4)}/${randomNonce(3)}'`,
-    () => `EACCES: permission denied, unlink '/tmp/${randomNonce(4)}/${randomNonce(3)}'`,
-    () => `fatal: ${randomNonce(6)}: unable to write new object`,
-    () => `Traceback (most recent call last):\n  File "${randomNonce(4)}.py", line ${1 + Math.floor(Math.random() * 900)}\nOSError: [Errno ${1 + Math.floor(Math.random() * 90)}] ${randomNonce(6)}`,
-    () => `Error: ${randomNonce(8)} exited with status ${1 + Math.floor(Math.random() * 200)}`,
-    () => `TimeoutError: operation timed out after ${1 + Math.floor(Math.random() * 9000)}ms (${randomNonce(4)})`,
+// CEREMONY ROUND FIX (ruling item 4, "C1-10 tool-confound removal"): round 2
+// always ran every failure on `Write` and the ONE success on `Read` --
+// "permits a fail-all-Write implementation" (ruling finding 4) -- and the
+// model-id encoding baked in classifier-legible substrings ("-ctrl-success",
+// "-ctrl-marked-", "-rand-", named explicitly as forbidden in item 7). This
+// generates matched success/failure PAIRS per tool identity (Read and Write
+// mandatory; Edit and Bash included too, each also getting both a success
+// and a failure), CSPRNG-shuffles run order, and encodes each run's whole
+// spec (tool identity + outcome + failure content) as ONE opaque base64url
+// blob -- the fake CLI decodes it structurally; no regex-matchable tag
+// survives in the model id string the daemon itself ever sees.
+interface KimiProbeSpec { tool: string; ok: boolean; content: string }
+function encodeKimiProbeSpec(spec: KimiProbeSpec): string {
+  return `m${base64UrlEncode(JSON.stringify(spec))}`;
+}
+// Runtime/combinatorial failure-content generator (replaces the closed
+// seven-template pool): error CLASS, casing, punctuation, wrapper, path, and
+// status/errno code are all independently randomized per call, and the
+// wrapper composition varies the field ORDERING within the message.
+function randomCase(s: string): string {
+  const mode = Math.floor(Math.random() * 3);
+  return mode === 0 ? s.toUpperCase() : mode === 1 ? s.toLowerCase() : s;
+}
+function combinatorialToolErrorContent(): string {
+  const errnoNum = 1 + Math.floor(Math.random() * 90);
+  const statusCode = 1 + Math.floor(Math.random() * 200);
+  const ext = ['txt', 'py', 'json', 'log'][Math.floor(Math.random() * 4)];
+  const p = `/${randomNonce(3)}/${randomNonce(4)}.${ext}`;
+  const punctuation = [':', ' -', ',', ''][Math.floor(Math.random() * 4)]!;
+  const bodies: Array<() => string> = [
+    () => `${randomCase('EPERM')}${punctuation} operation not permitted, open '${p}'`,
+    () => `${randomCase('ENOENT')}${punctuation} no such file or directory, stat '${p}'`,
+    () => `${randomCase('EACCES')}${punctuation} permission denied, unlink '${p}'`,
+    () => `${randomCase('fatal')}${punctuation} ${randomNonce(6)}: unable to write new object`,
+    () => `${randomCase('OSError')}${punctuation} [Errno ${errnoNum}] ${randomNonce(6)}`,
+    () => `${randomCase('Error')}${punctuation} ${randomNonce(8)} exited with status ${statusCode}`,
+    () => `${randomCase('TimeoutError')}${punctuation} operation timed out after ${1 + Math.floor(Math.random() * 9000)}ms (${randomNonce(4)})`,
   ];
-  const pick = templates[Math.floor(Math.random() * templates.length)]!;
-  return pick();
+  const wrappers: Array<(inner: string) => string> = [
+    (inner) => inner,
+    (inner) => `${randomCase('Error')}${punctuation} ${inner}`,
+    (inner) => `[tool-error] ${inner}`,
+    (inner) => `${inner}\nexit status ${statusCode}`,
+    (inner) => `Traceback (most recent call last):\n  File "${randomNonce(4)}.py", line ${1 + Math.floor(Math.random() * 900)}\n${inner}`,
+  ];
+  const body = bodies[Math.floor(Math.random() * bodies.length)]!();
+  const wrapper = wrappers[Math.floor(Math.random() * wrappers.length)]!;
+  return wrapper(body);
 }
 const FAKE_KIMI_SCRIPT = `#!/usr/bin/env node
-// verifier-owned fake kimi CLI -- see verify-w1.ts header comment.
+// fake kimi CLI -- see verify-w1.ts header comment.
+const crypto = require('node:crypto');
 const args = process.argv.slice(2);
-if (args.includes('--version')) { process.stdout.write('0.27.0 (fake-kimi, verifier-owned)\\n'); process.exit(0); }
+if (args.includes('--version')) { process.stdout.write(${JSON.stringify(`0.27.${randomNonce(4)}`)} + '\\n'); process.exit(0); }
 function b64urlDecode(s) {
   const padded = s + '='.repeat((4 - (s.length % 4)) % 4);
   return Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
 }
 const modelIdx = args.indexOf('--model');
 const requestedModel = (modelIdx >= 0 ? args[modelIdx + 1] : '') || '';
-let toolContent = 'ok';
-let succeeds = true;
-const markedMatch = /-ctrl-marked-([A-Za-z0-9_-]+)/.exec(requestedModel);
-const randMatch = /-rand-([A-Za-z0-9_-]+)/.exec(requestedModel);
-if (markedMatch) { toolContent = b64urlDecode(markedMatch[1]); succeeds = false; }
-else if (randMatch) { toolContent = b64urlDecode(randMatch[1]); succeeds = false; }
+let spec = { tool: 'Read', ok: true, content: 'ok' };
+if (requestedModel[0] === 'm') {
+  try { spec = JSON.parse(b64urlDecode(requestedModel.slice(1))); } catch {}
+}
+const toolCallId = 'call_' + crypto.randomBytes(6).toString('hex');
+const sessionId = 'sess_' + crypto.randomBytes(6).toString('hex');
 function line(o) { process.stdout.write(JSON.stringify(o) + '\\n'); }
-line({ role: 'assistant', tool_calls: [{ type: 'function', id: 'call_1', function: { name: succeeds ? 'Read' : 'Write', arguments: '{}' } }] });
-line({ role: 'tool', tool_call_id: 'call_1', content: toolContent });
-line({ role: 'assistant', content: succeeds ? 'all good' : "I couldn't complete that." });
-line({ role: 'meta', type: 'session.resume_hint', session_id: 'fake-kimi-session' });
+line({ role: 'assistant', tool_calls: [{ type: 'function', id: toolCallId, function: { name: spec.tool, arguments: '{}' } }] });
+line({ role: 'tool', tool_call_id: toolCallId, content: spec.ok ? 'ok' : spec.content });
+line({ role: 'assistant', content: spec.ok ? 'all good' : "I couldn't complete that." });
+line({ role: 'meta', type: 'session.resume_hint', session_id: sessionId });
 setTimeout(() => process.exit(0), 30);
 `;
-function fakeKimiSuccessModelId(): string {
-  return `kimi-${randomNonce(4)}-ctrl-success`;
-}
-// The ONE exact-marker control: proves the EXISTING regex-matched shape
-// stays correctly classified (a negative control, per R4) -- distinct from
-// the randomized-content runs below, which prove the property generalizes.
-function fakeKimiMarkedFailureModelId(): string {
-  const content = `Command failed with exit code: ${1 + Math.floor(Math.random() * 200)}. ${randomNonce(4)}`;
-  return `kimi-${randomNonce(4)}-ctrl-marked-${base64UrlEncode(content)}`;
-}
-function fakeKimiRandomFailureModelId(): { modelId: string; content: string } {
-  const content = randomToolErrorContent();
-  return { modelId: `kimi-${randomNonce(4)}-rand-${base64UrlEncode(content)}`, content };
+// Builds the full battery: combinatorial-content pairs for Read/Write/Edit,
+// plus one Bash pair that RETAINS the real, already-correctly-classified
+// exact `Command failed with exit code: N.` marker shape as its failure
+// (ruling: "retain the real... negative control, but pair it with a
+// successful result using the same tool identity"). CSPRNG-shuffled order.
+function buildKimiProbePairs(): KimiProbeSpec[] {
+  const combinatorialTools = ['Read', 'Write', 'Edit'];
+  const specs: KimiProbeSpec[] = [];
+  for (const tool of combinatorialTools) {
+    specs.push({ tool, ok: true, content: 'ok' });
+    specs.push({ tool, ok: false, content: combinatorialToolErrorContent() });
+  }
+  specs.push({ tool: 'Bash', ok: true, content: 'ok' });
+  specs.push({ tool: 'Bash', ok: false, content: `Command failed with exit code: ${1 + Math.floor(Math.random() * 200)}.` });
+  for (let i = specs.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    const tmp = specs[i]!; specs[i] = specs[j]!; specs[j] = tmp;
+  }
+  return specs;
 }
 
 // Antigravity's daemon-side write-settings -> spawn -> agy-reads-settings
@@ -1061,7 +1260,7 @@ type PlaywrightBrowser = {
 type PlaywrightCdpSession = { send: (method: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>> };
 type PlaywrightBrowserContext = { newCDPSession: (page: PlaywrightPage) => Promise<PlaywrightCdpSession> };
 type PlaywrightRoute = {
-  request: () => { method: () => string };
+  request: () => { method: () => string; url: () => string };
   fulfill: (opts: { json?: unknown; status?: number }) => Promise<void>;
   fallback: () => Promise<void>;
   continue: () => Promise<void>;
@@ -1657,21 +1856,40 @@ await checkCriterion('C1-5', 'local PostHog-shaped capture stub + a substitution
     const msgForExec = readMessageRow(daemon.dataDir, run.assistantMessageId);
     const executedMatch = /^fake claude reply for (.+)$/.exec(msgForExec?.content ?? '');
     const executedModel = executedMatch?.[1] ?? null;
-    const capturedModelIds = capture.bodies.flatMap((b) => {
-      try { return findPropertiesModelIdValues(JSON.parse(b)); } catch { return []; }
+    // CEREMONY ROUND FIX (ruling item 3): strict envelope parse (root
+    // {event,properties} OR elements of a root batch array only, no
+    // recursion into arbitrary nesting -- see extractPostHogEnvelopeEvents),
+    // filtered to event==="run_finished" && properties.run_id===run.runId,
+    // requiring EXACTLY ONE match. run_created, retry events, unrelated
+    // runs, and unrelated properties.model_id fields elsewhere in the same
+    // batch supply no evidence. Only on that one matched event do we look
+    // at properties.model_id at all.
+    const allEnvelopeEvents = capture.bodies.flatMap((b) => {
+      try { return extractPostHogEnvelopeEvents(JSON.parse(b)); } catch { return []; }
     });
-    const rawRequestedCaptured = capturedModelIds.includes(requestedInvalid);
-    const resolvedCaptured = typeof resolvedGuess === 'string' && capturedModelIds.includes(resolvedGuess);
-    const executedCaptured = !!executedModel && capturedModelIds.includes(executedModel);
+    const matchingRunFinished = allEnvelopeEvents.filter((e) => e.event === 'run_finished' && isRecord(e.properties) && e.properties.run_id === run.runId);
     const problems: string[] = [];
     if (capture.bodies.length === 0) problems.push('no analytics payload was captured at all -- POSTHOG_HOST override did not take effect, or capture() was never called');
     if (!executedModel) problems.push('could not independently observe the executed model from the fake CLI\'s own echoed reply text -- cannot ground-truth the telemetry assertion');
-    if (capturedModelIds.length === 0) problems.push('no captured analytics payload carries a `properties.model_id` field at all -- telemetry is not stamping model_id on this event\'s properties');
-    if (rawRequestedCaptured) problems.push(`a captured event's properties.model_id equals the RAW REQUESTED model ("${requestedInvalid}") -- run.model still records pre-resolution input`);
-    if (!resolvedGuess) problems.push('no requested/resolved field pair found on the run yet, so resolved-vs-telemetry cannot be cross-checked');
-    else if (!resolvedCaptured) problems.push(`no captured event's properties.model_id equals the persisted resolved model ("${resolvedGuess}")`);
-    if (executedModel && !executedCaptured) problems.push(`no captured event's properties.model_id equals the INDEPENDENTLY-observed executed model ("${executedModel}") -- telemetry may match a self-reported "resolved" value without matching what actually ran`);
-    record('C1-5', 'local PostHog stub, model_id-bound', 'captured model_id equals the resolved AND independently-observed executed model, never the raw requested one', problems.length === 0, `capturedBodyCount=${capture.bodies.length}\ncapturedModelIds=${JSON.stringify(capturedModelIds)}\nresolvedGuess=${String(resolvedGuess)}\nexecutedModel=${executedModel}\nrawRequestedCaptured=${rawRequestedCaptured}\nresolvedCaptured=${resolvedCaptured}\nfirstBody=${capture.bodies[0]?.slice(0, 800) ?? '(none)'}`, { detail: problems.length ? problems.join('; ') : undefined });
+    let matchedModelId: string | null = null;
+    if (matchingRunFinished.length === 0) {
+      problems.push(`no captured PostHog envelope is a run_finished event with properties.run_id === "${run.runId}" (checked ${allEnvelopeEvents.length} total envelope event(s) across ${capture.bodies.length} captured body/bodies)`);
+    } else if (matchingRunFinished.length > 1) {
+      problems.push(`${matchingRunFinished.length} captured run_finished events match properties.run_id === "${run.runId}" -- expected exactly one, unambiguous match`);
+    } else {
+      const props = matchingRunFinished[0]!.properties as Record<string, unknown>;
+      const modelId = props.model_id;
+      if (typeof modelId !== 'string' || modelId.length === 0) {
+        problems.push('the matched run_finished event has no non-empty properties.model_id');
+      } else {
+        matchedModelId = modelId;
+        if (modelId === requestedInvalid) problems.push(`the matched run_finished event's properties.model_id equals the RAW REQUESTED model ("${requestedInvalid}") -- run.model still records pre-resolution input`);
+        if (!resolvedGuess) problems.push('no requested/resolved field pair found on the run yet, so resolved-vs-telemetry cannot be cross-checked');
+        else if (modelId !== resolvedGuess) problems.push(`the matched run_finished event's properties.model_id ("${modelId}") does not equal the persisted resolved model ("${resolvedGuess}")`);
+        if (executedModel && modelId !== executedModel) problems.push(`the matched run_finished event's properties.model_id ("${modelId}") does not equal the INDEPENDENTLY-observed executed model ("${executedModel}") -- telemetry may match a self-reported "resolved" value without matching what actually ran`);
+      }
+    }
+    record('C1-5', 'local PostHog stub, strict run_finished/run_id-bound envelope', 'exactly one run_finished event matches properties.run_id; on it alone, properties.model_id equals the resolved AND independently-observed executed model, never the raw requested one', problems.length === 0, `capturedBodyCount=${capture.bodies.length}\ntotalEnvelopeEvents=${allEnvelopeEvents.length}\nmatchingRunFinishedCount=${matchingRunFinished.length}\nmatchedModelId=${matchedModelId}\nresolvedGuess=${String(resolvedGuess)}\nexecutedModel=${executedModel}\nfirstBody=${capture.bodies[0]?.slice(0, 800) ?? '(none)'}`, { detail: problems.length ? problems.join('; ') : undefined });
   } finally {
     await daemon.kill();
     await capture.close();
@@ -1769,30 +1987,277 @@ await checkCriterion('C1-6', 'two SEQUENTIAL solo antigravity runs (positive con
 // run replayed twice) so a flat/constant per-run cost cannot pass the
 // "differs and is proportionate" check, and the project total must equal
 // the exact sum of the two -- catching double-counted aggregation.
-// ROUND 1 FIX (finding 5): the previous two runs used
-// fakeClaudeUsageModelId's nonce-prefixed, obviously-synthetic model id to
-// carry usage numbers -- an HONEST pricing implementation has no real price
-// for such a model and would correctly answer "unavailable", making the
-// numeric-cost-differential requirement below UNSATISFIABLE by a correct
-// implementation (and satisfiable only by an implementation that special-
-// cases recognizable probe ids, which is the opposite of what a gate should
-// reward). Both runs now request a REAL, current, listed Claude model id
-// (CLAUDE_FALLBACK_MODELS' 'claude-sonnet-4-5', confirmed present in
-// apps/daemon/src/runtimes/defs/claude.ts) and carry their usage numbers in
-// the PROMPT instead (usageMarkerPrompt / FAKE_CLAUDE_SCRIPT's stdin-marker
-// decode path -- see the design note above FAKE_CLAUDE_SCRIPT). The project
-// aggregate check is also now MANDATORY (previously skipped entirely when no
-// separate "global" route existed -- finding 5's "aggregate equality is
-// optional") by searching the SAME project-scoped response for a total,
-// falling back to a separate global-shaped route only if the project
-// response itself carries none.
+// ROUND 1 FIX (finding 5): both runs request a REAL, current, listed Claude
+// model id ('claude-sonnet-4-5') and carry their usage numbers in the
+// PROMPT instead (usageMarkerPrompt / FAKE_CLAUDE_SCRIPT's stdin-marker
+// decode path). The project aggregate check is MANDATORY.
+// CEREMONY ROUND FIX (ruling items 1 + 6): round 2's retry/resume/cache-
+// inclusive/multi-lane additions were rejected as insufficient evidence --
+// "a comment is not an executable retry probe; a second ordinary run
+// sharing conversationId is not lifecycle resume; and directly invoking the
+// Codex extractor does not prove that the future cost route consumes its
+// result" (ruling finding 1) -- and the aggregate oracle accepted any
+// numeric leaf equal to the expected sum (ruling finding 6). This section
+// now:
+//   - builds a REAL same-run retry probe directly on
+//     apps/daemon/tests/run-retry-runtime.test.ts's deterministic shape
+//     (dedicated daemon, stateful fake claude);
+//   - replaces the same-conversation pair with a genuine resumable-failure
+//     + real `od run continue` flow directly on apps/daemon/tests/
+//     run-resume-on-failure.test.ts's shape (dedicated daemon);
+//   - replaces the direct extractCodexLastTurnFirstCallUsage import/call
+//     with a verifier-owned fake Codex through the real daemon, isolated
+//     CODEX_HOME, and a REAL rollout file (dedicated daemon) -- this also
+//     absorbs the old MULTI-LANE aggregate/partiality check;
+//   - replaces the any-leaf-matches-the-sum aggregate scan with
+//     findAggregateCandidates/readAggregateAtPath: exactly one unambiguous,
+//     project-scoped, non-run-anchored, aggregate-and-money-shaped field
+//     path, discovered ONCE against the main run1/run2 project and REUSED
+//     (by path string, queried against each dedicated daemon's own
+//     project) across retry/resume/Codex/restart.
+// The accepted daemon-restart design/mechanism itself is UNCHANGED (ceremony
+// ruling: "The restart design is accepted and remains closed").
 // -----------------------------------------------------------------------
 function additiveEffectiveInput(input: number, cacheRead: number, cacheCreation: number): number {
   return input + cacheRead + cacheCreation;
 }
+// Path-validated aggregate-field-rule (ruling item 6). Candidates are found
+// ONLY in the project-scoped response, EXCLUDING any object that itself
+// carries one of `excludeRunIds` as one of its own values (the per-run cost
+// records the findRunNumberField lookups above already bind to -- an
+// aggregate must live somewhere else in the shape). A candidate's full,
+// normalized (camelCase/snake_case/kebab-case-insensitive) field path must
+// contain at least one token from {total,aggregate,project} AND one from
+// {cost,spend}, and a USD signal must appear either in the path itself or as
+// a sibling `currency:"USD"` field on the SAME object the leaf lives on. The
+// leaf itself must be one finite, nonnegative number (or a numeric-looking
+// string at that same path). Zero or multiple ambiguous candidates both fail
+// -- this is deliberately a single, unambiguous, path-anchored oracle, never
+// "any leaf that happens to equal the sum."
+interface AggregateCandidate { path: string; value: number }
+function normalizePathToken(seg: string): string {
+  return seg.replace(/[_-]/g, '').toLowerCase();
+}
+function findAggregateCandidates(root: unknown, excludeRunIds: string[]): AggregateCandidate[] {
+  const out: AggregateCandidate[] = [];
+  const AGGREGATE_TOKENS = ['total', 'aggregate', 'project'];
+  const MONEY_TOKENS = ['cost', 'spend'];
+  function objectCarriesRunId(obj: Record<string, unknown>): boolean {
+    return excludeRunIds.some((id) => Object.values(obj).includes(id));
+  }
+  function pushIfCandidate(segPath: string[], numeric: number, siblingObj: Record<string, unknown>): void {
+    const normalizedFull = segPath.map(normalizePathToken).join('.');
+    const hasAggregateToken = AGGREGATE_TOKENS.some((t) => normalizedFull.includes(t));
+    const hasMoneyToken = MONEY_TOKENS.some((t) => normalizedFull.includes(t));
+    if (!hasAggregateToken || !hasMoneyToken) return;
+    const siblingCurrencyUsd = Object.entries(siblingObj).some(([kk, vv]) => /currency/i.test(kk) && typeof vv === 'string' && vv.toUpperCase() === 'USD');
+    if (siblingCurrencyUsd || normalizedFull.includes('usd')) out.push({ path: segPath.join('.'), value: numeric });
+  }
+  function walk(node: unknown, pathSegs: string[]): void {
+    if (Array.isArray(node)) { node.forEach((v, i) => walk(v, [...pathSegs, String(i)])); return; }
+    if (!isRecord(node)) return;
+    if (objectCarriesRunId(node)) return;
+    for (const [k, v] of Object.entries(node)) {
+      const segPath = [...pathSegs, k];
+      if (typeof v === 'number' && Number.isFinite(v) && v >= 0) pushIfCandidate(segPath, v, node);
+      else if (typeof v === 'string' && /^\d+(\.\d+)?$/.test(v)) pushIfCandidate(segPath, Number(v), node);
+      else walk(v, segPath);
+    }
+  }
+  walk(root, []);
+  return out;
+}
+function readAggregateAtPath(root: unknown, fieldPath: string): number | null {
+  let cur: unknown = root;
+  for (const seg of fieldPath.split('.')) {
+    if (Array.isArray(cur)) cur = cur[Number(seg)];
+    else if (isRecord(cur)) cur = cur[seg];
+    else return null;
+  }
+  if (typeof cur === 'number' && Number.isFinite(cur)) return cur;
+  if (typeof cur === 'string' && /^\d+(\.\d+)?$/.test(cur)) return Number(cur);
+  return null;
+}
+function projectRouteUrl(baseUrl: string, routePath: string, projectId: string): string {
+  return `${baseUrl}${routePath.replace(/:\w+/, encodeURIComponent(projectId))}`;
+}
+// Used by the Codex cache-inclusive probe: navigates to the FIRST object
+// anywhere in `root` that mentions `runId` as one of its own values (reusing
+// findRunScopedRecord), then searches that object's ENTIRE subtree for the
+// first numeric field whose key exactly matches one of `candidateNames` --
+// so a field nested one level deeper than the run-id-bearing object itself
+// (e.g. run.usage.inputTokensEffective) is still found, without falling
+// back to an unrelated global field.
+function findNamedNumberInSubtree(root: unknown, candidateNames: string[], _seen: Set<unknown> = new Set()): number | null {
+  if (!isRecord(root) && !Array.isArray(root)) return null;
+  if (_seen.has(root)) return null;
+  _seen.add(root);
+  if (isRecord(root)) {
+    for (const name of candidateNames) {
+      const v = root[name];
+      if (typeof v === 'number' && Number.isFinite(v)) return v;
+    }
+    for (const v of Object.values(root)) {
+      const hit = findNamedNumberInSubtree(v, candidateNames, _seen);
+      if (hit !== null) return hit;
+    }
+    return null;
+  }
+  for (const v of root as unknown[]) {
+    const hit = findNamedNumberInSubtree(v, candidateNames, _seen);
+    if (hit !== null) return hit;
+  }
+  return null;
+}
+function findRunScopedNamedNumber(root: unknown, runId: string, candidateNames: string[]): number | null {
+  const scoped = findRunScopedRecord(root, runId);
+  if (!scoped) return null;
+  return findNamedNumberInSubtree(scoped, candidateNames);
+}
 const C17_KNOWN_MODEL = 'claude-sonnet-4-5';
 const usageRouteFilesForC17 = findUsageRouteFiles();
-await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL known model id (usage carried in the prompt, not the model id) in one project, read back through apps/daemon/src/routes/usage*.ts', 'per-run cost differs proportionately with token volume, a project aggregate equals the exact sum (mandatory), and cache tokens are accounted additively (not double-counted)', async () => {
+// Same-run retry fake claude (ruling item 1a): fails BEFORE FIRST TOKEN with
+// the exact transient-503 shape apps/daemon/tests/run-retry-runtime.test.ts's
+// writeFlakyClaude uses -- the daemon's own EXISTING, already-shipped retry
+// policy recognizes this and retries once, same-run. Attempt 0 emits nothing
+// (no usage) so a correct cost route must charge attempt 1's controlled
+// usage exactly once.
+function writeRetryProbeClaude(dir: string, name: string, usage: ProbeUsage, costUsd: number): string {
+  const bin = path.join(dir, name);
+  const counterPath = path.join(dir, `${name}-attempts`);
+  const script = `#!/usr/bin/env node
+const fs = require('node:fs');
+const counterPath = ${JSON.stringify(counterPath)};
+const args = process.argv.slice(2);
+if (args.includes('--version')) { process.stdout.write(${JSON.stringify(`1.0.${randomNonce(4)}`)} + '\\n'); process.exit(0); }
+if (args.includes('--help')) { process.stdout.write('Usage: claude -p\\n'); process.exit(0); }
+if (args.includes('auth')) { process.stdout.write('Logged in (fixture)\\n'); process.exit(0); }
+let attempts = 0;
+try { attempts = Number(fs.readFileSync(counterPath, 'utf8')) || 0; } catch {}
+fs.writeFileSync(counterPath, String(attempts + 1));
+function line(o) { process.stdout.write(JSON.stringify(o) + '\\n'); }
+if (attempts === 0) {
+  process.stderr.write('HTTP 503 Service Unavailable: upstream provider unavailable before first token.\\n');
+  setTimeout(() => process.exit(1), 20);
+} else {
+  line({ type: 'system', subtype: 'init', model: ${JSON.stringify(C17_KNOWN_MODEL)} });
+  line({ type: 'assistant', message: { id: 'msg_retry', role: 'assistant', content: [{ type: 'text', text: 'recovered after retry' }], stop_reason: 'end_turn' } });
+  line({ type: 'result', subtype: 'success', usage: ${JSON.stringify(usage)}, total_cost_usd: ${JSON.stringify(costUsd)}, duration_ms: 5, stop_reason: 'end_turn' });
+  setTimeout(() => process.exit(0), 30);
+}
+`;
+  fs.writeFileSync(bin, script);
+  fs.chmodSync(bin, 0o755);
+  return bin;
+}
+// Lifecycle-resume fake claude (ruling item 1b): mirrors apps/daemon/tests/
+// run-resume-on-failure.test.ts's writeResumableClaude -- attempt 0 commits
+// a tool_use (a real resume boundary), emits a NON-error `result` usage
+// event carrying controlled failed-turn usage (safe: claude-stream.ts's
+// result handler only escalates to a terminal `error` event when
+// `is_error===true`, so this is purely additive and does not interfere with
+// the daemon's separate stderr-driven resumable-failure classification),
+// then fails with an upstream drop. Every later invocation succeeds.
+// Records argv per invocation so the criterion can assert --session-id /
+// --resume.
+function writeResumeProbeClaude(dir: string, name: string, failUsage: ProbeUsage, failCostUsd: number, resumeUsage: ProbeUsage, resumeCostUsd: number): { bin: string; argsLogPath: string } {
+  const bin = path.join(dir, name);
+  const counterPath = path.join(dir, `${name}-attempts`);
+  const argsLogPath = path.join(dir, `${name}-args.jsonl`);
+  const script = `#!/usr/bin/env node
+const fs = require('node:fs');
+const counterPath = ${JSON.stringify(counterPath)};
+const argsLogPath = ${JSON.stringify(argsLogPath)};
+const args = process.argv.slice(2);
+if (args.includes('--version')) { process.stdout.write(${JSON.stringify(`1.0.${randomNonce(4)}`)} + '\\n'); process.exit(0); }
+if (args.includes('--help')) { process.stdout.write('Usage: claude -p\\n'); process.exit(0); }
+if (args.includes('auth')) { process.stdout.write('Logged in (fixture)\\n'); process.exit(0); }
+let attempts = 0;
+try { attempts = Number(fs.readFileSync(counterPath, 'utf8')) || 0; } catch {}
+fs.writeFileSync(counterPath, String(attempts + 1));
+fs.appendFileSync(argsLogPath, JSON.stringify(args) + '\\n');
+function line(o) { process.stdout.write(JSON.stringify(o) + '\\n'); }
+line({ type: 'system', subtype: 'init', model: ${JSON.stringify(C17_KNOWN_MODEL)} });
+if (attempts === 0) {
+  line({ type: 'assistant', message: { id: 'msg_resume0', role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_resume0', name: 'Bash', input: { command: 'echo working' } }], stop_reason: 'tool_use' } });
+  // EMPIRICALLY CONFIRMED (scratchpad probe-resume.mjs, live daemon):
+  // stop_reason MUST be 'tool_use' here. apps/daemon/src/runtimes/
+  // chat-run-lifecycle.ts's applyClaudeStreamJsonRunBookkeeping treats ANY
+  // 'usage' stream event whose stopReason !== 'tool_use' as a terminal turn
+  // and marks run.turnCompletedCleanly=true UNLESS isError===true -- a bare
+  // usage-carrying result with no stop_reason (what a naive "safe, additive"
+  // event looked like on paper) got silently classified as a clean
+  // completion, which classifyChatRunCloseStatus then turns into
+  // 'succeeded' even though the process still exits 1 with the 503 stderr
+  // right after -- resumable never got set. Fresh empirical confirmation
+  // this round, not carried from a prior round's finding.
+  line({ type: 'result', usage: ${JSON.stringify(failUsage)}, total_cost_usd: ${JSON.stringify(failCostUsd)}, duration_ms: 5, stop_reason: 'tool_use' });
+  process.stderr.write('Upstream request failed: HTTP 503 stream disconnected before completion.\\n');
+  setTimeout(() => process.exit(1), 20);
+} else {
+  line({ type: 'assistant', message: { id: 'msg_resume', role: 'assistant', content: [{ type: 'text', text: 'recovered after resume' }], stop_reason: 'end_turn' } });
+  line({ type: 'result', subtype: 'success', usage: ${JSON.stringify(resumeUsage)}, total_cost_usd: ${JSON.stringify(resumeCostUsd)}, duration_ms: 5, stop_reason: 'end_turn' });
+  setTimeout(() => process.exit(0), 30);
+}
+`;
+  fs.writeFileSync(bin, script);
+  fs.chmodSync(bin, 0o755);
+  return { bin, argsLogPath };
+}
+function readClaudeArgvLog(file: string): string[][] {
+  if (!fs.existsSync(file)) return [];
+  return fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map((line) => { try { return JSON.parse(line) as string[]; } catch { return []; } });
+}
+function flagValueFromArgv(args: string[], flag: string): string | null {
+  const idx = args.indexOf(flag);
+  return idx >= 0 ? args[idx + 1] ?? null : null;
+}
+// Cache-inclusive fake Codex (ruling item 1c): through the REAL daemon,
+// writes a REAL rollout file under an isolated CODEX_HOME with codex's own
+// real shape (`payload.type==='task_started'` resets, then
+// `payload.type==='token_count'` carrying `info.last_token_usage.
+// {input_tokens,cached_input_tokens}`, where input_tokens is INCLUSIVE of
+// the cached subset), and emits enough of codex's real stream protocol
+// (thread.started with a fresh session UUID, an agent_message, turn.
+// completed) for the run to succeed through json-event-stream.ts's real,
+// unmodified codex parser.
+function writeFakeCodexRolloutScript(dir: string, name: string, rolloutInputTokens: number, rolloutCachedTokens: number): string {
+  const bin = path.join(dir, name);
+  const script = `#!/usr/bin/env node
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const args = process.argv.slice(2);
+if (args.includes('--version')) { process.stdout.write(${JSON.stringify(`1.0.${randomNonce(4)}`)} + '\\n'); process.exit(0); }
+if (args[0] === 'login' && args[1] === 'status') { process.stdout.write('Logged in (fixture)\\n'); process.exit(0); }
+if (args[0] === 'debug' && args[1] === 'models') { process.stdout.write(JSON.stringify({ models: [] }) + '\\n'); process.exit(0); }
+const threadId = crypto.randomUUID();
+function line(o) { process.stdout.write(JSON.stringify(o) + '\\n'); }
+const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
+const now = new Date();
+const yyyy = String(now.getUTCFullYear());
+const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
+const dd = String(now.getUTCDate()).padStart(2, '0');
+const sessDir = path.join(codexHome, 'sessions', yyyy, mm, dd);
+fs.mkdirSync(sessDir, { recursive: true });
+const rolloutPath = path.join(sessDir, 'rollout-' + now.toISOString().replace(/[:.]/g, '') + '-' + threadId + '.jsonl');
+const rolloutLines = [
+  JSON.stringify({ payload: { type: 'task_started' } }),
+  JSON.stringify({ payload: { type: 'token_count', info: { last_token_usage: { input_tokens: ${JSON.stringify(rolloutInputTokens)}, cached_input_tokens: ${JSON.stringify(rolloutCachedTokens)} } } } }),
+];
+fs.writeFileSync(rolloutPath, rolloutLines.join('\\n') + '\\n');
+line({ type: 'thread.started', thread_id: threadId });
+line({ type: 'turn.started' });
+line({ type: 'item.completed', item: { type: 'agent_message', text: 'fake codex reply ' + threadId } });
+line({ type: 'turn.completed', usage: { input_tokens: ${JSON.stringify(rolloutInputTokens)}, output_tokens: 50, cached_input_tokens: ${JSON.stringify(rolloutCachedTokens)} } });
+setTimeout(() => process.exit(0), 30);
+`;
+  fs.writeFileSync(bin, script);
+  fs.chmodSync(bin, 0o755);
+  return bin;
+}
+await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL known model id in one project (read through apps/daemon/src/routes/usage*.ts) + a dedicated same-run retry probe + a dedicated lifecycle-resume probe (real od run continue) + a dedicated cache-inclusive fake-Codex probe + a real daemon restart, all bound to ONE path-validated aggregate field', 'per-run cost differs proportionately with token volume; a project aggregate has exactly one unambiguous aggregate-and-money-shaped field path and equals the exact sum; a same-run retry charges the successful attempt exactly once; a resumable failure + real od run continue binds both turns\' usage exactly once each; a fake Codex proves cache-inclusive accounting via the real usage route; the accepted field survives a daemon restart', async () => {
   if (usageRouteFilesForC17.length === 0) {
     record('C1-7', 'apps/daemon/src/routes/usage*.ts route discovery', 'a usage/cost route exists to read back from', false, '', { detail: 'no apps/daemon/src/routes/usage*.ts file exists yet' });
     return;
@@ -1805,14 +2270,16 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
   }
   const fakeBinDir = mkFakeBinDir();
   writeFakeBin(fakeBinDir, 'claude', FAKE_CLAUDE_SCRIPT);
-  const codexFetchForC17 = ensureMockRecordings('codex');
-  // let (not const): the daemon-restart scenario below reassigns this to a
-  // SECOND booted instance pointed at the SAME dataDir; the outer `finally`
-  // always kills whichever instance is current.
-  let daemon = await bootDaemon({
-    extraPathDirs: [fakeBinDir, MOCKS_BIN],
-    extraEnv: { OD_MOCKS_TRACE: C1_4_FIXED_CODEX_TRACE, OD_MOCKS_NO_DELAY: '1' },
-  });
+  // `daemon` is reassigned by the restart scenario below (same dataDir, new
+  // process); `retryDaemon`/`resumeDaemon`/`codexDaemon` are each a fresh,
+  // dedicated daemon+project (mirroring the two reference test files' own
+  // "fresh startServer() per scenario" pattern) so their stateful fakes
+  // never cross-talk with run1/run2 or each other. The outer `finally` kills
+  // whichever of these are non-null.
+  let daemon = await bootDaemon({ extraPathDirs: [fakeBinDir] });
+  let retryDaemon: BootedDaemon | null = null;
+  let resumeDaemon: BootedDaemon | null = null;
+  let codexDaemon: BootedDaemon | null = null;
   try {
     const projectId = await createProject(daemon.url, randomNonce(8));
     // Run 1: small, no cache tokens. Real model id; no self-reported
@@ -1832,10 +2299,7 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
 
     const projectRoute = getRoutes.find((r) => r.routePath.includes(':') && /project/i.test(r.routePath)) ?? getRoutes.find((r) => r.routePath.includes(':'));
     const globalRoute = getRoutes.find((r) => !r.routePath.includes(':'));
-    function toUrl(routePath: string): string {
-      return `${daemon.url}${routePath.replace(/:\w+/, encodeURIComponent(projectId))}`;
-    }
-    const perRun1 = projectRoute ? await httpJson('GET', toUrl(projectRoute.routePath)) : null;
+    const perRun1 = projectRoute ? await httpJson('GET', projectRouteUrl(daemon.url, projectRoute.routePath, projectId)) : null;
     const problems: string[] = [];
     if (!perRun1 || perRun1.status !== 200) {
       problems.push(`GET ${projectRoute?.routePath ?? '(no project-scoped route found)'} did not return 200 (status=${perRun1?.status})`);
@@ -1859,171 +2323,207 @@ await checkCriterion('C1-7', 'two different-sized fake-claude runs on a REAL kno
       if (cost1 !== null && cost2 !== null && !(cost2 > cost1)) {
         problems.push(`run2 (far more tokens incl. cache: ${JSON.stringify(usage2)}) costs ${cost2}, not greater than run1's ${cost1} (${JSON.stringify(usage1)}) -- cost is not tracking token volume`);
       }
-      // Aggregate check is MANDATORY (finding 5): try the project-scoped
-      // body itself first (it covers exactly these two runs and nothing
-      // else, so any total-shaped number in it is a fair candidate), then
-      // fall back to a separate global-shaped route only if one exists.
+
+      // CEREMONY ROUND FIX (ruling item 6): exactly one unambiguous,
+      // path-validated aggregate candidate, never "any leaf equal to the
+      // sum." The accepted path is RECORDED and REUSED (by path string,
+      // queried against each dedicated daemon's own response) below.
+      let acceptedFieldPath: string | null = null;
       if (cost1 !== null && cost2 !== null) {
         const expectedSum = cost1 + cost2;
-        const projectBodyCandidates = [...collectNumbers(body), ...collectStrings(body).filter((s) => /^\d+(\.\d+)?$/.test(s)).map(Number)];
-        let matchesSum = projectBodyCandidates.some((t) => Math.abs(t - expectedSum) < 1e-6);
-        let sumSource = `project-scoped GET ${projectRoute?.routePath}`;
-        if (!matchesSum && globalRoute) {
-          const totalResp = await httpJson('GET', toUrl(globalRoute.routePath));
-          if (totalResp.status === 200) {
-            const totalCandidates = [...collectNumbers(totalResp.json), ...collectStrings(totalResp.json).filter((s) => /^\d+(\.\d+)?$/.test(s)).map(Number)];
-            matchesSum = totalCandidates.some((t) => Math.abs(t - expectedSum) < 1e-6);
-            sumSource = `global GET ${globalRoute.routePath}`;
+        const candidates = findAggregateCandidates(body, [run1.runId, run2.runId]);
+        if (candidates.length === 0) {
+          problems.push('no aggregate-and-money-shaped, project-scoped, non-run-anchored field found in the project usage response (needed: a field path containing one of {total,aggregate,project} AND one of {cost,spend}, with a USD signal in the path or a sibling currency:"USD")');
+        } else if (candidates.length > 1) {
+          problems.push(`${candidates.length} ambiguous aggregate-field candidates found (${JSON.stringify(candidates.map((c) => c.path))}) -- expected exactly one unambiguous candidate`);
+        } else {
+          const candidate = candidates[0]!;
+          if (Math.abs(candidate.value - expectedSum) > 1e-6) {
+            problems.push(`the one unambiguous aggregate candidate ("${candidate.path}" = ${candidate.value}) does not equal cost1+cost2 (${expectedSum})`);
+          } else {
+            acceptedFieldPath = candidate.path;
           }
         }
-        if (!matchesSum) problems.push(`no route (checked ${sumSource}${globalRoute ? '' : '; no separate global route exists'}) exposes a number matching cost1+cost2 (${expectedSum}) -- project aggregation is not mandatory-satisfied (evidence: projectBodyCandidates=${JSON.stringify(projectBodyCandidates)})`);
       }
 
-      // ROUND 2 ADDITION (finding 5, Sol round-2 ruling 5): "retry/resume,
-      // daemon restart, cache-inclusive/additive accounting, and multi-lane
-      // behavior are explicit criterion scope [W1-routing-truth.md:94]...
-      // deferring them until implementation would allow the verifier
-      // contract to move after implementation begins." All four are added
-      // now, gated on the same `cost1`/`cost2` preconditions above so they
-      // only run once the basic aggregate is already established.
       let lifecycleAggregate = cost1 !== null && cost2 !== null ? cost1 + cost2 : null;
-      if (lifecycleAggregate !== null && projectRoute) {
-        // DAEMON RESTART: kill this instance, boot a SECOND one pointed at
-        // the SAME dataDir, and requery the SAME project's aggregate on the
-        // NEW process -- proving the cost meter's data survives a real
-        // process restart, not merely an in-memory cache.
+      if (acceptedFieldPath && lifecycleAggregate !== null && projectRoute) {
+        const fieldPath = acceptedFieldPath;
+
+        // DAEMON RESTART (accepted design, unchanged mechanism -- ceremony
+        // ruling: "The restart design is accepted and remains closed"):
+        // kill this instance, boot a SECOND one pointed at the SAME
+        // dataDir, and requery the accepted field path on the NEW process.
         const dataDirBeforeRestart = daemon.dataDir;
         await daemon.kill();
-        daemon = await bootDaemon({
-          dataDir: dataDirBeforeRestart,
-          extraPathDirs: [fakeBinDir, MOCKS_BIN],
-          extraEnv: { OD_MOCKS_TRACE: C1_4_FIXED_CODEX_TRACE, OD_MOCKS_NO_DELAY: '1' },
-        });
-        const postRestartResp = await httpJson('GET', toUrl(projectRoute.routePath));
+        daemon = await bootDaemon({ dataDir: dataDirBeforeRestart, extraPathDirs: [fakeBinDir] });
+        const postRestartResp = await httpJson('GET', projectRouteUrl(daemon.url, projectRoute.routePath, projectId));
         if (postRestartResp.status !== 200) {
           problems.push(`DAEMON RESTART: GET ${projectRoute.routePath} on the restarted daemon did not return 200 (status=${postRestartResp.status}) -- cost data did not survive the restart`);
         } else {
-          const postRestartCandidates = [...collectNumbers(postRestartResp.json), ...collectStrings(postRestartResp.json).filter((s) => /^\d+(\.\d+)?$/.test(s)).map(Number)];
-          if (!postRestartCandidates.some((t) => Math.abs(t - lifecycleAggregate!) < 1e-6)) {
-            problems.push(`DAEMON RESTART: project aggregate after a real process restart (same dataDir) does not still match cost1+cost2 (${lifecycleAggregate}) -- cost data did not survive the restart (candidates=${JSON.stringify(postRestartCandidates)})`);
+          const postRestartAggregate = readAggregateAtPath(postRestartResp.json, fieldPath);
+          if (postRestartAggregate === null || Math.abs(postRestartAggregate - lifecycleAggregate) > 1e-6) {
+            problems.push(`DAEMON RESTART: the accepted aggregate field ("${fieldPath}") after a real process restart (same dataDir) reads ${postRestartAggregate}, expected cost1+cost2 (${lifecycleAggregate}) -- cost data did not survive the restart`);
           }
         }
 
-        // RESUME: a second run continuing the SAME conversation (a real,
-        // empirically-verified continuation path: POST /api/runs with the
-        // prior run's own `conversationId`) -- the aggregate must grow by
-        // exactly that run's cost, not lose or double-count it.
-        // EVASION-ANALYSIS-ADJACENT NOTE: `od run continue <runId>` (the
-        // CLI's own same-run resume command) was tried first and rejected
-        // after empirical testing -- it requires `run.resumable === true`,
-        // which server.ts sets ONLY for a resumable *failure*
-        // (`run.resumable = resumableFailure`, confirmed by reading it), so
-        // it categorically refuses "run-not-resumable" for any run that
-        // SUCCEEDED, which every run in this file's harness does by design.
-        // That command tests recovering a crashed session, not conversation
-        // continuation, so it is the wrong mechanism for this criterion's
-        // "resume" scope; a second same-conversation run is the mechanism
-        // this repo's own multi-turn chat flow actually uses.
-        const usage3 = { input_tokens: 300, output_tokens: 60, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
-        const run3 = await startRun(daemon.url, { projectId, agentId: 'claude', model: C17_KNOWN_MODEL, message: usageMarkerPrompt(usage3, 0) });
-        await pollRunTerminal(daemon.url, run3.runId);
-        const usage4 = { input_tokens: 150, output_tokens: 30, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
-        const run4 = await startRun(daemon.url, { projectId, conversationId: run3.conversationId, agentId: 'claude', model: C17_KNOWN_MODEL, message: usageMarkerPrompt(usage4, 0) });
-        await pollRunTerminal(daemon.url, run4.runId, 20_000);
-        if (run4.conversationId !== run3.conversationId) {
-          problems.push(`RESUME: the continuation run's conversationId ("${run4.conversationId}") does not match the original ("${run3.conversationId}") -- not actually a resumed/continued conversation`);
+        // SAME-RUN RETRY (ruling item 1a).
+        const retryFakeBinDir = mkFakeBinDir();
+        const retryUsage = { input_tokens: 500, output_tokens: 100, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+        writeRetryProbeClaude(retryFakeBinDir, 'claude', retryUsage, 0);
+        retryDaemon = await bootDaemon({ extraPathDirs: [retryFakeBinDir] });
+        const retryProjectId = await createProject(retryDaemon.url, randomNonce(8));
+        const retryRun = await startRun(retryDaemon.url, { projectId: retryProjectId, agentId: 'claude', model: C17_KNOWN_MODEL, message: randomNonce(10) });
+        const retryStatus = await pollRunTerminal(retryDaemon.url, retryRun.runId, 20_000);
+        const retryEvents = await readRunEventsViaSse(retryDaemon.url, retryRun.runId, 15_000);
+        const retryStarts = retryEvents.filter((e) => e.event === 'start');
+        const retryEnds = retryEvents.filter((e) => e.event === 'end');
+        const retryAttempted = retryEvents.filter((e) => e.event === 'run_retry_attempted');
+        const retryFinished = retryEvents.filter((e) => e.event === 'run_retry_finished');
+        if (retryStatus.status !== 'succeeded') problems.push(`RETRY: run status="${String(retryStatus.status)}", expected "succeeded"`);
+        if (retryStarts.length !== 2) problems.push(`RETRY: ${retryStarts.length} 'start' events, expected exactly 2`);
+        if (retryEnds.length !== 1) problems.push(`RETRY: ${retryEnds.length} terminal 'end' events, expected exactly 1`);
+        if (retryAttempted.length !== 1) {
+          problems.push(`RETRY: ${retryAttempted.length} 'run_retry_attempted' events, expected exactly 1`);
+        } else if (!matchesObjectSubset(retryAttempted[0]!.data, { run_id: retryRun.runId, retry_of_run_id: retryRun.runId, retry_attempt_index: 1, retry_strategy: 'same_run_transient', retry_reason: 'transient_failure' })) {
+          problems.push(`RETRY: run_retry_attempted event does not match the expected shape (got ${JSON.stringify(retryAttempted[0]!.data)})`);
         }
-        const resumeResp = await httpJson('GET', toUrl(projectRoute.routePath));
-        const cost3 = resumeResp.json !== null ? findRunNumberField(resumeResp.json, run3.runId, /cost|price|usd|spend/i) : null;
-        const cost4 = resumeResp.json !== null ? findRunNumberField(resumeResp.json, run4.runId, /cost|price|usd|spend/i) : null;
-        if (cost3 === null) problems.push(`RESUME: no numeric cost bound to run3's id (${run3.runId})`);
-        if (cost4 === null) problems.push(`RESUME: no numeric cost bound to the continuation run's id (${run4.runId})`);
-        if (cost3 !== null && cost4 !== null) {
-          const expectedResumeSum = lifecycleAggregate + cost3 + cost4;
-          const resumeCandidates = [...collectNumbers(resumeResp.json), ...collectStrings(resumeResp.json).filter((s) => /^\d+(\.\d+)?$/.test(s)).map(Number)];
-          if (!resumeCandidates.some((t) => Math.abs(t - expectedResumeSum) < 1e-6)) {
-            problems.push(`RESUME: project aggregate after a second run in the same (resumed/continued) conversation does not match cost1+cost2+cost3+cost4 (${expectedResumeSum}) -- resume is losing or double-counting cost (candidates=${JSON.stringify(resumeCandidates)})`);
+        if (retryFinished.length !== 1) {
+          problems.push(`RETRY: ${retryFinished.length} 'run_retry_finished' events, expected exactly 1`);
+        } else if (!matchesObjectSubset(retryFinished[0]!.data, { run_id: retryRun.runId, retry_of_run_id: retryRun.runId, retry_attempt_index: 1, retry_result: 'success' })) {
+          problems.push(`RETRY: run_retry_finished event does not match the expected shape (got ${JSON.stringify(retryFinished[0]!.data)})`);
+        }
+        const retryUsageResp = await httpJson('GET', projectRouteUrl(retryDaemon.url, projectRoute.routePath, retryProjectId));
+        if (retryUsageResp.status !== 200) {
+          problems.push(`RETRY: GET ${projectRoute.routePath} on the retry-probe project did not return 200 (status=${retryUsageResp.status})`);
+        } else {
+          const retryCost = findRunNumberField(retryUsageResp.json, retryRun.runId, /cost|price|usd|spend/i);
+          if (retryCost === null) {
+            problems.push(`RETRY: no numeric cost/price field bound to the retry-probe run's id (${retryRun.runId})`);
           } else {
-            lifecycleAggregate = expectedResumeSum;
+            const retryAggregate = readAggregateAtPath(retryUsageResp.json, fieldPath);
+            if (retryAggregate === null) problems.push(`RETRY: no value at the accepted aggregate field path ("${fieldPath}") in the retry-probe project's usage response`);
+            else if (Math.abs(retryAggregate - retryCost) > 1e-6) problems.push(`RETRY: project aggregate (${retryAggregate}) does not equal exactly the one successful attempt's own cost (${retryCost}) in a project containing only that one run -- attempt 0's (unemitted) usage was charged, or the successful attempt was double-counted`);
           }
         }
 
-        // MULTI-LANE: a REAL codex mock recording (a genuinely different
-        // provider convention -- codex's own usage accounting is cumulative/
-        // cache-INCLUSIVE, confirmed by reading codex-rollout-usage.ts's own
-        // comment, vs claude's additive shape exercised above) joins the
-        // SAME project. It has no CODEX_HOME rollout file in this harness
-        // (the mock replay corpus does not produce one), so a correct
-        // implementation legitimately has no cost signal for it -- this
-        // proves the aggregate is not corrupted (not silently including
-        // garbage, not dropping the other runs) by a second lane joining,
-        // accepting EITHER a correctly-extended sum (if the lane does
-        // contribute a real cost) OR an unchanged sum bound to the SAME
-        // partial-marker convention C1-9 requires.
-        if (codexFetchForC17.ok) {
-          const codexRun = await startRun(daemon.url, { projectId, agentId: 'codex', model: 'gpt-5.6-codex', message: randomNonce(10), context: {} });
-          await pollRunTerminal(daemon.url, codexRun.runId, 30_000);
-          const multiLaneResp = await httpJson('GET', toUrl(projectRoute.routePath));
-          if (multiLaneResp.status !== 200) {
-            problems.push(`MULTI-LANE: GET ${projectRoute.routePath} after adding a codex run did not return 200 (status=${multiLaneResp.status})`);
+        // LIFECYCLE RESUME (ruling item 1b).
+        const resumeFakeBinDir = mkFakeBinDir();
+        const failUsage = { input_tokens: 400, output_tokens: 20, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+        const resumeUsage = { input_tokens: 250, output_tokens: 90, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+        const { argsLogPath: resumeArgsLogPath } = writeResumeProbeClaude(resumeFakeBinDir, 'claude', failUsage, 0, resumeUsage, 0);
+        resumeDaemon = await bootDaemon({ extraPathDirs: [resumeFakeBinDir] });
+        const resumeProjectId = await createProject(resumeDaemon.url, randomNonce(8));
+        // EMPIRICALLY CONFIRMED (scratchpad probe-resume.mjs): `model` is
+        // deliberately OMITTED here. `od run continue` (cli.ts's `case
+        // 'continue'`) never sends a `model` field in its POST body, so the
+        // continuation always resolves the daemon's own default model.
+        // agent-session-resume.ts's evaluateResumeInvalidation rejects a
+        // resume the instant storedModel !== currentModel ("model_changed")
+        // -- requesting a concrete model on turn 1 while turn 2 is
+        // necessarily model-less guarantees that mismatch and silently
+        // forces a from-scratch session every time, live-confirmed against
+        // the real daemon this round (argv never carried --resume until
+        // both turns omitted model).
+        const failedRun = await startRun(resumeDaemon.url, { projectId: resumeProjectId, agentId: 'claude', message: randomNonce(10) });
+        const failedStatus = await pollRunTerminal(resumeDaemon.url, failedRun.runId, 20_000);
+        if (failedStatus.status !== 'failed') problems.push(`RESUME: first turn status="${String(failedStatus.status)}", expected "failed"`);
+        if (failedStatus.resumable !== true) problems.push(`RESUME: first turn resumable=${String(failedStatus.resumable)}, expected true`);
+        const nativeRecovery = failedStatus.nativeSessionRecovery;
+        if (!isRecord(nativeRecovery) || nativeRecovery.state !== 'captured_not_resumed') problems.push(`RESUME: first turn nativeSessionRecovery.state="${isRecord(nativeRecovery) ? String(nativeRecovery.state) : '(absent)'}", expected "captured_not_resumed"`);
+        const continueResp = odCli(resumeDaemon.url, resumeDaemon.dataDir, ['run', 'continue', failedRun.runId, '--json'], {}, 30_000);
+        let continueJson: unknown = null;
+        // EMPIRICALLY CONFIRMED (scratchpad probe): `od run continue --json`
+        // (cli.ts's `case 'continue'`) writes ONE pretty-printed
+        // (2-space-indented) JSON.stringify block as its entire --json
+        // stdout, not a single compact line -- the "last non-empty line"
+        // trick this file uses elsewhere for CLI outputs with unknown
+        // shape (e.g. C1-8's boundKey command) would only capture a bare
+        // "}" here and silently fail to parse. Parse the whole trimmed
+        // stdout directly.
+        try { continueJson = JSON.parse(continueResp.stdout.trim()); } catch { continueJson = null; }
+        const continuedRunId = isRecord(continueJson) && typeof continueJson.runId === 'string' ? continueJson.runId : null;
+        if (continueResp.status !== 0 || !continuedRunId) {
+          problems.push(`RESUME: real \`od run continue ${failedRun.runId} --json\` failed (exit=${continueResp.status}): ${continueResp.stdout.slice(-500)}${continueResp.stderr.slice(-500)}`);
+        } else if (continuedRunId === failedRun.runId) {
+          problems.push('RESUME: od run continue returned the SAME run id as the failed run -- expected a different, new run id');
+        } else {
+          const continuedStatus = await pollRunTerminal(resumeDaemon.url, continuedRunId, 20_000);
+          if (continuedStatus.status !== 'succeeded') problems.push(`RESUME: continued run status="${String(continuedStatus.status)}", expected "succeeded"`);
+          if (continuedStatus.projectId !== resumeProjectId) problems.push(`RESUME: continued run's projectId ("${String(continuedStatus.projectId)}") does not match the original ("${resumeProjectId}")`);
+          if (continuedStatus.conversationId !== failedStatus.conversationId) problems.push(`RESUME: continued run's conversationId ("${String(continuedStatus.conversationId)}") does not match the failed run's ("${String(failedStatus.conversationId)}")`);
+          const argvLog = readClaudeArgvLog(resumeArgsLogPath);
+          const firstSessionId = argvLog[0] ? flagValueFromArgv(argvLog[0], '--session-id') : null;
+          if (!firstSessionId) problems.push('RESUME: first invocation\'s argv carries no --session-id');
+          if (argvLog.length < 2) {
+            problems.push(`RESUME: fake CLI was invoked ${argvLog.length} time(s), expected at least 2 (original + continued)`);
           } else {
-            const codexCost = findRunNumberField(multiLaneResp.json, codexRun.runId, /cost|price|usd|spend/i);
-            const multiLaneCandidates = [...collectNumbers(multiLaneResp.json), ...collectStrings(multiLaneResp.json).filter((s) => /^\d+(\.\d+)?$/.test(s)).map(Number)];
-            const matchesUnchanged = multiLaneCandidates.some((t) => Math.abs(t - lifecycleAggregate!) < 1e-6);
-            const matchesExtended = codexCost !== null && multiLaneCandidates.some((t) => Math.abs(t - (lifecycleAggregate! + codexCost)) < 1e-6);
-            if (matchesUnchanged) {
-              const bodyText = JSON.stringify(multiLaneResp.json).toLowerCase();
-              const hasPartialityMarker = ['partial', 'incomplete', 'unavailable', 'unpricedcount', 'unavailablecount'].some((m) => bodyText.includes(m));
-              if (!hasPartialityMarker) problems.push('MULTI-LANE: the aggregate stayed unchanged after a codex run joined the project, but the response carries no partiality/unavailable marker anywhere -- an unchanged aggregate must be explained as partial, not silent');
-            } else if (!matchesExtended) {
-              problems.push(`MULTI-LANE: after a codex run joined the project, the aggregate matches neither "unchanged" (${lifecycleAggregate}) nor "extended by the codex run's own cost" (codexCost=${codexCost}) -- the second lane corrupted the aggregate (candidates=${JSON.stringify(multiLaneCandidates)})`);
+            const secondResumeId = flagValueFromArgv(argvLog[1]!, '--resume');
+            if (!secondResumeId) problems.push(`RESUME: second invocation's argv carries no --resume flag (argv=${JSON.stringify(argvLog[1])})`);
+            else if (secondResumeId !== firstSessionId) problems.push(`RESUME: second invocation's --resume value ("${secondResumeId}") does not equal the first invocation's --session-id ("${firstSessionId}")`);
+          }
+          const resumeUsageResp = await httpJson('GET', projectRouteUrl(resumeDaemon.url, projectRoute.routePath, resumeProjectId));
+          if (resumeUsageResp.status !== 200) {
+            problems.push(`RESUME: GET ${projectRoute.routePath} on the resume-probe project did not return 200 (status=${resumeUsageResp.status})`);
+          } else {
+            const failedCost = findRunNumberField(resumeUsageResp.json, failedRun.runId, /cost|price|usd|spend/i);
+            const continuedCost = findRunNumberField(resumeUsageResp.json, continuedRunId, /cost|price|usd|spend/i);
+            if (failedCost === null) problems.push(`RESUME: no numeric cost bound to the failed run's id (${failedRun.runId}) -- the controlled failed-turn usage was not bound to it`);
+            if (continuedCost === null) problems.push(`RESUME: no numeric cost bound to the continued run's id (${continuedRunId})`);
+            if (failedCost !== null && continuedCost !== null) {
+              const resumeAggregate = readAggregateAtPath(resumeUsageResp.json, fieldPath);
+              if (resumeAggregate === null) problems.push(`RESUME: no value at the accepted aggregate field path ("${fieldPath}") in the resume-probe project's usage response`);
+              else if (Math.abs(resumeAggregate - (failedCost + continuedCost)) > 1e-6) problems.push(`RESUME: project aggregate (${resumeAggregate}) does not equal failed-turn cost + continued-turn cost (${failedCost + continuedCost})`);
             }
           }
+        }
+
+        // CACHE-INCLUSIVE (ruling item 1c). Absent/unwired route below is a
+        // NAMED failure (the GET-status/field-lookup problems pushed) --
+        // never a substituted pure-function call.
+        const codexFakeBinDir = mkFakeBinDir();
+        const codexHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w1-verify-codex-home-'));
+        const rolloutInputTokens = 1000;
+        const rolloutCachedTokens = 400;
+        writeFakeCodexRolloutScript(codexFakeBinDir, 'codex', rolloutInputTokens, rolloutCachedTokens);
+        codexDaemon = await bootDaemon({ extraPathDirs: [codexFakeBinDir], extraEnv: { CODEX_HOME: codexHomeDir } });
+        const codexProjectId = await createProject(codexDaemon.url, randomNonce(8));
+        const codexRun = await startRun(codexDaemon.url, { projectId: codexProjectId, agentId: 'codex', model: 'gpt-5.6-codex', message: randomNonce(10), context: {} });
+        const codexRunStatus = await pollRunTerminal(codexDaemon.url, codexRun.runId, 30_000);
+        if (codexRunStatus.status !== 'succeeded') problems.push(`CACHE-INCLUSIVE: codex run status="${String(codexRunStatus.status)}", expected "succeeded"`);
+        const codexUsageResp = await httpJson('GET', projectRouteUrl(codexDaemon.url, projectRoute.routePath, codexProjectId));
+        if (codexUsageResp.status !== 200) {
+          problems.push(`CACHE-INCLUSIVE: GET ${projectRoute.routePath} on the codex-probe project did not return 200 (status=${codexUsageResp.status}) -- absent/unwired route is a named C1-7 failure`);
         } else {
-          problems.push(`MULTI-LANE probe skipped: could not fetch a codex mock recording: ${codexFetchForC17.error}`);
+          const codexEffective = findRunScopedNamedNumber(codexUsageResp.json, codexRun.runId, ['input_tokens_effective', 'inputTokensEffective']);
+          const codexCacheRead = findRunScopedNamedNumber(codexUsageResp.json, codexRun.runId, ['cache_read_input_tokens', 'cacheReadInputTokens']);
+          if (codexEffective === null) problems.push(`CACHE-INCLUSIVE: no input_tokens_effective/inputTokensEffective field found bound to the codex run (${codexRun.runId})`);
+          else if (codexEffective !== rolloutInputTokens) problems.push(`CACHE-INCLUSIVE: codex run's effective input tokens = ${codexEffective}, expected the INCLUSIVE total ${rolloutInputTokens} (codex's own convention already includes the cached subset -- ${rolloutInputTokens + rolloutCachedTokens} would mean double-counting)`);
+          if (codexCacheRead === null) problems.push(`CACHE-INCLUSIVE: no cache_read_input_tokens/cacheReadInputTokens field found bound to the codex run (${codexRun.runId})`);
+          else if (codexCacheRead !== rolloutCachedTokens) problems.push(`CACHE-INCLUSIVE: codex run's cache_read_input_tokens = ${codexCacheRead}, expected ${rolloutCachedTokens}`);
+          const codexScoped = findRunScopedRecord(codexUsageResp.json, codexRun.runId);
+          const codexCost = findRunNumberField(codexUsageResp.json, codexRun.runId, /cost|price|usd|spend/i);
+          const codexUnavailable = codexScoped ? findPricingUnavailableField(codexScoped) : null;
+          if (codexCost === null && !codexUnavailable) problems.push('CACHE-INCLUSIVE: the codex run has neither a numeric cost field nor an honest pricing-unavailable marker bound to its own record');
+          const codexAggregate = readAggregateAtPath(codexUsageResp.json, fieldPath);
+          if (codexAggregate === null) {
+            problems.push(`CACHE-INCLUSIVE: no value at the accepted aggregate field path ("${fieldPath}") in the codex-probe project's usage response -- the codex lane is not participating in the same aggregate rules as the claude runs`);
+          } else if (codexCost !== null) {
+            if (Math.abs(codexAggregate - codexCost) > 1e-6) problems.push(`CACHE-INCLUSIVE: project aggregate (${codexAggregate}) does not match the codex run's own cost (${codexCost}) in a project containing only that one run`);
+          } else {
+            const bodyText = JSON.stringify(codexUsageResp.json).toLowerCase();
+            const hasPartialityMarker = ['partial', 'incomplete', 'unavailable', 'unpricedcount', 'unavailablecount'].some((m) => bodyText.includes(m));
+            if (!hasPartialityMarker) problems.push('CACHE-INCLUSIVE: no numeric cost was found for the codex run and no partiality/unavailable marker is present -- an unpriced lane must be explained, not silent');
+          }
         }
       }
     }
-
-    // CACHE-INCLUSIVE convention (finding 5): codex's own usage accounting
-    // is cache-INCLUSIVE (`input_tokens` already contains the cached
-    // subset, confirmed by reading codex-rollout-usage.ts's own comment),
-    // the opposite of claude's additive shape exercised above. The live
-    // HTTP path for it is not yet wired to any route (confirmed: zero call
-    // sites for `extractCodexLastTurnFirstCallUsage`/
-    // `codexSessionIdFromRunEvents` anywhere in server.ts today -- this is
-    // pre-built NM-20 infrastructure, not yet integrated), so this directly
-    // imports and calls the REAL, unmodified, already-shipped pure
-    // extractor with a crafted rollout-shaped JSONL carrying KNOWN
-    // cache-inclusive numbers, and asserts it reports the INCLUSIVE total
-    // (not total+cached) -- a concrete regression guard on the exact
-    // invariant this criterion is required to cover, honest about the
-    // boundary: it does not yet prove the future usage*.ts route WIRES this
-    // in, only that the convention it must reuse is itself correct.
-    try {
-      const codexUsageMod = (await import(pathToFileURL(path.join(repoRoot, 'apps/daemon/src/codex-rollout-usage.ts')).href)) as {
-        extractCodexLastTurnFirstCallUsage: (rolloutJsonl: string) => { first_call_input_tokens: number; first_call_cache_read_input_tokens: number; first_call_cache_hit_ratio: number } | null;
-      };
-      const inclusiveTotal = 1000;
-      const cachedSubset = 400;
-      const rollout = [
-        JSON.stringify({ payload: { type: 'task_started' } }),
-        JSON.stringify({ payload: { type: 'token_count', info: { last_token_usage: { input_tokens: inclusiveTotal, cached_input_tokens: cachedSubset } } } }),
-      ].join('\n');
-      const extracted = codexUsageMod.extractCodexLastTurnFirstCallUsage(rollout);
-      if (!extracted) {
-        problems.push('CACHE-INCLUSIVE: extractCodexLastTurnFirstCallUsage returned null for a well-formed rollout with a real first-call token_count');
-      } else {
-        if (extracted.first_call_input_tokens !== inclusiveTotal) problems.push(`CACHE-INCLUSIVE: extracted first_call_input_tokens=${extracted.first_call_input_tokens}, expected the INCLUSIVE total ${inclusiveTotal} (codex's input_tokens already contains the cached subset -- it must not be re-added)`);
-        if (extracted.first_call_input_tokens === inclusiveTotal + cachedSubset) problems.push(`CACHE-INCLUSIVE: extracted first_call_input_tokens equals total+cached (${inclusiveTotal + cachedSubset}) -- the cached subset is being double-counted as additive when codex's own convention is inclusive`);
-        if (extracted.first_call_cache_read_input_tokens !== cachedSubset) problems.push(`CACHE-INCLUSIVE: extracted first_call_cache_read_input_tokens=${extracted.first_call_cache_read_input_tokens}, expected ${cachedSubset}`);
-      }
-    } catch (err) {
-      problems.push(`CACHE-INCLUSIVE: could not import/call codex-rollout-usage.ts's extractCodexLastTurnFirstCallUsage: ${String((err as Error)?.message ?? err)}`);
-    }
-    record('C1-7', `GET ${projectRoute?.routePath ?? '?'} / GET ${globalRoute?.routePath ?? '?'} + daemon restart + resume + multi-lane + cache-inclusive pure-function check`, 'per-run cost is id-bound and tracks token volume (run2 > run1) on a real, honestly-priceable model id; cache-additive tokens are not double-counted or dropped; a project aggregate mandatorily matches the per-run sum and survives a restart, a resume chain, and a second (cache-inclusive) lane joining', problems.length === 0, `routes=${JSON.stringify(routes)}\nrun1(id=${run1.runId} status=${status1.status} usage=${JSON.stringify(usage1)})\nrun2(id=${run2.runId} status=${status2.status} usage=${JSON.stringify(usage2)})\nperRun1Body=${perRun1 ? JSON.stringify(perRun1.json).slice(0, 1500) : '(n/a)'}`, { detail: problems.length ? problems.join('; ') : undefined });
+    record('C1-7', `GET ${projectRoute?.routePath ?? '?'} / GET ${globalRoute?.routePath ?? '?'} + daemon restart + dedicated retry/resume/cache-inclusive probes`, 'per-run cost is id-bound and tracks token volume (run2 > run1) on a real, honestly-priceable model id; exactly one unambiguous project-scoped aggregate field exists and mandatorily matches the per-run sum; that same field path survives a restart, a real same-run retry, a real resumable-failure + od run continue, and a real fake-Codex cache-inclusive lane', problems.length === 0, `routes=${JSON.stringify(routes)}\nrun1(id=${run1.runId} status=${status1.status} usage=${JSON.stringify(usage1)})\nrun2(id=${run2.runId} status=${status2.status} usage=${JSON.stringify(usage2)})\nperRun1Body=${perRun1 ? JSON.stringify(perRun1.json).slice(0, 1500) : '(n/a)'}`, { detail: problems.length ? problems.join('; ') : undefined });
   } finally {
     await daemon.kill();
+    if (retryDaemon) await retryDaemon.kill();
+    if (resumeDaemon) await resumeDaemon.kill();
+    if (codexDaemon) await codexDaemon.kill();
   }
 });
 
@@ -2080,6 +2580,104 @@ function loadCapabilityManifestRows(): { rows: CapabilityManifestRowLoose[] } | 
   } catch (err) {
     return { error: `capability-manifest.json is not valid JSON: ${String(err)}` };
   }
+}
+// CEREMONY ROUND FIX (ruling item 5, "C1-8 manifest-driven UI proof"): round
+// 2's UI check crawled three GUESSED pages and scanned the whole body for a
+// small fixed set of literal number formats -- "three guessed pages and
+// fixed render strings can reject a correct Settings/dedicated-route UI and
+// accept unrelated body text" (ruling finding 5). This parses a
+// machine-actionable `| verify={...}` suffix out of the manifest row's own
+// `uiEntryPoint`, navigates ONLY the declared path, clicks the declared
+// activate selectors in order, requires exactly one VISIBLE target, attaches
+// network observation BEFORE navigation to confirm the manifest-bound usage
+// GET actually fires, and matches the target's rendered text SEMANTICALLY
+// (currency marker, decimal/grouping separators, arbitrary precision,
+// </ / <= bound forms) against the authoritative HTTP cost.
+interface UiEntryPointVerifySpec { path: string; activate: string[]; target: string; currency: string }
+function parseUiEntryPointVerifySpec(uiEntryPoint: string): { ok: true; spec: UiEntryPointVerifySpec } | { ok: false; error: string } {
+  const marker = '| verify=';
+  const idx = uiEntryPoint.indexOf(marker);
+  if (idx === -1) return { ok: false, error: 'uiEntryPoint has no "| verify={...}" suffix' };
+  const jsonText = uiEntryPoint.slice(idx + marker.length).trim();
+  let parsed: unknown;
+  try { parsed = JSON.parse(jsonText); } catch (err) { return { ok: false, error: `verify= suffix is not valid JSON: ${String(err)}` }; }
+  if (!isRecord(parsed)) return { ok: false, error: 'verify= suffix is not a JSON object' };
+  const p = parsed.path;
+  const activate = parsed.activate;
+  const target = parsed.target;
+  const currency = parsed.currency;
+  if (typeof p !== 'string' || p.length === 0) return { ok: false, error: 'verify.path is missing or not a non-empty string' };
+  if (!p.startsWith('/')) return { ok: false, error: `verify.path ("${p}") must be a same-origin relative path starting with "/"` };
+  if (p.includes('://')) return { ok: false, error: `verify.path ("${p}") looks like an external URL, not a same-origin relative path` };
+  if (!Array.isArray(activate) || activate.length === 0 || !activate.every((a) => typeof a === 'string' && a.length > 0)) return { ok: false, error: 'verify.activate is missing or not a non-empty array of non-empty strings' };
+  if (typeof target !== 'string' || target.length === 0) return { ok: false, error: 'verify.target is missing or not a non-empty string' };
+  if (currency !== 'USD') return { ok: false, error: `verify.currency ("${String(currency)}") must be exactly "USD"` };
+  const allSelectorsAndPath = [p, ...(activate as string[]), target];
+  for (const s of allSelectorsAndPath) {
+    const placeholderRe = /\{([a-zA-Z]+)\}/g;
+    let m: RegExpExecArray | null;
+    while ((m = placeholderRe.exec(s))) {
+      if (!['projectId', 'conversationId', 'runId'].includes(m[1]!)) return { ok: false, error: `unknown placeholder "{${m[1]}}" in "${s}" -- only {projectId}, {conversationId}, {runId} are permitted` };
+    }
+    if (/[\n\r]/.test(s)) return { ok: false, error: `"${s}" contains a raw newline -- not a valid path/selector` };
+  }
+  return { ok: true, spec: { path: p, activate: activate as string[], target, currency: currency as string } };
+}
+function fillUiEntryPointPlaceholders(template: string, values: { projectId: string; conversationId: string; runId: string }): string {
+  return template.replace(/\{projectId\}/g, values.projectId).replace(/\{conversationId\}/g, values.conversationId).replace(/\{runId\}/g, values.runId);
+}
+// Extracts every number-looking occurrence in `text`, tolerant of the
+// currency/separator/precision variance ruling item 5 requires ($/US$/USD
+// before or after; '.' or ',' decimal separator; comma/dot/space/NBSP/
+// apostrophe grouping; arbitrary displayed precision; </<= bound prefixes).
+interface RenderedMoneyMatch { raw: string; value: number; fractionDigits: number; bound: 'exact' | 'lt' | 'lte' }
+function extractRenderedMoneyMatches(text: string): RenderedMoneyMatch[] {
+  const out: RenderedMoneyMatch[] = [];
+  const re = /(<=|≤|<)?\s*(?:\$|US\$|USD)?\s*([0-9][0-9,.\s ']*[0-9]|[0-9])\s*(?:\$|USD)?/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    const boundToken = m[1];
+    const numRaw = m[2]!;
+    const cleaned = numRaw.replace(/[\s ']/g, '');
+    const lastDot = cleaned.lastIndexOf('.');
+    const lastComma = cleaned.lastIndexOf(',');
+    const decimalIdx = Math.max(lastDot, lastComma);
+    let integerPart: string;
+    let fractionPart: string;
+    if (decimalIdx === -1) {
+      integerPart = cleaned;
+      fractionPart = '';
+    } else {
+      const after = cleaned.slice(decimalIdx + 1);
+      // Only treat as a decimal separator when 1-4 digits follow (a real
+      // fractional amount); otherwise it is pure grouping (e.g. "1,234").
+      if (after.length >= 1 && after.length <= 4 && /^[0-9]+$/.test(after)) {
+        integerPart = cleaned.slice(0, decimalIdx).replace(/[.,]/g, '');
+        fractionPart = after;
+      } else {
+        integerPart = cleaned.replace(/[.,]/g, '');
+        fractionPart = '';
+      }
+    }
+    const numeric = Number(`${integerPart}.${fractionPart || '0'}`);
+    if (!Number.isFinite(numeric)) continue;
+    out.push({
+      raw: m[0],
+      value: numeric,
+      fractionDigits: fractionPart.length,
+      bound: boundToken === '<' ? 'lt' : (boundToken === '<=' || boundToken === '≤') ? 'lte' : 'exact',
+    });
+  }
+  return out;
+}
+// For a displayed value with `d` fractional digits, accept when the
+// authoritative cost is within 0.5*10^-d of it (ruling's exact tolerance
+// formula); <N only when strictly below N; <=N only when at most N.
+function moneyMatchAcceptsCost(match: RenderedMoneyMatch, authoritativeCost: number): boolean {
+  if (match.bound === 'lt') return authoritativeCost < match.value;
+  if (match.bound === 'lte') return authoritativeCost <= match.value;
+  const tolerance = 0.5 * Math.pow(10, -match.fractionDigits);
+  return Math.abs(authoritativeCost - match.value) <= tolerance;
 }
 await checkCriterion('C1-8', 'cli.ts SUBCOMMAND_MAP diff + capability-manifest.json row binding + apps/daemon/src/routes/usage*.ts route discovery + real od CLI invocation vs real HTTP, value-bound to the same run\'s cost', 'a new CLI subcommand has a capability-manifest.json row structurally bound to a real usage*.ts GET route with a documented UI entry point, and the CLI/HTTP surfaces report the IDENTICAL numeric cost for the same run', async () => {
   const currentKeys = new Set(extractSubcommandMapKeys());
@@ -2159,68 +2757,104 @@ await checkCriterion('C1-8', 'cli.ts SUBCOMMAND_MAP diff + capability-manifest.j
     if (cliCost === null) p2.push(`no numeric cost/price field bound to run id ${run.runId} found in the CLI --json output`);
     if (httpCost !== null && cliCost !== null && Math.abs(httpCost - cliCost) > 1e-6) p2.push(`HTTP surface reports cost=${httpCost} for run ${run.runId} but the CLI surface reports cost=${cliCost} for the SAME run -- the two surfaces disagree on authoritative data`);
 
-    // ROUND 2 ADDITION (finding 6, Sol round-2 F6, ruling 2): "a nonempty
-    // prose field is not evidence that the cost surface exists or displays
-    // the correct value." A LITERAL behavioral UI proof is added: a real
-    // browser visits a small, fixed set of plausible pages (home, the
-    // project's own page, its conversation page -- this PRD names no
-    // specific route/selector, so this is a bounded crawl rather than a
-    // guess at one exact location) and the ACTUAL RENDERED TEXT of at least
-    // one must contain the KNOWN cost figure (in a few plausible currency
-    // formattings), ground-truthed against `httpCost` computed above from
-    // the real HTTP response for a run with a controlled, known usage
-    // shape. Documentation can no longer close this half.
+    // CEREMONY ROUND FIX (ruling item 5): round 2 crawled three GUESSED
+    // pages and scanned the whole body for a handful of fixed literal
+    // number formats -- "three guessed pages and fixed render strings can
+    // reject a correct Settings/dedicated-route UI and accept unrelated
+    // body text" (ruling finding 5). This now parses a machine-actionable
+    // `| verify={...}` suffix out of the manifest row's OWN uiEntryPoint,
+    // navigates ONLY the declared path, clicks the declared activate
+    // selectors in order, requires exactly one VISIBLE target, attaches
+    // network observation BEFORE navigation to confirm the manifest-bound
+    // usage GET actually fires, and matches the target's own rendered text
+    // SEMANTICALLY against the authoritative HTTP cost.
     if (httpCost !== null) {
-      const pw = resolvePlaywright();
-      if (!pw.ok) {
-        p2.push(`UI rendered-value check skipped: ${pw.error}`);
+      const specResult = parseUiEntryPointVerifySpec(boundRow.uiEntryPoint);
+      if (!specResult.ok) {
+        p2.push(`UI manifest-driven check: uiEntryPoint's verify= suffix is invalid: ${specResult.error}`);
       } else {
-        const fakeBinDir2 = mkFakeBinDir();
-        writeFakeBin(fakeBinDir2, 'claude', FAKE_CLAUDE_SCRIPT);
-        let webSuite: WebSuiteHandle | null = null;
-        let browser: PlaywrightBrowser | null = null;
-        try {
-          webSuite = await bootWebSuite({ PATH: `${fakeBinDir2}${path.delimiter}${process.env.PATH ?? ''}` });
-          const uiProjectResp = await httpJson('POST', `${webSuite.daemonUrl}/api/projects`, { id: randomNonce(8), name: randomNonce(6) });
-          const uiProjectId = (uiProjectResp.json as { project?: { id?: string } })?.project?.id;
-          if (!uiProjectId) throw new Error(`could not create project via web daemon: ${uiProjectResp.text.slice(0, 300)}`);
-          const uiUsage = { input_tokens: 888, output_tokens: 222, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
-          const uiRun = await startRun(webSuite.daemonUrl, { projectId: uiProjectId, agentId: 'claude', model: 'claude-sonnet-4-5', message: usageMarkerPrompt(uiUsage, 0) });
-          await pollRunTerminal(webSuite.daemonUrl, uiRun.runId);
-          const uiHttpUrl = `${webSuite.daemonUrl}${boundRoute.routePath.replace(/:\w+/, encodeURIComponent(uiProjectId))}`;
-          const uiHttpResp = await httpJson('GET', uiHttpUrl);
-          const uiCost = uiHttpResp.json !== null ? findRunNumberField(uiHttpResp.json, uiRun.runId, /cost|price|usd|spend/i) : null;
-          if (uiCost === null) {
-            p2.push('UI rendered-value check: could not independently establish a known cost for the web-suite run (HTTP route did not report one) -- cannot verify a rendered value against it');
-          } else {
-            const candidates = [String(uiCost), uiCost.toFixed(2), uiCost.toFixed(4), `$${uiCost.toFixed(2)}`, `$${uiCost.toFixed(4)}`];
-            browser = await pw.pw.chromium.launch({ headless: true });
-            const page = await browser.newPage();
-            await seedWebClientConfig(page, 'claude');
-            const candidatePages = [
-              `${webSuite.webUrl}/`,
-              `${webSuite.webUrl}/projects/${encodeURIComponent(uiProjectId)}`,
-              `${webSuite.webUrl}/projects/${encodeURIComponent(uiProjectId)}/conversations/${encodeURIComponent(uiRun.conversationId)}`,
-            ];
-            let renderedMatch: string | null = null;
-            for (const url of candidatePages) {
-              try {
-                await page.goto(url, { waitUntil: 'load', timeout: 20_000 });
-                await page.waitForTimeout(1_000);
-                const bodyText = await page.evaluate(() => (globalThis as unknown as { document: { body: { innerText: string } } }).document.body.innerText);
-                const hit = candidates.find((c) => (bodyText as unknown as string).includes(c));
-                if (hit) { renderedMatch = `${url} contains "${hit}"`; break; }
-              } catch { /* try the next candidate page */ }
+        const spec = specResult.spec;
+        const pw = resolvePlaywright();
+        if (!pw.ok) {
+          p2.push(`UI manifest-driven check skipped: ${pw.error}`);
+        } else {
+          const fakeBinDir2 = mkFakeBinDir();
+          writeFakeBin(fakeBinDir2, 'claude', FAKE_CLAUDE_SCRIPT);
+          let webSuite: WebSuiteHandle | null = null;
+          let browser: PlaywrightBrowser | null = null;
+          try {
+            webSuite = await bootWebSuite({ PATH: `${fakeBinDir2}${path.delimiter}${process.env.PATH ?? ''}` });
+            const uiProjectResp = await httpJson('POST', `${webSuite.daemonUrl}/api/projects`, { id: randomNonce(8), name: randomNonce(6) });
+            const uiProjectId = (uiProjectResp.json as { project?: { id?: string } })?.project?.id;
+            if (!uiProjectId) throw new Error(`could not create project via web daemon: ${uiProjectResp.text.slice(0, 300)}`);
+            const uiUsage = { input_tokens: 888, output_tokens: 222, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+            const uiRun = await startRun(webSuite.daemonUrl, { projectId: uiProjectId, agentId: 'claude', model: 'claude-sonnet-4-5', message: usageMarkerPrompt(uiUsage, 0) });
+            await pollRunTerminal(webSuite.daemonUrl, uiRun.runId);
+            const uiHttpUrl = projectRouteUrl(webSuite.daemonUrl, boundRoute.routePath, uiProjectId);
+            const uiHttpResp = await httpJson('GET', uiHttpUrl);
+            const uiCost = uiHttpResp.json !== null ? findRunNumberField(uiHttpResp.json, uiRun.runId, /cost|price|usd|spend/i) : null;
+            if (uiCost === null) {
+              p2.push('UI manifest-driven check: could not independently establish a known cost for the web-suite run (HTTP route did not report one) -- cannot verify a rendered value against it');
+            } else {
+              const placeholderValues = { projectId: uiProjectId, conversationId: uiRun.conversationId, runId: uiRun.runId };
+              const resolvedPath = fillUiEntryPointPlaceholders(spec.path, placeholderValues);
+              if (resolvedPath.includes('://')) {
+                p2.push(`UI manifest-driven check: resolved path "${resolvedPath}" is not a same-origin relative path after placeholder substitution -- refusing to navigate outside the isolated web origin`);
+              } else {
+                const resolvedActivate = spec.activate.map((a) => fillUiEntryPointPlaceholders(a, placeholderValues));
+                const resolvedTarget = fillUiEntryPointPlaceholders(spec.target, placeholderValues);
+                browser = await pw.pw.chromium.launch({ headless: true });
+                const page = await browser.newPage();
+                await seedWebClientConfig(page, 'claude');
+                // Network observation attached BEFORE navigation (ruling:
+                // "require the surface to issue the manifest-bound usage GET").
+                // route.continue() lets the real request proceed unmodified --
+                // this observes, it does not mock/fulfill.
+                let boundRequestObserved = false;
+                const boundPathGlob = `**${normalizeRoutePath(boundRoute.routePath).replace(/:param/g, '*')}*`;
+                await page.route(boundPathGlob, async (route) => {
+                  if (route.request().method() === 'GET') boundRequestObserved = true;
+                  await route.continue();
+                });
+                await page.goto(`${webSuite.webUrl}${resolvedPath}`, { waitUntil: 'load', timeout: 30_000 });
+                for (const sel of resolvedActivate) {
+                  const loc = page.locator(sel).first();
+                  await loc.waitFor({ timeout: 10_000, state: 'visible' });
+                  await loc.click({ timeout: 10_000 });
+                }
+                await page.locator(resolvedTarget).first().waitFor({ timeout: 15_000, state: 'visible' }).catch(() => {});
+                const visibleCount = await page.evaluate((sel: unknown) => {
+                  const doc = (globalThis as unknown as { document: any }).document;
+                  const getComputed = (globalThis as unknown as { getComputedStyle: (el: any) => any }).getComputedStyle;
+                  const nodes = Array.from(doc.querySelectorAll(sel as string)) as any[];
+                  return nodes.filter((n) => {
+                    const rect = n.getBoundingClientRect();
+                    const style = getComputed(n);
+                    return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+                  }).length;
+                }, resolvedTarget);
+                if (visibleCount !== 1) {
+                  p2.push(`UI manifest-driven check: verify.target ("${resolvedTarget}") has ${visibleCount} visible match(es), expected exactly 1`);
+                } else {
+                  const targetText = await page.locator(resolvedTarget).first().innerText().catch(() => '');
+                  const moneyMatches = extractRenderedMoneyMatches(targetText);
+                  const accepted = moneyMatches.find((mm) => moneyMatchAcceptsCost(mm, uiCost));
+                  if (!accepted) p2.push(`UI manifest-driven check: verify.target's own rendered text ("${targetText.slice(0, 200)}") does not semantically match the authoritative cost (${uiCost}); parsed candidates=${JSON.stringify(moneyMatches)}`);
+                  if (!boundRequestObserved) p2.push(`UI manifest-driven check: the manifest-bound usage route (${boundRoute.routePath}) was never observed as a GET request during navigation/activation -- a target rendered without observing the bound API request fails`);
+                  p2Evidence.uiTargetText = targetText.slice(0, 200);
+                  p2Evidence.uiMoneyMatches = moneyMatches;
+                  p2Evidence.uiBoundRequestObserved = boundRequestObserved;
+                }
+                p2Evidence.uiCost = uiCost;
+                p2Evidence.resolvedPath = resolvedPath;
+              }
             }
-            if (!renderedMatch) p2.push(`UI rendered-value check: none of the candidate pages (${candidatePages.join(', ')}) render the known cost figure (uiCost=${uiCost}, tried formats ${JSON.stringify(candidates)}) -- documentation of a UI entry point is not evidence the cost actually displays`);
-            p2Evidence.uiRenderedMatch = renderedMatch;
-            p2Evidence.uiCost = uiCost;
+          } catch (err) {
+            p2.push(`UI manifest-driven check failed: ${String((err as Error)?.message ?? err)}`);
+          } finally {
+            try { await browser?.close(); } catch { /* best effort */ }
+            try { await webSuite?.stop(); } catch { /* best effort */ }
           }
-        } catch (err) {
-          p2.push(`UI rendered-value check failed: ${String((err as Error)?.message ?? err)}`);
-        } finally {
-          try { await browser?.close(); } catch { /* best effort */ }
-          try { await webSuite?.stop(); } catch { /* best effort */ }
         }
       }
     }
@@ -2405,62 +3039,64 @@ await checkCriterion('C1-9', 'one priced fake-claude run + one unpriced fake-agy
 // ROUND 1 FIX (finding 8, part 1): `od run watch <runId> --json` is bound
 // to a SPECIFIC, already-HTTP-confirmed run id (not a fresh run the CLI
 // itself started), so a CLI that exits nonzero unconditionally cannot pass.
-// ROUND 2 REWRITE (finding 8, part 2 / Sol round-2 F8): "the mock supplies
-// only three fixed textual shell-error phrases... it does not exercise the
-// specified property of an arbitrary nonzero tool-error field. A three-
-// string special case remains sufficient." Round 1's "third phrasing" was
-// still a 4th fixed literal. This now runs N=5 INDEPENDENTLY RANDOMIZED
-// failure-content probes per execution (via `fakeKimiRandomFailureModelId`,
-// drawn from a 7-family template pool with per-call random details -- see
-// `randomToolErrorContent`), each of which must fail the run. No two
-// verifier runs, and no two probes within one run, ever see the same
-// literal content string, so a fixed enum of special-cased phrases cannot
-// pass this loop.
+// CEREMONY ROUND FIX (ruling item 4): round 2 always ran every failure on
+// `Write` and the ONE success on `Read` -- "permits a fail-all-Write
+// implementation" (ruling finding 4). This now runs MATCHED
+// success/failure PAIRS across Read/Write/Edit/Bash (buildKimiProbePairs,
+// CSPRNG-shuffled order -- see its own comment above), asserting BOTH the
+// HTTP-confirmed status AND a bound `od run watch` exit code for EVERY
+// probe (not just one sampled pair), plus an explicit assertion that the
+// mandatory defeating pair (a failing Read + a successful Write) actually
+// ran.
 // -----------------------------------------------------------------------
-await checkCriterion('C1-10', 'N=5 INDEPENDENTLY RANDOMIZED fake-kimi tool-failure content probes + one exact-marker control + one clean-success control, each CLI-followed via `od run watch` bound to its own HTTP-confirmed status', 'every randomized-content failure (drawn fresh per run from a 7-family template pool, never a fixed phrase) ends up "failed", CLI-visible via a non-zero `od run watch` exit bound to that SPECIFIC run; the clean control exits 0 for its OWN run', async () => {
+await checkCriterion('C1-10', 'matched success/failure fake-kimi pairs across Read/Write/Edit/Bash (CSPRNG-shuffled order, combinatorial failure content, one exact-marker Bash control), each independently CLI-followed via `od run watch` bound to its own HTTP-confirmed status', 'every failing pair (any tool identity, including a failing Read paired with a successful Write) ends up "failed" with a nonzero `od run watch` exit bound to that SPECIFIC run; every successful pair ends up "succeeded" with a zero exit', async () => {
   const fakeBinDir = mkFakeBinDir();
   writeFakeBin(fakeBinDir, 'kimi', FAKE_KIMI_SCRIPT);
   const daemon = await bootDaemon({ extraPathDirs: [fakeBinDir] });
   try {
     const projectId = await createProject(daemon.url, randomNonce(8));
-    async function runKimiModel(modelId: string): Promise<{ status: string; run: { runId: string; assistantMessageId: string } }> {
-      const run = await startRun(daemon.url, { projectId, agentId: 'kimi', model: modelId, message: randomNonce(10) });
+    const specs = buildKimiProbePairs();
+    interface KimiProbeResult { spec: KimiProbeSpec; runId: string; httpStatus: string; watchExit: number }
+    const probeResults: KimiProbeResult[] = [];
+    for (const spec of specs) {
+      const run = await startRun(daemon.url, { projectId, agentId: 'kimi', model: encodeKimiProbeSpec(spec), message: randomNonce(10) });
       const status = await pollRunTerminal(daemon.url, run.runId, 15_000);
-      return { status: String(status.status), run };
+      // `od run watch <runId> --json` is bound to a SPECIFIC, already-HTTP-
+      // confirmed run id -- not a fresh run the CLI itself started -- so a
+      // pass here can only mean the CLI's own exit code genuinely reflects
+      // THAT run's terminal status (confirmed by reading streamRunEvents():
+      // no exit-code wiring for run failure exists anywhere in cli.ts
+      // today, it reads the SSE stream and returns unconditionally on
+      // `event:end`).
+      const watch = odCli(daemon.url, daemon.dataDir, ['run', 'watch', run.runId, '--json'], {}, 20_000);
+      probeResults.push({ spec, runId: run.runId, httpStatus: String(status.status), watchExit: watch.status });
     }
-    const RANDOM_PROBE_COUNT = 5;
-    const randomProbes: { content: string; result: { status: string; run: { runId: string; assistantMessageId: string } } }[] = [];
-    for (let i = 0; i < RANDOM_PROBE_COUNT; i++) {
-      const { modelId, content } = fakeKimiRandomFailureModelId();
-      randomProbes.push({ content, result: await runKimiModel(modelId) });
-    }
-    const negControl = await runKimiModel(fakeKimiMarkedFailureModelId());
-    const posControl = await runKimiModel(fakeKimiSuccessModelId());
-
-    const cliInfoResp = odCli(daemon.url, daemon.dataDir, ['run', 'info', randomProbes[0]!.result.run.runId, '--json']);
-    // `od run watch <runId> --json` is bound to a SPECIFIC, already-HTTP-
-    // confirmed run id -- not a fresh run the CLI itself started -- so a
-    // pass here can only mean the CLI's own exit code genuinely reflects
-    // THAT run's terminal status (confirmed by reading streamRunEvents():
-    // no exit-code wiring for run failure exists anywhere in cli.ts today,
-    // it reads the SSE stream and returns unconditionally on `event:end`).
-    const cliWatchFailedResp = odCli(daemon.url, daemon.dataDir, ['run', 'watch', randomProbes[0]!.result.run.runId, '--json'], {}, 20_000);
-    const cliWatchCleanResp = odCli(daemon.url, daemon.dataDir, ['run', 'watch', posControl.run.runId, '--json'], {}, 20_000);
 
     const problems: string[] = [];
-    randomProbes.forEach((p, i) => {
-      if (p.result.status !== 'failed') problems.push(`randomized failure probe #${i} (content="${p.content.slice(0, 80)}") resolved to status="${p.result.status}", expected "failed" -- the guard does not generalize to arbitrary tool-error content, only to a fixed set of memorized phrases`);
-    });
-    if (negControl.status !== 'failed') problems.push(`marked-bash-failure (isError:true with the "Command failed with exit code" marker) resolved to status="${negControl.status}", expected "failed" -- a genuinely failing tool call must fail the run regardless of which regex branch classified it`);
-    if (posControl.status !== 'succeeded') problems.push(`CONTROL CHECK: the clean-success run (no failing tool call) resolved to "${posControl.status}", expected "succeeded" -- if this fails, the harness itself is broken, not necessarily the product; a real fix must not fail every kimi run indiscriminately`);
+    for (const pr of probeResults) {
+      const label = `tool=${pr.spec.tool} ok=${pr.spec.ok} run=${pr.runId} content="${pr.spec.content.slice(0, 80)}"`;
+      if (pr.spec.ok) {
+        if (pr.httpStatus !== 'succeeded') problems.push(`${label}: resolved to status="${pr.httpStatus}", expected "succeeded"`);
+        if (pr.watchExit !== 0) problems.push(`${label}: od run watch --json exited ${pr.watchExit}, expected 0`);
+      } else {
+        if (pr.httpStatus !== 'failed') problems.push(`${label}: resolved to status="${pr.httpStatus}", expected "failed" -- the guard does not generalize across tool identities/content shapes`);
+        if (pr.watchExit === 0) problems.push(`${label}: od run watch --json exited 0, expected nonzero -- the CLI does not surface this run's failure via its exit code`);
+      }
+    }
+    // The mandatory defeating case (ruling item 4): a failing Read paired
+    // with a successful Write must both have actually run.
+    const readFail = probeResults.find((pr) => pr.spec.tool === 'Read' && !pr.spec.ok);
+    const writeSuccess = probeResults.find((pr) => pr.spec.tool === 'Write' && pr.spec.ok);
+    if (!readFail || !writeSuccess) problems.push('the mandatory cross-tool defeating pair (a failing Read + a successful Write) was not exercised by buildKimiProbePairs()');
+    const cliInfoResp = readFail ? odCli(daemon.url, daemon.dataDir, ['run', 'info', readFail.runId, '--json']) : null;
     let cliInfoJson: unknown = null;
-    try { cliInfoJson = JSON.parse(cliInfoResp.stdout); } catch { cliInfoJson = null; }
-    const cliAgreesFailed = isRecord(cliInfoJson) && cliInfoJson.status === 'failed';
-    if (cliInfoResp.status !== 0) problems.push(`od run info --json exited ${cliInfoResp.status} unexpectedly`);
-    if (!cliAgreesFailed) problems.push(`od run info --json reports status="${isRecord(cliInfoJson) ? String(cliInfoJson.status) : '(unparseable)'}" for randomized probe #0, expected "failed"`);
-    if (cliWatchFailedResp.status === 0) problems.push(`od run watch --json exited 0 for run ${randomProbes[0]!.result.run.runId}, whose HTTP-confirmed status is "${randomProbes[0]!.result.status}" -- the CLI does not surface run failure via its exit code`);
-    if (cliWatchCleanResp.status !== 0) problems.push(`od run watch --json exited ${cliWatchCleanResp.status} (non-zero) for run ${posControl.run.runId}, whose HTTP-confirmed status is "${posControl.status}" (succeeded) -- the CLI exit code is not bound to the specific run's actual status (either hardcoded nonzero, or failing every --follow/--watch invocation indiscriminately)`);
-    record('C1-10', 'od run info --json + od run watch --json (bound to specific HTTP-confirmed runs) + 5 randomized-content probes + 2 controls', 'every randomized tool-error content fails the run, CLI-visible via a non-zero od run watch exit bound to that run; the exact-marker control still fails; the clean control run watches to exit 0', problems.length === 0, `randomProbes=${JSON.stringify(randomProbes)}\nnegControl=${JSON.stringify(negControl)}\nposControl=${JSON.stringify(posControl)}\ncliInfoJson=${JSON.stringify(cliInfoJson)}\ncliWatchFailedExit=${cliWatchFailedResp.status}\ncliWatchCleanExit=${cliWatchCleanResp.status}`, { detail: problems.length ? problems.join('; ') : undefined });
+    try { cliInfoJson = cliInfoResp ? JSON.parse(cliInfoResp.stdout) : null; } catch { cliInfoJson = null; }
+    if (readFail) {
+      const cliAgreesFailed = isRecord(cliInfoJson) && cliInfoJson.status === 'failed';
+      if (cliInfoResp?.status !== 0) problems.push(`od run info --json exited ${cliInfoResp?.status} unexpectedly for the failing-Read probe`);
+      if (!cliAgreesFailed) problems.push(`od run info --json reports status="${isRecord(cliInfoJson) ? String(cliInfoJson.status) : '(unparseable)'}" for the failing-Read probe, expected "failed"`);
+    }
+    record('C1-10', 'matched success/failure fake-kimi pairs (Read/Write/Edit/Bash) + od run info/watch --json bound to each probe\'s own run', 'every failing pair (any tool identity) fails with a nonzero od run watch exit bound to that run; every successful pair succeeds with a zero exit; the failing-Read/succeeding-Write defeating pair ran', problems.length === 0, `specs=${JSON.stringify(specs)}\nprobeResults=${JSON.stringify(probeResults)}\ncliInfoJson=${JSON.stringify(cliInfoJson)}`, { detail: problems.length ? problems.join('; ') : undefined });
   } finally {
     await daemon.kill();
   }
@@ -2505,7 +3141,24 @@ await checkCriterion('C1-10', 'N=5 INDEPENDENTLY RANDOMIZED fake-kimi tool-failu
 //     is not gated on live agent-detection timing outside its own boundary
 //     under test (accessibility of the picker, not agent-detection speed).
 //     Absence is now a hard failure, not informational.
+// CEREMONY ROUND FIX (ruling item 2): round 2 only EXCLUDED `none`/
+// `presentation` (an allowlist-by-exclusion), so `generic`, `statictext`,
+// `heading`, `paragraph`, and `group` all still passed -- "a named generic,
+// StaticText, heading, paragraph, or presentation node proves that text
+// entered the AX tree, not that the claimed state-bearing semantic node/
+// control is accessible" (ruling finding 2). Replaced with an explicit,
+// lowercase-normalized ALLOWLIST per role class; every role outside it now
+// fails, including the ones round 2 let through. The existing computed-name/
+// model/state checks above each role check are unchanged.
 // -----------------------------------------------------------------------
+const STATE_BEARING_ALLOWED_ROLES = new Set(['button', 'link', 'status', 'alert']);
+const PICKER_ALLOWED_ROLES = new Set(['button', 'combobox']);
+function axRoleViolation(ax: { role: string | null; ignored: boolean }, allowed: Set<string>, label: string): string | null {
+  if (ax.ignored) return `${label}: node is \`ignored\` by the accessibility tree`;
+  const normalizedRole = (ax.role ?? '').toLowerCase();
+  if (!allowed.has(normalizedRole)) return `${label}: computed role is "${ax.role}", not in the allowed set {${[...allowed].join('|')}} (ceremony ruling item 2 -- generic/statictext/heading/paragraph/group/none/presentation all fail)`;
+  return null;
+}
 await checkCriterion('C1-11', 'CDP Accessibility-domain computed audit across THREE states: a named descendant control inside the substituted message, a named descendant control inside the unverified (codex, no-echo) message, and the model picker reached from / per the e2e house pattern', 'the substituted message has a descendant control whose computed accessible name contains BOTH the requested and resolved model; the unverified message has one naming "unverified"; the picker is present, visible, and has a non-empty computed accessible name with no generic/none/presentation role', async () => {
   const pw = resolvePlaywright();
   if (!pw.ok) {
@@ -2564,14 +3217,12 @@ await checkCriterion('C1-11', 'CDP Accessibility-domain computed audit across TH
       const requestedAx = await findNamedDescendantAx(page, substitutedSelector, substitutedModel);
       evidence.substitutedRequestedAx = requestedAx;
       if (!requestedAx) problems.push(`substituted state: no accessible descendant control's computed name contains the requested model ("${substitutedModel}")`);
-      else if (requestedAx.ignored) problems.push('substituted state: the control naming the requested model is `ignored` by the accessibility tree');
-      else if (requestedAx.role === 'none' || requestedAx.role === 'presentation') problems.push(`substituted state: the control naming the requested model has role="${requestedAx.role}", which strips it from the accessibility tree`);
+      else { const v = axRoleViolation(requestedAx, STATE_BEARING_ALLOWED_ROLES, 'substituted state (requested-model control)'); if (v) problems.push(v); }
       if (executedModel) {
         const resolvedAx = await findNamedDescendantAx(page, substitutedSelector, executedModel);
         evidence.substitutedResolvedAx = resolvedAx;
         if (!resolvedAx) problems.push(`substituted state: no accessible descendant control's computed name contains the resolved/executed model ("${executedModel}")`);
-        else if (resolvedAx.ignored) problems.push('substituted state: the control naming the resolved model is `ignored` by the accessibility tree');
-        else if (resolvedAx.role === 'none' || resolvedAx.role === 'presentation') problems.push(`substituted state: the control naming the resolved model has role="${resolvedAx.role}", which strips it from the accessibility tree`);
+        else { const v = axRoleViolation(resolvedAx, STATE_BEARING_ALLOWED_ROLES, 'substituted state (resolved-model control)'); if (v) problems.push(v); }
       }
     }
 
@@ -2591,8 +3242,7 @@ await checkCriterion('C1-11', 'CDP Accessibility-domain computed audit across TH
         const ax = await findNamedDescendantAx(page, unverifiedSelector, 'unverified');
         evidence.unverified = ax;
         if (!ax) problems.push('unverified state: no accessible descendant control\'s computed name contains "unverified"');
-        else if (ax.ignored) problems.push('unverified state: the control naming the unverified state is `ignored` by the accessibility tree');
-        else if (ax.role === 'none' || ax.role === 'presentation') problems.push(`unverified state: the control naming the unverified state has role="${ax.role}", which strips it from the accessibility tree`);
+        else { const v = axRoleViolation(ax, STATE_BEARING_ALLOWED_ROLES, 'unverified state'); if (v) problems.push(v); }
       }
     }
 
@@ -2624,8 +3274,8 @@ await checkCriterion('C1-11', 'CDP Accessibility-domain computed audit across TH
       if (!ax) problems.push('picker state: CDP Accessibility.getPartialAXTree returned no node for the picker trigger');
       else {
         if (!ax.name || ax.name.trim().length === 0) problems.push('picker state: computed accessible name is empty');
-        if (ax.ignored) problems.push('picker state: node is `ignored` by the accessibility tree');
-        if (ax.role === 'none' || ax.role === 'presentation') problems.push(`picker state: computed role is "${ax.role}", which strips it from the accessibility tree`);
+        const v = axRoleViolation(ax, PICKER_ALLOWED_ROLES, 'picker state');
+        if (v) problems.push(v);
       }
     }
 
@@ -3016,15 +3666,71 @@ if (manifestWrite.wroteOk) {
   try { manifestSha256 = sha256File(manifestWrite.path); fs.writeFileSync(path.join(proofDir, 'manifest.sha256.txt'), `${manifestSha256}\n`); } catch { manifestSha256 = 'unavailable'; }
 }
 
+// =============================================================================
+// CEREMONY ROUND FIX (ruling item 8): reread and verify every artifact +
+// the manifest itself before trusting anything just written; only THEN
+// atomically promote latest-run COPIES to the canonical proof/manifest.json
+// / manifest.sha256.txt paths (copy, never move/rename the archived
+// originals -- "canonical replacement must never alter archived files");
+// finally, re-verify every file the startup snapshot already found archived
+// by a PRIOR invocation is still byte-identical. Any violation anywhere in
+// this chain forces a nonzero exit regardless of the criteria results
+// above.
+// =============================================================================
+function verifyArchiveIntegrity(criteria: CriterionResult[], writtenManifestPath: string, writtenManifestWroteOk: boolean, expectedManifestSha256: string): string[] {
+  const violations: string[] = [];
+  if (!writtenManifestWroteOk) { violations.push('run manifest.json was not written successfully to the archive directory'); return violations; }
+  const rereadManifestSha = sha256FileSafe(writtenManifestPath);
+  if (rereadManifestSha !== expectedManifestSha256) violations.push(`rereading ${writtenManifestPath} produced sha256 ${String(rereadManifestSha)}, expected ${expectedManifestSha256} (manifest write did not verify)`);
+  for (const r of criteria) {
+    if (r.artifact === null || r.artifactSha256 === null) { violations.push(`criterion ${r.id} has no artifact on disk (artifact write failed at record time)`); continue; }
+    const rereadSha = sha256FileSafe(r.artifact);
+    if (rereadSha === null) violations.push(`criterion ${r.id}'s artifact ${r.artifact} could not be reread from disk`);
+    else if (rereadSha !== r.artifactSha256) violations.push(`criterion ${r.id}'s artifact ${r.artifact} rereads as sha256 ${rereadSha}, expected ${r.artifactSha256} (artifact changed after being recorded)`);
+  }
+  return violations;
+}
+function promoteCanonicalManifestCopies(archivedManifestPath: string, expectedManifestSha256: string): string | null {
+  try {
+    const canonicalManifest = path.join(CANONICAL_PROOF_DIR, 'manifest.json');
+    const canonicalSha = path.join(CANONICAL_PROOF_DIR, 'manifest.sha256.txt');
+    const tmpManifest = `${canonicalManifest}.tmp-${process.pid}`;
+    const tmpSha = `${canonicalSha}.tmp-${process.pid}`;
+    fs.copyFileSync(archivedManifestPath, tmpManifest); // COPY, never move -- the archived file is untouched.
+    fs.renameSync(tmpManifest, canonicalManifest);
+    fs.writeFileSync(tmpSha, `${expectedManifestSha256}\n`);
+    fs.renameSync(tmpSha, canonicalSha);
+    return null;
+  } catch (err) {
+    return `canonical manifest replacement failed: ${String((err as Error)?.message ?? err)}`;
+  }
+}
+if (manifestSha256 === 'unavailable') archiveIntegrityViolations.push('manifest.sha256.txt could not be computed/written for this run\'s archive');
+archiveIntegrityViolations.push(...verifyArchiveIntegrity(results, manifestWrite.path, manifestWrite.wroteOk, manifestSha256));
+if (archiveIntegrityViolations.length === 0) {
+  const promoteError = promoteCanonicalManifestCopies(manifestWrite.path, manifestSha256);
+  if (promoteError) archiveIntegrityViolations.push(promoteError);
+} else {
+  console.log(`  ⚠ archive integrity violation(s) before promotion -- canonical manifest.json/manifest.sha256.txt left untouched: ${archiveIntegrityViolations.join('; ')}`);
+}
+// Re-verify every file a PRIOR invocation already archived is still exactly
+// what the startup snapshot recorded -- this run must not have collided
+// with, overwritten, or otherwise disturbed another run's evidence.
+for (const [f, expectedHash] of preExistingArchiveHashes) {
+  const nowHash = sha256FileSafe(f);
+  if (nowHash !== expectedHash) archiveIntegrityViolations.push(`previously-archived file changed during this run: ${f} (was ${String(expectedHash)}, now ${String(nowHash)})`);
+}
+
 const hardFailures = results.filter((r) => r.status === 'fail');
 const blocked = results.filter((r) => r.status === 'blocked-on-founder');
 const passed = results.filter((r) => r.status === 'pass');
-console.log(`\nverify-w1: ${passed.length} pass, ${blocked.length} blocked-on-founder, ${hardFailures.length} fail (of ${results.length}); treeDirty=${treeDirty}; manifest=${manifestWrite.path} (wroteOk=${manifestWrite.wroteOk})`);
+console.log(`\nverify-w1: ${passed.length} pass, ${blocked.length} blocked-on-founder, ${hardFailures.length} fail (of ${results.length}); treeDirty=${treeDirty}; runDir=${runDir}; manifest=${manifestWrite.path} (wroteOk=${manifestWrite.wroteOk}); archiveIntegrityViolations=${archiveIntegrityViolations.length}`);
 for (const r of results) console.log(`  [${r.status.toUpperCase()}] ${r.id}${r.detail ? ` -- ${r.detail.slice(0, 200)}` : ''}`);
 if (treeDirty) console.log('  ⚠ tree is dirty: this run is advisory, never a wave pass (VERIFICATION-CONTRACT.md S2)');
 if (!manifestWrite.wroteOk) console.log('  ⚠ proof manifest degraded to a fallback path -- never a wave pass');
+if (archiveIntegrityViolations.length > 0) { console.log('  ⚠ ARCHIVE INTEGRITY VIOLATIONS (forces a fail regardless of criteria results):'); for (const v of archiveIntegrityViolations) console.log(`    - ${v}`); }
 console.log(`MANIFEST_SHA256=${manifestSha256}`);
-process.exit(hardFailures.length === 0 && !treeDirty && manifestWrite.wroteOk ? 0 : 1);
+process.exit(hardFailures.length === 0 && !treeDirty && manifestWrite.wroteOk && archiveIntegrityViolations.length === 0 ? 0 : 1);
 
 }
 
