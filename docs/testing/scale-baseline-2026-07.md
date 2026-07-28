@@ -12,12 +12,23 @@ corpus).
 ## Corpus
 
 A read-only `cp -R` snapshot of the operator's live `~/projects/mishmash/.od`
-data root, taken 2026-07-27. **2,675 files, 1,124,656,223 bytes (~1.07 GB)**
+data root, taken 2026-07-27. **2,849 files, 1,142,043,038 bytes (~1.09 GB)**
 — the real project store the PRD names (~987 MB was the estimate at PRD-
 writing time; the live store has grown since). This is the actual store, not
 a synthetic filler directory sized to pass a byte-count floor: every file is
 copied verbatim from the real `.od` tree (`projects/`, `library/`,
 `artifacts/`, `design-systems/`, `brands/`, `connectors/`, `app.sqlite`, …).
+
+The original `cp -R` preserved two pnpm-managed directory symlinks
+(`node_modules/playwright`, `node_modules/playwright-core` under one seeded
+project) pointing *outside* the snapshot into the live repo's
+`node_modules/.pnpm/…` store. A content-hashing walk that does not
+special-case a symlink resolving to a directory reads it like a regular
+file and fails with `EISDIR`. Dereferenced into real in-snapshot copies on
+2026-07-27 so the corpus is genuinely self-contained (reconstituting it
+never needs a path outside `corpus.path`) and so the walk in
+`scripts/waves/verify-w0.ts` does not crash; the file/byte counts and
+`corpus.sha256` above reflect the dereferenced tree.
 
 The live daemon at `~/projects/mishmash` was never touched, stopped, or
 pointed at by a writable connection — only a plain filesystem read (`cp -R`)

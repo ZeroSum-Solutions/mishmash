@@ -2,9 +2,9 @@
   "version": "1.0.0",
   "corpus": {
     "path": "/Users/zero-suminc./.cache/mishmash-w0-scale-corpus",
-    "sha256": "b6f59161e986abde8471a556ac40767a27543e347a7cbc2de18465c7eb728e06",
+    "sha256": "a9e87b35c2e97032e899516037a8ebbe587370c7368356aaba56b31f7663b453",
     "isRealStoreSnapshot": true,
-    "realStoreFingerprint": "read-only cp -R snapshot of the operator's live ~/projects/mishmash/.od data root taken 2026-07-27 for this wave, 2675 files / 1124656223 bytes (~1.07GB) -- the real store the PRD's NM-27C names, not synthetic filler. Never opened by a writable daemon; the live daemon at ~/projects/mishmash was never touched."
+    "realStoreFingerprint": "read-only cp -R snapshot of the operator's live ~/projects/mishmash/.od data root taken 2026-07-27 for this wave, 2849 files / 1142043038 bytes (~1.09GB) -- the real store the PRD's NM-27C names, not synthetic filler. Never opened by a writable daemon; the live daemon at ~/projects/mishmash was never touched. The original cp -R preserved two pnpm-managed directory symlinks (node_modules/playwright, node_modules/playwright-core) pointing outside the snapshot into the live repo's node_modules -- dereferenced into real in-snapshot copies on 2026-07-27 so the corpus is genuinely self-contained (no path outside corpus.path is read to reconstitute it) and so a content-hashing walk that does not special-case symlinks-to-directories does not fail; sha256/file/byte counts above reflect the dereferenced tree."
   },
   "machine": {
     "fingerprint": "Devins-MacBook-Pro.local-darwin-arm64-16cpu"
