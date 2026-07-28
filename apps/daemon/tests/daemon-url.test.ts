@@ -16,7 +16,14 @@ describe("resolveDaemonUrl", () => {
   let emptyBinDir: string;
 
   beforeAll(() => {
-    ipcBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "od-mcp-resolve-"));
+    // Anchor to /tmp directly rather than os.tmpdir(): ipcBaseDir hosts a
+    // unix-domain IPC socket, and AF_UNIX socket paths are capped at ~104
+    // bytes on macOS (~108 on Linux) at the kernel level. A long/nested
+    // $TMPDIR (e.g. an orchestrator-scoped gate run) pushes
+    // `<tmpdir>/od-mcp-resolve-XXXXXX/daemon.sock` past that cap and
+    // `server.listen()` throws EINVAL. /tmp stays short regardless of
+    // $TMPDIR.
+    ipcBaseDir = fs.mkdtempSync(path.join("/tmp", "od-mcp-resolve-"));
     fakeBinDir = fs.mkdtempSync(path.join(os.tmpdir(), "od-tools-dev-resolve-"));
     emptyBinDir = fs.mkdtempSync(path.join(os.tmpdir(), "od-tools-dev-empty-"));
   });

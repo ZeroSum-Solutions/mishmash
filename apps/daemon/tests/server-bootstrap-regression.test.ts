@@ -1,7 +1,6 @@
 import type http from 'node:http';
 import express from 'express';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -351,7 +350,15 @@ describe('bootstrap route regressions', () => {
   });
 
   it('keeps extracted design-system and template example responses stable', async () => {
-    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'od-route-smoke-'));
+    // Anchor to /tmp directly rather than os.tmpdir(): the static asset
+    // route below serves files with Express's `res.sendFile()`, whose
+    // underlying `send` package 404s any path with a dotfile-style segment
+    // (default `dotfiles: 'ignore'`) when no `root` option is given -- see
+    // node_modules/send's `containsDotFile`. An orchestrator-scoped gate run
+    // can point $TMPDIR at a path nested under a dot-directory (e.g.
+    // `~/.claude/...`), which would silently 404 the asset fetch below.
+    // /tmp has no dotfile segment.
+    const tempRoot = fs.mkdtempSync(path.join('/tmp', 'od-route-smoke-'));
     const designSystemId = 'route-smoke-system';
     const templateId = 'route-smoke-template';
     const designSystemBody = '# Route Smoke System\n\nA seeded design system.';

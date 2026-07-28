@@ -1,5 +1,4 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -42,7 +41,14 @@ import {
 const tempRoots: string[] = [];
 
 async function makeProjectsRoot() {
-  const root = await mkdtemp(path.join(tmpdir(), 'od-live-artifacts-'));
+  // Anchor to /tmp directly rather than os.tmpdir(): the git.summary test
+  // below asserts this directory is NOT inside a git work tree. That's true
+  // for the plain system scratch space os.tmpdir() normally resolves to,
+  // but not guaranteed for an arbitrary $TMPDIR -- an orchestrator-scoped
+  // gate run can point $TMPDIR at a path nested inside a git-tracked
+  // directory, which flips `git rev-parse --is-inside-work-tree` to true
+  // for every fixture created here. /tmp is not part of any repo.
+  const root = await mkdtemp(path.join('/tmp', 'od-live-artifacts-'));
   tempRoots.push(root);
   return path.join(root, 'projects');
 }

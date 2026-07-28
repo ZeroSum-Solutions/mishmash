@@ -1,0 +1,1004 @@
+[
+  {
+    "capability": "artifacts",
+    "uiEntryPoint": "Chat composer file-attach / live-artifact creation flow",
+    "cliArgs": [
+      "artifacts",
+      "create",
+      "--name",
+      "w0-manifest-check.html",
+      "--input",
+      "package.json",
+      "--project",
+      "<nonceProjectId>"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/projects/:id/files",
+    "outputSchema": "{ ok: true, ...artifact create response }",
+    "parityApplicable": true,
+    "reason": "Only sub-verb is a non-idempotent file-creating write (apps/daemon/src/artifacts-cli.ts); safe under a fresh per-run project id since a nonce project is created new each gate run. HISTORICAL NOTE, now resolved (round-3 F10/F11/F13 -> coordinator ruling item 4a): POST /api/projects/:id/files's JSON response ({ok:true, file:{name,path,...}}) does not echo the parent project id anywhere in its body, and cliArgs \"<nonceProjectId>\" substitution is exact-match-only, so the GENERIC isProjectScoped nonce-substring identity check (verify-w0.ts probeCapabilityEntry) can never bind a value-level identity to this row. C0-10 now grades \"artifacts\" through a dedicated gate-owned probe instead of the generic path (probeArtifactsNonceBinding, unconditional, never sample-gated): it independently creates a nonce-bound file through BOTH the real CLI (od artifacts create --project <nonce>) and the real HTTP surface (POST here), then proves read-after-write for each through its own surface (od files list --json / GET .../files) -- a genuine value-level identity check, just not the generic substring one. cliArgs/httpMethod/httpPath/probeBody above describe the real CLI<->HTTP parity surface this bespoke probe exercises; probeBody is not consumed directly by the bespoke probe (which mints its own per-call nonce-bound name/project) but documents an equivalent request body shape and keeps this row schema-valid as a body-bearing POST. The route itself (apps/daemon/src/routes/project/index.ts) is outside this wave's write lease, so the response-shape gap above is not something this wave can close at the source -- the bespoke probe is the implementation-side answer to it.",
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ],
+    "probeBody": {
+      "name": "w0-c10-manifest-check.html",
+      "content": "<!doctype html><title>w0 manifest check</title>",
+      "encoding": "utf8"
+    }
+  },
+  {
+    "capability": "media",
+    "uiEntryPoint": "Home / project media-generation surface",
+    "cliArgs": [
+      "media",
+      "generate",
+      "--surface",
+      "image",
+      "--model",
+      "gpt-image-2",
+      "--project",
+      "<nonceProjectId>",
+      "--prompt",
+      "w0 manifest check"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/projects/:id/media/generate",
+    "outputSchema": "media generate task response",
+    "parityApplicable": true,
+    "reason": "Only sub-verbs are generate (real paid provider call) and wait (needs a prior real taskId) -- apps/daemon/src/cli.ts:1040-1191. No credential-free read-only verb exists. Independently verified (C0-10): this row's httpPath (`/api/projects/:id/media/generate`) and cliArgs (`--project <nonceProjectId>`) both mark it project-scoped, so C0-10 grades it by nonce-substring presence. pollUntilDoneOrBudget (apps/daemon/src/cli.ts:1192-1287) prints exactly one of four mutually-exclusive completion envelopes depending on how the generate task resolves: `{file}` on success (line 1260), `{taskId,status:'failed',error}` on failure (lines 1266-1268), `{taskId,status:'interrupted',error}` on interruption (lines 1274-1276), or `{taskId,status,nextSince,elapsed}` if the CLI's poll budget runs out first (lines 1281-1287) -- none of the four contains the project id, so the nonce-substring check is structurally unsatisfiable regardless of whether the underlying paid-provider call itself succeeds. No valueComparison declaration would change this (valueComparison is never reached for a project-scoped row); the row is left at the strict default and reported here as a real, understood gate-comparator-vocabulary gap (the nonce-substring-assumption class): it will legitimately fail if sample-selected.",
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ],
+    "probeBody": {
+      "surface": "image",
+      "model": "gpt-image-2",
+      "prompt": "w0 manifest check"
+    }
+  },
+  {
+    "capability": "mcp",
+    "uiEntryPoint": "Settings > MCP servers install flow",
+    "cliArgs": [
+      "mcp",
+      "install",
+      "cursor",
+      "--print",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/mcp/install-info",
+    "outputSchema": "{ ok, agent, kind, configPath, preview, message }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/mcp/install-info"
+    ],
+    "reason": "CLI vs HTTP determination (C0-10, confirmed live): \"od mcp install <agent> --print\" (apps/daemon/src/cli.ts resolveMcpLaunchSpec) calls GET /api/mcp/install-info (this row declared endpoint, confirmed the correct and only HTTP call it makes) to get this daemon instance raw launch descriptor ({command,args,env,...}), then performs a LOCAL filesystem read of the target agent own existing MCP config file (e.g. ~/.cursor/mcp.json) and merges the two into a higher-level \"preview\" of the full file it would write. This is legitimate, architecturally necessary reshaping -- a stateless HTTP endpoint cannot see or replicate the caller local config file, so the CLI richer output is not the daemon dropping data, it is the CLI adding data the daemon structurally cannot have. The divergence is total at the top level (CLI: ok/agent/kind/configPath/preview/message; HTTP: command/args/env/daemonUrl/webBaseUrl/platform/cliExists/nodeExists/buildHint -- zero shared keys), and the genuinely-comparable fields (command/args/env) are only reachable by parsing a JSON string nested inside the CLI own \"preview\" field, which none of the four supported valueComparison modes (exact/unordered-array/composite/binary) can express -- composite in particular requires every declared field to be present in BOTH payloads, and none are. No valueComparison is declared: this row is left at the strict default (which will legitimately fail if sample-selected) and reported here as a real, understood gate-comparator-vocabulary gap rather than forced with an inapplicable mode."
+  },
+  {
+    "capability": "amr",
+    "uiEntryPoint": "Settings > AMR / Vela account status",
+    "cliArgs": [
+      "amr",
+      "status",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/integrations/vela/status",
+    "outputSchema": "{ loggedIn, profile, user, account?, wallet }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/integrations/vela/message-center/messages",
+      "GET /api/integrations/vela/status",
+      "GET /api/integrations/vela/wallet:param",
+      "POST /api/integrations/vela/message-center/messages/:param/read",
+      "POST /api/integrations/vela/message-center/read-all"
+    ],
+    "valueComparison": {
+      "mode": "composite",
+      "fields": [
+        "loggedIn",
+        "profile",
+        "configPath"
+      ]
+    },
+    "reason": "CLI vs HTTP determination (C0-10, confirmed live): \"od amr status\" (apps/daemon/src/cli.ts runAmr) makes TWO fetches -- GET /api/integrations/vela/status (this row declared endpoint) AND a separate GET /api/integrations/vela/wallet, then merges the second call result into its own \"wallet\" field. This is legitimate client-side aggregation, not a parity bug: the daemon /status endpoint never carried wallet data by design (that is a distinct endpoint), so the CLI enriches its own output rather than dropping data users need. Declared composite comparison over the fields genuinely shared by both payloads (loggedIn, profile, configPath -- all guaranteed present/non-empty regardless of login state); \"user\" is excluded (null when signed out, which fails the composite present-non-empty precondition) and \"wallet\" is excluded (CLI-only, sourced from a different endpoint entirely)."
+  },
+  {
+    "capability": "message-center",
+    "uiEntryPoint": "Home notification / message-center bell",
+    "cliArgs": [
+      "message-center",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "ALL",
+    "httpPath": "/api/integrations/vela/message-center/*splat",
+    "outputSchema": "{ messages: [...], nextCursor?, unreadCount? }",
+    "parityApplicable": true,
+    "reason": "Registered as a wildcard catch-all (app.all('/api/integrations/vela/message-center/*splat', ...), apps/daemon/src/routes/vela.ts:424) proxying to a real Vela API gated on a configured VELA_CONTROL_KEY / logged-in AMR account; 401s without one. httpPath is the literal registered pattern (the concrete /messages suffix is not itself a separate Express route registration). Independently verified (C0-10): \"od message-center list --json\" (apps/daemon/src/cli.ts runMessageCenterList, lines 848-893, fetch at line 867) has no client-side auth logic of its own -- it is a thin proxy to GET /api/integrations/vela/message-center/messages, the SAME route the gate's own independent HTTP probe calls, so BOTH surfaces' outcomes are governed entirely by the ONE daemon-side auth resolution: readVelaControlApiContext (apps/daemon/src/integrations/vela.ts:529-558), which returns null when neither a VELA_CONTROL_KEY env var nor a stored ~/.amr/config.json profile controlKey is present. When null, apps/daemon/src/routes/vela.ts:428-430 responds 401 {\"error\":\"vela_control_key_required\"} to both callers identically; the CLI's structuredHttpFailure (cli.ts:1810-1836) treats that flat-string error body as having no recoverable code, falls through to its fallbackCode='daemon-not-running' default, and exits the subprocess with code 64 (RECOVERABLE_EXIT_CODES['daemon-not-running'], cli.ts:309-323) -- a non-zero exit that makes execFileAsync reject, so cliOk=false; the gate's own probe likewise sees httpOk=false from the same 401. This is NOT a CLI/HTTP reshape defect -- when a control key IS provisioned, both surfaces are a faithful, unreshaped passthrough of the same Vela response (mirroring the confirmed-passing \"amr\" row) -- it is ambient-credential state-dependence: the row's sampled outcome is a property of whether the MACHINE running the gate has an AMR/Vela control key provisioned, not of the manifest or the code paths themselves. No valueComparison declaration changes this (both cliOk/httpOk are false before any comparison runs on an unprovisioned machine). This row is reported here as a real, understood, machine-state-dependent gap and is intended to be sampling-excluded orchestrator-side (per the typed sampling-excluded allowlist class C0-10 already supports) rather than fixed in this manifest; it will legitimately fail if sample-selected on any machine without a provisioned vela control key.",
+    "knownNamespaceRoutes": [
+      "GET /api/integrations/vela/message-center/messages",
+      "GET /api/integrations/vela/status",
+      "GET /api/integrations/vela/wallet:param",
+      "POST /api/integrations/vela/message-center/messages/:param/read",
+      "POST /api/integrations/vela/message-center/read-all"
+    ],
+    "probeMethod": "GET",
+    "probePath": "/api/integrations/vela/message-center/messages?locale=en&filter=all&limit=100"
+  },
+  {
+    "capability": "research",
+    "uiEntryPoint": "Chat research tool surface",
+    "cliArgs": [
+      "research",
+      "search",
+      "--query",
+      "w0 manifest check"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/research/search",
+    "outputSchema": "{ query, summary, sources: [...], provider, depth, fetchedAt }",
+    "parityApplicable": true,
+    "reason": "Only sub-verb, hard-gated on a configured TAVILY_API_KEY / OD_TAVILY_API_KEY (apps/daemon/src/research/index.ts); no credential-free verb exists. Independently verified (C0-10): even when TAVILY_API_KEY IS configured and both surfaces succeed with the same query and provider, the daemon stamps a fresh `fetchedAt: Date.now()` on every call (apps/daemon/src/research/index.ts:97), and \"od research search --query ...\" (apps/daemon/src/cli.ts:993-1034) issues its OWN independent POST /api/research/search call (line 1016) separate from the gate's own independent HTTP probe to the same endpoint -- two separate calls to a handler that timestamps per-invocation can never produce the same fetchedAt value. This row's httpPath has no `:id`/`:projectId` token and its cliArgs never reference the nonce, so it is NOT project-scoped and is graded by the default deepValueEqual value check rather than nonce-substring; that check requires exact recursive equality including fetchedAt, which will differ on essentially every real pair of calls. No valueComparison mode can express \"ignore this one volatile field\" (composite would still require fetchedAt -- or any other declared field -- to be identical across two independently-stamped payloads, which defeats the point). No valueComparison is declared: the row is left at the strict default and reported here as a real, understood gate-comparator-vocabulary gap (the nondeterministic-timestamp class): it will legitimately fail if sample-selected, independent of and in addition to the credential-gating finding above.",
+    "knownNamespaceRoutes": [],
+    "probeBody": {
+      "query": "w0 manifest check"
+    }
+  },
+  {
+    "capability": "plugin",
+    "uiEntryPoint": "Plugins marketplace / installed-plugins panel",
+    "cliArgs": [
+      "plugin",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/plugins",
+    "outputSchema": "{ total, plugins: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/applied-plugins/:param",
+      "GET /api/applied-plugins/:param/canon",
+      "GET /api/plugins",
+      "GET /api/plugins/:param",
+      "GET /api/plugins/:param/doctor",
+      "GET /api/plugins/events/stats",
+      "POST /api/applied-plugins/export",
+      "POST /api/plugins/:param/apply",
+      "POST /api/plugins/:param/doctor",
+      "POST /api/plugins/events/purge"
+    ],
+    "reason": "CLI vs HTTP determination (C0-10, confirmed live): \"od plugin list --json\" (apps/daemon/src/cli.ts emitPluginList, lines 2930-2939, fed by applyPluginFilters -> plugins/search.ts searchInstalledPlugins) computes a `total: entries.length` field and re-sorts the roster -- with no query/filter flags (this row's declared cliArgs), every entry gets the same rank (plugins/search.ts:96, `rank = matched.length > 0 ? 9 : 0`), so the stable sort's tie-break (plugins/search.ts:102-106, `a.plugin.id.localeCompare(b.plugin.id)`) becomes a pure alphabetical-by-id reorder. The raw HTTP response (GET /api/plugins, apps/daemon/src/routes/plugins/index.ts:174, `res.json({ plugins: ... })`) has no `total` key at all and returns plugins in whatever order `plugins.listInstalledPlugins(db)` yields (unspecified DB order, not alphabetical). None of the four supported valueComparison modes can express this: composite would need the SAME field name present in both payloads, but the CLI payload has an extra top-level `total` key the HTTP payload never has (composite's own present-in-both precondition fails on that field immediately), and even projecting down to the shared `plugins` field still leaves an ORDERED-array comparison across two different sort orders -- unordered-array only relaxes ordering for the WHOLE top-level value (canonicalizeForComparison returns a non-array value unchanged), so it cannot reach inside an object payload to a nested array field here. No valueComparison is declared: this row is left at the strict default (which will legitimately fail if sample-selected) and reported here as a real, understood gate-comparator-vocabulary gap, the same category as the \"mcp\" row above."
+  },
+  {
+    "capability": "ui",
+    "uiEntryPoint": "GenUI inline form/choice/confirmation surfaces in chat",
+    "cliArgs": [
+      "ui",
+      "list",
+      "--project",
+      "<nonceProjectId>",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/projects/:projectId/genui",
+    "outputSchema": "{ projectId, surfaces: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ]
+  },
+  {
+    "capability": "marketplace",
+    "uiEntryPoint": "Plugins > marketplace sources panel",
+    "cliArgs": [
+      "marketplace",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/marketplaces",
+    "outputSchema": "{ marketplaces: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/marketplaces",
+      "GET /api/marketplaces/:param",
+      "GET /api/marketplaces/:param/plugins",
+      "POST /api/marketplaces"
+    ]
+  },
+  {
+    "capability": "share",
+    "uiEntryPoint": "Home / project share menu",
+    "cliArgs": [
+      "share",
+      "open-design",
+      "--json"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/social-share",
+    "outputSchema": "{ kind, locale, url, title, text, copyText, githubRepoUrl, platforms: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "POST /api/social-share"
+    ],
+    "probeBody": {}
+  },
+  {
+    "capability": "brand",
+    "uiEntryPoint": "Brand library panel",
+    "cliArgs": [
+      "brand",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/brands",
+    "outputSchema": "{ brands: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/brands/:param",
+      "GET /api/brands",
+      "GET /api/brands/:param",
+      "POST /api/brands",
+      "POST /api/brands/:param/continue-extraction",
+      "POST /api/brands/:param/extract-from-html",
+      "POST /api/brands/:param/finalize",
+      "POST /api/brands/:param/preview"
+    ]
+  },
+  {
+    "capability": "brands",
+    "uiEntryPoint": "Brand library panel",
+    "cliArgs": [
+      "brands",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/brands",
+    "outputSchema": "{ brands: [...] }",
+    "parityApplicable": true,
+    "reason": "Alias of `brand` in SUBCOMMAND_MAP (both map to runBrand); listed separately per set-equality against SUBCOMMAND_MAP keys.",
+    "knownNamespaceRoutes": [
+      "DELETE /api/brands/:param",
+      "GET /api/brands",
+      "GET /api/brands/:param",
+      "POST /api/brands",
+      "POST /api/brands/:param/continue-extraction",
+      "POST /api/brands/:param/extract-from-html",
+      "POST /api/brands/:param/finalize",
+      "POST /api/brands/:param/preview"
+    ]
+  },
+  {
+    "capability": "project",
+    "uiEntryPoint": "Home project list / EntryNavRail",
+    "cliArgs": [
+      "project",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/projects",
+    "outputSchema": "{ projects: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/editors",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/import/folder",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ]
+  },
+  {
+    "capability": "automation",
+    "uiEntryPoint": "Automations tab",
+    "cliArgs": [
+      "automation",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/routines",
+    "outputSchema": "{ routines: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/routines/:param",
+      "GET /api/automation-proposals/:param",
+      "GET /api/automation-proposals:param",
+      "GET /api/automation-source-packets/:param",
+      "GET /api/automation-source-packets:param",
+      "GET /api/automation-templates",
+      "GET /api/automation-templates/:param",
+      "GET /api/routines",
+      "GET /api/routines/:param",
+      "GET /api/routines/:param/runs",
+      "PATCH /api/routines/:param",
+      "POST /api/automation-ingestions",
+      "POST /api/automation-proposals/:param/:param",
+      "POST /api/routines",
+      "POST /api/routines/:param/run",
+      "POST /api/routines/:param/runs/:param/crystallize"
+    ]
+  },
+  {
+    "capability": "automations",
+    "uiEntryPoint": "Automations tab",
+    "cliArgs": [
+      "automations",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/routines",
+    "outputSchema": "{ routines: [...] }",
+    "parityApplicable": true,
+    "reason": "Alias of `automation` in SUBCOMMAND_MAP (both map to runAutomation); listed separately per set-equality against SUBCOMMAND_MAP keys.",
+    "knownNamespaceRoutes": [
+      "DELETE /api/routines/:param",
+      "GET /api/automation-proposals/:param",
+      "GET /api/automation-proposals:param",
+      "GET /api/automation-source-packets/:param",
+      "GET /api/automation-source-packets:param",
+      "GET /api/automation-templates",
+      "GET /api/automation-templates/:param",
+      "GET /api/routines",
+      "GET /api/routines/:param",
+      "GET /api/routines/:param/runs",
+      "PATCH /api/routines/:param",
+      "POST /api/automation-ingestions",
+      "POST /api/automation-proposals/:param/:param",
+      "POST /api/routines",
+      "POST /api/routines/:param/run",
+      "POST /api/routines/:param/runs/:param/crystallize"
+    ]
+  },
+  {
+    "capability": "memory",
+    "uiEntryPoint": "Memory panel",
+    "cliArgs": [
+      "memory",
+      "tree",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/memory/tree",
+    "outputSchema": "{ enabled, rootDir, tree: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/memory/verifications",
+      "GET /api/memory",
+      "GET /api/memory/:param",
+      "GET /api/memory/tree",
+      "GET /api/memory/verifications",
+      "PATCH /api/memory/config",
+      "PATCH /api/memory/tree/:param",
+      "POST /api/memory",
+      "POST /api/memory/rules/suggest",
+      "PUT /api/memory/:param"
+    ]
+  },
+  {
+    "capability": "run",
+    "uiEntryPoint": "Run history / chat run status",
+    "cliArgs": [
+      "run",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/runs",
+    "outputSchema": "{ runs: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/runs/:param",
+      "GET /api/runs/:param/events",
+      "GET /api/runs/:param/result-package",
+      "POST /api/runs",
+      "POST /api/runs/:param/cancel"
+    ]
+  },
+  {
+    "capability": "files",
+    "uiEntryPoint": "Design Files panel",
+    "cliArgs": [
+      "files",
+      "list",
+      "<nonceProjectId>",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/projects/:id/files",
+    "outputSchema": "{ files: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ],
+    "reason": "CLI vs HTTP determination (C0-10, confirmed live): this row's httpPath (`/api/projects/:id/files`) contains a `:id` token, so C0-10's checker treats it as project-scoped and grades it by nonce-substring presence (`cliStdout.includes(nonceValue) && httpText.includes(nonceValue)`) instead of value equality -- valueComparison is never even consulted. GET /api/projects/:id/files (apps/daemon/src/routes/project/index.ts:3015-3029) responds `{ files }` with no project-id echo anywhere in the body, and \"od files list <nonceProjectId> --json\" (apps/daemon/src/cli.ts:6805-6817) prints that same body verbatim. The gate always probes against the SAME nonce project it seeds immediately before sampling (a bare POST /api/projects with no files ever uploaded), so `files` is always `[]` for this call -- neither surface's response ever contains the nonce project id anywhere, so the nonce-substring check is structurally unsatisfiable for a list-only, no-side-effect read against a resource-empty project, independent of whether the CLI and HTTP payloads genuinely agree (they do -- both are byte-identical `{ files: [] }`). This is not a reshape defect and no valueComparison declaration would help, since valueComparison is never reached for a project-scoped row; the row is left at the strict default and reported here as a real, understood gate-comparator-vocabulary gap (the nonce-substring-assumption class): it will legitimately fail if sample-selected."
+  },
+  {
+    "capability": "templates",
+    "uiEntryPoint": "Home Templates surface",
+    "cliArgs": [
+      "templates",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/templates",
+    "outputSchema": "{ templates: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/templates/:param",
+      "GET /api/templates",
+      "POST /api/templates"
+    ]
+  },
+  {
+    "capability": "conversation",
+    "uiEntryPoint": "Chat conversation switcher",
+    "cliArgs": [
+      "conversation",
+      "list",
+      "<nonceProjectId>"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/projects/:id/conversations",
+    "outputSchema": "{ conversations: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/conversations/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ],
+    "reason": "CLI vs HTTP determination (C0-10, confirmed live): this row's httpPath (`/api/projects/:id/conversations`) contains a `:id` token, so C0-10's checker grades it by nonce-substring presence instead of value equality. GET /api/projects/:id/conversations (apps/daemon/src/routes/project/conversations.ts:39-44) responds `{ conversations: listConversations(db, req.params.id) }` with no project-id echo, and \"od conversation list <nonceProjectId>\" (apps/daemon/src/cli.ts:7381-7392) prints that body verbatim, unconditionally (no --json flag needed). Against the gate's freshly-seeded, conversation-free nonce project this is always `{ conversations: [] }` on both surfaces -- byte-identical, but the nonce project id never appears in either response, so the nonce-substring check is structurally unsatisfiable here, same mechanism and same class as the \"files\" row above. No valueComparison declaration would change this (valueComparison is never reached for a project-scoped row); the row is left at the strict default and reported here as a real, understood gate-comparator-vocabulary gap (the nonce-substring-assumption class): it will legitimately fail if sample-selected."
+  },
+  {
+    "capability": "chat",
+    "uiEntryPoint": "Chat pane 'new side chat'",
+    "cliArgs": [
+      "chat",
+      "new",
+      "--project",
+      "<nonceProjectId>",
+      "--json"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/projects/:id/conversations",
+    "outputSchema": "{ conversation: { id, title, sessionMode, createdAt } }",
+    "parityApplicable": true,
+    "reason": "Only sub-verb is a real (but credential-free, non-LLM) write that creates a conversation row; no read-only verb exists (apps/daemon/src/cli.ts:7403-7469).",
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ],
+    "probeBody": {}
+  },
+  {
+    "capability": "deploy",
+    "uiEntryPoint": "Project deploy button",
+    "cliArgs": [
+      "deploy",
+      "<nonceProjectId>",
+      "--file",
+      "index.html",
+      "--json"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/projects/:id/deploy",
+    "outputSchema": "deploy result envelope",
+    "parityApplicable": true,
+    "reason": "No sub-verb dispatch at all -- the whole command is a real Vercel/Cloudflare deploy (apps/daemon/src/cli.ts:10320-10401, deploy.ts:71). No credential-free/idempotent form exists; provider config lives server-side. Independently verified (C0-10): this row's httpPath (`/api/projects/:id/deploy`) and cliArgs (`<nonceProjectId>`) both mark it project-scoped, so C0-10 grades it by nonce-substring presence. \"od deploy <nonceProjectId> --file index.html --json\" (apps/daemon/src/cli.ts:10339-10420) is a thin POST /api/projects/:id/deploy passthrough with no local file access of its own; the daemon route (apps/daemon/src/routes/deploy.ts:71-113) calls buildDeployFileSet, which calls buildDeployFilePlan (apps/daemon/src/deploy.ts:241-253) to read the declared entry file via readProjectFile BEFORE any of buildDeployFileSet's own missing-reference bookkeeping (deploy.ts:343-355) runs. Against the gate's freshly-seeded, file-empty nonce project, reading index.html throws an uncaught ENOENT (deploy.ts:247, never wrapped locally), which routes/deploy.ts's outer catch (lines 159-172) treats as a generic non-DeployError exception and reports as 400 BAD_REQUEST with the raw filesystem error text -- NOT the friendly `missing: <ref>` message deploy.ts:343-355 produces (that message is reserved for assets REFERENCED BY an entry file that itself was successfully read, which never happens here since the entry file itself is what's missing; a prior audit pass quoted that literal string for this scenario, which this verification could not confirm and does not repeat). Both surfaces fail this precondition identically and symmetrically (cliOk=false, httpOk=false), so the nonce-substring check can never succeed regardless of any valueComparison declaration (which is never reached for a project-scoped row anyway); the row is left at the strict default and reported here as a real, understood gate-comparator-vocabulary gap (the precondition class): it will legitimately fail if sample-selected.",
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ],
+    "probeBody": {
+      "fileName": "index.html"
+    }
+  },
+  {
+    "capability": "daemon",
+    "uiEntryPoint": "Settings > About daemon status",
+    "cliArgs": [
+      "daemon",
+      "status",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/daemon/status",
+    "outputSchema": "{ ok, version, bindHost, port, dataDir, sandboxMode, pid, installedPlugins }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/daemon/db",
+      "GET /api/daemon/status",
+      "POST /api/daemon/db/vacuum",
+      "POST /api/daemon/shutdown"
+    ]
+  },
+  {
+    "capability": "atoms",
+    "uiEntryPoint": "Home Templates / atoms catalogue",
+    "cliArgs": [
+      "atoms",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/atoms",
+    "outputSchema": "{ atoms: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/atoms",
+      "GET /api/atoms/:param"
+    ]
+  },
+  {
+    "capability": "skills",
+    "uiEntryPoint": "Settings > Skills panel",
+    "cliArgs": [
+      "skills",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/skills",
+    "outputSchema": "{ skills: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/skills"
+    ]
+  },
+  {
+    "capability": "design-systems",
+    "uiEntryPoint": "Design systems library panel",
+    "cliArgs": [
+      "design-systems",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/design-systems",
+    "outputSchema": "{ designSystems: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/design-systems",
+      "GET /api/design-systems/:param/archive",
+      "PATCH /api/design-systems/:param",
+      "POST /api/design-systems/:param/token-contract/rebuild-jobs"
+    ]
+  },
+  {
+    "capability": "craft",
+    "uiEntryPoint": "Design systems craft-rules panel",
+    "cliArgs": [
+      "craft",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/craft",
+    "outputSchema": "{ craft: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": []
+  },
+  {
+    "capability": "diagnostics",
+    "uiEntryPoint": "Settings > About > Export diagnostics",
+    "cliArgs": [
+      "diagnostics",
+      "export",
+      "--output",
+      ".w0-manifest-check-diagnostics.zip",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/diagnostics/export",
+    "outputSchema": "{ path, sizeBytes }",
+    "parityApplicable": true,
+    "reason": "The HTTP response body is a binary zip, not JSON; --json shapes the CLI's own stdout summary after writing the file locally.",
+    "knownNamespaceRoutes": []
+  },
+  {
+    "capability": "export",
+    "uiEntryPoint": "Project export (PDF/image/PPTX) menu",
+    "cliArgs": [
+      "export",
+      "index.html",
+      "--project",
+      "<nonceProjectId>",
+      "--format",
+      "pdf",
+      "--out",
+      ".w0-manifest-check-export.pdf",
+      "--json"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/projects/:id/export/pdf-image",
+    "outputSchema": "{ ok: true, path, out, bytes, format }",
+    "parityApplicable": true,
+    "reason": "No list/status/dry-run verb exists; requires a real project + HTML file and the desktop runtime's bundled Chromium for rasterization. Independently verified (C0-10): this row's httpPath (`/api/projects/:id/export/pdf-image`) and cliArgs (`--project <nonceProjectId>`) both mark it project-scoped, so C0-10 grades it by nonce-substring presence. buildExportCliResultEnvelope (apps/daemon/src/export-cli-request.ts:45-57), which \"od export ... --json\" prints verbatim (apps/daemon/src/cli.ts:515-518), returns `{ok,path,out,bytes,format}` where `path`/`out` are LOCAL filesystem paths on the machine invoking the CLI -- never the project id -- so the nonce-substring check can never succeed even on a fully successful export. Separately and unconditionally (confirmed against the CURRENT plain daemon boot the gate itself performs, e.g. verify-w0.ts's bootDaemonForProbing, which never wires a desktop sidecar): apps/daemon/src/server.ts:2041-2043 defaults desktopSlideRenderer/desktopPdfExporter/desktopArtifactExporter to null when not explicitly supplied, and apps/daemon/src/import-export-routes.ts's handleScreenshotExport checks `typeof desktopSlideRenderer !== 'function'` and returns 501 UPSTREAM_UNAVAILABLE (\"screenshot export is only available in the desktop runtime\") BEFORE ever checking whether the declared index.html file exists in the target project -- so in the gate's own boot this row 501s on every attempt regardless of project file contents (a prior audit pass attributed this row's failure to a missing-file precondition inside buildDeployFileSet; that specific mechanism belongs to the unrelated \"deploy\" row below and this verification could not confirm it is reached in this code path). No valueComparison declaration would change any of this (valueComparison is never reached for a project-scoped row); the row is left at the strict default and reported here as a real, understood gate-comparator-vocabulary gap (the nonce-substring-assumption class, compounded by a desktop-runtime-gated endpoint): it will legitimately fail if sample-selected.",
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ],
+    "probeBody": {
+      "fileName": "index.html"
+    }
+  },
+  {
+    "capability": "status",
+    "uiEntryPoint": "Settings > About daemon status",
+    "cliArgs": [
+      "status",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/daemon/status",
+    "outputSchema": "{ ok, version, bindHost, port, dataDir, sandboxMode, pid, installedPlugins }",
+    "parityApplicable": true,
+    "reason": "Alias of `od daemon status` (apps/daemon/src/cli.ts:8361-8364).",
+    "knownNamespaceRoutes": [
+      "GET /api/daemon/db",
+      "GET /api/daemon/status",
+      "POST /api/daemon/db/vacuum",
+      "POST /api/daemon/shutdown"
+    ]
+  },
+  {
+    "capability": "version",
+    "uiEntryPoint": "Settings > About version string",
+    "cliArgs": [
+      "version",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/version",
+    "outputSchema": "{ version: { version, channel, packaged, platform, arch } }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/version"
+    ]
+  },
+  {
+    "capability": "whats-new",
+    "uiEntryPoint": "Home 'what's new' highlight card",
+    "cliArgs": [
+      "whats-new",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/whats-new",
+    "outputSchema": "{ version, id, content: { title, body, linkUrl? } | null }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/whats-new"
+    ]
+  },
+  {
+    "capability": "doctor",
+    "uiEntryPoint": "Settings > About health-check action",
+    "cliArgs": [
+      "doctor",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/daemon/status",
+    "outputSchema": "{ daemon, plugins: [...], skills: [...], designSystems: [...], atoms: [...], issues: [...] }",
+    "parityApplicable": true,
+    "reason": "Composite health check with no single 1:1 HTTP endpoint (apps/daemon/src/cli.ts:8510-8600) -- calls /api/daemon/status as its anchor/first step plus several more GETs and per-plugin POSTs. httpPath names the anchor call; the CLI's full JSON output is a superset built from multiple endpoints, not identical to any one response body.",
+    "knownNamespaceRoutes": [
+      "GET /api/daemon/db",
+      "GET /api/daemon/status",
+      "POST /api/daemon/db/vacuum",
+      "POST /api/daemon/shutdown"
+    ]
+  },
+  {
+    "capability": "config",
+    "uiEntryPoint": "Settings panel (all preference surfaces)",
+    "cliArgs": [
+      "config",
+      "list"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/app-config",
+    "outputSchema": "app-config's inner `config` object (free-form settings)",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/app-config",
+      "PUT /api/app-config"
+    ],
+    "reason": "CLI vs HTTP determination (C0-10, confirmed live): \"od config list\" (apps/daemon/src/cli.ts runConfig, case 'list') calls GET /api/app-config (this row's declared endpoint, confirmed the correct and only HTTP call it makes), then unwraps the daemon's `{ config }` envelope and prints only the inner settings object. Confirmed live: CLI stdout is `{\"telemetry\":{\"metrics\":true,\"content\":true}}` while the raw HTTP response for the same request is `{\"config\":{\"telemetry\":{\"metrics\":true,\"content\":true}}}`. This is a legitimate, permanent one-level unwrap for CLI ergonomics (the same settings object, not a different capability's data), not a parity bug -- but it is a wrapper-key mismatch none of the four supported valueComparison modes (exact/unordered-array/composite/binary) can express: composite requires every declared field to be present and non-empty in BOTH payloads at the top level, and no single field name is ever present in both (the CLI's top-level keys are the real setting names; the HTTP response's only top-level key is the literal \"config\" wrapper). No valueComparison is declared: this row is left at the strict default (which will legitimately fail if sample-selected) and reported here as a real, understood gate-comparator-vocabulary gap, the same category as the \"mcp\" row above."
+  },
+  {
+    "capability": "library",
+    "uiEntryPoint": "OD Library grid",
+    "cliArgs": [
+      "library",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/library/assets",
+    "outputSchema": "{ assets: [...] }",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "DELETE /api/library/assets/:param",
+      "GET /api/library/assets/:param",
+      "GET /api/library/assets/:param/figma",
+      "GET /api/library/assets:param",
+      "POST /api/library/assets/:param/apply",
+      "POST /api/library/assets/:param/edit-as-page",
+      "POST /api/library/ingest",
+      "POST /api/library/pair",
+      "POST /api/library/sync"
+    ]
+  },
+  {
+    "capability": "figma",
+    "uiEntryPoint": "Design Files > Import from Figma",
+    "cliArgs": [
+      "figma",
+      "import",
+      "--project",
+      "<nonceProjectId>",
+      "--file",
+      "fixtures/w0-manifest-check.fig",
+      "--json"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/projects/:id/figma/import",
+    "outputSchema": "{ label, snapshotDir, inventory: {...}, suggestedPrompt }",
+    "parityApplicable": true,
+    "reason": "Only sub-verb; the offline --file path needs no Figma API token but requires a real local .fig file and creates a real snapshot dir in the target project (non-idempotent within one project, safe under a fresh nonce project per run). NOTE (C0-10 live-sample finding): POST /api/projects/:id/figma/import (apps/daemon/src/server.ts:2988) is multipart/form-data-only (figmaUpload.single(\"file\")) -- the live-sample probe mechanism (verify-w0.ts probeCapabilityEntry) only ever sends application/json bodies, with no multipart support. Any probeBody here is structurally unable to reach a genuine success; the route always sees no file and 400s. Reported, not forced -- this is a gate-mechanism limitation (JSON-only probing), not fixable via manifest data.",
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param",
+      "DELETE /api/projects/:param/files/:param",
+      "GET /api/projects",
+      "GET /api/projects/:param",
+      "GET /api/projects/:param/conversations",
+      "GET /api/projects/:param/files",
+      "GET /api/projects/:param/files/:param",
+      "GET /api/projects/:param/files/:param/versions",
+      "GET /api/projects/:param/files/:param/versions/:param",
+      "GET /api/projects/:param/plugin-candidates:param",
+      "POST /api/projects",
+      "POST /api/projects/:param/:param",
+      "POST /api/projects/:param/conversations",
+      "POST /api/projects/:param/deploy",
+      "POST /api/projects/:param/figma/import",
+      "POST /api/projects/:param/files",
+      "POST /api/projects/:param/files/:param/versions",
+      "POST /api/projects/:param/files/:param/versions/:param/restore",
+      "POST /api/projects/:param/open-in",
+      "POST /api/projects/:param/plugin-candidates/:param/dismiss",
+      "POST /api/projects/:param/plugin-candidates/:param/draft",
+      "POST /api/projects/:param/terminals"
+    ],
+    "probeBody": {}
+  },
+  {
+    "capability": "backup",
+    "uiEntryPoint": "None -- no web UI surface exists for backup/restore as of this wave; CLI (`od backup create`) and HTTP (`POST /api/backup`, loopback-only) are the only surfaces. Known gap against AGENTS.md \"Capability exposure (UI/CLI dual-track)\"; closing it needs apps/web, which is outside this wave's write lease.",
+    "cliArgs": [
+      "backup",
+      "create",
+      "--out",
+      "/tmp/w0-c10-capability-manifest-backup-probe.tar"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/backup",
+    "outputSchema": "{ ok: true, archivePath: string, classes: string[] }",
+    "parityApplicable": true,
+    "reason": "od backup create (apps/daemon/src/backup/cli.ts) calls the engine (create.ts) directly against the resolved data directory instead of issuing an HTTP request, so a backup can be taken even when the daemon isn't running; cli.ts therefore has no fetch() call into this namespace and knownNamespaceRoutes is empty by construction.",
+    "knownNamespaceRoutes": [],
+    "probeBody": {
+      "outPath": "/tmp/w0-c10-capability-manifest-backup-probe.tar"
+    }
+  },
+  {
+    "capability": "restore",
+    "uiEntryPoint": "None -- no web UI surface exists for backup/restore as of this wave; CLI (`od restore`) and HTTP (`POST /api/restore`, loopback-only) are the only surfaces. Known gap against AGENTS.md \"Capability exposure (UI/CLI dual-track)\"; closing it needs apps/web, which is outside this wave's write lease.",
+    "cliArgs": [
+      "restore",
+      "--archive",
+      "/tmp/w0-c10-capability-manifest-backup-probe.tar"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/restore",
+    "outputSchema": "{ ok: true, restoredClasses: string[], destination: string }",
+    "parityApplicable": true,
+    "reason": "od restore (apps/daemon/src/backup/cli.ts) calls the engine (restore.ts) directly against the resolved data directory instead of issuing an HTTP request, so a restore can run even when the daemon is not running; cli.ts therefore has no fetch() call into this namespace and knownNamespaceRoutes is empty by construction. HISTORICAL FINDING (now remediated -- see below): C0-10's live-sample mechanism previously spawned every CLI-invoked capability's subprocess (including this row's) with no explicit OD_DATA_DIR override, so apps/daemon/src/backup/restore.ts's unconditional fs.mkdirSync(dataDir) resolved against a cwd-relative legacy default (<repo-root>/.od) instead of the isolated per-boot daemon data dir the HTTP side used -- confirmed live at the time via a real repro: the CLI call wrote into the checked-out worktree's own .od/ directory, a genuine unisolated side effect, not just a doomed-to-fail probe. REMEDIATED: verify-w0.ts's C0-10 criterion now routes every od CLI subprocess launch -- identity canary, sampled/widened probes, and the bespoke artifacts/figma probes alike -- through a single sentinel-delimited runOdCli/buildOdCliEnv pair (verify-w0.ts, RUNODCLI-BODY-BEGIN/END span, ~lines 2483-2504) that unconditionally sets OD_DATA_DIR to the CURRENT isolated boot's own dataDir via odDataEnv(bootedDaemon.dataDir) for every launch, audited per-call (odDataDirAudit) and structurally enforced by an identifier-scope scan elsewhere in the same criterion that fails the gate if any other call site could bypass buildOdCliEnv -- so this row's CLI probe, like every other sampled probe, now correctly targets the same isolated dataDir the HTTP side uses. CURRENT deterministic failure mode (destination-not-fresh, verified live): with both surfaces now aimed at the SAME isolated dataDir, they no longer diverge on WHICH root they target -- but the C0-10 gate unconditionally seeds a nonce project into that same isolated daemon (a bare POST /api/projects) before any sampling occurs, so by the time this row's probe runs (if drawn), dataDirHasExistingPayload (apps/daemon/src/backup/restore.ts:92-115, which treats any non-empty projects table row count as an existing payload) is already true, and restoreBackupArchive (backup/restore.ts:117-124) throws RestoreError('destination-not-fresh', ...) on the CLI side exactly as it does on the HTTP side (POST /api/restore, apps/daemon/src/backup/routes.ts:47-60, which maps RestoreError to 422 RESTORE_FAILED). Both cliOk and httpOk are now false for the SAME reason, symmetrically -- this row's httpPath has no `:id`/`:projectId` token and its cliArgs never reference the nonce, so it is not project-scoped and would otherwise be graded by value equality, but that is moot since cliOk/httpOk are both false before any comparison runs. (od backup does not have this exposure -- its read-only sqlite-open on a missing file fails closed without ever creating the directory; restore is a write path and always mkdirSync-creates its destination.) No valueComparison declaration would change this; the row is left at the strict default and reported here as a real, understood gate-comparator-vocabulary gap (the precondition class): it will legitimately fail if sample-selected, for a different and now-safe reason than the historical finding above.",
+    "knownNamespaceRoutes": [],
+    "probeBody": {
+      "archivePath": "/tmp/w0-c10-capability-manifest-backup-probe.tar"
+    }
+  }
+]

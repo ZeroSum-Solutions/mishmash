@@ -1,6 +1,5 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -35,7 +34,14 @@ describe('daemon sidecar startup', () => {
   it('starts through the shared daemon startup path and reports live auth state', async () => {
     const { setDesktopAuthSecret } = await import('../src/desktop-auth.js');
     const { startDaemonSidecar } = await import('../src/sidecar/server.js');
-    const root = await mkdtemp(join(tmpdir(), 'od-daemon-sidecar-'));
+    // Anchor to /tmp directly rather than os.tmpdir(): `root` hosts a
+    // unix-domain IPC socket (`ipc: join(root, 'daemon.sock')` below), and
+    // AF_UNIX socket paths are capped at ~104 bytes on macOS (~108 on
+    // Linux) at the kernel level. A long/nested $TMPDIR (e.g. an
+    // orchestrator-scoped gate run) pushes that path past the cap and
+    // `server.listen()` throws EINVAL. /tmp stays short regardless of
+    // $TMPDIR.
+    const root = await mkdtemp(join('/tmp', 'od-daemon-sidecar-'));
     const handle = await startDaemonSidecar({
       app: APP_KEYS.DAEMON,
       base: root,

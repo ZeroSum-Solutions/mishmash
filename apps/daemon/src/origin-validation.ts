@@ -273,9 +273,20 @@ function headerValue(value: unknown): string | undefined {
  *
  * Returns true only for a locally-installed browser extension (an origin a web
  * page cannot forge) targeting the narrow OD Clipper bootstrap surface: the
- * dedicated probe route and the ingest endpoint. Library reads still require
- * normal same-origin / allow-list validation so an unrelated installed
- * extension cannot enumerate or download the user's library.
+ * dedicated probe route, the ingest endpoint, and the pairing-confirm
+ * endpoint. Library reads still require normal same-origin / allow-list
+ * validation so an unrelated installed extension cannot enumerate or
+ * download the user's library.
+ *
+ * `/library/pair/confirm` is included deliberately, not as a broadening: a
+ * not-yet-paired extension origin is BY DEFINITION not yet in the paired-
+ * origins allow-list this middleware otherwise consults, so without this
+ * entry no extension could ever complete its first pairing over a genuine
+ * cross-origin request. The route's own real authorization is the short-
+ * lived, user-visible pairing code (`confirmPairing`,
+ * apps/daemon/src/library-tokens.ts) — this bypass only lets the request
+ * *reach* that check, exactly as apps/daemon/src/routes/library.ts's
+ * pair/confirm handler comment has always documented.
  */
 export function isZeroConfigClipperLibraryRequest(
   method: string,
@@ -286,7 +297,7 @@ export function isZeroConfigClipperLibraryRequest(
   const isAllowedClipperPath =
     (normalizedMethod === 'GET' && apiRelativePath === '/library/clipper-probe') ||
     ((normalizedMethod === 'OPTIONS' || normalizedMethod === 'POST') &&
-      apiRelativePath === '/library/ingest');
+      (apiRelativePath === '/library/ingest' || apiRelativePath === '/library/pair/confirm'));
   if (!isAllowedClipperPath) return false;
   return (
     typeof origin === 'string' &&
