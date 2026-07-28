@@ -887,11 +887,16 @@ function invalidModelId(): string {
 // ITS OWN spawn time (see bootDaemon()) -- mutating this verifier's own
 // process.env AFTER the daemon has already booted does NOT propagate to the
 // already-running daemon, and therefore not to whatever it spawns. Every
-// per-run signal these fakes need (usage numbers, kimi failure mode) is
-// therefore encoded into the REQUESTED MODEL ID STRING or (for FAKE_CLAUDE
-// usage numbers specifically, see below) the PROMPT TEXT delivered over
-// stdin -- both are genuinely per-request values that flow through the
-// daemon unmodified, with no daemon restart required.
+// per-run signal these fakes need is therefore delivered through a channel
+// that genuinely flows through the daemon per-request, with no daemon
+// restart required: FAKE_CLAUDE usage numbers ride the PROMPT TEXT
+// delivered over stdin (see below); the kimi failure mode's own signal
+// (STALE COMMENT FIX, confirmed round: this used to say "encoded into the
+// REQUESTED MODEL ID STRING," describing the deleted reversible-base64url
+// scheme) now rides the REQUESTED MODEL ID STRING only as an opaque,
+// informationless CSPRNG lookup TOKEN -- the actual {tool,ok,content} spec
+// lives out-of-band, in a JSON file this verifier writes to a directory
+// baked into the fake CLI's own generated source (see buildFakeKimiScript).
 //
 // Usage-marker prompt encoding (finding 5 fix): C1-7/C1-9 need a run whose
 // MODEL ID is a real, current, honestly-priceable Claude model (so a correct
@@ -927,6 +932,28 @@ const USAGE_MARKER_END = randomNonce(12);
 // word. No fixed prefix survives now; the whole value is opaque CSPRNG.
 const FAKE_CLAUDE_OWN_DEFAULT_MODEL = randomNonce(16);
 const FAKE_CLAUDE_VERSION_STRING = `1.0.${randomNonce(4)}`;
+// FOUNDER-AUTHORIZED SCOPED RELAXATION (round 3, 2026-07-28): the old fixed
+// reply-text prefix (now removed everywhere -- see FAKE_CLAUDE_SCRIPT below)
+// was ruled a founder-level protected-body conflict: a lazy implementation
+// could perform one fixed startsWith check on that literal, recognize the
+// verifier, extract the executed-model suffix, and populate routing truth
+// only for these fixtures. FAKE_REPLY_MARKER is one fresh CSPRNG value per verifier
+// invocation (never repeats across runs, so no stable classifier substring
+// survives); FAKE_CLAUDE_SCRIPT's assistant reply embeds it in place of the
+// old literal prefix, and the four protected consumers (C1-1, C1-2, C1-5,
+// C1-11) construct their extraction pattern from this SAME in-memory
+// runtime constant instead of a hardcoded literal. Ground truth is
+// preserved because generator and consumers share the one value; nothing
+// stable survives for product code to key off of.
+const FAKE_REPLY_MARKER = randomNonce(12);
+// Regex-escapes FAKE_REPLY_MARKER before splicing it into a `new RegExp`
+// extraction pattern. randomNonce's own alphabet (lowercase hex) never
+// contains a regex metacharacter today, but the four consumer sites must
+// not silently break if that ever changes -- escaping is done unconditionally
+// rather than assumed safe.
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 interface ProbeUsage { input_tokens: number; output_tokens: number; cache_creation_input_tokens: number; cache_read_input_tokens: number }
 // ROUND 2 FIX (finding 11): dropped the round-1 `label` parameter (e.g.
 // "small run", "priced", "cost meter probe") -- a fixed, criterion-
@@ -978,27 +1005,27 @@ function respond(promptText) {
   // "fake-session-" prefix, and the message id was the fixed literal
   // "msg_1" every time. Both now come from the CSPRNG \`crypto\` module
   // required at the top of this script, with no fixed prefix at all.
-  // NOT CHANGED (deliberately): the assistant reply text keeps its exact
-  // "fake claude reply for <executedModel>" shape. Four PROTECTED,
-  // byte-stable criteria (C1-1, C1-2, C1-5, C1-11 -- confirmed by grepping
-  // every call site in this file) each independently regex-match this exact
-  // literal prefix (/^fake claude reply for (.+)$/) against the persisted
-  // message content as their sole independent ground truth for which model
-  // actually executed; none of those four bodies may be touched this round.
-  // Randomizing or removing the prefix would silently break all four
-  // (executedModel would stop being recoverable, false-failing criteria
-  // that are otherwise correctly structured). This is the same
-  // shared-helper-vs-protected-consumer constraint as findRunNumberField in
-  // the prior fidelity round: the model id itself already carries the
-  // per-invocation CSPRNG entropy (FAKE_CLAUDE_OWN_DEFAULT_MODEL / the
-  // caller-supplied requested model), so this fixed wrapper text is not a
-  // stable VALUE an implementation could key off of to fake a specific
-  // requested/resolved pair -- only the surrounding words are fixed.
+  // FOUNDER-AUTHORIZED SCOPED RELAXATION (round 3, fixture literals -- 3 of
+  // 3): the assistant reply text previously kept its exact "fake claude
+  // reply for <executedModel>" shape, deliberately left unchanged because
+  // four protected criteria (C1-1, C1-2, C1-5, C1-11) hard-depended on that
+  // literal prefix. Confirmation ruled this a founder-level protected-body
+  // conflict regardless: "a lazy implementation can perform one
+  // startsWith(...) check, recognize the verifier... populate routing truth
+  // only for these fixtures." The founder has now authorized the ONLY
+  // permitted shape of touch to those four bodies: replacing the fixed
+  // literal with FAKE_REPLY_MARKER (a fresh CSPRNG value per verifier
+  // invocation, declared once above FAKE_CLAUDE_SCRIPT) on BOTH sides --
+  // this generator embeds it here, and all four consumers construct their
+  // extraction pattern from the SAME runtime constant instead of the old
+  // hardcoded literal (see each site's own comment). No stable substring
+  // survives across runs; ground truth is preserved because generator and
+  // consumers share the one in-memory value.
   const sessionId = crypto.randomBytes(8).toString('hex');
   const assistantMsgId = crypto.randomBytes(8).toString('hex');
   function line(o) { process.stdout.write(JSON.stringify(o) + '\\n'); }
   line({ type: 'system', subtype: 'init', model: executedModel, session_id: sessionId });
-  line({ type: 'assistant', message: { id: assistantMsgId, role: 'assistant', content: [{ type: 'text', text: 'fake claude reply for ' + executedModel }], stop_reason: 'end_turn' } });
+  line({ type: 'assistant', message: { id: assistantMsgId, role: 'assistant', content: [{ type: 'text', text: ${JSON.stringify(FAKE_REPLY_MARKER)} + ' ' + executedModel }], stop_reason: 'end_turn' } });
   line({ type: 'result', subtype: 'success', usage, total_cost_usd: costUsd, duration_ms: 5, stop_reason: 'end_turn' });
   setTimeout(() => process.exit(0), 30);
 }
@@ -1028,9 +1055,13 @@ setTimeout(() => { if (!responded) { responded = true; respond(''); } }, 2000);
 // with no "Command failed with exit code" marker (the Write/Edit/etc. tool
 // class the comment names as the blind spot), vs a control failure that DOES
 // carry the marker (already correctly classified today) and a control
-// success with no failing tool call at all. Mode is decoded from the
-// requested model id (see the process.env note above FAKE_CLAUDE_SCRIPT --
-// the same constraint applies here).
+// success with no failing tool call at all.
+// STALE COMMENT FIX (confirmed round): this used to say "Mode is decoded
+// from the requested model id," describing the deleted reversible-base64url
+// scheme. Mode is now looked up out-of-band: the requested model id is only
+// an opaque CSPRNG token, and the fake CLI reads its own {tool,ok,content}
+// spec from a JSON file at a directory path baked into its generated source
+// (see buildFakeKimiScript below).
 // ROUND 2 REWRITE (finding 8 / Sol round-2 F8): round 1 still special-cased
 // exactly three fixed textual phrases (EPERM, ENOENT, the "Command failed
 // with exit code" marker) -- "a three-string special case remains
@@ -1524,7 +1555,7 @@ async function main(): Promise<void> {
 //     against this repo's current code that this forces resolveModelForAgent
 //     into its fallback branch): a real substitution IS forced -- resolved
 //     must differ from requested AND must equal the INDEPENDENTLY observed
-//     ground truth (FAKE_CLAUDE_SCRIPT's own "fake claude reply for <exec>"
+//     ground truth (FAKE_CLAUDE_SCRIPT's own CSPRNG-marker-prefixed reply
 //     text, parsed from the persisted message content, not trusted from
 //     whatever the daemon claims about itself) -- closing finding 2's "never
 //     requires resolved differs or matches the runtime resolution". `reported`
@@ -1561,7 +1592,7 @@ await checkCriterion('C1-1', 'contract type scan (packages/contracts/src/**) + t
     // itself: FAKE_CLAUDE_SCRIPT always emits "fake claude reply for
     // <executedModel>" as the assistant text.
     function executedModelFromContent(msg: MessageRow | null): string | null {
-      const m = /^fake claude reply for (.+)$/.exec(msg?.content ?? '');
+      const m = new RegExp(`^${escapeRegExp(FAKE_REPLY_MARKER)} (.+)$`).exec(msg?.content ?? '');
       return m?.[1] ?? null;
     }
     const rrA = extractRRR(statusA, msgA);
@@ -1662,7 +1693,7 @@ await checkCriterion('C1-2', 'apps/web/src/components/agentModelSelection.ts dir
       // from the fake CLI's own echoed reply text (see C1-1's identical
       // technique) -- never trusted from whatever the UI itself claims.
       const msg = readMessageRow(webSuite.dataDir, run.assistantMessageId);
-      const executedMatch = /^fake claude reply for (.+)$/.exec(msg?.content ?? '');
+      const executedMatch = new RegExp(`^${escapeRegExp(FAKE_REPLY_MARKER)} (.+)$`).exec(msg?.content ?? '');
       const executedModel = executedMatch?.[1] ?? null;
       if (!executedModel) problems.push('could not independently observe the executed model from the fake CLI\'s own echoed reply text -- cannot verify the DOM names the real resolved model');
       browser = await pw.pw.chromium.launch({ headless: true });
@@ -1908,7 +1939,7 @@ await checkCriterion('C1-5', 'local PostHog-shaped capture stub + a substitution
     // <executedModel>" as the assistant text (see C1-1/C1-2's identical
     // technique).
     const msgForExec = readMessageRow(daemon.dataDir, run.assistantMessageId);
-    const executedMatch = /^fake claude reply for (.+)$/.exec(msgForExec?.content ?? '');
+    const executedMatch = new RegExp(`^${escapeRegExp(FAKE_REPLY_MARKER)} (.+)$`).exec(msgForExec?.content ?? '');
     const executedModel = executedMatch?.[1] ?? null;
     // CEREMONY ROUND FIX (ruling item 3): strict envelope parse (root
     // {event,properties} OR elements of a root batch array only, no
@@ -3509,7 +3540,7 @@ await checkCriterion('C1-11', 'CDP Accessibility-domain computed audit across TH
     // technique as C1-1/C1-2/C1-5: FAKE_CLAUDE_SCRIPT always emits "fake
     // claude reply for <executedModel>" as the assistant text.
     const substitutedMsg = readMessageRow(webSuite.dataDir, substitutedRun.assistantMessageId);
-    const executedMatch = /^fake claude reply for (.+)$/.exec(substitutedMsg?.content ?? '');
+    const executedMatch = new RegExp(`^${escapeRegExp(FAKE_REPLY_MARKER)} (.+)$`).exec(substitutedMsg?.content ?? '');
     const executedModel = executedMatch?.[1] ?? null;
     if (!executedModel) problems.push('substituted state: could not independently observe the executed model from the fake CLI\'s own echoed reply text');
 
