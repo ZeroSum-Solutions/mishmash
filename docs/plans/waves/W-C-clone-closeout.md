@@ -14,8 +14,8 @@ conflicted with the global stop rule and with this file's own "if verification f
 
 ## Why this wave exists
 
-Three commits on `feat/web-clone-capture-hardening` (`8e3afa16b` → `357e3314d` → `371daca15`)
-took the clone pipeline through three GPT-5.6 adversarial rounds. Every user-facing symptom the
+Three commits (`8e3afa16b` → `357e3314d` → `371daca15`), landed squashed as `f0c4bda56` on
+`main`, took the clone pipeline through three GPT-5.6 adversarial rounds. Every user-facing symptom the
 founder reported is confirmed fixed: whole-site capture, query-bearing refs, recursive-fetch
 fidelity, deterministic width, cleanup paths, bot-wall detection, origin classification.
 

@@ -20,6 +20,8 @@
         "apps/daemon/src/backup/**",
         "apps/daemon/src/security/**",
         "apps/daemon/src/routes/library.ts",
+        "apps/daemon/src/cli.ts",
+        "apps/daemon/src/origin-validation.ts",
         "apps/daemon/tests/**",
         "docs/security/**",
         "docs/testing/**",
@@ -28,7 +30,7 @@
       "deny": [
         "apps/daemon/tests/web-clone-*.test.ts"
       ],
-      "note": "Owns `pnpm guard` and the daemon test tree for Burst 1. W-C may not touch guard."
+      "note": "Owns `pnpm guard` and the daemon test tree for Burst 1. W-C may not touch guard. Amended 2026-07-27: added `apps/daemon/src/cli.ts` and `apps/daemon/src/origin-validation.ts` to `allow` — `cli.ts` registers the backup CLI subcommands exercised by the backup/restore criteria (C0-1..C0-4) and is graded for CLI↔HTTP parity by C0-10; `origin-validation.ts` is required by origin rejection (C0-7). `apps/daemon/tests/**` is also claimed by W1 and W4; Burst ordering serializes these writers — W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3."
     },
     "W7": {
       "slug": "mishmash-w7-selector-foundations",
@@ -55,7 +57,7 @@
         "apps/web/tests/**",
         "scripts/waves/verify-w1.ts"
       ],
-      "note": "Owns EntryShell.tsx and server.ts outright for Burst 2. Executes W2's one-line newsletter fix (C2-1a) inside this lease."
+      "note": "Owns EntryShell.tsx and server.ts outright for Burst 2. Executes W2's one-line newsletter fix (C2-1a) inside this lease. `apps/daemon/tests/**` is also claimed by W0 and W4; Burst ordering serializes these writers — W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3."
     },
     "W2": {
       "slug": "mishmash-w2-brand-honesty",
@@ -73,6 +75,8 @@
       "deny": [
         "docs/security/**",
         "docs/specs/**",
+        "docs/plans/waves/**",
+        "docs/testing/**",
         "apps/web/src/components/EntryShell.tsx",
         "apps/daemon/src/server.ts",
         "packages/contracts/**"
@@ -94,7 +98,7 @@
         "apps/daemon/tests/**",
         "scripts/waves/verify-w4.ts"
       ],
-      "note": "Owns registry.ts. W3 runs after W4 lands — a shared lease across one 2,500-line module is not enforceable."
+      "note": "Owns registry.ts. W3 runs after W4 lands — a shared lease across one 2,500-line module is not enforceable. `apps/daemon/tests/**` is also claimed by W0 and W1; Burst ordering serializes these writers — W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3."
     },
     "W9-ingest": {
       "slug": "mishmash-w9-ingest-tranche",
@@ -105,7 +109,7 @@
         "docs/security/**",
         "scripts/waves/verify-w9-ingest.ts"
       ],
-      "note": "Runs beside W4; disjoint file sets. Must complete before W3 exposes the Library."
+      "note": "Runs beside W4; disjoint file sets. Must complete before W3 exposes the Library. `apps/daemon/src/routes/library.ts` and `docs/security/**` are also claimed by W0; W9-ingest does not begin until W0 lands on `main` (Burst 1, before Burst 3), so the two claims are temporally serialized, never concurrent."
     },
     "W3": {
       "slug": "mishmash-w3-library-launch",
