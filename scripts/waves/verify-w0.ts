@@ -933,6 +933,12 @@ async function main(): Promise<void> {
       const archiveDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w0-c02-archive-'));
       const archivePath = path.join(archiveDir, 'archive');
 
+      // r2 amendment 2026-07-27 (first full-run evidence): the upload daemon
+      // must be booted BEFORE the backup child is spawned. `od backup create`
+      // completes in ~250ms while bootDaemonForProbing takes 1-3s, so booting
+      // inside the loop guaranteed fileUploadsDuringBackup === 0 -- the
+      // criterion was structurally unsatisfiable by ANY implementation.
+      const uploadDaemon = await bootDaemonForProbing(fixture.sourceDir).catch(() => null);
       const child = spawn('node', [odBinPath, 'backup', 'create', '--out', archivePath, '--json'], { cwd: repoRoot, env: odDataEnv(fixture.sourceDir) });
       let stdout = '';
       child.stdout?.on('data', (c: Buffer) => (stdout += c.toString('utf8')));
@@ -948,7 +954,6 @@ async function main(): Promise<void> {
       // "atomic under concurrent mutation" covers the file store too.
       let backupChildRunning = true;
       const fileUploadLoop = (async () => {
-        const uploadDaemon = await bootDaemonForProbing(fixture.sourceDir).catch(() => null);
         if (!uploadDaemon) return;
         try {
           const targetProject = fixture.projects[1] ?? fixture.projects[0]!;
@@ -1963,7 +1968,15 @@ async function main(): Promise<void> {
         const daemon = await bootDaemonForProbing(baseline.corpus.path);
         try {
           const fanoutRoute = daemon.routeInventory.find((r) => r.method === 'GET' && /projects\/:[a-zA-Z]+\/files/i.test(r.path));
-          const searchRoute = daemon.routeInventory.find((r) => /search/i.test(r.path));
+          // r2 amendment 2026-07-27: the generic /search/i first-match picked
+          // POST /api/xai/search (an external network API that 401s without
+          // credentials, registered before the library route), so httpOkAll
+          // could never be true -- documented as "Known issue" in the
+          // committed baseline. The scale scenario means the CORPUS search:
+          // prefer the library search route, then any non-external search row.
+          const searchRoute =
+            daemon.routeInventory.find((r) => /library\/search/i.test(r.path)) ??
+            daemon.routeInventory.find((r) => /search/i.test(r.path) && !/xai/i.test(r.path));
 
           async function timedRun(fn: () => Promise<boolean>): Promise<{ samplesMs: number[]; httpOkAll: boolean }> {
             for (let w = 0; w < R8_WARMUP_ITERATIONS; w++) await fn().catch(() => false);
@@ -2484,6 +2497,11 @@ async function main(): Promise<void> {
       // ever reach a genuine success there. Unconditional (never
       // sample-gated), using the gate-owned known-good fixture provisioned
       // at scripts/waves/fixtures/w0-figma-check.fig.
+      // r2 amendment 2026-07-27: this declaration must lexically precede the
+      // probeFigmaMultipart call below -- it previously sat ~100 lines after
+      // the call site in the same block scope, so every run crashed on a TDZ
+      // ReferenceError before any manifest validity mattered.
+      const figmaFixturePath = path.join(repoRoot, 'scripts/waves/fixtures/w0-figma-check.fig');
       {
         const r = await probeFigmaMultipart(daemon, nonce);
         figmaMultipartOk = r.ok;
@@ -2578,8 +2596,8 @@ async function main(): Promise<void> {
       // CLI sends
       // (apps/daemon/src/cli.ts figma import: form.append('file', new
       // Blob([bytes]), basename(file)); no other fields when --notes is
-      // absent, which it is here).
-      const figmaFixturePath = path.join(repoRoot, 'scripts/waves/fixtures/w0-figma-check.fig');
+      // absent, which it is here). figmaFixturePath is declared above the
+      // probeFigmaMultipart call site (r2 amendment 2026-07-27, TDZ fix).
       // Round-final coordinator ruling (Sol REJECT, finding 3): shape-only
       // validation (label/snapshotDir/inventory/suggestedPrompt all
       // present) is satisfied by a lazy handler returning a static,
