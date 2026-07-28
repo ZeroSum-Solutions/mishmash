@@ -13,29 +13,36 @@
 `docs/plans/waves/DECISIONS.md`. The last entry landed on `main` at `ff47420b8` (round-1
 disposition, ruling 2) — confirmed directly by reading `origin/main`, not assumed.
 
-**Status: FOUNDER-AUTHORIZED FIDELITY ROUND (round 5, post-second-confirmation REJECT).**
+**Status: FOUNDER-AUTHORIZED FIDELITY ROUND (round 6, post-confirmation-#3 REJECT).**
 Round 1 returned REJECT (9 findings); round 2 returned REJECT again; round 2's own confirmation
 pass returned REJECT a third consecutive time, firing the program's stop rule and escalating to a
 founder-delegated ceremony, which ruled six mechanical defects and authorized one ceremony-bounded
 fix round (round 3, disposed below). Round 3's own fidelity-only confirmation (confirmation #1)
 returned REJECT on five of those six items plus one regression the round-3 fix itself introduced;
-the founder authorized round 4, disposed below. Round 4's own fidelity-only confirmation
-(confirmation #2) ruled the round-4 regression fix CLOSED and item 6 (archive finalization) settled
-byte-identical — but found five of round 4's own five fixes still imprecise in specific,
-demonstrable ways (a ternary-composition gap in the exposure veto, process-error/reporter-
-consistency gaps in the replay, factory-modifier context-independence gaps in the title parser, a
-fenced/indented-code gap in C9-7's bullet check, and an unbounded-substring gap in the transport
-numeric binding). The founder authorized exactly one further scoped fidelity round (this one),
-strictly confined to those five points, "nothing else," followed by exactly one more fidelity-only
-confirmation (confirmation #3). The ceremony's original analysis (round 2's attribution-authority
-work, the C9-10 redesign, the floor corrections, the stale-proof mechanics, and all three
-author-flagged residual-risk notes in **Adversarial review** below), item 6 (archive finalization),
-and the round-4 regression fix all remain settled and untouched. Every finding across all five
-rounds is disposed in **AUTHOR-FLAGGED / DISPOSITIONS** at the end of this document, which is the
-authoritative change record; earlier prose in this document reflects the current, fixed state, not
-the history — the dispositions section carries the history. Any verdict on this round other than
-APPROVE goes directly to the founder, with no further fix round absent explicit founder
-authorization.
+the founder authorized round 4. Round 4's own fidelity-only confirmation (confirmation #2) ruled
+the round-4 regression fix CLOSED and item 6 (archive finalization) settled byte-identical, but
+found five of round 4's own five fixes still imprecise; the founder authorized round 5, disposed
+below. Round 5's own fidelity-only confirmation (confirmation #3) ruled TWO of round 5's five
+points FIXED — the exposure classifier's ternary-composition gap (point 1) and the title parser's
+factory-suppression gap (point 3), both probe-verified against every decoy shape including deeper
+chains, factory-of-factory, and parenthesized/comma expressions — and settled areas confirmed
+AST-hash-identical with clean commit integrity. It found the remaining THREE points still needing
+work: replay consistency (point 2, not fixed, plus one new regression: the round-5 suite-count
+check itself counts suite nodes, not files); rendered Markdown bullets (point 4, not fixed: fence
+recognition was blind-toggling on triple-backtick fences only, missing tilde fences and
+run-length-aware closing);
+and the numeric boundary (point 5, fixed-with-defect: `\b<n>\b` is a word boundary, not the PRD's
+promised non-digit boundary). The founder authorized exactly one further scoped fidelity round
+(this one), strictly confined to those three points, followed by exactly one more fidelity-only
+confirmation (confirmation #4). Points 1 and 3, item 6 (archive finalization), the round-4
+regression fix, the const guards, and the prelude binding all remain settled and untouched — the
+ceremony's original analysis (round 2's attribution-authority work, the C9-10 redesign, the floor
+corrections, the stale-proof mechanics, and all three author-flagged residual-risk notes in
+**Adversarial review** below) likewise. Every finding across all six rounds is disposed in
+**AUTHOR-FLAGGED / DISPOSITIONS** at the end of this document, which is the authoritative change
+record; earlier prose in this document reflects the current, fixed state, not the history — the
+dispositions section carries the history. Any verdict on this round other than APPROVE goes
+directly to the founder, with no further fix round absent explicit founder authorization.
 
 This document is an **expansion**, not an implementation. Per the NM-41C gate
 (`W5-W11-gated.md` lines 8–24), it is written and frozen *before* any implementation work
@@ -910,19 +917,22 @@ recursively; an undeterminable condition still yields `undefined`. Dead arms wer
 remain, skipped by the walker — this only taught the evaluator what the walker already knew. See
 S9-2 (prose unchanged; it already described `&&`/`||` dead-branch elimination as the intent).
 
-**Point 2 (replay-at-parent — process-error / reporter-consistency gap → RESOLVED).** `sh()`
-collapsed a spawn error or a timeout-induced kill to an ordinary `status:1`, indistinguishable from
-a genuine failing test run, so the replay's only red-exit check (`status !== 0`) treated a process
-that never ran a single real test as the expected red state. `sh()` now returns a `processError`
-flag (set when `spawnSync` reports `.error` or `.signal`), and the replay fails outright, before
-even attempting to parse the reporter's output, whenever it's set. Separately, the replay only
-checked `numFailedTests === 1` and each assertion's own status — it never checked the reporter's
-own top-level `success` field (must be exactly `false` for a genuine failing run; a `true` value
-alongside a failed test is self-contradictory reporter output) or its suite-level counts
-(`numTotalTestSuites`/`numFailedTestSuites`, both required to be exactly `1` — a replay touching or
-failing more than the one targeted file signals something beyond the target test went wrong). Both
-are now modeled on `SuiteJson` (confirmed present in real Vitest JSON output by direct inspection)
-and checked. See S9-3 (prose unchanged; it already claimed unrelated-process-failure rejection).
+**Point 2 (replay-at-parent — process-error / reporter-consistency gap → RESOLVED in round 5, one
+of its own two reporter-consistency mechanisms found to be a REGRESSION and replaced in round 6 —
+see below).** `sh()` collapsed a spawn error or a timeout-induced kill to an ordinary `status:1`,
+indistinguishable from a genuine failing test run, so the replay's only red-exit check
+(`status !== 0`) treated a process that never ran a single real test as the expected red state.
+`sh()` now returns a `processError` flag (set when `spawnSync` reports `.error` or `.signal`), and
+the replay fails outright, before even attempting to parse the reporter's output, whenever it's
+set — **unchanged, confirmed correct.** Separately, round 5 added two reporter-consistency checks:
+the reporter's own top-level `success` field (must be exactly `false` for a genuine failing run;
+a `true` value alongside a failed test is self-contradictory reporter output) — **unchanged,
+confirmed correct** — and its suite-level counts (`numTotalTestSuites`/`numFailedTestSuites`, both
+required to be exactly `1`). **That second check was itself a regression:** those counts are
+Vitest's internal SUITE NODES (every `describe` block is its own suite), not files, so a legitimate
+single-file replay containing nested `describe` blocks could be wrongly rejected. Round 6 removes
+that equality check and replaces it with file-count semantics — see below. See S9-3 (prose
+unchanged; it already claimed unrelated-process-failure rejection, which both rounds' fixes serve).
 
 **Point 3 (historical titles — factory/chain context-independence gap → RESOLVED).** `each`, `for`,
 `runIf`, and `skipIf` were accepted as ordinary modifiers indistinguishable from terminal ones
@@ -940,23 +950,31 @@ multi-level) factory chain's result -- via a new recursive `isValidTestChainExpr
 still contribute a title. See S9-3 (prose unchanged; it already described the outer-title-call
 pattern, which continues to work).
 
-**Point 4 (C9-7 bullets — fenced/indented-code gap → RESOLVED).** The bullet-line check was still
-line-regex-only: a `- [C9-N] ...`-shaped line inside a fenced code block, or indented 4+ spaces
-(CommonMark indented-code), is not a rendered Markdown list item, but both satisfied the check.
-Fixed by tracking fence state (toggling on every triple-backtick fence-delimiter line, excluding
-every line while inside a fence, including the delimiters themselves) and excluding any line with
-4+ leading spaces, both applied before the bullet-pattern test.
+**Point 4 (C9-7 bullets — fenced/indented-code gap → RESOLVED in round 5; the round-5 fence tracker
+itself found still-imprecise and corrected in round 6 — see below).** The bullet-line check was
+still line-regex-only: a `- [C9-N] ...`-shaped line inside a fenced code block, or indented 4+
+spaces (CommonMark indented-code), is not a rendered Markdown list item, but both satisfied the
+check. Round 5 fixed this by tracking fence state, toggling on every triple-backtick
+fence-delimiter line and excluding every line while inside a fence — **but the toggle recognized
+only triple-backtick fences blindly, with no run-length awareness:** a tilde-fenced decoy was never
+excluded, and a longer opening fence (4+ backticks) was wrongly "closed" by a shorter inner
+backtick run, exposing whatever followed. Round 6 replaces this with CommonMark's actual fence rule
+(see below). The 4+-leading-space exclusion was correct in round 5 and is unchanged.
 
-**Point 5 (ENFORCED transport binding — unbounded-substring gap → RESOLVED, PRD updated too).**
+**Point 5 (ENFORCED transport binding — unbounded-substring gap → RESOLVED in round 5; the round-5
+mechanism itself found FIXED-WITH-DEFECT and further corrected in round 6 — see below).**
 The numeric bindings added in round 4 were unbounded substring tests
 (`fullName.includes(String(parsed.limit))`), so with `limit=10` and `overflow=reject-429`, a
 distinct, wrong-magnitude assertion name like `"ingest allow 100 requests under limit"` or
 `"ingest reject 100 requests with 1429"` still satisfied the check — neither the limit nor the
-overflow code was actually matched exactly. Fixed with `containsExactNumericToken`, requiring the
-number to appear bounded by non-digit characters (or the string's own start/end) on both sides —
-`\b<n>\b` (digits are word characters, so a word boundary is exactly a digit boundary). S9-4 and the
-C9-6 table row are updated to describe exact-token matching explicitly, replacing the "literal
-substring" language the confirmation found still-gameable.
+overflow code was actually matched exactly. Round 5 fixed this with `containsExactNumericToken`,
+requiring the number to appear bounded by non-digit characters (or the string's own start/end) on
+both sides, implemented as `\b<n>\b`. **That implementation was itself imprecise** — a word boundary
+is NOT exactly a digit boundary, since `\b` also treats letters and underscores as word characters;
+round 6 corrects this (see below). S9-4 and the C9-6 table row were updated in round 5 to describe
+exact-token matching explicitly, replacing the "literal substring" language the confirmation found
+still-gameable; that prose already said "non-digit characters" (not "word characters") and needed
+no further correction in round 6 — only the code's `\b`-based implementation was wrong.
 
 **Verification this round:** typecheck clean; `pnpm guard` 102/102; all 9 canonical self-probes and
 the round-4 confirmation regression probes re-run and passing; three new ternary-composition probes
@@ -977,3 +995,76 @@ exact reported false-positive cases (`10` inside `100`, `429` inside `1429`) plu
 string-boundary cases. No settled design (attribution authority, C9-10, floor corrections,
 stale-proof mechanics, the three r3 accepted-LOW residuals, item 6, or the round-4 regression fix)
 changed in this round.
+
+### Round 6 (founder-authorized fidelity round #3 — confirmation #3 REJECT, 3 points)
+
+Round 5's own fidelity-only confirmation (confirmation #3) ruled points 1 (ternary reachability)
+and 3 (factory-title suppression) FIXED — both probe-verified against every decoy shape, including
+deeper chains, factory-of-factory, and parenthesized/comma expressions — and confirmed settled
+areas AST-hash-identical with clean commit integrity. It found three points still needing work.
+The founder authorized exactly one further scoped fidelity round, strictly confined to those three.
+
+**Point 2 (replay consistency — NOT FIXED, plus one new regression removed).** Round 5's
+process-error, parse-failure, `success !== false`, and suite-count checks all rejected correctly on
+their own terms, but `FileTestResult` never carried the reporter's file-level `status`/`message` and
+the replay only ever inspected `assertionResults` — so a scenario with the target failed, the
+control passed, and correct counts could STILL pass alongside a file-level or `afterAll` unhandled
+error, because nothing was inspecting the field that error would land in. Separately, round 5's
+`numTotalTestSuites`/`numFailedTestSuites === 1/1` check was itself a regression: those fields count
+Vitest's internal SUITE NODES (every `describe` block is its own suite), not files, so a legitimate
+one-file replay containing nested `describe` blocks could be wrongly rejected. Fixed by: (a)
+extending `FileTestResult` with `status`/`message` (confirmed present in real Vitest JSON reporter
+output by direct inspection) and requiring the one file's `status === 'failed'` and `message` to be
+empty — any non-empty file-level message is a file-level/`afterAll` error distinct from an ordinary
+per-test assertion failure (which is never carried in this field) and is now visible and fatal; (b)
+removing the suite-node-counting equality entirely and replacing it with file-count semantics —
+exactly one entry in `testResults`, governed by (a) — so nested `describe` blocks inside the one
+replayed file no longer fail the gate. `numTotalTestSuites`/`numFailedTestSuites` remain in evidence
+text as informational-only, never gated on. See S9-3 (prose unchanged; it already claimed
+unrelated-process-failure rejection, which this fix now genuinely closes for file-level errors too).
+
+**Point 4 (rendered Markdown bullets — NOT FIXED).** Round 5's fence tracker matched only a
+triple-backtick prefix with blind state toggling: a tilde-fenced decoy was never excluded (the
+pattern doesn't recognize tildes at all), and a longer opening fence (4+ backticks) was wrongly
+"closed" by any shorter backtick run inside it (an ordinary triple-backtick line), exposing
+whatever followed as if the fence had ended. Fixed by tracking fences per CommonMark's basic rule:
+a fence OPENS on a line matching only whitespace then a run of 3+ backtick OR tilde characters
+(`FENCE_MARKER_LINE`), recording the run's character and length; while inside, a line CLOSES the
+fence only if it is the SAME character
+with a run length `>=` the opening length and nothing else but whitespace on that line — a shorter
+same-character run, or any run of the other character, does not close it. Both fence characters
+exclude their contents from bullet eligibility; the existing 4+-space-indent exclusion is unchanged.
+
+**Point 5 (numeric boundary — FIXED-WITH-DEFECT, corrected).** Round 5's `containsExactNumericToken`
+used `\b<n>\b` — a WORD boundary, not the non-digit boundary the PRD (and round 5's own comment)
+already promised. Since `\b` also treats letters and underscores as word characters, a legitimate
+digit-bounded-by-non-digit occurrence like `"...limit10requests..."` or `"..._10_..."` incorrectly
+failed to match, even though it correctly kept rejecting wrong-magnitude cases (`10` inside `100`,
+`429` inside `1429`). Fixed with explicit non-digit lookarounds, `(?<![0-9])<n>(?![0-9])` — `n` is
+always a positive integer from a grammar-validated `EnforcedDeclaration` or a fixed literal
+(429/413), so direct interpolation carries no regex-injection risk. The PRD's own S9-4 prose already
+said "non-digit characters," not "word characters," so it needed no semantic change; the round-5
+disposition entry's incorrect justification ("a word boundary is exactly a digit boundary") is
+corrected above, and the verifier now genuinely matches what both documents always promised.
+
+**Verification this round:** typecheck clean; `pnpm guard` 102/102; the full existing self-probe
+suite re-run (9 canonical exposure probes, the round-4 regression and ternary-composition probes,
+the item-3 factory/chain probes including both exact previously-reported leaks) all still passing,
+confirming points 1 and 3 genuinely untouched; byte-diff of `staticBooleanValue`/
+`isLocalSameOriginReachable`, the title-parser block, `archiveRunArtifacts`, `hasDistinctSignalPair`
+plus the `isControl` paired-control block, and the const-guard/prelude-binding matchers against the
+prior confirmed-good commit — all confirmed byte-identical. New targeted probes: (a) a simulated
+replay payload with the target failed, the control passed, and a file-level `afterAll` error
+message — confirmed rejected; (b) a payload for one file containing nested `describe` suites
+(`numTotalTestSuites` > 1) with a clean target/control — confirmed still passes (the exact round-5
+regression scenario); a file-level-status-mismatch case and a two-file-result case independently
+confirmed rejected too; (c) a tilde-fence decoy confirmed excluded; a backtick line inside a tilde
+fence confirmed not closing it; a 4-backtick fence with a shorter inner triple-backtick run
+confirmed staying open through the following decoy, only closing on a genuine 4+-backtick line,
+with the bullet after it correctly counted; a longer closing run and a fully unclosed fence both
+confirmed correct; (d)
+`limit10requests` and `_10_` confirmed now matching a `limit=10` binding, while `100`/`1429` are
+confirmed still rejected, alongside decimal-context and leading-zero-adjacency sanity checks. No
+settled design (attribution authority, C9-10, floor corrections, stale-proof mechanics, the three r3
+accepted-LOW residuals, item 6, the round-4 regression fix, points 1 or 3, the const guards, or the
+prelude binding) changed in this round.
