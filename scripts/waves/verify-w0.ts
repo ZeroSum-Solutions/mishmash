@@ -1382,7 +1382,7 @@ async function main(): Promise<void> {
   await checkCriterion(
     'C0-7',
     'two-pass alias-aware AST extraction (local const aliases, property chains, constant paths) over apps/daemon/src/routes/** + server.ts; unresolvable-path guarded registrations must be explicitly acknowledged as dynamic in the inventory',
-    'inventory row without a live route = fail; guarded live route missing from inventory = fail; an unresolvable-path guarded registration not explicitly marked dynamic in the inventory = fail; every row is probed TWICE -- once with an explicitly hostile browser Origin (https://evil.invalid), expecting rejection (401/403), and once with NO Origin header at all (the local CLI\'s own request shape), expecting an EXPLICIT success: 2xx by default, or the row\'s own declared expectedLocalStatus for routes whose genuine local success is legitimately non-2xx -- expectedLocalStatus may NEVER declare -1, 401, 403, or any 5xx (structurally forbidden, named, at validation time -- a lazy expectedLocalStatus: 403 can never bless the guard\'s own rejection as "success"); a static row whose path is parameterized REQUIRES a declared probePath with a concrete value, and any probed row with a body-bearing method REQUIRES a declared probeBody -- both support \'<nonceProjectId>\' substitution against a REAL project seeded fresh after every daemon boot (initial or reboot), so placeholder-driven 400/404 can never be blessed via expectedLocalStatus; a row missing either declaration fails BY NAME; requireLocalDaemonRequest exists to stop a malicious web page, not a genuine local caller, so origin-LESS success and hostile-Origin rejection are both required, honestly, against the current product; every daemon reboot triggered mid-probe (e.g. a route with a genuine local side effect) is logged with the row/phase whose probe ACTUALLY PRECEDED the death (never the upcoming probe), and settles that preceding row\'s own result BEFORE the reboot -- a reboot can never retroactively convert a row\'s failure into a pass; a dynamic row without probePath may skip probing ONLY when authorized by an orchestrator-owned allowlist (--unreachable-allowlist / W0_UNREACHABLE_ALLOWLIST) -- absent/unreadable/invalid allowlist = zero authorized skips (fail-closed); each allowlist entry binds to {file, line, method, path}, a source-line sha256 fingerprint recomputed from the CURRENT tree, AND a commit that must be (1) a full 40-char lowercase hex sha, (2) a real commit object in this repository that is an ancestor-or-equal of the evaluated HEAD, and (3) the commit the source line was AUTHORED against -- the fingerprint must independently match both the current tree AND `git show <commit>:<file>` at that line; any of these failing makes the entry INVALID, same hard-fail bucket as stale; entries must match exactly one claiming row 1:1 (duplicate entries, unused entries, and unauthorized claiming rows are all hard fails); a row\'s free-text "unreachable" string is surfaced in evidence but never authorizes anything; hard-fail when authorizedUnreachable*2 >= totalDynamic (nonempty set, exactly-half included)',
+    'inventory row without a live route = fail; guarded live route missing from inventory = fail; an unresolvable-path guarded registration not explicitly marked dynamic in the inventory = fail; every row is probed TWICE -- once with an explicitly hostile browser Origin (https://evil.invalid), expecting rejection (401/403), and once with NO Origin header at all (the local CLI\'s own request shape), expecting an EXPLICIT success: 2xx by default, or the row\'s own declared expectedLocalStatus for routes whose genuine local success is legitimately non-2xx -- expectedLocalStatus may NEVER declare -1, 400, 401, 403, 404, or any 5xx (structurally forbidden, named, at validation time -- a lazy expectedLocalStatus: 403 can never bless the guard\'s own rejection as "success", and a lazy expectedLocalStatus: 404 can never bless a placeholder-ID 404 as "success"); a static row whose path is parameterized REQUIRES a declared probePath with a concrete value (a declared-but-STILL-parameterized probePath, e.g. one that still contains :id syntax, counts as missing exactly like no declaration), and any probed row with a body-bearing method REQUIRES a declared probeBody -- both support \'<nonceProjectId>\' SUBSTRING substitution (every occurrence within the string, including one embedded in a larger URL/token, not just an exact-match value) against a REAL project seeded fresh after every daemon boot (initial or reboot); ANY remaining unresolved <...> placeholder token after substitution is itself a named structural failure; probePath/probeBody resolution happens LAZILY per probe phase, strictly AFTER that phase\'s ensureDaemonAlive liveness check, so a reboot\'s freshly-seeded nonce is always the one actually used (never a stale nonce from the daemon instance that just died) -- every probe result records the daemon generation (boot count) its substitution resolved against; a row missing any declaration fails BY NAME; requireLocalDaemonRequest exists to stop a malicious web page, not a genuine local caller, so origin-LESS success and hostile-Origin rejection are both required, honestly, against the current product; every daemon reboot triggered mid-probe (e.g. a route with a genuine local side effect) is logged with the row/phase whose probe ACTUALLY PRECEDED the death (never the upcoming probe) and the new daemon generation it produced, and settles that preceding row\'s own result BEFORE the reboot -- a reboot can never retroactively convert a row\'s failure into a pass; a dynamic row without probePath may skip probing ONLY when authorized by an orchestrator-owned allowlist (--unreachable-allowlist / W0_UNREACHABLE_ALLOWLIST) -- absent/unreadable/invalid allowlist = zero authorized skips (fail-closed); each allowlist entry binds to {file, line, method, path}, a source-line sha256 fingerprint recomputed from the CURRENT tree, AND a commit that must be (1) a full 40-char lowercase hex sha, (2) a real commit object in this repository that is an ancestor-or-equal of the evaluated HEAD, and (3) the commit the source line was AUTHORED against -- the fingerprint must independently match both the current tree AND `git show <commit>:<file>` at that line; any of these failing makes the entry INVALID, same hard-fail bucket as stale; entries must match exactly one claiming row 1:1 (duplicate entries, unused entries, and unauthorized claiming rows are all hard fails); a row\'s free-text "unreachable" string is surfaced in evidence but never authorizes anything; hard-fail when authorizedUnreachable*2 >= totalDynamic (nonempty set, exactly-half included)',
     async () => {
       const rel = 'apps/daemon/src/security/privileged-routes.json';
       if (!fileExists(rel)) {
@@ -1498,22 +1498,39 @@ async function main(): Promise<void> {
       // a meaningless 400/404 blessed away by expectedLocalStatus.
       const BODY_BEARING_METHODS = new Set(['POST', 'PUT', 'PATCH']);
       const probedRowSet = validRows.filter((r) => !r.dynamic || typeof r.probePath === 'string');
-      const rowsMissingRealisticProbePath = probedRowSet.filter((r) => !r.dynamic && /:[a-zA-Z]+/.test(r.path) && typeof r.probePath !== 'string');
+      // Round-12 C0-7-PROBEPATH-SUBSTITUTION (1c): a declared probePath that
+      // STILL contains route-parameter syntax (e.g. :connectorId) is not
+      // realistic either -- it is the templated path copy-pasted verbatim,
+      // not a concrete value. Caught the same as no declaration at all.
+      const rowsMissingRealisticProbePath = probedRowSet.filter((r) => {
+        if (r.dynamic || !/:[a-zA-Z]+/.test(r.path)) return false;
+        if (typeof r.probePath !== 'string') return true;
+        return /:[a-zA-Z]+/.test(r.probePath);
+      });
       const rowsMissingProbeBody = probedRowSet.filter((r) => BODY_BEARING_METHODS.has(r.method) && r.probeBody === undefined);
-      // Round-11 F1 (C0-7-LOCAL-CANARY-FAILOPEN, second pass): a row can no
-      // longer declare expectedLocalStatus in {-1, 401, 403} or any 5xx --
-      // a lazy implementer could otherwise declare expectedLocalStatus: 403
-      // and have the guard's own rejection count as "success." Forbidden
-      // structurally (validation-time, named), not just at runtime.
+      // Round-11 F1 / Round-12 (1d, C0-7-LOCAL-CANARY-FAILOPEN): a row can
+      // no longer declare expectedLocalStatus in {-1, 400, 401, 403, 404} or
+      // any 5xx. Ruling A's own text ("placeholder 400/404 responses cannot
+      // count as success") extends the forbidden set beyond the guard-
+      // rejection codes (401/403) to the placeholder-data codes (400/404)
+      // too -- a lazy implementer could otherwise declare
+      // expectedLocalStatus: 404 and have a fake-ID 404 count as success.
+      // Forbidden structurally (validation-time, named), not just at runtime.
       function isForbiddenExpectedLocalStatus(status: number): boolean {
-        return status === -1 || status === 401 || status === 403 || (status >= 500 && status < 600);
+        return status === -1 || status === 400 || status === 401 || status === 403 || status === 404 || (status >= 500 && status < 600);
       }
       const rowsWithForbiddenExpectedLocalStatus = validRows.filter((r) => typeof r.expectedLocalStatus === 'number' && isForbiddenExpectedLocalStatus(r.expectedLocalStatus));
-      const hostileOriginResults: { method: string; path: string; status: number }[] = [];
-      const localSuccessCanaryResults: { method: string; path: string; status: number; expected: number | '2xx'; ok: boolean }[] = [];
+      const hostileOriginResults: { method: string; path: string; status: number; daemonGeneration: number }[] = [];
+      const localSuccessCanaryResults: { method: string; path: string; status: number; expected: number | '2xx'; ok: boolean; daemonGeneration: number }[] = [];
+      const rowsWithUnresolvedPlaceholder: { method: string; path: string; phase: 'hostile' | 'canary'; remaining: string[] }[] = [];
       let liveRouteKeys = new Set<string>();
-      const rebootLog: { triggeringRow: string; phase: 'hostile' | 'canary' }[] = [];
+      const rebootLog: { triggeringRow: string; phase: 'hostile' | 'canary'; newDaemonGeneration: number }[] = [];
       let currentNonceProjectId: string | null = null;
+      // Round-12 C0-7-REBOOT-NONCE-STALE: daemonGeneration increments on
+      // every FRESH boot (initial + every reboot). Recorded per probe result
+      // so evidence shows exactly which daemon instance's seeded fixture
+      // each row's substitution resolved against.
+      let daemonGeneration = 0;
       // Round-11 F2 (C0-7 reboot attribution, second pass): the reboot
       // record must name the row/phase whose probe PRECEDED the death, not
       // the row about to be probed next. lastProbed tracks the most
@@ -1527,7 +1544,8 @@ async function main(): Promise<void> {
       async function ensureDaemonAlive(current: BootedDaemon | null): Promise<BootedDaemon> {
         const alive = current ? await fetch(`${current.url}/api/health`).then(() => true).catch(() => false) : false;
         if (alive) return current as BootedDaemon;
-        rebootLog.push({ triggeringRow: lastProbed ? lastProbed.row : '(initial boot)', phase: lastProbed ? lastProbed.phase : 'hostile' });
+        daemonGeneration += 1;
+        rebootLog.push({ triggeringRow: lastProbed ? lastProbed.row : '(initial boot)', phase: lastProbed ? lastProbed.phase : 'hostile', newDaemonGeneration: daemonGeneration });
         if (current) await current.kill().catch(() => undefined);
         const fresh = await bootDaemonForProbing();
         liveRouteKeys = new Set(fresh.routeInventory.map((r) => `${r.method} ${r.path}`));
@@ -1554,6 +1572,24 @@ async function main(): Promise<void> {
         }
         return init;
       }
+      // Round-12 C0-7-REBOOT-NONCE-STALE: resolves the declared path/body
+      // against whatever currentNonceProjectId is CURRENTLY set to. Callers
+      // MUST call ensureDaemonAlive first, so a fresh boot's fixture project
+      // (and its new currentNonceProjectId) is in place BEFORE resolution --
+      // never resolved ahead of a liveness check that could reboot and
+      // invalidate the very nonce just used.
+      function resolveRowForProbe(row: { method: string; path: string; probePath?: string; probeBody?: unknown }): { declaredPath: string; resolvedPath: string; substitutedBody: unknown; unresolvedPlaceholders: string[] } {
+        const declaredPath = typeof row.probePath === 'string' ? row.probePath : row.path;
+        const substitutedPathRaw = currentNonceProjectId ? (substituteNoncePlaceholder(declaredPath, currentNonceProjectId) as string) : declaredPath;
+        // Any remaining un-substituted :param segment (no declaration
+        // supplied a real value) falls back to a placeholder id -- that gap
+        // is separately caught by rowsMissingRealisticProbePath as a named
+        // missing-declaration fail, not silently hidden here.
+        const resolvedPath = substitutedPathRaw.replace(/:[a-zA-Z]+/g, 'w0-verifier-probe-id');
+        const substitutedBody = row.probeBody !== undefined ? (currentNonceProjectId ? substituteNoncePlaceholder(row.probeBody, currentNonceProjectId) : row.probeBody) : undefined;
+        const unresolvedPlaceholders = [...findRemainingPlaceholders(substitutedPathRaw), ...findRemainingPlaceholders(substitutedBody)];
+        return { declaredPath, resolvedPath, substitutedBody, unresolvedPlaceholders };
+      }
       try {
         daemon = await ensureDaemonAlive(daemon);
         // Static rows are probed by their declared path (or probePath
@@ -1566,35 +1602,41 @@ async function main(): Promise<void> {
         // (there is no path to probe) but are caught by
         // dynamicRowsMissingProbePathOrReason above.
         for (const row of probedRowSet) {
-          const declaredPath = typeof row.probePath === 'string' ? row.probePath : row.path;
-          const substitutedPath = currentNonceProjectId ? (substituteNoncePlaceholder(declaredPath, currentNonceProjectId) as string) : declaredPath;
-          // Any remaining un-substituted :param segment (no declaration
-          // supplied a real value) falls back to a placeholder id -- that
-          // gap is separately caught by rowsMissingRealisticProbePath as a
-          // named missing-declaration fail, not silently hidden here.
-          const resolvedPath = substitutedPath.replace(/:[a-zA-Z]+/g, 'w0-verifier-probe-id');
-          const rowLabel = `${row.method} ${declaredPath}`;
-          const substitutedBody = row.probeBody !== undefined ? (currentNonceProjectId ? substituteNoncePlaceholder(row.probeBody, currentNonceProjectId) : row.probeBody) : undefined;
-
+          // Round-12 C0-7-REBOOT-NONCE-STALE: ensureDaemonAlive runs FIRST
+          // for EACH phase, then resolution happens lazily against
+          // whichever daemon (and whichever seeded nonce project) is
+          // current at that moment -- never resolved against a nonce that a
+          // reboot is about to invalidate.
           daemon = await ensureDaemonAlive(daemon);
+          const hostileResolved = resolveRowForProbe(row);
+          const hostileGeneration = daemonGeneration;
+          const rowLabel = `${row.method} ${hostileResolved.declaredPath}`;
+          if (hostileResolved.unresolvedPlaceholders.length > 0) {
+            rowsWithUnresolvedPlaceholder.push({ method: row.method, path: hostileResolved.declaredPath, phase: 'hostile', remaining: hostileResolved.unresolvedPlaceholders });
+          }
           try {
-            const res = await fetch(`${daemon.url}${resolvedPath}`, buildProbeInit(row.method, HOSTILE_ORIGIN, substitutedBody));
-            hostileOriginResults.push({ method: row.method, path: declaredPath, status: res.status });
+            const res = await fetch(`${daemon.url}${hostileResolved.resolvedPath}`, buildProbeInit(row.method, HOSTILE_ORIGIN, hostileResolved.substitutedBody));
+            hostileOriginResults.push({ method: row.method, path: hostileResolved.declaredPath, status: res.status, daemonGeneration: hostileGeneration });
           } catch {
-            hostileOriginResults.push({ method: row.method, path: declaredPath, status: -1 });
+            hostileOriginResults.push({ method: row.method, path: hostileResolved.declaredPath, status: -1, daemonGeneration: hostileGeneration });
           }
           lastProbed = { row: rowLabel, phase: 'hostile' };
 
           daemon = await ensureDaemonAlive(daemon);
+          const canaryResolved = resolveRowForProbe(row);
+          const canaryGeneration = daemonGeneration;
+          if (canaryResolved.unresolvedPlaceholders.length > 0) {
+            rowsWithUnresolvedPlaceholder.push({ method: row.method, path: canaryResolved.declaredPath, phase: 'canary', remaining: canaryResolved.unresolvedPlaceholders });
+          }
           try {
-            const res = await fetch(`${daemon.url}${resolvedPath}`, buildProbeInit(row.method, null, substitutedBody));
-            localSuccessCanaryResults.push({ method: row.method, path: declaredPath, status: res.status, expected: typeof row.expectedLocalStatus === 'number' ? row.expectedLocalStatus : '2xx', ok: isCanarySuccess(row, res.status) });
+            const res = await fetch(`${daemon.url}${canaryResolved.resolvedPath}`, buildProbeInit(row.method, null, canaryResolved.substitutedBody));
+            localSuccessCanaryResults.push({ method: row.method, path: canaryResolved.declaredPath, status: res.status, expected: typeof row.expectedLocalStatus === 'number' ? row.expectedLocalStatus : '2xx', ok: isCanarySuccess(row, res.status), daemonGeneration: canaryGeneration });
           } catch {
             // Transport failure (-1) is NEVER success -- this row fails,
             // full stop. It is recorded here, BEFORE the next row's
             // ensureDaemonAlive call can reboot, so the failure cannot be
             // masked by a subsequent fresh-daemon reboot.
-            localSuccessCanaryResults.push({ method: row.method, path: declaredPath, status: -1, expected: typeof row.expectedLocalStatus === 'number' ? row.expectedLocalStatus : '2xx', ok: false });
+            localSuccessCanaryResults.push({ method: row.method, path: canaryResolved.declaredPath, status: -1, expected: typeof row.expectedLocalStatus === 'number' ? row.expectedLocalStatus : '2xx', ok: false, daemonGeneration: canaryGeneration });
           }
           lastProbed = { row: rowLabel, phase: 'canary' };
         }
@@ -1637,6 +1679,7 @@ async function main(): Promise<void> {
         rowsWithForbiddenExpectedLocalStatus.length === 0 &&
         rowsMissingRealisticProbePath.length === 0 &&
         rowsMissingProbeBody.length === 0 &&
+        rowsWithUnresolvedPlaceholder.length === 0 &&
         iteration.ok &&
         control.ok &&
         liveRejectedAll &&
@@ -1652,14 +1695,16 @@ async function main(): Promise<void> {
           `authorized rows (allowlist-cleared, free text is evidence-only): ${JSON.stringify(authorizedRows.map((r) => ({ method: r.method, path: r.path, file: r.file, line: r.line, freeTextUnreachable: r.unreachable })))}\n` +
           `all claiming rows with free-text unreachable surfaced: ${JSON.stringify(claimingRows.map((r) => ({ method: r.method, path: r.path, file: r.file, line: r.line, freeTextUnreachable: r.unreachable, authorized: authorizedRows.includes(r) })))}\n` +
           `inventory rows without a live route: ${JSON.stringify(inventoryRowsNotLive)}\n` +
-          `rows with a FORBIDDEN declared expectedLocalStatus (-1/401/403/5xx never count as success): ${JSON.stringify(rowsWithForbiddenExpectedLocalStatus.map((r) => ({ method: r.method, path: r.path, expectedLocalStatus: r.expectedLocalStatus })))}\n` +
-          `rows missing a realistic probePath (parameterized static path, no declared override): ${JSON.stringify(rowsMissingRealisticProbePath.map((r) => ({ method: r.method, path: r.path })))}\n` +
+          `rows with a FORBIDDEN declared expectedLocalStatus (-1/400/401/403/404/5xx never count as success): ${JSON.stringify(rowsWithForbiddenExpectedLocalStatus.map((r) => ({ method: r.method, path: r.path, expectedLocalStatus: r.expectedLocalStatus })))}\n` +
+          `rows missing a realistic probePath (parameterized static path, no declared override, OR a declared override that still contains :param syntax): ${JSON.stringify(rowsMissingRealisticProbePath.map((r) => ({ method: r.method, path: r.path, declaredProbePath: r.probePath })))}\n` +
           `rows missing a required probeBody (body-bearing method, no declaration): ${JSON.stringify(rowsMissingProbeBody.map((r) => ({ method: r.method, path: r.path })))}\n` +
-          `hostile-Origin probe (Origin: ${HOSTILE_ORIGIN}, expect 401/403): ${JSON.stringify(hostileOriginResults)}; NOT rejected (real fail if non-empty): ${JSON.stringify(hostileOriginNotRejected)}\n` +
-          `origin-less local-success canary (no Origin header, CLI's own shape; expect 2xx or the row's declared expectedLocalStatus -- -1/401/403/5xx are all real fails now, and can never be declared as expected): ${JSON.stringify(localSuccessCanaryResults)}; failed (real fail if non-empty): ${JSON.stringify(localSuccessCanaryRejected)}\n` +
-          `daemon reboots during probing (each entry names the row/phase whose probe PRECEDED the death -- the actual trigger, not the upcoming probe; a reboot settles the PRECEDING row's result first and never retroactively changes it): ${JSON.stringify(rebootLog)}\n` +
+          `rows whose resolved probePath/probeBody still contains an unresolved <...> placeholder token after substitution: ${JSON.stringify(rowsWithUnresolvedPlaceholder)}\n` +
+          `hostile-Origin probe (Origin: ${HOSTILE_ORIGIN}, expect 401/403; each entry records the daemon generation its substitution resolved against): ${JSON.stringify(hostileOriginResults)}; NOT rejected (real fail if non-empty): ${JSON.stringify(hostileOriginNotRejected)}\n` +
+          `origin-less local-success canary (no Origin header, CLI's own shape; expect 2xx or the row's declared expectedLocalStatus -- -1/400/401/403/404/5xx are all real fails now, and can never be declared as expected; each entry records the daemon generation its substitution resolved against): ${JSON.stringify(localSuccessCanaryResults)}; failed (real fail if non-empty): ${JSON.stringify(localSuccessCanaryRejected)}\n` +
+          `daemon reboots during probing (each entry names the row/phase whose probe PRECEDED the death -- the actual trigger, not the upcoming probe -- and the new daemon generation it produced; a reboot settles the PRECEDING row's result first and never retroactively changes it): ${JSON.stringify(rebootLog)}\n` +
+          `final daemon generation reached: ${daemonGeneration}\n` +
           `-- per-route --\n${iteration.evidence}\n-- control --\n${control.evidence}`,
-        { detail: ok ? undefined : `rows=${validRows.length} unique=${dedupKeys.size} inventoryRowsNotLive=${inventoryRowsNotLive.length} guardedMissing=${guardedRoutesMissingFromInventory.length} dynamicRowsMissingProbePathOrReason=${dynamicRowsMissingProbePathOrReason.length} dynamicRowsUnbound=${dynamicRowsUnbound.length} dynamicRowsDuplicateBinding=${dynamicRowsDuplicateBinding.length} unresolvableSitesUnacknowledged=${unresolvableSitesUnacknowledged.length} allowlistStatus=${allowlistStatus} duplicateAllowlistEntries=${duplicateAllowlistEntries.length} staleAllowlistEntries=${staleAllowlistEntries.length} unusedAllowlistEntries=${unusedAllowlistEntries.length} dynamicRowCounts(total=${dynamicRows.length},probed=${probedDynamicRows.length},claiming=${claimingRows.length},authorized=${authorizedRows.length}) majorityUnreachable=${majorityUnreachable} rowsWithForbiddenExpectedLocalStatus=${rowsWithForbiddenExpectedLocalStatus.length} rowsMissingRealisticProbePath=${rowsMissingRealisticProbePath.length} rowsMissingProbeBody=${rowsMissingProbeBody.length} iterationOk=${iteration.ok} controlOk=${control.ok} liveRejectedAll=${liveRejectedAll} localSuccessCanaryOk=${localSuccessCanaryOk} hostileOriginNotRejected=${JSON.stringify(hostileOriginNotRejected)} localSuccessCanaryRejected=${JSON.stringify(localSuccessCanaryRejected)} reboots=${rebootLog.length}` });
+        { detail: ok ? undefined : `rows=${validRows.length} unique=${dedupKeys.size} inventoryRowsNotLive=${inventoryRowsNotLive.length} guardedMissing=${guardedRoutesMissingFromInventory.length} dynamicRowsMissingProbePathOrReason=${dynamicRowsMissingProbePathOrReason.length} dynamicRowsUnbound=${dynamicRowsUnbound.length} dynamicRowsDuplicateBinding=${dynamicRowsDuplicateBinding.length} unresolvableSitesUnacknowledged=${unresolvableSitesUnacknowledged.length} allowlistStatus=${allowlistStatus} duplicateAllowlistEntries=${duplicateAllowlistEntries.length} staleAllowlistEntries=${staleAllowlistEntries.length} unusedAllowlistEntries=${unusedAllowlistEntries.length} dynamicRowCounts(total=${dynamicRows.length},probed=${probedDynamicRows.length},claiming=${claimingRows.length},authorized=${authorizedRows.length}) majorityUnreachable=${majorityUnreachable} rowsWithForbiddenExpectedLocalStatus=${rowsWithForbiddenExpectedLocalStatus.length} rowsMissingRealisticProbePath=${rowsMissingRealisticProbePath.length} rowsMissingProbeBody=${rowsMissingProbeBody.length} rowsWithUnresolvedPlaceholder=${rowsWithUnresolvedPlaceholder.length} iterationOk=${iteration.ok} controlOk=${control.ok} liveRejectedAll=${liveRejectedAll} localSuccessCanaryOk=${localSuccessCanaryOk} hostileOriginNotRejected=${JSON.stringify(hostileOriginNotRejected)} localSuccessCanaryRejected=${JSON.stringify(localSuccessCanaryRejected)} reboots=${rebootLog.length}` });
       void baselineKeys;
     },
   );
@@ -1905,13 +1950,36 @@ async function main(): Promise<void> {
   const VALID_CONCRETE_METHODS = /^(GET|POST|PUT|PATCH|DELETE|OPTIONS)$/;
   const VALID_VALUE_COMPARISON_MODES = ['exact', 'unordered-array', 'composite', 'binary'];
   const isBodyBearingMethod = (m: string): boolean => m === 'POST' || m === 'PUT' || m === 'PATCH';
-  // Nonce placeholder substitution for probeBody, mirroring the existing
-  // '<nonceProjectId>' convention already used for cliArgs.
+  // Nonce placeholder substitution for probeBody/probePath, mirroring the
+  // existing '<nonceProjectId>' convention already used for cliArgs.
+  // Round-12 C0-7-PROBEPATH-SUBSTITUTION (1a): a string leaf is substring-
+  // replaced (every occurrence WITHIN the string), not just matched exactly
+  // -- a declared value like "https://cb.example/x?project=<nonceProjectId>"
+  // (an embedded URL token) previously stayed completely literal because
+  // only `value === '<nonceProjectId>'` ever matched.
   function substituteNoncePlaceholder(value: unknown, nonce: string): unknown {
-    if (value === '<nonceProjectId>') return nonce;
+    if (typeof value === 'string') return value.split('<nonceProjectId>').join(nonce);
     if (Array.isArray(value)) return value.map((v) => substituteNoncePlaceholder(v, nonce));
     if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value as object).map(([k, v]) => [k, substituteNoncePlaceholder(v, nonce)]));
     return value;
+  }
+  // Round-12 C0-7-PROBEPATH-SUBSTITUTION (1b): after substitution, ANY
+  // remaining `<...>` token (a placeholder this function does not know how
+  // to resolve, e.g. a declared-but-unsupported `<connectorId>`) is a
+  // structural failure -- named, not silently probed as a literal string.
+  function findRemainingPlaceholders(value: unknown): string[] {
+    const found: string[] = [];
+    (function walk(v: unknown): void {
+      if (typeof v === 'string') {
+        const matches = v.match(/<[^<>]+>/g);
+        if (matches) found.push(...matches);
+      } else if (Array.isArray(v)) {
+        v.forEach(walk);
+      } else if (v && typeof v === 'object') {
+        Object.values(v as object).forEach(walk);
+      }
+    })(value);
+    return found;
   }
   // A "present, non-empty" value: rejects undefined/null/'' /empty array/
   // empty object, but accepts legitimate falsy-but-real values like 0/false.
