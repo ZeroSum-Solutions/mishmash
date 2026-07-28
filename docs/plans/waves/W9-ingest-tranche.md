@@ -13,12 +13,24 @@
 `docs/plans/waves/DECISIONS.md`. The last entry landed on `main` at `ff47420b8` (round-1
 disposition, ruling 2) — confirmed directly by reading `origin/main`, not assumed.
 
-**Status: FIX ROUND 2 (final round under the 2-fix-round cap).** Round 1 returned REJECT with 9
-findings; round 2 returned REJECT again — "FIXED-WITH-NEW-DEFECT" on several, "NOT FIXED" on
-others, plus 4 new blocking defects this round's own fixes introduced. Every round-1 AND round-2
-finding is disposed in **AUTHOR-FLAGGED / DISPOSITIONS** at the end of this document, which is
-the authoritative change record; earlier prose in this document reflects the current, fixed
-state, not the history — the dispositions section carries the history.
+**Status: CEREMONY-AUTHORIZED FIX ROUND (post-stop-rule).** Round 1 returned REJECT (9 findings);
+round 2 returned REJECT again; round 2's own confirmation pass returned REJECT a third
+consecutive time, firing the program's stop rule and escalating to a founder-delegated
+ceremony. The ceremony's analysis confirmed round 2's attribution-authority work, the C9-10
+redesign, the floor corrections, and the stale-proof mechanics as FIXED, and ruled all three
+author-flagged residual-risk notes (in **Adversarial review**, below) acceptable-LOW and
+settled — **none of that changed in this round.** It then ruled six specific mechanical defects
+still blocking (exposure-classifier dead-code acceptance, fabricated/untested red transcripts,
+naive quoted-string test-title detection, reusable control citations plus omnibus C9-7 coverage,
+C9-6's gameable prose regex, and swallowed archive finalization) and authorized **exactly one**
+ceremony-bounded fix round, confined to this document and the verifier, implementing the
+ruling's exact fix semantics — "nothing else." Every round-1, round-2, AND ceremony finding is
+disposed in **AUTHOR-FLAGGED / DISPOSITIONS** at the end of this document, which is the
+authoritative change record; earlier prose in this document reflects the current, fixed state,
+not the history — the dispositions section carries the history. Per the ceremony's own failure
+path: this round is followed by exactly one fidelity-only confirmation; any verdict other than
+APPROVE goes directly to the founder, with no further fix round absent explicit founder
+authorization.
 
 This document is an **expansion**, not an implementation. Per the NM-41C gate
 (`W5-W11-gated.md` lines 8–24), it is written and frozen *before* any implementation work
@@ -140,24 +152,48 @@ same file (`registerBackupRoutes(...)`, line 365) but implemented in and owned b
 reviewer-owned floor.** Score = `exposure(0–3) + impact(0–3)`.
 
 - **Exposure** — the *weakest* caller class the route's own gate code accepts, derived from real
-  AST `CallExpression`/identifier nodes, **reachability-aware**: guard-signal detection is scoped
-  to the handler's own **top-level statements** (never nested inside an `if`/loop/nested-function,
-  so a decoy call inside dead code cannot count) and stops scanning at the first unconditional
-  top-level `return`/`throw` (anything after is genuinely unreachable JS):
+  AST `CallExpression`/identifier nodes, via a **straight-line dominance grammar** (ceremony round
+  3 — round 2's "reachability-aware, top-level, stops-at-first-return" scoping still let a
+  recursive descendant search find a guard call inside genuinely dead code; the classifier no
+  longer performs any recursive descent at all for positive-guard detection):
   - `0` — `requireLocalDaemonRequest` is a literal identifier among the route's own middleware
     arguments (a real Express middleware, always invoked — no reachability ambiguity there).
-  - `1` — a real, reachable top-level `CallExpression` to `authorizeToolRequest`.
-  - `2` — real, reachable top-level `CallExpression`s to both `bearerToken` and
-    `validateLibraryToken`, **AND** the handler does not also call `isLocalSameOrigin` anywhere.
-    That last clause is load-bearing: `POST /api/library/pair/revoke`/`rotate` use `bearerToken`+
-    `validateLibraryToken` as the caller's *only* accepted proof (self-service bearer, no
-    loopback alternative) — but `POST /api/library/ingest` calls the *same pair* of functions at
-    its own top level too, as one branch of a three-way decision that also accepts
-    `isLocalSameOrigin` (loopback) with **no token at all**. Without the `isLocalSameOrigin` veto,
-    the classifier would misclassify ingest as exposure `2` instead of `3` — caught and fixed
-    against the real handler before this document was submitted, not merely from a reviewer
-    finding.
-  - `3` — none of the above.
+  - `1` — the handler's own final callback is block-bodied, and its `body.statements` begin (after
+    at most one direct `applyExtensionCors(req, res)` prelude statement) with the EXACT sequence
+    `const grant = authorizeToolRequest(...)` immediately followed by a top-level `if (!grant)`
+    whose consequent unconditionally returns or throws. Positive detection inspects only these
+    direct siblings — never a call inside an `if`/loop/`switch`/`try`/nested block/callback/nested
+    function/class, and never a call whose result is discarded.
+  - `2` — the same straight-line prefix instead reads `const token = bearerToken(req)`, then
+    `const check = validateLibraryToken(..., token)`, then a top-level `if (!check.ok)` (or
+    `check.ok === false`) whose consequent unconditionally returns or throws, **AND** no reachable
+    call to `isLocalSameOrigin` exists anywhere in the handler. That veto is load-bearing:
+    `POST /api/library/pair/revoke`/`rotate` use `bearerToken`+`validateLibraryToken` as the
+    caller's *only* accepted proof (self-service bearer, no loopback alternative) — but
+    `POST /api/library/ingest` calls the *same pair* of functions too, as one branch of a
+    three-way decision that also accepts `isLocalSameOrigin` (loopback) with **no token at all**.
+    The veto walk is a bounded recursive reachability search (never entering nested
+    function/class bodies, stopping after an unconditional top-level return/throw) with real
+    dead-branch elimination: statically-false `if`/`while`/`for` conditions (literal `false`,
+    parenthesized-literal `false`, `!`-negation of a boolean literal, determinable boolean-literal
+    `&&`/`||`) are skipped, `do...while` always executes its body once, and any condition the
+    classifier cannot statically resolve keeps both branches reachable — never assumed dead.
+  - `3` — none of the above (including: the guard sequence exists but is inside a branch/loop/
+    callback, its result is ignored, it runs after a response operation, or it sits inside a
+    statically-dead branch).
+
+  **Nine verifier self-probes** (fixtures run through this exact `collectRouteRegistrations`/
+  `classifyExposure` pipeline, never a separate mock) prove the grammar against both real shapes
+  and every decoy class the ceremony named: the real `authorizeToolRequest` shape (expect `1`);
+  the real `bearerToken`/`validateLibraryToken` shape with an `applyExtensionCors` prelude (expect
+  `2`); a guard wrapped in `if (false) {...}` (expect `3`); a guard wrapped in `if (!true) {...}`
+  (expect `3`); a guard that only runs under a live, non-static condition (expect `3`, since it
+  does not unconditionally dominate); a guard whose result is called but never checked (expect
+  `3`); a guard placed after a response write (expect `3`); a reachable `isLocalSameOrigin` call
+  vetoing an otherwise-exposure-`2` bearer shape (expect `3`); and the same bearer shape with an
+  `isLocalSameOrigin` call inside a statically-dead branch, which must NOT veto (expect `2`). A
+  failed self-probe fails BOTH C9-1 and C9-8 outright — the classifier is not trusted for a route
+  verdict in a run where it cannot even classify its own known fixtures correctly.
 - **Impact — a FROZEN, reviewer-owned FLOOR per route, not implementer-declared.** Every one of
   the 23 frozen routes gets a literal floor in this document and in the verifier's
   `FROZEN_IMPACT_FLOORS` (the two match; C9-1 checks this). A row may claim `impact >= floor`
@@ -231,31 +267,59 @@ and, **for every route whose mechanically-derived `exposure === 3`**, exactly on
 - `control: { mechanism: string, testRef: string }` — a real, currently-passing test, bound by
   **exact `fullName` equality**, additionally required to relate to its own row by a
   **path-derived association term** (e.g. `ingest`, `pair`, `revoke`, `confirm`, `raw` — computed
-  mechanically from the route's own path segments, never a hand-authored per-row table), and
-  **unique**: no two rows may share the same primary `testRef`. Whether a cited test counts as
-  "new" (needing red evidence) is decided by whether its exact **test title** — not merely its
-  containing file — already existed in that file's content at `baseCommit`; a test appended to an
-  already-existing file no longer rides along on the file's own pre-existing citation-exemption. A
-  genuinely new test's `control`/`testRef` requires a companion **structured** red-transcript
+  mechanically from the route's own path segments, never a hand-authored per-row table). **Global
+  uniqueness (ceremony round 3):** one map from exact test `fullName` to route key spans **every**
+  row's primary `testRef` AND **every** row's `control.testRef` together — round 2 only deduped
+  primary refs, leaving a control free to reuse a citation another row already owns; that gap is
+  closed. A reference's associated-route-key set must have cardinality exactly one; reuse across
+  two route keys fails C9-5 for both. The same file as the cited test must **also** contain a
+  **genuine paired positive+negative control** (unchanged, settled round-2 mechanism, an
+  author-flagged residual — see **Adversarial review**): at least one other passing assertion in
+  that file whose name reads as a positive/accepted-path signal, and at least one whose name reads
+  as a rejection/negative-path signal — a raw "≥2 passing assertions" count is not this.
+
+  Whether a cited test counts as "new" (needing red evidence) is decided by whether its exact
+  **test title** already existed in that file's content at `baseCommit` — and, per the ceremony,
+  "existed" now means a real **TypeScript-AST** parse of the file at `baseCommit`, matching only
+  the static first argument (string literal or no-substitution template) of a syntactic `it`/
+  `test` declaration or a modifier chain rooted at one (including `it.each(...)(...)`'s outer
+  title call), compared against the reporter's own leaf `title` field — never a "this quoted
+  string appears somewhere in the file" scan, which let an ordinary route-path string falsely
+  grant the pre-existing-test exemption (the round-2/round-3 boundary defect). A title that is
+  dynamic or that the reporter doesn't expose fails closed as new, requiring replay.
+
+  A genuinely new test's `control`/`testRef` requires a companion **structured** red-transcript
   artifact at `docs/security/library-ingest-red/<slug(testRef)>.txt`:
   ```
   PARENT_SHA: <the commit the test failed on, before this control landed>
-  COMMAND: <the exact vitest invocation used to capture this transcript>
+  COMMAND: <the exact vitest invocation used to capture this transcript (descriptive only)>
   TEST: <the exact testRef this transcript proves red>
+  CONTROL_TEST: <a second fullName in the same file the replay must show passing>
   ---
-  <the captured failing output>
+  <the captured failing output (descriptive only)>
   ```
-  `PARENT_SHA` must resolve to a real commit and be an ancestor of `HEAD` (not merely a
-  40-hex-looking string); `TEST` must exactly equal the `testRef` it's attached to; the output
-  body must be non-trivial and carry a `RED`/`FAIL` marker (R1: both transcripts recorded — the
-  green half is already captured by the suite's own JSON report). Separately, the same file must
-  contain a **genuine paired positive+negative control**: at least one other passing assertion in
-  that file whose name reads as a positive/accepted-path signal, and at least one whose name reads
-  as a rejection/negative-path signal — a raw "≥2 passing assertions" count is not this; R4 is
-  about proving the SAME mechanism accepts the right caller and rejects the wrong one, not about
-  test-file population size. Coverage that already existed at `baseCommit` (SSRF, token-binding,
-  etc.) is exempt from the red-artifact/pairing requirement per this section's "may cite directly"
-  allowance.
+  **The checked-in `COMMAND` and output body are descriptive only (ceremony round 3) — never
+  executed, never trusted as proof.** Real proof comes from the verifier's own replay: it first
+  independently determines the test's true **introduction commit** — the first commit in
+  `baseCommit..HEAD` whose AST (via the same `it`/`test` parse above) contains the exact new
+  declaration — and requires `PARENT_SHA` to equal that commit's first parent, `PARENT_SHA` to be
+  a full 40-hex commit satisfying `baseCommit <= PARENT_SHA < HEAD`, and `TEST` to exactly equal
+  the `testRef`. It then creates an isolated **detached temporary `git worktree`** at
+  `PARENT_SHA`, runs `mise trust` (a fresh worktree's `mise.toml` is untrusted by default and
+  `pnpm`/`vitest` are mise-shimmed) followed by a frozen `pnpm install --offline
+  --frozen-lockfile` (the shared pnpm content-addressable store makes this genuinely offline —
+  no fetch), overlays **only the HEAD version of the containing test file** on top, and runs that
+  file with verifier-constructed argv through Vitest's JSON reporter. The replay passes only when
+  the child exits nonzero, the exact cited `fullName` appears with status `failed`, and the
+  header's `CONTROL_TEST` appears with status `passed` — a missing test, install failure, timeout,
+  parse failure, or unrelated process failure is an evidence failure, not a pass. The replay's own
+  constructed argv, resolved commits, JSON assertion statuses, stdout/stderr hash, and exit code
+  are captured in **C9-5's own artifact** — the implementer-authored transcript text can no longer
+  substitute for that evidence. The current HEAD suite must still independently show the cited
+  test passing. Coverage that already existed at `baseCommit` (SSRF, token-binding, etc.) is exempt
+  from the red-artifact/replay requirement per this section's "may cite directly" allowance, but
+  never from the paired positive/negative-control requirement above, which applies to every
+  `control.testRef` regardless of new/old status.
 - `acceptedRisk: { decisionRef: string }` — **not implementer-authored JSON.** `decisionRef` must
   **exactly equal** (never substring-match) a **unique** `### W9-ACCEPT-<slug>` heading in
   `docs/plans/waves/DECISIONS.md` **as read at `baseCommit`** (`git show`, never the working
@@ -285,18 +349,40 @@ consciously-accepted, still-open item).
 
 `docs/security/daemon-threat-model.md` is extended with a "Wave 9" section, in the same style as
 its existing `[C0-N]` bullets: every claim tagged `[C9-N]`, quoting a test `fullName` by **exact**
-match, and — **the specific route's own `{method} {path}` string must appear inside the SAME
-bullet line that carries a valid citation**, for every P0-tier route (criterion C9-7) — a route
-name appearing anywhere else in the section's surrounding prose does not count as coverage.
+match. **Per-P0-route bullet association (ceremony round 3, tightened from round 2's "route key
+inside the same bullet" rule):** a qualifying bullet line must name **exactly one** P0 route key,
+not several — round 2 let one bullet cite several P0 routes at once, or reuse an unrelated
+passing citation, and still count as coverage for each. For a controlled P0 row that line must
+cite the row's **exact** `control.testRef`; for an accepted-risk P0 row it must cite the row's
+**exact** primary `testRef` — not merely any passing test whose name happens to contain the
+route's path segment. The cited reference must already be part of the S9-3 global citation map
+(above) associated with **only** that same route. One bullet or citation satisfies at most one P0
+row; every P0-tier route needs its own (criterion C9-7).
 
 **S9-4 — Resolve the size/rate-limit gap explicitly, for every P0 row.** C9-6 applies to **every
 row whose mechanically-verified `riskScore.tier === 'P0'`** (today: `pair/confirm`, `ingest`,
-`GET /assets` — see S9-2). Its `sizeRateLimit` field must resolve with either (a) a `control`
-whose `mechanism` text is **semantically checked**, not just keyword-matched: it must match an
-enforcement-shaped pattern (rate/volume/throttle language paired with limit/cap/enforce/reject/429
-language) **and must not match a negation pattern** — "no rate limit exists" contains both `rate`
-and `limit` but is a negation, and is explicitly rejected, not merely a keyword hit — or (b) a
-`DECISIONS.md`-verified `acceptedRisk`. An in-process control (a bounded per-token-hash,
+`GET /assets` — see S9-2). Its `sizeRateLimit` field must resolve with either (a) a `control` or
+(b) a `DECISIONS.md`-verified `acceptedRisk`.
+
+**(a), ceremony round 3 — anchored declaration grammar, replacing round 2's prose-pattern
+regex** (which a phrase like "no rate limit exists" could still pass, since it contains both
+`rate` and `limit`; R5 independently forbids documentation from closing a live behavioral gap).
+`control.mechanism` must match, in full, the anchored grammar:
+
+```
+ENFORCED kind=<request-rate|byte-volume|pair-attempt> scope=<token-hash|origin|pairing-attempt>
+  limit=<positive-integer> windowMs=<positive-integer|none> overflow=<reject-429|reject-413>
+```
+
+`request-rate` and `pair-attempt` require a positive `windowMs`; `byte-volume` requires
+`windowMs=none`. Extra text, zero/negative limits, unknown enum values, and every future/planned/
+documented-only/unenforced phrasing fail — none of them matches the complete grammar. **The
+declaration remains descriptive evidence only** — mechanism text alone can never close C9-6. It
+passes only when, in addition, the row's `control.testRef` (a) passes the full C9-5 bar
+(exact-pass, global-uniqueness, route-association, AST-derived historical-title check, and — for
+a genuinely new control — the S9-3 replay above) and (b) the same file's real-transport coverage
+(the current HEAD suite's own passing assertions) shows **both** an under-limit-accepted **and**
+an over-limit-rejected outcome for that route. An in-process control (a bounded per-token-hash,
 per-origin, or per-pairing-attempt counter, entirely inside `routes/library.ts`) is achievable
 inside this tranche's lease for all three current P0 rows; a `library-tokens.ts`-level or
 `server.ts`-level control is not (ruling 1).
@@ -399,14 +485,14 @@ All criteria inherit `VERIFICATION-CONTRACT.md` §3. Verified by `scripts/waves/
 
 | ID | Criterion | Verification |
 |---|---|---|
-| C9-1 | Route snapshot frozen **at baseCommit**, drift-checked, duplicate-checked | `git show <baseCommit>:...library.ts` AST-scanned (scoped to `registerLibraryRoutes`), self-consistent with `FROZEN_IMPACT_FLOORS`' key set, compared to a real daemon boot's live `routeInventory`; any duplicate `{method,path}` at either point is a hard fail |
+| C9-1 | Route snapshot frozen **at baseCommit**, drift-checked, duplicate-checked, classifier self-verified | `git show <baseCommit>:...library.ts` AST-scanned (scoped to `registerLibraryRoutes`), self-consistent with `FROZEN_IMPACT_FLOORS`' key set, compared to a real daemon boot's live `routeInventory`; any duplicate `{method,path}` at either point is a hard fail; **gated on all 9 exposure-classifier self-probes passing** |
 | C9-2 | Existing ingest-security suite is green | Real vitest JSON-reporter run of **glob-discovered** `apps/daemon/tests/library-*.test.ts` files; zero failed, zero pending/skipped, zero `skip`/`only`/`todo` markers (spaced and bracket-alias forms included) |
 | C9-3 | Attribution matrix exists and covers exactly the frozen route set | `docs/security/library-ingest-attribution.json` parses as JSON; exactly one row per frozen `{method,path}`, no orphans, no gaps, no duplicates |
 | C9-4 | Every row is fully, structurally attributed | Every field clears a placeholder floor (length + denylist + anti-repetition, not mere non-emptiness); `authn` must name its row's mechanically-derived exposure class; `acceptedRisk.decisionRef` resolves to a unique, fully-structured, route-bound, non-self-accepted `### W9-ACCEPT-*` entry in `DECISIONS.md@baseCommit`; evidence reports attributed/unattributed/known-vulnerable counts |
-| C9-5 | Every `testRef` names a real, currently-passing, route-associated, unique test | Exact `fullName` equality; a path-derived association term must appear in the citation; no two rows share a primary `testRef`; "new" is decided by test-TITLE existence at baseCommit (not file existence); new tests require a structured red transcript (`PARENT_SHA` resolves + is an ancestor of `HEAD`, `TEST` matches exactly) plus a genuine paired positive+negative control in-file |
-| C9-6 | Every P0-tier row's size/rate-limit dimension is explicitly, semantically resolved | For every row with `riskScore.tier === 'P0'` (today: `pair/confirm`, `ingest`, `GET /assets`): a `control` whose `mechanism` matches an enforcement pattern and NOT a negation pattern, with a `testRef` passing C9-5's full bar, or a verified `acceptedRisk` |
-| C9-7 | Threat-model doc extended, mechanically cited, P0-complete | `docs/security/daemon-threat-model.md` carries a "Wave 9" section bounded to the next `## ` heading; every `[C9-N]` bullet's cited test is an exact match; every P0-tier route's own key appears inside the SAME cited-and-valid bullet line |
-| C9-8 | Full risk-score formula enforced per row | AST-derived `exposure` (scoped, comment-blind, duplicate-checked, reachability-aware) matches exactly; `impact >= FROZEN_IMPACT_FLOORS[route]`; `score === exposure+impact` exactly; `tier === tierFor(score)` exactly |
+| C9-5 | Every `testRef`/`control.testRef` names a real, currently-passing, globally-route-unique test; new controls carry independently-replayed red evidence | Exact `fullName` equality; a path-derived association term must appear; **one global map spans every row's `testRef` AND `control.testRef`** — reuse across two routes fails; "new" decided by an AST-derived test-title match at `baseCommit`; a new control's citation requires an isolated detached-worktree replay at the AST-verified introduction-commit parent (frozen offline install, HEAD-file overlay, Vitest JSON reporter) proving the exact test failed and a named `CONTROL_TEST` passed; the checked-in transcript's `COMMAND`/output are descriptive only; every `control.testRef` (new or pre-existing) additionally requires a genuine paired positive+negative control in-file |
+| C9-6 | Every P0-tier row's size/rate-limit dimension is explicitly, mechanically resolved | For every row with `riskScore.tier === 'P0'` (today: `pair/confirm`, `ingest`, `GET /assets`): `control.mechanism` matches the anchored `ENFORCED kind=... scope=... limit=... windowMs=... overflow=...` grammar exactly, `control.testRef` passes C9-5's full bar (incl. replay for a new control), AND the same file's real-transport coverage shows both an under-limit-accepted and an over-limit-rejected passing assertion — or a verified `acceptedRisk` |
+| C9-7 | Threat-model doc extended, mechanically cited, P0-complete | `docs/security/daemon-threat-model.md` carries a "Wave 9" section bounded to the next `## ` heading; every `[C9-N]` bullet's cited test is an exact match; **each P0-tier route requires its own bullet naming exactly that one P0 route key** and citing exactly that row's expected reference (`control.testRef` if controlled, else primary `testRef`), already globally associated with only that route — a bullet naming several P0 routes, or reusing an unrelated citation, no longer counts |
+| C9-8 | Full risk-score formula enforced per row | AST-derived `exposure` (straight-line dominance grammar, self-probe-verified, comment-blind, duplicate-checked) matches exactly; `impact >= FROZEN_IMPACT_FLOORS[route]`; `score === exposure+impact` exactly; `tier === tierFor(score)` exactly; **gated on all 9 exposure-classifier self-probes passing** |
 | C9-9 | Gates | `pnpm guard` and `pnpm typecheck` exit 0 on the current tree |
 | C9-10 | Adversarial review of the **implementation** is on record, non-spoofable | `docs/security/library-ingest-implementation-review.json`: `reviewedCommit` resolves and is a STRICT ancestor of `HEAD`; the owned-path diff between `reviewedCommit` and `HEAD` is empty (review covers the final state); `reviewer` distinct from every author in `baseCommit..reviewedCommit`; `verdict === "APPROVE"` |
 
@@ -417,16 +503,37 @@ absence is now also `manifest.gateIntegrityPinned`, a top-level field), **LEASE*
 --name-only <baseCommit>...HEAD` ⊆ `leases.json@baseCommit`'s `W9-ingest.allow`, read via `git
 show`, never the working tree), **HEAD-DRIFT** (HEAD must not move mid-run).
 
-## Verified baseline (this run, pre-implementation, post round-2 fix)
+## Verified baseline (this run, pre-implementation, post ceremony round-3 fix)
 
 - Glob-discovered `library-*.test.ts` suite: **45/45 passing** across 9 files.
 - Route count: confirmed **23**, agreeing across the baseCommit AST scan and real daemon
   introspection.
-- The AST classifier's own exposure histogram (printed as informational evidence on every C9-1
-  run, even pre-implementation) was checked directly against this table's "Exposure (today)"
-  column before submission: `POST /api/library/ingest => 3` (not `2` — the misclassification
-  found and fixed during this round, verified with the bug present AND after the fix, not just
-  asserted fixed).
+- **All 9 exposure-classifier self-probes pass** — verified directly by running the verifier,
+  reading its `C9-1.txt` artifact, and confirming `self-probes: 9/9 pass`. The baseCommit
+  exposure histogram printed alongside it matches this document's "Exposure (today)" column
+  exactly, entry for entry, including `POST /api/library/ingest => exposure 3` (the veto working)
+  and both `pair/revoke`/`pair/rotate => exposure 2` (the veto correctly NOT firing on routes that
+  never call `isLocalSameOrigin`).
+- The item-3 AST title parser (`extractStaticTestTitlesFromSource`) was spot-checked outside the
+  verifier against all 9 real `library-*.test.ts` files: every extracted title matches the
+  Vitest JSON reporter's own `title` field exactly (cross-checked directly against a captured
+  `suite-run.attempt-1.json`); a decoy source with only route-path string literals and a
+  commented-out `it(...)` call yields zero titles; `it.concurrent`, `test.fails`, `it.each`'s
+  outer title call, and a nested `it` inside a `describe.skip` block all extract correctly, while
+  the `describe` title itself does not.
+- The item-5 `ENFORCED` grammar parser was checked against 11 cases (3 valid, 8 invalid,
+  including "no rate limit exists", a future-tense sentence, `windowMs=none` on `request-rate`, a
+  positive `windowMs` on `byte-volume`, a zero limit, a negative limit, trailing text, and wrong
+  case) — every case resolved as expected.
+- `archiveRunArtifacts`' construct-then-reread-verify path was exercised live: `archiveOk: true`
+  in both the canonical and the run-archived manifest, confirmed by reading the manifest back off
+  disk after the run, not merely by trusting the process exit code.
+- The full git-worktree replay pipeline (`git worktree add --detach` → `mise trust` → `pnpm
+  install --offline --frozen-lockfile` → HEAD-file overlay → Vitest JSON reporter run) was
+  validated live against a real parent commit and a real existing test file before this round's
+  code was written; it has not yet been exercised THROUGH `checkTestRef` end-to-end in this run,
+  because no attribution matrix exists yet pre-implementation (C9-5 correctly reports "no matrix
+  to check" rather than skipping silently) — see **Adversarial review** for the resulting residual.
 - `docs/security/library-ingest-attribution.json`,
   `docs/security/library-ingest-implementation-review.json`: do not exist yet (C9-3 through C9-8
   and C9-10 fail honestly).
@@ -437,9 +544,12 @@ show`, never the working tree), **HEAD-DRIFT** (HEAD must not move mid-run).
 
 ## Adversarial review
 
-GPT-5.6 Sol. Rounds 1 and 2's findings and rulings are fully disposed below. This is the final
-fix round under the 2-fix-round cap; a further REJECT fires the program's stop rule. Residual
-uncertainty flagged honestly rather than hidden, since a reviewer would find it either way:
+GPT-5.6 Sol. Rounds 1 and 2's findings and rulings, and the ceremony's six ruled mechanical
+defects, are fully disposed below. Per the ceremony's failure path, this round is followed by
+exactly one fidelity-only confirmation; any verdict other than APPROVE goes directly to the
+founder. **The three residuals below are the SAME three the ceremony's own r3 confirmation ruled
+acceptable-LOW and settled — unchanged, word-for-word, in this round, per the coordinator's
+explicit instruction that they must not change:**
 
 - The paired positive/negative-control check (S9-3) is a **name-pattern proxy**, not true
   semantic verification of test intent — it cannot detect a file with two passing tests that
@@ -455,6 +565,20 @@ uncertainty flagged honestly rather than hidden, since a reviewer would find it 
   was verified to produce a non-empty term set for all 23 routes (see sanity check in this
   round's work), but has not been exercised against a REAL populated matrix (none exists
   pre-implementation) to confirm it doesn't over-reject a legitimately-named test.
+
+**One new residual, honestly flagged from this round's own work (not a reopening of any settled
+item above):**
+
+- The item-2 replay mechanism (isolated detached worktree, `mise trust`, frozen offline `pnpm
+  install`, HEAD-file overlay, Vitest JSON run) was validated directly against a real parent
+  commit and a real existing test file before this round's code was written, and its constituent
+  functions (the AST title parser, the `ENFORCED` grammar parser) were separately spot-checked
+  against real files and a deliberate valid/invalid battery — but the full path has not yet run
+  end-to-end THROUGH `checkTestRef` inside a verifier run, because no attribution matrix exists
+  yet pre-implementation (there is no `control.testRef` for it to evaluate). The first real
+  exercise of this path happens when an implementation branch's matrix cites a genuinely new
+  test — a legitimate, structural consequence of this document being authored before any
+  implementation exists, not a gap in the mechanism itself.
 
 ---
 
@@ -502,26 +626,34 @@ by round 2 ("faithfully encoded").
 **Ruling 5 (tighten risk ranking)** — round-1 encoding was incomplete (one floor wrong, AST
 classifier decoy-gameable); fully closed in round 2 (below).
 
-### Round 2 (7 dispositions + rulings + 4 new defects) — current state
+### Round 2 (7 dispositions + rulings + 4 new defects) — superseded by round 3 (ceremony) where noted
 
-**Finding 1 (FIXED-WITH-NEW-DEFECT → RESOLVED).** `GET /api/library/assets`'s floor corrected
-from `0` to `2` (S9-2 — it calls `runReconcile(false)`, a real mutation). Exposure detection is
-now reachability-aware, scoped to top-level statements, comment-blind, and stops at the first
-unconditional return (S9-2). `GATE-INTEGRITY`'s unpinned state is now a top-level manifest field
-(`gateIntegrityPinned`).
+**Finding 1 (FIXED-WITH-NEW-DEFECT → RESOLVED in round 2; exposure-classifier mechanism further
+replaced in round 3 — see below).** `GET /api/library/assets`'s floor corrected from `0` to `2`
+(S9-2 — it calls `runReconcile(false)`, a real mutation; this floor correction is unchanged and
+settled). Round 2's own fix made exposure detection reachability-aware, scoped to top-level
+statements, comment-blind, and stopping at the first unconditional return — round 3's ceremony
+found this still let a recursive descendant search find a guard call inside dead code and
+replaced the detection mechanism with the straight-line dominance grammar described in S9-2 and
+"Round 3 (ceremony)" below. `GATE-INTEGRITY`'s unpinned state is now a top-level manifest field
+(`gateIntegrityPinned`) — unchanged, settled.
 
 **Finding 2 (NOT FIXED → RESOLVED).** Every attribution field now clears a placeholder floor
 (length + denylist + anti-repetition); `authn` is checked against its row's mechanically-derived
 exposure class; `acceptedRisk.decisionRef` requires an exact match to a unique, fully-structured,
 route-bound, non-self-accepted `DECISIONS.md@baseCommit` entry (S9-3).
 
-**Finding 3 (NOT FIXED → RESOLVED).** Primary `testRef` is now unique per row; citations require
-a path-derived route-association term; "new" is decided by test-title existence at baseCommit,
-not file existence; the red transcript is now a structured `PARENT_SHA`/`COMMAND`/`TEST` header
-with real ancestry verification; the pairing check requires an actual positive+negative signal
-match, not a raw count; C9-6's mechanism text is checked against an enforcement pattern AND a
-negation-veto; C9-7 requires the P0 route's own key inside the same cited-and-valid bullet line
-(all: S9-3/S9-4/S9-5).
+**Finding 3 (NOT FIXED → RESOLVED in round 2; several of its own mechanisms further replaced in
+round 3 — see below).** Round 2 made primary `testRef` unique per row and required a path-derived
+route-association term (unchanged, settled). Round 2's own "new" decision (test-title existence at
+baseCommit via quoted-string matching), red-transcript format (`PARENT_SHA`/`COMMAND`/`TEST`
+header trusted as authored), citation uniqueness (primary refs only), and C9-6 mechanism check
+(enforcement-pattern-plus-negation-veto regex) were each found still-gameable by the ceremony and
+replaced — see "Round 3 (ceremony)" items 2/3/4/5 below for the current mechanisms. The pairing
+check (actual positive+negative signal match on `control.testRef`, not a raw count) is unchanged
+and settled — it is one of the three r3 accepted-LOW residuals in **Adversarial review**. C9-7's
+P0-bullet requirement is tightened further in round 3 (item 4) from "the route's key somewhere in
+the cited bullet" to "exactly one P0 key, citing exactly that row's expected reference."
 
 **Finding 4 (FIXED-WITH-NEW-DEFECT → RESOLVED).** The base mechanism (baseCommit AST derivation)
 was already correct per Sol; the remaining verifier-integrity gap (floor table alterable under an
@@ -541,11 +673,16 @@ strict ancestor of `HEAD`) instead of `commit === HEAD` — see S9-6's design-ra
 for the complete mechanism and why it makes a clean pass feasible while closing the spoofing
 vectors.
 
-**Finding 7/9 (FIXED-WITH-NEW-DEFECT → RESOLVED).** Archived per-run manifests now rewrite their
+**Finding 7/9 (FIXED-WITH-NEW-DEFECT → RESOLVED in round 2; round 2's own fix itself found
+still-swallowing and replaced in round 3 — see below).** Archived per-run manifests rewrite their
 own `criteria[].artifact` paths to run-dir-local copies before writing (fully self-contained,
-independently re-verifiable without touching the canonical, overwrite-prone `proof/` paths).
-Archive failure is no longer swallowed — `archiveOk` is a top-level manifest field and now a hard
-exit-code contributor.
+independently re-verifiable without touching the canonical, overwrite-prone `proof/` paths) —
+unchanged, settled. `archiveOk` as a top-level manifest field and a hard exit-code
+contributor — unchanged, settled. What round 2 got wrong: it computed the true archival outcome
+AFTER writing the archived manifest, then patched `archiveOk` in with a "post-success best-effort
+correction" wrapped in a silent catch — the ceremony found that correction itself swallowable.
+Round 3 removes it; see "Round 3 (ceremony)" item 6 below for the construct-then-reread-verify
+replacement.
 
 **External-receipt ruling.** Encoded as instructed: `DECISIONS.md`-at-baseCommit is the sole,
 sufficient mechanism; no second external-receipt path was built.
@@ -565,3 +702,83 @@ by vetoing the self-service-bearer classification whenever `isLocalSameOrigin` i
 anywhere in the handler (S9-2) — verified directly against `routes/library.ts` (`isLocalSameOrigin`
 appears only in ingest's handler, never in revoke/rotate) and confirmed via the classifier's own
 printed histogram both before and after the fix, not asserted from reading the diff alone.
+
+### Round 3 (ceremony — 6 ruled mechanical defects, confined to this document and the verifier)
+
+Three consecutive non-APPROVE verdicts (round 1, round 2, and round 2's own confirmation pass)
+fired the program's stop rule. The founder-delegated escalation ceremony's analysis confirmed
+round 2's attribution-authority work, the C9-10 redesign, the floor corrections, and the
+stale-proof mechanics FIXED, and ruled the three residuals in **Adversarial review** above
+acceptable-LOW and settled — **none of that was touched in this round.** It then ruled six
+specific mechanical defects still blocking and authorized exactly one ceremony-bounded fix round,
+"implement EXACTLY, nothing else," confined to this document and `scripts/waves/verify-w9-ingest.ts`.
+
+**Item 1 (exposure classifier — dead-code acceptance, blocking → RESOLVED).** The classifier's
+positive-guard detection no longer performs ANY recursive descendant search. It now recognizes
+only two exact statement sequences as direct children of the handler's own `body.statements`
+(optionally preceded by exactly one `applyExtensionCors(req, res)` prelude), each requiring its
+terminating `if` to unconditionally return or throw — a call inside a branch/loop/callback/nested
+function/class, or one whose result is ignored, or one placed after a response operation, no
+longer counts, regardless of whether the surrounding branch is live or dead. The `isLocalSameOrigin`
+veto keeps a bounded recursive walk but now performs real dead-branch elimination (statically-false
+`if`/`while`/`for`, `do...while`'s always-once semantics, unknown conditions kept reachable). Nine
+self-probe fixtures — covering both real positive shapes, both dead-branch decoy classes, a
+branch-only guard, an ignored-result guard, a post-response guard, and both `isLocalSameOrigin`
+veto directions — run through the exact production `collectRouteRegistrations`/`classifyExposure`
+pipeline and gate C9-1/C9-8 outright on any failure. See S9-2, and "Verified baseline" above for
+this run's 9/9 self-probe pass confirmation with the exposure histogram cross-checked against the
+frozen table.
+
+**Item 2 (red evidence — fabricated transcripts, blocking → RESOLVED).** Checked-in `COMMAND` and
+output text are now descriptive only, never executed or trusted. `PARENT_SHA` must equal the
+independently-computed introduction commit's first parent (the first commit in `baseCommit..HEAD`
+whose AST contains the exact new declaration, via item 3's parser), and real proof now comes from
+an isolated detached `git worktree` at `PARENT_SHA`, a frozen offline `pnpm install` (after `mise
+trust`, discovered necessary via a live smoke test — a fresh worktree's `mise.toml` starts
+untrusted), a HEAD-file overlay, and a Vitest JSON-reporter run requiring a nonzero exit, the
+cited test `failed`, and a new required `CONTROL_TEST` field's test `passed`. The replay's own
+argv/commits/statuses/output-hash/exit-code are captured in C9-5's own artifact. See S9-3.
+
+**Item 3 (historical test-declaration parsing — naive quoted-string match, blocking → RESOLVED).**
+Whether a title "existed at baseCommit" is now decided by a real TypeScript-AST parse matching
+only the static first argument of a syntactic `it`/`test` declaration (including modifier chains
+and `.each`'s outer title call), string-literal/no-substitution-template only, compared against
+the reporter's exact leaf `title` field — never a substring scan across the whole file, which let
+an ordinary route-path string falsely grant the pre-existing-test exemption. Dynamic/unavailable
+titles fail closed as new. See S9-3, and "Verified baseline" for the direct spot-check against all
+9 real test files plus a decoy and a modifier-chain fixture.
+
+**Item 4 (citation uniqueness / C9-7 association, blocking → RESOLVED).** One global map from
+exact test `fullName` to route key now spans every row's `testRef` AND every row's
+`control.testRef` together (round 2 only deduped primary refs). C9-7 now requires each P0 route's
+own bullet to name exactly one P0 route key and cite exactly that row's expected reference
+(`control.testRef` if controlled, else primary `testRef`), already globally associated with only
+that route — a bullet naming several P0 routes, or reusing an unrelated passing citation, no
+longer counts. See S9-3's `control` bullet and the threat-model paragraph.
+
+**Item 5 (C9-6 enforcement grammar — gameable prose regex, blocking → RESOLVED).** The keyword
+regex (which let "no rate limit exists" pass because it contains both `rate` and `limit`) is
+replaced by the anchored `ENFORCED kind=... scope=... limit=... windowMs=... overflow=...`
+declaration grammar, with `request-rate`/`pair-attempt` requiring a positive `windowMs` and
+`byte-volume` requiring `windowMs=none`. The declaration remains descriptive; C9-6 passes only
+when the route-unique `control.testRef` passes the full C9-5 bar (including replay for a new
+control) AND the same file's real-transport coverage shows both an under-limit-accepted and an
+over-limit-rejected passing assertion. See S9-4, and "Verified baseline" for the 11-case grammar
+spot-check.
+
+**Item 6 (archive finalization — swallowed failure, blocking → RESOLVED).** The round-2
+post-success "best-effort correction" (which could itself silently swallow a failed rewrite) is
+removed entirely. `archiveRunArtifacts` now constructs the archived manifest with `archiveOk:true`
+BEFORE writing, then rereads and independently verifies: the file parses, `archiveOk === true`,
+its recorded hash matches, and every archived artifact exists with a matching hash — only then may
+it return `ok:true`. Any failure at any step returns `ok:false`, and no catch block may preserve or
+restore `true`. See "Definition of green" predicate 3 and "Verified baseline" for this run's live
+`archiveOk: true` confirmation, reread off disk.
+
+**Confirmation-review scope, restated verbatim from the ruling:** "The confirmation review is
+limited strictly to whether `docs/plans/waves/W9-ingest-tranche.md` and
+`scripts/waves/verify-w9-ingest.ts` implement items 1–6 exactly as ruled here; it must not reopen
+previously fixed findings or the three r3 accepted-LOW residuals, and any regression within the
+six ruled mechanisms counts as non-fidelity." Per the ruling's failure path: this round is
+followed by exactly one fidelity-only confirmation; any verdict other than APPROVE goes directly
+to the founder, with no further fix round absent explicit founder authorization.
