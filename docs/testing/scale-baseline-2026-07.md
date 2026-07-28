@@ -69,12 +69,12 @@ one long-lived daemon, each running its own warmup-then-5-reps loop.
 | project-list | 21 ms | 23 ms | `GET /api/projects` |
 | designs-tab-fan-out | 1 ms | 3 ms | `GET /api/projects/:id/files` against a real project id from the corpus. |
 | memory-high-water | 130848 KB | 130848 KB | Peak RSS of the daemon process, sampled via `ps -o rss=` across the same warmup+5-rep window as the other scenarios (flat across reps — one long-lived process, no GC pressure induced by this smoke). |
-| search | 3 ms | 5 ms | Known-match search probe against the frozen corpus project (`searchProbe` in the JSON): `GET /api/projects/<searchProbe.projectId>/search?q=<searchProbe.needle>`, asserting the response names `searchProbe.expectFile`, plus a negative-control nonce query asserting zero matches. See "Known issue" below for the full history. |
+| search | 3 ms | 4 ms | Content-proof search probe against the frozen corpus project (`searchProbe` in the JSON): `GET /api/projects/<searchProbe.projectId>/search?q=<searchProbe.needle>`, asserting the response names `searchProbe.expectFile` + `searchProbe.expectLine` with a snippet containing `searchProbe.expectSnippetContains`, plus an unmarked negative-control nonce query asserting zero matches. See "Known issue" below for the full history. |
 
 ## Known issue: search scenario (resolved)
 
-**Fully resolved by the 2026-07-28 r2c verifier amendment
-(`scripts/waves/verify-w0.ts` commit `dcf483dab`).** History, in order:
+**Fully resolved by the 2026-07-28 r2d verifier amendment
+(`scripts/waves/verify-w0.ts` commit `41c9dbf1a`).** History, in order:
 
 1. **Original**: the scenario-selection logic picked the **first** route in
    the daemon's route-registration order whose path matched `/search/i`,
@@ -102,37 +102,64 @@ one long-lived daemon, each running its own warmup-then-5-reps loop.
    intentionally matches nothing, so the probe's only assertion was "returns
    2xx" — an always-empty-`200` stub handler would pass identically to a
    real search, so the scenario never actually proved search worked.
-4. **r2c amendment** (commit `dcf483dab`, current): the committed baseline now
-   declares a frozen `searchProbe: { projectId, needle, expectFile }` (top
-   level of `scale-baseline-2026-07.json`). The scenario asserts a KNOWN
-   MATCH — the positive probe (`q=<needle>`) must return `>=1` match whose
+4. **r2c amendment** (commit `dcf483dab`): the committed baseline declared a
+   frozen `searchProbe: { projectId, needle, expectFile }` (top level of
+   `scale-baseline-2026-07.json`). The scenario asserted a KNOWN MATCH — the
+   positive probe (`q=<needle>`) must return `>=1` match whose
    `file === expectFile` on every timed repetition — **and** a negative
-   control (a random nonce query must return `2xx` with zero matches),
-   which is exactly what would catch the r2b-era always-empty stub.
+   control (a random nonce query must return `2xx` with zero matches). The
+   chosen probe used needle `doctype` against `steady-landing.html`,
+   matching `<!doctype html>` at line 2 (samples `[5, 3, 4, 2, 2]`, p50 3ms /
+   p95 5ms). **Sol rejected this too**: `doctype`/`<!doctype html>` is
+   universal HTML boilerplate — every HTML document starts with it, so a
+   list-only stub could special-case the literal query string `doctype` and
+   fabricate a plausible-looking match (`file`, a guessed line 1 or 2, a
+   snippet containing `<!doctype html>`) without ever reading the file. The
+   probe proved the ROUTE was reachable, not that the SEARCH actually read
+   file content.
+5. **r2d amendment** (commit `41c9dbf1a`, current): `searchProbe` gains two
+   frozen fields, `expectLine` (integer) and `expectSnippetContains` (a slice
+   of the real matched line that strictly extends the needle — load-validated
+   to include the needle case-insensitively and not equal it). The positive
+   match must now carry `file === expectFile`, `line === expectLine`, AND
+   `snippet` containing `expectSnippetContains` — a value the request body
+   never carries, so only an implementation that actually reads and returns
+   the matched line's real content can produce it. The negative nonce is now
+   unmarked (`crypto.randomBytes(9).toString('hex')`, no recognizable
+   prefix), closing the "stub special-cases a `w0-`/`w0-neg-`-prefixed nonce"
+   gap too.
 
 **Chosen probe target**, read from `apps/daemon/src/projects.ts`'s
 `searchProjectFiles` (query is regex-escaped then matched case-insensitively
 per line, restricted to textual MIME files; `match.file` is the file's path
 relative to the project root, `f.name`/`f.path` from `listFiles`) before
-picking a needle: project `bde3b40d-f47e-418f-b8d2-66701c4de690` (the same
-first project `GET /api/projects` already resolves), file
-`steady-landing.html` (a real generated HTML landing page, single top-level
-file so `name === path`, `text/html` MIME — eligible), needle `doctype` — a
-plain alphanumeric token (no regex metacharacters), boring and structural
-(part of `<!doctype html>`) rather than thematic content, occurring exactly
-once in the file for an unambiguous match.
+picking a needle: same project and file as before —
+`bde3b40d-f47e-418f-b8d2-66701c4de690` / `steady-landing.html` (single
+top-level file, `name === path`, `text/html` MIME) — but a genuinely
+**distinctive** line this time, not boilerplate. Needle `rings`: a plain
+alphanumeric token (no regex metacharacters) occurring **exactly once** in
+the entire 1003-line file, on line 593 — `<p class="lede">Steady is a habit
+tracker without the guilt. No streaks to protect, no red rings to close —
+just a calm, honest record of the things you're trying to do more
+often.</p>` (194 characters, well under the route's 220-char snippet
+truncation, so the full line survives verbatim).
+`expectSnippetContains: "red rings to close"` is a content-specific phrase
+from that same line, several words longer than the needle, that no stub
+could derive from the query string `rings` alone.
 
 Re-measured live against the amended logic (isolated daemon boot, same
-corpus, same R8 protocol — 1 discarded warmup + 5 timed reps), 3 independent
-runs: `searchProbe.projectId` confirmed listed in `GET /api/projects` every
-run; the positive probe (`q=doctype`) returned `200` with exactly one match
-— `{"file":"steady-landing.html","line":2,"snippet":"<!doctype html>"}` — on
-every one of the 5 timed repetitions in every run; the negative control (a
-random nonce query) returned `200` with zero matches every time. Combined
-`httpOkAll` (positive-match AND negative-control) was `true` in all 3 runs.
-Observed samples across runs: `[4,3,2,2,2]` (p50 2/p95 4), `[5,2,2,2,2]`
-(p50 2/p95 5), `[5,3,4,2,2]` (p50 3/p95 5). Recorded the third run —
-`[5, 3, 4, 2, 2]`, p50 3ms, p95 5ms — with `toleranceBandPct: 50` (the cap),
-chosen because its ±50% window (`[1.5, 4.5]` for p50, `[2.5, 7.5]` for p95)
-comfortably covers the full spread observed across all 3 runs, not just the
-recorded one.
+corpus, same R8 protocol — 1 discarded warmup + 5 timed reps, same full
+match assertion the verifier uses: `file === expectFile && line ===
+expectLine && snippet.includes(expectSnippetContains)`), 3 independent runs:
+`searchProbe.projectId` confirmed listed in `GET /api/projects` every run;
+the positive probe (`q=rings`) returned `200` with exactly one match — file
+`steady-landing.html`, line `593`, snippet containing `red rings to close`
+— satisfying the full content-proof assertion on every one of the 5 timed
+repetitions in every run; the unmarked negative-control nonce (a fresh
+random 18-hex-char string each run) returned `200` with zero matches every
+time. Combined `httpOkAll` was `true` in all 3 runs. Observed samples across
+runs: `[3,4,3,3,3]` (p50 3/p95 4), `[2,2,1,2,2]` (p50 2/p95 2), `[2,3,1,2,2]`
+(p50 2/p95 3). Recorded the first run — `[3, 4, 3, 3, 3]`, p50 3ms, p95
+4ms — with `toleranceBandPct: 50` (the cap), chosen because its ±50% window
+(`[1.5, 4.5]` for p50, `[2, 6]` for p95) comfortably covers the full spread
+observed across all 3 runs, not just the recorded one.
