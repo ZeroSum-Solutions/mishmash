@@ -69,27 +69,52 @@ one long-lived daemon, each running its own warmup-then-5-reps loop.
 | project-list | 21 ms | 23 ms | `GET /api/projects` |
 | designs-tab-fan-out | 1 ms | 3 ms | `GET /api/projects/:id/files` against a real project id from the corpus. |
 | memory-high-water | 130848 KB | 130848 KB | Peak RSS of the daemon process, sampled via `ps -o rss=` across the same warmup+5-rep window as the other scenarios (flat across reps — one long-lived process, no GC pressure induced by this smoke). |
-| search | 1 ms | 1 ms | See "Known issue" below — the timings are for a 401 rejection, not a functioning search. |
+| search | 2 ms | 3 ms | See "Known issue" below — re-measured after the r2 verifier amendment; the timings are for a 401 rejection, not a functioning search. |
 
 ## Known issue: search scenario
 
-The verifier's own scenario-selection logic (mirrored here) picks the
-**first** route in the daemon's route-registration order whose path matches
-`/search/i`. In the current route registration order that is
-`POST /api/xai/search` (`apps/daemon/src/routes/xai.ts`) — an X.AI/Grok
-search endpoint gated on X.AI credentials, not a project- or library-scoped
-search. With no `XAI_API_KEY`/OAuth token configured (the correct state for
-a clean environment, and the state both this baseline run and the wave
-verifier's own environment are in), every request 401s
-(`no xAI credentials — sign in with your SuperGrok subscription, set
-XAI_API_KEY, or configure a key in Settings`) before any real search work
-happens. The sub-millisecond timings above measure that immediate rejection,
-not a search.
+**Partially resolved by the 2026-07-27 r2 verifier amendment
+(`scripts/waves/verify-w0.ts` commit `e9cff6c52`).** The scenario-selection
+logic used to pick the **first** route in the daemon's route-registration
+order whose path matched `/search/i`, which was `POST /api/xai/search`
+(`apps/daemon/src/routes/xai.ts`) — an X.AI/Grok search endpoint gated on
+X.AI credentials, not a project- or library-scoped search. The amendment
+changed the selection to prefer a route matching `/library\/search/i`
+first, falling back to any non-`/xai/i` `/search/i` route:
 
-This is a route-selection artifact in the scenario picker, not something
-`apps/daemon/src/routes/xai.ts` or route registration order can be changed
-to fix from within this wave's write lease (`docs/plans/waves/leases.json`,
-W0 grants `apps/daemon/src/backup/**`, `apps/daemon/src/security/**`, and
-`apps/daemon/src/routes/library.ts` specifically — not `xai.ts` or
-`server.ts`, where registration order is decided). Recorded here rather than
-worked around; see the wave's completion report for the full reproduction.
+```js
+const searchRoute =
+  daemon.routeInventory.find((r) => /library\/search/i.test(r.path)) ??
+  daemon.routeInventory.find((r) => /search/i.test(r.path) && !/xai/i.test(r.path));
+```
+
+Re-measured against this exact logic (isolated daemon boot, same corpus,
+same R8 protocol): the route-selection half of the problem **is** fixed —
+this now genuinely resolves `POST /api/tools/library/search`, the
+library-scoped search endpoint, not the external X.AI route. **The
+scenario is still not a functioning search, for a different reason**:
+`POST /api/tools/library/search` is an agent tool-track endpoint
+(`apps/daemon/src/routes/library.ts`, `authorizeToolRequest(req, res,
+'library:search')`) gated by a per-run tool token
+(`apps/daemon/src/tool-tokens.ts`) minted only for a live, already-running
+agent turn. An unauthenticated HTTP probe — this scenario's shape, and the
+only shape the wave gate can honestly send here — has no such token and
+gets `401 TOOL_TOKEN_MISSING` on every call, confirmed live and
+reproducible across repeated measurements. The timings above measure that
+401, not a search.
+
+Historical note: the pre-amendment baseline (samples `[1, 1, 0, 1, 1]`,
+p50/p95 1ms) measured the old `POST /api/xai/search` 401
+(`no xAI credentials — sign in with your SuperGrok subscription, set
+XAI_API_KEY, or configure a key in Settings`), before any real search work
+happened.
+
+This remaining gap is a route-selection/capability-shape mismatch, not
+something `apps/daemon/src/routes/library.ts`'s tool-token gate should be
+loosened to fix — `authorizeToolRequest` existing to require a live run
+context is the correct security posture for an agent-facing tool
+endpoint, not a bug. There is no genuinely CLI/HTTP-probeable
+"corpus search" capability in the current route surface that is both (a)
+project/library-scoped rather than external, and (b) reachable without a
+live agent run or external credentials. Recorded here rather than worked
+around.

@@ -45,11 +45,11 @@
     },
     {
       "name": "search",
-      "samplesMs": [1, 1, 0, 1, 1],
-      "p50": 1,
-      "p95": 1,
+      "samplesMs": [3, 2, 1, 2, 1],
+      "p50": 2,
+      "p95": 3,
       "toleranceBandPct": 50,
-      "note": "KNOWN GATE-LEVEL ISSUE -- see docs/testing/scale-baseline-2026-07.md 'Known issue: search scenario'. daemon.routeInventory's first /search/i match is POST /api/xai/search (an X.AI/Grok-credentialed search endpoint), which 401s with no XAI credentials configured -- the correct, expected state for a clean environment. Timings recorded are for the 401 response itself, not a functioning search."
+      "note": "KNOWN GATE-LEVEL ISSUE, re-measured after the 2026-07-27 r2 verifier amendment (scripts/waves/verify-w0.ts commit e9cff6c52) -- see docs/testing/scale-baseline-2026-07.md 'Known issue: search scenario'. The amended selection logic now resolves POST /api/tools/library/search (daemon.routeInventory's first /library\\/search/i match), no longer the external X.AI route -- but that endpoint is an agent tool-track route gated by authorizeToolRequest, which 401s TOOL_TOKEN_MISSING for any caller without a live agent-run-scoped tool token (apps/daemon/src/tool-tokens.ts) -- the correct, expected state for an unauthenticated HTTP probe. Timings recorded are for that 401 response, still not a functioning search."
     }
   ]
 }
