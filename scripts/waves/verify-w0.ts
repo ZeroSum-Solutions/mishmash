@@ -1292,7 +1292,27 @@ async function main(): Promise<void> {
   // --unreachable-allowlist or W0_UNREACHABLE_ALLOWLIST (flag wins). FAIL
   // CLOSED: absent/unreadable/unparsable/malformed => authorized-skip set is
   // EMPTY, never inferred or defaulted from anything in-repo.
-  interface UnreachableAllowlistEntry { file: string; line: number; method: string; path: string; sourceFingerprint: string; commit: string }
+  // Round-final coordinator ruling, items 2/3: the allowlist schema now
+  // carries a typed entryClass. Existing entries (no entryClass in the raw
+  // JSON) normalize to 'dynamic-row' at load time -- semantics unchanged,
+  // exactly the pre-existing F7 mechanism. 'canary-unreachable' (item 2,
+  // C0-7) binds to {method, path} like 'dynamic-row' but does NOT reuse
+  // {file, line} as a row-matching key -- for this class file/line are the
+  // entry's OWN fingerprint/commit-binding anchor (any source line the
+  // orchestrator chooses, e.g. within privileged-routes.json), unrelated to
+  // the row's AST site. 'sampling-excluded' (item 3, C0-10) binds to
+  // {capability} instead of {method, path}. reason is free text,
+  // evidence-only -- it never itself authorizes anything beyond what
+  // entryClass + the binding fields grant.
+  type AllowlistEntryClass = 'dynamic-row' | 'canary-unreachable' | 'sampling-excluded';
+  const ALLOWLIST_ENTRY_CLASSES: readonly AllowlistEntryClass[] = ['dynamic-row', 'canary-unreachable', 'sampling-excluded'];
+  interface UnreachableAllowlistEntry {
+    file: string; line: number; sourceFingerprint: string; commit: string;
+    entryClass: AllowlistEntryClass; // normalized at load time; absent in the raw JSON defaults to 'dynamic-row'
+    method?: string; path?: string; // required (validated at load) for 'dynamic-row' and 'canary-unreachable'
+    capability?: string; // required (validated at load) for 'sampling-excluded'
+    reason?: string;
+  }
   type AllowlistStatus = 'absent' | 'unreadable' | 'invalid' | `loaded:${number}`;
   function loadUnreachableAllowlist(): { entries: UnreachableAllowlistEntry[]; status: AllowlistStatus } {
     if (!unreachableAllowlistPath) return { entries: [], status: 'absent' };
@@ -1311,16 +1331,24 @@ async function main(): Promise<void> {
     if (!Array.isArray(parsed)) return { entries: [], status: 'invalid' };
     const entries: UnreachableAllowlistEntry[] = [];
     for (const e of parsed) {
-      const valid =
-        isRecord(e) &&
+      if (!isRecord(e)) return { entries: [], status: 'invalid' };
+      const rawClass = e.entryClass;
+      if (rawClass !== undefined && !(typeof rawClass === 'string' && (ALLOWLIST_ENTRY_CLASSES as readonly string[]).includes(rawClass))) {
+        return { entries: [], status: 'invalid' };
+      }
+      const entryClass: AllowlistEntryClass = rawClass === undefined ? 'dynamic-row' : (rawClass as AllowlistEntryClass);
+      const baseValid =
         typeof e.file === 'string' &&
         typeof e.line === 'number' &&
-        typeof e.method === 'string' &&
-        typeof e.path === 'string' &&
         typeof e.sourceFingerprint === 'string' &&
-        typeof e.commit === 'string';
-      if (!valid) return { entries: [], status: 'invalid' }; // any malformed entry invalidates the WHOLE file -- fail closed, not partial-trust
-      entries.push(e as unknown as UnreachableAllowlistEntry);
+        typeof e.commit === 'string' &&
+        (e.reason === undefined || typeof e.reason === 'string');
+      const classValid =
+        entryClass === 'sampling-excluded'
+          ? typeof e.capability === 'string' && e.capability.trim().length > 0
+          : typeof e.method === 'string' && typeof e.path === 'string'; // 'dynamic-row' and 'canary-unreachable'
+      if (!baseValid || !classValid) return { entries: [], status: 'invalid' }; // any malformed entry invalidates the WHOLE file -- fail closed, not partial-trust
+      entries.push({ ...(e as Record<string, unknown>), entryClass } as unknown as UnreachableAllowlistEntry);
     }
     return { entries, status: `loaded:${entries.length}` };
   }
@@ -1382,7 +1410,7 @@ async function main(): Promise<void> {
   await checkCriterion(
     'C0-7',
     'two-pass alias-aware AST extraction (local const aliases, property chains, constant paths) over apps/daemon/src/routes/** + server.ts; unresolvable-path guarded registrations must be explicitly acknowledged as dynamic in the inventory',
-    'inventory row without a live route = fail; guarded live route missing from inventory = fail; an unresolvable-path guarded registration not explicitly marked dynamic in the inventory = fail; every row is probed TWICE -- once with an explicitly hostile browser Origin (https://evil.invalid), expecting rejection (401/403), and once with NO Origin header at all (the local CLI\'s own request shape), expecting an EXPLICIT success: 2xx by default, or the row\'s own declared expectedLocalStatus for routes whose genuine local success is legitimately non-2xx -- expectedLocalStatus may NEVER declare -1, 400, 401, 403, 404, or any 5xx (structurally forbidden, named, at validation time -- a lazy expectedLocalStatus: 403 can never bless the guard\'s own rejection as "success", and a lazy expectedLocalStatus: 404 can never bless a placeholder-ID 404 as "success"); a static row whose path is parameterized REQUIRES a declared probePath with a concrete value (a declared-but-STILL-parameterized probePath, e.g. one that still contains :id syntax, counts as missing exactly like no declaration), and any probed row with a body-bearing method REQUIRES a declared probeBody -- both support \'<nonceProjectId>\' SUBSTRING substitution (every occurrence within the string, including one embedded in a larger URL/token, not just an exact-match value) against a REAL project seeded fresh after every daemon boot (initial or reboot); ANY remaining unresolved <...> placeholder token after substitution is itself a named structural failure; probePath/probeBody resolution happens LAZILY per probe phase, strictly AFTER that phase\'s ensureDaemonAlive liveness check, so a reboot\'s freshly-seeded nonce is always the one actually used (never a stale nonce from the daemon instance that just died) -- every probe result records the daemon generation (boot count) its substitution resolved against; a row missing any declaration fails BY NAME; requireLocalDaemonRequest exists to stop a malicious web page, not a genuine local caller, so origin-LESS success and hostile-Origin rejection are both required, honestly, against the current product; every daemon reboot triggered mid-probe (e.g. a route with a genuine local side effect) is logged with the row/phase whose probe ACTUALLY PRECEDED the death (never the upcoming probe) and the new daemon generation it produced, and settles that preceding row\'s own result BEFORE the reboot -- a reboot can never retroactively convert a row\'s failure into a pass; a dynamic row without probePath may skip probing ONLY when authorized by an orchestrator-owned allowlist (--unreachable-allowlist / W0_UNREACHABLE_ALLOWLIST) -- absent/unreadable/invalid allowlist = zero authorized skips (fail-closed); each allowlist entry binds to {file, line, method, path}, a source-line sha256 fingerprint recomputed from the CURRENT tree, AND a commit that must be (1) a full 40-char lowercase hex sha, (2) a real commit object in this repository that is an ancestor-or-equal of the evaluated HEAD, and (3) the commit the source line was AUTHORED against -- the fingerprint must independently match both the current tree AND `git show <commit>:<file>` at that line; any of these failing makes the entry INVALID, same hard-fail bucket as stale; entries must match exactly one claiming row 1:1 (duplicate entries, unused entries, and unauthorized claiming rows are all hard fails); a row\'s free-text "unreachable" string is surfaced in evidence but never authorizes anything; hard-fail when authorizedUnreachable*2 >= totalDynamic (nonempty set, exactly-half included)',
+    'inventory row without a live route = fail; guarded live route missing from inventory = fail; an unresolvable-path guarded registration not explicitly marked dynamic in the inventory = fail; every row is probed TWICE -- once with an explicitly hostile browser Origin (https://evil.invalid), expecting rejection (401/403), and once with NO Origin header at all (the local CLI\'s own request shape), expecting an EXPLICIT success: 2xx by default, or the row\'s own declared expectedLocalStatus for routes whose genuine local success is legitimately non-2xx -- expectedLocalStatus may NEVER declare -1, 400, 401, 403, 404, or any 5xx (structurally forbidden, named, at validation time -- a lazy expectedLocalStatus: 403 can never bless the guard\'s own rejection as "success", and a lazy expectedLocalStatus: 404 can never bless a placeholder-ID 404 as "success"); a static row whose path is parameterized REQUIRES a declared probePath with a concrete value (a declared-but-STILL-parameterized probePath, e.g. one that still contains :id syntax, counts as missing exactly like no declaration), and any probed row with a body-bearing method REQUIRES a declared probeBody -- both support \'<nonceProjectId>\' SUBSTRING substitution (every occurrence within the string, including one embedded in a larger URL/token, not just an exact-match value) against a REAL project seeded fresh after every daemon boot (initial or reboot); ANY remaining unresolved <...> placeholder token after substitution is itself a named structural failure; probePath/probeBody resolution happens LAZILY per probe phase, strictly AFTER that phase\'s ensureDaemonAlive liveness check, so a reboot\'s freshly-seeded nonce is always the one actually used (never a stale nonce from the daemon instance that just died) -- every probe result records the daemon generation (boot count) its substitution resolved against; a row missing any declaration fails BY NAME; requireLocalDaemonRequest exists to stop a malicious web page, not a genuine local caller, so origin-LESS success and hostile-Origin rejection are both required, honestly, against the current product; every daemon reboot triggered mid-probe (e.g. a route with a genuine local side effect) is logged with the row/phase whose probe ACTUALLY PRECEDED the death (never the upcoming probe) and the new daemon generation it produced, and settles that preceding row\'s own result BEFORE the reboot -- a reboot can never retroactively convert a row\'s failure into a pass; a dynamic row without probePath may skip probing ONLY when authorized by an orchestrator-owned allowlist (--unreachable-allowlist / W0_UNREACHABLE_ALLOWLIST) -- absent/unreadable/invalid allowlist = zero authorized skips (fail-closed); each allowlist entry binds to {file, line, method, path}, a source-line sha256 fingerprint recomputed from the CURRENT tree, AND a commit that must be (1) a full 40-char lowercase hex sha, (2) a real commit object in this repository that is an ancestor-or-equal of the evaluated HEAD, and (3) the commit the source line was AUTHORED against -- the fingerprint must independently match both the current tree AND `git show <commit>:<file>` at that line; any of these failing makes the entry INVALID, same hard-fail bucket as stale; entries must match exactly one claiming row 1:1 (duplicate entries, unused entries, and unauthorized claiming rows are all hard fails); a row\'s free-text "unreachable" string is surfaced in evidence but never authorizes anything; hard-fail when authorizedUnreachable*2 >= totalDynamic (nonempty set, exactly-half included); a typed canary-unreachable allowlist entry (bound to {method, path} + a source fingerprint + commit, same rigor as the dynamic-row class) waives ONLY the origin-less success canary for its one exact row -- hostile-Origin rejection and every structural check remain fully mandatory for that row, and waived rows also count toward a strict less-than-half cap over the full route inventory',
     async () => {
       const rel = 'apps/daemon/src/security/privileged-routes.json';
       if (!fileExists(rel)) {
@@ -1430,7 +1458,7 @@ async function main(): Promise<void> {
       const entryKey = (e: UnreachableAllowlistEntry) => `${e.file}:${e.line}`;
       const entryKeyCounts = new Map<string, number>();
       for (const e of allowlistEntries) entryKeyCounts.set(entryKey(e), (entryKeyCounts.get(entryKey(e)) ?? 0) + 1);
-      const duplicateAllowlistEntries = allowlistEntries.filter((e) => (entryKeyCounts.get(entryKey(e)) ?? 0) > 1);
+      const duplicateAllowlistEntriesByFileLine = allowlistEntries.filter((e) => (entryKeyCounts.get(entryKey(e)) ?? 0) > 1);
 
       // Staleness: every entry's fingerprint is recomputed from the CURRENT
       // tree, never trusted from the entry itself. Round-8 F7: commit
@@ -1453,10 +1481,17 @@ async function main(): Promise<void> {
       // 1:1 matching: an entry authorizes a row only when file+line+method+
       // path ALL match (row method+path is already globally unique via
       // dedupKeys, so at most one row can match a given entry this way).
+      // Round-final coordinator ruling, item 2: scoped to entryClass ===
+      // 'dynamic-row' entries only -- a 'canary-unreachable' or
+      // 'sampling-excluded' entry's own {file, line} point at a DIFFERENT
+      // thing (its own fingerprint/commit-binding anchor, not an AST call
+      // site) and must never be judged "unused" from this class's
+      // perspective, nor treated as authorizing a probing skip here.
       const rowMatchesEntry = (r: { file?: string; line?: number; method: string; path: string }, e: UnreachableAllowlistEntry) => r.file === e.file && r.line === e.line && r.method === e.method && r.path === e.path;
-      const authorizedRows = claimingRows.filter((r) => allowlistEntries.some((e) => rowMatchesEntry(r, e)));
-      const unauthorizedClaimingRows = claimingRows.filter((r) => !allowlistEntries.some((e) => rowMatchesEntry(r, e)));
-      const unusedAllowlistEntries = allowlistEntries.filter((e) => !claimingRows.some((r) => rowMatchesEntry(r, e)));
+      const dynamicRowClassEntries = allowlistEntries.filter((e) => e.entryClass === 'dynamic-row');
+      const authorizedRows = claimingRows.filter((r) => dynamicRowClassEntries.some((e) => rowMatchesEntry(r, e)));
+      const unauthorizedClaimingRows = claimingRows.filter((r) => !dynamicRowClassEntries.some((e) => rowMatchesEntry(r, e)));
+      const unusedDynamicRowEntries = dynamicRowClassEntries.filter((e) => !claimingRows.some((r) => rowMatchesEntry(r, e)));
       // An unauthorized claiming row is functionally the same failure class
       // as a row with neither probePath nor authorization -- it cannot be
       // probed and it is not allowlist-cleared, so it is "missing" either way.
@@ -1466,6 +1501,54 @@ async function main(): Promise<void> {
       // only (free text carries no weight), and the ruling is >= not > --
       // exactly-half (e.g. 1 of 2) now also hard-fails.
       const majorityUnreachable = dynamicRows.length > 0 && authorizedRows.length * 2 >= dynamicRows.length;
+
+      // Round-final coordinator ruling, item 2: typed allowlist class
+      // 'canary-unreachable' -- waives ONLY the origin-less success canary
+      // for one exact row (bound by {method, path}, NOT dynamic-row's
+      // {file, line, method, path} -- this class's file/line are its own
+      // fingerprint/commit-binding anchor). Hostile-Origin rejection and
+      // every structural check (probePath/probeBody declarations,
+      // forbidden expectedLocalStatus, live-route membership, etc.) remain
+      // fully mandatory for a waived row -- unaffected, since none of those
+      // checks consult this waiver. Applies to ANY row (static or dynamic),
+      // not just the dynamic-row subset -- the two classes address
+      // different problems (dynamic-row: the row's real path is
+      // unresolvable, so it cannot be probed at all; canary-unreachable:
+      // the row CAN be probed, but its origin-less canary cannot honestly
+      // succeed in this gate's environment).
+      const canaryUnreachableClassEntries = allowlistEntries.filter((e) => e.entryClass === 'canary-unreachable');
+      const rowMatchesCanaryEntry = (r: { method: string; path: string }, e: UnreachableAllowlistEntry) => r.method === e.method && r.path === e.path;
+      const unusedCanaryUnreachableEntries = canaryUnreachableClassEntries.filter((e) => !validRows.some((r) => rowMatchesCanaryEntry(r, e)));
+      // Duplicate: two canary-unreachable entries claiming the SAME
+      // {method, path} row are ambiguous even when their own {file, line}
+      // binding anchors differ (so the generic file:line dup check above
+      // would not catch this on its own).
+      const canaryEntryRowKeyCounts = new Map<string, number>();
+      for (const e of canaryUnreachableClassEntries) { const k = `${e.method} ${e.path}`; canaryEntryRowKeyCounts.set(k, (canaryEntryRowKeyCounts.get(k) ?? 0) + 1); }
+      const duplicateCanaryUnreachableEntries = canaryUnreachableClassEntries.filter((e) => (canaryEntryRowKeyCounts.get(`${e.method} ${e.path}`) ?? 0) > 1);
+      const unusedAllowlistEntries = [...unusedDynamicRowEntries, ...unusedCanaryUnreachableEntries];
+      const duplicateAllowlistEntriesSet = new Set<UnreachableAllowlistEntry>([
+        ...duplicateAllowlistEntriesByFileLine,
+        ...duplicateCanaryUnreachableEntries,
+      ]);
+      const duplicateAllowlistEntries = [...duplicateAllowlistEntriesSet];
+      // Fail-closed: only a VALID (non-stale, non-duplicate, non-unused)
+      // canary-unreachable entry actually waives anything.
+      const invalidCanaryUnreachableEntries = new Set<UnreachableAllowlistEntry>([
+        ...staleAllowlistEntries.filter((s) => s.entry.entryClass === 'canary-unreachable').map((s) => s.entry),
+        ...duplicateCanaryUnreachableEntries,
+        ...unusedCanaryUnreachableEntries,
+      ]);
+      const validCanaryUnreachableEntries = canaryUnreachableClassEntries.filter((e) => !invalidCanaryUnreachableEntries.has(e));
+      function findCanaryWaiver(row: { method: string; path: string }): UnreachableAllowlistEntry | undefined {
+        return validCanaryUnreachableEntries.find((e) => rowMatchesCanaryEntry(row, e));
+      }
+      // Item 2: canary-unreachable waivers ALSO count toward a strict
+      // less-than-half cap, but over the FULL route inventory (validRows,
+      // "the 27 rows") -- not just the dynamic-row subset majorityUnreachable
+      // already gates.
+      const canaryWaivedRows = validRows.filter((r) => findCanaryWaiver(r) !== undefined);
+      const canaryUnreachableMajorityExceeded = validRows.length > 0 && canaryWaivedRows.length * 2 >= validRows.length;
 
       // Round-9 C0-7 amendment (docs/plans/waves/DECISIONS.md "W0 gate
       // adjudication", GPT-5.6 Sol reviewer-of-record, GATE-DEFECT):
@@ -1532,7 +1615,7 @@ async function main(): Promise<void> {
       }
       const rowsWithForbiddenExpectedLocalStatus = validRows.filter((r) => typeof r.expectedLocalStatus === 'number' && isForbiddenExpectedLocalStatus(r.expectedLocalStatus));
       const hostileOriginResults: { method: string; path: string; status: number; daemonGeneration: number }[] = [];
-      const localSuccessCanaryResults: { method: string; path: string; status: number; expected: number | '2xx'; ok: boolean; daemonGeneration: number }[] = [];
+      const localSuccessCanaryResults: { method: string; path: string; status: number; expected: number | '2xx'; ok: boolean; daemonGeneration: number; waived: boolean; waivedReason?: string | undefined }[] = [];
       const rowsWithUnresolvedPlaceholder: { method: string; path: string; phase: 'hostile' | 'canary'; remaining: string[] }[] = [];
       let liveRouteKeys = new Set<string>();
       const rebootLog: { triggeringRow: string; phase: 'hostile' | 'canary'; newDaemonGeneration: number }[] = [];
@@ -1639,15 +1722,20 @@ async function main(): Promise<void> {
           if (canaryResolved.unresolvedPlaceholders.length > 0) {
             rowsWithUnresolvedPlaceholder.push({ method: row.method, path: canaryResolved.declaredPath, phase: 'canary', remaining: canaryResolved.unresolvedPlaceholders });
           }
+          // Round-final coordinator ruling, item 2: a valid canary-unreachable
+          // entry waives ONLY this row's success expectation below -- the
+          // probe still runs and its real result is still recorded (never
+          // skipped), it is just excluded from the pass/fail gate.
+          const canaryWaiver = findCanaryWaiver(row);
           try {
             const res = await fetch(`${daemon.url}${canaryResolved.resolvedPath}`, buildProbeInit(row.method, null, canaryResolved.substitutedBody));
-            localSuccessCanaryResults.push({ method: row.method, path: canaryResolved.declaredPath, status: res.status, expected: typeof row.expectedLocalStatus === 'number' ? row.expectedLocalStatus : '2xx', ok: isCanarySuccess(row, res.status), daemonGeneration: canaryGeneration });
+            localSuccessCanaryResults.push({ method: row.method, path: canaryResolved.declaredPath, status: res.status, expected: typeof row.expectedLocalStatus === 'number' ? row.expectedLocalStatus : '2xx', ok: isCanarySuccess(row, res.status), daemonGeneration: canaryGeneration, waived: canaryWaiver !== undefined, waivedReason: canaryWaiver?.reason });
           } catch {
             // Transport failure (-1) is NEVER success -- this row fails,
             // full stop. It is recorded here, BEFORE the next row's
             // ensureDaemonAlive call can reboot, so the failure cannot be
             // masked by a subsequent fresh-daemon reboot.
-            localSuccessCanaryResults.push({ method: row.method, path: canaryResolved.declaredPath, status: -1, expected: typeof row.expectedLocalStatus === 'number' ? row.expectedLocalStatus : '2xx', ok: false, daemonGeneration: canaryGeneration });
+            localSuccessCanaryResults.push({ method: row.method, path: canaryResolved.declaredPath, status: -1, expected: typeof row.expectedLocalStatus === 'number' ? row.expectedLocalStatus : '2xx', ok: false, daemonGeneration: canaryGeneration, waived: canaryWaiver !== undefined, waivedReason: canaryWaiver?.reason });
           }
           lastProbed = { row: rowLabel, phase: 'canary' };
         }
@@ -1667,8 +1755,12 @@ async function main(): Promise<void> {
       // 400/404 from an undeclared realistic probePath/probeBody is caught
       // separately by rowsMissingRealisticProbePath/rowsMissingProbeBody,
       // never blessed by widening this check.
-      const localSuccessCanaryOk = localSuccessCanaryResults.length > 0 && localSuccessCanaryResults.every((r) => r.ok);
-      const localSuccessCanaryRejected = localSuccessCanaryResults.filter((r) => !r.ok);
+      // Round-final coordinator ruling, item 2: a row whose canary is
+      // validly waived is excluded from the pass/fail gate (but its real
+      // result is still fully recorded above, never skipped).
+      const localSuccessCanaryOk = localSuccessCanaryResults.length > 0 && localSuccessCanaryResults.every((r) => r.ok || r.waived);
+      const localSuccessCanaryRejected = localSuccessCanaryResults.filter((r) => !r.ok && !r.waived);
+      const waivedCanaryResults = localSuccessCanaryResults.filter((r) => r.waived);
       const inventoryRowsNotLive = validRows.filter((r) => !r.dynamic && !liveRouteKeys.has(`${r.method} ${r.path}`));
       const guardedRoutesMissingFromInventory = guarded.filter((b) => !dedupKeys.has(`${b.method} ${b.path}`));
       const iteration = needleReport('(C0-7/route)', Math.max(validRows.length, 1));
@@ -1687,6 +1779,7 @@ async function main(): Promise<void> {
         staleAllowlistEntries.length === 0 &&
         unusedAllowlistEntries.length === 0 &&
         !majorityUnreachable &&
+        !canaryUnreachableMajorityExceeded &&
         rowsWithForbiddenExpectedLocalStatus.length === 0 &&
         rowsMissingRealisticProbePath.length === 0 &&
         rowsMissingProbeBody.length === 0 &&
@@ -1705,6 +1798,8 @@ async function main(): Promise<void> {
           `dynamic row counts: total=${dynamicRows.length} probed=${probedDynamicRows.length} claiming=${claimingRows.length} authorized=${authorizedRows.length} unauthorized=${unauthorizedClaimingRows.length} majorityUnreachable(authorized*2>=total)=${majorityUnreachable}\n` +
           `authorized rows (allowlist-cleared, free text is evidence-only): ${JSON.stringify(authorizedRows.map((r) => ({ method: r.method, path: r.path, file: r.file, line: r.line, freeTextUnreachable: r.unreachable })))}\n` +
           `all claiming rows with free-text unreachable surfaced: ${JSON.stringify(claimingRows.map((r) => ({ method: r.method, path: r.path, file: r.file, line: r.line, freeTextUnreachable: r.unreachable, authorized: authorizedRows.includes(r) })))}\n` +
+          `canary-unreachable entries (item 2 -- waives ONLY the origin-less success canary for one exact row; hostile-Origin rejection and every structural check remain mandatory): declared=${JSON.stringify(canaryUnreachableClassEntries.map((e) => ({ method: e.method, path: e.path, file: e.file, line: e.line, reason: e.reason })))} valid=${JSON.stringify(validCanaryUnreachableEntries.map((e) => ({ method: e.method, path: e.path })))} duplicate=${JSON.stringify(duplicateCanaryUnreachableEntries)} unused=${JSON.stringify(unusedCanaryUnreachableEntries)}\n` +
+          `canary-waived rows (over ${validRows.length} total rows): ${JSON.stringify(waivedCanaryResults)}; majority cap (waived*2>=total)=${canaryUnreachableMajorityExceeded}\n` +
           `inventory rows without a live route: ${JSON.stringify(inventoryRowsNotLive)}\n` +
           `rows with a FORBIDDEN declared expectedLocalStatus (-1/400/401/403/404/5xx never count as success): ${JSON.stringify(rowsWithForbiddenExpectedLocalStatus.map((r) => ({ method: r.method, path: r.path, expectedLocalStatus: r.expectedLocalStatus })))}\n` +
           `rows missing a realistic probePath (parameterized static path, no declared override, OR a declared override that still contains :param syntax): ${JSON.stringify(rowsMissingRealisticProbePath.map((r) => ({ method: r.method, path: r.path, declaredProbePath: r.probePath })))}\n` +
@@ -1715,7 +1810,7 @@ async function main(): Promise<void> {
           `daemon reboots during probing (each entry names the row/phase whose probe PRECEDED the death -- the actual trigger, not the upcoming probe -- and the new daemon generation it produced; a reboot settles the PRECEDING row's result first and never retroactively changes it): ${JSON.stringify(rebootLog)}\n` +
           `final daemon generation reached: ${daemonGeneration}\n` +
           `-- per-route --\n${iteration.evidence}\n-- control --\n${control.evidence}`,
-        { detail: ok ? undefined : `rows=${validRows.length} unique=${dedupKeys.size} inventoryRowsNotLive=${inventoryRowsNotLive.length} guardedMissing=${guardedRoutesMissingFromInventory.length} dynamicRowsMissingProbePathOrReason=${dynamicRowsMissingProbePathOrReason.length} dynamicRowsUnbound=${dynamicRowsUnbound.length} dynamicRowsDuplicateBinding=${dynamicRowsDuplicateBinding.length} unresolvableSitesUnacknowledged=${unresolvableSitesUnacknowledged.length} allowlistStatus=${allowlistStatus} duplicateAllowlistEntries=${duplicateAllowlistEntries.length} staleAllowlistEntries=${staleAllowlistEntries.length} unusedAllowlistEntries=${unusedAllowlistEntries.length} dynamicRowCounts(total=${dynamicRows.length},probed=${probedDynamicRows.length},claiming=${claimingRows.length},authorized=${authorizedRows.length}) majorityUnreachable=${majorityUnreachable} rowsWithForbiddenExpectedLocalStatus=${rowsWithForbiddenExpectedLocalStatus.length} rowsMissingRealisticProbePath=${rowsMissingRealisticProbePath.length} rowsMissingProbeBody=${rowsMissingProbeBody.length} rowsWithUnresolvedPlaceholder=${rowsWithUnresolvedPlaceholder.length} iterationOk=${iteration.ok} controlOk=${control.ok} liveRejectedAll=${liveRejectedAll} localSuccessCanaryOk=${localSuccessCanaryOk} hostileOriginNotRejected=${JSON.stringify(hostileOriginNotRejected)} localSuccessCanaryRejected=${JSON.stringify(localSuccessCanaryRejected)} reboots=${rebootLog.length}` });
+        { detail: ok ? undefined : `rows=${validRows.length} unique=${dedupKeys.size} inventoryRowsNotLive=${inventoryRowsNotLive.length} guardedMissing=${guardedRoutesMissingFromInventory.length} dynamicRowsMissingProbePathOrReason=${dynamicRowsMissingProbePathOrReason.length} dynamicRowsUnbound=${dynamicRowsUnbound.length} dynamicRowsDuplicateBinding=${dynamicRowsDuplicateBinding.length} unresolvableSitesUnacknowledged=${unresolvableSitesUnacknowledged.length} allowlistStatus=${allowlistStatus} duplicateAllowlistEntries=${duplicateAllowlistEntries.length} staleAllowlistEntries=${staleAllowlistEntries.length} unusedAllowlistEntries=${unusedAllowlistEntries.length} dynamicRowCounts(total=${dynamicRows.length},probed=${probedDynamicRows.length},claiming=${claimingRows.length},authorized=${authorizedRows.length}) majorityUnreachable=${majorityUnreachable} canaryUnreachableMajorityExceeded=${canaryUnreachableMajorityExceeded} canaryWaivedRows=${canaryWaivedRows.length} rowsWithForbiddenExpectedLocalStatus=${rowsWithForbiddenExpectedLocalStatus.length} rowsMissingRealisticProbePath=${rowsMissingRealisticProbePath.length} rowsMissingProbeBody=${rowsMissingProbeBody.length} rowsWithUnresolvedPlaceholder=${rowsWithUnresolvedPlaceholder.length} iterationOk=${iteration.ok} controlOk=${control.ok} liveRejectedAll=${liveRejectedAll} localSuccessCanaryOk=${localSuccessCanaryOk} hostileOriginNotRejected=${JSON.stringify(hostileOriginNotRejected)} localSuccessCanaryRejected=${JSON.stringify(localSuccessCanaryRejected)} reboots=${rebootLog.length}` });
       void baselineKeys;
     },
   );
@@ -2178,7 +2273,7 @@ async function main(): Promise<void> {
     return problems;
   }
 
-  await checkCriterion('C0-10', 'SUBCOMMAND_MAP capability ids must be SET-EQUAL (exact, no substring) to manifest capability names; full structural validation of ALL rows, deterministic and independent of the random 3-row sample; live sampled invocations use a nonce-bearing value check, not shape-only, with equivalent HTTP bodies and declared canonicalizers where needed', 'set-equal capability ids, unique rows, every row structurally valid; httpMethod may be a concrete verb or the literal "ALL" (Express .all() registrations), in which case a concrete probeMethod AND a concrete probePath are BOTH REQUIRED declarations, checked over every row (not just the sample); any body-bearing effective method (POST/PUT/PATCH, or ALL whose probeMethod is body-bearing) REQUIRES a declared probeBody, also checked over every row; a row missing a required declaration fails BY NAME regardless of sampling; a row\'s declared valueComparison (unordered-array/composite/binary) canonicalizes BOTH surfaces before comparison -- absent or mode=exact stays a REAL, unrelaxed, ordered byte-level check (the preserved implementation duty); composite mode requires EVERY declared field to be present and non-empty in BOTH payloads (a field missing from either is a structural fail, never a silently-equal undefined projection); binary mode strictly validates the encoding (hex: /^[0-9a-f]+$/i even length; base64: charset+padding+round-trip re-encode) BEFORE decoding -- malformed input is a structural fail, never permissively decoded; sample invocations prove the CLI reaches the manifest\'s SAME handler via a nonce value, not just matching key shapes; a composite/binary precondition failure fails the entry regardless of nonce success (conjunctive, never masked); randomized red control exercises the SAME canonicalizer and precondition checks as its basis row and must still fail for a genuine mismatch -- the basis is required to have at least one leaf corruptValues can actually change (an empty-array/object payload is skipped), widening deterministically over the rest of the manifest, alphabetically, until a corruptible basis is found or all applicable capabilities are exhausted', async () => {
+  await checkCriterion('C0-10', 'SUBCOMMAND_MAP capability ids must be SET-EQUAL (exact, no substring) to manifest capability names; full structural validation of ALL rows, deterministic and independent of the random 3-row sample; live sampled invocations use a nonce-bearing value check, not shape-only, with equivalent HTTP bodies and declared canonicalizers where needed', 'set-equal capability ids, unique rows, every row structurally valid; httpMethod may be a concrete verb or the literal "ALL" (Express .all() registrations), in which case a concrete probeMethod AND a concrete probePath are BOTH REQUIRED declarations, checked over every row (not just the sample); any body-bearing effective method (POST/PUT/PATCH, or ALL whose probeMethod is body-bearing) REQUIRES a declared probeBody, also checked over every row; a row missing a required declaration fails BY NAME regardless of sampling; a row\'s declared valueComparison (unordered-array/composite/binary) canonicalizes BOTH surfaces before comparison -- absent or mode=exact stays a REAL, unrelaxed, ordered byte-level check (the preserved implementation duty); composite mode requires EVERY declared field to be present and non-empty in BOTH payloads (a field missing from either is a structural fail, never a silently-equal undefined projection); binary mode strictly validates the encoding (hex: /^[0-9a-f]+$/i even length; base64: charset+padding+round-trip re-encode) BEFORE decoding -- malformed input is a structural fail, never permissively decoded; sample invocations prove the CLI reaches the manifest\'s SAME handler via a nonce value, not just matching key shapes; a composite/binary precondition failure fails the entry regardless of nonce success (conjunctive, never masked); randomized red control exercises the SAME canonicalizer and precondition checks as its basis row and must still fail for a genuine mismatch -- the basis is required to have at least one leaf corruptValues can actually change (an empty-array/object payload is skipped), widening deterministically over the rest of the manifest, alphabetically, until a corruptible basis is found or all applicable capabilities are exhausted; every od CLI subprocess this criterion launches (identity canary, sampled/widened probes, and the bespoke artifacts/figma probes) receives the CURRENT isolated boot\'s own dataDir as OD_DATA_DIR, audited per-launch and hard-failed if any launch could resolve to <repo>/.od; a typed sampling-excluded allowlist entry (capability + source fingerprint + commit, same rigor as C0-7\'s allowlist classes) removes its capability from the random sample and the widened red-control search only, never from set-equality/structural/route-registration checks; the artifacts capability is graded by gate-owned nonce-bound create+observe read-after-write on both the CLI and HTTP surfaces, never response-body substring matching; the figma capability is graded by a real multipart probe against a gate-owned known-good .fig fixture, sending the same bytes and fields the CLI itself sends', async () => {
     if (!fileExists(capabilityManifestRel)) { record('C0-10', '', '', false, '', { detail: `missing: ${capabilityManifestRel}` }); return; }
     let manifest: CapabilityManifestEntry[] = [];
     try {
@@ -2212,10 +2307,78 @@ async function main(): Promise<void> {
     if (applicable.length < subcommandKeys.length) problems.push(`applicable count (${applicable.length}) below SUBCOMMAND_MAP floor (${subcommandKeys.length})`);
     if (applicable.length === 0) problems.push('manifest has zero applicable capabilities');
 
+    // Round-final coordinator ruling, item 3: typed allowlist class
+    // "sampling-excluded" (same shared orchestrator-owned allowlist file as
+    // C0-7's dynamic-row/canary-unreachable classes -- loaded independently
+    // here, scoped to entryClass === 'sampling-excluded' only; C0-7 never
+    // judges these entries, and this criterion never judges C0-7's own
+    // entries -- each criterion owns exactly its own class). An entry binds
+    // to {capability, source fingerprint, commit} with the SAME rigor as
+    // every other class (fingerprint/commit reuse the identical generic
+    // functions C0-7 uses); a valid entry excludes its capability from the
+    // random 3-sample AND the red-control widened search ONLY -- it stays
+    // fully subject to set-equality, structural row validation, and the
+    // registered-live-route check above, unaffected by exclusion.
+    const { entries: allowlistEntriesC10, status: allowlistStatusC10 } = loadUnreachableAllowlist();
+    const samplingExcludedEntries = allowlistEntriesC10.filter((e) => e.entryClass === 'sampling-excluded');
+    const staleSamplingExcludedEntries: { entry: UnreachableAllowlistEntry; reason: string }[] = [];
+    const commitValidationBySamplingEntry = new Map<UnreachableAllowlistEntry, { status: CommitValidationStatus; detail?: string }>();
+    for (const e of samplingExcludedEntries) {
+      const fp = computeSourceLineFingerprint(e.file, e.line);
+      if (!fp.ok) staleSamplingExcludedEntries.push({ entry: e, reason: fp.reason ?? 'unresolvable' });
+      else if (fp.hash?.toLowerCase() !== e.sourceFingerprint.toLowerCase()) staleSamplingExcludedEntries.push({ entry: e, reason: `fingerprint mismatch: recomputed ${fp.hash} != declared ${e.sourceFingerprint}` });
+      const cv = validateEntryCommitBinding(e);
+      commitValidationBySamplingEntry.set(e, cv);
+      if (cv.status !== 'ok') staleSamplingExcludedEntries.push({ entry: e, reason: `commit-binding invalid (${cv.status}): ${cv.detail ?? ''}` });
+    }
+    const samplingExcludedKeyCounts = new Map<string, number>();
+    for (const e of samplingExcludedEntries) { const k = e.capability ?? ''; samplingExcludedKeyCounts.set(k, (samplingExcludedKeyCounts.get(k) ?? 0) + 1); }
+    const duplicateSamplingExcludedEntries = samplingExcludedEntries.filter((e) => (samplingExcludedKeyCounts.get(e.capability ?? '') ?? 0) > 1);
+    const unusedSamplingExcludedEntries = samplingExcludedEntries.filter((e) => typeof e.capability !== 'string' || !manifestCapSet.has(e.capability));
+    const invalidSamplingExcludedEntries = new Set<UnreachableAllowlistEntry>([
+      ...staleSamplingExcludedEntries.map((s) => s.entry),
+      ...duplicateSamplingExcludedEntries,
+      ...unusedSamplingExcludedEntries,
+    ]);
+    // Fail-closed: only VALID (non-stale, non-duplicate, non-unused) entries
+    // actually exclude a capability from sampling -- an invalid entry
+    // authorizes nothing, same fail-closed posture as every other class.
+    const excludedCapabilityNames = new Set(samplingExcludedEntries.filter((e) => !invalidSamplingExcludedEntries.has(e)).map((e) => e.capability as string));
+
     const sampleResults: { capability: string; ok: boolean; detail: string }[] = [];
     let redControlOk = false, redControlDetail = '';
     let identityOk = false;
+    let artifactsNonceBindingOk = false, artifactsNonceBindingDetail = '';
+    let figmaMultipartOk = false, figmaMultipartDetail = '';
     let daemon: BootedDaemon | null = null;
+    // Round-final coordinator ruling, item 1 (safety defect): every `od`
+    // CLI subprocess this criterion launches MUST receive the CURRENT
+    // isolated boot's OWN dataDir as OD_DATA_DIR (AGENTS.md "Daemon data
+    // directory contract" -- subprocesses "must inherit the daemon's truth
+    // source instead of guessing their own data path"; a missing
+    // OD_DATA_DIR is a named forbidden-pattern escape that can fall through
+    // to a cwd-relative legacy default, i.e. <repo>/.od). buildOdCliEnv is
+    // the SINGLE construction point for every od CLI launch in this
+    // criterion -- OD_DATA_DIR is always the explicit, last-spread key, so
+    // it always wins over whatever (if anything) verify-w0.ts's own
+    // ambient process.env carries. Every actual launch this run performs is
+    // audited into odDataDirAudit below -- a real regression, proven
+    // against the real product on the real run, not just structurally --
+    // that OD_DATA_DIR was always explicitly bound to this boot's own
+    // isolated dataDir and could never resolve to <repo>/.od or repoRoot.
+    const odDataDirAudit: { site: string; dataDir: string | undefined; matchesBootedDataDir: boolean; resolvesUnderRepoOd: boolean }[] = [];
+    const repoOdDir = path.join(repoRoot, '.od');
+    function buildOdCliEnv(bootedDaemon: BootedDaemon, site: string): NodeJS.ProcessEnv {
+      const env: NodeJS.ProcessEnv = { ...odDataEnv(bootedDaemon.dataDir), OD_DAEMON_URL: bootedDaemon.url };
+      const resolved = typeof env.OD_DATA_DIR === 'string' ? path.resolve(env.OD_DATA_DIR) : undefined;
+      odDataDirAudit.push({
+        site,
+        dataDir: env.OD_DATA_DIR,
+        matchesBootedDataDir: env.OD_DATA_DIR === bootedDaemon.dataDir,
+        resolvesUnderRepoOd: resolved === repoOdDir || resolved === repoRoot,
+      });
+      return env;
+    }
     try {
       daemon = await bootDaemonForProbing();
       const liveRouteKeys = new Set(daemon.routeInventory.map((r) => `${r.method} ${r.path}`));
@@ -2229,7 +2392,7 @@ async function main(): Promise<void> {
       const nonce = `w0-nonce-${crypto.randomBytes(8).toString('hex')}`;
       await fetch(`${daemon.url}/api/projects`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: nonce, name: nonce }) }).catch(() => null);
       try {
-        const { stdout } = await execFileAsync('node', [odBinPath, 'project', 'list', '--json'], { env: { ...process.env, OD_DAEMON_URL: daemon.url }, timeout: 30_000 });
+        const { stdout } = await execFileAsync('node', [odBinPath, 'project', 'list', '--json'], { env: buildOdCliEnv(daemon, 'identity-canary'), timeout: 30_000 });
         identityOk = stdout.includes(nonce);
       } catch (err) {
         identityOk = false;
@@ -2237,17 +2400,184 @@ async function main(): Promise<void> {
       }
       if (!identityOk) problems.push('identity canary did not observe the nonce project through the CLI');
 
-      const shuffled = [...applicable].sort(() => Math.random() - 0.5);
+      // Round-final coordinator ruling, item 4a (artifacts): the generic
+      // per-sample nonceCheck (response BODY contains the nonce substring)
+      // cannot honestly bind "artifacts" -- POST /api/projects/:id/files's
+      // JSON response never echoes the parent project id (manifest reason
+      // field, C0-10 live-sample finding), and cliArgs substitution was
+      // exact-match-only (could not embed a nonce into a larger filename
+      // string). Gate-owned nonce binding instead, unconditional (like the
+      // identity canary -- never sample-gated): the nonce is embedded as a
+      // SUBSTRING into a valid filename (extension preserved), and BOTH the
+      // real CLI surface (od artifacts create + od files list --json) and
+      // the real HTTP surface (POST + GET .../files) independently create
+      // AND observe (read-after-write) their own nonce-bound resource.
+      {
+        const r = await probeArtifactsNonceBinding(daemon, nonce);
+        artifactsNonceBindingOk = r.ok;
+        artifactsNonceBindingDetail = r.detail;
+        if (!artifactsNonceBindingOk) problems.push(`artifacts nonce-binding create+observe probe failed: ${r.detail}`);
+      }
+
+      // Round-final coordinator ruling, item 4b (figma): the manifest's
+      // declared --file fixtures/w0-manifest-check.fig does not exist
+      // anywhere in this repository, and the generic probeCapabilityEntry
+      // mechanism only ever sends application/json bodies -- POST
+      // .../figma/import is multipart/form-data-only, so no JSON body can
+      // ever reach a genuine success there. Unconditional (never
+      // sample-gated), using the gate-owned known-good fixture provisioned
+      // at scripts/waves/fixtures/w0-figma-check.fig.
+      {
+        const r = await probeFigmaMultipart(daemon, nonce);
+        figmaMultipartOk = r.ok;
+        figmaMultipartDetail = r.detail;
+        if (!figmaMultipartOk) problems.push(`figma multipart probe failed: ${r.detail}`);
+      }
+
+      // Round-final coordinator ruling, item 3: sampling-excluded
+      // capabilities are drawn from neither the random 3-sample nor the
+      // red-control widened search -- samplingEligible, never applicable,
+      // feeds both. All structural/route-registration checks above already
+      // ran over `applicable` (unaffected).
+      const samplingEligible = applicable.filter((e) => !excludedCapabilityNames.has(e.capability));
+      const shuffled = [...samplingEligible].sort(() => Math.random() - 0.5);
       const sample = shuffled.length <= 3 ? shuffled : shuffled.slice(0, 3);
       // Round-4 F11: every sample is bound to a value-level check, not just
       // project-scoped ones -- and captured cliJson/httpBody feed the red
       // control below so it exercises the SAME comparator on real data.
       // Round-9: captured samples also retain the entry's valueComparison
       // spec so the red control canonicalizes identically to the real check.
+      // Round-final coordinator ruling, item 4a (artifacts): gate-owned
+      // nonce binding replacing the response-body substring check the
+      // manifest's own reason field documents as structurally impossible
+      // for this capability. Each call uses a fresh per-call id (callId) so
+      // repeat invocations (the unconditional call above, plus a possible
+      // re-invocation if "artifacts" is ALSO drawn into the random sample
+      // or widened search below) never collide on an already-created
+      // filename/project.
+      async function probeArtifactsNonceBinding(bootedDaemon: BootedDaemon, nonceValue: string): Promise<{ ok: boolean; detail: string }> {
+        const problems: string[] = [];
+        const callId = crypto.randomBytes(4).toString('hex');
+        const cliFileName = `w0-artifacts-cli-${nonceValue}-${callId}.html`;
+        const httpFileName = `w0-artifacts-http-${nonceValue}-${callId}.html`;
+        const cliProjectId = `w0-artifacts-cli-${nonceValue}-${callId}`;
+        const httpProjectId = `w0-artifacts-http-${nonceValue}-${callId}`;
+        for (const id of [cliProjectId, httpProjectId]) {
+          await fetch(`${bootedDaemon.url}/api/projects`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name: id }) }).catch(() => null);
+        }
+        const inputFile = path.join(os.tmpdir(), `w0-artifacts-input-${nonceValue}-${callId}.html`);
+        fs.writeFileSync(inputFile, '<!doctype html><title>w0 artifacts nonce probe</title>');
+        let cliCreateOk = false;
+        try {
+          await execFileAsync('node', [odBinPath, 'artifacts', 'create', '--name', cliFileName, '--input', inputFile, '--project', cliProjectId], { env: buildOdCliEnv(bootedDaemon, 'artifacts-nonce-binding:cli-create'), timeout: 60_000 });
+          cliCreateOk = true;
+        } catch (err) { problems.push(`CLI artifacts create failed: ${String(err)}`); }
+        finally { try { fs.unlinkSync(inputFile); } catch { /* best effort */ } }
+        let httpCreateOk = false;
+        try {
+          const res = await fetch(`${bootedDaemon.url}/api/projects/${encodeURIComponent(httpProjectId)}/files`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: httpFileName, content: '<!doctype html><title>w0 artifacts nonce probe (http)</title>', encoding: 'utf8' }),
+          });
+          httpCreateOk = res.ok;
+          if (!res.ok) problems.push(`HTTP artifacts create failed: status ${res.status}`);
+        } catch (err) { problems.push(`HTTP artifacts create failed: ${String(err)}`); }
+        async function cliListsFile(projectId: string, name: string): Promise<boolean> {
+          try {
+            const { stdout } = await execFileAsync('node', [odBinPath, 'files', 'list', projectId, '--json'], { env: buildOdCliEnv(bootedDaemon, 'artifacts-nonce-binding:cli-observe'), timeout: 30_000 });
+            const parsed: unknown = JSON.parse(stdout);
+            const files = isRecord(parsed) && Array.isArray(parsed.files) ? (parsed.files as unknown[]) : [];
+            return files.some((f) => isRecord(f) && (f.name === name || f.path === name));
+          } catch { return false; }
+        }
+        async function httpListsFile(projectId: string, name: string): Promise<boolean> {
+          try {
+            const res = await fetch(`${bootedDaemon.url}/api/projects/${encodeURIComponent(projectId)}/files`);
+            const body: unknown = await res.json().catch(() => null);
+            const files = isRecord(body) && Array.isArray(body.files) ? (body.files as unknown[]) : [];
+            return res.ok && files.some((f) => isRecord(f) && (f.name === name || f.path === name));
+          } catch { return false; }
+        }
+        const cliObservesOwn = await cliListsFile(cliProjectId, cliFileName);
+        const httpObservesOwn = await httpListsFile(httpProjectId, httpFileName);
+        if (!cliObservesOwn) problems.push('CLI-created artifact not observed via read-after-write (od files list) under the CLI nonce project');
+        if (!httpObservesOwn) problems.push('HTTP-created artifact not observed via read-after-write (GET .../files) under the HTTP nonce project');
+        const ok = cliCreateOk && httpCreateOk && cliObservesOwn && httpObservesOwn;
+        return { ok, detail: `cliCreateOk=${cliCreateOk} httpCreateOk=${httpCreateOk} cliObservesOwn=${cliObservesOwn} httpObservesOwn=${httpObservesOwn} problems=${JSON.stringify(problems)}` };
+      }
+
+      // Round-final coordinator ruling, item 4b (figma): a manifest-declared
+      // multipart probe using a gate-owned known-good .fig fixture,
+      // provisioned as part of this amendment at
+      // scripts/waves/fixtures/w0-figma-check.fig -- the smallest
+      // deterministically-constructible valid .fig: a raw (unwrapped, no
+      // ZIP container -- apps/daemon/src/figma/fig-decode.ts explicitly
+      // supports this as a first-class "source: raw" input, not a degraded
+      // fallback) fig-kiwi canvas defining ONE minimal, self-consistent
+      // kiwi schema/message pair (a single real DOCUMENT node) -- verified
+      // to decode with decoded=true, nodeCount=1 through the actual
+      // apps/daemon/src/figma/fig-decode.ts + figma-import.ts product code
+      // before being committed. Sends the same bytes and fields the real
+      // CLI sends
+      // (apps/daemon/src/cli.ts figma import: form.append('file', new
+      // Blob([bytes]), basename(file)); no other fields when --notes is
+      // absent, which it is here).
+      const figmaFixturePath = path.join(repoRoot, 'scripts/waves/fixtures/w0-figma-check.fig');
+      function validateFigmaOutputShape(v: unknown): boolean {
+        return isRecord(v) && typeof v.label === 'string' && typeof v.snapshotDir === 'string' && isRecord(v.inventory) && typeof v.suggestedPrompt === 'string';
+      }
+      async function probeFigmaMultipart(bootedDaemon: BootedDaemon, nonceValue: string): Promise<{ ok: boolean; detail: string }> {
+        const problems: string[] = [];
+        if (!fs.existsSync(figmaFixturePath)) return { ok: false, detail: `gate-owned fixture missing: ${figmaFixturePath}` };
+        const fixtureBytes = fs.readFileSync(figmaFixturePath);
+        const callId = crypto.randomBytes(4).toString('hex');
+        const cliProjectId = `w0-figma-cli-${nonceValue}-${callId}`;
+        const httpProjectId = `w0-figma-http-${nonceValue}-${callId}`;
+        for (const id of [cliProjectId, httpProjectId]) {
+          await fetch(`${bootedDaemon.url}/api/projects`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name: id }) }).catch(() => null);
+        }
+        let cliOk = false;
+        try {
+          const { stdout } = await execFileAsync('node', [odBinPath, 'figma', 'import', '--project', cliProjectId, '--file', figmaFixturePath, '--json'], { env: buildOdCliEnv(bootedDaemon, 'figma-multipart:cli'), timeout: 60_000 });
+          const cliJson: unknown = JSON.parse(stdout);
+          cliOk = validateFigmaOutputShape(cliJson);
+          if (!cliOk) problems.push(`CLI response missing declared outputSchema keys: ${stdout.slice(0, 500)}`);
+        } catch (err) { problems.push(`CLI figma import failed: ${String(err)}`); }
+        let httpOk = false;
+        try {
+          const form = new FormData();
+          form.append('file', new Blob([fixtureBytes]), path.basename(figmaFixturePath));
+          const res = await fetch(`${bootedDaemon.url}/api/projects/${encodeURIComponent(httpProjectId)}/figma/import`, { method: 'POST', body: form });
+          const httpJson: unknown = await res.json().catch(() => null);
+          httpOk = res.ok && validateFigmaOutputShape(httpJson);
+          if (!httpOk) problems.push(`HTTP multipart response invalid: status=${res.status} body=${JSON.stringify(httpJson).slice(0, 500)}`);
+        } catch (err) { problems.push(`HTTP figma multipart probe failed: ${String(err)}`); }
+        const ok = cliOk && httpOk;
+        return { ok, detail: `cliOk=${cliOk} httpOk=${httpOk} fixture=${figmaFixturePath} fixtureBytes=${fixtureBytes.length} problems=${JSON.stringify(problems)}` };
+      }
+
       // Round-11 Ruling B: factored into a standalone function so the same
       // probe logic can be re-run for the red control's widened search
       // without duplicating it.
-      async function probeCapabilityEntry(entry: CapabilityManifestEntry, daemonUrl: string, nonceValue: string): Promise<{ cliOk: boolean; httpOk: boolean; cliJson: unknown; httpBody: unknown; entryOk: boolean; detail: string; valueComparison: ValueComparisonSpec | undefined }> {
+      async function probeCapabilityEntry(entry: CapabilityManifestEntry, bootedDaemon: BootedDaemon, nonceValue: string): Promise<{ cliOk: boolean; httpOk: boolean; cliJson: unknown; httpBody: unknown; entryOk: boolean; detail: string; valueComparison: ValueComparisonSpec | undefined }> {
+        // Round-final coordinator ruling, items 4a/4b: "artifacts" and
+        // "figma" are structurally unable to pass the generic nonce-
+        // substring / JSON-body mechanism below (documented in the
+        // manifest's own reason field for each) -- delegate to their
+        // bespoke gate-owned probes instead, wherever this function is
+        // invoked from (the unconditional calls above already cover them,
+        // but the random sample / widened search may ALSO draw them; this
+        // ensures they are never independently re-judged by the broken
+        // generic path either way).
+        if (entry.capability === 'artifacts') {
+          const r = await probeArtifactsNonceBinding(bootedDaemon, nonceValue);
+          return { cliOk: r.ok, httpOk: r.ok, cliJson: null, httpBody: null, entryOk: r.ok, detail: r.detail, valueComparison: entry.valueComparison };
+        }
+        if (entry.capability === 'figma') {
+          const r = await probeFigmaMultipart(bootedDaemon, nonceValue);
+          return { cliOk: r.ok, httpOk: r.ok, cliJson: null, httpBody: null, entryOk: r.ok, detail: r.detail, valueComparison: entry.valueComparison };
+        }
+        const daemonUrl = bootedDaemon.url;
         // Value-level nonce check when the capability's route is
         // project/resource-scoped -- proves the CLI reaches the SAME
         // handler (static JSON can't know a value the verifier just
@@ -2257,7 +2587,7 @@ async function main(): Promise<void> {
         let cliStdout = '', cliOk = false;
         try {
           const args = entry.cliArgs.map((a) => (a === '<nonceProjectId>' ? nonceValue : a));
-          const { stdout } = await execFileAsync('node', [odBinPath, ...args], { env: { ...process.env, OD_DAEMON_URL: daemonUrl }, timeout: 60_000 });
+          const { stdout } = await execFileAsync('node', [odBinPath, ...args], { env: buildOdCliEnv(bootedDaemon, `probeCapabilityEntry:${entry.capability}`), timeout: 60_000 });
           cliStdout = stdout;
           cliOk = true;
         } catch { cliOk = false; }
@@ -2320,7 +2650,7 @@ async function main(): Promise<void> {
       }
       const capturedSamples: { capability: string; cliOk: boolean; httpOk: boolean; cliJson: unknown; httpBody: unknown; valueComparison: ValueComparisonSpec | undefined }[] = [];
       for (const entry of sample) {
-        const result = await probeCapabilityEntry(entry, daemon.url, nonce);
+        const result = await probeCapabilityEntry(entry, daemon, nonce);
         capturedSamples.push({ capability: entry.capability, cliOk: result.cliOk, httpOk: result.httpOk, cliJson: result.cliJson, httpBody: result.httpBody, valueComparison: result.valueComparison });
         sampleResults.push({ capability: entry.capability, ok: result.entryOk, detail: result.detail });
       }
@@ -2345,10 +2675,10 @@ async function main(): Promise<void> {
       const widenedSearchCapabilitiesTried: string[] = [];
       if (!controlBasis) {
         const alreadyTried = new Set(sample.map((e) => e.capability));
-        const remaining = applicable.filter((e) => !alreadyTried.has(e.capability)).sort((a, b) => a.capability.localeCompare(b.capability));
+        const remaining = samplingEligible.filter((e) => !alreadyTried.has(e.capability)).sort((a, b) => a.capability.localeCompare(b.capability));
         for (const entry of remaining) {
           widenedSearchCapabilitiesTried.push(entry.capability);
-          const result = await probeCapabilityEntry(entry, daemon.url, nonce);
+          const result = await probeCapabilityEntry(entry, daemon, nonce);
           const candidate = { capability: entry.capability, cliOk: result.cliOk, httpOk: result.httpOk, cliJson: result.cliJson, httpBody: result.httpBody, valueComparison: result.valueComparison };
           capturedSamples.push(candidate);
           if (candidate.cliOk && candidate.httpOk && candidate.cliJson !== null && candidate.httpBody !== null && hasCorruptibleLeaf(candidate.httpBody)) {
@@ -2382,10 +2712,24 @@ async function main(): Promise<void> {
     } finally {
       if (daemon) await daemon.kill();
     }
-    const ok = problems.length === 0 && sampleResults.length > 0 && sampleResults.every((r) => r.ok) && redControlOk && identityOk;
-    record('C0-10', '', '', ok, `manifest: ${manifest.length}, applicable: ${applicable.length}, SUBCOMMAND_MAP: ${subcommandKeys.length}\nproblems: ${problems.join('; ') || 'none'}\nsample: ${JSON.stringify(sampleResults)}\nred control: ${redControlDetail}`, {
-      detail: ok ? undefined : `problems=${problems.length} identityOk=${identityOk} sample=${JSON.stringify(sampleResults.map((r) => r.ok))} redControlOk=${redControlOk}`,
-    });
+    // Round-final coordinator ruling, item 1: a real regression, over every
+    // launch this actual run performed -- proves OD_DATA_DIR was always
+    // explicitly bound to the isolated boot's own dataDir and never absent
+    // or resolvable to <repo>/.od / repoRoot.
+    const odDataDirLeaks = odDataDirAudit.filter((a) => !a.matchesBootedDataDir || a.resolvesUnderRepoOd);
+    const ok = problems.length === 0 && sampleResults.length > 0 && sampleResults.every((r) => r.ok) && redControlOk && identityOk &&
+      artifactsNonceBindingOk && figmaMultipartOk &&
+      odDataDirLeaks.length === 0 &&
+      staleSamplingExcludedEntries.length === 0 && duplicateSamplingExcludedEntries.length === 0 && unusedSamplingExcludedEntries.length === 0;
+    record('C0-10', '', '', ok,
+      `manifest: ${manifest.length}, applicable: ${applicable.length}, SUBCOMMAND_MAP: ${subcommandKeys.length}\nproblems: ${problems.join('; ') || 'none'}\nsample: ${JSON.stringify(sampleResults)}\nred control: ${redControlDetail}\n` +
+        `artifacts nonce-binding (item 4a): ok=${artifactsNonceBindingOk} ${artifactsNonceBindingDetail}\n` +
+        `figma multipart (item 4b): ok=${figmaMultipartOk} ${figmaMultipartDetail}\n` +
+        `OD_DATA_DIR audit (item 1 -- every od CLI launch this run performed; a leak is a launch that omitted OD_DATA_DIR, diverged from the booted daemon's own dataDir, or could resolve under <repo>/.od): ${JSON.stringify(odDataDirAudit)}; leaks: ${JSON.stringify(odDataDirLeaks)}\n` +
+        `sampling-excluded (item 3): allowlistStatus=${allowlistStatusC10} entries=${JSON.stringify(samplingExcludedEntries.map((e) => ({ capability: e.capability, file: e.file, line: e.line, reason: e.reason })))} excludedCapabilities=${JSON.stringify([...excludedCapabilityNames])} staleEntries=${JSON.stringify(staleSamplingExcludedEntries)} duplicateEntries=${JSON.stringify(duplicateSamplingExcludedEntries)} unusedEntries=${JSON.stringify(unusedSamplingExcludedEntries)} per-entry commit-validation=${JSON.stringify(samplingExcludedEntries.map((e) => ({ capability: e.capability, ...commitValidationBySamplingEntry.get(e) })))}`,
+      {
+        detail: ok ? undefined : `problems=${problems.length} identityOk=${identityOk} sample=${JSON.stringify(sampleResults.map((r) => r.ok))} redControlOk=${redControlOk} artifactsNonceBindingOk=${artifactsNonceBindingOk} figmaMultipartOk=${figmaMultipartOk} odDataDirLeaks=${odDataDirLeaks.length} staleSamplingExcludedEntries=${staleSamplingExcludedEntries.length} duplicateSamplingExcludedEntries=${duplicateSamplingExcludedEntries.length} unusedSamplingExcludedEntries=${unusedSamplingExcludedEntries.length}`,
+      });
   });
 
   // Round-3 F13 (manifest-schema half): mutate a REAL manifest row (remove
