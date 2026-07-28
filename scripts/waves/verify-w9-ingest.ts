@@ -94,7 +94,7 @@
 // default-namespace daemon (ports 7456/51012) and never issues a `git
 // fetch`/`git push` -- git context is resolved from local refs only.
 
-import { execFileSync, spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -160,24 +160,28 @@ try {
   emergencyExit(`init failed: ${String((err as Error)?.stack ?? err)}`);
 }
 
+// CEREMONY CONFIRMATION FIX: rewritten on spawnSync (rather than
+// execFileSync's throw-on-nonzero-exit + try/catch dance) so stdout AND
+// stderr are always captured on every exit path, success or failure --
+// the prior execFileSync-based version only ever surfaced stdout (its catch
+// block read e.stdout but never e.stderr), so any "stdout/stderr hash"
+// claim built from it was false on the stderr half.
 function sh(
   cmd: string,
   args: string[],
   opts: { cwd?: string; timeoutMs?: number; env?: NodeJS.ProcessEnv } = {},
-): { status: number; stdout: string } {
-  try {
-    const stdout = execFileSync(cmd, args, {
-      cwd: opts.cwd ?? repoRoot,
-      encoding: 'utf8',
-      maxBuffer: 256 * 1024 * 1024,
-      timeout: opts.timeoutMs ?? 10 * 60_000,
-      env: opts.env ?? process.env,
-    });
-    return { status: 0, stdout };
-  } catch (error) {
-    const e = error as { status?: number; stdout?: string };
-    return { status: e.status ?? 1, stdout: e.stdout ?? '' };
+): { status: number; stdout: string; stderr: string } {
+  const result = spawnSync(cmd, args, {
+    cwd: opts.cwd ?? repoRoot,
+    encoding: 'utf8',
+    maxBuffer: 256 * 1024 * 1024,
+    timeout: opts.timeoutMs ?? 10 * 60_000,
+    env: opts.env ?? process.env,
+  });
+  if (result.error) {
+    return { status: 1, stdout: result.stdout ?? '', stderr: `${result.stderr ?? ''}\n${String(result.error)}` };
   }
+  return { status: result.status ?? 1, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 }
 
 function sha256Bytes(buf: Buffer | string): string {
@@ -504,13 +508,24 @@ function archiveRunArtifacts(manifest: ManifestShape): { runDir: string; ok: boo
 // positive evidence. The `isLocalSameOrigin` veto keeps a bounded recursive
 // walk with real dead-branch elimination.
 // =========================================================================
-function isApplyExtensionCorsPrelude(stmt: TsNode): boolean {
-  return (
-    ts.isExpressionStatement(stmt) &&
-    ts.isCallExpression(stmt.expression) &&
-    ts.isIdentifier(stmt.expression.expression) &&
-    stmt.expression.expression.text === 'applyExtensionCors'
-  );
+/** `applyExtensionCors(req, res)` -- exactly two arguments, both identifiers, bound to the
+ * enclosing handler's own first two parameter names. Arbitrary or absent arguments (a bare
+ * `applyExtensionCors()`, or one bound to unrelated variables) no longer count as the prelude. */
+function isApplyExtensionCorsPrelude(stmt: TsNode, handlerParamNames: readonly (string | null)[]): boolean {
+  if (
+    !ts.isExpressionStatement(stmt) ||
+    !ts.isCallExpression(stmt.expression) ||
+    !ts.isIdentifier(stmt.expression.expression) ||
+    stmt.expression.expression.text !== 'applyExtensionCors'
+  ) {
+    return false;
+  }
+  const args = stmt.expression.arguments;
+  if (args.length !== 2) return false;
+  const [reqParam, resParam] = handlerParamNames;
+  if (!reqParam || !resParam) return false;
+  const [a0, a1] = args;
+  return !!a0 && !!a1 && ts.isIdentifier(a0) && ts.isIdentifier(a1) && a0.text === reqParam && a1.text === resParam;
 }
 function isNegationOfIdentifier(expr: TsNode, varName: string): boolean {
   return (
@@ -564,6 +579,7 @@ function consequentUnconditionallyExits(stmt: TsNode): boolean {
 function matchToolTokenGuard(statements: readonly TsNode[], startIdx: number): boolean {
   const s0 = statements[startIdx];
   if (!s0 || !ts.isVariableStatement(s0)) return false;
+  if ((s0.declarationList.flags & ts.NodeFlags.Const) === 0) return false;
   const decls = s0.declarationList.declarations;
   if (decls.length !== 1) return false;
   const decl = decls[0]!;
@@ -579,6 +595,7 @@ function matchToolTokenGuard(statements: readonly TsNode[], startIdx: number): b
 function matchBearerGuard(statements: readonly TsNode[], startIdx: number): boolean {
   const s0 = statements[startIdx];
   if (!s0 || !ts.isVariableStatement(s0)) return false;
+  if ((s0.declarationList.flags & ts.NodeFlags.Const) === 0) return false;
   const d0 = s0.declarationList.declarations;
   if (d0.length !== 1 || !ts.isIdentifier(d0[0]!.name)) return false;
   const tokenVar = d0[0]!.name.text;
@@ -587,6 +604,7 @@ function matchBearerGuard(statements: readonly TsNode[], startIdx: number): bool
 
   const s1 = statements[startIdx + 1];
   if (!s1 || !ts.isVariableStatement(s1)) return false;
+  if ((s1.declarationList.flags & ts.NodeFlags.Const) === 0) return false;
   const d1 = s1.declarationList.declarations;
   if (d1.length !== 1 || !ts.isIdentifier(d1[0]!.name)) return false;
   const checkVar = d1[0]!.name.text;
@@ -600,8 +618,11 @@ function matchBearerGuard(statements: readonly TsNode[], startIdx: number): bool
   if (!isFalsyOkPropertyCheck(s2.expression, checkVar)) return false;
   return consequentUnconditionallyExits(s2.thenStatement);
 }
-function matchStraightLineGuards(statements: readonly TsNode[]): { authorizeToolRequest: boolean; bearer: boolean } {
-  const startIdx = statements.length > 0 && isApplyExtensionCorsPrelude(statements[0]!) ? 1 : 0;
+function matchStraightLineGuards(
+  statements: readonly TsNode[],
+  handlerParamNames: readonly (string | null)[],
+): { authorizeToolRequest: boolean; bearer: boolean } {
+  const startIdx = statements.length > 0 && isApplyExtensionCorsPrelude(statements[0]!, handlerParamNames) ? 1 : 0;
   return {
     authorizeToolRequest: matchToolTokenGuard(statements, startIdx),
     bearer: matchBearerGuard(statements, startIdx),
@@ -649,11 +670,44 @@ const NESTED_FUNCTION_KINDS = new Set([
 /** Bounded recursive reachability walk for the isLocalSameOrigin veto: never enters nested function/class bodies, stops after an unconditional top-level return/throw, and eliminates only statically-provable dead branches (if/while/for false conditions; do-while always runs once). */
 function isLocalSameOriginReachable(root: TsNode): boolean {
   let found = false;
+  // Short-circuit-aware: an operand that dead-expression evaluation proves
+  // unreachable (the RHS of `false && ...`, the RHS of `true || ...`, the
+  // untaken arm of a statically-resolved `cond ? a : b`) is never descended
+  // into -- visiting the whole condition eagerly, before evaluating which
+  // parts of it can even execute, is exactly what let an unreachable
+  // short-circuited RHS such as `false && isLocalSameOrigin(...)` still veto.
   function visitExprSubtree(node: TsNode): void {
     if (found) return;
     if (NESTED_FUNCTION_KINDS.has(node.kind)) return;
+    if (ts.isParenthesizedExpression(node)) {
+      visitExprSubtree(node.expression);
+      return;
+    }
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'isLocalSameOrigin') {
       found = true;
+      return;
+    }
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+      visitExprSubtree(node.left);
+      if (found) return;
+      if (staticBooleanValue(node.left) === false) return; // RHS never evaluates
+      visitExprSubtree(node.right);
+      return;
+    }
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.BarBarToken) {
+      visitExprSubtree(node.left);
+      if (found) return;
+      if (staticBooleanValue(node.left) === true) return; // RHS never evaluates
+      visitExprSubtree(node.right);
+      return;
+    }
+    if (ts.isConditionalExpression(node)) {
+      visitExprSubtree(node.condition);
+      if (found) return;
+      const condVal = staticBooleanValue(node.condition);
+      if (condVal !== false) visitExprSubtree(node.whenTrue);
+      if (found) return;
+      if (condVal !== true) visitExprSubtree(node.whenFalse);
       return;
     }
     ts.forEachChild(node, visitExprSubtree);
@@ -747,7 +801,8 @@ function collectRouteGuardSignals(finalHandler: TsNode): { hasAuthorizeToolReque
     return { hasAuthorizeToolRequest: false, hasSelfServiceBearerPattern: false };
   }
   const fnBody = finalHandler.body;
-  const guards = matchStraightLineGuards(fnBody.statements);
+  const handlerParamNames = finalHandler.parameters.map((p) => (ts.isIdentifier(p.name) ? p.name.text : null));
+  const guards = matchStraightLineGuards(fnBody.statements, handlerParamNames);
   const vetoed = isLocalSameOriginReachable(fnBody);
   return {
     hasAuthorizeToolRequest: guards.authorizeToolRequest,
@@ -1090,6 +1145,38 @@ function parseEnforcedDeclaration(mechanism: string): EnforcedDeclaration | null
 const UNDER_LIMIT_SIGNAL = /\b(accept|allow|within.?limit|under.?limit|below.?limit|not.?rate.?limited)\b/i;
 const OVER_LIMIT_SIGNAL = /\b(reject|429|413|exceed|over.?limit|throttl\w*|rate.?limited|too.?many|too.?large)\b/i;
 
+// CEREMONY CONFIRMATION FIX (regression + item 5): a signal "pair" requires
+// TWO DISTINCT passing assertions, one matching each side -- a single
+// assertion whose name happens to match both regexes (an omnibus name) no
+// longer satisfies the pair, restoring the parent implementation's
+// at-least-two-assertions requirement.
+function hasDistinctSignalPair(candidates: readonly { fullName: string }[], matchA: (fullName: string) => boolean, matchB: (fullName: string) => boolean): boolean {
+  const aMatches = candidates.filter((c) => matchA(c.fullName));
+  const bMatches = candidates.filter((c) => matchB(c.fullName));
+  return aMatches.some((a) => bMatches.some((b) => b.fullName !== a.fullName));
+}
+// CEREMONY CONFIRMATION FIX (item 5): transport coverage must bind the
+// under/over-limit assertions to the SAME route (via the existing
+// path-derived association terms), the parsed declaration's own numeric
+// limit, and -- for the over-limit side -- the declared overflow status
+// code. A bare "one assertion whose name matches an accept-shaped regex, a
+// different one matching a reject-shaped regex" is no longer sufficient on
+// its own; an unrelated or omnibus assertion name can no longer satisfy it.
+function matchesUnderLimitAssertion(fullName: string, routeTerms: readonly string[], parsed: EnforcedDeclaration): boolean {
+  const nameLower = fullName.toLowerCase();
+  const routeAssociated = routeTerms.length === 0 || routeTerms.some((t) => nameLower.includes(t.toLowerCase()));
+  const mentionsLimit = fullName.includes(String(parsed.limit));
+  return routeAssociated && mentionsLimit && UNDER_LIMIT_SIGNAL.test(fullName);
+}
+function matchesOverLimitAssertion(fullName: string, routeTerms: readonly string[], parsed: EnforcedDeclaration): boolean {
+  const nameLower = fullName.toLowerCase();
+  const routeAssociated = routeTerms.length === 0 || routeTerms.some((t) => nameLower.includes(t.toLowerCase()));
+  const mentionsLimit = fullName.includes(String(parsed.limit));
+  const overflowCode = parsed.overflow === 'reject-429' ? '429' : '413';
+  const mentionsOverflow = fullName.includes(overflowCode);
+  return routeAssociated && mentionsLimit && mentionsOverflow && OVER_LIMIT_SIGNAL.test(fullName);
+}
+
 // -----------------------------------------------------------------------
 // S9-3's generic paired positive/negative-control signal (round 2,
 // UNCHANGED by the ceremony -- one of the three r3 accepted-LOW residuals
@@ -1108,32 +1195,65 @@ const NEGATIVE_SIGNAL = /\b(reject|deny|denied|unauthoriz\w*|forbidden|invalid|4
 // title exists ONLY as the static first argument of a syntactic Vitest
 // `it`/`test` declaration (including modifier chains and `.each`'s outer
 // title call), string-literal or no-substitution-template only.
+//
+// CEREMONY CONFIRMATION FIX: the prior `rootIdentifierOfChain` walked
+// through CallExpressions as well as PropertyAccessExpressions, so for
+// `it.each('/api/library/ingest')('real title', fn)` it resolved BOTH the
+// outer title call AND the inner `it.each('/api/library/ingest')` factory
+// call to root 'it' -- recording the route-literal factory argument as a
+// second, false "title". It also accepted any property name at all
+// (`it.helper(...)`) as a valid modifier. Fixed by distinguishing the
+// structural shapes explicitly: a chained call's inner factory (the callee
+// of an outer CallExpression) is never independently treated as a
+// declaration, and only a fixed allowlist of real Vitest modifiers is
+// accepted between the root identifier and the call.
 // -----------------------------------------------------------------------
+const KNOWN_TEST_MODIFIERS = new Set(['concurrent', 'sequential', 'skip', 'only', 'todo', 'fails', 'each', 'for', 'runIf', 'skipIf']);
 function extractStaticTestTitlesFromSource(sourceText: string, label: string): Set<string> {
   const sourceFile = ts.createSourceFile(label, sourceText, ts.ScriptTarget.Latest, true);
   const titles = new Set<string>();
-  function rootIdentifierOfChain(expr: TsNode): string | null {
+  // Unwraps ONLY identifier/property-access chains -- never descends
+  // through a CallExpression. Returns the root identifier text only if
+  // every intermediate property is a known modifier; an unknown helper
+  // (e.g. `it.helper`) or a non-it/test root returns null.
+  function resolveKnownTestChainRoot(expr: TsNode): string | null {
     let cur: TsNode = expr;
-    for (;;) {
-      if (ts.isIdentifier(cur)) return cur.text;
-      if (ts.isPropertyAccessExpression(cur)) {
-        cur = cur.expression;
-        continue;
-      }
-      if (ts.isCallExpression(cur)) {
-        cur = cur.expression;
-        continue;
-      }
-      return null;
+    const props: string[] = [];
+    while (ts.isPropertyAccessExpression(cur)) {
+      props.unshift(cur.name.text);
+      cur = cur.expression;
     }
+    if (!ts.isIdentifier(cur)) return null;
+    const root = cur.text;
+    if (root !== 'it' && root !== 'test') return null;
+    if (props.some((p) => !KNOWN_TEST_MODIFIERS.has(p))) return null;
+    return root;
   }
+  function addTitleFromFirstArg(args: readonly TsNode[]): void {
+    const firstArg = args[0];
+    if (firstArg && ts.isStringLiteral(firstArg)) titles.add(firstArg.text);
+    else if (firstArg && ts.isNoSubstitutionTemplateLiteral(firstArg)) titles.add(firstArg.text);
+  }
+  const suppressed = new Set<TsNode>();
   function visit(node: TsNode): void {
-    if (ts.isCallExpression(node)) {
-      const rootName = rootIdentifierOfChain(node.expression);
-      if (rootName === 'it' || rootName === 'test') {
-        const firstArg = node.arguments[0];
-        if (firstArg && ts.isStringLiteral(firstArg)) titles.add(firstArg.text);
-        else if (firstArg && ts.isNoSubstitutionTemplateLiteral(firstArg)) titles.add(firstArg.text);
+    if (ts.isCallExpression(node) && !suppressed.has(node)) {
+      if (ts.isCallExpression(node.expression)) {
+        // Chained shape: it.each(arr)('title', fn). Only the OUTER call
+        // (this node) can bear a title; its inner factory call is marked
+        // suppressed so the generic walk below never re-examines it as an
+        // independent declaration.
+        const innerRoot = resolveKnownTestChainRoot(node.expression.expression);
+        if (innerRoot) {
+          suppressed.add(node.expression);
+          addTitleFromFirstArg(node.arguments);
+        }
+      } else {
+        // Plain shape: it(...), it.concurrent(...), test.fails(...). Only a
+        // property chain wholly composed of known modifiers, rooted at
+        // exactly it/test, counts -- an unknown helper never does.
+        if (resolveKnownTestChainRoot(node.expression)) {
+          addTitleFromFirstArg(node.arguments);
+        }
       }
     }
     ts.forEachChild(node, visit);
@@ -1331,8 +1451,10 @@ function replayRedEvidence(parentSha: string, containingFileRel: string, targetF
     ];
     evidenceLines.push(`argv: pnpm ${argvList.join(' ')} (cwd=${path.join(tempDir, 'apps/daemon')})`);
     const runResult = sh('pnpm', argvList, { cwd: path.join(tempDir, 'apps/daemon'), timeoutMs: 3 * 60_000 });
-    const outputHash = sha256Bytes(runResult.stdout);
-    evidenceLines.push(`exit=${runResult.status} stdout/stderr sha256=${outputHash}`);
+    // Both streams captured -- sh() now returns stderr too (ceremony
+    // confirmation fix), so this hash is honestly what it claims to be.
+    const outputHash = sha256Bytes(`${runResult.stdout}\n--- stderr ---\n${runResult.stderr}`);
+    evidenceLines.push(`exit=${runResult.status} stdout+stderr sha256=${outputHash}`);
 
     let replayData: SuiteJson | null = null;
     try {
@@ -1346,6 +1468,21 @@ function replayRedEvidence(parentSha: string, containingFileRel: string, targetF
     const controlAssertion = replayAssertions.find((a) => a.fullName === controlTestFullName);
     evidenceLines.push(`target="${targetFullName}" status=${targetAssertion?.status ?? 'MISSING'}`);
     evidenceLines.push(`CONTROL_TEST="${controlTestFullName}" status=${controlAssertion?.status ?? 'MISSING'}`);
+
+    // CEREMONY CONFIRMATION FIX: the target must be the ONLY failure --
+    // an unrelated failed assertion or timeout (which also reports status
+    // "failed" in the JSON reporter) can no longer coexist with the target
+    // failure and passing control and still pass. Both the reporter's own
+    // failed-test count and a direct scan of every OTHER assertion's status
+    // must agree there is exactly one failure, and it must be the target.
+    const otherFailed = replayAssertions.filter((a) => a.status === 'failed' && a.fullName !== targetFullName);
+    evidenceLines.push(`numFailedTests=${replayData.numFailedTests} otherFailedAssertions=${otherFailed.length}`);
+    if (otherFailed.length > 0) {
+      problems.push(`replay produced ${otherFailed.length} unrelated failed assertion(s) besides the target: ${otherFailed.map((a) => a.fullName).join('; ')}`);
+    }
+    if (replayData.numFailedTests !== 1) {
+      problems.push(`replay reporter numFailedTests is ${replayData.numFailedTests}, expected exactly 1 (the target only)`);
+    }
 
     if (runResult.status === 0) problems.push('replay child process exited 0 (expected nonzero for a genuine red state)');
     if (!targetAssertion) problems.push(`target test "${targetFullName}" not found in replay results`);
@@ -1808,16 +1945,18 @@ async function main(): Promise<void> {
       // as the control's cited test must contain a genuine paired
       // positive+negative signal among its own passing assertions -- proof
       // that the mechanism accepts a right caller and rejects a wrong one,
-      // not just a raw assertion count.
+      // not just a raw assertion count. CEREMONY CONFIRMATION FIX
+      // (regression): this must be TWO DISTINCT assertions -- one passing
+      // assertion whose name happens to match both regexes no longer
+      // satisfies the pair on its own.
       const fileResult = (suiteRun.data?.testResults ?? []).find(
         (t) => path.relative(path.join(repoRoot, 'apps/daemon'), t.name) === assertion.rel,
       );
       const passedInFile = fileResult ? fileResult.assertionResults.filter((a) => a.status === 'passed') : [];
-      const hasPositive = passedInFile.some((a) => POSITIVE_SIGNAL.test(a.fullName));
-      const hasNegative = passedInFile.some((a) => NEGATIVE_SIGNAL.test(a.fullName));
-      if (!hasPositive || !hasNegative) {
+      const pairedOk = hasDistinctSignalPair(passedInFile, (n) => POSITIVE_SIGNAL.test(n), (n) => NEGATIVE_SIGNAL.test(n));
+      if (!pairedOk) {
         problems.push(
-          `control.testRef "${ref}": ${assertion.rel} must contain a genuine paired positive+negative control among its passing assertions (positive=${hasPositive}, negative=${hasNegative})`,
+          `control.testRef "${ref}": ${assertion.rel} must contain a genuine paired positive+negative control -- two DISTINCT passing assertions, one reading positive, one reading negative`,
         );
       }
     }
@@ -1932,6 +2071,7 @@ async function main(): Promise<void> {
         const parsed = parseEnforcedDeclaration(mechanism);
         if (!parsed) {
           problems.push(`${key} (P0): control.mechanism "${mechanism}" does not match the required grammar "ENFORCED kind=... scope=... limit=... windowMs=... overflow=..."`);
+          continue; // no parsed limit/overflow to bind transport coverage to
         }
         const ref = typeof c.testRef === 'string' ? c.testRef.trim() : '';
         if (!ref) {
@@ -1943,16 +2083,25 @@ async function main(): Promise<void> {
           problems.push(`${key} (P0) control.testRef: ${testProblems.join('; ')}`);
           continue;
         }
-        // Real-transport coverage: under-limit-accepted AND over-limit-rejected
-        // signals among the current HEAD suite's passed assertions in the
-        // same file as the control test.
+        // CEREMONY CONFIRMATION FIX: real-transport coverage now binds the
+        // under/over-limit assertions to THIS route (path-derived terms),
+        // the parsed declaration's own numeric limit, and -- for the
+        // over-limit side -- the declared overflow status code, and
+        // requires two DISTINCT passing assertions (an unrelated or
+        // omnibus assertion name can no longer satisfy both sides at once).
         const assertion = findAssertion(ref);
         const fileResult = assertion ? (suiteRun.data?.testResults ?? []).find((t) => path.relative(path.join(repoRoot, 'apps/daemon'), t.name) === assertion.rel) : undefined;
         const passedInFile = fileResult ? fileResult.assertionResults.filter((a) => a.status === 'passed') : [];
-        const hasUnder = passedInFile.some((a) => UNDER_LIMIT_SIGNAL.test(a.fullName));
-        const hasOver = passedInFile.some((a) => OVER_LIMIT_SIGNAL.test(a.fullName));
-        if (!hasUnder || !hasOver) {
-          problems.push(`${key} (P0): real-transport coverage in ${assertion?.rel ?? '(unresolved file)'} must show both an under-limit-accepted and an over-limit-rejected passing assertion (under=${hasUnder}, over=${hasOver})`);
+        const routeTerms = routeAssociationTerms(key);
+        const coverageOk = hasDistinctSignalPair(
+          passedInFile,
+          (n) => matchesUnderLimitAssertion(n, routeTerms, parsed),
+          (n) => matchesOverLimitAssertion(n, routeTerms, parsed),
+        );
+        if (!coverageOk) {
+          problems.push(
+            `${key} (P0): real-transport coverage in ${assertion?.rel ?? '(unresolved file)'} must show two DISTINCT passing assertions -- one under-limit-accepted, one over-limit-rejected -- each associated with this route, naming limit=${parsed.limit} (the over-limit one also naming the declared overflow status ${parsed.overflow === 'reject-429' ? '429' : '413'})`,
+          );
         }
       } else if (hasAcceptedRisk) {
         const ar = row.acceptedRisk as { decisionRef?: unknown };
@@ -1992,7 +2141,12 @@ async function main(): Promise<void> {
       });
       return;
     }
-    const bulletLines = waveSection.split('\n').filter((l) => /\[C9-\d+\]/.test(l));
+    // CEREMONY CONFIRMATION FIX: a line must actually BE a Markdown list
+    // item (unordered `-`/`*`/`+` or ordered `1.`), not merely contain the
+    // `[C9-N]` tag anywhere -- a plain paragraph mentioning a tag no longer
+    // satisfies the ruled per-route "bullet line" requirement.
+    const MARKDOWN_BULLET_LINE = /^\s*(?:[-*+]|\d+\.)\s+/;
+    const bulletLines = waveSection.split('\n').filter((l) => MARKDOWN_BULLET_LINE.test(l) && /\[C9-\d+\]/.test(l));
     const problems: string[] = [];
     const p0Rows = matrixRows ? matrixRows.filter((r) => r.riskScore?.tier === 'P0') : [];
     const bulletsCoveringP0 = new Set<string>();
