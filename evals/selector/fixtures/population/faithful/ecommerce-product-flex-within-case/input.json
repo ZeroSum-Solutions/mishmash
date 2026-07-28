@@ -1,0 +1,47 @@
+{
+  "caseId": "ecommerce-product-flex",
+  "composition": [
+    {
+      "elementId": "pop-0-palette",
+      "sourceId": "ecom-flex-a",
+      "domPath": "body > div.ecom-flex-a-shell > price_badge.ecom-flex-a-price-badge",
+      "nodeId": "ecom-flex-a-price-badge-mobile-default",
+      "breakpoint": "mobile"
+    },
+    {
+      "elementId": "pop-1-palette",
+      "sourceId": "ecom-grid-b",
+      "domPath": "body > div.ecom-grid-b-shell > price_badge.ecom-grid-b-price-badge",
+      "nodeId": "ecom-grid-b-price-badge-mobile-default",
+      "breakpoint": "mobile"
+    },
+    {
+      "elementId": "pop-2-motion",
+      "sourceId": "ecom-grid-b",
+      "domPath": "body > div.ecom-grid-b-shell > add_to_cart.ecom-grid-b-add-to-cart",
+      "nodeId": "ecom-grid-b-add-to-cart-mobile-default",
+      "breakpoint": "mobile"
+    },
+    {
+      "elementId": "pop-3-section",
+      "sourceId": "ecom-flex-a",
+      "domPath": "body > div.ecom-flex-a-shell > reviews_panel.ecom-flex-a-reviews-panel",
+      "nodeId": "ecom-flex-a-reviews-panel-mobile-default",
+      "breakpoint": "mobile"
+    },
+    {
+      "elementId": "pop-4-layout",
+      "sourceId": "ecom-flex-a",
+      "domPath": "body > div.ecom-flex-a-shell > reviews_panel.ecom-flex-a-reviews-panel",
+      "nodeId": "ecom-flex-a-reviews-panel-mobile-default",
+      "breakpoint": "mobile"
+    },
+    {
+      "elementId": "pop-5-typography",
+      "sourceId": "ecom-grid-b",
+      "domPath": "body > div.ecom-grid-b-shell > product_title.ecom-grid-b-product-title",
+      "nodeId": "ecom-grid-b-product-title-mobile-default",
+      "breakpoint": "mobile"
+    }
+  ]
+}

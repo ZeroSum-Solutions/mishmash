@@ -1,0 +1,1 @@
+I want the grid features layout from mkt-grid-a -- mkt-flex-b has its own features layout too but I don't want that one, mkt-grid-a's should win. For the rest: use mkt-flex-b's colour palette on the hero, and keep mkt-grid-a's headline typography as-is.
