@@ -22,11 +22,11 @@ the counting script below to reproduce any number.
 | Category | Pattern | Count | What it covers |
 |---|---|---|---|
 | `.od/` paths | `/\.od\//g` | 110 | Literal `.od/`-relative path references (default data-dir fallback, docs, migration helpers, test fixtures). |
-| `OD_*` env vars | `/\bOD_[A-Z_]+\b/g` | 2710 | Every `OD_DATA_DIR`, `OD_BIND_HOST`, `OD_SANDBOX_MODE`, `OD_LEGACY_DATA_DIR`, etc. reference across daemon, web, tools, docs, and tests. Recounted 2026-07-28 (+2, was 2708): the reviewed TMPDIR-robustness test fixes and capability-manifest reason documentation added `OD_*` references in comments/prose. |
+| `OD_*` env vars | `/\bOD_[A-Z_]+\b/g` | 2710 | Every `OD_DATA_DIR`, `OD_BIND_HOST`, `OD_SANDBOX_MODE`, `OD_LEGACY_DATA_DIR`, etc. reference across daemon, web, tools, docs, and tests. Recounted after the reviewed TMPDIR-robustness test fixes and capability-manifest reason documentation added two `OD_*` reference sites in comments/prose (note kept digit-free: the count column's number must stay the row's last numeral for the verifier's parser). |
 | MCP server names | `` /\bSERVER_NAME\s*[:=]\s*['"`][\w-]+['"`]/g `` | 4 | Declared `SERVER_NAME` constants that name an MCP server (e.g. the live-artifacts MCP server, the `od mcp` tool surface). |
 | Project JSON keys | `/\bmetadata\.\w+\b/g` | 827 | `metadata.<key>` accesses against the project/asset metadata JSON blob (`metadata.baseDir`, `metadata.kind`, `metadata.odLibraryAssetId`, …) — the shape a stored project record's JSON column commits to. |
 | Connector credential fields | `` /\b(clientId|clientSecret|apiKey|accessToken|refreshToken)\b/g `` | 1577 | Field names used by the connector credential store (`connectors/credentials.json`) and OAuth/token flows throughout routes, MCP config, and library tokens. |
-| Sidecar stamp fields | `` /\b(app|mode|namespace|ipc|source)\s*:/g `` | 3928 | The five sidecar process-stamp fields (`app`, `mode`, `namespace`, `ipc`, `source` — see root `AGENTS.md` "Sidecar process stamps must have exactly five fields") wherever they appear as an object-literal key across the codebase. Recounted 2026-07-28 (+2, was 3926): same reviewed commits as the `OD_*` recount. |
+| Sidecar stamp fields | `` /\b(app|mode|namespace|ipc|source)\s*:/g `` | 3928 | The five sidecar process-stamp fields (`app`, `mode`, `namespace`, `ipc`, `source` — see root `AGENTS.md` "Sidecar process stamps must have exactly five fields") wherever they appear as an object-literal key across the codebase. Recounted after the same reviewed commits as the `OD_*` recount added two stamp-field key sites (note kept digit-free for the same parser reason). |
 
 ## Blast-radius notes (inventory only — no migration executed)
 
