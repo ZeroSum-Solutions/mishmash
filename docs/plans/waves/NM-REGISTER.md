@@ -23,7 +23,7 @@ register IDs.
 |---|---|---|---|
 | NM-01 | Rename `@open-design/*` scope (20 manifests, 760 imports, 563 files) | W11 | **Deferred by default** — both auditors HIGH against |
 | NM-02 | Stale PNG brand assets (favicon + apple-touch-icon) | W2 | Open |
-| NM-03 | Internal-identifier policy ruling (`od`, `OD_*`, `.od/`, `SERVER_NAME`) | W2 | Founder decision |
+| NM-03 | Internal-identifier policy ruling (`od`, `OD_*`, `.od/`, `SERVER_NAME`) | W2 | **Resolved 2026-07-27** — KEEP internal identifiers + `@open-design` package scope (with NM-01). W11 will not fire. C0-12 inventory still runs, inventory-only |
 | NM-04 | Orphaned Chinese i18n key + toolbox `searchTerms` | W2 | Open |
 | NM-05 | README rebrand | W2 | Open |
 | NM-06 | Retire `open-design-public-metadata` route | W2 | Open |
@@ -44,11 +44,11 @@ register IDs.
 | NM-18 | Project-card cover lifecycle (**not** greenfield capture) | W4 | Open |
 | NM-19 | Design-toolbox reliability + 16-action mapping tests | **W10c** | Open |
 | NM-20 | Cost & usage meter (in-app first) | W1 | Open |
-| NM-21 | Memory scope decision | **W10e** | Founder decision |
+| NM-21 | Memory scope decision | **W10e** | **Resolved 2026-07-27** — library embeddings only |
 | NM-22 | Route hardening (340 registrations + 6 bootstrap) | W9 | **Split by threat boundary**; ingest tranche is its own gate on W3 |
 | NM-23 | Second de-bloat pass (`tools/pack`, `.tmp` 30 GB, `.od` 1.1 GB) | **W10f** | Open |
-| NM-24 | Instatic tether | **W10a** | Founder decision |
-| NM-25 | VoiceBox MCP tether (MCP already exists) | **W10b** | Founder decision |
+| NM-24 | Instatic tether | **W10a** | **Resolved 2026-07-27** — seam = MCP + Super Import only; W10a pinned to that seam; deeper coupling needs separate evidence |
+| NM-25 | VoiceBox MCP tether (MCP already exists) | **W10b** | **Resolved 2026-07-27** — register the MCP and stop; W10b shrinks to registration only |
 | NM-26 | Documentation honesty (mark archived in-file) | W2 | Open |
 | NM-27 | Library/gallery organization policy (J1–J4) | **W10d** | Open |
 | NM-28 | Current daemon failure inventory (re-measure) | W0 | Open |
