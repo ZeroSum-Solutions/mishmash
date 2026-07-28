@@ -1884,7 +1884,7 @@ async function main(): Promise<void> {
     const mdRel = 'docs/testing/scale-baseline-2026-07.md';
     const jsonRel = 'docs/testing/scale-baseline-2026-07.json';
     if (!fileExists(mdRel) || !fileExists(jsonRel)) { record('C0-9', '', '', false, '', { detail: `missing: ${!fileExists(mdRel) ? mdRel : ''} ${!fileExists(jsonRel) ? jsonRel : ''}`.trim() }); return; }
-    interface BaselineJson { corpus: { path: string; sha256: string; isRealStoreSnapshot?: boolean; realStoreFingerprint?: string }; machine: { fingerprint: string }; warmup: { iterations: number }; scenarios: { name: string; samplesMs: number[]; p50: number; p95: number; toleranceBandPct?: number }[]; searchProbe?: { projectId: string; needle: string; expectFile: string }; nonRegressionCeiling: number; minimumImprovementThreshold: number; version: string }
+    interface BaselineJson { corpus: { path: string; sha256: string; isRealStoreSnapshot?: boolean; realStoreFingerprint?: string }; machine: { fingerprint: string }; warmup: { iterations: number }; scenarios: { name: string; samplesMs: number[]; p50: number; p95: number; toleranceBandPct?: number }[]; searchProbe?: { projectId: string; needle: string; expectFile: string; expectLine: number; expectSnippetContains: string }; nonRegressionCeiling: number; minimumImprovementThreshold: number; version: string }
     let baseline: BaselineJson;
     try { baseline = JSON.parse(readRepoFile(jsonRel)) as BaselineJson; } catch (err) { record('C0-9', '', '', false, '', { detail: `invalid JSON: ${String(err)}` }); return; }
     const problems: string[] = [];
@@ -1994,10 +1994,23 @@ async function main(): Promise<void> {
           // and a NEGATIVE control (random nonce -> 2xx with zero matches),
           // both against the declared project. Timing measures the positive
           // probe -- the real search work.
+          // r2d amendment 2026-07-28 (Sol REJECT r4-1): a list-only stub could
+          // special-case the recognizable 'w0-neg-' nonce prefix and map
+          // listed FILENAMES to matches without reading any file content. Two
+          // structural closures: (1) the negative nonce carries NO marker --
+          // it is indistinguishable from a real query; (2) the positive match
+          // must return CONTENT PROOF the request never carried:
+          // expectSnippetContains is a frozen slice of the real matched line
+          // that strictly extends the needle (validated below), so only an
+          // implementation that actually read the file's line can echo it.
           const searchProbe = baseline.searchProbe;
           let searchProbeUsable = false;
-          if (!searchProbe || typeof searchProbe.projectId !== 'string' || !searchProbe.projectId || typeof searchProbe.needle !== 'string' || !searchProbe.needle || typeof searchProbe.expectFile !== 'string' || !searchProbe.expectFile) {
-            problems.push('baseline.searchProbe {projectId, needle, expectFile} is required for the search scenario and is missing or invalid');
+          if (!searchProbe || typeof searchProbe.projectId !== 'string' || !searchProbe.projectId || typeof searchProbe.needle !== 'string' || !searchProbe.needle || typeof searchProbe.expectFile !== 'string' || !searchProbe.expectFile
+              || !Number.isInteger(searchProbe.expectLine) || searchProbe.expectLine < 1
+              || typeof searchProbe.expectSnippetContains !== 'string'
+              || !searchProbe.expectSnippetContains.toLowerCase().includes(searchProbe.needle.toLowerCase())
+              || searchProbe.expectSnippetContains.toLowerCase() === searchProbe.needle.toLowerCase()) {
+            problems.push('baseline.searchProbe {projectId, needle, expectFile, expectLine, expectSnippetContains} is required; expectSnippetContains must strictly extend the needle (content proof beyond the query itself)');
           } else {
             const pr = await fetch(`${daemon.url}/api/projects`).catch(() => null);
             const pj = pr && pr.ok ? ((await pr.json().catch(() => null)) as { projects?: { id?: unknown }[] } | null) : null;
@@ -2044,16 +2057,23 @@ async function main(): Promise<void> {
             const searchRun = await timedRun(async () => {
               const r = await fetch(searchUrl(searchProbe.needle)).catch(() => null);
               if (!r || !r.ok) return false;
-              const body = (await r.json().catch(() => null)) as { matches?: { file?: unknown }[] } | null;
+              const body = (await r.json().catch(() => null)) as { matches?: { file?: unknown; line?: unknown; snippet?: unknown }[] } | null;
               const matches = Array.isArray(body?.matches) ? body.matches : [];
-              // A real search must FIND the frozen needle in the declared file;
-              // matches.length alone is not enough (an always-match stub is
-              // killed by the negative control below).
-              return matches.length >= 1 && matches.some((m) => String(m?.file ?? '') === searchProbe.expectFile);
+              // r2d: the match must carry CONTENT PROOF -- the frozen file,
+              // the frozen line number, and a snippet containing the frozen
+              // slice of the real line (which strictly extends the query, so
+              // it cannot be echoed back from the request). A list-only stub
+              // has none of these.
+              return matches.length >= 1 && matches.some((m) =>
+                String(m?.file ?? '') === searchProbe.expectFile &&
+                m?.line === searchProbe.expectLine &&
+                String(m?.snippet ?? '').toLowerCase().includes(searchProbe.expectSnippetContains.toLowerCase()));
             });
             // Negative control (unmatched nonce): a genuine search returns 2xx
-            // with ZERO matches; an always-match stub fails here.
-            const negNonce = `w0-neg-${crypto.randomBytes(6).toString('hex')}`;
+            // with ZERO matches; an always-match stub fails here. r2d: the
+            // nonce carries NO recognizable marker -- a stub cannot
+            // special-case it apart from a real query.
+            const negNonce = crypto.randomBytes(9).toString('hex');
             const neg = await fetch(searchUrl(negNonce)).catch(() => null);
             const negBody = neg && neg.ok ? ((await neg.json().catch(() => null)) as { matches?: unknown[] } | null) : null;
             const negOk = !!neg && neg.ok && Array.isArray(negBody?.matches) && negBody.matches.length === 0;
