@@ -12,6 +12,11 @@
   "warmup": {
     "iterations": 1
   },
+  "searchProbe": {
+    "projectId": "bde3b40d-f47e-418f-b8d2-66701c4de690",
+    "needle": "doctype",
+    "expectFile": "steady-landing.html"
+  },
   "nonRegressionCeiling": 25,
   "minimumImprovementThreshold": 10,
   "scenarios": [
@@ -45,11 +50,11 @@
     },
     {
       "name": "search",
-      "samplesMs": [5, 2, 2, 2, 2],
-      "p50": 2,
+      "samplesMs": [5, 3, 4, 2, 2],
+      "p50": 3,
       "p95": 5,
       "toleranceBandPct": 50,
-      "note": "RESOLVED by the 2026-07-27/28 r2b verifier amendment (scripts/waves/verify-w0.ts commit c0d5c7d24) -- see docs/testing/scale-baseline-2026-07.md 'Known issue: search scenario' for the full history. The scenario now resolves a REAL project id from the booted corpus (GET /api/projects, first project with a string id) and times GET /api/projects/<id>/search?q=w0-verifier-smoke -- unauthenticated, real file search over PROJECTS_DIR, no external or tool-token credential required. Confirmed live: resolved project id bde3b40d-f47e-418f-b8d2-66701c4de690, probe returns 200 with body {\"query\":\"w0-verifier-smoke\",\"matches\":[]} (the query intentionally matches nothing in the corpus -- the search work happens regardless). httpOkAll=true across both measurement runs."
+      "note": "RESOLVED by the 2026-07-28 r2c verifier amendment (scripts/waves/verify-w0.ts commit dcf483dab), after Sol rejected the r2b probe as gameable by an always-empty-200 stub. The scenario now asserts a KNOWN MATCH against the frozen searchProbe (top-level field above) -- GET /api/projects/<searchProbe.projectId>/search?q=<searchProbe.needle> must return >=1 match whose file === searchProbe.expectFile on every timed repetition -- plus a negative control (a random nonce query must return 2xx with zero matches). Confirmed live, 3 independent runs: project bde3b40d-f47e-418f-b8d2-66701c4de690 is listed in GET /api/projects; the positive probe (q=doctype) returns 200 with exactly one match {file: \"steady-landing.html\", line: 2, snippet: \"<!doctype html>\"} on every repetition across all 3 runs; the negative control (random nonce query) returns 200 with zero matches every time. httpOkAll=true (combined positive-match + negative-control) in all 3 runs. See docs/testing/scale-baseline-2026-07.md 'Known issue: search scenario' for the full history."
     }
   ]
 }

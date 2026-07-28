@@ -69,12 +69,12 @@ one long-lived daemon, each running its own warmup-then-5-reps loop.
 | project-list | 21 ms | 23 ms | `GET /api/projects` |
 | designs-tab-fan-out | 1 ms | 3 ms | `GET /api/projects/:id/files` against a real project id from the corpus. |
 | memory-high-water | 130848 KB | 130848 KB | Peak RSS of the daemon process, sampled via `ps -o rss=` across the same warmup+5-rep window as the other scenarios (flat across reps — one long-lived process, no GC pressure induced by this smoke). |
-| search | 2 ms | 5 ms | `GET /api/projects/:id/search?q=w0-verifier-smoke` against a real project id from the corpus — unauthenticated, real file search over `PROJECTS_DIR`. See "Known issue" below for the history; this scenario is now a genuinely functioning, 200-returning search. |
+| search | 3 ms | 5 ms | Known-match search probe against the frozen corpus project (`searchProbe` in the JSON): `GET /api/projects/<searchProbe.projectId>/search?q=<searchProbe.needle>`, asserting the response names `searchProbe.expectFile`, plus a negative-control nonce query asserting zero matches. See "Known issue" below for the full history. |
 
 ## Known issue: search scenario (resolved)
 
-**Fully resolved by the 2026-07-28 r2b verifier amendment
-(`scripts/waves/verify-w0.ts` commit `c0d5c7d24`).** History, in order:
+**Fully resolved by the 2026-07-28 r2c verifier amendment
+(`scripts/waves/verify-w0.ts` commit `dcf483dab`).** History, in order:
 
 1. **Original**: the scenario-selection logic picked the **first** route in
    the daemon's route-registration order whose path matched `/search/i`,
@@ -92,21 +92,47 @@ one long-lived daemon, each running its own warmup-then-5-reps loop.
    token and got `401 TOOL_TOKEN_MISSING` on every call — a different
    401, still not a functioning search (samples `[3, 2, 1, 2, 1]`, p50 2ms /
    p95 3ms).
-3. **r2b amendment** (commit `c0d5c7d24`, current): the scenario now resolves
-   a REAL project id from the booted corpus first (`GET /api/projects`, the
-   first project with a string id), then times `GET
+3. **r2b amendment** (commit `c0d5c7d24`): the scenario resolved a REAL
+   project id from the booted corpus (`GET /api/projects`, the first project
+   with a string id) and timed `GET
    /api/projects/:id/search?q=w0-verifier-smoke` — unauthenticated, real
-   file search over `PROJECTS_DIR`, requiring no external or tool-token
-   credential.
+   file search over `PROJECTS_DIR`, no external or tool-token credential
+   required, and genuinely returning `200`. **Sol (adversarial review)
+   rejected this as gameable**: the fixed query `w0-verifier-smoke`
+   intentionally matches nothing, so the probe's only assertion was "returns
+   2xx" — an always-empty-`200` stub handler would pass identically to a
+   real search, so the scenario never actually proved search worked.
+4. **r2c amendment** (commit `dcf483dab`, current): the committed baseline now
+   declares a frozen `searchProbe: { projectId, needle, expectFile }` (top
+   level of `scale-baseline-2026-07.json`). The scenario asserts a KNOWN
+   MATCH — the positive probe (`q=<needle>`) must return `>=1` match whose
+   `file === expectFile` on every timed repetition — **and** a negative
+   control (a random nonce query must return `2xx` with zero matches),
+   which is exactly what would catch the r2b-era always-empty stub.
 
-Re-measured live against this exact logic (isolated daemon boot, same
-corpus, same R8 protocol — 1 discarded warmup + 5 timed reps): resolved
-project id `bde3b40d-f47e-418f-b8d2-66701c4de690` from the corpus's own
-project listing; every one of the 5 timed repetitions returned `200` with
-body `{"query":"w0-verifier-smoke","matches":[]}` (the query intentionally
-matches nothing in the corpus — the search work happens regardless of match
-count). `httpOkAll=true` across two independent measurement runs (samples
-`[5, 2, 2, 2, 2]` and `[4, 3, 3, 2, 2]` — consistent p50 around 2-3ms).
-Recorded samples: `[5, 2, 2, 2, 2]`, p50 2ms, p95 5ms, `toleranceBandPct: 50`
-(the cap — honest at this sub-10ms scale, where a 1-2ms absolute jitter is a
-large relative swing).
+**Chosen probe target**, read from `apps/daemon/src/projects.ts`'s
+`searchProjectFiles` (query is regex-escaped then matched case-insensitively
+per line, restricted to textual MIME files; `match.file` is the file's path
+relative to the project root, `f.name`/`f.path` from `listFiles`) before
+picking a needle: project `bde3b40d-f47e-418f-b8d2-66701c4de690` (the same
+first project `GET /api/projects` already resolves), file
+`steady-landing.html` (a real generated HTML landing page, single top-level
+file so `name === path`, `text/html` MIME — eligible), needle `doctype` — a
+plain alphanumeric token (no regex metacharacters), boring and structural
+(part of `<!doctype html>`) rather than thematic content, occurring exactly
+once in the file for an unambiguous match.
+
+Re-measured live against the amended logic (isolated daemon boot, same
+corpus, same R8 protocol — 1 discarded warmup + 5 timed reps), 3 independent
+runs: `searchProbe.projectId` confirmed listed in `GET /api/projects` every
+run; the positive probe (`q=doctype`) returned `200` with exactly one match
+— `{"file":"steady-landing.html","line":2,"snippet":"<!doctype html>"}` — on
+every one of the 5 timed repetitions in every run; the negative control (a
+random nonce query) returned `200` with zero matches every time. Combined
+`httpOkAll` (positive-match AND negative-control) was `true` in all 3 runs.
+Observed samples across runs: `[4,3,2,2,2]` (p50 2/p95 4), `[5,2,2,2,2]`
+(p50 2/p95 5), `[5,3,4,2,2]` (p50 3/p95 5). Recorded the third run —
+`[5, 3, 4, 2, 2]`, p50 3ms, p95 5ms — with `toleranceBandPct: 50` (the cap),
+chosen because its ±50% window (`[1.5, 4.5]` for p50, `[2.5, 7.5]` for p95)
+comfortably covers the full spread observed across all 3 runs, not just the
+recorded one.
