@@ -1481,6 +1481,160 @@ interface ReplayOutcome {
   problems: string[];
   evidenceLines: string[];
 }
+
+// =========================================================================
+// CEREMONY CONFIRMATION FIX (round 6) -- REDESIGN: bypasses the JSON
+// reporter entirely. Sol proved (against the worktree's actual installed
+// vitest@4.1.6 sources) that the reporter's per-file `message` field only
+// ever carries an error attached directly to the ROOT FILE task
+// (@vitest/runner dist/chunk-artifact.js: a nested suite's own afterAll
+// failure is caught and attached via `failTask(suite.result, e, ...)` at
+// the point the suite's own `afterAll` hook runs -- confirmed directly in
+// this worktree's installed @vitest/runner@4.1.6 source, chunk-artifact.js
+// around the `suite.afterAll` hook call and its `catch (e) {
+// failTask(suite.result, e, ...) }` handler; `failTask` itself, also in
+// chunk-artifact.js, sets `result.state='fail'` and pushes into
+// `result.errors` on the exact object it's given -- the NESTED suite's own
+// result, never the file's). A sibling helper, `hasFailed`, walks the tree
+// afterward and propagates only the FAILED STATE up to ancestors -- never
+// the error objects -- so a nested-suite hook error is real, visible on
+// that suite's own result, and invisible to any check that only reads the
+// file-level JSON reporter fields. The JSON reporter also silently drops
+// process-level unhandled errors, since it never reads vitest's separate
+// unhandled-errors argument at report time. Verified directly in this
+// worktree's installed vitest@4.1.6:
+//   - `createVitest`/`startVitest` are exported from `vitest/node`
+//     (node_modules/vitest/dist/node.d.ts -> dist/chunks/cli-api.*.js).
+//   - `startVitest(mode, cliFilters, options, ...)` runs the collection +
+//     execution and returns the Vitest instance (`ctx`) after completion.
+//   - `ctx.state.getTestModules()` returns the "reported tasks" API
+//     (TestModule/TestSuite/TestCase instances, dist/chunks/cli-api.*.js).
+//     TestModule/TestSuite both extend SuiteImplementation, which exposes
+//     `.errors()` (`task.result?.errors || []`) and `.state()`; TestCase
+//     exposes `.result()` returning `{ state, errors }` for that ONE test.
+//     Both suite/module types expose `.children` (a TestCollection,
+//     iterable, yielding further TestSuite/TestCase nodes) -- a full
+//     recursive tree walk is possible entirely through this public API.
+//   - `ctx.state.getUnhandledErrors()` (StateManager.getUnhandledErrors,
+//     `Array.from(this.errorsSet)`) returns the run's process-level
+//     unhandled-errors collection, independent of any reporter.
+// All of the above was additionally validated empirically against a real
+// vitest@4.1.6 run in an isolated scratch project (never the repo
+// worktree, never a daemon): a nested describe's throwing afterAll shows
+// up as a non-empty `errors()` on that nested TestSuite while the file's
+// own `errors()` stays empty; an unhandled promise rejection shows up only
+// in `getUnhandledErrors()`; a legitimate replay (target test fails, an
+// unrelated nested describe with no errors, control passes) shows a
+// completely clean tree and empty unhandled-errors collection.
+//
+// The redesign: the verifier generates a runner script (a string built by
+// this function -- verifier-constructed source, never checked-in command
+// text, the same anti-gaming principle as the pre-existing verifier-built
+// argv) and writes it into the detached worktree. The runner imports
+// `vitest/node` from THAT worktree's own frozen-offline-installed
+// `apps/daemon/node_modules` (a bare specifier resolves normally since the
+// runner file lives inside `apps/daemon`), runs exactly the replay file
+// with the same config, and serializes the FULL task forest plus the
+// unhandled-errors collection to stdout as one JSON line behind a fixed
+// marker prefix (vitest's own console output is not suppressed and may
+// share stdout, so the marker line is found by exact prefix match, not by
+// assuming stdout is pure JSON).
+// =========================================================================
+interface SerializedTaskNode {
+  type: 'module' | 'suite' | 'test';
+  name: string;
+  fullName: string;
+  state: string;
+  errors: string[];
+  children?: SerializedTaskNode[];
+}
+interface SerializedReplayForest {
+  moduleCount: number;
+  modules: SerializedTaskNode[];
+  unhandledErrors: string[];
+}
+const REPLAY_RESULT_MARKER = 'W9_REPLAY_RESULT_JSON:';
+function buildReplayRunnerScript(): string {
+  return [
+    "import { startVitest } from 'vitest/node';",
+    '',
+    'function serializeErrors(errors) {',
+    "  return (errors || []).map((e) => (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)));",
+    '}',
+    'function serializeNode(node) {',
+    "  if (node.type === 'test') {",
+    '    const result = node.result();',
+    "    return { type: 'test', name: node.name, fullName: node.fullName, state: result.state, errors: serializeErrors(result.errors) };",
+    '  }',
+    '  const children = [...node.children].map(serializeNode);',
+    '  return {',
+    '    type: node.type,',
+    "    name: node.type === 'module' ? node.relativeModuleId : node.name,",
+    "    fullName: node.type === 'module' ? node.moduleId : node.fullName,",
+    '    state: node.state(),',
+    '    errors: serializeErrors(node.errors()),',
+    '    children,',
+    '  };',
+    '}',
+    '',
+    'const targetFile = process.argv[2];',
+    "const ctx = await startVitest('test', [targetFile], { root: process.cwd(), watch: false, reporters: [], config: 'vitest.config.ts' });",
+    'const testModules = ctx.state.getTestModules();',
+    'const unhandledErrors = ctx.state.getUnhandledErrors();',
+    'const serialized = { moduleCount: testModules.length, modules: testModules.map(serializeNode), unhandledErrors: serializeErrors(unhandledErrors) };',
+    `console.log(${JSON.stringify(REPLAY_RESULT_MARKER)} + JSON.stringify(serialized));`,
+    'await ctx.close();',
+    'process.exit(0);',
+    '',
+  ].join('\n');
+}
+/** Walks the entire serialized forest once, checking every predicate the ruling requires: exactly one module task; the ONLY failed leaf anywhere is the target; the ONLY errors anywhere belong to the target's own test-level result; no suite/module task carries any error; the unhandled-errors collection is empty; target failed; control passed. */
+function evaluateTaskForestConsistency(forest: SerializedReplayForest, targetFullName: string, controlFullName: string): string[] {
+  const problems: string[] = [];
+  if (forest.moduleCount !== 1 || forest.modules.length !== 1) {
+    problems.push(`expected exactly 1 module task, got moduleCount=${forest.moduleCount} modules.length=${forest.modules.length}`);
+  }
+  const moduleNode = forest.modules[0];
+  if (!moduleNode) {
+    problems.push('no module task found in the serialized forest');
+    return problems;
+  }
+  let targetState: string | null = null;
+  let controlState: string | null = null;
+  const failedLeaves: string[] = [];
+  const disallowedErrorNodes: string[] = [];
+  function walk(node: SerializedTaskNode): void {
+    const isTargetTestNode = node.type === 'test' && node.fullName === targetFullName;
+    if (node.errors.length > 0 && !isTargetTestNode) {
+      disallowedErrorNodes.push(`${node.type} "${node.fullName}": ${JSON.stringify(node.errors)}`);
+    }
+    if (node.type === 'test') {
+      if (node.state === 'failed') failedLeaves.push(node.fullName);
+      if (node.fullName === targetFullName) targetState = node.state;
+      if (node.fullName === controlFullName) controlState = node.state;
+      return;
+    }
+    for (const child of node.children ?? []) walk(child);
+  }
+  walk(moduleNode);
+
+  if (forest.unhandledErrors.length > 0) {
+    problems.push(`run-level unhandled errors present: ${JSON.stringify(forest.unhandledErrors)}`);
+  }
+  if (disallowedErrorNodes.length > 0) {
+    problems.push(`errors present outside the target test's own assertion failure: ${disallowedErrorNodes.join('; ')}`);
+  }
+  const otherFailedLeaves = failedLeaves.filter((f) => f !== targetFullName);
+  if (otherFailedLeaves.length > 0) {
+    problems.push(`unrelated failed test(s) in the tree: ${otherFailedLeaves.join('; ')}`);
+  }
+  if (targetState === null) problems.push(`target test "${targetFullName}" not found in the serialized forest`);
+  else if (targetState !== 'failed') problems.push(`target test state is "${targetState}", expected "failed"`);
+  if (controlState === null) problems.push(`CONTROL_TEST "${controlFullName}" not found in the serialized forest`);
+  else if (controlState !== 'passed') problems.push(`CONTROL_TEST state is "${controlState}", expected "passed"`);
+
+  return problems;
+}
 function replayRedEvidence(parentSha: string, containingFileRel: string, targetFullName: string, controlTestFullName: string): ReplayOutcome {
   const problems: string[] = [];
   const evidenceLines: string[] = [];
@@ -1518,97 +1672,49 @@ function replayRedEvidence(parentSha: string, containingFileRel: string, targetF
     }
     evidenceLines.push(`overlay: HEAD:apps/daemon/${containingFileRel} -> ${targetFileAbs}`);
 
-    const jsonOutPath = path.join(tempDir, '.replay-result.json');
-    const argvList = [
-      '--filter', '@open-design/daemon', 'exec', 'vitest', 'run', '-c', 'vitest.config.ts',
-      '--reporter=json', `--outputFile=${jsonOutPath}`, `tests/${path.basename(containingFileRel)}`,
-    ];
+    // Verifier-constructed runner source, written fresh into the throwaway
+    // detached worktree -- never checked-in command text, and deleted with
+    // the rest of tempDir in the finally block below.
+    const runnerScriptAbs = path.join(tempDir, 'apps/daemon', '.w9-replay-runner.mjs');
+    fs.writeFileSync(runnerScriptAbs, buildReplayRunnerScript());
+    const targetFileArg = `tests/${path.basename(containingFileRel)}`;
+    const argvList = ['--filter', '@open-design/daemon', 'exec', 'node', '.w9-replay-runner.mjs', targetFileArg];
     evidenceLines.push(`argv: pnpm ${argvList.join(' ')} (cwd=${path.join(tempDir, 'apps/daemon')})`);
     const runResult = sh('pnpm', argvList, { cwd: path.join(tempDir, 'apps/daemon'), timeoutMs: 3 * 60_000 });
-    // Both streams captured -- sh() now returns stderr too (ceremony
-    // confirmation fix), so this hash is honestly what it claims to be.
-    const outputHash = sha256Bytes(`${runResult.stdout}\n--- stderr ---\n${runResult.stderr}`);
-    evidenceLines.push(`exit=${runResult.status} processError=${runResult.processError} stdout+stderr sha256=${outputHash}`);
 
     // CEREMONY CONFIRMATION FIX (round 3): a spawn error or a timeout-
     // induced kill is NOT the expected red exit -- it means no genuine test
-    // run happened at all. Previously `sh()` collapsed this into an
-    // ordinary status:1, indistinguishable from a real failing test run;
-    // this must fail the replay outright, before even attempting to parse
-    // whatever (if anything) the reporter wrote.
+    // run happened at all.
     if (runResult.processError) {
+      const outputHash = sha256Bytes(`--- stdout ---\n${runResult.stdout}\n--- stderr ---\n${runResult.stderr}`);
+      evidenceLines.push(`exit=${runResult.status} processError=true stdout+stderr sha256=${outputHash}`);
       problems.push('replay child process reported a spawn error or was killed (timeout/signal) -- not a genuine test-driven red exit');
       return { ok: false, problems, evidenceLines };
     }
 
-    let replayData: SuiteJson | null = null;
-    try {
-      replayData = JSON.parse(fs.readFileSync(jsonOutPath, 'utf8')) as SuiteJson;
-    } catch (err) {
-      problems.push(`replay JSON reporter output could not be parsed: ${String(err)}`);
+    const markerLine = runResult.stdout.split('\n').find((l) => l.startsWith(REPLAY_RESULT_MARKER));
+    // The transcript hash covers the runner's own serialized output plus
+    // both process streams, per the ruling.
+    const outputHash = sha256Bytes(`--- runner output ---\n${markerLine ?? ''}\n--- stdout ---\n${runResult.stdout}\n--- stderr ---\n${runResult.stderr}`);
+    evidenceLines.push(`exit=${runResult.status} processError=false stdout+stderr+runnerOutput sha256=${outputHash}`);
+    if (!markerLine) {
+      problems.push(`replay runner produced no ${REPLAY_RESULT_MARKER} line on stdout`);
       return { ok: false, problems, evidenceLines };
     }
-    const replayAssertions = replayData.testResults.flatMap((t) => t.assertionResults);
-    const targetAssertion = replayAssertions.find((a) => a.fullName === targetFullName);
-    const controlAssertion = replayAssertions.find((a) => a.fullName === controlTestFullName);
-    evidenceLines.push(`target="${targetFullName}" status=${targetAssertion?.status ?? 'MISSING'}`);
-    evidenceLines.push(`CONTROL_TEST="${controlTestFullName}" status=${controlAssertion?.status ?? 'MISSING'}`);
 
-    // CEREMONY CONFIRMATION FIX: the target must be the ONLY failure --
-    // an unrelated failed assertion or timeout (which also reports status
-    // "failed" in the JSON reporter) can no longer coexist with the target
-    // failure and passing control and still pass. Both the reporter's own
-    // failed-test count and a direct scan of every OTHER assertion's status
-    // must agree there is exactly one failure, and it must be the target.
-    const otherFailed = replayAssertions.filter((a) => a.status === 'failed' && a.fullName !== targetFullName);
-    evidenceLines.push(`numFailedTests=${replayData.numFailedTests} otherFailedAssertions=${otherFailed.length}`);
-    if (otherFailed.length > 0) {
-      problems.push(`replay produced ${otherFailed.length} unrelated failed assertion(s) besides the target: ${otherFailed.map((a) => a.fullName).join('; ')}`);
+    let forest: SerializedReplayForest | null = null;
+    try {
+      forest = JSON.parse(markerLine.slice(REPLAY_RESULT_MARKER.length)) as SerializedReplayForest;
+    } catch (err) {
+      problems.push(`replay runner's serialized forest could not be parsed: ${String(err)}`);
+      return { ok: false, problems, evidenceLines };
     }
-    if (replayData.numFailedTests !== 1) {
-      problems.push(`replay reporter numFailedTests is ${replayData.numFailedTests}, expected exactly 1 (the target only)`);
-    }
+    evidenceLines.push(`forest: moduleCount=${forest.moduleCount} unhandledErrors=${JSON.stringify(forest.unhandledErrors)}`);
+    evidenceLines.push(`forest json: ${JSON.stringify(forest)}`);
 
-    // CEREMONY CONFIRMATION FIX (round 3): reject a reporter-level
-    // inconsistency the assertion-level checks above cannot see on their
-    // own -- a reporter claiming `success:true` while a test failed is
-    // self-contradictory output.
-    evidenceLines.push(`reporter success=${replayData.success} (informational only: numTotalTestSuites=${replayData.numTotalTestSuites} numFailedTestSuites=${replayData.numFailedTestSuites} -- these count SUITE NODES, not files, and are never gated on)`);
-    if (replayData.success !== false) {
-      problems.push(`replay reporter's own "success" field is ${JSON.stringify(replayData.success)}, expected exactly false for a genuine failing run`);
-    }
-
-    // CEREMONY CONFIRMATION FIX (round 4): the round-3 fix gated on
-    // numTotalTestSuites/numFailedTestSuites === 1/1 -- but those count
-    // Vitest's internal SUITE NODES (every describe block is its own
-    // suite), not files, so a legitimate single-file replay containing
-    // nested describe blocks could be wrongly rejected. That equality
-    // check is removed (the round-3 regression) and replaced with
-    // file-count semantics: exactly ONE file result in testResults, and
-    // that one file's own reporter-provided status/message govern it --
-    // catching a file-level/afterAll unhandled error the assertion-level
-    // checks above cannot see (assertionResults only cover individual
-    // tests, never a collection-time or hook-level failure attributed to
-    // the file as a whole).
-    if (replayData.testResults.length !== 1) {
-      problems.push(`replay produced ${replayData.testResults.length} file result(s) in testResults, expected exactly 1 (the one targeted file)`);
-    }
-    const fileResult = replayData.testResults[0];
-    if (fileResult) {
-      evidenceLines.push(`file-level status=${JSON.stringify(fileResult.status)} message=${JSON.stringify(fileResult.message)}`);
-      if (fileResult.status !== 'failed') {
-        problems.push(`replay's file-level status is ${JSON.stringify(fileResult.status)}, expected exactly "failed" (the expected failing state)`);
-      }
-      if (fileResult.message) {
-        problems.push(`replay's file-level message is non-empty -- a file-level/afterAll error distinct from the target's own assertion failure, which is never carried in this field: ${fileResult.message.slice(0, 500)}`);
-      }
-    }
-
+    const forestProblems = evaluateTaskForestConsistency(forest, targetFullName, controlTestFullName);
+    problems.push(...forestProblems);
     if (runResult.status === 0) problems.push('replay child process exited 0 (expected nonzero for a genuine red state)');
-    if (!targetAssertion) problems.push(`target test "${targetFullName}" not found in replay results`);
-    else if (targetAssertion.status !== 'failed') problems.push(`target test status in replay is "${targetAssertion.status}", expected "failed"`);
-    if (!controlAssertion) problems.push(`CONTROL_TEST "${controlTestFullName}" not found in replay results`);
-    else if (controlAssertion.status !== 'passed') problems.push(`CONTROL_TEST status in replay is "${controlAssertion.status}", expected "passed"`);
 
     return { ok: problems.length === 0, problems, evidenceLines };
   } catch (err) {
@@ -2273,34 +2379,55 @@ async function main(): Promise<void> {
     // recognized ``` (blindly toggling on any backtick-triple), so a ~~~
     // fence's contents were never excluded, and a longer opening fence
     // (four-plus backticks) was wrongly "closed" by a SHORTER inner run
-    // (e.g. an ordinary ``` line), exposing whatever followed. Fence
-    // tracking now follows CommonMark's basic fenced-code rule: a fence
-    // OPENS on a line matching only whitespace then a run of 3+ backtick OR
-    // tilde characters; the run's character and length are recorded. While
-    // inside, a line CLOSES the fence only if it is the SAME character with
-    // a run length >= the opening length and nothing else but whitespace on
-    // the line -- a shorter same-character run, or any run of the OTHER
-    // character, does not close it. Both fence characters exclude their
-    // contents from bullet eligibility; the 4+-space-indent exclusion
-    // (CommonMark indented code) is unchanged.
+    // (e.g. an ordinary ``` line), exposing whatever followed.
+    //
+    // CEREMONY CONFIRMATION FIX (round 5): the round-4 fence tracker's
+    // `[`~]{3,}` was a CHARACTER CLASS, not an alternation, so it matched a
+    // MIXED run such as "```~" as one homogeneous-looking run of length 4 --
+    // CommonMark requires a fence's own run to be entirely one character.
+    // Such a mixed run could falsely close a real fence (leaking whatever
+    // followed) or falsely open one. Additionally, `^\s*` let a 4+-space-
+    // indented marker line be read as a fence before the indented-code
+    // exclusion ever ran, and no info-string check meant a backtick opener
+    // whose info string itself contained a backtick was wrongly accepted
+    // (CommonMark: only backtick fences carry that restriction, since it is
+    // what disambiguates a code-block opener from an inline code span --
+    // tilde info strings are unrestricted). Fixed with SEPARATE
+    // single-character alternates (never a mixed run), an explicit
+    // AT-MOST-3-space indent captured directly in the regex (a 4+-space
+    // marker line simply fails to match at all, so it naturally falls
+    // through to the unchanged indented-code exclusion), and a
+    // backtick-specific info-string check on OPEN only (closing lines
+    // already require nothing-but-whitespace, which a non-empty info
+    // string would fail regardless of character). A line CLOSES the fence
+    // only if it is the SAME character with a run length >= the opening
+    // length and nothing else but whitespace on the line.
     const MARKDOWN_BULLET_LINE = /^\s*(?:[-*+]|\d+\.)\s+/;
-    const FENCE_MARKER_LINE = /^\s*([`~]{3,})(.*)$/;
+    const FENCE_MARKER_LINE = /^( {0,3})(`{3,}|~{3,})(.*)$/;
     const INDENTED_CODE_LINE = /^ {4,}/;
     const bulletLines: string[] = [];
     let fence: { char: string; length: number } | null = null;
     for (const line of waveSection.split('\n')) {
       const fenceMatch = FENCE_MARKER_LINE.exec(line);
       if (fenceMatch) {
-        const run = fenceMatch[1]!;
-        const rest = fenceMatch[2]!;
+        const run = fenceMatch[2]!;
+        const rest = fenceMatch[3]!;
         const char = run[0]!;
         const length = run.length;
         if (!fence) {
-          fence = { char, length };
-        } else if (char === fence.char && length >= fence.length && rest.trim() === '') {
-          fence = null;
+          const invalidBacktickOpener = char === '`' && rest.includes('`');
+          if (!invalidBacktickOpener) {
+            fence = { char, length };
+            continue; // this line is the fence's own opening delimiter -- never a bullet
+          }
+          // else: a backtick run whose info string itself contains a
+          // backtick is not a valid opener at all -- falls through to
+          // ordinary-line handling below, exactly like any other line.
+        } else {
+          if (char === fence.char && length >= fence.length && rest.trim() === '') fence = null;
+          continue; // fence-marker-shaped line while already inside a fence is never a bullet,
+          // whether or not it closes the fence
         }
-        continue; // any fence-marker-shaped line (open, non-closing, or close) is never a bullet
       }
       if (fence) continue;
       if (INDENTED_CODE_LINE.test(line)) continue;
