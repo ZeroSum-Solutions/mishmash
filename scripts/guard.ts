@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -1365,7 +1366,7 @@ async function checkRemovedWorkflows(): Promise<boolean> {
 // defect and is being replaced separately, outside this check). This check
 // never boots a daemon and never makes a network call.
 //
-// It validates three things:
+// It validates four things:
 //   (a) shape        -- every manifest row has the required fields, with the
 //                        required types.
 //   (b) CLI parity    -- the manifest's capability set is exactly the
@@ -1376,6 +1377,19 @@ async function checkRemovedWorkflows(): Promise<boolean> {
 //                        a namespace the manifest doesn't cover at all, or a
 //                        new route inside an already-covered namespace,
 //                        fails by name).
+//   (d) new-file drift -- (c) only sees routes cli.ts itself reaches, so a
+//                        route registered directly in apps/daemon/src/routes/
+//                        with no CLI caller yet is invisible to it. Every
+//                        untracked (`git status --porcelain`-new) .ts file
+//                        under apps/daemon/src/routes/ is statically scanned
+//                        for app.<method>('/api/...', ...) registrations and
+//                        checked against the same knownNamespaceRoutes
+//                        baseline as (c). Deliberately scoped to brand-new
+//                        files only -- retroactively requiring manifest
+//                        coverage for the many pre-existing, legitimately
+//                        CLI-exempt web-UI-only routes already committed
+//                        under apps/daemon/src/routes/ is out of scope here
+//                        and would be a large, unrelated blast radius.
 // ---------------------------------------------------------------------------
 
 const capabilityManifestPath = path.join(repoRoot, "scripts/waves/capability-manifest.json");
@@ -1656,6 +1670,71 @@ function extractCliApiRoutesByNamespace(source: string): Map<string, Set<string>
   return byNamespace;
 }
 
+const EXPRESS_ROUTE_METHODS = new Set(["get", "post", "put", "patch", "delete", "options", "all"]);
+
+/**
+ * Statically scans a route-registration file for `app.<method>('/api/...', ...)`
+ * Express calls (the convention every apps/daemon/src/routes/**\/*.ts file
+ * uses -- see each file's `register*Routes(app: Express, ...)` export) and
+ * returns each as a normalized `{ method, path }` pair (`:param`-normalized,
+ * matching extractCliApiRoutesByNamespace's convention so the two are
+ * directly comparable). Used only for NEW, untracked route files -- see
+ * listNewRouteFiles below -- never the whole committed tree.
+ */
+function extractExpressRouteRegistrations(source: string, filePath: string): { method: string; path: string }[] {
+  const sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const found: { method: string; path: string }[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === "app" &&
+      EXPRESS_ROUTE_METHODS.has(node.expression.name.text)
+    ) {
+      const firstArg = node.arguments[0];
+      if (firstArg && ts.isStringLiteral(firstArg) && firstArg.text.startsWith("/api/")) {
+        found.push({
+          method: node.expression.name.text.toUpperCase(),
+          path: firstArg.text.replace(/:[a-zA-Z0-9_]+/g, ":param"),
+        });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
+}
+
+/**
+ * Lists .ts route files under apps/daemon/src/routes/ that `git status`
+ * reports as untracked or newly staged-but-uncommitted (never a modified
+ * pre-existing file -- see checkCapabilityManifestParityCore's "(d)" comment
+ * for why this check is deliberately scoped to brand-new files only).
+ */
+function listNewRouteFiles(): string[] {
+  let porcelain: string;
+  try {
+    porcelain = execFileSync("git", ["status", "--porcelain", "--", "apps/daemon/src/routes"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+  } catch {
+    return [];
+  }
+  const files: string[] = [];
+  for (const line of porcelain.split("\n")) {
+    if (!line.trim()) continue;
+    const status = line.slice(0, 2);
+    const relPath = line.slice(3).trim();
+    const isNew = status.includes("?") || status.startsWith("A");
+    if (isNew && relPath.endsWith(".ts") && !relPath.endsWith(".test.ts")) {
+      files.push(relPath);
+    }
+  }
+  return files;
+}
+
 type CapabilityManifestParityResult = {
   ok: boolean;
   errors: string[];
@@ -1673,6 +1752,7 @@ function checkCapabilityManifestParityCore(
   manifestRaw: unknown,
   subcommandKeys: readonly string[],
   liveNamespaceRoutes: ReadonlyMap<string, ReadonlySet<string>>,
+  newRouteFileRegistrations: readonly { file: string; method: string; path: string }[] = [],
 ): CapabilityManifestParityResult {
   const errors: string[] = [];
 
@@ -1749,6 +1829,37 @@ function checkCapabilityManifestParityCore(
     );
   }
 
+  // (d) new-route-file source-surface drift -- (c) above only sees routes
+  // apps/daemon/src/cli.ts itself calls, so a route registered directly in
+  // apps/daemon/src/routes/ with no CLI caller (a web-UI-only endpoint, or a
+  // genuinely new capability whose CLI wiring hasn't landed yet) is
+  // invisible to it. Retroactively requiring every SUCH existing route to
+  // carry manifest coverage would be a huge, unrelated blast radius (most
+  // web-UI-only routes were never meant to be CLI capabilities), so this
+  // check is scoped to UNTRACKED route files only -- `newRouteFileRegistrations`
+  // is pre-filtered by the async wrapper to `git status --porcelain`-reported
+  // new files, never the full committed tree. This is exactly the
+  // "real, unmanifested route registration" source-level drift the doc
+  // comment above describes: catches a brand-new route surface as it is
+  // being introduced, without an ever-growing baseline of pre-existing,
+  // legitimately-uncovered routes.
+  const newFileUnmanifested: string[] = [];
+  for (const reg of newRouteFileRegistrations) {
+    const key = `${reg.method} ${reg.path}`;
+    const namespace = apiNamespaceFromPath(reg.path);
+    const baseline = namespace ? manifestNamespaceBaseline.get(namespace) : undefined;
+    if (!baseline || !baseline.has(key)) {
+      newFileUnmanifested.push(
+        `${key} (new file ${reg.file}${namespace && baseline ? `, namespace "${namespace}" is manifested but this route is not in its committed knownNamespaceRoutes` : namespace ? `, namespace "${namespace}" has no capability-manifest.json row at all` : ", route has no /api/ namespace"})`,
+      );
+    }
+  }
+  if (newFileUnmanifested.length > 0) {
+    errors.push(
+      `${newFileUnmanifested.length} new, untracked route registration(s) under apps/daemon/src/routes/ are not covered by any committed capability-manifest.json knownNamespaceRoutes snapshot:\n  - ${newFileUnmanifested.sort().join("\n  - ")}`,
+    );
+  }
+
   return { ok: errors.length === 0, errors };
 }
 
@@ -1762,20 +1873,48 @@ async function checkCapabilityManifestParity(): Promise<boolean> {
   try {
     manifestRaw = JSON.parse(manifestSource);
   } catch (error) {
-    console.error(
-      `Capability manifest parity check failed: ${toRepositoryPath(capabilityManifestPath)} is not valid JSON.`,
-    );
+    const message = `Capability manifest parity check failed: ${toRepositoryPath(capabilityManifestPath)} is not valid JSON.`;
+    console.error(message);
     console.error(error);
+    console.log(message);
+    console.log(String(error));
     return false;
   }
 
   const subcommandKeys = extractSubcommandMapKeysFromCliSource(cliSource);
   const liveNamespaceRoutes = extractCliApiRoutesByNamespace(cliSource);
-  const result = checkCapabilityManifestParityCore(manifestRaw, subcommandKeys, liveNamespaceRoutes);
+
+  const newRouteFiles = listNewRouteFiles();
+  const newRouteFileRegistrations: { file: string; method: string; path: string }[] = [];
+  for (const relPath of newRouteFiles) {
+    const absPath = path.join(repoRoot, relPath);
+    let source: string;
+    try {
+      source = await readFile(absPath, "utf8");
+    } catch {
+      continue; // deleted between `git status` and the read -- nothing to scan
+    }
+    for (const reg of extractExpressRouteRegistrations(source, absPath)) {
+      newRouteFileRegistrations.push({ file: relPath, ...reg });
+    }
+  }
+
+  const result = checkCapabilityManifestParityCore(manifestRaw, subcommandKeys, liveNamespaceRoutes, newRouteFileRegistrations);
 
   if (!result.ok) {
+    // Mirrored to stdout (not just stderr, the usual convention for guard
+    // check failures in this file): tooling that captures a subprocess by
+    // its stdout only -- e.g. the W0 wave gate's guard-defeat fixtures,
+    // which mutate a real manifest row and assert the failure output names
+    // the specific capability/route it broke -- would otherwise see no
+    // attribution at all for this check, since Node's execFileSync-style
+    // helpers commonly read back only the captured stdout on a non-zero
+    // exit. The per-line detail is real either way; this only changes which
+    // stream(s) carry it.
     console.error("Capability manifest parity check failed:");
     for (const error of result.errors) console.error(`- ${error}`);
+    console.log("Capability manifest parity check failed:");
+    for (const error of result.errors) console.log(`- ${error}`);
     return false;
   }
 
