@@ -1191,10 +1191,18 @@ function hasDistinctSignalPair(candidates: readonly { fullName: string }[], matc
 // `fullName.includes('429')` matches inside "1429" -- so a distinct,
 // wrong-magnitude number could still satisfy the binding. Matching is now
 // exact-token: the number must appear bounded by non-digit characters (or
-// string start/end) on both sides, via `\b<n>\b` (digits are word
-// characters, so a word boundary is exactly a digit boundary here).
+// string start/end) on both sides.
+//
+// CEREMONY CONFIRMATION FIX (round 4): round 3's `\b<n>\b` used a WORD
+// boundary, not the PRD's promised non-digit boundary -- `\b` also treats
+// letters and underscores as word characters, so a legitimate assertion
+// name like "limit10requests" or "_10_" (digits bounded by non-digit
+// characters, but not by a \W/\w transition) incorrectly failed to match.
+// Rewritten on explicit non-digit lookarounds, `n` is always a positive
+// integer from a grammar-validated EnforcedDeclaration or a fixed literal
+// (429/413), so direct interpolation carries no regex-injection risk.
 function containsExactNumericToken(text: string, n: number): boolean {
-  return new RegExp(`\\b${n}\\b`).test(text);
+  return new RegExp(`(?<![0-9])${n}(?![0-9])`).test(text);
 }
 function matchesUnderLimitAssertion(fullName: string, routeTerms: readonly string[], parsed: EnforcedDeclaration): boolean {
   const nameLower = fullName.toLowerCase();
@@ -1408,6 +1416,13 @@ interface AssertionResult {
 }
 interface FileTestResult {
   name: string; // absolute path to the test file, per vitest's json reporter
+  // CEREMONY CONFIRMATION FIX (round 4): the file-level status/message
+  // Vitest's JSON reporter actually emits per testResults[] entry
+  // (confirmed present by direct inspection of real reporter output) --
+  // needed so a file-level/afterAll unhandled error, distinct from an
+  // ordinary per-test assertion failure, is visible to the replay check.
+  status: string;
+  message: string;
   assertionResults: AssertionResult[];
 }
 interface SuiteJson {
@@ -1554,18 +1569,39 @@ function replayRedEvidence(parentSha: string, containingFileRel: string, targetF
       problems.push(`replay reporter numFailedTests is ${replayData.numFailedTests}, expected exactly 1 (the target only)`);
     }
 
-    // CEREMONY CONFIRMATION FIX (round 3): reject reporter-level
-    // inconsistencies and suite-level failures the assertion-level checks
-    // above cannot see on their own -- a reporter claiming `success:true`
-    // while a test failed is self-contradictory output, and a replay that
-    // touches more than the one targeted file, or fails more than that one
-    // file, means something beyond the target test itself went wrong.
-    evidenceLines.push(`reporter success=${replayData.success} numTotalTestSuites=${replayData.numTotalTestSuites} numFailedTestSuites=${replayData.numFailedTestSuites}`);
+    // CEREMONY CONFIRMATION FIX (round 3): reject a reporter-level
+    // inconsistency the assertion-level checks above cannot see on their
+    // own -- a reporter claiming `success:true` while a test failed is
+    // self-contradictory output.
+    evidenceLines.push(`reporter success=${replayData.success} (informational only: numTotalTestSuites=${replayData.numTotalTestSuites} numFailedTestSuites=${replayData.numFailedTestSuites} -- these count SUITE NODES, not files, and are never gated on)`);
     if (replayData.success !== false) {
       problems.push(`replay reporter's own "success" field is ${JSON.stringify(replayData.success)}, expected exactly false for a genuine failing run`);
     }
-    if (replayData.numTotalTestSuites !== 1 || replayData.numFailedTestSuites !== 1) {
-      problems.push(`replay reporter suite-level counts are inconsistent with a single failing file (numTotalTestSuites=${replayData.numTotalTestSuites}, numFailedTestSuites=${replayData.numFailedTestSuites}, expected 1/1)`);
+
+    // CEREMONY CONFIRMATION FIX (round 4): the round-3 fix gated on
+    // numTotalTestSuites/numFailedTestSuites === 1/1 -- but those count
+    // Vitest's internal SUITE NODES (every describe block is its own
+    // suite), not files, so a legitimate single-file replay containing
+    // nested describe blocks could be wrongly rejected. That equality
+    // check is removed (the round-3 regression) and replaced with
+    // file-count semantics: exactly ONE file result in testResults, and
+    // that one file's own reporter-provided status/message govern it --
+    // catching a file-level/afterAll unhandled error the assertion-level
+    // checks above cannot see (assertionResults only cover individual
+    // tests, never a collection-time or hook-level failure attributed to
+    // the file as a whole).
+    if (replayData.testResults.length !== 1) {
+      problems.push(`replay produced ${replayData.testResults.length} file result(s) in testResults, expected exactly 1 (the one targeted file)`);
+    }
+    const fileResult = replayData.testResults[0];
+    if (fileResult) {
+      evidenceLines.push(`file-level status=${JSON.stringify(fileResult.status)} message=${JSON.stringify(fileResult.message)}`);
+      if (fileResult.status !== 'failed') {
+        problems.push(`replay's file-level status is ${JSON.stringify(fileResult.status)}, expected exactly "failed" (the expected failing state)`);
+      }
+      if (fileResult.message) {
+        problems.push(`replay's file-level message is non-empty -- a file-level/afterAll error distinct from the target's own assertion failure, which is never carried in this field: ${fileResult.message.slice(0, 500)}`);
+      }
     }
 
     if (runResult.status === 0) problems.push('replay child process exited 0 (expected nonzero for a genuine red state)');
@@ -2231,20 +2267,42 @@ async function main(): Promise<void> {
     // satisfies the ruled per-route "bullet line" requirement. Round 3
     // (confirmation #3): a line-regex match alone still accepted a bullet-
     // looking line sitting inside a fenced code block or a 4+-space-indented
-    // code block -- neither is a rendered Markdown list item. Fence state is
-    // tracked while scanning; the fence delimiter lines themselves and any
-    // line between them are excluded, as is any line with 4+ leading spaces.
+    // code block -- neither is a rendered Markdown list item.
+    //
+    // CEREMONY CONFIRMATION FIX (round 4): the round-3 fence tracker only
+    // recognized ``` (blindly toggling on any backtick-triple), so a ~~~
+    // fence's contents were never excluded, and a longer opening fence
+    // (four-plus backticks) was wrongly "closed" by a SHORTER inner run
+    // (e.g. an ordinary ``` line), exposing whatever followed. Fence
+    // tracking now follows CommonMark's basic fenced-code rule: a fence
+    // OPENS on a line matching only whitespace then a run of 3+ backtick OR
+    // tilde characters; the run's character and length are recorded. While
+    // inside, a line CLOSES the fence only if it is the SAME character with
+    // a run length >= the opening length and nothing else but whitespace on
+    // the line -- a shorter same-character run, or any run of the OTHER
+    // character, does not close it. Both fence characters exclude their
+    // contents from bullet eligibility; the 4+-space-indent exclusion
+    // (CommonMark indented code) is unchanged.
     const MARKDOWN_BULLET_LINE = /^\s*(?:[-*+]|\d+\.)\s+/;
-    const FENCE_LINE = /^\s*```/;
+    const FENCE_MARKER_LINE = /^\s*([`~]{3,})(.*)$/;
     const INDENTED_CODE_LINE = /^ {4,}/;
     const bulletLines: string[] = [];
-    let insideFence = false;
+    let fence: { char: string; length: number } | null = null;
     for (const line of waveSection.split('\n')) {
-      if (FENCE_LINE.test(line)) {
-        insideFence = !insideFence;
-        continue; // the fence delimiter line itself is never a bullet
+      const fenceMatch = FENCE_MARKER_LINE.exec(line);
+      if (fenceMatch) {
+        const run = fenceMatch[1]!;
+        const rest = fenceMatch[2]!;
+        const char = run[0]!;
+        const length = run.length;
+        if (!fence) {
+          fence = { char, length };
+        } else if (char === fence.char && length >= fence.length && rest.trim() === '') {
+          fence = null;
+        }
+        continue; // any fence-marker-shaped line (open, non-closing, or close) is never a bullet
       }
-      if (insideFence) continue;
+      if (fence) continue;
       if (INDENTED_CODE_LINE.test(line)) continue;
       if (MARKDOWN_BULLET_LINE.test(line) && /\[C9-\d+\]/.test(line)) bulletLines.push(line);
     }
