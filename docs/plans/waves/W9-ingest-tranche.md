@@ -13,7 +13,7 @@
 `docs/plans/waves/DECISIONS.md`. The last entry landed on `main` at `ff47420b8` (round-1
 disposition, ruling 2) — confirmed directly by reading `origin/main`, not assumed.
 
-**Status: FOUNDER-AUTHORIZED FIDELITY ROUND (round 6, post-confirmation-#3 REJECT).**
+**Status: FOUNDER-AUTHORIZED FIDELITY ROUND (round 7, post-confirmation-#4 REJECT).**
 Round 1 returned REJECT (9 findings); round 2 returned REJECT again; round 2's own confirmation
 pass returned REJECT a third consecutive time, firing the program's stop rule and escalating to a
 founder-delegated ceremony, which ruled six mechanical defects and authorized one ceremony-bounded
@@ -21,24 +21,29 @@ fix round (round 3, disposed below). Round 3's own fidelity-only confirmation (c
 returned REJECT on five of those six items plus one regression the round-3 fix itself introduced;
 the founder authorized round 4. Round 4's own fidelity-only confirmation (confirmation #2) ruled
 the round-4 regression fix CLOSED and item 6 (archive finalization) settled byte-identical, but
-found five of round 4's own five fixes still imprecise; the founder authorized round 5, disposed
-below. Round 5's own fidelity-only confirmation (confirmation #3) ruled TWO of round 5's five
-points FIXED — the exposure classifier's ternary-composition gap (point 1) and the title parser's
-factory-suppression gap (point 3), both probe-verified against every decoy shape including deeper
-chains, factory-of-factory, and parenthesized/comma expressions — and settled areas confirmed
-AST-hash-identical with clean commit integrity. It found the remaining THREE points still needing
-work: replay consistency (point 2, not fixed, plus one new regression: the round-5 suite-count
-check itself counts suite nodes, not files); rendered Markdown bullets (point 4, not fixed: fence
-recognition was blind-toggling on triple-backtick fences only, missing tilde fences and
-run-length-aware closing);
-and the numeric boundary (point 5, fixed-with-defect: `\b<n>\b` is a word boundary, not the PRD's
-promised non-digit boundary). The founder authorized exactly one further scoped fidelity round
-(this one), strictly confined to those three points, followed by exactly one more fidelity-only
-confirmation (confirmation #4). Points 1 and 3, item 6 (archive finalization), the round-4
-regression fix, the const guards, and the prelude binding all remain settled and untouched — the
-ceremony's original analysis (round 2's attribution-authority work, the C9-10 redesign, the floor
-corrections, the stale-proof mechanics, and all three author-flagged residual-risk notes in
-**Adversarial review** below) likewise. Every finding across all six rounds is disposed in
+found five of round 4's own five fixes still imprecise; the founder authorized round 5. Round 5's
+own fidelity-only confirmation (confirmation #3) ruled points 1 and 3 FIXED, probe-verified against
+every decoy shape including deeper chains, factory-of-factory, and parenthesized/comma expressions,
+with settled areas confirmed AST-hash-identical; the founder authorized round 6, disposed below.
+Round 6's own fidelity-only confirmation (confirmation #4) ruled point 5 FIXED (the non-digit
+lookaround is exact and PRD-consistent) and the round-4 suite-count-regression removal correct —
+both settled — but found points 2 and 4 still failing on structural grounds. **Point 2:** an
+independent forensic read of this worktree's actual installed `@vitest/runner@4.1.6` source proved
+the JSON reporter's file-level `message` field structurally cannot carry a nested `describe`
+block's own `afterAll` failure (it attaches only to that nested suite's own result; only the failed
+*state*, never the error, propagates to the file) — no amount of additional reporter-field-reading
+could close this, so the founder authorized a full redesign bypassing the JSON reporter for a
+runner-script-driven walk of Vitest's own reported task forest (`vitest/node`'s `startVitest`,
+`ctx.state.getTestModules()`/`getUnhandledErrors()`). **Point 4:** the round-6 fence regex was a
+character class, not an alternation, so it still accepted mixed runs, unlimited indentation before
+recognizing a marker, and backtick openers with backtick-containing info strings. The founder
+authorized exactly one further scoped round (this one) implementing the full point-2 redesign and
+the point-4 grammar correction, followed by exactly one more fidelity-only confirmation
+(confirmation #5). Points 1, 3, and 5, item 6 (archive finalization), the round-4 regression fix,
+the const guards, the prelude binding, and both-stream `sh()` all remain settled and untouched —
+the ceremony's original analysis (round 2's attribution-authority work, the C9-10 redesign, the
+floor corrections, the stale-proof mechanics, and all three author-flagged residual-risk notes in
+**Adversarial review** below) likewise. Every finding across all seven rounds is disposed in
 **AUTHOR-FLAGGED / DISPOSITIONS** at the end of this document, which is the authoritative change
 record; earlier prose in this document reflects the current, fixed state, not the history — the
 dispositions section carries the history. Any verdict on this round other than APPROVE goes
@@ -324,18 +329,48 @@ and, **for every route whose mechanically-derived `exposure === 3`**, exactly on
   `PARENT_SHA`, runs `mise trust` (a fresh worktree's `mise.toml` is untrusted by default and
   `pnpm`/`vitest` are mise-shimmed) followed by a frozen `pnpm install --offline
   --frozen-lockfile` (the shared pnpm content-addressable store makes this genuinely offline —
-  no fetch), overlays **only the HEAD version of the containing test file** on top, and runs that
-  file with verifier-constructed argv through Vitest's JSON reporter. The replay passes only when
-  the child exits nonzero, the exact cited `fullName` appears with status `failed`, and the
-  header's `CONTROL_TEST` appears with status `passed` — a missing test, install failure, timeout,
-  parse failure, or unrelated process failure is an evidence failure, not a pass. The replay's own
-  constructed argv, resolved commits, JSON assertion statuses, stdout/stderr hash, and exit code
-  are captured in **C9-5's own artifact** — the implementer-authored transcript text can no longer
-  substitute for that evidence. The current HEAD suite must still independently show the cited
-  test passing. Coverage that already existed at `baseCommit` (SSRF, token-binding, etc.) is exempt
-  from the red-artifact/replay requirement per this section's "may cite directly" allowance, but
-  never from the paired positive/negative-control requirement above, which applies to every
-  `control.testRef` regardless of new/old status.
+  no fetch), overlays **only the HEAD version of the containing test file** on top.
+
+  **Round 6 (confirmation #4) redesign — Vitest's JSON reporter is bypassed entirely for the
+  replay's own pass/fail predicate.** An independent forensic read of this worktree's actually-
+  installed `vitest@4.1.6`/`@vitest/runner@4.1.6` sources proved the reporter's per-file `message`
+  field only ever carries an error attached directly to the root file task; a NESTED `describe`
+  block's own `afterAll` throwing is caught and attached to *that nested suite's own result*
+  (`@vitest/runner`'s `failTask`, called from inside the suite's own `afterAll` hook handler) —
+  the failed *state* propagates up to every ancestor, but the error object never does. A scenario
+  with the target test failed, the control passed, and a clean top-level file `message` could
+  therefore still coexist with a real, hidden nested-suite hook failure the reporter never
+  surfaces. The reporter also silently drops process-level unhandled errors (it never reads
+  Vitest's separate unhandled-errors collection at report time). Both gaps are structural to the
+  reporter itself, not fixable by reading more of its fields.
+
+  The replay now generates a **runner script** (verifier-constructed source, written fresh into
+  the throwaway detached worktree — never checked-in command text, the same anti-gaming principle
+  as the argv construction below) that imports Vitest's own **Node API** (`startVitest` from
+  `vitest/node`, resolved from the worktree's own frozen-offline-installed
+  `apps/daemon/node_modules`), runs exactly the one replay file with the same config, and — after
+  the run completes — walks the run's own **reported task forest** (`ctx.state.getTestModules()`,
+  recursively through each module/suite/test's `.children`) plus its **unhandled-errors
+  collection** (`ctx.state.getUnhandledErrors()`), serializing `{type, name, fullName, state,
+  errors}` for every node to one JSON line on stdout behind a fixed marker prefix. This is the
+  same public "reported tasks" surface Vitest's own reporters are built on, so it is not a fragile
+  reach into private internals.
+
+  The replay passes only when, over that serialized forest: exactly one module (file) task exists;
+  walking the entire tree, the **only** failed leaf anywhere is the target test, and the **only**
+  errors anywhere belong to the target's own test-level result — no suite or module task may carry
+  any error, at any depth; the unhandled-errors collection is empty; and the control test's own
+  leaf state is `passed`. A missing test, install failure, a spawn error or timeout (surfaced
+  distinctly by the verifier's process wrapper, never conflated with an ordinary nonzero exit), a
+  missing or unparsable runner output line, or any error anywhere else in the tree is an evidence
+  failure, not a pass. The replay's own constructed argv, resolved commits, the full serialized
+  forest, and a hash covering the runner's own output plus both process streams are captured in
+  **C9-5's own artifact** — the implementer-authored transcript text can no longer substitute for
+  that evidence. The current HEAD suite must still independently show the cited test passing.
+  Coverage that already existed at `baseCommit` (SSRF, token-binding, etc.) is exempt from the
+  red-artifact/replay requirement per this section's "may cite directly" allowance, but never from
+  the paired positive/negative-control requirement above, which applies to every `control.testRef`
+  regardless of new/old status.
 - `acceptedRisk: { decisionRef: string }` — **not implementer-authored JSON.** `decisionRef` must
   **exactly equal** (never substring-match) a **unique** `### W9-ACCEPT-<slug>` heading in
   `docs/plans/waves/DECISIONS.md` **as read at `baseCommit`** (`git show`, never the working
@@ -518,7 +553,7 @@ All criteria inherit `VERIFICATION-CONTRACT.md` §3. Verified by `scripts/waves/
 | C9-2 | Existing ingest-security suite is green | Real vitest JSON-reporter run of **glob-discovered** `apps/daemon/tests/library-*.test.ts` files; zero failed, zero pending/skipped, zero `skip`/`only`/`todo` markers (spaced and bracket-alias forms included) |
 | C9-3 | Attribution matrix exists and covers exactly the frozen route set | `docs/security/library-ingest-attribution.json` parses as JSON; exactly one row per frozen `{method,path}`, no orphans, no gaps, no duplicates |
 | C9-4 | Every row is fully, structurally attributed | Every field clears a placeholder floor (length + denylist + anti-repetition, not mere non-emptiness); `authn` must name its row's mechanically-derived exposure class; `acceptedRisk.decisionRef` resolves to a unique, fully-structured, route-bound, non-self-accepted `### W9-ACCEPT-*` entry in `DECISIONS.md@baseCommit`; evidence reports attributed/unattributed/known-vulnerable counts |
-| C9-5 | Every `testRef`/`control.testRef` names a real, currently-passing, globally-route-unique test; new controls carry independently-replayed red evidence | Exact `fullName` equality; a path-derived association term must appear; **one global map spans every row's `testRef` AND `control.testRef`** — reuse across two routes fails; "new" decided by an AST-derived test-title match at `baseCommit`; a new control's citation requires an isolated detached-worktree replay at the AST-verified introduction-commit parent (frozen offline install, HEAD-file overlay, Vitest JSON reporter) proving the exact test failed and a named `CONTROL_TEST` passed; the checked-in transcript's `COMMAND`/output are descriptive only; every `control.testRef` (new or pre-existing) additionally requires a genuine paired positive+negative control in-file — **two DISTINCT passing assertions**, never one omnibus name satisfying both sides |
+| C9-5 | Every `testRef`/`control.testRef` names a real, currently-passing, globally-route-unique test; new controls carry independently-replayed red evidence | Exact `fullName` equality; a path-derived association term must appear; **one global map spans every row's `testRef` AND `control.testRef`** — reuse across two routes fails; "new" decided by an AST-derived test-title match at `baseCommit`; a new control's citation requires an isolated detached-worktree replay at the AST-verified introduction-commit parent (frozen offline install, HEAD-file overlay) — **the replay runs Vitest's own Node API through a verifier-generated runner script, never the JSON reporter**, and passes only when the full reported task forest shows exactly one file, the ONLY failed leaf and the ONLY error anywhere is the target's own assertion failure, no suite/module carries any error, the unhandled-errors collection is empty, and the control test passed; the checked-in transcript's `COMMAND`/output are descriptive only; every `control.testRef` (new or pre-existing) additionally requires a genuine paired positive+negative control in-file — **two DISTINCT passing assertions**, never one omnibus name satisfying both sides |
 | C9-6 | Every P0-tier row's size/rate-limit dimension is explicitly, mechanically resolved | For every row with `riskScore.tier === 'P0'` (today: `pair/confirm`, `ingest`, `GET /assets`): `control.mechanism` matches the anchored `ENFORCED kind=... scope=... limit=... windowMs=... overflow=...` grammar exactly, `control.testRef` passes C9-5's full bar (incl. replay for a new control), AND the same file's real-transport coverage shows **two DISTINCT** passing assertions — one under-limit-accepted, one over-limit-rejected — each bound to the same route, the declaration's own parsed `limit`, and (over-limit side) the declared overflow status code, **matched as an exact numeric token (digit-bounded), never an unbounded substring** — or a verified `acceptedRisk` |
 | C9-7 | Threat-model doc extended, mechanically cited, P0-complete | `docs/security/daemon-threat-model.md` carries a "Wave 9" section bounded to the next `## ` heading; every `[C9-N]` bullet's cited test is an exact match; **each P0-tier route requires its own bullet naming exactly that one P0 route key** and citing exactly that row's expected reference (`control.testRef` if controlled, else primary `testRef`), already globally associated with only that route — a bullet naming several P0 routes, or reusing an unrelated citation, no longer counts |
 | C9-8 | Full risk-score formula enforced per row | AST-derived `exposure` (straight-line dominance grammar, self-probe-verified, comment-blind, duplicate-checked) matches exactly; `impact >= FROZEN_IMPACT_FLOORS[route]`; `score === exposure+impact` exactly; `tier === tierFor(score)` exactly; **gated on all 9 exposure-classifier self-probes passing** |
@@ -1004,36 +1039,37 @@ deeper chains, factory-of-factory, and parenthesized/comma expressions — and c
 areas AST-hash-identical with clean commit integrity. It found three points still needing work.
 The founder authorized exactly one further scoped fidelity round, strictly confined to those three.
 
-**Point 2 (replay consistency — NOT FIXED, plus one new regression removed).** Round 5's
-process-error, parse-failure, `success !== false`, and suite-count checks all rejected correctly on
-their own terms, but `FileTestResult` never carried the reporter's file-level `status`/`message` and
-the replay only ever inspected `assertionResults` — so a scenario with the target failed, the
-control passed, and correct counts could STILL pass alongside a file-level or `afterAll` unhandled
-error, because nothing was inspecting the field that error would land in. Separately, round 5's
-`numTotalTestSuites`/`numFailedTestSuites === 1/1` check was itself a regression: those fields count
-Vitest's internal SUITE NODES (every `describe` block is its own suite), not files, so a legitimate
-one-file replay containing nested `describe` blocks could be wrongly rejected. Fixed by: (a)
-extending `FileTestResult` with `status`/`message` (confirmed present in real Vitest JSON reporter
-output by direct inspection) and requiring the one file's `status === 'failed'` and `message` to be
-empty — any non-empty file-level message is a file-level/`afterAll` error distinct from an ordinary
-per-test assertion failure (which is never carried in this field) and is now visible and fatal; (b)
-removing the suite-node-counting equality entirely and replacing it with file-count semantics —
-exactly one entry in `testResults`, governed by (a) — so nested `describe` blocks inside the one
-replayed file no longer fail the gate. `numTotalTestSuites`/`numFailedTestSuites` remain in evidence
-text as informational-only, never gated on. See S9-3 (prose unchanged; it already claimed
-unrelated-process-failure rejection, which this fix now genuinely closes for file-level errors too).
+**Point 2 (replay consistency — NOT FIXED in round 6; round 6's own fix found structurally
+insufficient by confirmation #4 and fully redesigned in round 7 — see below).** Round 5's
+process-error, parse-failure, and `success !== false` checks all rejected correctly on their own
+terms and remain unchanged. Round 6 additionally extended `FileTestResult` with the JSON reporter's
+file-level `status`/`message` and removed the round-5 suite-node-counting regression, replacing it
+with file-count semantics. **This entire approach was itself structurally incapable of closing the
+gap:** an independent forensic read of this worktree's actual installed `@vitest/runner@4.1.6`
+source proved a NESTED `describe` block's own `afterAll` failure is attached to that nested suite's
+own result, never propagated into the file-level `message` field the JSON reporter exposes — only
+the failed *state* propagates to ancestors, never the error object. A scenario with the target
+failed, the control passed, and a clean top-level `message` could therefore still hide a real
+nested-suite hook failure no field-level check on the reporter's output could ever see, no matter
+how many reporter fields were added. Round 7 replaces the entire mechanism, bypassing the JSON
+reporter for a runner-script-driven walk of Vitest's own reported task forest — see below.
 
-**Point 4 (rendered Markdown bullets — NOT FIXED).** Round 5's fence tracker matched only a
-triple-backtick prefix with blind state toggling: a tilde-fenced decoy was never excluded (the
-pattern doesn't recognize tildes at all), and a longer opening fence (4+ backticks) was wrongly
-"closed" by any shorter backtick run inside it (an ordinary triple-backtick line), exposing
-whatever followed as if the fence had ended. Fixed by tracking fences per CommonMark's basic rule:
-a fence OPENS on a line matching only whitespace then a run of 3+ backtick OR tilde characters
-(`FENCE_MARKER_LINE`), recording the run's character and length; while inside, a line CLOSES the
-fence only if it is the SAME character
-with a run length `>=` the opening length and nothing else but whitespace on that line — a shorter
-same-character run, or any run of the other character, does not close it. Both fence characters
-exclude their contents from bullet eligibility; the existing 4+-space-indent exclusion is unchanged.
+**Point 4 (rendered Markdown bullets — NOT FIXED in round 6; round 6's own fence tracker found
+still-imprecise by confirmation #4 and corrected in round 7 — see below).** Round 5's fence
+tracker matched only a triple-backtick prefix with blind state toggling: a tilde-fenced decoy was
+never excluded, and a longer opening fence was wrongly closed by a shorter inner run. Round 6 fixed
+this by tracking fences per CommonMark's basic rule: a fence OPENS on a line matching only
+whitespace then a run of 3+ backtick OR tilde characters, recording the run's character and length;
+a line CLOSES the fence only if it is the SAME character with a run length `>=` the opening length
+and nothing else but whitespace. **That regex itself, `[`~]{3,}`, was a character CLASS, not an
+alternation** — it still matched a MIXED run such as `` ```~ `` as one homogeneous-looking run of
+length 4, which CommonMark does not permit (a fence's own run must be entirely one character); a
+mixed run could falsely close a real fence or falsely open one. It also allowed unlimited leading
+whitespace (a 4+-space-indented marker line was read as a fence before the indented-code exclusion
+ever ran) and performed no info-string check (a backtick opener whose info string itself contained
+a backtick was wrongly accepted — CommonMark restricts this specifically for backtick fences, since
+it is what disambiguates a code-block opener from an inline code span; tilde info strings carry no
+such restriction). Round 7 corrects all three — see below.
 
 **Point 5 (numeric boundary — FIXED-WITH-DEFECT, corrected).** Round 5's `containsExactNumericToken`
 used `\b<n>\b` — a WORD boundary, not the non-digit boundary the PRD (and round 5's own comment)
@@ -1068,3 +1104,124 @@ confirmed still rejected, alongside decimal-context and leading-zero-adjacency s
 settled design (attribution authority, C9-10, floor corrections, stale-proof mechanics, the three r3
 accepted-LOW residuals, item 6, the round-4 regression fix, points 1 or 3, the const guards, or the
 prelude binding) changed in this round.
+
+### Round 7 (founder-authorized fidelity round #4 — confirmation #4 REJECT, 2 points)
+
+Round 6's own fidelity-only confirmation (confirmation #4) ruled point 5 FIXED (the non-digit
+lookaround is exact and consistent with the PRD's promised lexical contract — a `10.5`-context
+match was explicitly ruled consistent with that contract) and the round-4 suite-count-regression
+removal correct — both settled and untouched again this round. It found points 2 and 4 still
+failing, on structural rather than merely imprecise grounds, and the founder authorized exactly one
+further scoped round implementing the redesign/correction below.
+
+**Point 2 (replay error visibility — structural redesign, RESOLVED).** Every prior round's fix to
+this mechanism (rounds 3, 5, and 6) worked by reading MORE fields off Vitest's JSON reporter output
+— exact assertion status, the reporter's own `success` field, suite counts, then finally the
+file-level `status`/`message` fields. Confirmation #4 supplied a forensic proof, read directly
+against this worktree's actually-installed `vitest@4.1.6`/`@vitest/runner@4.1.6` sources, that this
+entire approach was structurally incapable of closing the gap: a NESTED `describe` block's own
+`afterAll` hook failure is caught and attached via `failTask` to *that nested suite's own*
+`result.errors` — confirmed directly in `@vitest/runner`'s installed `chunk-artifact.js`, at the
+`catch (e) { failTask(suite.result, e, ...) }` handler wrapping the `await $("suite.afterAll", ...)`
+call inside the suite-execution routine, and in `failTask`'s own body (`result.state = "fail";
+result.errors ??= []; result.errors.push(...)`). A SEPARATE helper, `hasFailed`, walks the tree
+afterward and propagates only the FAILED **state** to every ancestor (`suite.result.state = "fail"`
+when `hasFailed(suite)`) — never the error object itself. No field the JSON reporter exposes at the
+file level can therefore ever carry a nested suite's own hook error; reading more of that reporter's
+own output was never going to close this, no matter how many rounds tried.
+
+The fix bypasses the JSON reporter entirely for the replay's own pass/fail predicate. The verifier
+generates a **runner script** — verifier-constructed source (`buildReplayRunnerScript`), written
+fresh into the throwaway detached worktree, never checked-in command text, the identical
+anti-gaming principle the pre-existing verifier-built argv already used — that imports Vitest's own
+**Node API**, confirmed directly against this worktree's installed sources:
+- `createVitest`/`startVitest` are exported from the `vitest/node` subpath
+  (`node_modules/vitest/package.json`'s `"./node"` export → `dist/node.js` → re-exported from
+  `dist/chunks/cli-api.*.js`).
+- `startVitest(mode, cliFilters, options, ...)` (`cli-api.*.js`) runs collection AND execution and
+  resolves to the Vitest instance (`ctx`) once the run completes; `cliFilters: [<relative file
+  path>]` narrows a run to exactly that one file, confirmed live against a scratch multi-file
+  project (a second, unrelated test file in the same directory never ran).
+- `ctx.state.getTestModules()` (`StateManager.getTestModules`, same chunk) returns Vitest's own
+  "reported tasks" API — `TestModule`/`TestSuite`/`TestCase` instances, the same public surface
+  Vitest's own built-in reporters consume, not a private-internals reach. `TestModule` and
+  `TestSuite` both extend `SuiteImplementation`, which exposes `.errors()`
+  (`task.result?.errors || []`) and `.state()`; both expose `.children` (an iterable
+  `TestCollection`) enabling a full recursive walk. `TestCase` exposes `.result()` returning
+  `{ state, errors }` for that one test.
+- `ctx.state.getUnhandledErrors()` (`StateManager.getUnhandledErrors`, `Array.from(this.errorsSet)`)
+  returns the run's process-level unhandled-errors collection, independent of any reporter and of
+  the task tree.
+
+The runner walks the entire forest recursively, serializing `{type, name, fullName, state, errors}`
+for every module/suite/test node, plus the unhandled-errors collection, to one JSON line on stdout
+behind a fixed marker prefix (Vitest's own console output is not suppressed and may share stdout;
+the marker line is found by exact prefix match, never by assuming stdout is pure JSON). All of the
+above was additionally validated **empirically**, in isolated scratch temp directories (never the
+repo worktree, never any daemon), against a real `vitest@4.1.6` run:
+- A nested `describe`'s throwing `afterAll`, alongside a failing target and a passing control:
+  the serialized tree shows the nested suite's own `errors` populated with the hook's message,
+  while the file's own `errors` stays empty — the replay predicate correctly **rejects** it.
+- A standalone unhandled promise rejection, alongside a failing target and a passing control: the
+  tree itself is completely clean, but `unhandledErrors` is populated — the replay predicate
+  correctly **rejects** it.
+- The legitimate shape — a failing target, a passing control, and an unrelated nested `describe`
+  with no errors of its own — produces a fully clean tree and an empty unhandled-errors collection;
+  the replay predicate correctly **accepts** it.
+- `cliFilters` targeting was independently confirmed against a two-file scratch project: only the
+  named file's module appears in the result (`moduleCount: 1`), the unrelated file never runs.
+
+The replay now passes only when: exactly one module (file) task exists in the forest; walking the
+entire tree, the ONLY failed leaf anywhere is the target test, and the ONLY errors anywhere belong
+to the target's own test-level result — no suite or module task may carry any error, at any depth;
+the unhandled-errors collection is empty; and the control's own leaf state is `passed`. `sh()`'s
+existing `processError` flag (round 5, unchanged) still fails the replay outright, before even
+attempting to read the runner's output, on a spawn error or timeout. The transcript hash now covers
+the runner's own serialized output plus both process streams, per the ruling. See S9-3, updated
+with the full mechanism and the forensic citations above.
+
+**Point 4 (fence tracking — grammar correction, RESOLVED).** The round-6 regex, `` [`~]{3,} ``, was
+a character CLASS, not an alternation — CommonMark requires a fence's own run to be entirely one
+character, but a character class matches ANY mix of the listed characters, so a run like `` ```~ ``
+(three backticks then a tilde) was read as one homogeneous-looking run of length 4. Such a mixed
+run could falsely close a real fence (exposing whatever followed as if the fence had ended) or
+falsely open one. Separately, `^\s*` allowed unlimited leading whitespace before a marker, so a
+4+-space-indented line was read as a fence candidate before the indented-code exclusion ever had a
+chance to apply; and no info-string check meant a backtick opener whose info string itself
+contained a backtick was wrongly accepted as a valid opener.
+
+Fixed with the anchored grammar `^( {0,3})(`{3,}|~{3,})(.*)$` — separate single-character
+alternates (`` `{3,} `` or `~{3,}`, never a mixed class) mean a matched run is now provably
+homogeneous; the indentation capture is bounded to exactly 0–3 literal spaces, so a 4+-space-
+indented line simply fails to match the fence pattern at all and falls through to the unchanged
+indented-code exclusion naturally, with no explicit ordering dependency needed. A backtick run
+whose info string (`rest`) contains a backtick is rejected as an opener — CommonMark restricts this
+specifically to backtick fences, since it is what disambiguates a code-block opener from an inline
+code span; tilde info strings carry no such restriction and are accepted unconditionally, including
+one containing a backtick. Closing semantics are unchanged: the SAME character, a run length `>=`
+the opening length, and nothing else but whitespace on the line. Verified against the exact
+`` ```~ `` mixed-run shape (both as a would-be opener, where it correctly opens a 3-backtick fence
+with `~` as an ordinary info-string character rather than a 4-length mixed run, and as a would-be
+closer inside a real fence, where it correctly fails to close it), a 4-space-indented marker (both
+alone and immediately followed by a real bullet, confirming it never suppresses anything), a
+backtick opener with a backtick in its info string (confirmed it neither opens a fence nor corrupts
+recognition of a later genuine fence), a tilde opener with a backtick in its info string (confirmed
+still valid), and a longer closing run.
+
+**Verification this round:** typecheck clean; `pnpm guard` 102/102; the full existing self-probe
+suite re-run (9 canonical exposure probes, the round-2-confirmation regression and round-5
+ternary-composition probes for point 1, the 14 factory/chain title probes for point 3, the round-5
+non-digit-boundary probes for point 5) all still passing. Byte-diff of `staticBooleanValue`/
+`isLocalSameOriginReachable` (point 1), the title-parser block (point 3), `containsExactNumericToken`
+(point 5), `archiveRunArtifacts` (item 6), `hasDistinctSignalPair` (the round-4 regression fix), the
+const-guard/prelude-binding matchers, and `sh()` itself against the prior confirmed-good commit —
+all confirmed byte-identical; the working-tree diff against that commit touches exactly three hunks,
+all inside the two points' intended regions. New probes: the exact task-forest predicate
+(`evaluateTaskForestConsistency`) re-run against the real captured empirical outputs for all three
+scenarios (nested-`afterAll`-throws rejected, unhandled-rejection rejected, legitimate-with-nested-
+describes accepted), plus synthetic edge cases (a two-module-task forest rejected, a 3-level-deep
+clean tree accepted); the fence grammar re-run against the exact mixed-run, indentation, and
+info-string shapes named above. No settled design (attribution authority, C9-10, floor corrections,
+stale-proof mechanics, the three r3 accepted-LOW residuals, item 6, the round-4 regression fix,
+points 1, 3, or 5, the const guards, the prelude binding, or both-stream `sh()`) changed in this
+round.
