@@ -2099,7 +2099,7 @@ async function main(): Promise<void> {
     return problems;
   }
 
-  await checkCriterion('C0-10', 'SUBCOMMAND_MAP capability ids must be SET-EQUAL (exact, no substring) to manifest capability names; full structural validation of ALL rows, deterministic and independent of the random 3-row sample; live sampled invocations use a nonce-bearing value check, not shape-only, with equivalent HTTP bodies and declared canonicalizers where needed', 'set-equal capability ids, unique rows, every row structurally valid; httpMethod may be a concrete verb or the literal "ALL" (Express .all() registrations), in which case a concrete probeMethod AND a concrete probePath are BOTH REQUIRED declarations, checked over every row (not just the sample); any body-bearing effective method (POST/PUT/PATCH, or ALL whose probeMethod is body-bearing) REQUIRES a declared probeBody, also checked over every row; a row missing a required declaration fails BY NAME regardless of sampling; a row\'s declared valueComparison (unordered-array/composite/binary) canonicalizes BOTH surfaces before comparison -- absent or mode=exact stays a REAL, unrelaxed, ordered byte-level check (the preserved implementation duty); composite mode requires EVERY declared field to be present and non-empty in BOTH payloads (a field missing from either is a structural fail, never a silently-equal undefined projection); binary mode strictly validates the encoding (hex: /^[0-9a-f]+$/i even length; base64: charset+padding+round-trip re-encode) BEFORE decoding -- malformed input is a structural fail, never permissively decoded; sample invocations prove the CLI reaches the manifest\'s SAME handler via a nonce value, not just matching key shapes; randomized red control exercises the SAME canonicalizer and precondition checks as its basis row and must still fail for a genuine mismatch', async () => {
+  await checkCriterion('C0-10', 'SUBCOMMAND_MAP capability ids must be SET-EQUAL (exact, no substring) to manifest capability names; full structural validation of ALL rows, deterministic and independent of the random 3-row sample; live sampled invocations use a nonce-bearing value check, not shape-only, with equivalent HTTP bodies and declared canonicalizers where needed', 'set-equal capability ids, unique rows, every row structurally valid; httpMethod may be a concrete verb or the literal "ALL" (Express .all() registrations), in which case a concrete probeMethod AND a concrete probePath are BOTH REQUIRED declarations, checked over every row (not just the sample); any body-bearing effective method (POST/PUT/PATCH, or ALL whose probeMethod is body-bearing) REQUIRES a declared probeBody, also checked over every row; a row missing a required declaration fails BY NAME regardless of sampling; a row\'s declared valueComparison (unordered-array/composite/binary) canonicalizes BOTH surfaces before comparison -- absent or mode=exact stays a REAL, unrelaxed, ordered byte-level check (the preserved implementation duty); composite mode requires EVERY declared field to be present and non-empty in BOTH payloads (a field missing from either is a structural fail, never a silently-equal undefined projection); binary mode strictly validates the encoding (hex: /^[0-9a-f]+$/i even length; base64: charset+padding+round-trip re-encode) BEFORE decoding -- malformed input is a structural fail, never permissively decoded; sample invocations prove the CLI reaches the manifest\'s SAME handler via a nonce value, not just matching key shapes; a composite/binary precondition failure fails the entry regardless of nonce success (conjunctive, never masked); randomized red control exercises the SAME canonicalizer and precondition checks as its basis row and must still fail for a genuine mismatch -- the basis is required to have at least one leaf corruptValues can actually change (an empty-array/object payload is skipped), widening deterministically over the rest of the manifest, alphabetically, until a corruptible basis is found or all applicable capabilities are exhausted', async () => {
     if (!fileExists(capabilityManifestRel)) { record('C0-10', '', '', false, '', { detail: `missing: ${capabilityManifestRel}` }); return; }
     let manifest: CapabilityManifestEntry[] = [];
     try {
@@ -2165,18 +2165,20 @@ async function main(): Promise<void> {
       // control below so it exercises the SAME comparator on real data.
       // Round-9: captured samples also retain the entry's valueComparison
       // spec so the red control canonicalizes identically to the real check.
-      const capturedSamples: { capability: string; cliOk: boolean; httpOk: boolean; cliJson: unknown; httpBody: unknown; valueComparison: ValueComparisonSpec | undefined }[] = [];
-      for (const entry of sample) {
+      // Round-11 Ruling B: factored into a standalone function so the same
+      // probe logic can be re-run for the red control's widened search
+      // without duplicating it.
+      async function probeCapabilityEntry(entry: CapabilityManifestEntry, daemonUrl: string, nonceValue: string): Promise<{ cliOk: boolean; httpOk: boolean; cliJson: unknown; httpBody: unknown; entryOk: boolean; detail: string; valueComparison: ValueComparisonSpec | undefined }> {
         // Value-level nonce check when the capability's route is
         // project/resource-scoped -- proves the CLI reaches the SAME
         // handler (static JSON can't know a value the verifier just
         // created).
-        const isProjectScoped = /:projectId|:id/i.test(entry.httpPath) || entry.cliArgs.some((a) => a === nonce || /project/i.test(a));
+        const isProjectScoped = /:projectId|:id/i.test(entry.httpPath) || entry.cliArgs.some((a) => a === nonceValue || /project/i.test(a));
         let nonceCheck: { attempted: boolean; ok: boolean } = { attempted: false, ok: false };
         let cliStdout = '', cliOk = false;
         try {
-          const args = entry.cliArgs.map((a) => (a === '<nonceProjectId>' ? nonce : a));
-          const { stdout } = await execFileAsync('node', [odBinPath, ...args], { env: { ...process.env, OD_DAEMON_URL: daemon.url }, timeout: 60_000 });
+          const args = entry.cliArgs.map((a) => (a === '<nonceProjectId>' ? nonceValue : a));
+          const { stdout } = await execFileAsync('node', [odBinPath, ...args], { env: { ...process.env, OD_DAEMON_URL: daemonUrl }, timeout: 60_000 });
           cliStdout = stdout;
           cliOk = true;
         } catch { cliOk = false; }
@@ -2191,19 +2193,19 @@ async function main(): Promise<void> {
           // that need one -- the old probe never sent a body at all.
           const effectiveMethod = entry.httpMethod === 'ALL' ? (entry.probeMethod as string) : entry.httpMethod;
           const rawPath = entry.probePath ?? entry.httpPath;
-          const httpPath = rawPath.replace(/:projectId|:id/i, nonce);
+          const httpPath = rawPath.replace(/:projectId|:id/i, nonceValue);
           const init: RequestInit = { method: effectiveMethod };
           if (entry.probeBody !== undefined) {
             init.headers = { 'Content-Type': 'application/json' };
-            init.body = JSON.stringify(substituteNoncePlaceholder(entry.probeBody, nonce));
+            init.body = JSON.stringify(substituteNoncePlaceholder(entry.probeBody, nonceValue));
           }
-          const res = await fetch(`${daemon.url}${httpPath}`, init);
+          const res = await fetch(`${daemonUrl}${httpPath}`, init);
           httpText = await res.clone().text();
           httpBody = await res.json().catch(() => null);
           httpOk = res.ok;
         } catch { httpOk = false; }
         if (isProjectScoped) {
-          nonceCheck = { attempted: true, ok: cliOk && httpOk && cliStdout.includes(nonce) && httpText.includes(nonce) };
+          nonceCheck = { attempted: true, ok: cliOk && httpOk && cliStdout.includes(nonceValue) && httpText.includes(nonceValue) };
         }
         const cliJson = cliOk ? (() => { try { return JSON.parse(cliStdout); } catch { return null; } })() : null;
         // Round-4 F11: for capabilities NOT bound by a nonce, require full
@@ -2224,9 +2226,24 @@ async function main(): Promise<void> {
         const canonicalCli = canonicalizeForComparison(cliJson, entry.valueComparison);
         const canonicalHttp = canonicalizeForComparison(httpBody, entry.valueComparison);
         const valueEqual = cliOk && httpOk && precondition.ok && deepValueEqual(canonicalCli, canonicalHttp);
-        const entryOk = nonceCheck.attempted ? nonceCheck.ok : valueEqual;
-        capturedSamples.push({ capability: entry.capability, cliOk, httpOk, cliJson, httpBody, valueComparison: entry.valueComparison });
-        sampleResults.push({ capability: entry.capability, ok: entryOk, detail: `nonceAttempted=${nonceCheck.attempted} nonceOk=${nonceCheck.ok} valueEqual=${valueEqual} valueComparisonMode=${entry.valueComparison?.mode ?? 'exact(default)'} preconditionOk=${precondition.ok} preconditionProblems=${JSON.stringify(precondition.problems)} cliOk=${cliOk} httpOk=${httpOk}` });
+        // Round-11 C0-10 precondition-bypass (Sol confirmation review,
+        // verify-w0.ts:2180 in the reviewed copy): entryOk used to pick
+        // nonceCheck.ok ALONE whenever nonce-checking applied, completely
+        // ignoring `precondition` -- a project-scoped capability could
+        // declare a composite/binary valueComparison that structurally
+        // fails (missing field, malformed encoding) while its nonce check
+        // still passed, and entryOk would still be true. Preconditions are
+        // now CONJUNCTIVE: a precondition failure fails the entry
+        // regardless of nonce success.
+        const entryOk = precondition.ok && (nonceCheck.attempted ? nonceCheck.ok : valueEqual);
+        const detail = `nonceAttempted=${nonceCheck.attempted} nonceOk=${nonceCheck.ok} valueEqual=${valueEqual} valueComparisonMode=${entry.valueComparison?.mode ?? 'exact(default)'} preconditionOk=${precondition.ok} preconditionProblems=${JSON.stringify(precondition.problems)} cliOk=${cliOk} httpOk=${httpOk}`;
+        return { cliOk, httpOk, cliJson, httpBody, entryOk, detail, valueComparison: entry.valueComparison };
+      }
+      const capturedSamples: { capability: string; cliOk: boolean; httpOk: boolean; cliJson: unknown; httpBody: unknown; valueComparison: ValueComparisonSpec | undefined }[] = [];
+      for (const entry of sample) {
+        const result = await probeCapabilityEntry(entry, daemon.url, nonce);
+        capturedSamples.push({ capability: entry.capability, cliOk: result.cliOk, httpOk: result.httpOk, cliJson: result.cliJson, httpBody: result.httpBody, valueComparison: result.valueComparison });
+        sampleResults.push({ capability: entry.capability, ok: result.entryOk, detail: result.detail });
       }
 
       // Round-4 F11: the red control now exercises the SAME comparator used
@@ -2234,7 +2251,33 @@ async function main(): Promise<void> {
       // pair built from a real captured sample -- proving discrimination is
       // on values, not key shape. A stub-vs-/api/health comparison could
       // pass or fail for reasons unrelated to value binding.
-      const controlBasis = capturedSamples.find((s) => s.cliOk && s.httpOk && s.cliJson !== null && s.httpBody !== null);
+      // Round-11 Ruling B: the basis must be a payload corruptValues can
+      // actually CHANGE -- an empty-array/empty-object payload corrupts to
+      // itself, making the control vacuously ineffective. Skip such bases;
+      // if none of the random 3-sample captures is corruptible, widen the
+      // search DETERMINISTICALLY (alphabetical by capability name) over the
+      // remaining applicable capabilities, probing one at a time, until a
+      // corruptible basis is found or all are exhausted -- never fail this
+      // randomly just because the 3-sample draw happened to be empty payloads.
+      function hasCorruptibleLeaf(v: unknown): boolean {
+        return JSON.stringify(corruptValues(v)) !== JSON.stringify(v);
+      }
+      let controlBasis = capturedSamples.find((s) => s.cliOk && s.httpOk && s.cliJson !== null && s.httpBody !== null && hasCorruptibleLeaf(s.httpBody));
+      const widenedSearchCapabilitiesTried: string[] = [];
+      if (!controlBasis) {
+        const alreadyTried = new Set(sample.map((e) => e.capability));
+        const remaining = applicable.filter((e) => !alreadyTried.has(e.capability)).sort((a, b) => a.capability.localeCompare(b.capability));
+        for (const entry of remaining) {
+          widenedSearchCapabilitiesTried.push(entry.capability);
+          const result = await probeCapabilityEntry(entry, daemon.url, nonce);
+          const candidate = { capability: entry.capability, cliOk: result.cliOk, httpOk: result.httpOk, cliJson: result.cliJson, httpBody: result.httpBody, valueComparison: result.valueComparison };
+          capturedSamples.push(candidate);
+          if (candidate.cliOk && candidate.httpOk && candidate.cliJson !== null && candidate.httpBody !== null && hasCorruptibleLeaf(candidate.httpBody)) {
+            controlBasis = candidate;
+            break;
+          }
+        }
+      }
       if (controlBasis) {
         const corrupted = corruptValues(controlBasis.httpBody);
         // shapeStillMatches is deliberately checked on the RAW (uncanonicalized)
@@ -2252,10 +2295,10 @@ async function main(): Promise<void> {
         // genuinely corrupted pair must fail one way or another.
         const valueCheckRejectsIt = !controlPrecondition.ok || !deepValueEqual(canonicalCliForControl, canonicalCorrupted);
         redControlOk = shapeStillMatches && valueCheckRejectsIt;
-        redControlDetail = `basis=${controlBasis.capability} valueComparisonMode=${controlBasis.valueComparison?.mode ?? 'exact(default)'} shapeStillMatches=${shapeStillMatches} controlPreconditionOk=${controlPrecondition.ok} valueCheckRejectsIt=${valueCheckRejectsIt}`;
+        redControlDetail = `basis=${controlBasis.capability} widenedSearch=${widenedSearchCapabilitiesTried.length > 0} widenedSearchCapabilitiesTried=${JSON.stringify(widenedSearchCapabilitiesTried)} valueComparisonMode=${controlBasis.valueComparison?.mode ?? 'exact(default)'} shapeStillMatches=${shapeStillMatches} controlPreconditionOk=${controlPrecondition.ok} valueCheckRejectsIt=${valueCheckRejectsIt}`;
       } else {
         redControlOk = false;
-        redControlDetail = 'no captured sample produced both a real CLI JSON value and a real HTTP JSON value to build a red control from';
+        redControlDetail = `no capability (3-sample draw plus a deterministic widened search over all ${applicable.length} applicable capabilities: ${JSON.stringify(widenedSearchCapabilitiesTried)}) produced a real CLI+HTTP payload pair with at least one corruptible leaf to build a red control from`;
       }
     } finally {
       if (daemon) await daemon.kill();
