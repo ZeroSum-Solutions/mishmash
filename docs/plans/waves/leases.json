@@ -56,9 +56,12 @@
         "apps/daemon/src/cli.ts",
         "apps/daemon/tests/**",
         "apps/web/tests/**",
-        "scripts/waves/verify-w1.ts"
+        "scripts/waves/verify-w1.ts",
+        "scripts/waves/capability-manifest.json",
+        "docs/decisions/gemini-lane.md",
+        "docs/decisions/deepseek-path-hygiene.md"
       ],
-      "note": "Owns EntryShell.tsx and server.ts outright for Burst 2. Executes W2's one-line newsletter fix (C2-1a) inside this lease. `apps/daemon/tests/**` is also claimed by W0 and W4; Burst ordering serializes these writers — W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3."
+      "note": "Owns EntryShell.tsx and server.ts outright for Burst 2. Executes W2's one-line newsletter fix (C2-1a) inside this lease. `apps/daemon/tests/**` is also claimed by W0 and W4; Burst ordering serializes these writers — W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3. Amended 2026-07-28 (Sol verify-w1 r1 rulings): `scripts/waves/capability-manifest.json` added because C1-8 requires a new `od` subcommand and `scripts/guard.ts` enforces exact SUBCOMMAND_MAP/manifest parity — without the manifest, C1-8 + C1-14 + LEASE are mutually unsatisfiable; the two C1-12 decision docs are enumerated exactly (NM-14 → gemini-lane.md, NM-37C → deepseek-path-hygiene.md) rather than leasing all of docs/decisions/**. The NM-20 cost-meter files (run-analytics-observability.ts, codex-rollout-usage.ts, langfuse-trace.ts) are deliberately NOT added per the same ruling: leased routes/usage*.ts code consumes their exported evidence; if implementation proves a modification necessary, amend main first with only the exact required file."
     },
     "W2": {
       "slug": "mishmash-w2-brand-honesty",
@@ -121,9 +124,10 @@
         "apps/daemon/src/library-store.ts",
         "apps/daemon/tests/library-*.test.ts",
         "docs/security/**",
-        "scripts/waves/verify-w9-ingest.ts"
+        "scripts/waves/verify-w9-ingest.ts",
+        "docs/plans/waves/DECISIONS.md"
       ],
-      "note": "Runs beside W4; disjoint file sets. Must complete before W3 exposes the Library. `apps/daemon/src/routes/library.ts` and `docs/security/**` are also claimed by W0; W9-ingest does not begin until W0 lands on `main` (Burst 1, before Burst 3), so the two claims are temporally serialized, never concurrent."
+      "note": "Runs beside W4; disjoint file sets. Must complete before W3 exposes the Library. `apps/daemon/src/routes/library.ts` and `docs/security/**` are also claimed by W0; W9-ingest does not begin until W0 lands on `main` (Burst 1, before Burst 3), so the two claims are temporally serialized, never concurrent. Amended 2026-07-28 (Sol W9-ingest expansion r1 ruling 2): `docs/plans/waves/DECISIONS.md` added so accepted-risk attribution rows reference a founder/orchestrator-authorized decision entry there — the attribution JSON alone is never a founder decision record, and the wave verifier fails closed on an implementation-authored JSON assertion. Same ruling declined to lease the ingest-adjacent security modules (library-tokens, token-lifecycle, library-sync, safe-fetch): attribution without modification suffices; any proven necessity requires a separate exact-file amendment on main before modification."
     },
     "W3": {
       "slug": "mishmash-w3-library-launch",
