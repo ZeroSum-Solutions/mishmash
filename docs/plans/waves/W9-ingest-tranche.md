@@ -13,22 +13,29 @@
 `docs/plans/waves/DECISIONS.md`. The last entry landed on `main` at `ff47420b8` (round-1
 disposition, ruling 2) — confirmed directly by reading `origin/main`, not assumed.
 
-**Status: FOUNDER-AUTHORIZED FIDELITY ROUND (round 4, post-ceremony-confirmation REJECT).**
+**Status: FOUNDER-AUTHORIZED FIDELITY ROUND (round 5, post-second-confirmation REJECT).**
 Round 1 returned REJECT (9 findings); round 2 returned REJECT again; round 2's own confirmation
 pass returned REJECT a third consecutive time, firing the program's stop rule and escalating to a
 founder-delegated ceremony, which ruled six mechanical defects and authorized one ceremony-bounded
-fix round (round 3, disposed below). Round 3's own fidelity-only confirmation returned REJECT on
-five of those six items plus one regression the round-3 fix itself introduced — item 6 (archive
-finalization) was confirmed IMPLEMENTED and untouched again. The founder then authorized exactly
-one further scoped fidelity round (this one), strictly confined to the same six confirmation
-points, "nothing else." The ceremony's original analysis (round 2's attribution-authority work,
-the C9-10 redesign, the floor corrections, the stale-proof mechanics, and all three author-flagged
-residual-risk notes in **Adversarial review** below) remains settled and untouched across every
-round since. Every finding across all four rounds is disposed in **AUTHOR-FLAGGED / DISPOSITIONS**
-at the end of this document, which is the authoritative change record; earlier prose in this
-document reflects the current, fixed state, not the history — the dispositions section carries the
-history. This round gets exactly one fidelity-only confirmation; any verdict other than APPROVE
-goes directly to the founder, with no further fix round absent explicit founder authorization.
+fix round (round 3, disposed below). Round 3's own fidelity-only confirmation (confirmation #1)
+returned REJECT on five of those six items plus one regression the round-3 fix itself introduced;
+the founder authorized round 4, disposed below. Round 4's own fidelity-only confirmation
+(confirmation #2) ruled the round-4 regression fix CLOSED and item 6 (archive finalization) settled
+byte-identical — but found five of round 4's own five fixes still imprecise in specific,
+demonstrable ways (a ternary-composition gap in the exposure veto, process-error/reporter-
+consistency gaps in the replay, factory-modifier context-independence gaps in the title parser, a
+fenced/indented-code gap in C9-7's bullet check, and an unbounded-substring gap in the transport
+numeric binding). The founder authorized exactly one further scoped fidelity round (this one),
+strictly confined to those five points, "nothing else," followed by exactly one more fidelity-only
+confirmation (confirmation #3). The ceremony's original analysis (round 2's attribution-authority
+work, the C9-10 redesign, the floor corrections, the stale-proof mechanics, and all three
+author-flagged residual-risk notes in **Adversarial review** below), item 6 (archive finalization),
+and the round-4 regression fix all remain settled and untouched. Every finding across all five
+rounds is disposed in **AUTHOR-FLAGGED / DISPOSITIONS** at the end of this document, which is the
+authoritative change record; earlier prose in this document reflects the current, fixed state, not
+the history — the dispositions section carries the history. Any verdict on this round other than
+APPROVE goes directly to the founder, with no further fix round absent explicit founder
+authorization.
 
 This document is an **expansion**, not an implementation. Per the NM-41C gate
 (`W5-W11-gated.md` lines 8–24), it is written and frozen *before* any implementation work
@@ -385,15 +392,20 @@ passes only when, in addition, the row's `control.testRef` (a) passes the full C
 a genuinely new control — the S9-3 replay above) and (b) the same file's real-transport coverage
 (the current HEAD suite's own passing assertions) shows **two DISTINCT** passing assertions — one
 under-limit-accepted, one over-limit-rejected — each **bound**, not merely coexisting in the same
-file: **same route** (the existing path-derived association terms), **same parsed limit** (the
-declaration's own `limit` value must appear in both assertion names), and, for the over-limit side
-specifically, **same declared overflow outcome** (the assertion name must name the declared status
-— `429` for `overflow=reject-429`, `413` for `overflow=reject-413`). A single omnibus assertion
-whose name happens to satisfy both the accept- and reject-shaped language does not count as the
-pair, and an unrelated same-file assertion that never mentions the route, the limit, or the
-overflow code does not count either — closing the confirmation-round gap where two arbitrary
-passing assertions in the same file, unbound to any of those three facts, could satisfy this
-requirement. An in-process control (a bounded per-token-hash, per-origin, or per-pairing-attempt
+file: **same route** (the existing path-derived association terms), **same parsed limit** — the
+declaration's own `limit` value must appear in the assertion name as an **exact numeric token**
+(bounded by non-digit characters or the string's own start/end, so `limit=10` matches `"...within
+the 10 request limit"` but never `"...within the 100 request limit"`) — and, for the over-limit
+side specifically, **same declared overflow outcome**, matched the same exact-token way (`429` for
+`overflow=reject-429`, `413` for `overflow=reject-413`; `429` never matches inside `1429`). An
+unbounded substring test (`fullName.includes('10')`, `fullName.includes('429')`) is explicitly
+insufficient — round 3's own first attempt at this binding used exactly that unbounded form,
+confirmed still-gameable: "ingest allow 100 requests" satisfies a `limit=10` substring check, and
+"ingest reject 100 requests with 1429" satisfies both a `limit=10` and an `overflow=reject-429`
+substring check, without naming either fact exactly. A single omnibus assertion whose name happens
+to satisfy both the accept- and reject-shaped language does not count as the pair, and an unrelated
+same-file assertion that never exactly names the route, the limit, or the overflow code does not
+count either. An in-process control (a bounded per-token-hash, per-origin, or per-pairing-attempt
 counter, entirely inside `routes/library.ts`) is achievable inside this tranche's lease for all
 three current P0 rows; a `library-tokens.ts`-level or `server.ts`-level control is not (ruling 1).
 
@@ -500,7 +512,7 @@ All criteria inherit `VERIFICATION-CONTRACT.md` §3. Verified by `scripts/waves/
 | C9-3 | Attribution matrix exists and covers exactly the frozen route set | `docs/security/library-ingest-attribution.json` parses as JSON; exactly one row per frozen `{method,path}`, no orphans, no gaps, no duplicates |
 | C9-4 | Every row is fully, structurally attributed | Every field clears a placeholder floor (length + denylist + anti-repetition, not mere non-emptiness); `authn` must name its row's mechanically-derived exposure class; `acceptedRisk.decisionRef` resolves to a unique, fully-structured, route-bound, non-self-accepted `### W9-ACCEPT-*` entry in `DECISIONS.md@baseCommit`; evidence reports attributed/unattributed/known-vulnerable counts |
 | C9-5 | Every `testRef`/`control.testRef` names a real, currently-passing, globally-route-unique test; new controls carry independently-replayed red evidence | Exact `fullName` equality; a path-derived association term must appear; **one global map spans every row's `testRef` AND `control.testRef`** — reuse across two routes fails; "new" decided by an AST-derived test-title match at `baseCommit`; a new control's citation requires an isolated detached-worktree replay at the AST-verified introduction-commit parent (frozen offline install, HEAD-file overlay, Vitest JSON reporter) proving the exact test failed and a named `CONTROL_TEST` passed; the checked-in transcript's `COMMAND`/output are descriptive only; every `control.testRef` (new or pre-existing) additionally requires a genuine paired positive+negative control in-file — **two DISTINCT passing assertions**, never one omnibus name satisfying both sides |
-| C9-6 | Every P0-tier row's size/rate-limit dimension is explicitly, mechanically resolved | For every row with `riskScore.tier === 'P0'` (today: `pair/confirm`, `ingest`, `GET /assets`): `control.mechanism` matches the anchored `ENFORCED kind=... scope=... limit=... windowMs=... overflow=...` grammar exactly, `control.testRef` passes C9-5's full bar (incl. replay for a new control), AND the same file's real-transport coverage shows **two DISTINCT** passing assertions — one under-limit-accepted, one over-limit-rejected — each bound to the same route, the declaration's own parsed `limit`, and (over-limit side) the declared overflow status code — or a verified `acceptedRisk` |
+| C9-6 | Every P0-tier row's size/rate-limit dimension is explicitly, mechanically resolved | For every row with `riskScore.tier === 'P0'` (today: `pair/confirm`, `ingest`, `GET /assets`): `control.mechanism` matches the anchored `ENFORCED kind=... scope=... limit=... windowMs=... overflow=...` grammar exactly, `control.testRef` passes C9-5's full bar (incl. replay for a new control), AND the same file's real-transport coverage shows **two DISTINCT** passing assertions — one under-limit-accepted, one over-limit-rejected — each bound to the same route, the declaration's own parsed `limit`, and (over-limit side) the declared overflow status code, **matched as an exact numeric token (digit-bounded), never an unbounded substring** — or a verified `acceptedRisk` |
 | C9-7 | Threat-model doc extended, mechanically cited, P0-complete | `docs/security/daemon-threat-model.md` carries a "Wave 9" section bounded to the next `## ` heading; every `[C9-N]` bullet's cited test is an exact match; **each P0-tier route requires its own bullet naming exactly that one P0 route key** and citing exactly that row's expected reference (`control.testRef` if controlled, else primary `testRef`), already globally associated with only that route — a bullet naming several P0 routes, or reusing an unrelated citation, no longer counts |
 | C9-8 | Full risk-score formula enforced per row | AST-derived `exposure` (straight-line dominance grammar, self-probe-verified, comment-blind, duplicate-checked) matches exactly; `impact >= FROZEN_IMPACT_FLOORS[route]`; `score === exposure+impact` exactly; `tier === tierFor(score)` exactly; **gated on all 9 exposure-classifier self-probes passing** |
 | C9-9 | Gates | `pnpm guard` and `pnpm typecheck` exit 0 on the current tree |
@@ -878,3 +890,90 @@ item-5 binding logic and the paired-control regression fix independently verifie
 legitimate-pair, omnibus-single-assertion, unrelated-unbound-pair, and missing-overflow-code cases.
 No settled design (attribution authority, C9-10, floor corrections, stale-proof mechanics, the
 three r3 accepted-LOW residuals, or item 6) changed in this round.
+
+### Round 5 (founder-authorized fidelity round #2 — confirmation #2 REJECT, 5 points)
+
+Round 4's own fidelity-only confirmation (confirmation #2) ruled the round-4 regression fix CLOSED
+and item 6 settled byte-identical — both untouched again — but found five of round 4's own five
+fixes still imprecise in specific, demonstrable ways. The founder authorized exactly one further
+scoped fidelity round, strictly confined to those five points.
+
+**Point 1 (exposure classifier — ternary composition gap → RESOLVED).** `staticBooleanValue`
+handled literals, negation, `&&`, and `||`, but had no case for `ConditionalExpression` — so
+`(true ? false : isLocalSameOrigin(req)) && isLocalSameOrigin(req)` still vetoed: the dead ternary
+arm was correctly skipped by the WALKER (`visitExprSubtree`'s existing `ConditionalExpression`
+handling), but the ternary's own static value came back `undefined` from the EVALUATOR, so the
+outer `&&`'s reachability check (`staticBooleanValue(left) === false`) never fired and the RHS was
+visited anyway. Fixed by teaching `staticBooleanValue` itself to evaluate a ternary whose condition
+has a determinable static value: the ternary's own value is that branch's static value, evaluated
+recursively; an undeterminable condition still yields `undefined`. Dead arms were already, and
+remain, skipped by the walker — this only taught the evaluator what the walker already knew. See
+S9-2 (prose unchanged; it already described `&&`/`||` dead-branch elimination as the intent).
+
+**Point 2 (replay-at-parent — process-error / reporter-consistency gap → RESOLVED).** `sh()`
+collapsed a spawn error or a timeout-induced kill to an ordinary `status:1`, indistinguishable from
+a genuine failing test run, so the replay's only red-exit check (`status !== 0`) treated a process
+that never ran a single real test as the expected red state. `sh()` now returns a `processError`
+flag (set when `spawnSync` reports `.error` or `.signal`), and the replay fails outright, before
+even attempting to parse the reporter's output, whenever it's set. Separately, the replay only
+checked `numFailedTests === 1` and each assertion's own status — it never checked the reporter's
+own top-level `success` field (must be exactly `false` for a genuine failing run; a `true` value
+alongside a failed test is self-contradictory reporter output) or its suite-level counts
+(`numTotalTestSuites`/`numFailedTestSuites`, both required to be exactly `1` — a replay touching or
+failing more than the one targeted file signals something beyond the target test went wrong). Both
+are now modeled on `SuiteJson` (confirmed present in real Vitest JSON output by direct inspection)
+and checked. See S9-3 (prose unchanged; it already claimed unrelated-process-failure rejection).
+
+**Point 3 (historical titles — factory/chain context-independence gap → RESOLVED).** `each`, `for`,
+`runIf`, and `skipIf` were accepted as ordinary modifiers indistinguishable from terminal ones
+(`concurrent`, `skip`, `only`, `todo`, `fails`), so a standalone or assigned factory call (`const
+factory = it.each('/api/library/ingest')`) recorded its own factory argument as a title through the
+"plain call" branch, and `it.each('/api/library/ingest').helper('real title', fn)` /
+`.skip(...)` still leaked the inner route literal because the prior suppression mechanism only
+fired when the OUTER callee was recognized as a chained-call shape at all — an unrecognized outer
+shape (`.helper`, `.skip` immediately after a factory call) left the inner factory call
+un-suppressed. Fixed by replacing context-dependent suppression with a context-FREE predicate,
+`isFactoryCall`: any call whose own direct callee chain terminates in a factory modifier is
+rejected as a title source unconditionally, wherever it's encountered in the tree -- standalone,
+assigned, or an unrecognized inner link. Only the OUTER invocation of a validated (possibly
+multi-level) factory chain's result -- via a new recursive `isValidTestChainExpression` -- may
+still contribute a title. See S9-3 (prose unchanged; it already described the outer-title-call
+pattern, which continues to work).
+
+**Point 4 (C9-7 bullets — fenced/indented-code gap → RESOLVED).** The bullet-line check was still
+line-regex-only: a `- [C9-N] ...`-shaped line inside a fenced code block, or indented 4+ spaces
+(CommonMark indented-code), is not a rendered Markdown list item, but both satisfied the check.
+Fixed by tracking fence state (toggling on every triple-backtick fence-delimiter line, excluding
+every line while inside a fence, including the delimiters themselves) and excluding any line with
+4+ leading spaces, both applied before the bullet-pattern test.
+
+**Point 5 (ENFORCED transport binding — unbounded-substring gap → RESOLVED, PRD updated too).**
+The numeric bindings added in round 4 were unbounded substring tests
+(`fullName.includes(String(parsed.limit))`), so with `limit=10` and `overflow=reject-429`, a
+distinct, wrong-magnitude assertion name like `"ingest allow 100 requests under limit"` or
+`"ingest reject 100 requests with 1429"` still satisfied the check — neither the limit nor the
+overflow code was actually matched exactly. Fixed with `containsExactNumericToken`, requiring the
+number to appear bounded by non-digit characters (or the string's own start/end) on both sides —
+`\b<n>\b` (digits are word characters, so a word boundary is exactly a digit boundary). S9-4 and the
+C9-6 table row are updated to describe exact-token matching explicitly, replacing the "literal
+substring" language the confirmation found still-gameable.
+
+**Verification this round:** typecheck clean; `pnpm guard` 102/102; all 9 canonical self-probes and
+the round-4 confirmation regression probes re-run and passing; three new ternary-composition probes
+(the exact reported `(true ? false : X) && X` shape confirmed no longer vetoing; its live-condition
+mirror confirmed still vetoing; a ternary used directly as the whole condition re-confirmed
+unaffected); `sh()`'s `processError` field independently verified against a real nonexistent-binary
+spawn error, a real timeout-induced kill, and two ordinary exit-code cases (0 and nonzero), plus
+stderr-capture; the replay's new reporter-consistency logic independently verified against a clean
+case, the exact reported `success:true`-with-failure case, a suite-level-failure case, and the
+existing unrelated-failed-assertion case; the item-3 title parser re-verified against the real
+45-title suite (unchanged) plus 12 targeted factory/chain cases including the two exact reported
+leaks (`const factory = it.each(...)`, `it.each(...).helper(...)`) and confirmation that legitimate
+`runIf`/`skipIf` two-level outer invocations still extract correctly; the C9-7 bullet pattern
+re-verified against a real bullet, the exact reported fenced-code case, the exact reported
+4-space-indented case, a bullet correctly re-counted after a fence closes, and a lightly-indented
+(nested-list-shaped) bullet still counting; the item-5 numeric matcher re-verified against the two
+exact reported false-positive cases (`10` inside `100`, `429` inside `1429`) plus exact-match and
+string-boundary cases. No settled design (attribution authority, C9-10, floor corrections,
+stale-proof mechanics, the three r3 accepted-LOW residuals, item 6, or the round-4 regression fix)
+changed in this round.
