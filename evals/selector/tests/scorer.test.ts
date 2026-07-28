@@ -167,3 +167,67 @@ test('Sol-N4: a wrong-state citation (real hover-state nodeId cited where the cl
   assert.ok(wrongResult.axes.motion_timing < correctResult.axes.motion_timing, `expected wrong-state motion_timing (${wrongResult.axes.motion_timing}) < correct-state motion_timing (${correctResult.axes.motion_timing})`);
   assert.ok(wrongResult.axes.directive_claim_coverage < correctResult.axes.directive_claim_coverage, `expected wrong-state coverage (${wrongResult.axes.directive_claim_coverage}) < correct-state coverage (${correctResult.axes.directive_claim_coverage})`);
 });
+
+test('Sol-F9 (founder-authorized micro-round): arbitrary non-verified styleFingerprint on real provenance does not restore coverage at 0.707', () => {
+  // Sol's binding REJECT of round 4: "styleFingerprint:'x' on real
+  // provenance restores exact 0.7073170731707317 coverage; hasStyleEvidence
+  // checks presence, not verification" and "N1 STILL-OPEN: arbitrary
+  // non-empty styleFingerprint unlocks layout_geometry=1, section_identity=1,
+  // and responsiveness=1 without verified style evidence." Round 4's
+  // hasStyleEvidence gate correctly narrowed the evidence KIND to
+  // styleFingerprint (fixing the motionSignature exploit), but only checked
+  // NON-EMPTINESS -- an arbitrary, unparseable/unverifiable value like "x"
+  // still satisfied it. docs-api-reference's real provenance (every
+  // domPath/nodeId/breakpoint genuinely correct, groundedness=2 for all 4
+  // elements) plus styleFingerprint:"x" on every element reproduces the
+  // EXACT SAME 0.707 math as round 4's motionSignature repro, because "x" is
+  // just as non-empty as "arbitrary-nonempty-label" was -- the gate never
+  // looked past presence. hasVerifiedStyleEvidence must drop coverage to 0
+  // and must NOT unlock layout_geometry/section_identity/responsiveness,
+  // since "x" does not parse to a 3-part fingerprint and so verifies against
+  // nothing.
+  const ir = loadCaseIR(loadManifest().cases.find((c) => c.id === CASE_ID)!);
+  const composition: CompositionElement[] = ir.provenance.map((p) => ({
+    elementId: p.elementId,
+    sourceId: p.sourceId,
+    domPath: p.domPath,
+    nodeId: p.nodeId,
+    breakpoint: p.breakpoint,
+    styleFingerprint: 'x',
+  }));
+  const result = scoreComposition({ caseId: CASE_ID, composition });
+  assert.notEqual(result.axes.directive_claim_coverage, 0.7073170731707317, 'must not still be the pre-fix 0.707 value');
+  assert.equal(result.axes.directive_claim_coverage, 0, `expected coverage to drop to EXACTLY 0 (unverified styleFingerprint does not evidence layout/section claims), got ${result.axes.directive_claim_coverage}`);
+  const NEAR_ZERO = 0.2;
+  for (const axis of ['layout_geometry', 'section_identity', 'responsiveness'] as const) {
+    assert.ok(result.axes[axis] < NEAR_ZERO, `expected axes.${axis} = ${result.axes[axis]} < ${NEAR_ZERO} (an arbitrary, non-verified styleFingerprint must not unlock it to 1.0)`);
+  }
+});
+
+test('Sol-F9 (founder-authorized micro-round): a genuinely correct, verified styleFingerprint still fully verifies -- honest satisfiability', () => {
+  // Binding calibration standard: tightening a gate to require genuine
+  // VERIFICATION must not make honest, correctly-evidenced compositions
+  // unscoreable. Builds docs-api-reference's real provenance with a
+  // styleFingerprint DERIVED FROM the resolved node's own real captured
+  // computedStyle (color|backgroundColor|fontFamily, the same convention
+  // paletteEvidenceFactor/typeEvidenceFactor verify against and
+  // verify-w7.ts's own styleFingerprintOf uses) -- a genuinely honest claim,
+  // not an arbitrary label. This must fully verify: coverage=1 and every
+  // axis hasVerifiedStyleEvidence gates reaches its ceiling.
+  const c = loadManifest().cases.find((cc) => cc.id === CASE_ID)!;
+  const ir = loadCaseIR(c);
+  const bySource = buildSnapshotsBySource(c);
+  const composition: CompositionElement[] = ir.provenance.map((p) => {
+    const node = (bySource[p.sourceId] ?? []).find((n) => n.nodeId === p.nodeId && n.domPath === p.domPath && n.breakpoint === p.breakpoint && n.state === 'default');
+    assert.ok(node, `fixture sanity: provenance entry ${p.elementId} must resolve to a real default-state node`);
+    const parts = ['color', 'backgroundColor', 'fontFamily'].map((k) => node!.computedStyle[k]).filter((v): v is string => typeof v === 'string' && v.length > 0);
+    assert.equal(parts.length, 3, `fixture sanity: ${p.elementId}'s resolved node must carry all 3 style keys`);
+    const el: CompositionElement = { elementId: p.elementId, sourceId: p.sourceId, domPath: p.domPath, nodeId: p.nodeId, breakpoint: p.breakpoint, styleFingerprint: parts.join('|') };
+    return el;
+  });
+  const result = scoreComposition({ caseId: CASE_ID, composition });
+  assert.equal(result.axes.directive_claim_coverage, 1, `expected a genuinely honest, verified styleFingerprint to fully cover, got ${result.axes.directive_claim_coverage}`);
+  for (const axis of ['layout_geometry', 'section_identity', 'responsiveness'] as const) {
+    assert.equal(result.axes[axis], 1, `expected axes.${axis} to fully verify with honest evidence, got ${result.axes[axis]}`);
+  }
+});
