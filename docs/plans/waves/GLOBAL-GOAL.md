@@ -96,7 +96,7 @@ agent writes its own acceptance criteria after seeing its implementation and cer
 
 | ID | Criterion | Verification |
 |---|---|---|
-| G-1 | Clone pipeline landed | `feat/web-clone-capture-hardening` merged; class-A criteria green; limitations documented |
+| G-1 | Clone pipeline landed | `f0c4bda56` merged (squashed) to `main`; class-A criteria green; limitations documented |
 | G-2 | State is recoverable | W0 backup → restore into a fresh data root → verified equal |
 | G-3 | Daemon boundary documented and enforced | `docs/security/daemon-threat-model.md` + ingest capability tokens + red specs |
 | G-4 | Scale baseline exists, and later waves beat it | Committed baseline; W4 posts improved numbers |
@@ -119,8 +119,8 @@ without that index an agent can approve every wave and demonstrate no program-le
 
 ## Founder decisions (surface at start, do not block on them)
 
-1. **NM-03 / NM-01** — internal identifiers and the `@open-design/*` scope: keep as deliberate
-   (**both auditors recommend keeping**) or rename? Determines whether W11 exists at all.
+1. **NM-03 / NM-01** — internal identifiers and the `@open-design/*` scope: **Resolved 2026-07-27
+   — KEEP** as deliberate (both auditors recommended keeping). W11 will not fire.
 2. **NM-24** — Instatic tether depth (MCP + Super Import seam vs deeper).
 3. **NM-21** — memory scope: Library embeddings only (recommended) vs managed RAG evaluation.
 4. **NM-25** — VoiceBox: scope a real voiceover workflow, or register the MCP and stop?
