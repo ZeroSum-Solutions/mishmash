@@ -3,7 +3,6 @@ import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import url from 'node:url';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -53,7 +52,14 @@ describe('Phase 2C CLI wrappers', () => {
   });
 
   function makeFolder(): string {
-    const dir = mkdtempSync(path.join(tmpdir(), 'od-cli-phase2c-'));
+    // Anchor to /tmp directly rather than os.tmpdir(): one of these folders
+    // hosts a unix-domain IPC socket (see `ipcRoot` below), and AF_UNIX
+    // socket paths are capped at ~104 bytes on macOS (~108 on Linux) at the
+    // kernel level. A long/nested $TMPDIR (e.g. an orchestrator-scoped gate
+    // run) pushes `<tmpdir>/od-cli-phase2c-XXXXXX/daemon.sock` past that cap
+    // and `server.listen()` throws EINVAL. /tmp stays short regardless of
+    // $TMPDIR.
+    const dir = mkdtempSync(path.join('/tmp', 'od-cli-phase2c-'));
     tempDirs.push(dir);
     return dir;
   }
@@ -65,6 +71,16 @@ describe('Phase 2C CLI wrappers', () => {
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       OD_DAEMON_URL: baseUrl,
+      // Pin TMPDIR/TMP/TEMP for the spawned CLI subprocess tree, same
+      // reasoning as `makeFolder()` above: tsx's own loader opens an
+      // AF_UNIX IPC pipe at `${TMPDIR}/tsx-<uid>/<pid>.pipe`, subject to the
+      // identical ~104-byte `sun_path` cap. Without this, the child inherits
+      // the parent's (possibly long/nested) $TMPDIR from `...process.env`
+      // above and tsx's own pipe -- not just this file's own fixture dirs --
+      // can overflow the cap and crash the child with EINVAL.
+      TMPDIR: '/tmp',
+      TMP: '/tmp',
+      TEMP: '/tmp',
       ...options.env,
     };
     delete env.NODE_OPTIONS;
@@ -113,6 +129,12 @@ describe('Phase 2C CLI wrappers', () => {
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       OD_DAEMON_URL: baseUrl,
+      // See the matching comment in runCli() above: pin TMPDIR/TMP/TEMP so
+      // tsx's own AF_UNIX loader IPC pipe can't overflow the ~104-byte
+      // `sun_path` cap under a long/nested inherited $TMPDIR.
+      TMPDIR: '/tmp',
+      TMP: '/tmp',
+      TEMP: '/tmp',
       ...options.env,
     };
     delete env.NODE_OPTIONS;

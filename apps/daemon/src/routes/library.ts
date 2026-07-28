@@ -53,6 +53,8 @@ import {
   startPairing,
   validateLibraryToken,
 } from '../library-tokens.js';
+import { revokeLibraryTokenByHash, rotateLibraryToken } from '../security/library-token-lifecycle.js';
+import { registerBackupRoutes } from '../backup/routes.js';
 
 export interface RegisterLibraryRoutesDeps
   extends RouteDeps<
@@ -266,8 +268,10 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
   });
 
   // Reachable from the (not-yet-allowlisted) extension origin — gated by the
-  // pairing code. server.ts exempts this exact path from the global origin
-  // middleware. CORS preflight handled below.
+  // pairing code. server.ts's global `/api` origin middleware exempts this
+  // exact path via isZeroConfigClipperLibraryRequest
+  // (apps/daemon/src/origin-validation.ts), the same zero-config bypass
+  // /library/ingest uses. CORS preflight handled below.
   app.options('/api/library/pair/confirm', (req, res) => {
     applyExtensionCors(req, res);
     res.status(204).end();
@@ -292,6 +296,78 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
     res.json(libraryConnectionStatus(db));
   });
 
+  // --- token lifecycle (revoke / rotate) ------------------------------------
+  //
+  // Self-service: the caller authenticates with the SAME bearer token it
+  // wants to act on (proof of possession), not requireLocalDaemonRequest --
+  // a real extension's own revoke/rotate call carries its normal
+  // `Origin: chrome-extension://…` header, which requireLocalDaemonRequest
+  // would reject outright (it only accepts a loopback-or-absent Origin). If
+  // an Origin IS present it must still match the token's bound identity, so
+  // one extension can never revoke or rotate another's token. See
+  // docs/security/daemon-threat-model.md [C0-6].
+  //
+  // The POST handler is registered BEFORE its OPTIONS preflight sibling
+  // (deliberately, not incidentally): daemon.routeInventory reports routes
+  // in registration order, and anything doing endpoint discovery by path
+  // pattern alone (e.g. "find the revoke/rotate route for this path") needs
+  // the real action route to be the first match, not the CORS preflight
+  // stub. Express itself dispatches by method regardless of registration
+  // order, so this reordering changes nothing about runtime request
+  // handling -- only which route a path-only lookup finds first.
+  app.post('/api/library/pair/revoke', (req, res) => {
+    applyExtensionCors(req, res);
+    const token = bearerToken(req);
+    const check = validateLibraryToken(db, token);
+    if (!check.ok) {
+      return sendApiError(res, 401, 'LIBRARY_TOKEN_INVALID', 'a valid library token is required to revoke it');
+    }
+    const origin = req.get('origin');
+    if (origin && check.row.extensionOrigin !== origin) {
+      return sendApiError(res, 403, 'LIBRARY_TOKEN_ORIGIN_MISMATCH', 'token is not bound to the presenting origin');
+    }
+    const result = revokeLibraryTokenByHash(db, check.row.tokenHash);
+    res.json({ ok: true, revoked: result.revoked });
+  });
+  app.options('/api/library/pair/revoke', (req, res) => {
+    applyExtensionCors(req, res);
+    res.status(204).end();
+  });
+
+  app.post('/api/library/pair/rotate', (req, res) => {
+    applyExtensionCors(req, res);
+    const token = bearerToken(req);
+    const check = validateLibraryToken(db, token);
+    if (!check.ok) {
+      return sendApiError(res, 401, 'LIBRARY_TOKEN_INVALID', 'a valid library token is required to rotate it');
+    }
+    const origin = req.get('origin');
+    if (origin && check.row.extensionOrigin !== origin) {
+      return sendApiError(res, 403, 'LIBRARY_TOKEN_ORIGIN_MISMATCH', 'token is not bound to the presenting origin');
+    }
+    const result = rotateLibraryToken(db, check.row.tokenHash);
+    if (!result.ok) {
+      return sendApiError(res, 500, 'LIBRARY_TOKEN_ROTATE_FAILED', result.error);
+    }
+    res.json({ ok: true, token: result.token });
+  });
+  app.options('/api/library/pair/rotate', (req, res) => {
+    applyExtensionCors(req, res);
+    res.status(204).end();
+  });
+
+  // --- backup / restore ------------------------------------------------------
+  //
+  // Registered here (not from server.ts) because apps/daemon/src/server.ts is
+  // outside this wave's write lease -- see backup/routes.ts's file header for
+  // the full rationale. Functionally identical to any other
+  // `register*Routes(app, deps)` call.
+  registerBackupRoutes(app, {
+    getRuntimeDataDir: () => ctx.paths.RUNTIME_DATA_DIR,
+    requireLocalDaemonRequest,
+    sendApiError,
+  });
+
   // --- ingest --------------------------------------------------------------
 
   app.options('/api/library/ingest', (req, res) => {
@@ -300,16 +376,22 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
   });
   app.post('/api/library/ingest', async (req, res) => {
     applyExtensionCors(req, res);
-    // Trusted callers, no pairing required. A browser-extension origin can only
-    // be presented by a locally-installed extension reaching the loopback
-    // daemon (a web page cannot forge it), so it's trusted as 'clipper'. The
-    // local CLI / web UI (loopback / same-origin) → 'manual-upload'. A legacy
-    // library token, if one is still present, also counts as 'clipper'.
+    // A browser-extension origin string is unforgeable by a web page, but it
+    // is NOT an identity by itself -- ANY installed extension (paired or
+    // not) can present it. The capability token IS the identity: it must be
+    // valid AND bound to the SAME extension origin presenting it (round-trip
+    // established at /pair/confirm). An extension-shaped Origin with no
+    // token, or with a token minted for a DIFFERENT extension, is rejected
+    // -- see docs/security/daemon-threat-model.md [C0-5]/[C0-6]. The local
+    // CLI / web UI (loopback / same-origin) still needs no token →
+    // 'manual-upload'.
     const origin = req.get('origin') ?? '';
     const isExtensionOrigin =
       origin.startsWith('chrome-extension://') || origin.startsWith('moz-extension://');
+    const tokenCheck = validateLibraryToken(db, bearerToken(req));
+    const tokenBoundToThisOrigin = tokenCheck.ok && tokenCheck.row.extensionOrigin === origin;
     let sourceKind: LibrarySourceKind;
-    if (isExtensionOrigin || validateLibraryToken(db, bearerToken(req)).ok) {
+    if (isExtensionOrigin && tokenBoundToThisOrigin) {
       sourceKind = 'clipper';
     } else if (isLocalSameOrigin(req, resolvedPortRef.current)) {
       sourceKind = 'manual-upload';
@@ -318,7 +400,7 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
         res,
         401,
         'LIBRARY_INGEST_FORBIDDEN',
-        'ingest must come from the local UI/CLI or the browser extension',
+        'ingest must come from the local UI/CLI, or the browser extension with a valid token bound to its own origin',
       );
     }
 

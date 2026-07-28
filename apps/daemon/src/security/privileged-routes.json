@@ -1,0 +1,183 @@
+[
+  {
+    "method": "POST",
+    "path": "/api/backup",
+    "file": "apps/daemon/src/backup/routes.ts",
+    "probeBody": { "outPath": "/tmp/w0-c07-privileged-routes-backup-probe.tar" }
+  },
+  {
+    "method": "POST",
+    "path": "/api/restore",
+    "file": "apps/daemon/src/backup/routes.ts",
+    "probeBody": { "archivePath": "/tmp/w0-c07-privileged-routes-backup-probe.tar" },
+    "expectedLocalStatus": 422,
+    "note": "Genuine local success (2xx) is structurally unreachable under this gate's own protocol: ensureDaemonAlive seeds a real project on EVERY fresh boot before any row is probed, so dataDirHasExistingPayload() (apps/daemon/src/backup/restore.ts) is always true by the time this row's canary fires -- restore correctly refuses to overwrite a non-fresh data root. 422 is restore's real, deterministic, product-correct response to that precondition (RestoreError('destination-not-fresh', ...) via sendApiError(res, 422, ...)), not a placeholder -- confirmed against a live isolated daemon boot. Not forbidden (only -1/400/401/403/404/5xx are), so declaring it here is an honest description of this route's true behavior in this environment, not a forced pass."
+  },
+  {
+    "method": "PUT",
+    "path": "/api/connectors/composio/config",
+    "file": "apps/daemon/src/connectors/routes.ts",
+    "probeBody": {}
+  },
+  {
+    "method": "POST",
+    "path": "/api/connectors/auth-configs/prepare",
+    "file": "apps/daemon/src/connectors/routes.ts",
+    "probeBody": { "connectorIds": ["github"] }
+  },
+  {
+    "method": "POST",
+    "path": "/api/connectors/:connectorId/connect",
+    "file": "apps/daemon/src/connectors/routes.ts",
+    "probePath": "/api/connectors/github/connect",
+    "probeBody": {},
+    "note": "Confirmed against a live isolated daemon boot: every real connector in the catalog (apps/daemon/src/connectors/composio.ts) is authentication:'composio', and composioConnectorProvider.connect() unconditionally calls getOrCreateManagedAuthConfigId() -> requestJson() before anything else, which throws ConnectorServiceError('...not configured', 503) when no Composio API key is configured -- and 503 is structurally forbidden (5xx) as an expectedLocalStatus. Configuring a real key is not available to an isolated gate run (it would be a real external credential), and configuring a FAKE key only trades this for a live cross-network 401 from Composio's real backend (also forbidden, and undesirable to trigger from an automated gate at all). Genuine 2xx success for this row is not honestly reachable in this environment; reported rather than forced. requireLocalDaemonRequest itself is still exercised by the row (hostile-Origin rejection is unaffected)."
+  },
+  {
+    "method": "POST",
+    "path": "/api/connectors/:connectorId/authorization/cancel",
+    "file": "apps/daemon/src/connectors/routes.ts",
+    "probePath": "/api/connectors/github/authorization/cancel",
+    "probeBody": {}
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/connectors/:connectorId/connection",
+    "file": "apps/daemon/src/connectors/routes.ts",
+    "probePath": "/api/connectors/github/connection"
+  },
+  {
+    "method": "POST",
+    "path": "/api/agents/:agentId/oauth-launch",
+    "file": "apps/daemon/src/routes/daemon.ts",
+    "probePath": "/api/agents/antigravity/oauth-launch",
+    "probeBody": {},
+    "note": "Not live-probed to a genuine-success conclusion, and no expectedLocalStatus is declared, by deliberate choice: the only agentId this route accepts without an immediate 400 is 'antigravity', and apps/daemon/src/runtimes/terminal-launch.ts's launchOnDarwin() literally opens a real Terminal.app window via osascript and runs `agy` in it as its success path -- a genuine, visible side effect on whatever machine runs the gate, not a safe thing to trigger automatically, and its outcome is platform/environment-dependent (a headless or non-GUI runner gets osascript failure -> 500, forbidden; Linux falls through several terminal-emulator binaries that may not be installed -> 500, forbidden). There is no non-forbidden status this route can honestly and safely commit to across environments. Reported rather than forced or live-tested further."
+  },
+  {
+    "method": "POST",
+    "path": "/api/daemon/db/verify",
+    "file": "apps/daemon/src/routes/daemon.ts",
+    "probeBody": {}
+  },
+  {
+    "method": "POST",
+    "path": "/api/daemon/db/vacuum",
+    "file": "apps/daemon/src/routes/daemon.ts",
+    "probeBody": {}
+  },
+  {
+    "method": "POST",
+    "path": "/api/daemon/shutdown",
+    "file": "apps/daemon/src/routes/daemon.ts",
+    "probeBody": {}
+  },
+  {
+    "method": "POST",
+    "path": "/api/library/pair",
+    "file": "apps/daemon/src/routes/library.ts",
+    "probeBody": {}
+  },
+  {
+    "method": "GET",
+    "path": "/api/library/connection",
+    "file": "apps/daemon/src/routes/library.ts"
+  },
+  {
+    "method": "POST",
+    "path": "/api/library/sync",
+    "file": "apps/daemon/src/routes/library.ts",
+    "probeBody": {}
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/library/assets/:id",
+    "file": "apps/daemon/src/routes/library.ts",
+    "probePath": "/api/library/assets/w0-verifier-probe-asset-id",
+    "note": "Genuine local success (2xx) is structurally unreachable in this gate's environment: every /api/library/assets/:id route 404s on getLibraryAsset() (apps/daemon/src/routes/library.ts) for a nonexistent asset, and confirmed via live boot that this gate's isolated data dir starts with an empty library (USER_DESIGN_SYSTEMS_DIR and the seeded nonce project both empty -- apps/daemon/src/library-sync.ts's reconcileLibrary() genuinely indexes zero assets from either). None of the 27 privileged routes create a real library asset (POST /api/library/ingest is the asset-creation endpoint, but it is not requireLocalDaemonRequest-gated and so is out of this inventory and this row-probing sequence). 404 is structurally forbidden as an expectedLocalStatus, so there is no honest declaration that makes this row's canary pass. Reported rather than forced."
+  },
+  {
+    "method": "POST",
+    "path": "/api/library/assets/:id/apply",
+    "file": "apps/daemon/src/routes/library.ts",
+    "probePath": "/api/library/assets/w0-verifier-probe-asset-id/apply",
+    "probeBody": { "projectId": "<nonceProjectId>" },
+    "note": "Same root cause as DELETE /api/library/assets/:id (see that row's note): no real library asset exists to reference in this gate's environment, so getLibraryAsset() 404s before projectId is ever consulted. 404 is forbidden as an expectedLocalStatus. Reported rather than forced."
+  },
+  {
+    "method": "POST",
+    "path": "/api/library/assets/:id/edit-as-page",
+    "file": "apps/daemon/src/routes/library.ts",
+    "probePath": "/api/library/assets/w0-verifier-probe-asset-id/edit-as-page",
+    "probeBody": {},
+    "note": "Same root cause as DELETE /api/library/assets/:id (see that row's note): no real library asset exists to reference in this gate's environment. 404 is forbidden as an expectedLocalStatus. Reported rather than forced."
+  },
+  {
+    "method": "OPTIONS",
+    "path": "/api/live-artifacts/:artifactId/preview",
+    "file": "apps/daemon/src/routes/live-artifact.ts",
+    "probePath": "/api/live-artifacts/w0-verifier-probe-artifact-id/preview"
+  },
+  {
+    "method": "GET",
+    "path": "/api/live-artifacts/:artifactId/preview",
+    "file": "apps/daemon/src/routes/live-artifact.ts",
+    "probePath": "/api/live-artifacts/w0-verifier-probe-artifact-id/preview?projectId=<nonceProjectId>",
+    "note": "Genuine local success (2xx) is structurally unreachable in this gate's environment: ensureLiveArtifactPreview() (apps/daemon/src/live-artifacts/store.ts) requires a real, already-persisted live-artifact record on disk under the given project -- it never creates one on demand -- and the gate's seeded nonce project is freshly created with no live artifacts. Confirmed against a live isolated daemon boot: 404 LIVE_ARTIFACT_NOT_FOUND. 404 is forbidden as an expectedLocalStatus. Reported rather than forced. (The route's own OPTIONS preflight, the sibling row above, needs no real artifact and genuinely passes at 204.)"
+  },
+  {
+    "method": "OPTIONS",
+    "path": "/api/live-artifacts/:artifactId/refresh",
+    "file": "apps/daemon/src/routes/live-artifact.ts",
+    "probePath": "/api/live-artifacts/w0-verifier-probe-artifact-id/refresh"
+  },
+  {
+    "method": "POST",
+    "path": "/api/live-artifacts/:artifactId/refresh",
+    "file": "apps/daemon/src/routes/live-artifact.ts",
+    "probePath": "/api/live-artifacts/w0-verifier-probe-artifact-id/refresh?projectId=<nonceProjectId>",
+    "probeBody": {},
+    "note": "Same root cause as GET .../preview (see that row's note): refreshLiveArtifact() also requires a real, already-persisted live artifact, which this gate's fresh nonce project does not have. Confirmed against a live isolated daemon boot: 404 LIVE_ARTIFACT_NOT_FOUND. 404 is forbidden as an expectedLocalStatus. Reported rather than forced."
+  },
+  {
+    "method": "POST",
+    "path": "/api/memory/connectors/suggest",
+    "file": "apps/daemon/src/routes/memory.ts",
+    "probeBody": {}
+  },
+  {
+    "method": "POST",
+    "path": "/api/memory/connectors/extract",
+    "file": "apps/daemon/src/routes/memory.ts",
+    "probeBody": {}
+  },
+  {
+    "method": "POST",
+    "path": "/api/plugins/events/purge",
+    "file": "apps/daemon/src/routes/plugins/index.ts",
+    "probeBody": {}
+  },
+  {
+    "method": "POST",
+    "path": "/api/plugins/:id/duplicate-project",
+    "file": "apps/daemon/src/routes/plugins/index.ts",
+    "probePath": "/api/plugins/example-article-magazine/duplicate-project",
+    "probeBody": {}
+  },
+  {
+    "method": "POST",
+    "path": "/api/applied-plugins/export",
+    "file": "apps/daemon/src/routes/plugins/index.ts",
+    "probeBody": { "target": "od", "outDir": "/tmp/w0-c07-privileged-routes-applied-plugin-export-probe", "projectId": "<nonceProjectId>" },
+    "note": "Genuine local success (2xx) is structurally unreachable in this gate's environment: exportPlugin() (apps/daemon/src/plugins/export.ts) requires a real AppliedPluginSnapshot for the given project, and applying a plugin to a project happens through POST /api/plugins/:id/apply -- a route that is not requireLocalDaemonRequest-gated, so it is outside this privileged-routes inventory and this row-probing sequence entirely. Confirmed against a live isolated daemon boot: 404 'no snapshot found for project <id>'. 404 is forbidden as an expectedLocalStatus. Reported rather than forced."
+  },
+  {
+    "method": "GET",
+    "path": "/api/diagnostics/export",
+    "dynamic": true,
+    "file": "apps/daemon/src/server.ts",
+    "line": 2758,
+    "probePath": "/api/diagnostics/export",
+    "unreachable": "not unreachable -- DIAGNOSTICS_EXPORT_PATH is imported from @open-design/diagnostics rather than declared as a local string literal in server.ts, so the verifier's single-file AST pass cannot resolve the path text itself even though the route is live; probePath supplies the real, currently-live value (see apps/daemon/src/cli.ts:8407-8419, which fetches this same DIAGNOSTICS_EXPORT_PATH constant) so this row is live-probed exactly like a static row rather than claiming a skip."
+  }
+]
