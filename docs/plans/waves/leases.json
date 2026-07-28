@@ -56,9 +56,12 @@
         "apps/daemon/src/cli.ts",
         "apps/daemon/tests/**",
         "apps/web/tests/**",
-        "scripts/waves/verify-w1.ts"
+        "scripts/waves/verify-w1.ts",
+        "scripts/waves/capability-manifest.json",
+        "docs/decisions/gemini-lane.md",
+        "docs/decisions/deepseek-path-hygiene.md"
       ],
-      "note": "Owns EntryShell.tsx and server.ts outright for Burst 2. Executes W2's one-line newsletter fix (C2-1a) inside this lease. `apps/daemon/tests/**` is also claimed by W0 and W4; Burst ordering serializes these writers — W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3."
+      "note": "Owns EntryShell.tsx and server.ts outright for Burst 2. Executes W2's one-line newsletter fix (C2-1a) inside this lease. `apps/daemon/tests/**` is also claimed by W0 and W4; Burst ordering serializes these writers — W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3. Amended 2026-07-28 (Sol verify-w1 r1 rulings): `scripts/waves/capability-manifest.json` added because C1-8 requires a new `od` subcommand and `scripts/guard.ts` enforces exact SUBCOMMAND_MAP/manifest parity — without the manifest, C1-8 + C1-14 + LEASE are mutually unsatisfiable; the two C1-12 decision docs are enumerated exactly (NM-14 → gemini-lane.md, NM-37C → deepseek-path-hygiene.md) rather than leasing all of docs/decisions/**. The NM-20 cost-meter files (run-analytics-observability.ts, codex-rollout-usage.ts, langfuse-trace.ts) are deliberately NOT added per the same ruling: leased routes/usage*.ts code consumes their exported evidence; if implementation proves a modification necessary, amend main first with only the exact required file."
     },
     "W2": {
       "slug": "mishmash-w2-brand-honesty",
