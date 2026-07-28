@@ -133,13 +133,70 @@ function toRepoRelative(absFilePath: string): string {
   return path.relative(repoRoot, absFilePath).split(path.sep).join('/');
 }
 
-// Shared by checkC2_2 (defines the accepted inventory shape), checkC2_3 (the
-// mutation test's coverage must match what C2-2 accepts), and checkC2_9 (the
-// inventory-coverage cross-check must key off the same field, not any
-// string-valued property). Sol round-2 F2/F4: these three previously used
-// three different, silently-diverging notions of "the file/path field" --
-// this is the single source of truth all three now read.
-const INVENTORY_FILE_FIELD_PATTERN = /file|path|surface|location/i;
+// ===========================================================================
+// I-W2-ONE-CANONICAL-TARGET (ceremony ruling, F2, 2026-07-28): exactly one
+// predicate and one resolver, called without local variation by checkC2_2,
+// checkC2_3, and checkC2_9. Round-2's shared regex still let each of the
+// three pick a DIFFERENT matching property (first-match, or any match) when
+// an entry carried more than one candidate key -- this resolver removes that
+// degree of freedom entirely: zero or multiple matches is an error, never a
+// first-match pick.
+// ===========================================================================
+
+// Whole-key anchors (^...$): `surfaceId`, `surfaceRationale`, `filepathHint`,
+// `pathname` do NOT match. Only an entry's OWN property named exactly one of
+// these (case-insensitive) is a target-path candidate.
+const INVENTORY_TARGET_FIELD_PATTERN = /^(?:file|path|surface|location)$/i;
+
+type ResolvedInventoryTarget = { ok: true; canonicalPath: string } | { ok: false; error: string };
+
+// The single resolver. Requires exactly one matching own-enumerable
+// property; requires a normalized, repo-relative, non-escaping path that
+// realpath-resolves to a regular file contained under repoRoot. Returns one
+// canonical repo-relative (POSIX-separated) path, or a structured error --
+// never throws, never silently picks a first match.
+function resolveInventoryTargetPath(entry: Record<string, unknown>): ResolvedInventoryTarget {
+  const matches = Object.entries(entry).filter(([k, v]) => INVENTORY_TARGET_FIELD_PATTERN.test(k) && typeof v === 'string' && v.trim().length > 0);
+  if (matches.length === 0) {
+    return { ok: false, error: 'no own property key matches ^(?:file|path|surface|location)$/i with a non-empty (trimmed) string value' };
+  }
+  if (matches.length > 1) {
+    return { ok: false, error: `${matches.length} properties match the target-field pattern [${matches.map(([k]) => k).join(', ')}] -- exactly one is required; never first-match` };
+  }
+  const raw = (matches[0]![1] as string).trim();
+  if (raw.includes('\0')) return { ok: false, error: `"${raw}": contains a NUL byte` };
+  if (path.isAbsolute(raw) || /^[A-Za-z]:[\\/]/.test(raw)) return { ok: false, error: `"${raw}": absolute path is not permitted -- must be repo-relative` };
+  const posixRaw = raw.split(path.sep).join('/').replace(/^\/+/, '');
+  if (posixRaw.split('/').some((seg) => seg === '..')) return { ok: false, error: `"${raw}": contains a ".." traversal segment` };
+  const normalized = path.posix.normalize(posixRaw);
+  if (normalized === '' || normalized === '.' || normalized === '..' || normalized.startsWith('../')) {
+    return { ok: false, error: `"${raw}": normalizes to "${normalized}", which is empty or escapes the repo root` };
+  }
+  const absTarget = path.join(repoRoot, normalized);
+  let realRepoRoot: string;
+  let realTarget: string;
+  try {
+    realRepoRoot = fs.realpathSync(repoRoot);
+  } catch (err) {
+    return { ok: false, error: `could not realpath repoRoot: ${String((err as Error)?.message ?? err)}` };
+  }
+  try {
+    realTarget = fs.realpathSync(absTarget);
+  } catch (err) {
+    return { ok: false, error: `"${normalized}": does not resolve on disk under repoRoot: ${String((err as Error)?.message ?? err)}` };
+  }
+  if (!(realTarget === realRepoRoot || realTarget.startsWith(realRepoRoot + path.sep))) {
+    return { ok: false, error: `"${normalized}": resolves outside repoRoot (${realTarget})` };
+  }
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(realTarget);
+  } catch (err) {
+    return { ok: false, error: `"${normalized}": could not stat resolved path: ${String((err as Error)?.message ?? err)}` };
+  }
+  if (!stat.isFile()) return { ok: false, error: `"${normalized}": does not resolve to a regular file` };
+  return { ok: true, canonicalPath: normalized };
+}
 
 // ---------------------------------------------------------------------------
 // Result plumbing (house pattern: verify-w7.ts's record()/probe())
@@ -775,8 +832,8 @@ async function checkC2_2(): Promise<BrandSurfaceDiscovery | null> {
   let discovery: BrandSurfaceDiscovery | null = null;
   await probe(
     'C2-2',
-    'discover scripts/check-brand-surfaces*.ts; AST-parse scripts/guard.ts\'s ACTUAL `checks` array literal to find the specific imported function wired into it (not any check*-named export, not any unrelated run: property); dynamic-import the module and inspect its exported inventory array (rationale + file/path fields, file fields resolving to REAL repo files, per entry)',
-    'an allowlist-shaped, typed brand-surface inventory (>=5 entries, each carrying a rationale-like field and a file/path-like field that resolves to a real file) exists and is exported; the function actually registered as an ELEMENT of guard.ts\'s `checks` array (what `pnpm guard` executes) is a real export of the module',
+    'discover scripts/check-brand-surfaces*.ts; AST-parse scripts/guard.ts\'s ACTUAL `checks` array literal to find the specific imported function wired into it (not any check*-named export, not any unrelated run: property); dynamic-import the module and inspect its exported inventory array (rationale field + file/path/surface/location field, the latter resolved via the single shared canonical-target resolver, per entry)',
+    'an allowlist-shaped, typed brand-surface inventory (>=5 entries, each carrying a rationale-like field and EXACTLY one file/path/surface/location field that the shared resolver resolves to a real, repo-contained, non-escaping file) exists and is exported; 100% of entries resolve, not a ratio threshold; the function actually registered as an ELEMENT of guard.ts\'s `checks` array (what `pnpm guard` executes) is a real export of the module',
     async () => {
       const { path: modulePath, candidates } = discoverCheckBrandSurfacesModule();
       if (!modulePath) {
@@ -793,35 +850,47 @@ async function checkC2_2(): Promise<BrandSurfaceDiscovery | null> {
       if (shape.inventoryExportName && shape.inventoryLength < 5) problems.push(`inventory "${shape.inventoryExportName}" has only ${shape.inventoryLength} entries (want >= 5 -- the PRD names at least the newsletter URL, 3+ X-Title sites, the metadata route, share-helpers, pluginFolderActions, and the sidecar handshake string as distinct surfaces)`);
 
       let rationaleFieldsOk = true;
-      let fileFieldsOk = true;
-      let realFileRatio = 0;
+      let allResolved = true;
+      let resolvedCount = 0;
+      let entryCount = 0;
+      const resolutionProblems: string[] = [];
       if (shape.inventoryExportName) {
         try {
           const mod = (await import(pathToFileURL(modulePath).href + `?t=${Date.now()}`)) as Record<string, unknown>;
           const arr = mod[shape.inventoryExportName] as Array<Record<string, unknown>>;
-          let realFileCount = 0;
-          for (const entry of arr) {
+          entryCount = arr.length;
+          for (const [index, entry] of arr.entries()) {
             const keys = Object.keys(entry);
             const hasRationale = keys.some((k) => /rationale|reason|why/i.test(k) && typeof entry[k] === 'string' && (entry[k] as string).trim().length > 0);
-            const fileKey = keys.find((k) => INVENTORY_FILE_FIELD_PATTERN.test(k) && typeof entry[k] === 'string' && (entry[k] as string).trim().length > 0);
             if (!hasRationale) rationaleFieldsOk = false;
-            if (!fileKey) fileFieldsOk = false;
-            else if (fs.existsSync(abs((entry[fileKey] as string).replace(/^\/+/, '')))) realFileCount += 1;
+            // I-W2-ONE-CANONICAL-TARGET (ceremony ruling F2): the SAME
+            // resolveInventoryTargetPath used by checkC2_3/checkC2_9 --
+            // exactly one matching field, resolved to a real, contained,
+            // regular file. 100% of entries must resolve; no ratio.
+            const resolution = resolveInventoryTargetPath(entry);
+            if (resolution.ok) {
+              resolvedCount += 1;
+            } else {
+              allResolved = false;
+              resolutionProblems.push(`entry #${index}: ${resolution.error}`);
+            }
           }
-          realFileRatio = arr.length > 0 ? realFileCount / arr.length : 0;
-        } catch {
+        } catch (err) {
           rationaleFieldsOk = false;
-          fileFieldsOk = false;
+          allResolved = false;
+          resolutionProblems.push(`failed to inspect inventory entries: ${String((err as Error)?.message ?? err)}`);
         }
       }
       if (shape.inventoryExportName && !rationaleFieldsOk) problems.push(`inventory "${shape.inventoryExportName}" has at least one entry missing a non-empty rationale-like string field`);
-      if (shape.inventoryExportName && !fileFieldsOk) problems.push(`inventory "${shape.inventoryExportName}" has at least one entry missing a non-empty file/path-like string field`);
-      // Sol round-1 F2: require the file/path fields to mostly resolve to
-      // REAL files in the tree -- a decorative array of unrelated objects
-      // (gaming the "any array of objects" shape check) would not.
-      if (shape.inventoryExportName && fileFieldsOk && realFileRatio < 0.8) problems.push(`inventory "${shape.inventoryExportName}": only ${Math.round(realFileRatio * 100)}% of entries' file/path fields resolve to a real file in the repo (want >= 80%) -- this does not look like a real brand-surface inventory`);
+      // Sol round-2 F2 / ceremony ruling F2: 100% resolution required, not a
+      // ratio threshold -- every entry must resolve via the single shared
+      // canonical-target resolver (exactly one matching field, a real,
+      // repo-contained, non-escaping regular file).
+      if (shape.inventoryExportName && !allResolved) {
+        problems.push(`inventory "${shape.inventoryExportName}": not every entry resolves via the canonical file/path/surface/location resolver (${resolvedCount}/${entryCount} resolved; want 100%) -- ${resolutionProblems.join('; ')}`);
+      }
 
-      const evidence = `module: ${toRepoRelative(modulePath)} (candidates: ${candidates.map(toRepoRelative).join(', ')})\nguardWiring: ${wiring.evidence}\ncheckFnName (guard-derived): ${shape.checkFnName}\ninventoryExportName: ${shape.inventoryExportName} (length ${shape.inventoryLength}, realFileRatio=${realFileRatio.toFixed(2)})\n\nPROBLEMS:\n${problems.join('\n') || '(none)'}`;
+      const evidence = `module: ${toRepoRelative(modulePath)} (candidates: ${candidates.map(toRepoRelative).join(', ')})\nguardWiring: ${wiring.evidence}\ncheckFnName (guard-derived): ${shape.checkFnName}\ninventoryExportName: ${shape.inventoryExportName} (length ${shape.inventoryLength}, resolved ${resolvedCount}/${entryCount})\n\nPROBLEMS:\n${problems.join('\n') || '(none)'}`;
       return { ok: problems.length === 0, evidence, detail: problems[0] };
     },
   );
@@ -832,21 +901,18 @@ async function checkC2_2(): Promise<BrandSurfaceDiscovery | null> {
 // C2-3 -- the guard actually catches reintroduction (mutation test on a
 // throwaway repo copy; the real tree is never touched).
 // ===========================================================================
-// Sol round-1 F2: a fixed, verifier-source-visible marker string
-// ("w2-verifier-mutation-probe") is exactly what a gaming stub would grep
-// for and special-case. Every run now generates a fresh random nonce and
-// picks one of several GENUINE old-brand-shaped payloads -- a URL under the
-// actual frozen domain, or the actual display name checked elsewhere in
-// this file -- so the only thing a check can catch is the real signal, not
-// a memorable verifier-specific token.
-//
-// Sol round-2 F1: nonce-only variation left both payload FORMATS fixed
-// templates (`https://open-design.ai/<hex>` and `Open Design (ref <hex>)`),
-// which an opportunistic checker can pattern-match without implementing
-// genuine detection. Both the URL path shape and the display-name sentence
-// now vary per run too -- the only invariant is the real signal a correct
-// guard must key on (the `open-design.ai` host; the `Open Design` display
-// text), never a fixed surrounding shape.
+// I-W2-NO-PROBE-SIGNATURE (ceremony ruling, F1, 2026-07-28): the ONLY stable
+// semantic bytes a mutation may introduce are the genuine prohibited
+// signals -- `open-design.ai` and `Open Design`. Earlier rounds fixed the
+// payload TEMPLATE (Sol round-2 F1) but still wrapped it in a verifier-owned
+// identifier (`__w2MutationProbe_<id>`) or a fixed JSON key
+// (`__w2VerifierMutationProbe`) -- both are stable, grep-classifiable
+// verifier identity that an opportunistic checker can special-case without
+// enforcing any real brand rule. There is no wrapper now: every mutation
+// REPLACES the value of an EXISTING carrier already present in the target
+// (an AST string/template literal for code, a string leaf for JSON, a text
+// boundary for Markdown) -- nothing named "w2", "verifier", "mutation", or
+// "probe" is ever written into a mutation target.
 function randomMutationMarker(): { kind: 'url' | 'displayName'; text: string } {
   const nonce = crypto.randomBytes(6).toString('hex');
   if (crypto.randomInt(2) === 0) {
@@ -866,32 +932,6 @@ function randomMutationMarker(): { kind: 'url' | 'displayName'; text: string } {
   return { kind: 'displayName', text: shapes[crypto.randomInt(shapes.length)]! };
 }
 
-// Sol round-2 F1: for code files, the marker must land as a REAL AST string
-// literal / template literal a correct guard would see -- not a `//`
-// comment, which any AST-literal scanner (the same pattern this verifier's
-// own C2-9 scanFileForDisplayNameHits uses) correctly ignores as non-user-
-// visible. Structure varies (const, object property, array element,
-// function return, interpolated template) so a checker cannot special-case
-// one fixed shape either; every variant still produces a genuine
-// isStringLiteralLike or isTemplateExpression node containing the marker
-// text, which is exactly the node-kind surface a real guard must scan.
-function embedMutationLiteral(marker: { kind: 'url' | 'displayName'; text: string }): string {
-  const id = crypto.randomBytes(3).toString('hex');
-  const literal = JSON.stringify(marker.text);
-  const shapes = [
-    `const __w2MutationProbe_${id} = ${literal};`,
-    `const __w2MutationProbe_${id} = { label: ${literal} };`,
-    `const __w2MutationProbe_${id} = [${literal}];`,
-    `function __w2MutationProbe_${id}() { return ${literal}; }`,
-    // A genuinely interpolated template (head + spans), not a no-substitution
-    // template -- exercises the SAME template-middle/tail node shape C2-9's
-    // scanFileForDisplayNameHits hardens against (Sol round-1 F7), so a
-    // guard built on that same pattern is proven against it here too.
-    `const __w2MutationProbe_${id} = \`prefix-\${1}-${marker.text}-\${2}\`;`,
-  ];
-  return shapes[crypto.randomInt(shapes.length)]!;
-}
-
 function fisherYatesShuffle<T>(items: T[]): T[] {
   const out = [...items];
   for (let i = out.length - 1; i > 0; i--) {
@@ -903,11 +943,177 @@ function fisherYatesShuffle<T>(items: T[]): T[] {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Mutation mechanism (I-W2-NO-PROBE-SIGNATURE). One `applyMutation` dispatch
+// per supported file class; anything else is a hard failure, never a skip.
+// ---------------------------------------------------------------------------
+type MutationOutcome = { ok: true; mutated: string; markerKind: 'url' | 'displayName' } | { ok: false; error: string };
+
+function escapeForTemplateLiteralChunk(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+}
+
+// A mutation carrier is an EXISTING string/template/JSX-text span already in
+// the source; mutating it means overwriting its content in place, never
+// adding a declaration, identifier, property, or comment around it.
+interface MutationCarrier {
+  start: number;
+  end: number;
+  replacementFor: (payload: string) => string;
+}
+
+// Excludes import/export module specifiers, directive-prologue-shaped bare
+// string-expression-statements, and property-name positions (including
+// computed property names) -- exactly the exclusions I-W2-NO-PROBE-SIGNATURE
+// names.
+function isExcludedCarrierPosition(node: TsNode): boolean {
+  const p = node.parent;
+  if (!p) return false;
+  if ((ts.isImportDeclaration(p) || ts.isExportDeclaration(p)) && p.moduleSpecifier === node) return true;
+  if (ts.isImportEqualsDeclaration(p) && ts.isExternalModuleReference(p.moduleReference) && p.moduleReference.expression === node) return true;
+  if (ts.isExpressionStatement(p) && p.expression === node) return true;
+  if (ts.isComputedPropertyName(p)) return true;
+  if (ts.isPropertyAssignment(p) && p.name === node) return true;
+  if (ts.isPropertySignature(p) && p.name === node) return true;
+  if (ts.isMethodDeclaration(p) && p.name === node) return true;
+  if (ts.isMethodSignature(p) && p.name === node) return true;
+  if (ts.isGetAccessorDeclaration(p) && p.name === node) return true;
+  if (ts.isSetAccessorDeclaration(p) && p.name === node) return true;
+  if (ts.isEnumMember(p) && p.name === node) return true;
+  return false;
+}
+
+function collectMutationCarriers(sourceFile: TypeScriptModule.SourceFile): MutationCarrier[] {
+  const carriers: MutationCarrier[] = [];
+  walkAst(sourceFile, (node) => {
+    if (ts.isStringLiteralLike(node)) {
+      if (isExcludedCarrierPosition(node)) return;
+      carriers.push({ start: node.getStart(sourceFile), end: node.getEnd(), replacementFor: (payload) => JSON.stringify(payload) });
+      return;
+    }
+    if (ts.isTemplateExpression(node)) {
+      // Each literal piece (head, and every span's middle/tail) is an
+      // independently eligible carrier -- overwriting one preserves the
+      // surrounding `${...}` interpolations and backtick delimiters.
+      carriers.push({
+        start: node.head.getStart(sourceFile),
+        end: node.head.getEnd(),
+        replacementFor: (payload) => `\`${escapeForTemplateLiteralChunk(payload)}\${`,
+      });
+      for (const span of node.templateSpans) {
+        const lit = span.literal;
+        const isTail = lit.kind === ts.SyntaxKind.TemplateTail;
+        carriers.push({
+          start: lit.getStart(sourceFile),
+          end: lit.getEnd(),
+          replacementFor: (payload) => (isTail ? `}${escapeForTemplateLiteralChunk(payload)}\`` : `}${escapeForTemplateLiteralChunk(payload)}\${`),
+        });
+      }
+      return;
+    }
+    if (ts.isJsxText(node) && node.text.trim().length > 0) {
+      carriers.push({ start: node.getStart(sourceFile), end: node.getEnd(), replacementFor: (payload) => payload.replace(/[<>{}&]/g, '') });
+    }
+  });
+  return carriers;
+}
+
+function isSyntacticallyValid(text: string, scriptKind: TypeScriptModule.ScriptKind): boolean {
+  try {
+    const fileName = scriptKind === ts.ScriptKind.TSX ? 'reparse-check.tsx' : scriptKind === ts.ScriptKind.JSX ? 'reparse-check.jsx' : 'reparse-check.ts';
+    const result = ts.transpileModule(text, {
+      compilerOptions: { target: ts.ScriptTarget.Latest, jsx: ts.JsxEmit.Preserve, module: ts.ModuleKind.ESNext },
+      reportDiagnostics: true,
+      fileName,
+    });
+    return !result.diagnostics || result.diagnostics.length === 0;
+  } catch {
+    return false;
+  }
+}
+
+// AST-select a RANDOM existing eligible carrier and overwrite it in place;
+// reparse (isSyntacticallyValid) before returning. No valid carrier, or a
+// reparse failure, is a hard failure -- never a skip.
+function applyCodeMutation(relPath: string, original: string, marker: { kind: 'url' | 'displayName'; text: string }): MutationOutcome {
+  if (!ts) return { ok: false, error: 'TypeScript compiler API unavailable -- cannot AST-select a mutation carrier' };
+  const scriptKind = /\.tsx$/.test(relPath) ? ts.ScriptKind.TSX : /\.jsx$/.test(relPath) ? ts.ScriptKind.JSX : ts.ScriptKind.TS;
+  let sourceFile: TypeScriptModule.SourceFile;
+  try {
+    sourceFile = ts.createSourceFile(relPath, original, ts.ScriptTarget.Latest, true, scriptKind);
+  } catch (err) {
+    return { ok: false, error: `could not parse original source: ${String((err as Error)?.message ?? err)}` };
+  }
+  const carriers = collectMutationCarriers(sourceFile);
+  if (carriers.length === 0) {
+    return { ok: false, error: 'no eligible string/template/JSX-text carrier found (excluding imports/exports, directive prologues, and property names) -- no valid mutation carrier' };
+  }
+  const carrier = carriers[crypto.randomInt(carriers.length)]!;
+  const mutated = original.slice(0, carrier.start) + carrier.replacementFor(marker.text) + original.slice(carrier.end);
+  if (!isSyntacticallyValid(mutated, scriptKind)) {
+    return { ok: false, error: 'mutated source failed to reparse cleanly' };
+  }
+  return { ok: true, mutated, markerKind: marker.kind };
+}
+
+// JSON: replace an EXISTING string-valued leaf's value; never add a
+// property. Absence of a string leaf, or unparsable JSON, is a hard failure.
+function applyJsonMutation(original: string, marker: { kind: 'url' | 'displayName'; text: string }): MutationOutcome {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(original);
+  } catch (err) {
+    return { ok: false, error: `not parseable JSON: ${String((err as Error)?.message ?? err)}` };
+  }
+  const setters: Array<(v: string) => void> = [];
+  (function collect(node: unknown): void {
+    if (Array.isArray(node)) {
+      node.forEach((v, i) => {
+        if (typeof v === 'string') setters.push((nv) => { (node as unknown[])[i] = nv; });
+        else collect(v);
+      });
+    } else if (node && typeof node === 'object') {
+      for (const k of Object.keys(node as Record<string, unknown>)) {
+        const v = (node as Record<string, unknown>)[k];
+        if (typeof v === 'string') setters.push((nv) => { (node as Record<string, unknown>)[k] = nv; });
+        else collect(v);
+      }
+    }
+  })(parsed);
+  if (setters.length === 0) return { ok: false, error: 'no existing string-valued leaf found in the JSON document to mutate' };
+  setters[crypto.randomInt(setters.length)]!(marker.text);
+  return { ok: true, mutated: JSON.stringify(parsed, null, 2), markerKind: marker.kind };
+}
+
+// Markdown/text: insert the payload at a CSPRNG-selected line boundary
+// (never a fixed position) with no probe-owned wrapper.
+function applyTextBoundaryMutation(original: string, marker: { kind: 'url' | 'displayName'; text: string }): MutationOutcome {
+  const boundaries = [0, original.length];
+  for (let i = 0; i < original.length; i++) if (original[i] === '\n') boundaries.push(i + 1);
+  const offset = boundaries[crypto.randomInt(boundaries.length)]!;
+  const before = original.slice(0, offset);
+  const after = original.slice(offset);
+  const leadingNl = before.length > 0 && !before.endsWith('\n') ? '\n' : '';
+  const trailingNl = after.length > 0 && !after.startsWith('\n') ? '\n' : '';
+  return { ok: true, mutated: `${before}${leadingNl}${marker.text}\n${trailingNl}${after}`, markerKind: marker.kind };
+}
+
+// Dispatcher: JSON leaf replace, AST carrier replace for code, CSPRNG text
+// boundary for Markdown. Everything else is unsupported -- a hard failure,
+// never a skip (I-W2-NO-PROBE-SIGNATURE mechanism, ceremony ruling F1).
+function applyMutation(relPath: string, original: string): MutationOutcome {
+  const marker = randomMutationMarker();
+  if (relPath.endsWith('.json')) return applyJsonMutation(original, marker);
+  if (/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(relPath)) return applyCodeMutation(relPath, original, marker);
+  if (relPath.endsWith('.md')) return applyTextBoundaryMutation(original, marker);
+  return { ok: false, error: `unsupported file type for mutation ("${relPath}") -- unsupported/binary targets are hard failures, never skips` };
+}
+
 async function checkC2_3(discovery: BrandSurfaceDiscovery | null): Promise<void> {
   await probe(
     'C2-3',
-    'rsync-copy the repo (excluding node_modules/.git/dist/.next/.tmp) to a scratch dir; symlink node_modules read-only (mount-namespace-free best effort) but ALSO exclude any node_modules-rooted inventory path from mutation eligibility and realpath-verify every mutation target stays contained inside the scratch copy; run the discovered check function on the pristine copy (negative control, expect pass); mutate EVERY resolvable inventory entry -- uncapped, matching C2-2\'s uncapped inventory shape, same file/path/surface/location field pattern C2-2 accepts -- injecting a random-per-run, structurally-varied, non-memorable old-brand-shaped marker as a REAL AST string/template literal for code files (never a `//` comment, which an AST-literal guard correctly ignores), re-run (expect fail), then revert; the real repo tree is never written to',
-    'the check function passes on the unmutated copy (proving it is not vacuously failing) and fails on every mutated entry across every inventory shape C2-2 accepts (proving each inventoried surface class is actually enforced by a check that cannot special-case a fixed probe string or a fixed accepted-field name), and the real repository tree remains untouched throughout',
+    'rsync-copy the repo (excluding node_modules/.git/dist/.next/.tmp) to a scratch dir; symlink node_modules read-only (mount-namespace-free best effort); run the discovered check function on the pristine copy (negative control, expect pass); resolve EVERY inventory entry via the single shared canonical-target resolver (I-W2-ONE-CANONICAL-TARGET) and give every resolved entry exactly one completed mutation attempt -- a CSPRNG-selected EXISTING carrier (AST string/template literal for code, a string leaf for JSON, a text boundary for Markdown) overwritten in place with a randomized, structurally-varied old-brand payload containing no stable verifier identity (I-W2-NO-PROBE-SIGNATURE), reparsed for validity, re-run (expect fail), then byte-verified revert; node_modules-rooted, unresolved, outside-copy, unsupported, or unparsable targets are hard failures, never silent skips; mutationsAttempted must equal inventory.length; the real repo tree is never written to',
+    'the check function passes on the unmutated copy (proving it is not vacuously failing) and every resolved inventory entry, mutated with a probe-signature-free payload, fails the check (proving each inventoried surface class is actually enforced, not merely pattern-matched against a fixed wrapper), with mutationsAttempted === inventory.length and no entry silently exempted, and the real repository tree remains untouched throughout',
     async () => {
       if (!discovery || !discovery.modulePath || !discovery.checkFnName || !discovery.inventoryExportName) {
         return { ok: false, evidence: 'C2-2 discovery did not find a usable check-brand-surfaces module/function/inventory -- cannot run the mutation test', detail: 'depends on C2-2' };
@@ -961,73 +1167,47 @@ async function checkC2_3(discovery: BrandSurfaceDiscovery | null): Promise<void>
 
         const inventoryMod = (await import(pathToFileURL(copyModulePath).href + `?t=${Date.now()}-init`)) as Record<string, unknown>;
         const inventory = inventoryMod[inventoryExportName] as Array<Record<string, unknown>>;
-        // Sol round-1 F2: no more "first 6" -- test every resolvable entry,
-        // in a RANDOMIZED order. Sol round-2 F2: C2-2 places no cap on
-        // inventory size ("no max inventory size"), so a fixed MAX_MUTATIONS
-        // here silently exempted any entry past the cap from enforcement --
-        // a false pass hiding behind "every entry tested" language. There is
-        // no cap now: every resolvable entry in the inventory is mutated,
-        // full stop, matching C2-2's uncapped acceptance exactly.
         const shuffledInventory = fisherYatesShuffle(inventory);
+        // I-W2-ONE-CANONICAL-TARGET (ceremony ruling F2): every entry gets
+        // exactly one completed mutation attempt -- no `continue` may exempt
+        // an accepted entry from being counted. Resolution/mutation failures
+        // are surfaced per entry in `problems`, never converted into skips.
         let mutationsAttempted = 0;
         for (const entry of shuffledInventory) {
-          const fileKey = Object.keys(entry).find((k) => INVENTORY_FILE_FIELD_PATTERN.test(k) && typeof entry[k] === 'string');
-          if (!fileKey) continue;
-          const relTargetPath = (entry[fileKey] as string).replace(/^\/+/, '');
-          // Sol round-1 F3: never mutate anything rooted under
-          // node_modules, regardless of what an inventory entry claims.
-          if (relTargetPath === 'node_modules' || relTargetPath.startsWith('node_modules/')) continue;
-          const targetInRepo = abs(relTargetPath);
-          if (!fs.existsSync(targetInRepo) || relTargetPath.endsWith('.png') || relTargetPath.endsWith('.jpg') || relTargetPath.endsWith('.svg')) continue;
-          const targetInCopy = path.join(copyRoot, relTargetPath);
-          if (!fs.existsSync(targetInCopy)) continue;
+          mutationsAttempted += 1;
+          const resolution = resolveInventoryTargetPath(entry);
+          if (!resolution.ok) {
+            problems.push(`entry ${mutationsAttempted}/${shuffledInventory.length}: canonical-target resolution failed: ${resolution.error}`);
+            continue;
+          }
+          const canonicalPath = resolution.canonicalPath;
+          if (canonicalPath === 'node_modules' || canonicalPath.startsWith('node_modules/')) {
+            problems.push(`${canonicalPath}: node_modules-rooted path is not eligible for mutation`);
+            continue;
+          }
+          const targetInCopy = path.join(copyRoot, canonicalPath);
+          let realTargetInCopy: string;
+          try {
+            realTargetInCopy = fs.realpathSync(targetInCopy);
+          } catch (err) {
+            problems.push(`${canonicalPath}: does not exist in the scratch copy: ${String((err as Error)?.message ?? err)}`);
+            continue;
+          }
           // Sol round-1 F3: realpath-containment -- refuse to mutate
           // anything that resolves outside the scratch copy (a symlink
           // escape from rsync-preserved links, or a path-traversal-shaped
           // inventory entry).
-          let realTarget: string;
-          try {
-            realTarget = fs.realpathSync(targetInCopy);
-          } catch {
+          if (!(realTargetInCopy === realCopyRoot || realTargetInCopy.startsWith(realCopyRoot + path.sep))) {
+            problems.push(`${canonicalPath}: resolved outside the scratch copy (${realTargetInCopy}) -- refusing to mutate (symlink/traversal escape guard)`);
             continue;
           }
-          if (!(realTarget === realCopyRoot || realTarget.startsWith(realCopyRoot + path.sep))) {
-            problems.push(`${relTargetPath}: resolved outside the scratch copy (${realTarget}) -- refusing to mutate (symlink/traversal escape guard)`);
-            continue;
-          }
-          mutationsAttempted += 1;
           const original = fs.readFileSync(targetInCopy, 'utf8');
-          const marker = randomMutationMarker();
-          let mutated: string;
-          if (relTargetPath.endsWith('.json')) {
-            try {
-              const parsed = JSON.parse(original) as Record<string, unknown>;
-              parsed.__w2VerifierMutationProbe = marker.text;
-              mutated = JSON.stringify(parsed, null, 2);
-            } catch {
-              // original wasn't parseable JSON to begin with; append the raw
-              // marker text (visible content, not a `//` comment -- JSON has
-              // no comment syntax anyway).
-              mutated = `${original}\n${marker.text}\n`;
-            }
-          } else if (relTargetPath.endsWith('.md')) {
-            // Prose file: the marker as visible text IS the real signal a
-            // content-scanning guard reads -- no AST-literal concept applies.
-            mutated = `${marker.text}\n\n${original}`;
-          } else if (/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(relTargetPath)) {
-            // Sol round-2 F1: code files must receive the marker as a REAL
-            // string/template AST literal -- see embedMutationLiteral. A `//`
-            // comment is invisible to any guard that (correctly, per C2-2's
-            // stated user-visible/egress surface semantics) scans string
-            // literals rather than raw text, so a comment-only injection
-            // false-fails a genuinely correct implementation.
-            mutated = `${embedMutationLiteral(marker)}\n${original}`;
-          } else {
-            // Unknown/non-code file type (no reliable comment syntax, no JS
-            // AST either) -- visible raw text, same rationale as .md.
-            mutated = `${marker.text}\n${original}`;
+          const mutation = applyMutation(canonicalPath, original);
+          if (!mutation.ok) {
+            problems.push(`${canonicalPath}: ${mutation.error}`);
+            continue;
           }
-          fs.writeFileSync(targetInCopy, mutated);
+          fs.writeFileSync(targetInCopy, mutation.mutated);
           let mutatedResult: { ok: boolean; raw: unknown } | null = null;
           let threw: string | null = null;
           try {
@@ -1037,19 +1217,19 @@ async function checkC2_3(discovery: BrandSurfaceDiscovery | null): Promise<void>
           }
           fs.writeFileSync(targetInCopy, original);
           const stillMatchesOriginal = fs.readFileSync(targetInCopy, 'utf8') === original;
-          if (!stillMatchesOriginal) problems.push(`${relTargetPath}: revert verification failed after mutation`);
+          if (!stillMatchesOriginal) problems.push(`${canonicalPath}: revert verification failed after mutation`);
           if (threw) {
-            evidenceLines.push(`${relTargetPath}: mutation (${marker.kind}) caused the check to throw (treated as a pass-through, not a confirmed catch): ${threw.slice(0, 300)}`);
-            problems.push(`${relTargetPath}: check function threw instead of returning false on a mutated copy -- inconclusive, not a confirmed reintroduction catch`);
+            evidenceLines.push(`${canonicalPath}: mutation (${mutation.markerKind}) caused the check to throw (treated as a pass-through, not a confirmed catch): ${threw.slice(0, 300)}`);
+            problems.push(`${canonicalPath}: check function threw instead of returning false on a mutated copy -- inconclusive, not a confirmed reintroduction catch`);
           } else if (mutatedResult) {
-            evidenceLines.push(`${relTargetPath}: mutation kind=${marker.kind} mutated copy check result: ${JSON.stringify(mutatedResult.raw)}`);
-            if (mutatedResult.ok) problems.push(`${relTargetPath}: injecting a random old-brand-shaped marker (${marker.kind}) did NOT fail the check -- this surface class is not actually enforced`);
+            evidenceLines.push(`${canonicalPath}: mutation kind=${mutation.markerKind} mutated copy check result: ${JSON.stringify(mutatedResult.raw)}`);
+            if (mutatedResult.ok) problems.push(`${canonicalPath}: injecting a randomized old-brand-shaped payload (${mutation.markerKind}) did NOT fail the check -- this surface class is not actually enforced`);
           }
         }
-        if (mutationsAttempted === 0) {
-          problems.push('no inventory entry had a resolvable, mutable text file target -- the mutation test never exercised anything');
+        if (mutationsAttempted !== inventory.length) {
+          problems.push(`mutationsAttempted (${mutationsAttempted}) !== inventory.length (${inventory.length}) -- every entry must receive exactly one completed mutation attempt, with no continue-exemption`);
         }
-        evidenceLines.push(`mutations attempted: ${mutationsAttempted} of ${inventory.length} inventory entries (randomized order)`);
+        evidenceLines.push(`mutations attempted: ${mutationsAttempted} of ${inventory.length} inventory entries (randomized order, uncapped)`);
       } finally {
         try {
           fs.rmSync(scratchRoot, { recursive: true, force: true });
@@ -1558,8 +1738,8 @@ function scanFileForDisplayNameHits(fileAbs: string): Array<{ line: number; kind
 async function checkC2_9(discovery: BrandSurfaceDiscovery | null): Promise<void> {
   await probe(
     'C2-9',
-    'AST-walk string/template/JSX-text literals (never comments; template MIDDLE/TAIL spans included, not just the head) for the display-name pattern /\\bOpen Design\\b/, across a named floor list PLUS a whole-repo sweep of apps/ and packages/ PLUS every C2-2 inventory-declared file -- never a hardcoded list alone',
-    'no user-visible string/template/JSX-text literal anywhere in apps/ or packages/ still reads "Open Design" as a display name (internal kebab identifiers like open-design.json / @open-design/* / OD_* are explicitly out of scope per the NM-03 KEEP ruling); the named floor files are all represented in the C2-2 brand-surface inventory',
+    'AST-walk string/template/JSX-text literals (never comments; template MIDDLE/TAIL spans included, not just the head) for the display-name pattern /\\bOpen Design\\b/, across a named floor list PLUS a whole-repo sweep of apps/ and packages/ PLUS every C2-2 inventory entry resolved through the single shared canonical-target resolver (I-W2-COVERAGE-BY-RESOLVED-TARGET) -- never a hardcoded list alone, never any other entry property',
+    'no user-visible string/template/JSX-text literal anywhere in apps/ or packages/ still reads "Open Design" as a display name (internal kebab identifiers like open-design.json / @open-design/* / OD_* are explicitly out of scope per the NM-03 KEEP ruling); every named floor file is covered by EXACT canonical-path equality against the resolver-derived inventory paths, and any resolver failure fails this check closed rather than narrowing silently',
     async () => {
       if (!ts) return { ok: false, evidence: `TypeScript compiler API unavailable: ${tsLoadError}`, detail: 'cannot AST-scan' };
       // A named floor -- files the W2 PRD explicitly calls out. Sol round-1
@@ -1604,22 +1784,33 @@ async function checkC2_9(discovery: BrandSurfaceDiscovery | null): Promise<void>
         try {
           const mod = (await import(pathToFileURL(discovery.modulePath).href + `?t=${Date.now()}`)) as Record<string, unknown>;
           const arr = mod[discovery.inventoryExportName] as Array<Record<string, unknown>>;
-          // Sol round-2 F4: this previously collected EVERY string-valued
-          // property on an entry (ids, rationale prose, anything), so an
-          // entry could satisfy coverage by merely MENTIONING a path in its
-          // rationale while its actual file/path field pointed elsewhere --
-          // a false pass for the future-reintroduction guarantee. Only the
-          // same file/path-designating field(s) C2-2 itself accepts count.
-          const inventoriedPaths = new Set(
-            arr
-              .flatMap((entry) => Object.keys(entry).filter((k) => INVENTORY_FILE_FIELD_PATTERN.test(k) && typeof entry[k] === 'string').map((k) => entry[k] as string))
-              .map((v) => v.replace(/^\/+/, '')),
-          );
-          const uncovered = namedFloor.filter((t) => fs.existsSync(abs(t)) && ![...inventoriedPaths].some((p) => p.includes(t) || t.includes(p)));
-          if (uncovered.length > 0) problems.push(`the C2-2 inventory does not appear to cover: ${uncovered.join(', ')}`);
-          evidenceLines.push(`inventory cross-check: ${uncovered.length} of ${namedFloor.length} named-floor target(s) uncovered`);
-        } catch {
-          evidenceLines.push('could not cross-check against the C2-2 inventory (import failed)');
+          // I-W2-COVERAGE-BY-RESOLVED-TARGET (ceremony ruling, F4): coverage
+          // comes ONLY from the SAME shared resolver checkC2_2/checkC2_3 use
+          // -- no other property (ids, rationale prose, partial paths) may
+          // contribute. Any resolver failure fails this check closed rather
+          // than silently narrowing the coverage set, and a named-floor file
+          // counts as covered only by EXACT canonical-path equality -- no
+          // substring containment either direction.
+          const inventoriedPaths = new Set<string>();
+          let resolverFailures = 0;
+          for (const [index, entry] of arr.entries()) {
+            const resolution = resolveInventoryTargetPath(entry);
+            if (resolution.ok) {
+              inventoriedPaths.add(resolution.canonicalPath);
+            } else {
+              resolverFailures += 1;
+              problems.push(`C2-2 inventory entry #${index} failed canonical-target resolution: ${resolution.error} -- C2-9 fails closed`);
+            }
+          }
+          if (resolverFailures === 0) {
+            const uncovered = namedFloor.filter((t) => fs.existsSync(abs(t)) && !inventoriedPaths.has(t));
+            if (uncovered.length > 0) problems.push(`the C2-2 inventory does not appear to cover: ${uncovered.join(', ')}`);
+            evidenceLines.push(`inventory cross-check: ${uncovered.length} of ${namedFloor.length} named-floor target(s) uncovered (exact canonical-path equality, resolver-derived)`);
+          } else {
+            evidenceLines.push(`inventory cross-check fails closed: ${resolverFailures} of ${arr.length} inventory entries failed canonical-target resolution`);
+          }
+        } catch (err) {
+          problems.push(`could not cross-check against the C2-2 inventory (import failed): ${String((err as Error)?.message ?? err)} -- fails closed, not skipped`);
         }
       } else {
         evidenceLines.push('C2-2 inventory unavailable -- skipping the cross-check (the whole-repo sweep above still enforces the actual behavior)');
