@@ -1,0 +1,33 @@
+{
+  "caseId": "dashboard-canvas-widgets",
+  "composition": [
+    {
+      "elementId": "pop-0-typography",
+      "sourceId": "dash-abs-a",
+      "domPath": "body > div.dash-abs-a-shell > alert_banner.dash-abs-a-alert-banner",
+      "nodeId": "dash-abs-a-alert-banner-mobile-default",
+      "breakpoint": "mobile"
+    },
+    {
+      "elementId": "pop-1-typography",
+      "sourceId": "dash-grid-b",
+      "domPath": "body > div.dash-grid-b-shell > alert_banner.dash-grid-b-alert-banner",
+      "nodeId": "dash-grid-b-alert-banner-mobile-default",
+      "breakpoint": "mobile"
+    },
+    {
+      "elementId": "pop-2-interaction",
+      "sourceId": "dash-abs-a",
+      "domPath": "body > div.dash-abs-a-shell > data_grid.dash-abs-a-data-grid",
+      "nodeId": "dash-abs-a-data-grid-mobile-default",
+      "breakpoint": "mobile"
+    },
+    {
+      "elementId": "pop-3-layout",
+      "sourceId": "dash-abs-a",
+      "domPath": "body > div.dash-abs-a-shell > chart_panel.dash-abs-a-chart-panel",
+      "nodeId": "dash-abs-a-chart-panel-mobile-default",
+      "breakpoint": "mobile"
+    }
+  ]
+}

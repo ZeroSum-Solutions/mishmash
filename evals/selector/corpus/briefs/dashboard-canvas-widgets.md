@@ -1,0 +1,1 @@
+Use dash-abs-a's typography on the alert banner -- dash-grid-b had its own competing type treatment there that I'm not choosing. Carry over dash-abs-a's data-grid interaction behaviour too, and its chart panel layout.
