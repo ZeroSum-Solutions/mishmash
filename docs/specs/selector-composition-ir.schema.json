@@ -1,0 +1,134 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mishmash.internal/specs/selector-composition-ir.schema.json",
+  "title": "Selector Composition IR",
+  "description": "Serializable intermediate representation for the Mishmash Selector (C2). Every composition run is expressed as one instance of this schema: which sources contributed, what the user asked for per axis, what must hold after composition, how competing claims were arbitrated, where every emitted element came from, and the axes three variants must structurally differ along.",
+  "type": "object",
+  "required": ["sourceSlots", "directives", "constraints", "conflictResolution", "provenance", "variantAxes"],
+  "properties": {
+    "corpusVersion": {
+      "description": "Informational: the evals/selector/corpus/manifest.json version this IR instance was generated/frozen under. Not one of the six required IR concepts -- omit for hand-authored IR instances outside the corpus.",
+      "type": "integer"
+    },
+    "sourceSlots": {
+      "description": "One entry per reference the user supplied. Each source slot pins an id, an optional snapshotIdentity (which capture session this slot's evidence came from), the breakpoints captured for it, and the evidence pointers (DOM path + breakpoint + captured state) available to ground directives and provenance against it.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "breakpoints", "evidencePointers"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "snapshotIdentity": {
+            "description": "v3+: identifies the capture session this slot's snapshot data belongs to (e.g. a source+version tag). Optional -- v1 (sealed) source slots do not carry it.",
+            "type": "string",
+            "minLength": 1
+          },
+          "breakpoints": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "evidencePointers": {
+            "description": "Compact string pointers, one per captured (domPath, breakpoint[, state]) combination actually captured for this source. v1 (sealed) shape: '<domPath>@<breakpoint>'. v3+ shape: '<domPath>@<breakpoint>@<state>' where state in [default, hover, scrolled, loaded] (see CapturedState in evals/selector/nl-to-ir/parser.ts). Both shapes satisfy the same pattern.",
+            "type": "array",
+            "items": { "type": "string", "minLength": 1, "pattern": "^.+@.+$" }
+          }
+        }
+      }
+    },
+    "directives": {
+      "description": "Typed claims parsed from the user's natural-language brief: {axis, source, scope, strength[, breakpoint]}. axis addresses WHAT is being adopted, source addresses WHOSE reference, scope addresses WHICH subtree (a domPath, or a whole-document sentinel), strength is a [0,1] confidence/weight the parser assigned to the claim, breakpoint (v3+, optional) addresses WHICH captured viewport the claim targets when a scope's evidence differs by breakpoint.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["axis", "source", "scope", "strength"],
+        "properties": {
+          "axis": {
+            "type": "string",
+            "enum": ["layout", "motion", "palette", "typography", "section", "interaction"]
+          },
+          "source": { "type": "string", "minLength": 1 },
+          "scope": { "type": "string", "minLength": 1 },
+          "strength": { "type": "number", "minimum": 0, "maximum": 1 },
+          "breakpoint": {
+            "description": "v3+: directive-level breakpoint scoping. Optional -- v1 (sealed) directives do not carry it, meaning 'applies at whichever breakpoint the scope resolves at'.",
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "constraints": {
+      "description": "What must hold post-composition regardless of which sources won which axes: grid integrity, contrast minimums, responsive behavior, and similar invariants that are not themselves a directive but bound what a directive's application is allowed to produce.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "rule"],
+        "properties": {
+          "type": { "type": "string", "minLength": 1 },
+          "rule": { "type": "string", "minLength": 1 },
+          "predicate": {
+            "description": "v3+: a machine-checkable predicate over computed styles -- {property: a computedStyle key, pattern: a regex the property's value must match}. Optional -- v1 (sealed) constraints only carry the opaque type/rule tokens.",
+            "type": "object",
+            "required": ["property", "pattern"],
+            "properties": {
+              "property": { "type": "string", "minLength": 1 },
+              "pattern": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "conflictResolution": {
+      "description": "Deterministic precedence records. One entry per axis where two or more sources made incompatible claims: the winning source, and (when a specific loser is meaningful) the losing source and what claim it lost. An axis with only a single claimant still gets a trivial entry recording that no contention existed, so this array is never used to silently drop a losing claim -- the loser is always recorded, never just discarded.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["axis", "winningSource"],
+        "properties": {
+          "axis": { "type": "string", "minLength": 1 },
+          "winningSource": { "type": "string", "minLength": 1 },
+          "losingSource": { "type": "string", "minLength": 1 },
+          "losingClaim": { "type": "string" },
+          "rationale": { "type": "string" },
+          "scopeOverlap": {
+            "description": "v3+: names HOW the competing claims' scopes overlap for grouping purposes -- e.g. 'same-role-different-source' (different literal domPaths, same semantic role/position) or 'single-claimant' (no real contention). Optional -- v1 (sealed) entries do not carry it. Clarifies resolve-conflicts.ts's axis-based grouping at the spec level without changing that grouping algorithm.",
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "provenance": {
+      "description": "Every emitted element/rule traces to a source slot and an evidence pointer. A provenance entry is only meaningful if it RESOLVES: (sourceId, nodeId, domPath, breakpoint) must name a node that was actually captured in that source's snapshot. Attaching an arbitrary sourceId to real-looking coordinates does not resolve.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["elementId", "sourceId", "nodeId", "domPath", "breakpoint"],
+        "properties": {
+          "elementId": { "type": "string", "minLength": 1 },
+          "sourceId": { "type": "string", "minLength": 1 },
+          "nodeId": { "type": "string", "minLength": 1 },
+          "domPath": { "type": "string", "minLength": 1 },
+          "breakpoint": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "variantAxes": {
+      "description": "The pre-registered dimensions along which the 3 output variants must structurally differ: layout-skeleton (domPath structure, order-independent), section-order (sequence of sections, order-dependent), motion-timeline (motion signature per element), breakpoint-behavior (how composition varies across breakpoints). Each axis names its own distance metric so 'diverse' cannot be redefined per run.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "distanceMetric"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "distanceMetric": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

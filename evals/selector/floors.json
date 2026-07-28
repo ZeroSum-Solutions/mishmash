@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "floors": {
+    "layout_geometry": 0.35,
+    "palette_fidelity": 0.35,
+    "type_fidelity": 0.35,
+    "motion_timing": 0.35,
+    "section_identity": 0.35,
+    "responsiveness": 0.35,
+    "broken_assets": 0.3,
+    "a11y": 0.3,
+    "source_bleed": 0.3,
+    "structural_variant_diversity": 0.25,
+    "directive_claim_coverage": 0.5
+  },
+  "counterfactualMinDelta": 0.1,
+  "note": "Frozen per VERIFICATION-CONTRACT.md loop:eval-gate -- absolute minimums, immutable by W8 without a founder decision record. Every floor is >= the named epsilon (0.05) and finite. directive_claim_coverage's floor (0.5) is deliberately the highest floor: it is the axis a house-style composite must fail (scores 0 -- see evals/selector/scorer/index.ts), while layout_geometry/palette_fidelity/type_fidelity/motion_timing/section_identity/responsiveness stay >= 0.35 for a house-style composite because that misattributed-but-real content is still genuinely captured page content, just wrongly attributed (groundedness 1, not 0) -- that gap between 'looks plausible' and 'does what the user asked' is the entire point of the added axis (PRD S7-3)."
+}

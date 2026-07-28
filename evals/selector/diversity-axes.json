@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "axes": [
+    {
+      "name": "layout-skeleton",
+      "description": "The SET of domPath values present in a composition (order-independent). Distance: Jaccard dissimilarity of the two variants' domPath sets.",
+      "distanceMetric": "jaccard-dissimilarity-of-domPath-set"
+    },
+    {
+      "name": "section-order",
+      "description": "The SEQUENCE of domPath values, position-aligned (order-dependent). Distance: fraction of positions where the two variants' element-at-position differ.",
+      "distanceMetric": "fraction-of-positions-differing-in-scope-order"
+    },
+    {
+      "name": "motion-timeline",
+      "description": "The motionSignature assigned per element, position-aligned. Distance: fraction of positions with a differing motion signature.",
+      "distanceMetric": "fraction-of-positions-differing-in-motionSignature"
+    },
+    {
+      "name": "breakpoint-behavior",
+      "description": "The breakpoint assigned per element, position-aligned. Distance: fraction of positions with a differing breakpoint assignment.",
+      "distanceMetric": "fraction-of-positions-differing-in-breakpoint-assignment"
+    }
+  ],
+  "combination": "score = max(min-pairwise-distance over each axis) -- any ONE axis showing genuine, uniform variation across every pair in the trio is sufficient; the four axes are not required to move in lockstep.",
+  "note": "Frozen before any W8 work per PRD S7-3/S7-4. Color, background, font, and CSS class names are deliberately absent from this axis set and from the composition schema itself (see evals/selector/scorer/diversity.ts) -- a recolor-only or class-name-only trio has no field to move any of these four axes, so it scores 0 by construction, not by a special case."
+}

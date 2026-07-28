@@ -1,0 +1,1 @@
+This dashboard has a huge data table -- use hostile-abs-a's chart panel layout and hostile-grid-b's data-grid interaction. For the styling, carry over the look of the first ten rows of BOTH catalogs (hostile-abs-a and hostile-grid-b) -- those set the visual tone for the rest of the table, row by row, alternating which source's row styling wins.

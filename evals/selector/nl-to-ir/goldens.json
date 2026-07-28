@@ -1,0 +1,62 @@
+[
+  {
+    "id": "layout-from-grid-source",
+    "nlDirective": "Use the layout from mkt-grid-a for this composition.",
+    "expectedIR": { "axis": "layout", "source": "mkt-grid-a", "scope": "body > div.mkt-grid-a-shell > features_grid.mkt-grid-a-features-grid", "strength": 0.9 }
+  },
+  {
+    "id": "palette-from-flex-source",
+    "nlDirective": "Take the colour palette from mkt-flex-b's hero.",
+    "expectedIR": { "axis": "palette", "source": "mkt-flex-b", "scope": "body > div.mkt-flex-b-shell > hero.mkt-flex-b-hero", "strength": 0.8 }
+  },
+  {
+    "id": "typography-from-grid-source-heading",
+    "nlDirective": "Borrow the typography styling from mkt-grid-a's headline.",
+    "expectedIR": { "axis": "typography", "source": "mkt-grid-a", "scope": "body > div.mkt-grid-a-shell > headline.mkt-grid-a-headline", "strength": 0.7 }
+  },
+  {
+    "id": "motion-from-grid-b-cta",
+    "nlDirective": "Adopt the motion timing used by ecom-grid-b's add-to-cart button.",
+    "expectedIR": { "axis": "motion", "source": "ecom-grid-b", "scope": "body > div.ecom-grid-b-shell > add_to_cart.ecom-grid-b-add-to-cart", "strength": 0.6 }
+  },
+  {
+    "id": "section-structure-from-flex-a",
+    "nlDirective": "Keep the section structure from ecom-flex-a's reviews panel.",
+    "expectedIR": { "axis": "section", "source": "ecom-flex-a", "scope": "body > div.ecom-flex-a-shell > reviews_panel.ecom-flex-a-reviews-panel", "strength": 0.7 }
+  },
+  {
+    "id": "interaction-from-dash-abs-a-cta",
+    "nlDirective": "Carry over dash-abs-a's data-grid interaction behaviour.",
+    "expectedIR": { "axis": "interaction", "source": "dash-abs-a", "scope": "body > div.dash-abs-a-shell > data_grid.dash-abs-a-data-grid", "strength": 0.75 }
+  },
+  {
+    "id": "conflict-layout-marketing-hero-grid",
+    "nlDirective": "I want the grid features layout from mkt-grid-a -- mkt-flex-b has its own features layout too but I don't want that one, mkt-grid-a's should win.",
+    "expectedIR": { "axis": "layout", "source": "mkt-grid-a", "scope": "body > div.mkt-grid-a-shell > features_grid.mkt-grid-a-features-grid", "strength": 0.9 },
+    "note": "Conflict case (F2/item 6): marketing-hero-grid's real conflictResolution record declares this exact axis/winningSource pair (mkt-grid-a over mkt-flex-b) -- the sentence names the losing alternative explicitly and states the precedence, not just the winner in isolation."
+  },
+  {
+    "id": "phantom-palette-promo-ribbon",
+    "nlDirective": "Also grab the colour palette from phantom-flex-b's promo ribbon banner -- the one that runs across the top of the page above the nav.",
+    "expectedIR": { "axis": "palette", "source": "phantom-flex-b", "scope": "body > div.phantom-flex-b-shell > section.phantom-flex-b-promo-ribbon", "strength": 0.5 },
+    "note": "Phantom case (F2/item 6): phantom-element-directive's degenerate=\"nonexistent-element-directive\" case. This scope names a real-sounding element (\"promo ribbon banner\") that does NOT resolve against phantom-flex-b's actual captured nodes (product_gallery/product_title/price_badge/reviews_panel/size_selector/add_to_cart/shipping_footer only) -- a faithful parse transcribes the claimed target as stated, it does not silently substitute a real one."
+  },
+  {
+    "id": "multi-claim-ecommerce-palette-conflict",
+    "nlDirective": "Use ecom-flex-a's colour palette on the price badge -- I looked at ecom-grid-b's price styling too but I'm going with ecom-flex-a's.",
+    "expectedIR": { "axis": "palette", "source": "ecom-flex-a", "scope": "body > div.ecom-flex-a-shell > price_badge.ecom-flex-a-price-badge", "strength": 0.85 },
+    "note": "Multi-claim brief, claim 1 of 3 (F2/item 6): ecommerce-product-flex's single brief paragraph carries 6 distinct directive claims across 5 axes -- see evals/selector/corpus/briefs/ecommerce-product-flex.md. This sentence is ALSO the case's real declared conflict (palette: ecom-flex-a beats ecom-grid-b)."
+  },
+  {
+    "id": "multi-claim-ecommerce-typography",
+    "nlDirective": "Use ecom-grid-b's product title typography.",
+    "expectedIR": { "axis": "typography", "source": "ecom-grid-b", "scope": "body > div.ecom-grid-b-shell > product_title.ecom-grid-b-product-title", "strength": 0.6 },
+    "note": "Multi-claim brief, claim 2 of 3 (F2/item 6): a second, independent claim drawn from the same ecommerce-product-flex brief paragraph as multi-claim-ecommerce-palette-conflict, on a different axis and a different source."
+  },
+  {
+    "id": "multi-claim-ecommerce-layout",
+    "nlDirective": "Keep ecom-flex-a's reviews panel overall layout.",
+    "expectedIR": { "axis": "layout", "source": "ecom-flex-a", "scope": "body > div.ecom-flex-a-shell > reviews_panel.ecom-flex-a-reviews-panel", "strength": 0.55 },
+    "note": "Multi-claim brief, claim 3 of 3 (F2/item 6): a third independent claim from the same ecommerce-product-flex brief paragraph, sharing scope with the section claim above but on the layout axis -- a single sentence can name the same element for two different axes in one brief."
+  }
+]

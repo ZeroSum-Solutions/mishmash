@@ -1,0 +1,1 @@
+I like docs-flex-a's table-of-contents section structure best -- docs-grid-b organizes its TOC differently and I don't want that version. Use docs-flex-a's overall layout too, and pull the callout box colours from docs-grid-b.
