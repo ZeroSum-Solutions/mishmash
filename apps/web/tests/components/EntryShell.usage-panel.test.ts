@@ -38,6 +38,17 @@ describe('formatUsageTotal', () => {
     expect(text).not.toMatch(/\$\s?0(\.0{1,2})?(?!\d)/);
   });
 
+  it('never renders a bare confident zero even when the API sends the real totalCostUsd:0 shape', () => {
+    // C1-7: projectUsageSummary's totalCostUsd is always a real number now
+    // (the honest sum of whatever IS priced, 0 when nothing is) -- this is
+    // the shape the API actually sends for an unpriced project, not the
+    // totalCostUsd:null placeholder the case above pins defensively.
+    // pricingVersion is the sole "is this confident/complete" signal.
+    const text = formatUsageTotal({ totalCostUsd: 0, pricingVersion: 'unavailable' });
+    expect(text).toMatch(/unavailable/i);
+    expect(text).not.toMatch(/\$\s?0(\.0{1,2})?(?!\d)/);
+  });
+
   it('flags a partial total so a mixed project never looks confidently complete', () => {
     const text = formatUsageTotal({ totalCostUsd: 0.006, pricingVersion: 'partial' });
     expect(text).toMatch(/\$0\.006/);
