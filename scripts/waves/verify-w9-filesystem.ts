@@ -1157,12 +1157,17 @@ interface AppCall {
  * string bound elsewhere -- possibly imported cross-file OR cross-package
  * (both real: `DIAGNOSTICS_EXPORT_PATH` from `@open-design/diagnostics`,
  * `ATTRIBUTION_CLAIM_PATH` from `@open-design/contracts`, confirmed by
- * reading both call sites and their packages' built `.d.ts` directly).
- * TypeScript preserves a `const`'s literal type through both same-file and
- * cross-package declaration-emit boundaries (`export declare const X =
- * "literal";`), so reading the TYPE at the identifier's use site -- rather
- * than re-deriving it from a same-file AST initializer -- resolves
- * same-file, cross-file, and cross-package consts uniformly. */
+ * reading both call sites and their packages' own git-tracked `src/*.ts`
+ * directly -- `buildDaemonProgram`'s `paths` override, above, is what makes
+ * "cross-package" resolve to that package's SOURCE rather than its build
+ * artifact; see the F1 fix note there for why that boundary matters). Reading
+ * the TYPE at the identifier's use site -- rather than re-deriving it from a
+ * same-file AST initializer -- resolves same-file, cross-file, and
+ * cross-package consts uniformly, because TypeScript never widens a `const`
+ * binding's own inferred type: that holds whether the declaration comes from
+ * a `.ts` source file or a rolled-up `.d.ts` (`export declare const X =
+ * "literal";`), so this mechanism is unchanged by which of the two the
+ * resolved module happens to be. */
 function resolveStaticPathLiteral(pathArg: TsNode, checker: TypeScriptModule.TypeChecker): string | null {
   if (ts.isStringLiteral(pathArg)) return pathArg.text;
   if (!ts.isIdentifier(pathArg)) return null;
@@ -1487,12 +1492,103 @@ interface UniverseScanResult {
   fnCount: number;
 }
 
+/** F1 fix (round-1 review, HIGH): a base-commit scan must resolve
+ * cross-package path-literal consts (`@open-design/contracts`,
+ * `@open-design/diagnostics`, ...) from THAT PACKAGE'S OWN git-tracked
+ * `src/*.ts`, inside the SAME worktree being scanned -- never through
+ * `node_modules`. The reason node_modules is unsafe here: `withDetachedWorktree`
+ * symlinks `node_modules` from the CURRENT checkout (there is no install step
+ * in a detached worktree), and every `packages/*` workspace member is itself
+ * a RELATIVE symlink inside that node_modules tree (e.g.
+ * `apps/daemon/node_modules/@open-design/contracts -> ../../../../packages/contracts`).
+ * A relative symlink resolves relative to its own on-disk location, which is
+ * always the CURRENT checkout's `apps/daemon/node_modules/@open-design/`
+ * regardless of which worktree walked through the outer symlink to reach it
+ * -- so it always lands back on the CURRENT checkout's
+ * `packages/<pkg>/dist/<file>.d.ts`. `dist/` is gitignored build output: mutating it
+ * plus the matching runtime path constant would let both the baseCommit scan
+ * and the live daemon report the same post-base path while `git status`
+ * stayed clean -- a false `drift=0`.
+ *
+ * The fix redirects every first-party `@open-design/*` module specifier to
+ * that package's own `src/` tree INSIDE `root` (the worktree under scan) via
+ * a `paths` compiler-option override built fresh from `root`'s own
+ * `packages/<pkg>/package.json` files -- so a base-commit scan only ever reads
+ * git-tracked source at that exact commit, never a build artifact from
+ * outside the worktree, and no full package rebuild is needed (this stays
+ * fast: it is still a single `ts.createProgram` over `apps/daemon`'s own
+ * rootDir, exactly as before). This changes WHERE the declaration is read
+ * from, not the classifier's own const-literal-type read at the use site
+ * (`resolveStaticPathLiteral` below): TypeScript never widens a `const`
+ * binding's own inferred type, regardless of whether the declaration lives
+ * in a `.ts` source file or a rolled-up `.d.ts` -- so this produces identical
+ * type-checking results to the dist-based resolution it replaces (verified
+ * directly against this tree: `ATTRIBUTION_CLAIM_PATH` and
+ * `DIAGNOSTICS_EXPORT_PATH` both still resolve to their correct literal
+ * values, now sourced from `packages/contracts/src/api/attribution.ts` and
+ * `packages/diagnostics/src/contract.ts` respectively). Every other
+ * specifier (`express`, `zod`, `node:*`, relative imports) still resolves
+ * through the ordinary Node algorithm against `root`'s own node_modules
+ * exactly as before -- third-party dependencies are pinned by the lockfile,
+ * not a mutable build artifact of THIS repo, so they are not the F1 risk and
+ * are deliberately left alone.
+ *
+ * A plain `options.paths` override alone is not enough: empirically, TS
+ * 5.9's own default (uncached) `resolveModuleNameLiterals` batching, when
+ * driving a program this size, sometimes still resolves an `@open-design/*`
+ * subpath specifier through `node_modules`'s package.json `exports` field
+ * instead of trying the `paths` substitution first (confirmed by tracing
+ * `ts.resolveModuleName` with `traceResolution: true` -- the same call
+ * resolves correctly through `paths` in isolation but not when reached via
+ * `createProgram`'s own internal resolution path for this program). Providing
+ * an explicit `resolveModuleNameLiterals` host override that calls
+ * `ts.resolveModuleName` directly (backed by one shared
+ * `ModuleResolutionCache` per program, so this costs no real performance
+ * versus the default) reproduces the correct, isolated-call behavior
+ * consistently -- verified empirically: with this override, zero
+ * `packages/<pkg>/dist/<file>` files are pulled into the program at all. */
+function buildWorkspaceSourcePathOverrides(root: string): Record<string, string[]> {
+  const overrides: Record<string, string[]> = {};
+  const packagesDir = path.join(root, 'packages');
+  let entries: string[] = [];
+  try {
+    entries = fs.readdirSync(packagesDir);
+  } catch {
+    return overrides; // no packages/ dir in this root (e.g. a self-probe scratch dir) -- nothing to override
+  }
+  for (const entry of entries) {
+    const pkgDir = path.join(packagesDir, entry);
+    const srcDir = path.join(pkgDir, 'src');
+    if (!fs.existsSync(srcDir)) continue;
+    let name: string | undefined;
+    try {
+      name = (JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8')) as { name?: string }).name;
+    } catch {
+      continue; // not a real workspace package dir (no readable package.json) -- skip
+    }
+    if (!name) continue;
+    const indexTs = path.join(srcDir, 'index.ts');
+    if (fs.existsSync(indexTs)) overrides[name] = [indexTs];
+    overrides[`${name}/*`] = [path.join(srcDir, '*')];
+  }
+  return overrides;
+}
+
 function buildDaemonProgram(root: string): { program: TypeScriptModule.Program; serverPath: string } {
   const tsconfigPath = path.join(root, DAEMON_TSCONFIG_RELPATH);
   const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
   if (configFile.error) throw new Error(`failed to read ${tsconfigPath}: ${configFile.error.messageText}`);
   const parsedConfig = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(tsconfigPath));
-  const program = ts.createProgram({ rootNames: parsedConfig.fileNames, options: { ...parsedConfig.options, noEmit: true } });
+  const options: TypeScriptModule.CompilerOptions = {
+    ...parsedConfig.options,
+    noEmit: true,
+    paths: { ...(parsedConfig.options.paths ?? {}), ...buildWorkspaceSourcePathOverrides(root) },
+  };
+  const host = ts.createCompilerHost(options, true);
+  const resolutionCache = ts.createModuleResolutionCache(root, host.getCanonicalFileName.bind(host), options);
+  host.resolveModuleNameLiterals = (moduleLiterals, containingFile, redirectedReference, opts) =>
+    moduleLiterals.map((literal) => ts.resolveModuleName(literal.text, containingFile, opts, host, resolutionCache, redirectedReference));
+  const program = ts.createProgram({ rootNames: parsedConfig.fileNames, options, host });
   return { program, serverPath: path.join(root, SERVER_RELPATH) };
 }
 
@@ -1907,9 +2003,25 @@ async function withDetachedWorktree<T>(commit: string, fn: (worktreeDir: string)
     // A fresh worktree's mise.toml is untrusted by default.
     sh('mise', ['trust', worktreeDir], { cwd: worktreeDir, timeoutMs: 30_000 });
     // Symlink node_modules from the current (already-installed) worktree so
-    // the classifier's TypeChecker resolves the same installed types without
-    // a real install -- this pass never executes baseCommit's own code, only
-    // reads its AST/type shape, so sharing installed packages is safe.
+    // the classifier's TypeChecker resolves the same installed THIRD-PARTY
+    // types (express, zod, node:* ambient libs, ...) without a real install
+    // -- this pass never executes baseCommit's own code, only reads its
+    // AST/type shape, so sharing installed packages is safe for THOSE
+    // (lockfile-pinned, not part of this repo's own git history).
+    //
+    // First-party `@open-design/*` workspace packages are the one category
+    // this symlink must NOT be trusted for: pnpm's own node_modules layout
+    // makes every `packages/*` entry a RELATIVE symlink
+    // (`apps/daemon/node_modules/@open-design/contracts -> ../../../../packages/contracts`),
+    // which resolves relative to its own on-disk location -- always the
+    // CURRENT checkout, regardless of which worktree walked through the
+    // outer symlink above to reach it -- landing on the CURRENT checkout's
+    // gitignored `packages/*/dist/*.d.ts` rather than baseCommit's own
+    // tracked source. `buildDaemonProgram`'s `paths` override intercepts
+    // `@open-design/*` specifiers before they ever reach this symlink chain
+    // for exactly that reason (F1 fix, round-1 review) -- see its doc
+    // comment for the full mechanism. This symlink stays in place only for
+    // the third-party fallback path.
     try {
       fs.symlinkSync(path.join(repoRoot, 'node_modules'), path.join(worktreeDir, 'node_modules'), 'dir');
     } catch {
@@ -2000,6 +2112,28 @@ async function waitForCondition(check: () => boolean, timeoutMs: number, interva
   }
   return check();
 }
+/** Teardown fix (round-1 review, routed item b -- genuine leak, ruled
+ * blocking for eventual wave freeze): escalate on process-group EMPTINESS,
+ * never on leader liveness alone. Daemon startup fires a fire-and-forget
+ * agent-detection probe (`void readAppConfig(...).then(... detectAgents
+ * ...)` in `apps/daemon/src/server.ts`, never awaited by `startServer`) that
+ * can spawn a `hermes-agent`/`node`/`cursor-agent` child concurrently with,
+ * or just after, this function's own SIGTERM lands. That child inherits the
+ * leader's process group but was never itself signaled -- and the OLD
+ * version of this function stopped watching as soon as `isPidAlive(pid)`
+ * (the LEADER only) went false, then did exactly one final group scan, which
+ * could catch that straggler mid-flight and report it as an unconfirmed
+ * teardown even though nothing further was ever done about it. Polling
+ * GROUP EMPTINESS (this same `processGroupSurvivors` scan, the same one the
+ * final verdict uses) as the escalation condition instead means a straggler
+ * that appears mid-teardown still gets escalated against -- SIGKILL is
+ * re-sent to the whole group, not just quietly observed -- before this
+ * function gives up. The group can never read as "empty" while the leader
+ * itself is still running (the leader's own pgid is its own pid), so this is
+ * a strict superset of the old leader-liveness check, not a narrowing of it:
+ * still signals the whole group by its one exact known pid (never a
+ * broader/fuzzy match), still kills by exact PID only, still fails closed on
+ * any unconfirmed or partial result. */
 async function killGroupFailClosed(pid: number): Promise<{ ok: boolean; detail: string }> {
   try {
     process.kill(-pid, 'SIGTERM');
@@ -2010,8 +2144,8 @@ async function killGroupFailClosed(pid: number): Promise<{ ok: boolean; detail: 
       return { ok: false, detail: `SIGTERM to group -${pid} failed: ${String(err)}` };
     }
   }
-  const exitedAfterTerm = await waitForCondition(() => !isPidAlive(pid), 8_000);
-  if (!exitedAfterTerm) {
+  const emptyAfterTerm = await waitForCondition(() => processGroupSurvivors(pid).length === 0, 8_000);
+  if (!emptyAfterTerm) {
     try {
       process.kill(-pid, 'SIGKILL');
     } catch (err) {
@@ -2019,19 +2153,21 @@ async function killGroupFailClosed(pid: number): Promise<{ ok: boolean; detail: 
         return { ok: false, detail: `SIGKILL to group -${pid} failed: ${String(err)}` };
       }
     }
-    const exitedAfterKill = await waitForCondition(() => !isPidAlive(pid), 5_000);
-    if (!exitedAfterKill) {
-      return { ok: false, detail: `leader pid ${pid} still alive after SIGTERM+SIGKILL -- teardown NOT confirmed` };
+    const emptyAfterKill = await waitForCondition(() => processGroupSurvivors(pid).length === 0, 5_000);
+    if (!emptyAfterKill) {
+      const survivors = processGroupSurvivors(pid);
+      return { ok: false, detail: `process group -${pid} still has survivors after SIGTERM+SIGKILL -- teardown NOT confirmed: ${survivors.join('; ')}` };
     }
   }
-  // The leader's own exit is not proof the whole group exited (a detached
-  // grandchild can survive its parent). Independently re-scan the real
-  // process table for any remaining member of this process group.
+  // waitForCondition's own successful exit already re-scanned and found the
+  // group empty, but re-derive the survivor list one more time explicitly
+  // rather than trusting a boolean alone -- never trust a resolved check as
+  // proof on its own, the same posture the rest of this teardown path takes.
   const survivors = processGroupSurvivors(pid);
   if (survivors.length > 0) {
     return { ok: false, detail: `process group -${pid} has survivors after kill+wait: ${survivors.join('; ')}` };
   }
-  return { ok: true, detail: `process group -${pid} confirmed empty (leader exited, group-wide ps scan found nothing)` };
+  return { ok: true, detail: `process group -${pid} confirmed empty (group-wide ps scan found nothing)` };
 }
 
 async function bootIsolatedDaemon(): Promise<LiveDaemon> {
