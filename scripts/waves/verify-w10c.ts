@@ -6,12 +6,12 @@
 // deleted, with the rest of scripts/waves/, when that program closes.
 //
 // Run: pnpm exec tsx scripts/waves/verify-w10c.ts [--repo <path>]
-// Exit 0 only when every C10C criterion reads exactly "pass" (C10C-8 may
-// legitimately read "blocked-on-founder" pre-decision without that alone
-// blocking a non-landing run -- see docs/plans/waves/W10c-toolbox.md §7),
-// GATE-INTEGRITY/LEASE/HEAD-DRIFT all pass, and the tree is clean. The
-// commit-bound proof manifest is written to the wave's goal-state proof
-// directory either way.
+// Exit 0 only when every C10C criterion (C10C-1..C10C-7) reads exactly
+// "pass", GATE-INTEGRITY/LEASE/HEAD-DRIFT all pass, and the tree is clean.
+// No criterion in this wave is human:-marked (a former C10C-8 founder-decision
+// gate was removed after the orchestrator ruled directly on the question it
+// gated -- see the FIX ROUND 1 note below). The commit-bound proof manifest
+// is written to the wave's goal-state proof directory either way.
 //
 // ===========================================================================
 // FIX ROUND 1 -- this file was rewritten to close 8 numbered findings from an
@@ -66,10 +66,21 @@
 //     whitespace via reviewerIdentityCandidates(); the owned-path list now
 //     includes all 8 lease-allowed content files.
 //   F8 (founder question 1 left as a soft, non-blocking open question when
-//     repository authority makes it blocking) -- promoted to a formal C10C-8
-//     criterion, human:-marked per VERIFICATION-CONTRACT.md §3 R7, reading
-//     DECISIONS.md (never writing it) for a `### W10C-CAPABILITY-DECISION`
-//     heading, mirroring W9-ingest-tranche.md's acceptedRisk mechanism.
+//     repository authority makes it blocking) -- ORIGINALLY promoted to a
+//     formal C10C-8 criterion (human:-marked, DECISIONS.md-gated). The
+//     orchestrator has since ruled on all three of this PRD's open founder
+//     questions directly (Orchestrator ruling under delegated founder
+//     authority, 2026-07-28 -- see docs/plans/waves/W10c-toolbox.md §9):
+//     ruling 1 is NO new toolbox-action HTTP/CLI capability, which closes the
+//     question C10C-8 existed to gate -- C10C-8 is therefore REMOVED (a
+//     criterion that would now trivially and permanently read "pass" is not
+//     measuring anything); ruling 2 is YES, extend the exhaustive walk to
+//     NextStepActions.tsx as a second catalogue consumer, with the two
+//     consumers' featured/non-featured partition asserted explicitly -- C10C-2
+//     below is extended accordingly (two required for-of loops, one per
+//     consumer, 2x the per-action spec count, a dedicated partition check);
+//     ruling 3 is KEEP scripts/check-toolbox-skill-refs.test.ts as a floor --
+//     no code change here, it was never touched by this file.
 // ===========================================================================
 //
 // Anti-gaming compliance notes (verifier defect catalog):
@@ -600,11 +611,15 @@ function hasNamedImportOfExactExport(sf: TypeScriptModule.SourceFile, exactExpor
   }
   return found;
 }
-// Locates a `for (const X of <binding referencing iterableNameSubstring>)`
+// Locates every `for (const X of <binding referencing iterableNameSubstring>)`
 // loop whose body directly contains a `test(...)` call -- required shape for
-// C10C-2's table-driven per-action generation.
-function findForOfLoopGeneratingTests(sf: TypeScriptModule.SourceFile, iterableNameSubstring: string): TypeScriptModule.ForOfStatement | null {
-  let found: TypeScriptModule.ForOfStatement | null = null;
+// C10C-2's table-driven per-action generation. Returns ALL matches (plural),
+// not just the first: [R1-F2]/orchestrator-ruling-2 extended C10C-2 to require
+// TWO such loops in the same file (one per catalogue consumer), and the two
+// must be told apart by what each loop body actually references, not by
+// assuming the first match is "the" loop.
+function findAllForOfLoopsGeneratingTests(sf: TypeScriptModule.SourceFile, iterableNameSubstring: string): TypeScriptModule.ForOfStatement[] {
+  const found: TypeScriptModule.ForOfStatement[] = [];
   function subtreeReferencesName(node: TypeScriptModule.Node): boolean {
     let hit = false;
     function inner(n: TypeScriptModule.Node): void {
@@ -626,10 +641,9 @@ function findForOfLoopGeneratingTests(sf: TypeScriptModule.SourceFile, iterableN
     return hit;
   }
   function visit(node: TypeScriptModule.Node): void {
-    if (found) return;
     if (ts.isForOfStatement(node) && subtreeReferencesName(node.expression) && bodyHasTestCall(node.statement)) {
-      found = node;
-      return;
+      found.push(node);
+      return; // do not descend into a matched loop looking for a nested match
     }
     ts.forEachChild(node, visit);
   }
@@ -647,6 +661,26 @@ function subtreeHasMethodCall(node: TypeScriptModule.Node, methodNames: string[]
     ts.forEachChild(n, visit);
   }
   visit(node);
+  return found;
+}
+// Does any string-literal/template-literal NODE inside this subtree contain
+// `fragment`? Used to tell C10C-2's two required for-of loops apart by which
+// consumer's selectors each one actually references (e.g. "chat-plus-trigger"
+// vs. "next-step-toolbox"), rather than assuming loop order.
+function subtreeContainsStringLiteralFragment(node: TypeScriptModule.Node, fragment: string): boolean {
+  let found = false;
+  function inner(n: TypeScriptModule.Node): void {
+    if (found) return;
+    if (
+      (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n)) &&
+      n.text.includes(fragment)
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(n, inner);
+  }
+  inner(node);
   return found;
 }
 
@@ -1243,38 +1277,24 @@ async function main(): Promise<void> {
   });
 
   // -----------------------------------------------------------------------
-  // C10C-2
+  // C10C-2 -- [orchestrator ruling 2] extended to cover BOTH catalogue
+  // consumers (DesignToolboxPanel + NextStepActions.tsx), asserting their
+  // featured/non-featured partition of the derived action set explicitly.
   // -----------------------------------------------------------------------
   await checkCriterion('C10C-2', async () => {
-    const specAbs = path.join(repoRoot, E2E_UI_SPEC_REL);
-    if (!fs.existsSync(specAbs)) {
-      record('C10C-2', '', 'exhaustive, table-driven, real-daemon-backed per-action walk from the side panel, cross-checked against a fresh runtime oracle', false, '', { detail: `${E2E_UI_SPEC_REL} does not exist` });
-      return;
-    }
     if (!derivedActionIds || derivedActionIds.length === 0) {
-      record('C10C-2', '', 'per-action walk covers exactly the C10C-1-derived action set', false, '', { detail: 'C10C-1 did not produce a derived action-id set; cannot verify per-action coverage' });
+      record('C10C-2', '', 'per-action walk covers exactly the C10C-1-derived action set for both consumers', false, '', { detail: 'C10C-1 did not produce a derived action-id set; cannot verify per-action coverage' });
       return;
-    }
-    const source = fs.readFileSync(specAbs, 'utf8');
-    const sf = parseTs(specAbs, source);
-    const banned = containsBannedTestMarker(sf);
-    const hasDynImport = hasDynamicImportReferencingFile(sf, 'design-toolbox');
-    const loop = findForOfLoopGeneratingTests(sf, 'TOOLBOX_ACTIONS');
-    const structuralProblems: string[] = [];
-    if (banned.length) structuralProblems.push(`banned skip/only/fixme/todo markers: ${banned.join(', ')}`);
-    if (!hasDynImport) structuralProblems.push('no dynamic import() call referencing "design-toolbox" found (a static import declaration fails this package\'s NodeNext typecheck -- see PRD §2)');
-    if (!loop) {
-      structuralProblems.push('no for-of loop over a TOOLBOX_ACTIONS-like binding generating test(...) calls was found');
-    } else {
-      if (!subtreeHasMethodCall(loop.statement, ['click'])) structuralProblems.push('the per-action test loop body has no .click(...) call');
-      if (!subtreeHasMethodCall(loop.statement, ['textContent', 'innerText'])) structuralProblems.push('the per-action test loop body has no .textContent(...)/.innerText(...) call');
     }
 
-    // Independent runtime oracle -- computed fresh, not trusted from the file.
+    // Independent runtime oracle + the explicit consumer-partition check
+    // (orchestrator ruling 2's "assert the intended difference" instruction).
+    // Computed regardless of whether the delegated spec file exists yet --
+    // the partition is a fact about the catalogue itself, not about the test.
     const toolboxMod = await loadDesignToolboxModule();
     const skillsResult = await liveSkillsList();
     if (!toolboxMod.ok || !skillsResult.ok) {
-      record('C10C-2', '', 'this verifier can independently compute the expected resolution for every action', false, structuralProblems.join('\n'), {
+      record('C10C-2', '', 'this verifier can independently compute the expected resolution for every action and the featured/non-featured partition', false, '', {
         detail: !toolboxMod.ok ? toolboxMod.error : !skillsResult.ok ? skillsResult.error : 'unknown oracle failure',
       });
       return;
@@ -1282,7 +1302,7 @@ async function main(): Promise<void> {
     const findDesignToolboxSkill = toolboxMod.mod.findDesignToolboxSkill;
     const actionsRuntime = safeExtractRuntimeActions(toolboxMod.mod.DESIGN_TOOLBOX_ACTIONS);
     if (typeof findDesignToolboxSkill !== 'function' || !actionsRuntime.ok) {
-      record('C10C-2', '', 'this verifier can independently compute the expected resolution for every action', false, structuralProblems.join('\n'), { detail: 'findDesignToolboxSkill is not callable or DESIGN_TOOLBOX_ACTIONS is malformed at runtime' });
+      record('C10C-2', '', 'this verifier can independently compute the expected resolution for every action', false, '', { detail: 'findDesignToolboxSkill is not callable or DESIGN_TOOLBOX_ACTIONS is malformed at runtime' });
       return;
     }
     const runtimeActionsByFullObj = toolboxMod.mod.DESIGN_TOOLBOX_ACTIONS as { id: string }[];
@@ -1292,49 +1312,107 @@ async function main(): Promise<void> {
       expectedByAction.set(action.id, resolved && typeof resolved.name === 'string' ? resolved.name : '__NONE__');
     }
 
+    const partitionProblems: string[] = [];
+    const featuredRaw = toolboxMod.mod.FEATURED_DESIGN_TOOLBOX_ACTION_IDS;
+    if (!Array.isArray(featuredRaw) || !featuredRaw.every((x) => typeof x === 'string')) {
+      partitionProblems.push('FEATURED_DESIGN_TOOLBOX_ACTION_IDS is not a string array at runtime');
+    } else {
+      const featuredIds = featuredRaw as string[];
+      if (featuredIds.length === 0) partitionProblems.push('FEATURED_DESIGN_TOOLBOX_ACTION_IDS is empty');
+      const nonFeaturedIds = derivedActionIds.filter((id) => !featuredIds.includes(id));
+      const partitionDiff = multisetDiff([...featuredIds, ...nonFeaturedIds], derivedActionIds);
+      if (partitionDiff.onlyInA.length) partitionProblems.push(`featured+non-featured union has id(s) not in the derived set: ${partitionDiff.onlyInA.join(', ')}`);
+      if (partitionDiff.onlyInB.length) partitionProblems.push(`derived set has id(s) covered by NEITHER featured nor non-featured: ${partitionDiff.onlyInB.join(', ')}`);
+      if (partitionDiff.countMismatch.length) partitionProblems.push(`featured/non-featured partition count mismatch (overlap or duplicate): ${partitionDiff.countMismatch.join(', ')}`);
+    }
+
+    const specAbs = path.join(repoRoot, E2E_UI_SPEC_REL);
+    if (!fs.existsSync(specAbs)) {
+      record('C10C-2', '', 'exhaustive, table-driven, real-daemon-backed per-action walk from BOTH catalogue consumers, with an explicit partition assertion and a fresh runtime oracle', false, partitionProblems.join('\n'), { detail: `${E2E_UI_SPEC_REL} does not exist` });
+      return;
+    }
+
+    const source = fs.readFileSync(specAbs, 'utf8');
+    const sf = parseTs(specAbs, source);
+    const banned = containsBannedTestMarker(sf);
+    const hasDynImport = hasDynamicImportReferencingFile(sf, 'design-toolbox');
+    const allLoops = findAllForOfLoopsGeneratingTests(sf, 'TOOLBOX_ACTIONS');
+    const sidePanelLoop = allLoops.find((l) => subtreeContainsStringLiteralFragment(l.statement, 'chat-plus-trigger'));
+    const nextStepLoop = allLoops.find((l) => subtreeContainsStringLiteralFragment(l.statement, 'next-step-toolbox'));
+    const structuralProblems: string[] = [...partitionProblems];
+    if (banned.length) structuralProblems.push(`banned skip/only/fixme/todo markers: ${banned.join(', ')}`);
+    if (!hasDynImport) structuralProblems.push('no dynamic import() call referencing "design-toolbox" found (a static import declaration fails this package\'s NodeNext typecheck -- see PRD §2)');
+    if (!sidePanelLoop) {
+      structuralProblems.push('no for-of loop over a TOOLBOX_ACTIONS-like binding referencing "chat-plus-trigger" (the DesignToolboxPanel consumer loop) was found');
+    } else {
+      if (!subtreeHasMethodCall(sidePanelLoop.statement, ['click'])) structuralProblems.push('the side-panel test loop body has no .click(...) call');
+      if (!subtreeHasMethodCall(sidePanelLoop.statement, ['textContent', 'innerText'])) structuralProblems.push('the side-panel test loop body has no .textContent(...)/.innerText(...) call');
+    }
+    if (!nextStepLoop) {
+      structuralProblems.push('no for-of loop over a TOOLBOX_ACTIONS-like binding referencing "next-step-toolbox" (the NextStepActions consumer loop required by orchestrator ruling 2) was found');
+    } else {
+      if (!subtreeHasMethodCall(nextStepLoop.statement, ['click'])) structuralProblems.push('the next-step test loop body has no .click(...) call');
+      if (!subtreeHasMethodCall(nextStepLoop.statement, ['textContent', 'innerText'])) structuralProblems.push('the next-step test loop body has no .textContent(...)/.innerText(...) call');
+    }
+
     const run = runPlaywrightFile(E2E_UI_SPEC_PKG_REL, 'C10C-2-playwright'); // [R1-F1] package-relative
     const coverageProblems: string[] = [];
-    const markerRe = /^W10C_RESOLVED (\S+) (.+)$/;
-    for (const id of derivedActionIds) {
-      const expectedTitle = `toolbox action "${id}" resolves and applies from the side panel`;
-      const matching = run.specs.filter((s) => s.title === expectedTitle);
-      if (matching.length === 0) {
-        coverageProblems.push(`no spec titled exactly "${expectedTitle}"`);
-        continue;
-      }
-      if (matching.length > 1) {
-        coverageProblems.push(`${matching.length} specs titled exactly "${expectedTitle}" -- expected exactly 1`);
-        continue;
-      }
-      const spec = matching[0]!;
-      if (!spec.ok) {
-        coverageProblems.push(`spec for "${id}" did not pass`);
-        continue;
-      }
-      const lines = pwSpecStdoutLines(spec);
-      const markerLine = lines.find((l) => markerRe.test(l.trim()));
-      if (!markerLine) {
-        coverageProblems.push(`no "W10C_RESOLVED ${id} ..." marker found in captured stdout for "${id}"`);
-        continue;
-      }
-      const m = markerRe.exec(markerLine.trim())!;
-      const observed = m[2] ?? '';
-      const expected = expectedByAction.get(id) ?? '__NONE__';
-      if (observed !== expected) {
-        coverageProblems.push(`action "${id}": observed marker "${observed}" != independently-computed expected "${expected}"`);
+    const sidePanelTitle = (id: string) => `toolbox action "${id}" resolves and applies from the side panel`;
+    const nextStepTitle = (id: string) => `next-step action "${id}" resolves and applies from the assistant next-step card`;
+    const sidePanelMarkerRe = /^W10C_RESOLVED (\S+) (.+)$/;
+    const nextStepMarkerRe = /^W10C_NEXTSTEP_RESOLVED (\S+) (.+)$/;
+
+    function checkOneConsumer(titleFor: (id: string) => string, markerRe: RegExp, label: string): void {
+      for (const id of derivedActionIds!) {
+        const expectedTitle = titleFor(id);
+        const matching = run.specs.filter((s) => s.title === expectedTitle);
+        if (matching.length === 0) {
+          coverageProblems.push(`[${label}] no spec titled exactly "${expectedTitle}"`);
+          continue;
+        }
+        if (matching.length > 1) {
+          coverageProblems.push(`[${label}] ${matching.length} specs titled exactly "${expectedTitle}" -- expected exactly 1`);
+          continue;
+        }
+        const spec = matching[0]!;
+        if (!spec.ok) {
+          coverageProblems.push(`[${label}] spec for "${id}" did not pass`);
+          continue;
+        }
+        const lines = pwSpecStdoutLines(spec);
+        const markerLine = lines.find((l) => markerRe.test(l.trim()));
+        if (!markerLine) {
+          coverageProblems.push(`[${label}] no marker found in captured stdout for "${id}"`);
+          continue;
+        }
+        const m = markerRe.exec(markerLine.trim())!;
+        const observed = m[2] ?? '';
+        const expected = expectedByAction.get(id) ?? '__NONE__';
+        if (observed !== expected) {
+          coverageProblems.push(`[${label}] action "${id}": observed marker "${observed}" != independently-computed expected "${expected}"`);
+        }
       }
     }
-    const extraneous = run.specs.filter((s) => !derivedActionIds!.some((id) => s.title === `toolbox action "${id}" resolves and applies from the side panel`));
-    if (extraneous.length) coverageProblems.push(`extraneous spec(s) not matching the pinned per-action title format: ${extraneous.map((s) => s.title).join(' | ')}`);
-    if (run.specs.length !== derivedActionIds.length) coverageProblems.push(`spec count ${run.specs.length} != derived action count ${derivedActionIds.length}`);
+    checkOneConsumer(sidePanelTitle, sidePanelMarkerRe, 'side-panel');
+    checkOneConsumer(nextStepTitle, nextStepMarkerRe, 'next-step');
+
+    const expectedTitles = new Set<string>();
+    for (const id of derivedActionIds) {
+      expectedTitles.add(sidePanelTitle(id));
+      expectedTitles.add(nextStepTitle(id));
+    }
+    const extraneous = run.specs.filter((s) => !expectedTitles.has(s.title));
+    if (extraneous.length) coverageProblems.push(`extraneous spec(s) not matching either pinned per-action title format: ${extraneous.map((s) => s.title).join(' | ')}`);
+    const expectedSpecCount = derivedActionIds.length * 2;
+    if (run.specs.length !== expectedSpecCount) coverageProblems.push(`spec count ${run.specs.length} != expected ${expectedSpecCount} (2 x derived action count, one per consumer)`);
 
     const allOk = run.status === 0 && run.specs.length > 0 && structuralProblems.length === 0 && coverageProblems.length === 0;
     record(
       'C10C-2',
       `pnpm --filter @open-design/e2e exec playwright test -c playwright.config.ts ${E2E_UI_SPEC_PKG_REL} --reporter=json`,
-      'every C10C-1-derived action id has exactly one passing, exact-titled test whose reported runtime marker equals this verifier\'s own freshly-computed expected resolution',
+      "every C10C-1-derived action id has exactly one passing, exact-titled test in EACH of the two catalogue consumers (DesignToolboxPanel + NextStepActions), the featured/non-featured partition holds exactly, and both consumers' reported runtime markers equal this verifier's own freshly-computed expected resolution",
       allOk,
-      `derived action count: ${derivedActionIds.length}\nplaywright exit: ${run.status}\nspecs found: ${run.specs.length}\n${[...structuralProblems, ...coverageProblems].join('\n')}\n\n${run.raw}`,
+      `derived action count: ${derivedActionIds.length} (expected spec count: ${expectedSpecCount})\nplaywright exit: ${run.status}\nspecs found: ${run.specs.length}\n${[...structuralProblems, ...coverageProblems].join('\n')}\n\n${run.raw}`,
     );
   });
 
@@ -1649,62 +1727,14 @@ async function main(): Promise<void> {
     );
   });
 
-  // -----------------------------------------------------------------------
-  // C10C-8 -- [R1-F8] founder decision gate. human:-marked, legitimately
-  // resolves to 'blocked-on-founder' (VERIFICATION-CONTRACT.md §3 R7).
-  // -----------------------------------------------------------------------
-  await checkCriterion('C10C-8', () => {
-    const HEADING = '### W10C-CAPABILITY-DECISION';
-    let raw: string;
-    try {
-      raw = readFileAtCommit(headSha, 'docs/plans/waves/DECISIONS.md');
-    } catch (err) {
-      record('C10C-8', `git show ${headSha}:docs/plans/waves/DECISIONS.md`, 'founder decision on toolbox-action-application UI/CLI parity is on record before this wave is fully landable', 'blocked-on-founder', '', {
-        detail: `could not read DECISIONS.md at HEAD (${String(err)}) -- treated as heading-absent, the legitimate pre-decision state`,
-      });
-      return;
-    }
-    const headingCount = raw.split('\n').filter((l) => l.trim() === HEADING).length;
-    if (headingCount === 0) {
-      record('C10C-8', '', 'founder decision on toolbox-action-application UI/CLI parity is on record before this wave is fully landable', 'blocked-on-founder', 'no "### W10C-CAPABILITY-DECISION" heading found in DECISIONS.md@HEAD', {
-        detail: 'legitimate pre-decision state per VERIFICATION-CONTRACT.md §3 R7 -- this does not block the autonomous loop, only landing',
-      });
-      return;
-    }
-    if (headingCount > 1) {
-      record('C10C-8', '', 'exactly one "### W10C-CAPABILITY-DECISION" heading exists', false, `found ${headingCount} occurrences -- a duplicate heading id is unresolvable everywhere`);
-      return;
-    }
-    const startIdx = raw.indexOf(HEADING);
-    const rest = raw.slice(startIdx + HEADING.length);
-    const nextHeadingMatch = /\n#{2,3} /.exec(rest);
-    const block = nextHeadingMatch ? rest.slice(0, nextHeadingMatch.index) : rest;
-    const decisionMatch = /- Decision:\s*(.+)/.exec(block);
-    const deciderMatch = /- Decider:\s*(.+)/.exec(block);
-    const dateMatch = /- Date:\s*(.+)/.exec(block);
-    const rationaleMatch = /- Rationale:\s*(.+)/.exec(block);
-    const decision = decisionMatch?.[1]?.trim();
-    const decider = deciderMatch?.[1]?.trim();
-    const date = dateMatch?.[1]?.trim();
-    const rationale = rationaleMatch?.[1]?.trim();
-    const problems: string[] = [];
-    if (decision !== 'build-now' && decision !== 'exempt') problems.push(`"Decision" is "${String(decision)}", expected exactly "build-now" or "exempt"`);
-    if (!decider) problems.push('"Decider" is missing');
-    if (!date) problems.push('"Date" is missing');
-    if (!rationale || rationale.length < 20) problems.push(`"Rationale" is missing or too short (${rationale?.length ?? 0} chars, need >= 20)`);
-    if (decider) {
-      const authorsInRange = commitAuthorsBetween(baseCommit, headSha);
-      if (identityMatchesAnyAuthor(decider, authorsInRange)) problems.push(`"Decider" ("${decider}") matches a commit author in baseCommit..HEAD -- an implementer cannot author their own exemption`);
-    }
-    record(
-      'C10C-8',
-      `read docs/plans/waves/DECISIONS.md@HEAD, locate the unique "${HEADING}" heading`,
-      'Decision is build-now|exempt; Decider present and distinct from every commit author; Date and a substantive Rationale present',
-      problems.length === 0,
-      problems.join('\n') || `Decision=${decision} Decider=${decider} Date=${date}`,
-      { detail: problems.length === 0 ? undefined : 'heading present but malformed -- a real defect, not a legitimate pending state' },
-    );
-  });
+  // C10C-8 retired: [R1-F8] originally added a human:-marked, DECISIONS.md-gated
+  // founder-decision criterion here. The orchestrator has since ruled on that
+  // question directly (Orchestrator ruling under delegated founder authority,
+  // 2026-07-28 -- see docs/plans/waves/W10c-toolbox.md §9, ruling 1: NO new
+  // toolbox-action HTTP/CLI capability), so the gate this criterion existed to
+  // provide is no longer needed -- the ruling itself closes the question. A
+  // criterion that would now trivially and permanently read "pass" by
+  // construction is not measuring anything, so it is removed rather than kept.
 
   // =======================================================================
   // GATE-INTEGRITY / LEASE / HEAD-DRIFT
