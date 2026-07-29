@@ -164,18 +164,44 @@ ways, matched to what each criterion actually needs to prove:
    checked out into an isolated `git worktree add --detach`, given a frozen `pnpm install --offline
    --frozen-lockfile`, and run for real *as committed at that commit* (no HEAD overlay) — proving the
    file did not arrive already fully green.
-3. **`NO-DESTRUCTIVE-INVOCATION` (new, self-enforcing).** A dedicated meta-check AST-scans the
-   verifier's own source and fails the gate if a future edit reintroduces an `apply`/`--confirm`/
-   `gc-apply` invocation anywhere — the safety property does not rely on every future editor
-   remembering the rule.
-4. **`FIXTURE-ISOLATION` (meta, carried forward from round 1, strengthened in round 2).** Structural:
-   the verifier's own source is self-scanned to confirm the real checkout's `.tmp/tools-dev/` is
-   referenced from **exactly one**, provably read-only function. Runtime: before any fixture work, a
-   read-only listing of whatever namespaces already exist in the real checkout is taken (never
-   written to), and none may ever appear among the plan candidates observed across the entire run.
-   Round 2 adds two more mandatory conjuncts to this same check's pass condition: every plan
-   candidate observed this run stayed confined to its own fixture roots (item 1, above), and **every
-   daemon teardown this run performed confirmed zero survivors** — a failed or partial teardown fails
+
+   **On "does the verifier reach `apply`" — a distinction stated explicitly so a future reviewer does
+   not re-litigate it.** Running the required red specs means the verifier spawns `vitest`
+   (`sh('pnpm', [...'vitest','run'...])`), which executes the product's own test file, which itself
+   calls `apply`. That is *not* the class the round-2 binding ruling closed, and is not required to
+   be closed by it. The failure mode that ruling exists to prevent is: the gate constructs a deletion
+   plan, executes it, and thereby only ever inspects a *description* of the work it is supposed to
+   judge. Running the product's own test suite is categorically different — the verifier chooses no
+   target, builds no plan, passes no `--confirm`, and owns no fixture; it only reads a JSON verdict
+   from a test file that constructs and owns its own fixture root, exactly what ordinary CI already
+   does for every test in this repo. If executing the product's tests counted as the verifier
+   "reaching" `apply`, no gate could ever run tests at all. **What this does NOT settle:** whether a
+   given required red-spec file actually confines its own fixture root correctly is a genuine,
+   separate concern — a badly-written product test could delete something real. That is a
+   **product-test review concern, not a gate-architecture concern**, and C10F-13's adversarial review
+   is where it is named and judged (see C10F-13, below).
+3. **`NO-DESTRUCTIVE-INVOCATION` (new, self-enforcing) plus a type-level closure.** A dedicated
+   meta-check AST-scans the verifier's own source and fails the gate if a future edit reintroduces an
+   `apply`/`--confirm`/`gc-apply` invocation anywhere. Round 3: this scan is honestly a *regression
+   guard* for the two literal idioms this file uses today (a literal array element, a literal/
+   template URL) — it would not by itself catch a deliberately obfuscated future bypass (string
+   concatenation, a renamed wrapper, variable indirection). The residual is closed at the type level
+   instead of the scan level: `runStorageCli`'s `args` parameter is typed `readonly
+   SafeStorageCliArg[]`, a closed literal-string union (`'gc' | 'plan' | 'report' | '--json'`) that
+   does not include `'apply'` or `'--confirm'` at all — passing either is a TypeScript compile error,
+   caught by `pnpm typecheck`, which C10F-12 already runs on every invocation (`tsc -p
+   scripts/tsconfig.json --noEmit`, included via the root `typecheck` script, covers this file). A
+   computed/concatenated string is never assignable to a closed literal union without an explicit,
+   visible, auditable unsafe cast — obfuscation stops being a scan-evasion problem and becomes a
+   compile error. The AST scan stays as defense in depth; it costs nothing.
+4. **`FIXTURE-ISOLATION` (meta, carried forward from round 1, strengthened in round 2 and round 3).**
+   Structural: the verifier's own source is self-scanned to confirm the real checkout's
+   `.tmp/tools-dev/` is referenced from **exactly one**, provably read-only function. Runtime: before
+   any fixture work, a read-only listing of whatever namespaces already exist in the real checkout is
+   taken (never written to), and none may ever appear among the plan candidates observed across the
+   entire run. Round 2 added two more mandatory conjuncts to this same check's pass condition: every
+   plan candidate observed this run stayed confined to its own fixture roots (item 1, above), and
+   **every daemon teardown this run performed confirmed zero survivors** — a failed or partial teardown fails
    `FIXTURE-ISOLATION`, and therefore fails the run; it is never merely recorded as evidence. Daemon
    teardown itself is rebuilt around POSIX process **groups**: every daemon subprocess is spawned
    detached (its own session/process group, pgid = its own pid), teardown signals the whole group
@@ -183,6 +209,25 @@ ways, matched to what each criterion actually needs to prove:
    before resolving — a process-group leader's own `exit` event is never treated as proof the whole
    group exited, per `DECISIONS.md`'s `W9AS-PARK` carry-forward (a sibling wave was parked over
    exactly this failure mode).
+
+   **Round 3: a third, honest terminal state — `not-exercised` — distinct from both `pass` and
+   `fail`.** `allDaemonTeardownResults.every(r => r.ok)` on an empty array is `true` by JS semantics,
+   not by evidence. Pre-implementation, `storageEntry` is `null`, so no plan-only criterion's
+   `requireSharedDaemon()` call and no dedicated-daemon-boot criterion ever calls
+   `bootIsolatedDaemon()` at all — zero plans observed, zero daemons booted, zero teardowns
+   performed. Reporting a bare `pass` in that state would claim the process-group teardown mechanism
+   had been proven safe when it never ran. `FIXTURE-ISOLATION` now distinguishes: an actual
+   structural defect (always evaluated, since the self-scan runs regardless of implementation state)
+   or an actual leak/confinement/teardown *failure* (only possible once something was exercised, so
+   these cannot false-fail pre-implementation) still fails outright; a clean structural scan with
+   zero plans observed and/or zero daemons booted reports `not-exercised` — not a defect finding, but
+   not a proof either; only when everything checked *and* both runtime conjuncts were genuinely
+   exercised does it report a real `pass`. `not-exercised` blocks the overall gate exactly like
+   `fail` does (see "How the verifier runs") — it is reported separately for honesty, never treated
+   as equivalent to a proven pass. This mirrors this program's existing precedent for an honest
+   non-pass terminal state (W1's C1-12 `blocked-on-founder`, which can never read `pass`), and closes
+   the same failure class `scripts/waves/verify-w0.ts` already guards against by pairing every
+   `.every()` on a results array with an explicit `length > 0 &&` guard.
 
 ## Threat model
 
@@ -658,6 +703,18 @@ fails guard immediately.
 `baseCommit..reviewedCommit`, and has committed to this repository before (round 2). `model` a real,
 non-placeholder-looking string. Diff over the **full owned/lease surface** between `reviewedCommit`
 and `HEAD` empty. `verdict === 'APPROVE'`.
+
+**Round 3, named explicitly: this review is also the fixture-confinement check the gate architecture
+itself cannot perform.** The verifier proves the five required red-spec files (see "Verifier safety
+model," item 2) exist, are bound to production, and went red before green — it deliberately never
+inspects whether each one's *own* synthetic fixture root is actually confined to a throwaway
+directory, versus, say, a path under the real checkout or a shared/reused location. A red-spec file
+that builds its fixture correctly and one that (by bug or bad-faith) reuses a real path are
+AST-indistinguishable at the level this verifier operates. The reviewer named in this record is
+responsible for confirming each required red-spec file's fixture construction is genuinely isolated
+before recording `verdict: 'APPROVE'` — the same standard already implicit in C10F-17's "the second,
+human-in-the-loop layer that must independently judge the genuineness of both fixtures," generalized
+here to all five required files.
 
 **Satisfiability.** Commit the whole implementation as P; a distinct, previously-active reviewer
 reviews P; the record naming `reviewedCommit: P` is committed afterward.
