@@ -7343,6 +7343,20 @@ export async function startServer({
           ));
           return;
         }
+        // Routing truth (NM-13a) `reported`: Claude's own `system`/`init`
+        // event (claude-stream.ts maps it to `{type:'status',
+        // label:'initializing', model, sessionId}`) echoes the model that
+        // actually executed. This inline callback is Claude's OWN event
+        // path -- separate from `sendAgentEvent` below, which the
+        // gemini/qoder/pi-rpc/opencode lanes share -- so it needs its own
+        // copy of this capture; it does not run through sendAgentEvent.
+        if (
+          ev?.type === 'status' &&
+          typeof (ev as any).model === 'string' &&
+          (ev as any).model.trim().length > 0
+        ) {
+          run.modelReported = (ev as any).model.trim();
+        }
         lastAgentEventPhase = summarizeAgentEventForInactivity(ev);
         noteAgentActivity();
         if (ev?.type === 'text_delta' && typeof ev.delta === 'string') {
