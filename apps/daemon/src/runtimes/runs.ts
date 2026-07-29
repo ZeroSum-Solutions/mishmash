@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { todoSnapshotHasUnfinishedWork } from '@open-design/contracts';
+import { buildModelRouting, todoSnapshotHasUnfinishedWork } from '@open-design/contracts';
 import { normalizeMediaExecutionPolicyForRun } from '../media/policy.js';
 import {
   normalizeRunToolBundleForRun,
@@ -45,6 +45,8 @@ function durableRunState(run) {
     endedWithUnfinishedWork: Boolean(run.endedWithUnfinishedWork),
     ...(typeof run.userPrompt === 'string' ? { userPrompt: run.userPrompt } : {}),
     ...(typeof run.model === 'string' ? { model: run.model } : {}),
+    ...(typeof run.modelRequested === 'string' ? { modelRequested: run.modelRequested } : {}),
+    ...(typeof run.modelReported === 'string' ? { modelReported: run.modelReported } : {}),
     ...(typeof run.reasoning === 'string' ? { reasoning: run.reasoning } : {}),
     ...(typeof run.skillId === 'string' ? { skillId: run.skillId } : {}),
     ...(typeof run.designSystemId === 'string' ? { designSystemId: run.designSystemId } : {}),
@@ -61,6 +63,19 @@ function durableRunState(run) {
       ? { langfuseCompletedAt: run.langfuseCompletedAt }
       : {}),
   };
+}
+
+// Routing truth (NM-13a): derives the `{requested, resolved, reported,
+// displayState}` record fresh from the run's raw fields every time it is
+// read, rather than freezing it once at spawn time -- `modelReported` is
+// only known once the CLI's echo event (if any) arrives, which can be
+// before OR after the first status poll.
+function modelRoutingForRun(run) {
+  return buildModelRouting({
+    requestedRaw: typeof run.modelRequested === 'string' ? run.modelRequested : null,
+    resolvedRaw: typeof run.model === 'string' ? run.model : null,
+    reportedRaw: typeof run.modelReported === 'string' ? run.modelReported : null,
+  });
 }
 
 function readString(value) {
@@ -317,6 +332,7 @@ export function createChatRunService({
     failureDetail: run.failureDetail ?? null,
     resumable: run.resumable ?? false,
     endedWithUnfinishedWork: !!run.endedWithUnfinishedWork,
+    modelRouting: modelRoutingForRun(run),
     ...(Number.isFinite(run.artifactCount) ? { artifactCount: run.artifactCount } : {}),
     eventsLogPath: run.eventsLogPath ?? null,
     workspace: projectWorkspaceProvenance(run.projectMetadata),
