@@ -72,6 +72,36 @@ const MAX_REMOTE_BYTES = 25 * 1024 * 1024;
 // for the clipper class specifically.
 const CLIPPER_INGEST_MAX_BYTES = 5_000_000;
 
+// `CLIPPER_INGEST_MAX_BYTES` bounds TOTAL persisted bytes for a clipper
+// ingest request. Round 1 (b6d963ef4, 0922a4416) hand-listed the fields to
+// sum (bytes/text/figmaCapture/elementHtml/metadata); round 2 found that
+// list missed sourceTitle/sourceUrl/tags, which also reach
+// registerLibraryAsset and get persisted on the asset row. A hand-listed
+// set is exactly the wrong shape here -- it can only ever be checked
+// against the fields someone remembered, and a THIRD reviewer would find a
+// fourth field the same way. This sums every key of the parsed request body
+// instead, so a caller-supplied field is counted BY CONSTRUCTION the moment
+// it exists in the request, with no matching edit required at the call site
+// that starts persisting it.
+//
+// The only deliberate exclusions are `dataUrl` and `url`, and the reason is
+// stated here because that is where the exclusion lives: neither is what
+// actually ends up persisted. `dataUrl` is base64 (~1.33x larger than the
+// bytes it decodes to) and is never itself stored; `url` is merely a fetch
+// source, and the fetched response -- not the URL string -- is what's
+// stored. Both are correctly represented instead by the caller's own
+// resolved `bytes` (see the `sourceKind === 'clipper'` check below).
+const CLIPPER_BYTE_VOLUME_EXCLUDED_BODY_FIELDS = new Set(['dataUrl', 'url']);
+
+function clipperIngestByteVolume(body: Record<string, unknown>): number {
+  let total = 0;
+  for (const [key, value] of Object.entries(body)) {
+    if (value === undefined || CLIPPER_BYTE_VOLUME_EXCLUDED_BODY_FIELDS.has(key)) continue;
+    total += Buffer.byteLength(JSON.stringify(value), 'utf8');
+  }
+  return total;
+}
+
 /** Strip the internal absolute `filePath` before returning an asset to a client. */
 function toPublicAsset(record: LibraryAssetRecord): LibraryAsset {
   const { filePath: _filePath, ...rest } = record;
@@ -535,18 +565,11 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
     // `LIBRARY_UPLOAD_MAX_BYTES` below applies only to manual-upload, and a
     // `dataUrl`/`text` clipper payload previously had no cap at all (only a
     // URL-sourced fetch was bounded, via fetchRemoteBytes's MAX_REMOTE_BYTES
-    // above). See CLIPPER_INGEST_MAX_BYTES's own docblock. The limit bounds
-    // TOTAL persisted bytes for this request, not just the primary payload:
-    // `figmaCapture` (-> Figma IR sidecar), `elementHtml` (-> element
-    // sidecar), and `metadata` (-> asset row) are all caller-supplied and
-    // all persisted below, so a tiny `bytes`/`text` payload paired with an
-    // oversized sidecar field must not bypass the cap.
+    // above). See CLIPPER_INGEST_MAX_BYTES's own docblock and
+    // `clipperIngestByteVolume`'s for why this sums the whole parsed body
+    // instead of naming fields.
     if (sourceKind === 'clipper') {
-      const payloadSize =
-        (bytes ? bytes.length : text !== undefined ? Buffer.byteLength(text, 'utf8') : 0) +
-        (figmaIr ? Buffer.byteLength(figmaIr, 'utf8') : 0) +
-        (elementHtml ? Buffer.byteLength(elementHtml, 'utf8') : 0) +
-        (metadata ? Buffer.byteLength(JSON.stringify(metadata), 'utf8') : 0);
+      const payloadSize = clipperIngestByteVolume(body) + (bytes ? bytes.length : 0);
       if (payloadSize > CLIPPER_INGEST_MAX_BYTES) {
         return sendApiError(
           res,
