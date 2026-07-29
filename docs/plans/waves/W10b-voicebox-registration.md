@@ -13,7 +13,11 @@ and the existing `~/.claude/goal-state/` directory naming (`mishmash-w0-substrat
 not add one (`leases.json` is HARD DENY for the expansion-authoring step that produced this PRD).
 The "Proposed write lease" section below gives the exact entry, verbatim, for the orchestrator to
 add before implementation starts; the verifier's lease check inside C10B-3 fails closed until that
-lands, by design (see "Verified baseline" below).
+lands, by design (see "Verified baseline" below). **`scripts/waves/verify-w10b.ts` is deliberately
+NOT in the implementation lease** (round-1 adversarial review finding 1, fixed — see "Round 1
+adversarial review" below): the verifier's authority comes from being outside what the implementer
+can write, not from a self-hash pin, and that only holds under the sequencing stated in "Proposed
+write lease."
 
 This document is an **expansion**, not an implementation. Per the NM-41C gate
 (`W5-W11-gated.md` lines 8–24), it is written and frozen *before* any implementation work starts,
@@ -126,17 +130,24 @@ transport, `utilities` category, no managed OAuth. Nothing else.
 
 ## Implementation surface
 
-Exactly one file, one additive change:
+Exactly one file, one additive change. **The object literal below is FROZEN, byte-for-byte**
+(round-1 adversarial review finding 4 — see "Round 1 adversarial review"): `verify-w10b.ts`'s
+`FROZEN` constant is a hand-synced copy of `label`/`description`/`example`/`homepage`/`transport`/
+`authMode`/`category`/`url` below, and C10B-2/C10B-4 assert exact equality against it. There is no
+wording this entry may take other than the one written here.
 
 - `apps/daemon/src/mcp-config.ts` — one new object literal appended inside `MCP_TEMPLATES`, in the
-  `utilities` section (alongside `filesystem` / `github` / `fetch` / `a11y`):
+  `utilities` section (alongside `filesystem` / `github` / `fetch` / `a11y`), with a citation
+  comment placed *inside* the array (before its closing `]`, after the new object — see the note
+  on C10B-3 below for why placement matters) and **no `headerFields` property** (round-1 ruling —
+  `X-Voicebox-Client-Id` and `headerFields` generally are pinned absent, not merely unfilled):
 
   ```ts
   {
     id: 'voicebox',
     label: 'VoiceBox',
     description:
-      'Local text-to-speech and voice-cloning MCP from your local VoiceBox app (jamiepine/voicebox — Tauri + Bun + Python, unrelated to Meta’s "Voicebox" research model). Exposes voicebox.speak (speak text in a cloned or preset voice profile), plus voicebox.transcribe, voicebox.list_captures and voicebox.list_profiles. Requires the VoiceBox app running locally on 127.0.0.1:17493 — this only connects to it; Open Design does not install, launch, or manage it.',
+      'Local text-to-speech and voice-cloning MCP from your local VoiceBox app (jamiepine/voicebox on GitHub -- Tauri + Bun + Python, unrelated to the Meta Voicebox research model). Exposes voicebox.speak (speak text in a cloned or preset voice profile), plus voicebox.transcribe, voicebox.list_captures and voicebox.list_profiles. Requires the VoiceBox app running locally on 127.0.0.1:17493 -- this only connects to it; Open Design does not install, launch, or manage it.',
     transport: 'http',
     authMode: 'none',
     category: 'utilities',
@@ -150,28 +161,35 @@ Exactly one file, one additive change:
 
   The trailing comment is deliberate (C10B-5) — a future reader hitting this entry should not
   need to rediscover the ruling to know the minimalism here is intentional, not unfinished. It
-  deliberately avoids the word the C10B-4 scope-creep scan bans (see that criterion's mechanism)
-  so the citation itself can never trip the scanner it is standing next to.
+  deliberately avoids the word "voiceover" (see C10B-4's mechanism) so the citation itself can
+  never collide with the frozen-text check it is standing next to. It must be placed *inside* the
+  `MCP_TEMPLATES` array's own closing `]` — C10B-3 (round-1 finding 2 fix) requires every file byte
+  **outside** the array's span to be byte-identical to `baseCommit`, so a comment placed after the
+  whole `const MCP_TEMPLATES = [...]` statement would itself fail that check.
 
 No other file changes. Not `packages/contracts/**` (no new category — W1's lease). Not
 `apps/web/**` (no new UI; the picker already groups by an existing category). Not
 `apps/daemon/src/mcp-routes.ts` (existing route already serves the full template array). Not
 `apps/daemon/src/cli.ts` (unrelated, pre-existing capability). Not `docs/plans/waves/leases.json`
 or `docs/plans/waves/DECISIONS.md` (both HARD DENY for this wave's own scope — nothing here needs
-an accepted-risk record; there is no risk being accepted, only a template being added).
+an accepted-risk record; there is no risk being accepted, only a template being added). Not
+`scripts/waves/verify-w10b.ts` — see "Round 1 adversarial review," finding 1: this file is
+frozen/external, not part of the implementer's lease.
 
 ## Success criteria
 
 All five are mechanical; none require human judgment (VERIFICATION-CONTRACT.md §3 R7 does not
-apply — nothing here is marked `human:`).
+apply — nothing here is marked `human:`). **This table reflects round-1 adversarial-review fixes**
+(finding numbers below refer to "Round 1 adversarial review"); the pre-fix version is superseded,
+not merely amended in place, because several mechanisms changed shape, not just wording.
 
 | ID | Assertion |
 |---|---|
-| **C10B-1** | `apps/daemon/src/mcp-config.ts` at HEAD defines, inside the `MCP_TEMPLATES` array literal, exactly one object whose `id` property is the string `'voicebox'`, with non-empty `label` and `homepage` string properties. |
-| **C10B-2** | That object's `transport` is exactly `'http'`; its `url`, parsed as a URL, has protocol `http:`, hostname `127.0.0.1`, port `17493`, and pathname `/mcp`; its `category` is exactly `'utilities'`; its `authMode` is either absent or exactly `'none'` (never `'oauth'` — the endpoint is loopback, matching `inferMcpAuthModeForUrl`'s own loopback rule in the same file). |
-| **C10B-3** | No extra surface: `git diff --name-only <baseCommit>...HEAD` is a subset of the proposed `"W10b"` lease (see "Proposed write lease" below) — read mechanically from `docs/plans/waves/leases.json`, never hand-approved. Independently and more precisely for the one product file in that lease: every `MCP_TEMPLATES` object present at `baseCommit`, keyed by its `id`, is still present at HEAD with **byte-identical** source text — the change adds the one `voicebox` object and changes nothing else in the array (no reordering, no incidental edits to a neighboring template). |
-| **C10B-4** | No voiceover-workflow scope creep: the `id: 'voicebox'` object literal's own source text (i.e. the template's declared fields — `description`, `example`, etc. — not any accompanying comment) matches none of, case-insensitive: `voiceover`, `storyboard`, `timeline`, a `merge` within 20 characters of `video`\|`project`, a `script` within 20 characters of `track`, `elevenlabs`, `fishaudio`, or `senseaudio`. Scoped to the object literal itself (not the whole diff) so a citation comment explaining the ruling — which necessarily discusses the thing that was refused — can never trip this check; that citation is C10B-5's job, not C10B-4's. The registered template may describe what VoiceBox's tools do; it may not describe or imply a design-workflow voiceover pipeline. |
-| **C10B-5** | Documentation record: at least one comment line *added* to `apps/daemon/src/mcp-config.ts` between `baseCommit` and HEAD contains the literal substring `NM-25`, so the entry is self-explaining without needing this PRD open. |
+| **C10B-1** | Parsing `MCP_TEMPLATES` at HEAD with the TypeScript compiler API finds **zero anomalies** across the *entire* array (findings 2/3): no spread element, no element that isn't a plain object literal, no object literal whose `id` isn't a literal string, and no duplicate `id` anywhere in the array — and, once the array is safe to reason about, exactly one element has `id === 'voicebox'`. Any anomaly fails this criterion closed; it does not fall through to a looser check. |
+| **C10B-2** | That element's `transport` is exactly `'http'`; its `url` is exactly the string `'http://127.0.0.1:17493/mcp'` — full-string equality, not component checks (finding 5: component checks silently allowed credentials/query/fragment through) — so `http://user:pass@127.0.0.1:17493/mcp?x#y` is rejected outright, not partially accepted; its `category` is exactly `'utilities'`; its `authMode` is exactly `'none'`, present not absent (finding 5); it has **no `headerFields` property at all** (round-1 ruling — pins `X-Voicebox-Client-Id` absent by construction, not merely unfilled). |
+| **C10B-3** | No extra surface, proven three independent ways (findings 1/2/3): (a) `git diff --name-only <baseCommit>...HEAD` is a subset of the `"W10b"` lease read from `leases.json@baseCommit`, and that lease's `allow` list is asserted to be *exactly* `["apps/daemon/src/mcp-config.ts"]` — a widened lease fails this criterion, not just an out-of-lease diff; (b) both `baseCommit`'s and HEAD's `MCP_TEMPLATES` arrays pass C10B-1's zero-anomaly analysis; (c) the file's text **outside** the `MCP_TEMPLATES` array literal's own span (before its `[`, after its `]`) is byte-identical between `baseCommit` and HEAD — closing the "new export/function/hook elsewhere in the file" gap an array-only diff cannot see; (d) every pre-existing array entry, keyed by `id`, is byte-identical between `baseCommit` and HEAD; (e) exactly one `id` is new, and it is `'voicebox'`. |
+| **C10B-4** | No voiceover-workflow scope creep, by exact match instead of denylist (finding 4: a finite blocklist is always evadable by paraphrase — "narration audio," string concatenation, a newline mid-phrase, all defeat a regex scan). The `id: 'voicebox'` element's `label`, `description`, `example`, and `homepage` are each **byte-for-byte identical** to the frozen strings in "Implementation surface" above (mirrored verbatim as `verify-w10b.ts`'s `FROZEN` constant). There is no wording these fields may take other than the one already reviewed. |
+| **C10B-5** | Documentation record, proven via real comment tokens, not raw diff text (finding 6: a string literal containing "NM-25" used to satisfy this). Using the TypeScript scanner in comment-preserving mode (`skipTrivia: false`), at least one comment token (`//` or `/* */`, never a string-literal token) present at HEAD but **absent** at `baseCommit` contains the literal substring `NM-25`. |
 
 ### Why these five and not more
 
@@ -180,8 +198,8 @@ surface added, documentation record" — four themes, mapped above to C10B-1/2/3
 one addition: the founder ruling's entire point was refusing a bigger surface, so the refusal
 itself gets an independent, mechanical check rather than resting on C10B-1..3's positive
 assertions alone. A criterion asserting only what *should* exist can pass even when something
-extra sneaked in beside it; C10B-3 (isolation) and C10B-4 (forbidden content) are deliberately
-two different failure modes, not one restated twice.
+extra sneaked in beside it; C10B-3 (isolation) and C10B-4 (frozen content) are deliberately two
+different failure modes, not one restated twice.
 
 No criterion asserts VoiceBox's server is reachable, spawns any process, or opens a network
 socket — see "Explicitly out of scope." No criterion asserts `pnpm guard`/`pnpm typecheck` pass on
@@ -209,10 +227,9 @@ optional `deny`, `note`):
 "W10b": {
   "slug": "mishmash-w10b-voicebox",
   "allow": [
-    "apps/daemon/src/mcp-config.ts",
-    "scripts/waves/verify-w10b.ts"
+    "apps/daemon/src/mcp-config.ts"
   ],
-  "note": "Registration-only per NM-25 (docs/plans/waves/NM-REGISTER.md): one additive McpTemplate entry in MCP_TEMPLATES. No route, UI, CLI, or packages/contracts change is needed or permitted — GET /api/mcp/servers already serves the full MCP_TEMPLATES array verbatim and the 'utilities' picker category already exists. scripts/waves/verify-w10b.ts is included so a review-round fix to the verifier itself, if one is ever needed, is not blocked by its own lease — same reasoning as the W9-ingest entry's inclusion of scripts/waves/verify-w9-ingest.ts. docs/plans/waves/W10b-voicebox-registration.md is deliberately NOT included, matching every other wave's lease (no wave holds write access to its own governing PRD)."
+  "note": "Registration-only per NM-25 (docs/plans/waves/NM-REGISTER.md): one additive McpTemplate entry in MCP_TEMPLATES. No route, UI, CLI, or packages/contracts change is needed or permitted — GET /api/mcp/servers already serves the full MCP_TEMPLATES array verbatim and the 'utilities' picker category already exists. Round-1 adversarial review finding 1 (fixed): scripts/waves/verify-w10b.ts is deliberately EXCLUDED from this lease, unlike the W9-ingest precedent's inclusion of its own verifier -- an implementer-writable verifier can be weakened and still pass its own lease check, so the verifier's authority here comes from being outside what the implementer can write. This requires a specific landing sequence: this lease row and the frozen verify-w10b.ts must both be merged to main FIRST; the implementation branch is then cut (or rebased) so its baseCommit already contains both. Under that sequence baseCommit-relative diff checking is sufficient and no separate self-hash/gate-integrity pin is needed. C10B-3 additionally asserts this allow list is exactly one entry, apps/daemon/src/mcp-config.ts -- a widened lease fails closed too. docs/plans/waves/W10b-voicebox-registration.md is deliberately NOT included either, matching every other wave's lease (no wave holds write access to its own governing PRD)."
 }
 ```
 
@@ -222,27 +239,48 @@ any `allow`/`deny` list for W-C, W0, W7, W1, W2, W4, W9-ingest, or W3 (checked d
 
 ## Verified baseline (this run, pre-implementation)
 
-Ran `pnpm exec tsx scripts/waves/verify-w10b.ts` on branch `feat/w10b-voicebox-registration`
-immediately after writing the verifier, before any implementation exists. Expected and confirmed:
-RED, nonzero exit — C10B-1 and C10B-2 fail because no `voicebox` template exists yet; C10B-3's
-lease sub-check fails closed because `leases.json` has no `"W10b"` key yet (the "Proposed write
-lease" entry above is not yet landed); C10B-4 and C10B-5 report against an empty diff. This is the
-intended fail-closed state, not a bug — see the run tail in the authoring session's report. Once
-implementation lands and the proposed lease entry is added to `leases.json`, re-running the same
-command with no other changes is the sole gate.
+Ran `pnpm exec tsx scripts/waves/verify-w10b.ts` on branch `feat/w10b-voicebox-registration`,
+re-confirmed after the round-1 fixes below, before any implementation exists. Expected and
+confirmed: RED, nonzero exit, exactly **1/6 passing — only the `HEAD-DRIFT` infra check** — with
+`treeDirty: false`. C10B-1/2/4 fail because no `voicebox` template exists yet; C10B-3 fails closed
+on both grounds (no `"W10b"` key in `leases.json@baseCommit` yet, and zero new `MCP_TEMPLATES`
+entries); C10B-5 fails because `apps/daemon/src/mcp-config.ts` has not changed at all between
+`baseCommit` and HEAD, so no new comment exists to find. This is the intended fail-closed state,
+not a bug — see the run tail in the authoring session's report. Once implementation lands and the
+proposed lease entry is added to `leases.json`, re-running the same command with no other changes
+is the sole gate.
 
-## Open questions for adversarial review
+## Round 1 adversarial review
 
-1. **Template id.** I used `id: 'voicebox'` because it matches VoiceBox's own README/`.mcp.json`
-   example verbatim, and `McpServerConfig.id` is scoped to `mcp-config.json`'s own `servers` list
-   (not the `od mcp` CLI namespace, which is unrelated) — collision risk is effectively zero. Flag
-   if a reviewer wants a namespaced id instead (e.g. `voicebox-speak`).
-2. **Optional `X-Voicebox-Client-Id` header field.** Left unregistered (not a `headerFields`
-   entry) because it is optional at the protocol level (ground fact 4) and adding a form field is
-   a UX nicety, not part of "registered." Flag if a reviewer wants it pinned one way as part of
-   the frozen shape rather than left to the implementing agent.
-3. **`leases.json` has no `"W10b"` key yet.** Structural consequence of the HARD DENY on that file
-   for this authoring step — the same shape `mishmash-w9-ingest-tranche`'s own verifier documented
-   for *its* PRD file during *its* authoring branch. C10B-3 will read fail-closed until the
-   orchestrator lands the "Proposed write lease" entry above; that is the intended sequencing, not
-   a defect in this PRD.
+**Verdict: REJECT** (6 findings). Fixed in this revision; all six are closed below. Per
+`VERIFICATION-CONTRACT.md` §6's round cap, this was fix round 1 of 2 before founder escalation.
+
+What round 1 confirmed **good** (carried forward unchanged): grounding accuracy (`utilities`
+category, `figma-use` precedent, `GET /api/mcp/servers` route behavior, VoiceBox
+README/`.mcp.json` corroboration), fail-closed exit/`treeDirty` handling, no cooked/executable
+template content, the verifier never contacting a daemon, the exactly-two-files diff range, and a
+clean `tsc`.
+
+| # | Finding (summary) | Fix |
+|---|---|---|
+| 1 | Frozen verifier was implementer-mutable (in its own proposed lease, no self-hash binding) | Lease narrowed to `apps/daemon/src/mcp-config.ts` only (see "Proposed write lease"); C10B-3 now also asserts the lease's `allow` list is *exactly* that one entry. Verifier's header comment states the required landing sequence. |
+| 2 | C10B-3's byte comparison covered only `MCP_TEMPLATES` object literals — new exports/functions/hooks elsewhere in the file passed unchanged | C10B-3 now additionally requires the file's text **outside** the array literal's own span to be byte-identical between `baseCommit` and HEAD (`splitAroundArray` in the verifier) |
+| 3 | `Map.set` silently collapsed duplicate ids; spreads/calls/non-literal ids were silently skipped | Replaced the array walk with `analyzeTemplateArray`, which fails closed (non-empty `problems`) on any spread, any non-object-literal element, any object literal without a literal string `id`, and any duplicate `id` across the whole array — every criterion checks `problems.length === 0` before trusting the parsed result |
+| 4 | C10B-4's denylist regex was evadable by paraphrase ("narration audio," concatenation, etc.) | Denylist removed entirely. C10B-4 now asserts byte-exact equality of `label`/`description`/`example`/`homepage` against the one frozen string per field (`FROZEN` constant in the verifier, mirrored verbatim in "Implementation surface" above) |
+| 5 | C10B-2 checked URL components separately (missed credentials/query/fragment) and accepted absent `authMode` | URL check is now full-string equality against `'http://127.0.0.1:17493/mcp'`; `authMode` must be exactly `'none'` (present, not absent) |
+| — | *(round-1 ruling, not a numbered finding)* Leave `X-Voicebox-Client-Id` unregistered and pin its absence | C10B-2 now also asserts **no `headerFields` property at all** on the object |
+| 6 | C10B-5 accepted any added line containing "NM-25," including inside a string literal | Rewritten to use the TypeScript scanner's own comment tokens (`skipTrivia: false`) — a string literal can never satisfy this; the match must be a real `//`/`/* */` comment, newly added |
+
+**Rulings applied, verbatim reasoning:**
+- *Template id:* kept `id: 'voicebox'` — matches VoiceBox's own configuration; a namespaced id like
+  `voicebox-speak` would misleadingly narrow a four-tool server. (Resolves former open question 1.)
+- *`X-Voicebox-Client-Id`:* left unregistered, absence now pinned by C10B-2 — optional, and the
+  global-default fallback keeps registration functional; adding the field would be an unrequested
+  UX extension. (Resolves former open question 2.)
+- *Lease sequencing:* lease narrowed to the one product file; verifier bound externally. The
+  orchestrator must land the lease row (and this frozen verifier) on `main` first, then cut/rebase
+  the implementation branch so `baseCommit` already contains both — under that sequence,
+  `baseCommit`-relative diff checking is correct as designed. (Sharpens former open question 3 into
+  a stated requirement rather than leaving it open.)
+
+No open questions remain from round 1. Round-2 review follows this revision.

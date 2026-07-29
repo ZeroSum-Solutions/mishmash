@@ -11,24 +11,54 @@
 // wave's goal-state proof directory either way, per
 // docs/plans/waves/W10b-voicebox-registration.md's "Definition of green".
 //
-// Scope note: docs/plans/waves/W10b-voicebox-registration.md registers
-// exactly one apps/daemon/src/mcp-config.ts MCP_TEMPLATES entry (NM-25,
-// founder-ruled registration-only -- no voiceover-workflow scoping). This
-// verifier therefore never imports daemon source as a live ES module --
-// apps/daemon/src/mcp-config.ts's own dependency graph, or a future change
-// to it, is not this script's concern to keep resolvable across --repo. It
-// reads that file as TEXT at specific commits (git show) and parses it with
-// the TypeScript compiler API, exactly like scripts/waves/verify-w9-ingest.ts
-// does for its own AST-based structural checks. This keeps the verifier
-// fully portable under --repo and decoupled from apps/daemon's own module
-// resolution.
+// ROUND-1 ADVERSARIAL REVIEW (REJECT, 6 findings, fixed here -- see the PRD's
+// "Round 1 adversarial review" section for the full disposition of each):
+//   1. This file is NOT part of the W10b implementation lease (see the PRD's
+//      "Proposed write lease" -- allow list is `apps/daemon/src/mcp-config.ts`
+//      only). Any implementation-branch diff that touches this file fails
+//      C10B-3's lease-subset check by construction; the verifier's authority
+//      comes from being external to what the implementer can write, not from
+//      a self-hash pin. That only holds under the sequencing the PRD states:
+//      orchestrator lands the lease row (and this file) on `main` FIRST, then
+//      the implementation branch is cut/rebased so `baseCommit` already
+//      contains both.
+//   2/3. `analyzeTemplateArray()` below replaces the old best-effort element
+//      walk: it fails closed (returns non-empty `problems`) on ANY array
+//      element that is not a plain object literal with a literal string
+//      `id` -- spreads, calls, conditionals, computed/shorthand ids -- and on
+//      any duplicate `id` across the WHOLE array, not just `voicebox`. C10B-3
+//      also now requires the file's text OUTSIDE the MCP_TEMPLATES array's
+//      own span to be byte-identical between baseCommit and HEAD, so new
+//      exports/functions/imports elsewhere in the file are caught even though
+//      they're invisible to an array-only diff.
+//   4. C10B-4's denylist regex is removed entirely -- a finite blocklist is
+//      always evadable by paraphrase. Replaced with byte-exact equality
+//      against the ONE frozen string per free-text field (label/description/
+//      example/homepage), copied verbatim from the PRD's "Implementation
+//      surface" code block. There is no wording those fields may take other
+//      than the frozen one.
+//   5. C10B-2's URL check is now full-string equality against the frozen URL
+//      (was: check hostname/port/pathname separately, silently allowing
+//      credentials/query/fragment through unchecked). `authMode` must now be
+//      exactly 'none' (was: absent-or-'none'). A `headerFields` property must
+//      be entirely absent (round-1 ruling: pin X-Voicebox-Client-Id absent).
+//   6. C10B-5 now scans real comment tokens via the TypeScript scanner
+//      (`collectComments`, skipTrivia=false) rather than raw `+`-prefixed
+//      diff lines, so a string literal that happens to contain "NM-25" can
+//      never satisfy it -- only an actual `//`/`/* */` comment can.
+//
+// Scope note: this verifier never imports apps/daemon/src/mcp-config.ts as a
+// live ES module -- that file's own dependency graph is not this script's
+// concern to keep resolvable across --repo. It reads the file as TEXT at
+// specific commits (git show) and parses it with the TypeScript compiler
+// API, matching the pattern in scripts/waves/verify-w9-ingest.ts.
 //
 // PORTABILITY: repoRoot comes from `process.cwd()`/`--repo`, never
 // `import.meta.url`.
 //
 // RUNTIME SAFETY: this verifier spawns no daemon and binds no port -- every
-// criterion below is answered from `git show`/`git diff`/`git status`
-// output plus in-process TypeScript AST parsing. It never touches a
+// criterion is answered from `git show`/`git diff`/`git status` output plus
+// in-process TypeScript parsing/scanning. It never touches a
 // default-namespace daemon (ports 7456/51012) because it never starts one.
 // Git context is resolved from local refs only (no fetch/push).
 
@@ -54,6 +84,26 @@ function argValue(flag: string): string | undefined {
 
 const WAVE_SLUG = 'mishmash-w10b-voicebox';
 const TEMPLATE_FILE = 'apps/daemon/src/mcp-config.ts';
+
+// -------------------------------------------------------------------------
+// Frozen fields (round-1 finding 4 fix). Copied verbatim from the PRD's
+// "Implementation surface" code block -- kept in exact byte sync with that
+// file by hand, since neither file may depend on the other at runtime
+// (portability; see header). Any wording change to the registered template
+// requires updating BOTH the PRD and this file, together, in one commit.
+// -------------------------------------------------------------------------
+const FROZEN = {
+  id: 'voicebox',
+  label: 'VoiceBox',
+  description:
+    'Local text-to-speech and voice-cloning MCP from your local VoiceBox app (jamiepine/voicebox on GitHub -- Tauri + Bun + Python, unrelated to the Meta Voicebox research model). Exposes voicebox.speak (speak text in a cloned or preset voice profile), plus voicebox.transcribe, voicebox.list_captures and voicebox.list_profiles. Requires the VoiceBox app running locally on 127.0.0.1:17493 -- this only connects to it; Open Design does not install, launch, or manage it.',
+  example: 'Speak "Build complete." using my default VoiceBox voice profile.',
+  homepage: 'https://github.com/jamiepine/voicebox',
+  transport: 'http',
+  authMode: 'none',
+  category: 'utilities',
+  url: 'http://127.0.0.1:17493/mcp',
+} as const;
 
 function emergencyExit(errorMessage: string): never {
   try {
@@ -314,7 +364,7 @@ function readFileAtCommit(commit: string, relPath: string): string | null {
 }
 
 // ---------------------------------------------------------------------
-// AST helpers over apps/daemon/src/mcp-config.ts's MCP_TEMPLATES array.
+// AST analysis over apps/daemon/src/mcp-config.ts's MCP_TEMPLATES array.
 // Read-as-text + TypeScript compiler API -- never a live import of daemon
 // source (see header note).
 // ---------------------------------------------------------------------
@@ -324,14 +374,26 @@ interface TemplateBlock {
   node: ObjectLiteralExpression;
 }
 
-function parseTemplateBlocks(
+interface ArrayScan {
+  file: SourceFile;
+  arrayNode: ArrayLiteralExpression;
+  /** Non-empty means the array could NOT be safely reasoned about (round-1
+   * finding 3): a spread/call/other non-object-literal element, an object
+   * literal with no plain string-literal `id`, or a duplicate `id`. Every
+   * consumer below must check this is empty before trusting `clean`. */
+  problems: string[];
+  /** One block per id, populated only when `problems` is empty. */
+  clean: Map<string, TemplateBlock> | null;
+}
+
+function locateTemplateArray(
   sourceText: string,
   syntheticFileName: string,
-): { file: SourceFile; blocks: Map<string, TemplateBlock> } | null {
+): { file: SourceFile; arrayNode: ArrayLiteralExpression } | null {
   const sourceFile = ts.createSourceFile(syntheticFileName, sourceText, ts.ScriptTarget.Latest, true);
-  let arrayLiteral: ArrayLiteralExpression | null = null;
+  let found: ArrayLiteralExpression | null = null;
   const visit = (node: TsNode): void => {
-    if (arrayLiteral) return;
+    if (found) return;
     if (
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
@@ -339,28 +401,19 @@ function parseTemplateBlocks(
       node.initializer &&
       ts.isArrayLiteralExpression(node.initializer)
     ) {
-      arrayLiteral = node.initializer;
+      found = node.initializer;
       return;
     }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  if (!arrayLiteral) return null;
-  // Explicit assertion, not a narrowed read: `arrayLiteral` is assigned
-  // inside the `visit` closure above, and TS does not reliably narrow a
-  // `let` binding's type across a closure boundary. `visit(sourceFile)` has
-  // already returned synchronously by this point, so the null check just
-  // above is a real runtime guarantee even though TS can't see it that way.
-  const resolvedArray = arrayLiteral as ArrayLiteralExpression;
-
-  const blocks = new Map<string, TemplateBlock>();
-  for (const element of resolvedArray.elements) {
-    if (!ts.isObjectLiteralExpression(element)) continue;
-    const id = findStringProp(element, sourceFile, 'id');
-    if (id === undefined) continue;
-    blocks.set(id, { id, rawText: element.getText(sourceFile).trim(), node: element });
-  }
-  return { file: sourceFile, blocks };
+  if (!found) return null;
+  // Explicit assertion, not a narrowed read: `found` is assigned inside the
+  // `visit` closure above, and TS does not reliably narrow a `let` binding's
+  // type across a closure boundary. `visit(sourceFile)` has already returned
+  // synchronously by this point, so the null check above is a real runtime
+  // guarantee even though TS can't see it that way.
+  return { file: sourceFile, arrayNode: found as ArrayLiteralExpression };
 }
 
 function findStringProp(
@@ -378,8 +431,100 @@ function findStringProp(
   return undefined;
 }
 
-const FORBIDDEN_SCOPE_PATTERN =
-  /voiceover|storyboard|timeline|merge.{0,20}(video|project)|script.{0,20}track|elevenlabs|fishaudio|senseaudio/i;
+/** True iff a property with this name is present at all, any value shape. */
+function hasOwnProp(obj: ObjectLiteralExpression, name: string): boolean {
+  for (const prop of obj.properties) {
+    if (!ts.isPropertyAssignment(prop) && !ts.isShorthandPropertyAssignment(prop)) continue;
+    if (!ts.isIdentifier(prop.name) || prop.name.text !== name) continue;
+    return true;
+  }
+  return false;
+}
+
+function shortText(sourceFile: SourceFile, node: TsNode): string {
+  return node.getText(sourceFile).replace(/\s+/g, ' ').slice(0, 100);
+}
+
+function analyzeTemplateArray(sourceText: string, syntheticFileName: string): ArrayScan | null {
+  const located = locateTemplateArray(sourceText, syntheticFileName);
+  if (!located) return null;
+  const { file, arrayNode } = located;
+  const problems: string[] = [];
+  const byId = new Map<string, TemplateBlock[]>();
+
+  for (const element of arrayNode.elements) {
+    if (ts.isSpreadElement(element)) {
+      problems.push(`spread element in MCP_TEMPLATES (not permitted): ${shortText(file, element)}`);
+      continue;
+    }
+    if (!ts.isObjectLiteralExpression(element)) {
+      problems.push(
+        `MCP_TEMPLATES element is not a plain object literal (SyntaxKind=${ts.SyntaxKind[element.kind]}): ${shortText(file, element)}`,
+      );
+      continue;
+    }
+    const id = findStringProp(element, file, 'id');
+    if (id === undefined) {
+      problems.push(
+        `object literal in MCP_TEMPLATES has no plain string-literal 'id' property: ${shortText(file, element)}`,
+      );
+      continue;
+    }
+    const block: TemplateBlock = { id, rawText: element.getText(file).trim(), node: element };
+    const list = byId.get(id);
+    if (list) list.push(block);
+    else byId.set(id, [block]);
+  }
+
+  for (const [id, list] of byId) {
+    if (list.length > 1) {
+      problems.push(`duplicate MCP_TEMPLATES id '${id}' appears ${list.length} times`);
+    }
+  }
+
+  const clean =
+    problems.length === 0
+      ? new Map(
+          [...byId.entries()].map(([id, list]) => {
+            const first = list[0];
+            if (!first) throw new Error(`unreachable: byId group for '${id}' was empty`);
+            return [id, first] as const;
+          }),
+        )
+      : null;
+
+  return { file, arrayNode, problems, clean };
+}
+
+/** Everything in the file's own text OUTSIDE the array literal's span (round-1
+ * finding 2): required to be byte-identical across baseCommit/HEAD so a new
+ * export, function, import, or any other surface elsewhere in the same file
+ * cannot pass as part of "one additive change." */
+function splitAroundArray(
+  sourceText: string,
+  scan: ArrayScan,
+): { before: string; after: string } {
+  const start = scan.arrayNode.getStart(scan.file);
+  const end = scan.arrayNode.getEnd();
+  return { before: sourceText.slice(0, start), after: sourceText.slice(end) };
+}
+
+/** All real comment tokens in a file (round-1 finding 6) -- uses the
+ * TypeScript scanner with skipTrivia=false so `//`/`/* *\/` comments are
+ * returned as their own tokens, structurally distinct from string-literal
+ * tokens. A string containing the text "NM-25" can never appear here. */
+function collectComments(sourceText: string): string[] {
+  const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.Standard, sourceText);
+  const comments: string[] = [];
+  let tok = scanner.scan();
+  while (tok !== ts.SyntaxKind.EndOfFileToken) {
+    if (tok === ts.SyntaxKind.SingleLineCommentTrivia || tok === ts.SyntaxKind.MultiLineCommentTrivia) {
+      comments.push(scanner.getTokenText());
+    }
+    tok = scanner.scan();
+  }
+  return comments;
+}
 
 async function main(): Promise<void> {
   // Two-phase manifest write: a dirty placeholder goes down IMMEDIATELY,
@@ -402,128 +547,117 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // -----------------------------------------------------------------
-  // C10B-1 -- registration present.
-  // -----------------------------------------------------------------
-  let voiceboxBlock: TemplateBlock | undefined;
-  let headSourceFile: SourceFile | undefined;
-  let headBlockCount = 0;
-  let headBlockIds: string[] = [];
+  // Each criterion below independently re-reads and re-scans HEAD (and, for
+  // C10B-3, baseCommit too) rather than sharing state from an earlier
+  // criterion -- deliberate: every check must stand on its own regardless of
+  // run order, per round-1 review's emphasis on each criterion being
+  // independently robust.
 
+  // -----------------------------------------------------------------
+  // C10B-1 -- registration present: exactly one clean, unambiguous
+  // MCP_TEMPLATES element with id 'voicebox'. Fails closed on anything the
+  // scan could not safely account for (round-1 findings 2/3).
+  // -----------------------------------------------------------------
   await checkCriterion('C10B-1', () => {
     const headText = readFileAtCommit(headSha, TEMPLATE_FILE);
     if (headText === null) {
+      record('C10B-1', `git show ${headSha}:${TEMPLATE_FILE}`, "MCP_TEMPLATES has exactly one clean element with id 'voicebox'", false, '', {
+        detail: `${TEMPLATE_FILE} does not exist at HEAD`,
+      });
+      return;
+    }
+    const scan = analyzeTemplateArray(headText, TEMPLATE_FILE);
+    if (!scan) {
+      record('C10B-1', `parse ${TEMPLATE_FILE}@HEAD`, 'MCP_TEMPLATES array literal is found and parseable', false, '', {
+        detail: 'could not locate `const MCP_TEMPLATES: McpTemplate[] = [...]` in the file',
+      });
+      return;
+    }
+    if (scan.problems.length > 0) {
       record(
         'C10B-1',
-        `git show ${headSha}:${TEMPLATE_FILE}`,
-        "a 'voicebox' entry exists in MCP_TEMPLATES with non-empty label and homepage",
+        `parse ${TEMPLATE_FILE}@HEAD, analyze every MCP_TEMPLATES element`,
+        "MCP_TEMPLATES has exactly one clean element with id 'voicebox'",
         false,
-        '',
-        { detail: `${TEMPLATE_FILE} does not exist at HEAD` },
+        scan.problems.join('\n'),
+        { detail: `array could not be safely analyzed: ${scan.problems.length} problem(s)` },
       );
       return;
     }
-    const parsed = parseTemplateBlocks(headText, TEMPLATE_FILE);
-    if (!parsed) {
-      record(
-        'C10B-1',
-        `parse ${TEMPLATE_FILE}@HEAD`,
-        'MCP_TEMPLATES array literal is found and parseable',
-        false,
-        '',
-        { detail: 'could not locate `const MCP_TEMPLATES: McpTemplate[] = [...]` in the file' },
-      );
-      return;
-    }
-    headSourceFile = parsed.file;
-    headBlockCount = parsed.blocks.size;
-    headBlockIds = [...parsed.blocks.keys()];
-    voiceboxBlock = parsed.blocks.get('voicebox');
-    if (!voiceboxBlock) {
-      record(
-        'C10B-1',
-        `parse ${TEMPLATE_FILE}@HEAD, search MCP_TEMPLATES for id==='voicebox'`,
-        "exactly one MCP_TEMPLATES object has id: 'voicebox', with non-empty label and homepage",
-        false,
-        `MCP_TEMPLATES has ${headBlockCount} entries; ids: ${headBlockIds.join(', ')}`,
-        { detail: "no object with id 'voicebox' present -- VoiceBox is not registered yet" },
-      );
-      return;
-    }
-    const label = findStringProp(voiceboxBlock.node, parsed.file, 'label');
-    const homepage = findStringProp(voiceboxBlock.node, parsed.file, 'homepage');
-    const ok = Boolean(label && label.trim()) && Boolean(homepage && homepage.trim());
+    const clean = scan.clean as Map<string, TemplateBlock>;
+    const block = clean.get('voicebox');
     record(
       'C10B-1',
-      `parse ${TEMPLATE_FILE}@HEAD, inspect the id==='voicebox' object`,
-      "exactly one MCP_TEMPLATES object has id: 'voicebox', with non-empty label and homepage",
-      ok,
-      `label=${JSON.stringify(label)} homepage=${JSON.stringify(homepage)}\n\n${voiceboxBlock.rawText}`,
-      { detail: ok ? undefined : 'label and/or homepage missing or empty' },
+      `parse ${TEMPLATE_FILE}@HEAD, analyze every MCP_TEMPLATES element, look up id==='voicebox'`,
+      "MCP_TEMPLATES has exactly one clean element with id 'voicebox'",
+      Boolean(block),
+      block ? block.rawText : `MCP_TEMPLATES has ${clean.size} clean entries; ids: ${[...clean.keys()].join(', ')}`,
+      { detail: block ? undefined : "no object with id 'voicebox' present -- VoiceBox is not registered yet" },
     );
   });
 
   // -----------------------------------------------------------------
-  // C10B-2 -- correct transport/config shape.
+  // C10B-2 -- correct transport/config shape, exact (round-1 findings 5 +
+  // ruling 2): full-string URL equality (not component checks), authMode
+  // exactly 'none' (not absent-or-'none'), no headerFields property at all.
   // -----------------------------------------------------------------
   await checkCriterion('C10B-2', () => {
-    if (!voiceboxBlock || !headSourceFile) {
+    const headText = readFileAtCommit(headSha, TEMPLATE_FILE);
+    const scan = headText === null ? null : analyzeTemplateArray(headText, `${TEMPLATE_FILE}@head-c2`);
+    if (!scan || scan.problems.length > 0) {
       record(
         'C10B-2',
-        '',
-        "transport/url/category/authMode match VoiceBox's documented HTTP MCP mount",
+        `parse ${TEMPLATE_FILE}@HEAD, analyze every MCP_TEMPLATES element`,
+        "transport/url/category/authMode/headerFields match the frozen configuration exactly",
         false,
-        '',
-        { detail: 'C10B-1 did not locate a voicebox entry to inspect -- see C10B-1' },
+        scan ? scan.problems.join('\n') : '',
+        { detail: !scan ? 'MCP_TEMPLATES array not found at HEAD' : `array could not be safely analyzed: ${scan.problems.length} problem(s)` },
       );
       return;
     }
-    const sf = headSourceFile;
-    const block = voiceboxBlock;
-    const transport = findStringProp(block.node, sf, 'transport');
-    const url = findStringProp(block.node, sf, 'url');
-    const category = findStringProp(block.node, sf, 'category');
-    const authMode = findStringProp(block.node, sf, 'authMode');
+    const clean = scan.clean as Map<string, TemplateBlock>;
+    const block = clean.get('voicebox');
+    if (!block) {
+      record(
+        'C10B-2',
+        '',
+        'transport/url/category/authMode/headerFields match the frozen configuration exactly',
+        false,
+        '',
+        { detail: "no object with id 'voicebox' present -- see C10B-1" },
+      );
+      return;
+    }
+    const transport = findStringProp(block.node, scan.file, 'transport');
+    const url = findStringProp(block.node, scan.file, 'url');
+    const category = findStringProp(block.node, scan.file, 'category');
+    const authMode = findStringProp(block.node, scan.file, 'authMode');
+    const hasHeaderFields = hasOwnProp(block.node, 'headerFields');
 
     const problems: string[] = [];
-    if (transport !== 'http') problems.push(`transport=${JSON.stringify(transport)}, want 'http'`);
-    let parsedUrl: URL | null = null;
-    if (url === undefined) {
-      problems.push('url is missing');
-    } else {
-      try {
-        parsedUrl = new URL(url);
-      } catch {
-        problems.push(`url ${JSON.stringify(url)} does not parse as a URL`);
-      }
-    }
-    if (parsedUrl) {
-      if (parsedUrl.protocol !== 'http:') problems.push(`url protocol=${parsedUrl.protocol}, want http:`);
-      if (parsedUrl.hostname !== '127.0.0.1')
-        problems.push(`url hostname=${parsedUrl.hostname}, want 127.0.0.1`);
-      if (parsedUrl.port !== '17493') problems.push(`url port=${JSON.stringify(parsedUrl.port)}, want 17493`);
-      if (parsedUrl.pathname !== '/mcp') problems.push(`url pathname=${parsedUrl.pathname}, want /mcp`);
-    }
-    if (category !== 'utilities') problems.push(`category=${JSON.stringify(category)}, want 'utilities'`);
-    if (authMode !== undefined && authMode !== 'none')
-      problems.push(`authMode=${JSON.stringify(authMode)}, want absent or 'none'`);
+    if (transport !== FROZEN.transport) problems.push(`transport=${JSON.stringify(transport)}, want ${JSON.stringify(FROZEN.transport)}`);
+    if (url !== FROZEN.url) problems.push(`url=${JSON.stringify(url)}, want exactly ${JSON.stringify(FROZEN.url)} (full-string equality -- credentials/query/fragment are therefore rejected too)`);
+    if (category !== FROZEN.category) problems.push(`category=${JSON.stringify(category)}, want ${JSON.stringify(FROZEN.category)}`);
+    if (authMode !== FROZEN.authMode) problems.push(`authMode=${JSON.stringify(authMode)}, want exactly ${JSON.stringify(FROZEN.authMode)} (present, not absent)`);
+    if (hasHeaderFields) problems.push("'headerFields' property present -- round-1 ruling pins X-Voicebox-Client-Id (and headerFields entirely) absent");
 
     record(
       'C10B-2',
-      `parse ${TEMPLATE_FILE}@HEAD, inspect the id==='voicebox' object's transport/url/category/authMode`,
-      "transport==='http', url parses to http://127.0.0.1:17493/mcp exactly, category==='utilities', authMode is absent or 'none'",
+      `parse ${TEMPLATE_FILE}@HEAD, inspect the id==='voicebox' object's transport/url/category/authMode/headerFields`,
+      `transport===${JSON.stringify(FROZEN.transport)}, url===${JSON.stringify(FROZEN.url)} exactly, category===${JSON.stringify(FROZEN.category)}, authMode===${JSON.stringify(FROZEN.authMode)} exactly, no headerFields property`,
       problems.length === 0,
-      problems.join('\n') ||
-        `transport=${transport} url=${url} category=${category} authMode=${authMode ?? '<absent>'}`,
+      problems.join('\n') || `transport=${transport} url=${url} category=${category} authMode=${authMode} headerFields=${hasHeaderFields}`,
       { detail: problems.length === 0 ? undefined : problems.join('; ') },
     );
   });
 
   // -----------------------------------------------------------------
-  // C10B-3 -- no extra surface added: lease-glob diff subset check (read
-  // mechanically from leases.json, never hand-approved) + additive-only
-  // check on MCP_TEMPLATES itself (every pre-existing entry byte-identical,
-  // exactly one net-new entry, and it is 'voicebox').
+  // C10B-3 -- no extra surface added (round-1 findings 1-3): lease-glob diff
+  // subset check against the NARROWED lease (mcp-config.ts only -- this
+  // verifier is no longer in it); both baseCommit and HEAD's MCP_TEMPLATES
+  // arrays must analyze cleanly; the file's text OUTSIDE the array's own
+  // span must be byte-identical between baseCommit and HEAD; every
+  // pre-existing entry byte-identical; exactly one net-new id, 'voicebox'.
   // -----------------------------------------------------------------
   function globToRegExp(glob: string): RegExp {
     let re = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&');
@@ -553,6 +687,10 @@ async function main(): Promise<void> {
         problems.push(
           'no "W10b" entry in leases.json@baseCommit -- expected until the orchestrator adds the entry proposed in docs/plans/waves/W10b-voicebox-registration.md\'s "Proposed write lease" section (fails closed by design; see that PRD\'s "Verified baseline" section)',
         );
+      } else if (lease.allow.length !== 1 || lease.allow[0] !== TEMPLATE_FILE) {
+        problems.push(
+          `leases.json@baseCommit["W10b"].allow is ${JSON.stringify(lease.allow)}, want exactly ["${TEMPLATE_FILE}"] -- this verifier must not be implementer-writable (round-1 finding 1)`,
+        );
       }
     }
 
@@ -573,26 +711,36 @@ async function main(): Promise<void> {
     if (baseText === null || headText === null) {
       problems.push(`could not read ${TEMPLATE_FILE} at baseCommit and/or HEAD`);
     } else {
-      const baseParsed = parseTemplateBlocks(baseText, `${TEMPLATE_FILE}@base`);
-      const headParsed = parseTemplateBlocks(headText, `${TEMPLATE_FILE}@head`);
-      if (!baseParsed || !headParsed) {
-        problems.push('could not locate/parse MCP_TEMPLATES at baseCommit and/or HEAD');
+      const baseScan = analyzeTemplateArray(baseText, `${TEMPLATE_FILE}@base`);
+      const headScan = analyzeTemplateArray(headText, `${TEMPLATE_FILE}@head`);
+      if (!baseScan || !headScan) {
+        problems.push('could not locate MCP_TEMPLATES at baseCommit and/or HEAD');
+      } else if (baseScan.problems.length > 0 || headScan.problems.length > 0) {
+        problems.push(
+          `array could not be safely analyzed -- base: [${baseScan.problems.join(' | ')}] head: [${headScan.problems.join(' | ')}]`,
+        );
       } else {
-        for (const [id, baseBlock] of baseParsed.blocks) {
-          const headBlock = headParsed.blocks.get(id);
+        const baseSplit = splitAroundArray(baseText, baseScan);
+        const headSplit = splitAroundArray(headText, headScan);
+        if (baseSplit.before !== headSplit.before) {
+          problems.push('file text BEFORE the MCP_TEMPLATES array changed -- only the array may change (round-1 finding 2)');
+        }
+        if (baseSplit.after !== headSplit.after) {
+          problems.push('file text AFTER the MCP_TEMPLATES array changed -- only the array may change (round-1 finding 2)');
+        }
+        const baseClean = baseScan.clean as Map<string, TemplateBlock>;
+        const headClean = headScan.clean as Map<string, TemplateBlock>;
+        for (const [id, baseBlock] of baseClean) {
+          const headBlock = headClean.get(id);
           if (!headBlock) {
             problems.push(`pre-existing template '${id}' was removed`);
           } else if (headBlock.rawText !== baseBlock.rawText) {
             problems.push(`pre-existing template '${id}' was modified (not byte-identical)`);
           }
         }
-        const newIds = [...headParsed.blocks.keys()].filter((id) => !baseParsed.blocks.has(id));
+        const newIds = [...headClean.keys()].filter((id) => !baseClean.has(id));
         if (newIds.length !== 1) {
-          problems.push(
-            `expected exactly 1 new MCP_TEMPLATES entry, found ${newIds.length}: ${
-              newIds.join(', ') || '<none>'
-            }`,
-          );
+          problems.push(`expected exactly 1 new MCP_TEMPLATES entry, found ${newIds.length}: ${newIds.join(', ') || '<none>'}`);
         } else if (newIds[0] !== 'voicebox') {
           problems.push(`the one new entry is '${newIds[0]}', expected 'voicebox'`);
         }
@@ -601,8 +749,8 @@ async function main(): Promise<void> {
 
     record(
       'C10B-3',
-      `git diff --name-only ${baseCommit}...HEAD subset-of leases.json@baseCommit["W10b"]; MCP_TEMPLATES additive-only diff`,
-      'diff is within the W10b lease; every pre-existing MCP_TEMPLATES entry is byte-identical; exactly one new entry, id voicebox',
+      `git diff --name-only ${baseCommit}...HEAD subset-of leases.json@baseCommit["W10b"] (mcp-config.ts only); MCP_TEMPLATES array analyzed cleanly both sides; non-array file text byte-identical; additive-only array diff`,
+      "diff is within the narrowed W10b lease; both baseCommit and HEAD's MCP_TEMPLATES arrays analyze with zero anomalies; every file byte outside the array is unchanged; every pre-existing entry is byte-identical; exactly one new entry, id voicebox",
       problems.length === 0,
       problems.join('\n') ||
         (diffNames.length === 0 ? 'no diff between baseCommit and HEAD' : `changed files: ${diffNames.join(', ')}`),
@@ -611,63 +759,81 @@ async function main(): Promise<void> {
   });
 
   // -----------------------------------------------------------------
-  // C10B-4 -- no voiceover-workflow scope creep. Scoped to the voicebox
-  // object literal's OWN source text (its declared fields), never the
-  // whole diff -- a citation comment explaining the ruling necessarily
-  // discusses the thing that was refused, and proving that citation
-  // exists is C10B-5's job, not this one's.
+  // C10B-4 -- no voiceover-workflow scope creep (round-1 finding 4): a
+  // denylist is always evadable by paraphrase, so this asserts byte-exact
+  // equality against the ONE frozen string per free-text field instead.
   // -----------------------------------------------------------------
   await checkCriterion('C10B-4', () => {
     const headText = readFileAtCommit(headSha, TEMPLATE_FILE);
-    const parsed = headText === null ? null : parseTemplateBlocks(headText, `${TEMPLATE_FILE}@head-c4`);
-    const block = parsed?.blocks.get('voicebox');
-    if (!block) {
+    const scan = headText === null ? null : analyzeTemplateArray(headText, `${TEMPLATE_FILE}@head-c4`);
+    if (!scan || scan.problems.length > 0) {
       record(
         'C10B-4',
-        `parse ${TEMPLATE_FILE}@HEAD, scan the id==='voicebox' object's own source text`,
-        `the voicebox object literal's own text matches none of ${FORBIDDEN_SCOPE_PATTERN}`,
+        `parse ${TEMPLATE_FILE}@HEAD, analyze every MCP_TEMPLATES element`,
+        'label/description/example/homepage are byte-identical to the frozen strings',
         false,
-        '',
-        { detail: 'no voicebox entry to scan -- see C10B-1' },
+        scan ? scan.problems.join('\n') : '',
+        { detail: !scan ? 'MCP_TEMPLATES array not found at HEAD' : `array could not be safely analyzed: ${scan.problems.length} problem(s)` },
       );
       return;
     }
-    const hit = FORBIDDEN_SCOPE_PATTERN.exec(block.rawText);
+    const clean = scan.clean as Map<string, TemplateBlock>;
+    const block = clean.get('voicebox');
+    if (!block) {
+      record('C10B-4', '', 'label/description/example/homepage are byte-identical to the frozen strings', false, '', {
+        detail: "no object with id 'voicebox' present -- see C10B-1",
+      });
+      return;
+    }
+    const label = findStringProp(block.node, scan.file, 'label');
+    const description = findStringProp(block.node, scan.file, 'description');
+    const example = findStringProp(block.node, scan.file, 'example');
+    const homepage = findStringProp(block.node, scan.file, 'homepage');
+
+    const problems: string[] = [];
+    if (label !== FROZEN.label) problems.push(`label differs from the frozen string`);
+    if (description !== FROZEN.description) problems.push(`description differs from the frozen string`);
+    if (example !== FROZEN.example) problems.push(`example differs from the frozen string`);
+    if (homepage !== FROZEN.homepage) problems.push(`homepage differs from the frozen string`);
+
     record(
       'C10B-4',
-      `parse ${TEMPLATE_FILE}@HEAD, scan the id==='voicebox' object's own source text`,
-      `the voicebox object literal's own text matches none of ${FORBIDDEN_SCOPE_PATTERN}`,
-      hit === null,
-      hit ? `matched: ${JSON.stringify(hit[0])}\n\n${block.rawText}` : block.rawText,
-      { detail: hit ? `forbidden-scope pattern matched: ${JSON.stringify(hit[0])}` : undefined },
+      `parse ${TEMPLATE_FILE}@HEAD, inspect the id==='voicebox' object's label/description/example/homepage`,
+      'label/description/example/homepage are byte-identical to the frozen strings in this PRD\'s "Implementation surface" section',
+      problems.length === 0,
+      problems.length === 0
+        ? `label=${JSON.stringify(label)}\ndescription=${JSON.stringify(description)}\nexample=${JSON.stringify(example)}\nhomepage=${JSON.stringify(homepage)}`
+        : `${problems.join('\n')}\n\nactual label=${JSON.stringify(label)}\nactual description=${JSON.stringify(description)}\nactual example=${JSON.stringify(example)}\nactual homepage=${JSON.stringify(homepage)}\n\nfrozen label=${JSON.stringify(FROZEN.label)}\nfrozen description=${JSON.stringify(FROZEN.description)}\nfrozen example=${JSON.stringify(FROZEN.example)}\nfrozen homepage=${JSON.stringify(FROZEN.homepage)}`,
+      { detail: problems.length === 0 ? undefined : problems.join('; ') },
     );
   });
 
   // -----------------------------------------------------------------
-  // C10B-5 -- documentation record: an NM-25 citation was added alongside
-  // the registration. Whole-diff scan is correct here (unlike C10B-4) --
-  // the citation legitimately lives outside the object literal itself, as
-  // a trailing/leading comment.
+  // C10B-5 -- documentation record (round-1 finding 6): a genuinely NEW
+  // comment token (never a string literal) containing "NM-25" must exist at
+  // HEAD but not at baseCommit.
   // -----------------------------------------------------------------
-  function addedLines(fromCommit: string, toCommit: string, relPath: string): string[] {
-    const r = sh('git', ['diff', `${fromCommit}...${toCommit}`, '--', relPath]);
-    if (r.status !== 0) return [];
-    return r.stdout
-      .split('\n')
-      .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
-      .map((line) => line.slice(1));
-  }
-
   await checkCriterion('C10B-5', () => {
-    const added = addedLines(baseCommit, 'HEAD', TEMPLATE_FILE);
-    const hasCitation = added.some((line) => line.includes('NM-25'));
+    const baseText = readFileAtCommit(baseCommit, TEMPLATE_FILE);
+    const headText = readFileAtCommit(headSha, TEMPLATE_FILE);
+    if (baseText === null || headText === null) {
+      record('C10B-5', '', "a comment token added to the file contains the literal substring 'NM-25'", false, '', {
+        detail: `could not read ${TEMPLATE_FILE} at baseCommit and/or HEAD`,
+      });
+      return;
+    }
+    const baseComments = new Set(collectComments(baseText));
+    const headComments = collectComments(headText);
+    const newNm25Comments = headComments.filter((c) => c.includes('NM-25') && !baseComments.has(c));
     record(
       'C10B-5',
-      `git diff ${baseCommit}...HEAD -- ${TEMPLATE_FILE}, scan added lines`,
-      `at least one line added to ${TEMPLATE_FILE} contains the literal substring 'NM-25'`,
-      hasCitation,
-      added.join('\n') || '<no added lines>',
-      { detail: hasCitation ? undefined : 'no NM-25 citation found in the diff' },
+      `scan real comment tokens (TypeScript scanner, skipTrivia=false) in ${TEMPLATE_FILE} at baseCommit and HEAD`,
+      "a comment token added to the file (present at HEAD, absent at baseCommit) contains the literal substring 'NM-25' -- a string literal containing that text does not count",
+      newNm25Comments.length > 0,
+      newNm25Comments.length > 0
+        ? newNm25Comments.join('\n')
+        : `${headComments.length} total comment(s) at HEAD, ${baseComments.size} at baseCommit; none newly-added contain 'NM-25'`,
+      { detail: newNm25Comments.length > 0 ? undefined : 'no newly-added NM-25 comment found' },
     );
   });
 
