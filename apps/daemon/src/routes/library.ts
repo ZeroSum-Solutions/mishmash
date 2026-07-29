@@ -93,11 +93,37 @@ const CLIPPER_INGEST_MAX_BYTES = 5_000_000;
 // resolved `bytes` (see the `sourceKind === 'clipper'` check below).
 const CLIPPER_BYTE_VOLUME_EXCLUDED_BODY_FIELDS = new Set(['dataUrl', 'url']);
 
+// `clipperIngestByteVolume` must be a TOTAL function. The call site (below,
+// `sourceKind === 'clipper'`) runs it synchronously and only THEN decides
+// whether to call `sendApiError` -- there is no `try`/`catch` around the
+// call itself. A throw here is not caught by the route's own error handling
+// at all: it becomes a rejection of this `async` handler that Express's
+// generic error handling takes instead, producing an unstructured response
+// instead of the mandated 413 -- a caller could crash the accounting
+// instead of merely being refused by it. `JSON.stringify` is recursive in
+// V8 and overflows the call stack on a deeply-nested value well before
+// `JSON.parse` does (the daemon's dedicated 128mb body-parser limit for this
+// route, server.ts, has no depth limit), so a parser-valid body reaches this
+// summation with a value `JSON.stringify` cannot handle.
+//
+// The guard below is deliberately NOT narrowed to `RangeError`: the
+// requirement is "never throws, for any value an Express JSON body can
+// contain," not "never throws for the one failure mode we found." Any value
+// this function cannot measure is unmeasurable, full stop, and an
+// unmeasurable value fails CLOSED -- returning `Infinity` routes it through
+// the EXACT SAME `payloadSize > CLIPPER_INGEST_MAX_BYTES` comparison and 413
+// response the call site already uses for an ordinary oversized body, with
+// no new branch and no change to the counting semantics for any ordinary,
+// measurable value.
 function clipperIngestByteVolume(body: Record<string, unknown>): number {
   let total = 0;
   for (const [key, value] of Object.entries(body)) {
     if (value === undefined || CLIPPER_BYTE_VOLUME_EXCLUDED_BODY_FIELDS.has(key)) continue;
-    total += Buffer.byteLength(JSON.stringify(value), 'utf8');
+    try {
+      total += Buffer.byteLength(JSON.stringify(value), 'utf8');
+    } catch {
+      return Infinity;
+    }
   }
   return total;
 }
