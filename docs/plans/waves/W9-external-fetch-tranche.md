@@ -21,14 +21,25 @@ written into `docs/plans/waves/leases.json` by this PRD, and no source file outs
 `docs/plans/waves/W9-external-fetch-tranche.md` and `scripts/waves/verify-w9-external-fetch.ts`
 is touched by this change.
 
-**Status: DRAFT — first expansion, not yet adversarially reviewed.** Per the NM-41C gate
+**Status: ROUND 2 (fix round for round-1 REJECT), not yet re-reviewed.** Per the NM-41C gate
 (`W5-W11-gated.md` lines 8–24), this document is written and frozen *before* any implementation
 work starts, and is reviewed by a reviewer who did not write it and will not implement it, before
-it is unfrozen for a `/goal` run. Unlike the sibling `W9-ingest-tranche.md` (now at round 8 of its
-own ceremony), this is the **first** draft of this document — no adversarial round has run against
-it yet. It does not claim any review history it does not have. An agent may not begin
-implementation from this page until that review has happened and the document + verifier are
-frozen on `main`.
+it is unfrozen for a `/goal` run. **Round 1 returned REJECT with 7 blocking findings** (full text
+staged at review time; disposed one-by-one in "Round 1 dispositions" below, in the same spirit as
+`W9-ingest-tranche.md`'s AUTHOR-FLAGGED/DISPOSITIONS section, though this document does not carry
+that sibling's full multi-round ceremony history — this is round 2, not round 8). The reviewer
+confirmed the underlying inventory research (the five named unguarded families, the
+`connectionTest.ts` DNS-validation/connection TOCTOU distinction) as real; every finding was about
+how the package *proves* things, plus one real inventory gap. This round fixes all 7 in place. Per
+program-wide guidance recorded in `docs/plans/waves/DECISIONS.md` (W9AS-PARK/W10A-PARK/W10B-PARK,
+after three sibling packages were parked for the same root cause): **a criterion asserting runtime
+behavior must observe that behavior — boot the daemon, issue the real request, assert on the
+response; structural (AST) checks are legitimate only for facts with no runtime observable, and
+must say so.** Finding 2 was exactly that failure mode; the fix (detailed in S9XF-4/CXF-6 below)
+boots a real isolated daemon and issues a live HTTP probe rather than adding more AST conditions.
+This document does not claim any review history beyond round 1's actual verdict. An agent may not
+begin implementation from this page until re-review happens and the document + verifier are frozen
+on `main`.
 
 ---
 
@@ -189,11 +200,15 @@ comment-blind since it is a real `ts.forEachChild` AST walk, never a text search
 | `registerStaticResourceRoutes` | `apps/daemon/src/routes/static-resource.ts` |
 | `registerLiveArtifactRoutes` | `apps/daemon/src/routes/live-artifact.ts` |
 | `registerChatRoutes` | `apps/daemon/src/routes/chat.ts` |
+| `registerXaiRoutes` | `apps/daemon/src/routes/xai.ts` |
 
 `apps/daemon/src/routes/design-systems.ts` (`registerDesignSystemRoutes`) is **deliberately not** in
 this table — see the correction noted at S9XF-2's frozen table below; it was in an earlier pass of
 this document and was removed after actually running the verifier against it, not left in on an
-unchecked assumption.
+unchecked assumption. `registerXaiRoutes` was **added in round 2** (finding 1) — entirely absent
+from round 1's table, which is exactly how `POST /api/xai/search` escaped a hand-curated list. See
+S9XF-1's mechanical discovery pass below, added specifically so a future miss like this one cannot
+happen silently again.
 
 Plus the traced same-file/1-hop-import edges each row's fetch reachability actually depends on
 (named explicitly so the verifier can check the edge still exists, rather than trusting a stale
@@ -223,7 +238,7 @@ missed without listing it explicitly; found by running the verifier against the 
 assumed).
 
 Any duplicate `{method, path}` registration among the **frozen route set** — at baseCommit or at
-HEAD — is a hard fail, same rule as the ingest tranche's S9-1, but scoped to the 31 rows this tranche actually
+HEAD — is a hard fail, same rule as the ingest tranche's S9-1, but scoped to the 33 rows this tranche actually
 attributes rather than every registration in every frozen file. That scoping is deliberate, not an
 oversight: `apps/daemon/src/routes/static-resource.ts` and `apps/daemon/src/routes/design-systems.ts`
 both legitimately register `DELETE /api/design-systems/:id` — confirmed by direct reading, the
@@ -237,15 +252,44 @@ over-broad check, which is now fixed to scope duplicate detection to the frozen 
 list itself, not by a path filter that could silently drop something else too — see "Explicitly out
 of scope".
 
+**Mechanical discovery, added round 2 (finding 1).** Round 1's CXF-1 only checked whether the
+hand-curated `FROZEN_CALLER_INFLUENCE_FLOORS` table's own keys still existed in source —
+self-consistency, never discovery — which is exactly how `POST /api/xai/search` escaped: nothing
+would ever have noticed a route this document never typed in. `discoverFetchReachingRoutes` walks
+**every** `.ts` file under `apps/daemon/src/routes/` (a real directory glob via `fs.readdirSync`,
+not a hand-typed list, so a brand-new route file is picked up automatically) plus
+`mcp-routes.ts`/`brand-routes.ts`/`connectors/routes.ts`, extracts every literal
+`app.METHOD('/path', ...)` registration in each file (not scoped to one named function — a file can
+define more than one registration function), and decides fetch-reachability with a bounded,
+GENERIC algorithm that never consults `ROUTE_TARGET_FILES` or any other hand-curated per-route
+table: a same-file call-graph BFS from the handler through named function/const-arrow declarations,
+plus exactly one generic import hop — for each relative import the file itself declares, if the
+handler's reachable call names include an imported binding AND that binding's own file shows any
+fetch reachability, the route counts as reaching fetch. Any discovered route absent from the frozen
+set is a hard CXF-1 failure naming the exact route. **This mechanism found a SECOND real miss on
+its own, unprompted**: `POST /api/xai/oauth/complete` (now added to the frozen table, S9XF-2) — direct
+evidence the fix generalizes past the one route the reviewer happened to name. It also produced two
+coarse-grained false positives (`GET /api/projects/:id/design-system-package-audit`,
+`POST /api/projects/:id/files`) from its own deliberate simplification (a same-file call graph plus
+ONE generic import hop is not full call-graph precision) — both independently read end-to-end,
+confirmed to reach no outbound fetch, and recorded in `DISCOVERY_FALSE_POSITIVE_ROUTES` with a
+stated reason each, never a blanket ignore. `apps/daemon/src/routes/library.ts` is additionally
+excluded at the FILE level (`DISCOVERY_EXCLUDED_FILES`) — it is owned end-to-end by the landed
+ingest tranche, and discovery finding its already-attributed ingest route is not a gap in this
+tranche's coverage, it is a scope boundary already documented in "Explicitly out of scope."
+
 **Scope reduction, flagged explicitly:** the ingest tranche's S9-1 cross-checks its route set
 against a **live daemon boot's own `routeInventory`** as a third, independent verification method
-beyond baseCommit and HEAD source reads. This tranche's verifier, as built this round, does **not**
-boot a real daemon — CXF-1 is a two-way check (baseCommit source AST vs. HEAD source AST), not the
-ingest tranche's three-way one. This is a genuine, disclosed scope reduction, not an oversight
-papered over: a live boot would catch a route registered dynamically (not as a literal
-`app.METHOD('/literal/path', ...)` call this scanner can see) or mounted through middleware this
-scanner does not walk. A reviewer may reasonably require porting `bootDaemonForRouteInventory` from
-`verify-w9-ingest.ts` before approving CXF-1 as equally strong evidence.
+beyond baseCommit and HEAD source reads. CXF-1 itself still does **not** do this — it remains a
+two-way check (baseCommit source AST vs. HEAD source AST) plus the new discovery pass above, not a
+live-daemon cross-check. This is a genuine, disclosed scope reduction, not an oversight papered
+over: a live boot would catch a route registered dynamically (not as a literal
+`app.METHOD('/literal/path', ...)` call either scanner can see) or mounted through middleware
+neither walks. **This gap is now cheaper to close than round 1 disclosed**: CXF-6's own
+`bootIsolatedDaemon` (S9XF-4 below, added this round for finding 2) already boots the real
+production daemon and exposes its `routeInventory` on the ready signal
+(`buildIsolatedDaemonRunnerScript`) — a reviewer requiring CXF-1 to consume it is asking for reuse
+of infrastructure that already exists in this file, not new construction.
 
 **S9XF-2 — State the risk-ranking rule: exposure reuses the ingest tranche's mechanical
 classifier; impact is SSRF-specific, frozen, and reviewer-owned.**
@@ -295,26 +339,39 @@ outcome).
     discovered from content the daemon itself fetched at the caller's direction (second-order —
     e.g. an `href`/`src` parsed out of attacker-influenced HTML).
 
-  **The full frozen table** (`FROZEN_CALLER_INFLUENCE_FLOORS`, **31 routes** — see "Ground facts":
+  **The full frozen table** (`FROZEN_CALLER_INFLUENCE_FLOORS`, **33 routes** — see "Ground facts":
   this count is the frozen route count for this tranche, verified against the file set above by
-  actually running the verifier this round, not assumed from any prior estimate. **This table was
-  corrected once already, by that same run**: an earlier pass of this document had a
-  `POST /api/design-systems/generation-jobs` row citing `shadcn-import.ts`/`source-context.ts`/
-  `github-import.ts` — but `generation-jobs` only calls `designSystemGenerationJobs.start(...)`, an
-  AI-generation job-queue abstraction with no traced outbound-fetch reachability. The REAL
-  shadcn/GitHub import entry points are `POST /api/design-systems/import/shadcn` and
-  `POST /api/design-systems/import/github`, both registered in
-  `apps/daemon/src/routes/static-resource.ts`'s `registerStaticResourceRoutes` — confirmed by
-  direct reading after the verifier's own drift/self-consistency check forced a re-check. This is
-  exactly the failure mode the mechanical gate exists to catch: a plausible-sounding row that does
-  not survive contact with the actual AST.):
+  actually running the verifier this round, not assumed from any prior estimate. **This table has
+  been corrected twice now, both times by actually running the verifier and reading its output,
+  never by re-reasoning from memory:**
+  - Round 1 (self-caught): an earlier pass had a `POST /api/design-systems/generation-jobs` row
+    citing `shadcn-import.ts`/`source-context.ts`/`github-import.ts` — but `generation-jobs` only
+    calls `designSystemGenerationJobs.start(...)`, an AI-generation job-queue abstraction with no
+    traced outbound-fetch reachability. The REAL shadcn/GitHub import entry points are
+    `POST /api/design-systems/import/shadcn` and `POST /api/design-systems/import/github`, both
+    registered in `apps/daemon/src/routes/static-resource.ts`'s `registerStaticResourceRoutes`.
+  - **Round 2 (reviewer-caught, finding 1 + finding 3): two defects.** First, `POST
+    /api/xai/search` (`routes/xai.ts:253`) was entirely absent — CXF-1 only checked whether the
+    curated table's own keys still existed in source, never discovered new ones. Fixed two ways:
+    the missed route was added, AND CXF-1 was given a genuine mechanical whole-tree discovery pass
+    (`discoverFetchReachingRoutes`, S9XF-1 below) that does not consult the curated tables at all —
+    running it found a SECOND real miss on its own, `POST /api/xai/oauth/complete`
+    (`exchangeCodeForToken` against the hardcoded `XAI_OAUTH_TOKEN_ENDPOINT`, impact 0), now also
+    added; and two coarse-grained false positives from the discovery algorithm's own cross-file
+    over-approximation (`GET /api/projects/:id/design-system-package-audit`,
+    `POST /api/projects/:id/files` — both independently read end-to-end and confirmed to reach no
+    outbound fetch), recorded as justified exclusions in `DISCOVERY_FALSE_POSITIVE_ROUTES`, never a
+    blanket ignore. Second, three impact floors (`check-link`, both `media/generate` routes, both
+    `live-artifacts/refresh` routes) were frozen at `3` while literally matching this section's own
+    impact-`2` definition ("a persisted, caller-editable configuration field") — corrected to `2`
+    below, so the table stops contradicting its own stated rule.
 
   | Route | Reaches (file) | Impact floor | Rationale |
   |---|---|---|---|
   | `POST /api/mcp/oauth/start` | `mcp-oauth.ts` `beginAuth` | 3 | caller-supplied `serverUrl` in body |
-  | `POST /api/projects/:id/deployments/:deploymentId/check-link` | `deploy.ts` `requestDeploymentUrl` | 3 | caller-configurable custom domain / stored deployment URL |
-  | `POST /api/projects/:id/media/generate` | `media/index.ts` (~40 provider fns) | 3 | persisted, caller-editable `credentials.baseUrl` |
-  | `POST /api/tools/media/generate` | `media/index.ts` (same fns) | 3 | same |
+  | `POST /api/projects/:id/deployments/:deploymentId/check-link` | `deploy.ts` `requestDeploymentUrl` | 2 | caller-configurable custom domain / stored deployment record — a persisted config field, not a same-request value (corrected from 3, round 2 finding 3) |
+  | `POST /api/projects/:id/media/generate` | `media/index.ts` (~40 provider fns) | 2 | persisted, caller-editable `credentials.baseUrl` (corrected from 3, round 2 finding 3) |
+  | `POST /api/tools/media/generate` | `media/index.ts` (same fns) | 2 | same |
   | `GET /api/media/providers/elevenlabs/voices` | `integrations/elevenlabs-voices.ts` | 2 | persisted, caller-editable `baseUrl` |
   | `GET /api/media/providers/aihubmix/models` | `routes/media.ts` (deliberately hardcoded) | 0 | model positive control — caller override explicitly refused |
   | `POST /api/design-systems/import/github` | `design-systems/github-import.ts` (via `static-resource.ts`) | 1 | host hardcoded to `github.com` (`git clone` subprocess); only owner/repo caller-supplied |
@@ -331,8 +388,8 @@ outcome).
   | `POST /api/connectors/:connectorId/connect` | `connectors/composio.ts` | 0 | same fixed host |
   | `POST /api/research/search` | `research/tavily.ts` | 2 | persisted `baseUrl`; route itself loopback-gated (`isLocalSameOrigin`) |
   | `POST /api/codex-pets/sync` | `community-pets-sync.ts` | 0 | fixed third-party hosts (`PETSHARE_BASE`/`HATCHERY_LIST`); no caller influence over target — flagged separately as an unauthenticated-trigger/resource-abuse row, not classic SSRF |
-  | `POST /api/live-artifacts/:artifactId/refresh` | `live-artifacts/refresh.ts` | 3 | caller-supplied url in stored refresh-source config — but route is `requireLocalDaemonRequest`-gated (mechanically confirmed exposure 0) |
-  | `POST /api/tools/live-artifacts/refresh` | same | 3 | same, tool-token gated (mechanically confirmed exposure 1) |
+  | `POST /api/live-artifacts/:artifactId/refresh` | `live-artifacts/refresh.ts` | 2 | url set on the artifact by an earlier, separate create call, only referenced by ID here — a persisted config field, not a same-request value (corrected from 3, round 2 finding 3); route is `requireLocalDaemonRequest`-gated (mechanically confirmed exposure 0) |
+  | `POST /api/tools/live-artifacts/refresh` | same | 2 | same correction; tool-token gated (mechanically confirmed exposure 1) |
   | `POST /api/provider/models` | `connectionTest.ts` family | 2 | persisted BYOK `baseUrl` |
   | `POST /api/test/connection` | `connectionTest.ts` family | 2 | same |
   | `POST /api/proxy/anthropic/stream` | `connectionTest.ts` family | 2 | same |
@@ -342,26 +399,22 @@ outcome).
   | `POST /api/proxy/ollama/stream` | same | 2 | same |
   | `POST /api/proxy/senseaudio/stream` | same (`registerByokToolChatProxy` factory, not a direct `app.post`) | 2 | same |
   | `POST /api/proxy/aihubmix/stream` | same | 2 | same |
+  | `POST /api/xai/search` | `routes/xai.ts` (same file) | 2 | persisted `provider.baseUrl`, stored bearer credential attached — round 2, finding 1 |
+  | `POST /api/xai/oauth/complete` | `routes/xai.ts` → `integrations/xai-oauth.ts` `completeXAIAuth`/`exchangeCodeForToken` | 0 | target host is the hardcoded `XAI_OAUTH_TOKEN_ENDPOINT`, set at flow start, never caller input at completion — found by CXF-1's own new discovery pass, round 2 finding 1 |
 
-  **Mechanically confirmed P0 today (this run, actually executed against this worktree — not a
-  ground-facts guess):** 23 of the 31 frozen routes score P0: `mcp/oauth/start`, `check-link`,
-  `media/generate` (the `/projects/:id/` entry; the `/tools/` entry scores P1, exposure `1` via
-  `authorizeToolRequest`), `elevenlabs/voices`, `design-systems/import/shadcn`, all five brand
-  routes, `marketplaces`, `plugins/install`, `research/search`, `tools/live-artifacts/refresh` (the
-  `requireLocalDaemonRequest`-gated `/live-artifacts/:artifactId/refresh` entry scores P2 instead,
-  exposure `0` — confirming the exposure/impact independence the ingest tranche's S9-2 established
-  for `pair/revoke`/`pair/rotate`), and all 9 `connectionTest.ts`-family routes
-  (`provider/models`, `test/connection`, all 7 `proxy/*/stream`). This large P0 count is the honest
-  mechanical output, not a target to shrink by construction — several of these rows (the five brand
-  routes, `marketplaces`, `plugins/install`) already have a real DNS-pinned guard
-  (`fetchExternalBrandAsset`/`safeExternalFetch`) and will resolve cleanly through `control` once
-  implemented; they are still P0 because tier is `exposure + impact`, not "has a control yet" — the
-  same separation of concerns S9-2 established for the ingest tranche. C9XF-6's per-P0-row control
-  requirement and the threat-model bullet requirement key off this mechanically-verified tier.
+  **The exact P0 count this run reports is in "Verified baseline" below — read that section's live
+  numbers, not a hand-computed guess here.** Impact-floor corrections and the exposure-classifier
+  bug fix (S9XF-2 below) both shift which rows land P0 relative to round 1's draft; restating a
+  specific count in this prose risks going stale the next time either input changes. What stays
+  true regardless of the exact count: tier is `exposure + impact`, never "has a control yet" — a
+  route with a real DNS-pinned guard (`fetchExternalBrandAsset`/`safeExternalFetch`) can still be
+  P0, and will resolve cleanly through `control` once implemented, the same separation of concerns
+  the ingest tranche's S9-2 established. CXF-6's per-P0-row control requirement and the
+  threat-model bullet requirement key off the row's mechanically-verified tier, not this table.
 
 **S9XF-3 — Mechanically-generated attribution matrix, structured, six required fields per
 `VERIFICATION-CONTRACT.md` §6.** A companion file, `docs/security/external-fetch-attribution.json`,
-one row per frozen route (exactly 31, no orphans/gaps/duplicates), each row carrying `owner`,
+one row per frozen route (exactly 33, no orphans/gaps/duplicates), each row carrying `owner`,
 `authn`, `authz`, `inputValidation`, `sizeRateLimit`, `testRef`. None of the six may be a bare
 placeholder (12-character floor, stock-filler denylist, anti-repetition check — same mechanism as
 the ingest tranche's S9-3). `authn` must name the row's mechanically-derived exposure class
@@ -544,16 +597,16 @@ All criteria inherit `VERIFICATION-CONTRACT.md` §3. Verified by
 
 | ID | Criterion | Verification |
 |---|---|---|
-| CXF-1 | Route/call-site snapshot frozen at baseCommit, drift-checked against HEAD, duplicate-checked, classifier self-verified | AST scan of the 10 frozen registration functions at `baseCommit` (`git show`) and at HEAD, self-consistent with `FROZEN_CALLER_INFLUENCE_FLOORS`' key set (31 routes); any duplicate `{method,path}` among the frozen set at either point is a hard fail; gated on all exposure- and guard-classifier self-probes passing. **No live daemon boot cross-check in this draft — see the flagged scope reduction in S9XF-1.** |
-| CXF-2 | Existing SSRF-relevant test suites are green | Real vitest JSON-reporter run of a frozen glob (`aihubmix-asset-ssrf`, `marketplace-install-ssrf`, `brand-safe-fetch`, `brand-prefetch`, `brands-prefetch-abort`, `plugin-asset-cache`, `deploy`, `deploy-routes`, `byok-tools`, `connectors-routes`, `connectors-service`, `connectionTest`-suffixed files if any exist); zero failed, zero pending/skipped, zero `skip`/`only`/`todo` markers |
-| CXF-3 | Attribution matrix exists and covers exactly the frozen route set | `docs/security/external-fetch-attribution.json` parses as JSON; exactly one row per frozen `{method,path}` (31), no orphans, no gaps, no duplicates |
-| CXF-4 | Every row is fully, structurally attributed | Every field clears the placeholder floor; `authn` names the row's exposure class; `inputValidation` names the row's mechanically-derived guard status; `acceptedRisk.decisionRef` resolves to a unique, fully-structured, route-bound, non-self-accepted `### W9XF-ACCEPT-*` entry in `DECISIONS.md@baseCommit`; evidence reports attributed/unattributed/known-vulnerable counts |
-| CXF-5 | Every `testRef`/`control.testRef` names a real, currently-passing, globally-route-unique test; new controls carry independently-replayed red evidence | Same mechanism as `W9-ingest-tranche.md`'s C9-5, ported: exact `fullName` equality, one global citation map, AST-derived "new" decision, detached-worktree replay through Vitest's own Node API for a genuinely new control, paired positive+negative control in-file |
-| CXF-6 | Every P0-tier row's SSRF guard is explicitly, mechanically resolved | For every row with `riskScore.tier === 'P0'`: `control.mechanism` matches the anchored `GUARDED mechanism=... fn=... pinsConnection=...` grammar exactly, `fn` matches the guard the reachability scan actually found on that route, `control.testRef` passes CXF-5's full bar, and the same file's real-transport coverage shows a paired accept-control/reject-control — or a verified `acceptedRisk` |
-| CXF-7 | Threat-model doc extended, mechanically cited, P0-complete | `docs/security/daemon-threat-model.md` carries a "Wave 9 — External fetch" section; every `[CXF-N]` bullet's cited test is an exact match; each P0-tier route requires its own bullet naming exactly that one route key |
-| CXF-8 | Full risk-score formula enforced per row | AST-derived `exposure` (ported straight-line dominance grammar, self-probe-verified) matches exactly; `impact >= FROZEN_CALLER_INFLUENCE_FLOORS[route]`; `score === exposure+impact`; `tier === tierFor(score)` |
+| CXF-1 | Route/call-site snapshot frozen at baseCommit, drift-checked against HEAD, duplicate-checked, classifier self-verified, AND mechanically re-derived (not merely self-consistent) | AST scan of the 11 frozen registration functions at `baseCommit` (`git show`) and at HEAD, self-consistent with `FROZEN_CALLER_INFLUENCE_FLOORS`' key set (33 routes); any duplicate `{method,path}` among the frozen set at either point (same file or different, round-2 fix) is a hard fail; gated on all exposure- and guard-classifier self-probes passing; **round-2 addition** — `discoverFetchReachingRoutes` independently walks every route-registration file and fails on any fetch-reaching route outside the frozen set, modulo a small, individually-justified false-positive exclusion list. **No live daemon `routeInventory` cross-check in CXF-1 itself — see the flagged scope reduction in S9XF-1** (the infrastructure to close this now exists via CXF-6's `bootIsolatedDaemon`, not yet wired into CXF-1). |
+| CXF-2 | Existing SSRF-relevant test suites are green | Real vitest JSON-reporter run of a glob (legacy exact filenames PLUS, round-2 addition, the lease's new prefix patterns `mcp-oauth-*`/`deploy-check-link-*`/`external-fetch-*` so a leased new test file is actually discoverable); zero failed, zero pending/skipped, zero `skip`/`only`/`todo` markers; **round-2 addition** — `.only(` is now source-scanned directly (the vitest reporter never surfaces it as a distinct status) |
+| CXF-3 | Attribution matrix exists and covers exactly the frozen route set | `docs/security/external-fetch-attribution.json` parses as JSON; exactly one row per frozen `{method,path}` (33), no orphans, no gaps, no duplicates. **Round-2 reorder**: now runs before CXF-8, which reads its output |
+| CXF-4 | Every row is fully, structurally attributed | Every field clears the placeholder floor; `authn` names the row's exposure class; `inputValidation` names the row's mechanically-derived guard status; `acceptedRisk.decisionRef` resolves to a unique, fully-structured, route-bound, non-self-accepted `### W9XF-ACCEPT-*` entry in `DECISIONS.md@baseCommit`, EVERY field of which (not only Route) is placeholder-checked and bound to its OWN heading span, never a neighbour's (round-2 fix, finding 6); `Accepter` is additionally checked against a non-founder-identity denylist; evidence reports attributed/unattributed/known-vulnerable counts |
+| CXF-5 | Every `testRef`/`control.testRef` names a real, currently-passing, globally-route-unique test; new controls carry independently-replayed red evidence | Same mechanism as `W9-ingest-tranche.md`'s C9-5, ported: exact `fullName` equality, one global citation map, AST-derived "new" decision, detached-worktree replay through Vitest's own Node API for a genuinely new control. **Round-2 fixes**: association terms exclude generic path segments (`api`/`tools`/`projects`/`assets`/`v1`/`v2` — finding 4b); a control in a file that did not exist at all at baseCommit is now correctly treated as new and forced through replay, never silently exempted (finding 4d); replay's own process tree is tracked and confirmed-stopped, never a bare blocking spawn (finding 7) |
+| CXF-6 | Every P0-tier row's SSRF guard is REAL, observed live — not inferred from source shape | **Redesigned, round 2 (findings 2a + 5a).** Boots a real isolated instance of the actual production daemon (`bootIsolatedDaemon`, dynamically imports `apps/daemon/src/server.ts`'s own `startServer`); for every P0 row's `control`, the GUARDED grammar + fn-binding pre-check must ALSO carry a `control.probe` (`ProbeSpec`) that is EXECUTED against the live daemon with the caller-controlled field pointed at a loopback canary — passes only when the canary sees ZERO connections AND the daemon's response status is one the row declared as a refusal; a probe-infra self-check (boot + real HTTP round-trip against a harmless route) runs even pre-implementation so the mechanism's own soundness is demonstrated regardless of matrix state; the daemon's process-tree teardown must independently confirm zero survivors or CXF-6 fails outright, never merely logged — or a verified `acceptedRisk`. The ACCEPT-side real-transport signal for a controlled row is CXF-5's own requirement that `control.testRef` names a real passing test; this criterion supplies the REJECT-side signal CXF-5 cannot. |
+| CXF-7 | Threat-model doc extended, mechanically cited, P0-complete | `docs/security/daemon-threat-model.md` carries a "Wave 9 — External fetch" section; every P0-tier route requires its own bullet naming exactly that one route key AND citing exactly its expected reference (`control.testRef` if controlled, else primary `testRef`) — **round-2 fix (finding 5b)**: matching is now exact backtick-token equality, never substring `.includes()` (which made "exactly one bullet" structurally unsatisfiable for any route whose key is a literal prefix of a sibling route, e.g. all five `POST /api/brands...` rows); citation-checking was also entirely absent before this round |
+| CXF-8 | Full risk-score formula enforced per row, bound to the MATRIX'S OWN declared riskScore | **Round-2 fix (finding 3): no longer tautological.** Previously recomputed score/tier from its own internal frozen-constants map and compared that computation against itself, never reading the attribution file at all — a row could omit or falsify `riskScore` entirely and still pass. Now reads each attribution ROW's own declared `riskScore.{exposure,impact,score,tier}` and checks it against the mechanically-computed exposure/impact-floor/tier; also carries the exposure-classifier dead-code fix (finding 2b: a straight-line inline `isLocalSameOrigin` veto, as opposed to `requireLocalDaemonRequest` middleware, now correctly scores exposure `0` instead of unconditionally `3`) |
 | CXF-9 | Gates | `pnpm guard` and `pnpm typecheck` exit 0 on the current tree |
-| CXF-10 | Adversarial review of the implementation is on record, non-spoofable | `docs/security/external-fetch-implementation-review.json`: `reviewedCommit` a strict ancestor of `HEAD`; owned-path diff between `reviewedCommit` and `HEAD` empty; `reviewer` distinct from every author in `baseCommit..reviewedCommit`; `verdict === "APPROVE"` |
+| CXF-10 | Adversarial review of the implementation is on record, non-spoofable | `docs/security/external-fetch-implementation-review.json`: `reviewedCommit` a strict ancestor of `HEAD`; owned-path diff between `reviewedCommit` and `HEAD` empty (round-2: the owned-path list now includes `routes/chat.ts` and every `apps/daemon/tests/*.test.ts`, both omitted before — finding 6b); `reviewer` AND `model` both placeholder- and non-founder-denylist-checked (round 1 checked neither meaningfully); `reviewer` distinct from every author in `baseCommit..reviewedCommit`; **round-2 addition** — the review record itself must NOT have existed at `reviewedCommit` (proves it was authored strictly afterward, not bundled with the state it claims to review); `verdict === "APPROVE"` |
 
 Plus the three named infra checks: **GATE-INTEGRITY** (advisory self-hash pin — absence is also
 `manifest.gateIntegrityPinned`, a top-level field), **LEASE** (`git diff --name-only
@@ -561,60 +614,78 @@ Plus the three named infra checks: **GATE-INTEGRITY** (advisory self-hash pin �
 never the working tree — note this entry does not exist in `leases.json` yet; see "Proposed lease"),
 **HEAD-DRIFT** (HEAD must not move mid-run).
 
-## Verified baseline (this run, pre-implementation)
+## Verified baseline (round 2, this run, pre-implementation)
 
 This section reports the verifier's **actual output**, from actually running
-`pnpm exec tsx scripts/waves/verify-w9-external-fetch.ts` against this worktree — not a predicted
-or narrated result. `pnpm guard` and `pnpm typecheck` both exit 0 on this diff (CXF-9 passes
-today, since this diff adds only the PRD and the verifier, and the verifier itself typechecks
-clean under `scripts/tsconfig.json`).
+`pnpm exec tsx scripts/waves/verify-w9-external-fetch.ts` against this worktree after the round-1
+fix pass — not a predicted or narrated result. `pnpm guard` and `pnpm typecheck` both exit 0 on
+this diff (CXF-9 passes today; the verifier itself typechecks clean under `scripts/tsconfig.json`).
 
-**6 of 13 criteria pass today, pre-implementation** — exactly the ones that do not require
-implementation artifacts to exist: **CXF-1** (route snapshot self-consistent, 9/9 exposure- and
-guard-classifier self-probes pass, no duplicates, no drift), **CXF-2** (the existing SSRF-relevant
-test glob is fully green), **CXF-8** (the risk formula is internally consistent for all 31 rows),
-**CXF-9** (guard + typecheck), **GATE-INTEGRITY** (correctly reports unpinned), and **HEAD-DRIFT**.
-**CXF-3 through CXF-7 and CXF-10 fail honestly** (no attribution matrix, threat-model section, or
-review record exists yet — expected pre-implementation). **LEASE fails honestly** (no
-`W9-external-fetch` entry in `leases.json` yet — expected until this PRD lands and the proposed
-lease is granted).
+**5 of 13 criteria pass today, pre-implementation** — one fewer than round 1's (incorrect) 6,
+because **CXF-8 now correctly fails honestly** instead of tautologically passing (finding 3's fix —
+see below). The 5 that pass are exactly the ones that do not require implementation artifacts to
+exist: **CXF-1** (route snapshot self-consistent, 11/11 exposure- and guard-classifier self-probes
+pass, no duplicates at either scope, no drift, AND — round-2 addition — the mechanical discovery
+pass finds zero fetch-reaching routes outside the frozen set), **CXF-2** (the existing SSRF-relevant
+test glob, now prefix-aware and `.only`-scanned, is fully green), **CXF-9** (guard + typecheck),
+**GATE-INTEGRITY** (correctly reports unpinned), and **HEAD-DRIFT**. **CXF-3 through CXF-8 and
+CXF-10 fail honestly** (no attribution matrix, threat-model section, or review record exists yet —
+expected pre-implementation). **LEASE fails honestly** (no `W9-external-fetch` entry in
+`leases.json` yet — expected until this PRD lands and the proposed lease is granted).
 
-- 31 routes frozen across 10 registration functions in 10 files, confirmed by direct reading of
-  every `app.get/post/put/delete/options(...)` call in each file plus the one
-  `registerByokToolChatProxy(...)` factory-registration alias (not assumed from any prior count,
-  and corrected once already this round after the verifier's own drift check caught a
-  mis-scoped row — see the frozen table above).
+**CXF-6's isolated-daemon-boot + live-probe infrastructure is confirmed real and working, not
+merely written.** This round's actual run booted the real production daemon
+(`bootIsolatedDaemon`), issued a real HTTP request (`GET /api/mcp/install-info`), got a genuine
+`status=200` back, then tore down the full process tree and confirmed zero survivors:
+```
+probe-infra self-check: GET /api/mcp/install-info -> status=200 (boot+HTTP round-trip OK)
+teardown: ok=true observed=[38152,38194,38161,38199] stopped=[38199,38194,38161,38152] forced=[] remaining=[]
+```
+CXF-6 still fails overall today (no attribution matrix to probe against, as expected
+pre-implementation), but the mechanism finding 2 required — "boot the daemon, issue the real
+request, assert on the response" — is not aspirational text; it ran, for real, this round.
+
+- **34 route-registration files** now scanned by the mechanical discovery pass (round-2 addition,
+  finding 1) across the whole `apps/daemon/src/routes/` tree plus the three named extras; it found
+  18 fetch-reaching routes, all inside the frozen set, plus 2 justified false-positive exclusions —
+  see S9XF-1.
+- 33 routes frozen across 11 registration functions in 11 files (up from 31 at round 1 — round 2
+  added `POST /api/xai/search`, the route the reviewer named, AND `POST /api/xai/oauth/complete`,
+  which this tranche's own new discovery pass found on its own).
 - Four independently-implemented SSRF guards confirmed, with two (`safe-fetch.ts`,
   `plugin-asset-cache.ts`) connection-pinned and two (`connectionTest.ts`'s
   `assertExternalAssetUrl` family, `shadcn-import.ts`'s `classifyHost`) not.
-- Five caller-reachable outbound-fetch call sites confirmed to have **no** SSRF guard today:
-  `mcp-oauth.ts` `beginAuth`, `deploy.ts` `requestDeploymentUrl`, `media/index.ts`'s ~40 provider
-  functions, `byok-tools.ts`'s provider-base-URL call sites, `elevenlabs-voices.ts`.
-- The mechanical guard-tier scan reports **guard-tier 2 (unguarded) for all 9
+- Six caller-reachable outbound-fetch call sites confirmed to have **no** SSRF guard today (the
+  five the reviewer confirmed as real, plus `routes/xai.ts`'s `POST /api/xai/search`, added this
+  round): `mcp-oauth.ts` `beginAuth`, `deploy.ts` `requestDeploymentUrl`, `media/index.ts`'s ~40
+  provider functions, `byok-tools.ts`'s provider-base-URL call sites, `elevenlabs-voices.ts`,
+  `routes/xai.ts`'s `POST /api/xai/search`.
+- The mechanical guard-tier scan still reports **guard-tier 2 (unguarded) for all 9
   `connectionTest.ts`-family routes** (`provider/models`, `test/connection`, all 7
   `proxy/*/stream`), even though those routes' handlers in `routes/chat.ts` do call
   `validateExternalApiBaseUrl` (a local alias for `validateUserProviderBaseUrl`, added to
-  `KNOWN_VALIDATING_GUARDS` this round after being found missing). This is a **known, flagged
-  limitation, not a bug the reviewer should silently accept**: `ROUTE_TARGET_FILES` maps these
-  routes to `connectionTest.ts` (where the guard function is *defined*), but the actual raw
-  `fetch(...)` calls for the streamed provider responses live inline in `routes/chat.ts` itself,
-  in the same handler functions as the guard call — the per-file worst-case aggregation this
-  tranche's guard-tier scanner uses cannot distinguish "this route's own handler is guarded" from
-  "an unrelated diagnostic helper elsewhere in a large multi-route file is not," and `chat.ts` is
-  an 85 KB file serving many routes outside this tranche's frozen set. The result is conservative
-  (fail-safe: it will force real attribution work for these 9 rows rather than silently trusting
-  the guard exists) but not fully accurate, and is called out again in "Adversarial review" below.
+  `KNOWN_VALIDATING_GUARDS` in round 1). This remains a **known, flagged limitation**:
+  `ROUTE_TARGET_FILES` maps these routes to `connectionTest.ts` (where the guard function is
+  *defined*), but the actual raw `fetch(...)` calls for the streamed provider responses live inline
+  in `routes/chat.ts` itself, in the same handler functions as the guard call — the per-file
+  worst-case aggregation this tranche's STRUCTURAL guard-tier scanner uses cannot distinguish "this
+  route's own handler is guarded" from "an unrelated diagnostic helper elsewhere in a large
+  multi-route file is not." **This is exactly the class of gap CXF-6's new live probe exists to
+  catch regardless of the structural scanner's blind spot once P0 rows are attributed with a real
+  `control.probe`** — the runtime check does not depend on `ROUTE_TARGET_FILES` being precise,
+  only on the declared probe actually reaching the route. The structural scan result stays
+  conservative (fail-safe) in the meantime; see "Adversarial review" below.
 - `apps/daemon/tests/aihubmix-asset-ssrf.test.ts`, `marketplace-install-ssrf.test.ts`,
   `brand-safe-fetch.test.ts`, `brand-prefetch.test.ts`, `brands-prefetch-abort.test.ts`,
   `plugin-asset-cache.test.ts` all exist and boot/exercise real transport — confirmed by reading
-  every test title in each file; none cover the five unguarded call sites above. The full frozen
+  every test title in each file; none cover the six unguarded call sites above. The full frozen
   glob (11 files, including `deploy`/`deploy-routes`/`byok-tools`/`connectors-routes`/
   `connectors-service`) ran green this round via the verifier's own CXF-2 check, not merely
   assumed from reading test titles.
 - `docs/plans/waves/DECISIONS.md` carries zero `### W9XF-ACCEPT-*` entries at `baseCommit`,
   confirmed by direct regex scan.
 - `docs/security/external-fetch-attribution.json`,
-  `docs/security/external-fetch-implementation-review.json`: do not exist yet (CXF-3 through CXF-7
+  `docs/security/external-fetch-implementation-review.json`: do not exist yet (CXF-3 through CXF-8
   and CXF-10 fail honestly, as expected pre-implementation).
 - The `mishmash-w9-ingest-tranche` proof manifest exists at
   `~/.claude/goal-state/mishmash-w9-ingest-tranche/proof/manifest.json` and its own criteria cover
@@ -661,13 +732,90 @@ the PRD and the verifier.
 }
 ```
 
+## Round 1 dispositions
+
+Round 1 (GPT-5.6 Sol) returned **REJECT** with 7 blocking findings. The reviewer explicitly
+confirmed the underlying inventory research (the five originally-named unguarded families, the
+`connectionTest.ts` DNS-validation/connection TOCTOU distinction) as real; every finding was about
+how the package *proves* things, plus one real inventory gap (finding 1). All 7 are disposed below,
+each against the reviewer's own cited file:line, per program-wide guidance recorded in
+`docs/plans/waves/DECISIONS.md` (W9AS-PARK/W10A-PARK/W10B-PARK): a criterion asserting runtime
+behavior must observe that behavior; structural checks are legitimate only for facts with no
+runtime observable.
+
+1. **Inventory incomplete, not mechanically derived** (`POST /api/xai/search` absent;
+   `routes/xai.ts:253,268,317`). Fixed two ways: the missed route was added to the frozen table
+   (impact 2, S9XF-2); and CXF-1 gained a genuine mechanical whole-tree discovery pass
+   (`discoverFetchReachingRoutes`) that walks every route-registration file and fails on any
+   fetch-reaching route outside the frozen set, independent of the curated tables. Running that
+   pass found a SECOND real miss on its own — `POST /api/xai/oauth/complete` — direct evidence the
+   fix generalizes past the one route named. The duplicate-registration check's same-file blind
+   spot (`dupCheck.get(key) !== target.file`) was also fixed to flag on any repeat, same file or
+   not.
+2. **Runtime protection inferred from gameable source shape.** Two sub-defects, fixed differently
+   on purpose. (a) Guard classification (whether a P0 row's control actually fires) is now
+   RUNTIME-OBSERVED: CXF-6 boots the real production daemon (`bootIsolatedDaemon`) and issues a
+   live HTTP probe with the caller-controlled field pointed at a loopback canary, passing only when
+   the canary sees zero connections and the response status is a declared refusal — per the binding
+   rule, this was NOT closed by adding more AST conditions. (b) Exposure classification's dead-code
+   bug (`classifyRouteExposure`'s final fallback read `isLocalSameOriginReachable(body) ? 3 : 3` —
+   both branches identical, so the reachability check could never change the outcome) is a genuine
+   coding defect in a mechanism the program has never required to become runtime (the ingest
+   tranche's own exposure classifier is the reused precedent) — fixed with a new positive grammar
+   case (`matchLocalSameOriginGuard`) for the real shape (`routes/media.ts:619`,
+   `routes/xai.ts:253`), not new AST conditions layered onto the gameable part.
+3. **CXF-8 tautological.** It recomputed score/tier from its own internal frozen-constants map and
+   compared that computation against itself — a row's `riskScore` was never read. Now reads each
+   attribution row's own declared `riskScore` and checks it against the mechanical verdict; CXF-3
+   was reordered to run first so `attribution` exists when CXF-8 needs it. The frozen-floor
+   contradiction (`check-link`/both `media/generate`/both `live-artifacts/refresh` rows frozen at
+   impact 3 while matching the stated impact-2 definition verbatim) is corrected to 2 in S9XF-2's
+   table — **a scoring judgment call, flagged for the coordinator's confirmation, not silently
+   asserted as the only possible reading; see the report accompanying this round.**
+4. **Endpoint-test lane unsatisfiable as leased, cheaply bypassed.** `discoverSsrfTestFiles` now
+   matches the lease's own new prefix patterns (`mcp-oauth-*`/`deploy-check-link-*`/
+   `external-fetch-*`) in addition to the legacy exact filenames. `routeAssociationTerms` now
+   excludes generic path segments (`api`/`tools`/`projects`/`assets`/`v1`/`v2`) that previously let
+   any test containing "api" satisfy any row. `.only(` is now source-scanned directly. CXF-5's
+   new-control check no longer skips the entire replay requirement when the containing file did not
+   exist at all at baseCommit (it used to silently exempt a genuinely brand-new file, the opposite
+   of the rule's intent).
+5. **CXF-6/CXF-7 didn't implement their stated evidence; CXF-7 unsatisfiable.** CXF-6 is
+   redesigned per finding 2 above. CXF-7's route-key matching is now exact backtick-token equality,
+   never substring `.includes()` (which made "exactly one bullet" impossible for `POST /api/brands`,
+   a literal prefix of its own five nested sibling routes); citation-checking (the bullet must also
+   cite the row's expected reference) was added — it did not exist before. **The "paired
+   accept/reject" evidence is now split across two criteria** (CXF-5's real-passing-test requirement
+   supplies "accept," CXF-6's live probe supplies "reject") rather than built as one self-contained
+   pair inside CXF-6 — **a design choice made because a live "accept" probe would need a reachable
+   real public host, which an isolated verifier should not depend on; flagged for the coordinator's
+   confirmation, not silently asserted as the only possible reading.**
+6. **Review/accepter identities spoofable.** Accepted-risk block parsing is now bounded to its own
+   heading span (`parseAcceptedRiskBlocks`, ported from the W9-agent-spawn reference the DECISIONS.md
+   record names as sound), never sliced to end-of-file; every field (not only `Route`) is
+   placeholder-checked; `Accepter` is checked against a non-founder-identity denylist. CXF-10 now
+   placeholder- and denylist-checks both `reviewer` and `model` (round 1 checked neither
+   meaningfully), expands the owned-path list to include `routes/chat.ts` and every test file, and
+   requires the review record itself to be ABSENT at `reviewedCommit` (proving it was authored
+   strictly afterward, never bundled with the state it claims to review).
+7. **Replay teardown violated the binding safety rule.** The replay runner is no longer a blocking
+   `sh()` call — `spawnWithProcessTreeTracking` polls the full descendant process tree WHILE the
+   process runs (not a single snapshot taken after the fact, which would miss a grandchild
+   outliving an already-reaped parent), and `confirmProcessTreeStopped` requires zero remaining
+   PIDs via `@open-design/platform`'s own `stopProcesses` (SIGTERM-then-SIGKILL escalation, ported
+   from `verify-w10f.ts`, the pattern DECISIONS.md names as proven). A failed/partial teardown now
+   fails the replay outright and PRESERVES the temp worktree (never deletes evidence out from under
+   a failure). `git worktree remove`'s result is checked, not discarded. The same infrastructure
+   backs CXF-6's own daemon teardown, verified live this round (see "Verified baseline").
+
 ## Adversarial review
 
-**Not yet performed.** This document is a first draft. Per `W5-W11-gated.md`'s expansion gate, it
-must be reviewed by a reviewer who did not author it and will not implement it, and both this
-document and `scripts/waves/verify-w9-external-fetch.ts` must be frozen on `main` before any
-`/goal` run against this slug begins. Known residuals the author flags proactively, so a reviewer
-does not have to rediscover them:
+**Round 1 returned REJECT** (7 blocking findings, disposed above). This round (round 2) has not
+yet been re-reviewed. Per `W5-W11-gated.md`'s expansion gate, this document must be reviewed by a
+reviewer who did not author it and will not implement it, and both this document and
+`scripts/waves/verify-w9-external-fetch.ts` must be frozen on `main` before any `/goal` run against
+this slug begins. Known residuals the author flags proactively, so a reviewer does not have to
+rediscover them:
 
 - The intra-file call-graph reachability walk in S9XF-1 is **bounded to same-file (and the named
   1-hop import edges)**, not full whole-program taint analysis. A fetch call site reachable only
@@ -707,7 +855,7 @@ does not have to rediscover them:
 - Unlike the ingest tranche's classifier, this document's exposure classifier is a **port** of the
   ingest tranche's proven functions, generalized to scan multiple registration functions — it HAS
   now been exercised this round (9/9 self-probes pass, CXF-1 and CXF-8 both pass against the real
-  tree, and the 31-route frozen table is self-consistent), which is further along than the ingest
+  tree, and the 33-route frozen table is self-consistent), which is further along than the ingest
   tranche's own PRD was at this identical pre-implementation stage. The guard-tier classifier (new
   this tranche, not ported) has also been exercised and found the real, above-noted limitation —
   arguably stronger evidence than an untested claim would be, but the limitation is real and open.
