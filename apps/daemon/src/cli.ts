@@ -191,6 +191,14 @@ const DAEMON_BOOLEAN_FLAGS = new Set([
 ]);
 const LIBRARY_STRING_FLAGS = new Set(['daemon-url', 'query', 'tag']);
 const LIBRARY_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
+// `od usage …` (NM-20 cost & usage meter). Hoisted up here for the same
+// reason as LIBRARY_STRING_FLAGS above: the top-level `await
+// SUBCOMMAND_MAP[first](rest)` dispatcher runs long before the module
+// finishes its top-to-bottom pass, so a flag-set const declared down near
+// runUsage's own definition would still be in its temporal dead zone the
+// first time `od usage` actually dispatches.
+const USAGE_STRING_FLAGS = new Set(['daemon-url', 'project']);
+const USAGE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 // `od library …` (OD Library asset registry). Hoisted so the dispatcher can
 // parse flags without hitting a temporal-dead-zone on these sets.
 const LIBRARY_ASSET_STRING_FLAGS = new Set([
@@ -8483,9 +8491,6 @@ async function runVersion(args) {
     : (data?.version?.version ?? JSON.stringify(data));
   console.log(version);
 }
-
-const USAGE_STRING_FLAGS = new Set(['daemon-url', 'project']);
-const USAGE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 
 function printUsageHelp() {
   console.log(`Usage:
