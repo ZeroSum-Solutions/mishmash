@@ -110,6 +110,15 @@ export function createChatRunService({
   // outlives buffer truncation. Kept generic here: this service does not
   // interpret event semantics, it just hands each record to the observer.
   onEventEmitted = null,
+  // Optional observer invoked once, synchronously, at the START of finish()
+  // -- before the terminal `end` event is emitted and before cleanup is
+  // scheduled -- so run.events / run.model / run.modelRequested /
+  // run.modelReported are all still in their final, complete state. The
+  // daemon uses this for the NM-20 cost-meter's durable per-run usage
+  // record (usage-tracking.ts): computed once here, from the real
+  // SSE-shaped run.events, rather than re-derived later from the
+  // differently-shaped persisted message history.
+  onRunFinished = null,
 }) {
   const runs = new Map();
 
@@ -345,6 +354,9 @@ export function createChatRunService({
 
   const finish = (run, status, code: number | null = null, signal: string | null = null) => {
     if (TERMINAL_RUN_STATUSES.has(run.status)) return;
+    if (onRunFinished) {
+      try { onRunFinished(run, status); } catch { /* best-effort, must not block finalize */ }
+    }
     run.status = status;
     run.exitCode = code;
     run.signal = signal;
