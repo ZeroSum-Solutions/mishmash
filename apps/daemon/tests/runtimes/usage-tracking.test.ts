@@ -250,7 +250,7 @@ describe('run_usage table persistence', () => {
     expect(summary.pricedRunCount).toBe(1);
   });
 
-  it('reports unavailable (not $0.00) for a project with zero priced runs', () => {
+  it('marks pricingVersion unavailable (never renders as $0.00) for a project with zero priced runs', () => {
     recordRunUsage(db, {
       runId: 'unpriced-only',
       projectId: 'proj-unpriced',
@@ -263,8 +263,22 @@ describe('run_usage table persistence', () => {
       }),
     });
     const summary = projectUsageSummary(db, 'proj-unpriced');
+    // C1-9's "not $0.00" guarantee lives at the display layer
+    // (formatUsageTotal / `od usage`), keyed on pricingVersion -- see their
+    // own tests. totalCostUsd itself is the real, honest sum of whatever IS
+    // priced (C1-7): 0 here because nothing is, not a null placeholder a
+    // real "before any run" HTTP baseline read could never tell apart from
+    // this same "unpriced" case.
     expect(summary.pricingVersion).toBe('unavailable');
-    expect(summary.totalCostUsd).toBeNull();
+    expect(summary.totalCostUsd).toBe(0);
+  });
+
+  it('reports a confident $0 total for a project with no runs at all', () => {
+    const summary = projectUsageSummary(db, 'proj-genuinely-empty');
+    expect(summary.runCount).toBe(0);
+    expect(summary.pricedRunCount).toBe(0);
+    expect(summary.pricingVersion).toBe('unavailable');
+    expect(summary.totalCostUsd).toBe(0);
   });
 
   it('survives a fresh Database handle against the same file (daemon-restart durability)', () => {
