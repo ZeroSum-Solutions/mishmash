@@ -1553,8 +1553,15 @@ interface SerializedReplayForest {
   modules: SerializedTaskNode[];
   unhandledErrors: string[];
 }
-const REPLAY_RESULT_MARKER = 'W9_REPLAY_RESULT_JSON:';
-function buildReplayRunnerScript(): string {
+// DEFECT 2 FIX: a per-invocation CSPRNG marker, generated fresh in the
+// verifier process for every replay and embedded only into that replay's
+// own generated runner source. The executed HEAD test file cannot predict
+// it (reading the runner source mid-run would be a deliberate multi-step
+// attack, the accepted LOW trust profile), unlike the old fixed string.
+function generateReplayMarker(): string {
+  return `W9_REPLAY_RESULT_JSON_${crypto.randomBytes(16).toString('hex')}:`;
+}
+function buildReplayRunnerScript(marker: string): string {
   return [
     "import { startVitest } from 'vitest/node';",
     '',
@@ -1582,9 +1589,17 @@ function buildReplayRunnerScript(): string {
     'const testModules = ctx.state.getTestModules();',
     'const unhandledErrors = ctx.state.getUnhandledErrors();',
     'const serialized = { moduleCount: testModules.length, modules: testModules.map(serializeNode), unhandledErrors: serializeErrors(unhandledErrors) };',
-    `console.log(${JSON.stringify(REPLAY_RESULT_MARKER)} + JSON.stringify(serialized));`,
+    `console.log(${JSON.stringify(marker)} + JSON.stringify(serialized));`,
     'await ctx.close();',
-    'process.exit(0);',
+    // DEFECT 1 FIX: preserve Vitest's own natural exit code instead of
+    // forcing 0. Vitest's TestRun.end() sets process.exitCode = 1
+    // automatically for a failed run (via hasFailed(modules)), and
+    // _checkUnhandledErrors() does the same for unhandled errors -- both
+    // run inside ctx.start()/startVitest()'s own finally block, so by the
+    // time we reach this line process.exitCode already reflects the true
+    // outcome. Forcing process.exit(0) here silently clobbered that and
+    // made every genuine red replay look like a zero-status (non-red) exit.
+    'process.exit(process.exitCode ?? 0);',
     '',
   ].join('\n');
 }
@@ -1601,7 +1616,8 @@ function evaluateTaskForestConsistency(forest: SerializedReplayForest, targetFul
   }
   let targetState: string | null = null;
   let controlState: string | null = null;
-  const failedLeaves: string[] = [];
+  let failedLeafCount = 0;
+  let soleFailedLeafFullName: string | null = null;
   const disallowedErrorNodes: string[] = [];
   function walk(node: SerializedTaskNode): void {
     const isTargetTestNode = node.type === 'test' && node.fullName === targetFullName;
@@ -1609,7 +1625,15 @@ function evaluateTaskForestConsistency(forest: SerializedReplayForest, targetFul
       disallowedErrorNodes.push(`${node.type} "${node.fullName}": ${JSON.stringify(node.errors)}`);
     }
     if (node.type === 'test') {
-      if (node.state === 'failed') failedLeaves.push(node.fullName);
+      // DEFECT 3 FIX: count failed leaves by NODE (once per failed TestCase
+      // encountered while walking), never deduplicated by fullName. The
+      // prior name-set approach let two distinct failed leaves that both
+      // happened to share the target's exact fullName filter each other
+      // out, silently accepting a second, unrelated failure.
+      if (node.state === 'failed') {
+        failedLeafCount += 1;
+        soleFailedLeafFullName = node.fullName;
+      }
       if (node.fullName === targetFullName) targetState = node.state;
       if (node.fullName === controlFullName) controlState = node.state;
       return;
@@ -1624,9 +1648,10 @@ function evaluateTaskForestConsistency(forest: SerializedReplayForest, targetFul
   if (disallowedErrorNodes.length > 0) {
     problems.push(`errors present outside the target test's own assertion failure: ${disallowedErrorNodes.join('; ')}`);
   }
-  const otherFailedLeaves = failedLeaves.filter((f) => f !== targetFullName);
-  if (otherFailedLeaves.length > 0) {
-    problems.push(`unrelated failed test(s) in the tree: ${otherFailedLeaves.join('; ')}`);
+  if (failedLeafCount !== 1) {
+    problems.push(`expected exactly 1 failed test leaf in the entire tree, found ${failedLeafCount}`);
+  } else if (soleFailedLeafFullName !== targetFullName) {
+    problems.push(`the one failed test leaf is "${soleFailedLeafFullName}", expected the target "${targetFullName}"`);
   }
   if (targetState === null) problems.push(`target test "${targetFullName}" not found in the serialized forest`);
   else if (targetState !== 'failed') problems.push(`target test state is "${targetState}", expected "failed"`);
@@ -1674,9 +1699,12 @@ function replayRedEvidence(parentSha: string, containingFileRel: string, targetF
 
     // Verifier-constructed runner source, written fresh into the throwaway
     // detached worktree -- never checked-in command text, and deleted with
-    // the rest of tempDir in the finally block below.
+    // the rest of tempDir in the finally block below. The marker is
+    // generated fresh per invocation (DEFECT 2 FIX) and only ever exists
+    // in this in-memory string and the runner source it gets embedded into.
+    const marker = generateReplayMarker();
     const runnerScriptAbs = path.join(tempDir, 'apps/daemon', '.w9-replay-runner.mjs');
-    fs.writeFileSync(runnerScriptAbs, buildReplayRunnerScript());
+    fs.writeFileSync(runnerScriptAbs, buildReplayRunnerScript(marker));
     const targetFileArg = `tests/${path.basename(containingFileRel)}`;
     const argvList = ['--filter', '@open-design/daemon', 'exec', 'node', '.w9-replay-runner.mjs', targetFileArg];
     evidenceLines.push(`argv: pnpm ${argvList.join(' ')} (cwd=${path.join(tempDir, 'apps/daemon')})`);
@@ -1692,19 +1720,26 @@ function replayRedEvidence(parentSha: string, containingFileRel: string, targetF
       return { ok: false, problems, evidenceLines };
     }
 
-    const markerLine = runResult.stdout.split('\n').find((l) => l.startsWith(REPLAY_RESULT_MARKER));
+    const markerLines = runResult.stdout.split('\n').filter((l) => l.startsWith(marker));
     // The transcript hash covers the runner's own serialized output plus
     // both process streams, per the ruling.
-    const outputHash = sha256Bytes(`--- runner output ---\n${markerLine ?? ''}\n--- stdout ---\n${runResult.stdout}\n--- stderr ---\n${runResult.stderr}`);
+    const outputHash = sha256Bytes(`--- runner output ---\n${markerLines[0] ?? ''}\n--- stdout ---\n${runResult.stdout}\n--- stderr ---\n${runResult.stderr}`);
     evidenceLines.push(`exit=${runResult.status} processError=false stdout+stderr+runnerOutput sha256=${outputHash}`);
-    if (!markerLine) {
-      problems.push(`replay runner produced no ${REPLAY_RESULT_MARKER} line on stdout`);
+    // DEFECT 2 FIX: fail closed unless the marker appears EXACTLY once.
+    // Zero occurrences means the runner never reached its own serialization
+    // step; more than one means some other stdout write (e.g. the executed
+    // HEAD test file raw-printing a decoy line) produced a colliding
+    // prefix, and a first-match/.find() extraction would trust whichever
+    // one came first -- including an attacker-chosen one.
+    if (markerLines.length !== 1) {
+      problems.push(`replay runner produced ${markerLines.length} marker-prefixed line(s) on stdout, expected exactly 1`);
       return { ok: false, problems, evidenceLines };
     }
+    const markerLine = markerLines[0]!;
 
     let forest: SerializedReplayForest | null = null;
     try {
-      forest = JSON.parse(markerLine.slice(REPLAY_RESULT_MARKER.length)) as SerializedReplayForest;
+      forest = JSON.parse(markerLine.slice(marker.length)) as SerializedReplayForest;
     } catch (err) {
       problems.push(`replay runner's serialized forest could not be parsed: ${String(err)}`);
       return { ok: false, problems, evidenceLines };
