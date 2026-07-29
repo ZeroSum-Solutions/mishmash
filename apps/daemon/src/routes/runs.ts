@@ -837,9 +837,22 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       const appCfgForAnalytics = await readAppConfig(RUNTIME_DATA_DIR).catch(
         () => ({} as Record<string, unknown>),
       );
-      const detectedAgentsForAnalytics = await detectAgents(
-        toJsonRecord((appCfgForAnalytics as { agentCliEnv?: unknown }).agentCliEnv),
-      ).catch((): Array<{ id: string; available: boolean }> => []);
+      // C1-5: detectAgents() probes every registered agent def with no
+      // caching anywhere in the codebase (verified: agents.ts/detection.ts
+      // memoizes nothing beyond per-agent capability flags) -- measured
+      // ~16s cold in this repo's own dev environment. Analytics prep must
+      // never block the run_finished capture on that; a bounded, best-effort
+      // budget degrades runtime_type dimensionality gracefully on timeout
+      // (the same empty-array shape the existing .catch() below already
+      // handles for an outright detection failure), rather than silently
+      // starving the whole run_finished PostHog event past any reasonable
+      // "did telemetry actually fire" window.
+      const detectedAgentsForAnalytics = await Promise.race([
+        detectAgents(
+          toJsonRecord((appCfgForAnalytics as { agentCliEnv?: unknown }).agentCliEnv),
+        ),
+        new Promise<DetectedAgent[]>((resolve) => setTimeout(() => resolve([]), 2000)),
+      ]).catch((): Array<{ id: string; available: boolean }> => []);
       const velaStatusForAnalytics = (() => {
         try {
           const configuredAmrEnv = agentCliEnvForAgent(
