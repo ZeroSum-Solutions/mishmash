@@ -442,3 +442,43 @@ strong-sounding one.
 - Disposition: NM-22 agent-spawn route hardening is NOT cancelled — the surface is real and the
   threat model work in this PRD is reusable. A future package re-expands it on the runtime-observation
   pattern above, and inherits C9S-8's accepted-risk mechanism, which is the one part that held up.
+
+### W10C-PARK
+- Decision: parked (package not frozen; wave not implemented)
+- Decider: Fable 5 orchestrator under gate authority delegated by Devin Wiggins (founder) on 2026-07-28
+- Date: 2026-07-29
+- Rounds: 3 independent reviews, 3 non-APPROVE verdicts
+- Rationale: Round 3 was pre-declared final and returned REJECT with five HIGH findings. Three of
+  them (C10C-2, C10C-3, C10C-4) are the SAME defect surviving a third round: the criteria meant to
+  prove the repository carries real delegated tests bound to production remain structural, and
+  structural binding keeps admitting decorative artifacts. `countCallsToExactIdentifier` counts
+  `obj._unused()` as a call to an imported binding named `_unused`; `SKILL_ID_ALIASES` is satisfied
+  by a property-name occurrence; the compiler-API check ties `createSourceFile` to `forEachChild`
+  rather than to reading the real toolbox source. C10C-1's live-value inspection is genuinely
+  runtime but incomplete — it never inspects array numeric-property descriptors and loses symbol
+  keys through `getOwnPropertyNames`/`keys`, so a probe adding an accessor at index 0 and a symbol
+  own key returned zero problems.
+- The deciding finding is teardown, for the third wave running: a missing or unparseable stop report
+  with no captured PID returns SUCCESS regardless of exit status; a reported `partial` becomes
+  success after escalation; only selected PIDs are polled rather than group survival; and the
+  temporary data directory is removed unconditionally even when confirmation fails. Production
+  `tools-dev` explicitly emits `status: "partial"` when `remainingPids` survive, so this is not
+  hypothetical.
+- What was sound and is worth reusing: the reinstated C10C-8 works and disclaims honestly — it
+  produces pass / blocked-on-founder / fail for present / deleted / malformed records and claims
+  review-lane provenance rather than verified authority. The reviewer/decider whitespace checks,
+  manual-redirect probes with origin and status validation, the DENY list, and the GATE-INTEGRITY
+  pattern are all sound. The author's self-caught `ScriptKind.TS` parser bug was confirmed to have
+  affected only the round-3 NextStepActions check, invalidating no earlier pass.
+- The insight for whoever re-expands this: the verifier's own runtime oracle DOES supply real
+  behavioral truth — the reviewer said so explicitly. What keeps failing is the surrounding attempt
+  to ALSO prove, structurally, that the repo contains particular tests wired to particular imports.
+  That is an unbounded source-shape claim and it has now lost three times. A future package should
+  either drop the delegated-artifact criteria and let the runtime oracle carry the proof, or bind
+  them by executing the delegated tests and observing their effects — never by counting identifiers.
+- Evidence gap noted for the record: the reviewer could not execute the verifier (tsx IPC `listen
+  EPERM` in its sandbox), and the manifest the author cited for 6/11 records `treeDirty: true`, so
+  no clean HEAD-bound run was independently confirmed. The five findings are static and stand
+  regardless, but the pass count was not verified.
+- Disposition: NM-19 toolbox reliability is NOT cancelled. The 17-phantom-skill-ID problem is real
+  and unaddressed; a future package re-expands it on the runtime-observation pattern.
