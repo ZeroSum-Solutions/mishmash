@@ -557,6 +557,58 @@ construction, since it can only observe the production path.
 
 ---
 
+### C10F-12 — Gates
+
+**Statement.** `pnpm guard` and `pnpm typecheck` both exit `0` on the current tree. A standing
+hygiene requirement, not a "new behavior exists yet" check — it legitimately passes both before and
+after implementation, unlike every other `C10F-*` criterion above.
+
+**Satisfiability.** A legitimate implementation adds no lint/type errors, and (per the
+`capability-manifest.json`/`SUBCOMMAND_MAP` parity check `scripts/guard.ts` already enforces
+program-wide — see "Ground facts") registering a `storage` `SUBCOMMAND_MAP` key without the
+matching manifest row fails `pnpm guard` immediately, closing the same gap C10F-10 checks
+positively.
+
+**Decoy.** An implementation that ships a working GC engine but skips the manifest row, or
+introduces a stray `any`/unused import, fails this criterion even though C10F-1 through C10F-9
+might all pass — a real implementation cannot selectively satisfy the behavioral criteria while
+leaving the repo's own standing hygiene gates red.
+
+**Verification.** `pnpm guard` and `pnpm typecheck` are run for real, on the current tree, exit
+codes checked exactly.
+
+---
+
+### C10F-13 — Adversarial review of the implementation is on record, non-spoofable
+
+**Statement.** `docs/security/storage-gc-implementation-review.json` exists:
+`{reviewer, model, reviewedCommit, verdict}`. Mirrors `verify-w9-ingest.ts`'s C9-10 design exactly,
+for the same structural reason: an in-repo file committed in commit X cannot contain X's own SHA,
+so the record names a **strict ancestor of `HEAD`** that carries the complete implementation, never
+`HEAD` itself.
+
+**Satisfiability.** Commit the whole implementation first as some real commit P; a reviewer
+distinct from every author in `baseCommit..P` reviews P; the review record naming `reviewedCommit:
+P` is committed afterward, even as `HEAD` itself, adding only that one file — P's SHA is already
+stable by construction, so there is no chicken-and-egg problem.
+
+**Decoy.** A review record naming `reviewedCommit: HEAD` (the record's own commit) is structurally
+impossible to trust — at authoring time HEAD's own SHA does not exist yet — and is rejected outright
+by the strict-ancestor check. A same-author "review" (reviewer string colliding with a commit author
+in `baseCommit..reviewedCommit`) is rejected by the distinctness check. A review naming an old
+commit while the owned implementation paths kept changing afterward (so the review no longer covers
+the final state) is rejected by the empty-owned-diff check.
+
+**Verification.** `reviewedCommit` resolves to a real commit object and is a strict ancestor of
+`HEAD` (`git merge-base --is-ancestor`, and `reviewedCommit !== HEAD`); `git diff --name-only
+reviewedCommit HEAD` over the owned implementation/evidence paths
+(`apps/daemon/src/storage-gc/**`, `apps/daemon/src/routes/storage-gc.ts`, `apps/daemon/tests/
+storage-gc-*.test.ts`, `packages/contracts/src/api/storage-gc.ts`,
+`docs/security/daemon-threat-model.md`) is empty; `reviewer` is distinct from every commit author
+across `baseCommit..reviewedCommit` (`git log --format='%an <%ae>'`); `verdict === "APPROVE"`.
+
+---
+
 ### GATE-INTEGRITY, LEASE, HEAD-DRIFT
 
 Standard infra checks, mirroring `verify-w0.ts`/`verify-w9-ingest.ts`:
@@ -607,6 +659,7 @@ globs below are the proposal for that entry.
 - `docs/security/daemon-threat-model.md` — append-only, a new `## Wave 10f` section bounded to the
   next `## ` heading (mirroring W9's C9-7 convention); must not edit any other wave's section.
   Shared with W0 (already landed) and W9-ingest; temporally serialized, never concurrent.
+- `docs/security/storage-gc-implementation-review.json` — the C10F-13 review record.
 - `docs/plans/waves/DECISIONS.md` — for recording founder rulings on the open questions below,
   mirroring W9-ingest's lease rationale (attribution/scope decisions belong in a founder-authorized
   record, never an implementation-authored assertion).
@@ -675,8 +728,51 @@ pnpm exec tsx scripts/waves/verify-w10f.ts
 Writes a commit-bound proof manifest to
 `~/.claude/goal-state/mishmash-w10f-storage/proof/manifest.json` (per
 `VERIFICATION-CONTRACT.md` §2) and prints a per-criterion scoreboard. Exits non-zero if any
-criterion fails, the tree is dirty, or the manifest fails to write. **Pre-implementation (current
-`main`), every C10F-* criterion fails by name** ("product surface missing: od storage gc …" /
-"no storage registry module found") — this is the expected clean-red state; the verifier does not
-crash, and GATE-INTEGRITY/LEASE report their own honest pre-freeze states (advisory /
-no-lease-entry-yet respectively) rather than false-passing.
+criterion fails, the tree is dirty, or the manifest fails to write.
+
+## Verified baseline (this run, pre-implementation)
+
+Captured directly from a real run of `scripts/waves/verify-w10f.ts` against this branch, immediately
+after writing this PRD and the verifier, with no implementation present — real stdout, not a
+prediction:
+
+```
+verify-w10f: 3/16 criteria pass (treeDirty=true)
+  [FAIL] C10F-1 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
+  [FAIL] C10F-2 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
+  [FAIL] C10F-3 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
+  [FAIL] C10F-4 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
+  [FAIL] C10F-5 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
+  [FAIL] C10F-6 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
+  [FAIL] C10F-7 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
+  [FAIL] C10F-8 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
+  [FAIL] C10F-9 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
+  [FAIL] C10F-10 (no capability-manifest.json row with capability === "storage")
+  [FAIL] C10F-11 (no apps/daemon/tests/storage-gc-*.test.ts files found)
+  [PASS] C10F-12
+  [FAIL] C10F-13 (docs/security/storage-gc-implementation-review.json does not exist yet -- expected pre-implementation state)
+  [PASS] GATE-INTEGRITY
+  [FAIL] LEASE (no "W10f" entry in leases.json@8e788d123557d2369c9aa43401da3412cd43a391 -- expected until the orchestrator adds one after this PRD/verifier freeze)
+  [PASS] HEAD-DRIFT
+  ⚠ tree is dirty: advisory only, never a wave pass
+MANIFEST_SHA256=ce1ccb9654ac05cb24f9a10763f32727b1a298dda4687f46a468bfac84dd98a1
+```
+
+`echo $?` after this run: `1`. Every `C10F-*` criterion fails **by name**, with a specific, honest
+reason (`product surface missing: ...`), never a crash, hang, timeout, or unhandled exception — the
+verifier never attempts to boot its shared fixture daemon at all in this state (`storageEntry` is
+`null`, so `bootSharedDaemon()` is skipped entirely; grep the run for any contact with a daemon and
+there is none). `C10F-12` (gates) passes legitimately, since it is a standing hygiene check, not a
+"new behavior" check — `pnpm guard`/`pnpm typecheck` are already green on the current tree.
+`GATE-INTEGRITY` passes advisory (no `approved-gate.sha256` pinned yet). `LEASE` fails by name for
+the expected reason (no `W10f` entry in `leases.json@baseCommit` yet — this PRD proposes globs; it
+does not add the entry). `HEAD-DRIFT` passes (nothing else touched `HEAD` mid-run). `treeDirty` is
+`true` in this capture because this PRD and the verifier are themselves new, uncommitted files at
+capture time — expected until they land as a commit.
+
+Separately, `startServer({ port: 0, host: '127.0.0.1', returnServer: true })` (the exact primitive
+`bootIsolatedDaemonSubprocess` uses) was sanity-checked standalone in an isolated fixture
+`OD_DATA_DIR`: it boots on an OS-assigned ephemeral port (observed: `65312` in one run — never
+7456/51012), answers a real `GET /api/projects` with `200`, and `shutdown()` cleanly stops it —
+confirming the shared-daemon mechanism this verifier's dynamic criteria depend on actually works,
+independent of whether `storage-gc` exists yet to exercise it end-to-end.
