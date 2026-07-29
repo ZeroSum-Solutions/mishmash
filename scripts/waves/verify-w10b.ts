@@ -7,45 +7,69 @@
 //
 // Run: pnpm exec tsx scripts/waves/verify-w10b.ts [--repo <path>]
 // Exit 0 only when C10B-1 through C10B-5 all pass AND the tree is clean
-// (treeDirty: false). The commit-bound proof manifest is written to the
-// wave's goal-state proof directory either way, per
+// (treeDirty: false) AND the infra checks (LEASE, GATE-INTEGRITY,
+// SCANNER-SELFTEST, HEAD-DRIFT) pass. The commit-bound proof manifest is
+// written to the wave's goal-state proof directory either way, per
 // docs/plans/waves/W10b-voicebox-registration.md's "Definition of green".
 //
-// ROUND-1 ADVERSARIAL REVIEW (REJECT, 6 findings, fixed here -- see the PRD's
-// "Round 1 adversarial review" section for the full disposition of each):
-//   1. This file is NOT part of the W10b implementation lease (see the PRD's
-//      "Proposed write lease" -- allow list is `apps/daemon/src/mcp-config.ts`
-//      only). Any implementation-branch diff that touches this file fails
-//      C10B-3's lease-subset check by construction; the verifier's authority
-//      comes from being external to what the implementer can write, not from
-//      a self-hash pin. That only holds under the sequencing the PRD states:
-//      orchestrator lands the lease row (and this file) on `main` FIRST, then
-//      the implementation branch is cut/rebased so `baseCommit` already
-//      contains both.
-//   2/3. `analyzeTemplateArray()` below replaces the old best-effort element
-//      walk: it fails closed (returns non-empty `problems`) on ANY array
-//      element that is not a plain object literal with a literal string
-//      `id` -- spreads, calls, conditionals, computed/shorthand ids -- and on
-//      any duplicate `id` across the WHOLE array, not just `voicebox`. C10B-3
-//      also now requires the file's text OUTSIDE the MCP_TEMPLATES array's
-//      own span to be byte-identical between baseCommit and HEAD, so new
-//      exports/functions/imports elsewhere in the file are caught even though
-//      they're invisible to an array-only diff.
-//   4. C10B-4's denylist regex is removed entirely -- a finite blocklist is
-//      always evadable by paraphrase. Replaced with byte-exact equality
-//      against the ONE frozen string per free-text field (label/description/
-//      example/homepage), copied verbatim from the PRD's "Implementation
-//      surface" code block. There is no wording those fields may take other
-//      than the frozen one.
-//   5. C10B-2's URL check is now full-string equality against the frozen URL
-//      (was: check hostname/port/pathname separately, silently allowing
-//      credentials/query/fragment through unchecked). `authMode` must now be
-//      exactly 'none' (was: absent-or-'none'). A `headerFields` property must
-//      be entirely absent (round-1 ruling: pin X-Voicebox-Client-Id absent).
-//   6. C10B-5 now scans real comment tokens via the TypeScript scanner
-//      (`collectComments`, skipTrivia=false) rather than raw `+`-prefixed
-//      diff lines, so a string literal that happens to contain "NM-25" can
-//      never satisfy it -- only an actual `//`/`/* */` comment can.
+// ROUND-3 ADVERSARIAL REVIEW (founder-authorized final round, three closures
+// -- see the PRD's "Round 3 adversarial review" section for full detail):
+//
+//   1. DEEP SPREAD BAN. Round 2 showed a complete false-green: a type-valid
+//      object literal with the frozen direct properties (id/label/url/...)
+//      followed by `...evilOverride` -- at runtime the spread silently wins
+//      (JS last-write-wins), but `findStringProp`'s first-match walk over
+//      `.properties` returned the frozen-looking literal and never noticed.
+//      `findDeepStructuralAnomalies()` now walks the ENTIRE MCP_TEMPLATES
+//      subtree (every object literal, at every nesting depth, including
+//      inside array-valued fields like a hypothetical `headerFields`) and
+//      fails closed on anything that is not a plain `key: <literal>`
+//      PropertyAssignment: SpreadAssignment (object spread), SpreadElement
+//      (array spread), a computed/non-literal property name, a method/
+//      getter/setter object member, or a duplicate property name within one
+//      object literal. The last three are the same vulnerability class as
+//      the spread (a later property silently overrides an earlier
+//      frozen-looking one at runtime, invisible to a first-match extractor)
+//      and are closed by the same mechanism, not left as an adjacent gap
+//      right next to the one just fixed.
+//   2. SCANNER FIX. Round 2 found that raw `scanner.scan()` calls, without
+//      tracking template-substitution context, misclassified text INSIDE a
+//      template literal's tail as a real comment once a `${...}`
+//      substitution was involved (e.g. `` `${0}// NM-25` ``). Manually
+//      reimplementing the stateful re-scan the TypeScript parser does
+//      internally (`reScanTemplateToken`) is exactly the kind of thing that
+//      is easy to get subtly wrong twice. Instead, `collectComments()` now
+//      trusts the ALREADY-CORRECT parser: it walks the parsed AST to record
+//      the exact `[start,end)` span of every string/template-piece/regex
+//      literal token (the parser resolved template boundaries correctly,
+//      substitutions and all -- that is the one thing a hand-rolled scanner
+//      loop cannot be trusted to redo), then finds `//`/`/* */`-shaped text
+//      in the raw source with a simple regex and discards any match whose
+//      start falls inside one of those literal spans. A comment-like
+//      sequence can only ever be a real comment if it sits OUTSIDE every
+//      literal the parser found. `SCANNER-SELFTEST` below is the
+//      template-heavy fixture proving this against the exact two round-2
+//      false-positive cases, plus positive/negative controls.
+//   3. GATE-INTEGRITY. Round 2: the lease already keeps this file out of the
+//      implementer's diff (see finding 1's round-1 fix), but that is a
+//      single control, not defense in depth, and the review wanted the same
+//      external-immutability shape scripts/waves/verify-w9-ingest.ts already
+//      uses. `GATE-INTEGRITY` below self-hashes the file currently
+//      executing and compares it against an orchestrator-placed
+//      `~/.claude/goal-state/mishmash-w10b-voicebox/approved-gate.sha256` --
+//      present only once the orchestrator pins this exact frozen copy.
+//      Unpinned (the state before that happens, including every run in this
+//      authoring session) passes with `gateIntegrityPinned: false` recorded
+//      in the manifest; pinned, it must match exactly. This is explicitly
+//      defense in depth, not the PRIMARY control -- the primary control
+//      remains C10B-3's lease-subset check, which already keeps this file
+//      out of the implementer's own diff. Per the founder's round-3
+//      instruction, the proposed lease's `deny` list also now names both
+//      this file and the PRD explicitly (see the PRD's "Proposed write
+//      lease"), and C10B-3 mechanically checks that `deny` list too.
+//
+// Prior rounds (1 and 2) are recorded in the PRD's "Round 1/2/3 adversarial
+// review" sections; this header covers only what changed in round 3.
 //
 // Scope note: this verifier never imports apps/daemon/src/mcp-config.ts as a
 // live ES module -- that file's own dependency graph is not this script's
@@ -58,9 +82,12 @@
 //
 // RUNTIME SAFETY: this verifier spawns no daemon and binds no port -- every
 // criterion is answered from `git show`/`git diff`/`git status` output plus
-// in-process TypeScript parsing/scanning. It never touches a
-// default-namespace daemon (ports 7456/51012) because it never starts one.
-// Git context is resolved from local refs only (no fetch/push).
+// in-process TypeScript parsing (no raw scanner loop as of round 3). It
+// never touches a default-namespace daemon (ports 7456/51012) because it
+// never starts one. Git context is resolved from local refs only (no
+// fetch/push). This file never writes generated script content -- only
+// `manifest.json` and plain-text proof artifacts under `proofDir` -- so
+// there is nothing here for `node --check` to validate.
 
 import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -86,11 +113,12 @@ const WAVE_SLUG = 'mishmash-w10b-voicebox';
 const TEMPLATE_FILE = 'apps/daemon/src/mcp-config.ts';
 
 // -------------------------------------------------------------------------
-// Frozen fields (round-1 finding 4 fix). Copied verbatim from the PRD's
-// "Implementation surface" code block -- kept in exact byte sync with that
-// file by hand, since neither file may depend on the other at runtime
-// (portability; see header). Any wording change to the registered template
-// requires updating BOTH the PRD and this file, together, in one commit.
+// Frozen fields (round-1 finding 4 fix, unchanged in round 3). Copied
+// verbatim from the PRD's "Implementation surface" code block -- kept in
+// exact byte sync with that file by hand, since neither file may depend on
+// the other at runtime (portability; see header). Any wording change to the
+// registered template requires updating BOTH the PRD and this file,
+// together, in one commit.
 // -------------------------------------------------------------------------
 const FROZEN = {
   id: 'voicebox',
@@ -112,6 +140,7 @@ function emergencyExit(errorMessage: string): never {
       commit: 'unknown',
       treeDirty: true,
       baseCommit: 'unknown',
+      gateIntegrityPinned: false,
       toolchain: { node: process.version, pnpm: 'unknown' },
       criteria: [
         {
@@ -173,6 +202,9 @@ function sh(
 
 function sha256Bytes(buf: Buffer | string): string {
   return crypto.createHash('sha256').update(buf).digest('hex');
+}
+function sha256File(absPath: string): string {
+  return sha256Bytes(fs.readFileSync(absPath));
 }
 
 interface CriterionResult {
@@ -305,6 +337,7 @@ function writeEmergencyManifest(errorMessage: string, partialResults: CriterionR
     commit: 'unknown',
     treeDirty: true,
     baseCommit: 'unknown',
+    gateIntegrityPinned: false,
     toolchain: { node: process.version, pnpm: sh('pnpm', ['--version']).stdout.trim() },
     criteria: [
       ...partialResults,
@@ -357,6 +390,10 @@ function resolveGitContextOrExit(): { headSha: string; baseCommit: string } {
 }
 const { headSha, baseCommit } = resolveGitContextOrExit();
 
+const gateIntegrityPinned = fs.existsSync(
+  path.join(os.homedir(), '.claude', 'goal-state', WAVE_SLUG, 'approved-gate.sha256'),
+);
+
 function readFileAtCommit(commit: string, relPath: string): string | null {
   const r = sh('git', ['show', `${commit}:${relPath}`]);
   if (r.status !== 0) return null;
@@ -378,8 +415,10 @@ interface ArrayScan {
   file: SourceFile;
   arrayNode: ArrayLiteralExpression;
   /** Non-empty means the array could NOT be safely reasoned about (round-1
-   * finding 3): a spread/call/other non-object-literal element, an object
-   * literal with no plain string-literal `id`, or a duplicate `id`. Every
+   * finding 3, round-3 finding 1): a spread/call/other non-object-literal
+   * element, an object literal with no plain string-literal `id`, a
+   * duplicate `id`, or a deep structural anomaly (spread/computed-key/
+   * duplicate-key/accessor at ANY nesting depth -- round-3 finding 1). Every
    * consumer below must check this is empty before trusting `clean`. */
   problems: string[];
   /** One block per id, populated only when `problems` is empty. */
@@ -445,18 +484,62 @@ function shortText(sourceFile: SourceFile, node: TsNode): string {
   return node.getText(sourceFile).replace(/\s+/g, ' ').slice(0, 100);
 }
 
+/** Round-3 finding 1 (deep spread ban) + its two sibling vulnerabilities in
+ * the same class (a later property silently overriding an earlier
+ * frozen-looking one at runtime, invisible to a first-match string
+ * extractor): computed property names and duplicate property names within
+ * one object literal. Walks the WHOLE subtree given (the entire
+ * MCP_TEMPLATES array, or any node within it) at every nesting depth --
+ * "shallow bans don't count" applies to all three, not just the literally-
+ * named spread case. Every object-literal member must be a plain
+ * `PropertyAssignment` with an `Identifier`/`StringLiteral`/`NumericLiteral`
+ * key; anything else (`SpreadAssignment`, `ShorthandPropertyAssignment`,
+ * `MethodDeclaration`, get/set accessors, computed keys) is rejected.
+ * `SpreadElement` (array spread) is rejected wherever it appears, including
+ * nested inside a hypothetical `headerFields`/`envFields` array. */
+function findDeepStructuralAnomalies(root: TsNode, sourceFile: SourceFile): string[] {
+  const problems: string[] = [];
+  function visit(node: TsNode): void {
+    if (ts.isSpreadElement(node)) {
+      problems.push(`array spread (SpreadElement) at offset ${node.getStart(sourceFile)}: ${shortText(sourceFile, node)}`);
+    } else if (ts.isObjectLiteralExpression(node)) {
+      const seenNames = new Set<string>();
+      for (const prop of node.properties) {
+        if (!ts.isPropertyAssignment(prop)) {
+          problems.push(
+            `non-plain object member (${ts.SyntaxKind[prop.kind]} -- spread/shorthand/method/accessor are all rejected) at offset ${prop.getStart(sourceFile)}: ${shortText(sourceFile, prop)}`,
+          );
+          continue;
+        }
+        if (!ts.isIdentifier(prop.name) && !ts.isStringLiteral(prop.name) && !ts.isNumericLiteral(prop.name)) {
+          problems.push(
+            `computed or non-literal property name at offset ${prop.getStart(sourceFile)}: ${shortText(sourceFile, prop)}`,
+          );
+          continue;
+        }
+        const key = prop.name.text;
+        if (seenNames.has(key)) {
+          problems.push(
+            `duplicate property '${key}' within one object literal at offset ${prop.getStart(sourceFile)}: ${shortText(sourceFile, prop)}`,
+          );
+        }
+        seenNames.add(key);
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(root);
+  return problems;
+}
+
 function analyzeTemplateArray(sourceText: string, syntheticFileName: string): ArrayScan | null {
   const located = locateTemplateArray(sourceText, syntheticFileName);
   if (!located) return null;
   const { file, arrayNode } = located;
-  const problems: string[] = [];
+  const problems: string[] = [...findDeepStructuralAnomalies(arrayNode, file)];
   const byId = new Map<string, TemplateBlock[]>();
 
   for (const element of arrayNode.elements) {
-    if (ts.isSpreadElement(element)) {
-      problems.push(`spread element in MCP_TEMPLATES (not permitted): ${shortText(file, element)}`);
-      continue;
-    }
     if (!ts.isObjectLiteralExpression(element)) {
       problems.push(
         `MCP_TEMPLATES element is not a plain object literal (SyntaxKind=${ts.SyntaxKind[element.kind]}): ${shortText(file, element)}`,
@@ -509,19 +592,52 @@ function splitAroundArray(
   return { before: sourceText.slice(0, start), after: sourceText.slice(end) };
 }
 
-/** All real comment tokens in a file (round-1 finding 6) -- uses the
- * TypeScript scanner with skipTrivia=false so `//`/`/* *\/` comments are
- * returned as their own tokens, structurally distinct from string-literal
- * tokens. A string containing the text "NM-25" can never appear here. */
-function collectComments(sourceText: string): string[] {
-  const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.Standard, sourceText);
-  const comments: string[] = [];
-  let tok = scanner.scan();
-  while (tok !== ts.SyntaxKind.EndOfFileToken) {
-    if (tok === ts.SyntaxKind.SingleLineCommentTrivia || tok === ts.SyntaxKind.MultiLineCommentTrivia) {
-      comments.push(scanner.getTokenText());
+// ---------------------------------------------------------------------
+// Comment collection (round-3 finding 2 fix). See the header note for why
+// this trusts the parser's own literal boundaries instead of hand-rolling a
+// stateful scanner loop.
+// ---------------------------------------------------------------------
+const COMMENT_LIKE_PATTERN = /\/\/[^\n]*|\/\*[\s\S]*?\*\//g;
+
+/** Exact `[start,end)` span of every string/template-piece/regex literal
+ * token in the file, as determined by the real parser -- template
+ * substitution boundaries included, correctly, because the parser (not a
+ * hand-rolled re-scan) resolved them. */
+function collectOpaqueLiteralRanges(sourceFile: SourceFile): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  function visit(node: TsNode): void {
+    if (
+      ts.isStringLiteral(node) ||
+      ts.isNoSubstitutionTemplateLiteral(node) ||
+      ts.isTemplateHead(node) ||
+      ts.isTemplateMiddle(node) ||
+      ts.isTemplateTail(node) ||
+      ts.isRegularExpressionLiteral(node)
+    ) {
+      ranges.push([node.getStart(sourceFile), node.getEnd()]);
     }
-    tok = scanner.scan();
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return ranges;
+}
+
+function isInsideAnyRange(pos: number, ranges: Array<[number, number]>): boolean {
+  return ranges.some(([start, end]) => pos >= start && pos < end);
+}
+
+/** All real comments in a file. A comment-shaped regex match is discarded
+ * unless its start position falls OUTSIDE every literal token span the
+ * parser found -- so text inside a template literal (including the tail
+ * following a `${...}` substitution) can never be misread as a comment,
+ * regardless of what it looks like. */
+function collectComments(sourceText: string, sourceFile: SourceFile): string[] {
+  const opaque = collectOpaqueLiteralRanges(sourceFile);
+  const comments: string[] = [];
+  COMMENT_LIKE_PATTERN.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = COMMENT_LIKE_PATTERN.exec(sourceText)) !== null) {
+    if (!isInsideAnyRange(m.index, opaque)) comments.push(m[0]);
   }
   return comments;
 }
@@ -535,6 +651,7 @@ async function main(): Promise<void> {
     commit: headSha,
     treeDirty: true,
     baseCommit,
+    gateIntegrityPinned,
     toolchain: { node: process.version, pnpm: sh('pnpm', ['--version']).stdout.trim() },
     criteria: [] as CriterionResult[],
   };
@@ -549,14 +666,13 @@ async function main(): Promise<void> {
 
   // Each criterion below independently re-reads and re-scans HEAD (and, for
   // C10B-3, baseCommit too) rather than sharing state from an earlier
-  // criterion -- deliberate: every check must stand on its own regardless of
-  // run order, per round-1 review's emphasis on each criterion being
-  // independently robust.
+  // criterion -- every check must stand on its own regardless of run order.
 
   // -----------------------------------------------------------------
   // C10B-1 -- registration present: exactly one clean, unambiguous
   // MCP_TEMPLATES element with id 'voicebox'. Fails closed on anything the
-  // scan could not safely account for (round-1 findings 2/3).
+  // scan could not safely account for, at any nesting depth (round-1
+  // findings 2/3, round-3 finding 1).
   // -----------------------------------------------------------------
   await checkCriterion('C10B-1', () => {
     const headText = readFileAtCommit(headSha, TEMPLATE_FILE);
@@ -576,7 +692,7 @@ async function main(): Promise<void> {
     if (scan.problems.length > 0) {
       record(
         'C10B-1',
-        `parse ${TEMPLATE_FILE}@HEAD, analyze every MCP_TEMPLATES element`,
+        `parse ${TEMPLATE_FILE}@HEAD, analyze every MCP_TEMPLATES element at every nesting depth`,
         "MCP_TEMPLATES has exactly one clean element with id 'voicebox'",
         false,
         scan.problems.join('\n'),
@@ -588,7 +704,7 @@ async function main(): Promise<void> {
     const block = clean.get('voicebox');
     record(
       'C10B-1',
-      `parse ${TEMPLATE_FILE}@HEAD, analyze every MCP_TEMPLATES element, look up id==='voicebox'`,
+      `parse ${TEMPLATE_FILE}@HEAD, analyze every MCP_TEMPLATES element at every nesting depth, look up id==='voicebox'`,
       "MCP_TEMPLATES has exactly one clean element with id 'voicebox'",
       Boolean(block),
       block ? block.rawText : `MCP_TEMPLATES has ${clean.size} clean entries; ids: ${[...clean.keys()].join(', ')}`,
@@ -598,8 +714,10 @@ async function main(): Promise<void> {
 
   // -----------------------------------------------------------------
   // C10B-2 -- correct transport/config shape, exact (round-1 findings 5 +
-  // ruling 2): full-string URL equality (not component checks), authMode
-  // exactly 'none' (not absent-or-'none'), no headerFields property at all.
+  // ruling 2): full-string URL equality, authMode exactly 'none', no
+  // headerFields property. Depends on C10B-1's deep-anomaly scan, so a
+  // spread/computed-key override anywhere is already excluded before these
+  // direct-property checks run at all (round-3 finding 1).
   // -----------------------------------------------------------------
   await checkCriterion('C10B-2', () => {
     const headText = readFileAtCommit(headSha, TEMPLATE_FILE);
@@ -607,8 +725,8 @@ async function main(): Promise<void> {
     if (!scan || scan.problems.length > 0) {
       record(
         'C10B-2',
-        `parse ${TEMPLATE_FILE}@HEAD, analyze every MCP_TEMPLATES element`,
-        "transport/url/category/authMode/headerFields match the frozen configuration exactly",
+        `parse ${TEMPLATE_FILE}@HEAD, analyze every MCP_TEMPLATES element at every nesting depth`,
+        'transport/url/category/authMode/headerFields match the frozen configuration exactly',
         false,
         scan ? scan.problems.join('\n') : '',
         { detail: !scan ? 'MCP_TEMPLATES array not found at HEAD' : `array could not be safely analyzed: ${scan.problems.length} problem(s)` },
@@ -652,12 +770,15 @@ async function main(): Promise<void> {
   });
 
   // -----------------------------------------------------------------
-  // C10B-3 -- no extra surface added (round-1 findings 1-3): lease-glob diff
-  // subset check against the NARROWED lease (mcp-config.ts only -- this
-  // verifier is no longer in it); both baseCommit and HEAD's MCP_TEMPLATES
-  // arrays must analyze cleanly; the file's text OUTSIDE the array's own
-  // span must be byte-identical between baseCommit and HEAD; every
-  // pre-existing entry byte-identical; exactly one net-new id, 'voicebox'.
+  // C10B-3 -- no extra surface added (round-1 findings 1-3, round-3
+  // finding 1 + ruling): lease-glob diff subset check against the NARROWED
+  // lease (mcp-config.ts only), asserting BOTH allow===exactly one entry
+  // AND deny contains this verifier and the PRD (round-3: "the
+  // implementation lease proposal must keep your own PRD + verifier in the
+  // DENY list"); both baseCommit and HEAD's MCP_TEMPLATES arrays must
+  // analyze cleanly at every nesting depth; the file's text OUTSIDE the
+  // array's own span must be byte-identical; every pre-existing entry
+  // byte-identical; exactly one net-new id, 'voicebox'.
   // -----------------------------------------------------------------
   function globToRegExp(glob: string): RegExp {
     let re = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&');
@@ -687,10 +808,20 @@ async function main(): Promise<void> {
         problems.push(
           'no "W10b" entry in leases.json@baseCommit -- expected until the orchestrator adds the entry proposed in docs/plans/waves/W10b-voicebox-registration.md\'s "Proposed write lease" section (fails closed by design; see that PRD\'s "Verified baseline" section)',
         );
-      } else if (lease.allow.length !== 1 || lease.allow[0] !== TEMPLATE_FILE) {
-        problems.push(
-          `leases.json@baseCommit["W10b"].allow is ${JSON.stringify(lease.allow)}, want exactly ["${TEMPLATE_FILE}"] -- this verifier must not be implementer-writable (round-1 finding 1)`,
-        );
+      } else {
+        if (lease.allow.length !== 1 || lease.allow[0] !== TEMPLATE_FILE) {
+          problems.push(
+            `leases.json@baseCommit["W10b"].allow is ${JSON.stringify(lease.allow)}, want exactly ["${TEMPLATE_FILE}"] -- this verifier must not be implementer-writable (round-1 finding 1)`,
+          );
+        }
+        const denyList = lease.deny ?? [];
+        const requiredDeny = ['docs/plans/waves/W10b-voicebox-registration.md', 'scripts/waves/verify-w10b.ts'];
+        const missingDeny = requiredDeny.filter((p) => !denyList.includes(p));
+        if (missingDeny.length > 0) {
+          problems.push(
+            `leases.json@baseCommit["W10b"].deny is missing ${JSON.stringify(missingDeny)} -- round-3 requires the PRD and this verifier both explicitly denied, not merely omitted from allow`,
+          );
+        }
       }
     }
 
@@ -749,8 +880,8 @@ async function main(): Promise<void> {
 
     record(
       'C10B-3',
-      `git diff --name-only ${baseCommit}...HEAD subset-of leases.json@baseCommit["W10b"] (mcp-config.ts only); MCP_TEMPLATES array analyzed cleanly both sides; non-array file text byte-identical; additive-only array diff`,
-      "diff is within the narrowed W10b lease; both baseCommit and HEAD's MCP_TEMPLATES arrays analyze with zero anomalies; every file byte outside the array is unchanged; every pre-existing entry is byte-identical; exactly one new entry, id voicebox",
+      `git diff --name-only ${baseCommit}...HEAD subset-of leases.json@baseCommit["W10b"] (allow exactly mcp-config.ts, deny includes this PRD+verifier); MCP_TEMPLATES array analyzed cleanly both sides at every nesting depth; non-array file text byte-identical; additive-only array diff`,
+      "diff is within the narrowed W10b lease (exact allow, required deny entries present); both baseCommit and HEAD's MCP_TEMPLATES arrays analyze with zero anomalies at every nesting depth; every file byte outside the array is unchanged; every pre-existing entry is byte-identical; exactly one new entry, id voicebox",
       problems.length === 0,
       problems.join('\n') ||
         (diffNames.length === 0 ? 'no diff between baseCommit and HEAD' : `changed files: ${diffNames.join(', ')}`),
@@ -759,9 +890,11 @@ async function main(): Promise<void> {
   });
 
   // -----------------------------------------------------------------
-  // C10B-4 -- no voiceover-workflow scope creep (round-1 finding 4): a
-  // denylist is always evadable by paraphrase, so this asserts byte-exact
-  // equality against the ONE frozen string per free-text field instead.
+  // C10B-4 -- no voiceover-workflow scope creep (round-1 finding 4): byte-
+  // exact equality against the ONE frozen string per free-text field.
+  // Depends on C10B-1's deep-anomaly scan (round-3 finding 1), so a spread
+  // that would otherwise smuggle a different runtime description/example
+  // past this check is already excluded before it runs.
   // -----------------------------------------------------------------
   await checkCriterion('C10B-4', () => {
     const headText = readFileAtCommit(headSha, TEMPLATE_FILE);
@@ -769,7 +902,7 @@ async function main(): Promise<void> {
     if (!scan || scan.problems.length > 0) {
       record(
         'C10B-4',
-        `parse ${TEMPLATE_FILE}@HEAD, analyze every MCP_TEMPLATES element`,
+        `parse ${TEMPLATE_FILE}@HEAD, analyze every MCP_TEMPLATES element at every nesting depth`,
         'label/description/example/homepage are byte-identical to the frozen strings',
         false,
         scan ? scan.problems.join('\n') : '',
@@ -809,9 +942,10 @@ async function main(): Promise<void> {
   });
 
   // -----------------------------------------------------------------
-  // C10B-5 -- documentation record (round-1 finding 6): a genuinely NEW
-  // comment token (never a string literal) containing "NM-25" must exist at
-  // HEAD but not at baseCommit.
+  // C10B-5 -- documentation record (round-1 finding 6, round-2 finding 6 /
+  // round-3 finding 2 fix): a genuinely NEW comment token (never a string or
+  // template-literal token, at any nesting depth of interpolation) must
+  // exist at HEAD but not at baseCommit.
   // -----------------------------------------------------------------
   await checkCriterion('C10B-5', () => {
     const baseText = readFileAtCommit(baseCommit, TEMPLATE_FILE);
@@ -822,18 +956,133 @@ async function main(): Promise<void> {
       });
       return;
     }
-    const baseComments = new Set(collectComments(baseText));
-    const headComments = collectComments(headText);
+    const baseSf = ts.createSourceFile(`${TEMPLATE_FILE}@base-c5`, baseText, ts.ScriptTarget.Latest, true);
+    const headSf = ts.createSourceFile(`${TEMPLATE_FILE}@head-c5`, headText, ts.ScriptTarget.Latest, true);
+    const baseComments = new Set(collectComments(baseText, baseSf));
+    const headComments = collectComments(headText, headSf);
     const newNm25Comments = headComments.filter((c) => c.includes('NM-25') && !baseComments.has(c));
     record(
       'C10B-5',
-      `scan real comment tokens (TypeScript scanner, skipTrivia=false) in ${TEMPLATE_FILE} at baseCommit and HEAD`,
-      "a comment token added to the file (present at HEAD, absent at baseCommit) contains the literal substring 'NM-25' -- a string literal containing that text does not count",
+      `parse ${TEMPLATE_FILE}@baseCommit and @HEAD, collect real comment tokens via collectComments() (round-3: literal-boundary-aware, not raw scanning)`,
+      "a comment token added to the file (present at HEAD, absent at baseCommit) contains the literal substring 'NM-25' -- text inside a string or template literal, at any interpolation depth, does not count",
       newNm25Comments.length > 0,
       newNm25Comments.length > 0
         ? newNm25Comments.join('\n')
         : `${headComments.length} total comment(s) at HEAD, ${baseComments.size} at baseCommit; none newly-added contain 'NM-25'`,
       { detail: newNm25Comments.length > 0 ? undefined : 'no newly-added NM-25 comment found' },
+    );
+  });
+
+  // -----------------------------------------------------------------
+  // GATE-INTEGRITY -- infra check, not a PRD criterion (round-3 finding 3;
+  // mirrors scripts/waves/verify-w9-ingest.ts's own GATE-INTEGRITY shape).
+  // Defense in depth: self-hashes the file currently executing and compares
+  // against an orchestrator-placed approved-gate.sha256. The PRIMARY control
+  // remains C10B-3's lease-subset check (this file is not in the
+  // implementer's allow list); this check adds an independent layer that
+  // does not depend on lease/diff semantics at all.
+  // -----------------------------------------------------------------
+  await checkCriterion('GATE-INTEGRITY', () => {
+    const selfPath = process.argv[1] ? path.resolve(process.argv[1]) : path.join(repoRoot, 'scripts/waves/verify-w10b.ts');
+    let selfSha256: string;
+    try {
+      selfSha256 = sha256File(selfPath);
+    } catch (err) {
+      record(
+        'GATE-INTEGRITY',
+        '',
+        'defense-in-depth self-hash check; the PRIMARY control is the lease-subset check in C10B-3, not this pin',
+        false,
+        '',
+        { detail: `could not hash self at ${selfPath}: ${String(err)}` },
+      );
+      return;
+    }
+    const approvedHashPath = path.join(os.homedir(), '.claude', 'goal-state', WAVE_SLUG, 'approved-gate.sha256');
+    if (!gateIntegrityPinned) {
+      record(
+        'GATE-INTEGRITY',
+        '',
+        'defense-in-depth self-hash check',
+        true,
+        `sha256: ${selfSha256}\nUNPINNED -- no approved-gate.sha256 present. This file is not tamper-protected by this specific check until the orchestrator pins one post-approval; see manifest.gateIntegrityPinned=false. C10B-3's lease-subset check is the primary control regardless.`,
+      );
+      return;
+    }
+    const approved = fs.readFileSync(approvedHashPath, 'utf8').trim();
+    const gateOk = approved === selfSha256;
+    record('GATE-INTEGRITY', '', 'defense-in-depth self-hash check', gateOk, `sha256: ${selfSha256}\napproved: ${approved}\nPINNED`, {
+      detail: gateOk ? undefined : 'verify-w10b.ts modified since orchestrator approval',
+    });
+  });
+
+  // -----------------------------------------------------------------
+  // SCANNER-SELFTEST -- infra check, not a PRD criterion (round-3 finding 2:
+  // "add a template-heavy fixture proving the fix"). Two-file constraint
+  // means the fixture lives here, in-process, rather than as a third file.
+  // Exercises collectComments() against the exact round-2 false-positive
+  // cases plus positive/negative controls.
+  // -----------------------------------------------------------------
+  await checkCriterion('SCANNER-SELFTEST', () => {
+    const cases: Array<{ name: string; source: string; expectNm25Comments: string[] }> = [
+      {
+        name: 'real-line-comment',
+        source: 'const x = 1; // NM-25\n',
+        expectNm25Comments: ['// NM-25'],
+      },
+      {
+        name: 'real-block-comment',
+        source: 'const x = 1; /* NM-25 */\n',
+        expectNm25Comments: ['/* NM-25 */'],
+      },
+      {
+        name: 'template-tail-after-substitution-line-comment-lookalike (round-2 false-positive)',
+        source: 'const x = `${0}// NM-25`;\n',
+        expectNm25Comments: [],
+      },
+      {
+        name: 'template-tail-after-substitution-block-comment-lookalike (round-2 false-positive)',
+        source: 'const x = `before ${0} /* NM-25 */ after`;\n',
+        expectNm25Comments: [],
+      },
+      {
+        name: 'no-substitution-template-literal-text',
+        source: 'const x = `// NM-25`;\n',
+        expectNm25Comments: [],
+      },
+      {
+        name: 'plain-string-literal-text',
+        source: "const x = 'NM-25 inside a plain string, not a comment';\n",
+        expectNm25Comments: [],
+      },
+      {
+        name: 'real-comment-immediately-after-a-template-literal',
+        source: 'const x = `${0}`; // NM-25\n',
+        expectNm25Comments: ['// NM-25'],
+      },
+      {
+        name: 'nested-template-substitution-with-comment-lookalike-in-inner-tail',
+        source: 'const x = `${`${0}// NM-25`}`;\n',
+        expectNm25Comments: [],
+      },
+    ];
+    const problems: string[] = [];
+    for (const c of cases) {
+      const sf = ts.createSourceFile('selftest.ts', c.source, ts.ScriptTarget.Latest, true);
+      const actual = collectComments(c.source, sf).filter((s) => s.includes('NM-25'));
+      const expected = c.expectNm25Comments;
+      const match = actual.length === expected.length && actual.every((v, i) => v === expected[i]);
+      if (!match) {
+        problems.push(`${c.name}: source=${JSON.stringify(c.source)} expected=${JSON.stringify(expected)} actual=${JSON.stringify(actual)}`);
+      }
+    }
+    record(
+      'SCANNER-SELFTEST',
+      'in-process fixture cases exercising collectComments() against template-literal edge cases, including the exact two round-2 false-positive shapes',
+      'collectComments() correctly distinguishes real comments from comment-shaped text inside string/template literals, at every interpolation depth, in both directions (no false positive, no false negative on a real adjacent comment)',
+      problems.length === 0,
+      problems.join('\n') || `${cases.length} fixture cases all matched expected output`,
+      { detail: problems.length === 0 ? undefined : `${problems.length}/${cases.length} fixture case(s) failed` },
     );
   });
 
@@ -863,6 +1112,7 @@ async function main(): Promise<void> {
     commit: headSha,
     treeDirty,
     baseCommit,
+    gateIntegrityPinned,
     toolchain: { node: process.version, pnpm: sh('pnpm', ['--version']).stdout.trim() },
     criteria: results,
   };
@@ -881,7 +1131,7 @@ async function main(): Promise<void> {
 
   const failures = results.filter((r) => r.status === 'fail');
   console.log(
-    `\nverify-w10b: ${results.length - failures.length}/${results.length} criteria pass (treeDirty=${treeDirty})`,
+    `\nverify-w10b: ${results.length - failures.length}/${results.length} criteria pass (treeDirty=${treeDirty}, gateIntegrityPinned=${gateIntegrityPinned})`,
   );
   for (const r of results) console.log(`  [${r.status.toUpperCase()}] ${r.id}${r.detail ? ` (${r.detail})` : ''}`);
   if (treeDirty) console.log('  ⚠ tree is dirty: this run is advisory, never a wave pass (VERIFICATION-CONTRACT.md §2)');

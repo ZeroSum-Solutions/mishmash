@@ -14,10 +14,12 @@ not add one (`leases.json` is HARD DENY for the expansion-authoring step that pr
 The "Proposed write lease" section below gives the exact entry, verbatim, for the orchestrator to
 add before implementation starts; the verifier's lease check inside C10B-3 fails closed until that
 lands, by design (see "Verified baseline" below). **`scripts/waves/verify-w10b.ts` is deliberately
-NOT in the implementation lease** (round-1 adversarial review finding 1, fixed — see "Round 1
-adversarial review" below): the verifier's authority comes from being outside what the implementer
-can write, not from a self-hash pin, and that only holds under the sequencing stated in "Proposed
-write lease."
+NOT in the implementation lease's `allow` list and IS in its `deny` list, alongside this PRD**
+(round-1 adversarial review finding 1; sharpened in round 3, finding 3 — see "Round 1 adversarial
+review" and "Round 3 adversarial review" below): the verifier's PRIMARY authority comes from being
+outside what the implementer can write, under the sequencing stated in "Proposed write lease."
+`GATE-INTEGRITY` (a round-3 addition, mirroring the sibling-wave shape) is an independent
+defense-in-depth self-hash layer on top of that, not a replacement for it.
 
 This document is an **expansion**, not an implementation. Per the NM-41C gate
 (`W5-W11-gated.md` lines 8–24), it is written and frozen *before* any implementation work starts,
@@ -167,6 +169,14 @@ wording this entry may take other than the one written here.
   **outside** the array's span to be byte-identical to `baseCommit`, so a comment placed after the
   whole `const MCP_TEMPLATES = [...]` statement would itself fail that check.
 
+  **The object literal above must be exactly what it appears to be** (round-3 finding 1): no
+  property spread (`...expr`), no computed property name (`[expr]: value`), and no property name
+  repeated within the object — at any nesting depth, including inside any array-valued field. Any
+  of these would let a later property silently win at runtime (JavaScript's own last-write-wins
+  object-literal semantics) while looking frozen to a naive first-match reader; C10B-1 through
+  C10B-4 all now depend on a scan that fails closed the instant any of these appears anywhere in
+  `MCP_TEMPLATES`, not just in the new entry.
+
 No other file changes. Not `packages/contracts/**` (no new category — W1's lease). Not
 `apps/web/**` (no new UI; the picker already groups by an existing category). Not
 `apps/daemon/src/mcp-routes.ts` (existing route already serves the full template array). Not
@@ -179,17 +189,22 @@ frozen/external, not part of the implementer's lease.
 ## Success criteria
 
 All five are mechanical; none require human judgment (VERIFICATION-CONTRACT.md §3 R7 does not
-apply — nothing here is marked `human:`). **This table reflects round-1 adversarial-review fixes**
-(finding numbers below refer to "Round 1 adversarial review"); the pre-fix version is superseded,
-not merely amended in place, because several mechanisms changed shape, not just wording.
+apply — nothing here is marked `human:`). **This table reflects round-1 and round-3
+adversarial-review fixes** (finding numbers refer to "Round 1 adversarial review" and "Round 3
+adversarial review" below); the pre-fix versions are superseded, not merely amended in place,
+because several mechanisms changed shape, not just wording. Three further infra checks —
+`LEASE` (folded into C10B-3), `GATE-INTEGRITY`, and `SCANNER-SELFTEST` — are not numbered PRD
+criteria (matching how `scripts/waves/verify-w9-ingest.ts` treats its own `LEASE`/`HEAD-DRIFT`/
+`GATE-INTEGRITY` checks) but still gate the verifier's overall exit code; see "Definition of
+green."
 
 | ID | Assertion |
 |---|---|
-| **C10B-1** | Parsing `MCP_TEMPLATES` at HEAD with the TypeScript compiler API finds **zero anomalies** across the *entire* array (findings 2/3): no spread element, no element that isn't a plain object literal, no object literal whose `id` isn't a literal string, and no duplicate `id` anywhere in the array — and, once the array is safe to reason about, exactly one element has `id === 'voicebox'`. Any anomaly fails this criterion closed; it does not fall through to a looser check. |
-| **C10B-2** | That element's `transport` is exactly `'http'`; its `url` is exactly the string `'http://127.0.0.1:17493/mcp'` — full-string equality, not component checks (finding 5: component checks silently allowed credentials/query/fragment through) — so `http://user:pass@127.0.0.1:17493/mcp?x#y` is rejected outright, not partially accepted; its `category` is exactly `'utilities'`; its `authMode` is exactly `'none'`, present not absent (finding 5); it has **no `headerFields` property at all** (round-1 ruling — pins `X-Voicebox-Client-Id` absent by construction, not merely unfilled). |
-| **C10B-3** | No extra surface, proven three independent ways (findings 1/2/3): (a) `git diff --name-only <baseCommit>...HEAD` is a subset of the `"W10b"` lease read from `leases.json@baseCommit`, and that lease's `allow` list is asserted to be *exactly* `["apps/daemon/src/mcp-config.ts"]` — a widened lease fails this criterion, not just an out-of-lease diff; (b) both `baseCommit`'s and HEAD's `MCP_TEMPLATES` arrays pass C10B-1's zero-anomaly analysis; (c) the file's text **outside** the `MCP_TEMPLATES` array literal's own span (before its `[`, after its `]`) is byte-identical between `baseCommit` and HEAD — closing the "new export/function/hook elsewhere in the file" gap an array-only diff cannot see; (d) every pre-existing array entry, keyed by `id`, is byte-identical between `baseCommit` and HEAD; (e) exactly one `id` is new, and it is `'voicebox'`. |
-| **C10B-4** | No voiceover-workflow scope creep, by exact match instead of denylist (finding 4: a finite blocklist is always evadable by paraphrase — "narration audio," string concatenation, a newline mid-phrase, all defeat a regex scan). The `id: 'voicebox'` element's `label`, `description`, `example`, and `homepage` are each **byte-for-byte identical** to the frozen strings in "Implementation surface" above (mirrored verbatim as `verify-w10b.ts`'s `FROZEN` constant). There is no wording these fields may take other than the one already reviewed. |
-| **C10B-5** | Documentation record, proven via real comment tokens, not raw diff text (finding 6: a string literal containing "NM-25" used to satisfy this). Using the TypeScript scanner in comment-preserving mode (`skipTrivia: false`), at least one comment token (`//` or `/* */`, never a string-literal token) present at HEAD but **absent** at `baseCommit` contains the literal substring `NM-25`. |
+| **C10B-1** | Parsing `MCP_TEMPLATES` at HEAD with the TypeScript compiler API finds **zero anomalies at any nesting depth** across the *entire* array (round-1 findings 2/3; round-3 finding 1): no array spread, no element that isn't a plain object literal, no object literal whose `id` isn't a literal string, no duplicate `id` anywhere in the array, and — inside every object literal anywhere in the array, at every depth — no property spread, no computed/non-literal property name, no method/getter/setter member, and no property name repeated within one object literal. Once the array is safe to reason about, exactly one element has `id === 'voicebox'`. Any anomaly fails this criterion closed; it does not fall through to a looser check. |
+| **C10B-2** | That element's `transport` is exactly `'http'`; its `url` is exactly the string `'http://127.0.0.1:17493/mcp'` — full-string equality, not component checks (finding 5: component checks silently allowed credentials/query/fragment through) — so `http://user:pass@127.0.0.1:17493/mcp?x#y` is rejected outright, not partially accepted; its `category` is exactly `'utilities'`; its `authMode` is exactly `'none'`, present not absent (finding 5); it has **no `headerFields` property at all** (round-1 ruling — pins `X-Voicebox-Client-Id` absent by construction, not merely unfilled). Depends on C10B-1's deep-anomaly scan, so a property spread that would otherwise override these values at runtime is already excluded before this check runs (round-3 finding 1). |
+| **C10B-3** | No extra surface, proven several independent ways (round-1 findings 1/2/3; round-3 findings 1/3): (a) `git diff --name-only <baseCommit>...HEAD` is a subset of the `"W10b"` lease read from `leases.json@baseCommit`, whose `allow` list is asserted to be *exactly* `["apps/daemon/src/mcp-config.ts"]` **and** whose `deny` list is asserted to contain both this PRD and `scripts/waves/verify-w10b.ts` — a widened `allow` or a missing `deny` entry fails this criterion, not just an out-of-lease diff; (b) both `baseCommit`'s and HEAD's `MCP_TEMPLATES` arrays pass C10B-1's deep zero-anomaly analysis; (c) the file's text **outside** the `MCP_TEMPLATES` array literal's own span (before its `[`, after its `]`) is byte-identical between `baseCommit` and HEAD; (d) every pre-existing array entry, keyed by `id`, is byte-identical between `baseCommit` and HEAD; (e) exactly one `id` is new, and it is `'voicebox'`. |
+| **C10B-4** | No voiceover-workflow scope creep, by exact match instead of denylist (finding 4: a finite blocklist is always evadable by paraphrase — "narration audio," string concatenation, a newline mid-phrase, all defeat a regex scan). The `id: 'voicebox'` element's `label`, `description`, `example`, and `homepage` are each **byte-for-byte identical** to the frozen strings in "Implementation surface" above (mirrored verbatim as `verify-w10b.ts`'s `FROZEN` constant). Depends on C10B-1's deep-anomaly scan for the same reason as C10B-2 (round-3 finding 1). There is no wording these fields may take other than the one already reviewed. |
+| **C10B-5** | Documentation record, proven via real comment tokens, never text inside a string or template literal at any interpolation depth (round-1 finding 6; round-3 finding 2 — a hand-rolled scanner loop previously misclassified template-tail text as a comment once a `${...}` substitution was involved). `collectComments()` walks the parsed AST to record every string/template-literal token's exact span, then finds comment-shaped text in the raw source and discards any match whose start falls inside one of those spans — so text can only count as a comment if it is genuinely outside every literal the parser found. At least one comment present at HEAD but **absent** at `baseCommit` contains the literal substring `NM-25`. `SCANNER-SELFTEST` (an infra check, not a numbered criterion) proves this mechanism against the exact round-2 false-positive shapes. |
 
 ### Why these five and not more
 
@@ -212,10 +227,14 @@ file, not a wave-completion criterion.)
 ## Definition of "green"
 
 The wave is green when a single `pnpm exec tsx scripts/waves/verify-w10b.ts` run against a clean
-tree (`treeDirty: false`) reports `status: "pass"` for C10B-1 through C10B-5 in
-`~/.claude/goal-state/mishmash-w10b-voicebox/proof/manifest.json`, with `exitCode: 0` overall. No
-other wave depends on this one; nothing consumes W10b's manifest the way W3's C3-4 consumes
-W9-ingest's.
+tree (`treeDirty: false`) reports `status: "pass"` for C10B-1 through C10B-5, plus the three infra
+checks `GATE-INTEGRITY`, `SCANNER-SELFTEST`, and `HEAD-DRIFT` (LEASE is folded into C10B-3, not a
+separate manifest entry), in `~/.claude/goal-state/mishmash-w10b-voicebox/proof/manifest.json`,
+with `exitCode: 0` overall. `GATE-INTEGRITY` passes trivially (recorded
+`gateIntegrityPinned: false`) until the orchestrator places
+`~/.claude/goal-state/mishmash-w10b-voicebox/approved-gate.sha256`; once pinned it must match this
+file's own sha256 exactly. No other wave depends on this one; nothing consumes W10b's manifest the
+way W3's C3-4 consumes W9-ingest's.
 
 ## Proposed write lease (text only — `leases.json` is HARD DENY for this document)
 
@@ -229,7 +248,11 @@ optional `deny`, `note`):
   "allow": [
     "apps/daemon/src/mcp-config.ts"
   ],
-  "note": "Registration-only per NM-25 (docs/plans/waves/NM-REGISTER.md): one additive McpTemplate entry in MCP_TEMPLATES. No route, UI, CLI, or packages/contracts change is needed or permitted — GET /api/mcp/servers already serves the full MCP_TEMPLATES array verbatim and the 'utilities' picker category already exists. Round-1 adversarial review finding 1 (fixed): scripts/waves/verify-w10b.ts is deliberately EXCLUDED from this lease, unlike the W9-ingest precedent's inclusion of its own verifier -- an implementer-writable verifier can be weakened and still pass its own lease check, so the verifier's authority here comes from being outside what the implementer can write. This requires a specific landing sequence: this lease row and the frozen verify-w10b.ts must both be merged to main FIRST; the implementation branch is then cut (or rebased) so its baseCommit already contains both. Under that sequence baseCommit-relative diff checking is sufficient and no separate self-hash/gate-integrity pin is needed. C10B-3 additionally asserts this allow list is exactly one entry, apps/daemon/src/mcp-config.ts -- a widened lease fails closed too. docs/plans/waves/W10b-voicebox-registration.md is deliberately NOT included either, matching every other wave's lease (no wave holds write access to its own governing PRD)."
+  "deny": [
+    "docs/plans/waves/W10b-voicebox-registration.md",
+    "scripts/waves/verify-w10b.ts"
+  ],
+  "note": "Registration-only per NM-25 (docs/plans/waves/NM-REGISTER.md): one additive McpTemplate entry in MCP_TEMPLATES. No route, UI, CLI, or packages/contracts change is needed or permitted -- GET /api/mcp/servers already serves the full MCP_TEMPLATES array verbatim and the 'utilities' picker category already exists. Round-1 finding 1 (sharpened round-3 finding 3): scripts/waves/verify-w10b.ts is EXCLUDED from allow and explicitly DENIED, alongside this PRD -- unlike the W9-ingest precedent's inclusion of its own verifier in allow, an implementer-writable verifier can be weakened and still pass its own lease check, so the verifier's authority comes from being outside what the implementer can write, reinforced by an explicit deny rather than mere omission. This requires a specific landing sequence: this lease row and the frozen verify-w10b.ts must both be merged to main FIRST; the implementation branch is then cut (or rebased) so its baseCommit already contains both. Under that sequence baseCommit-relative diff checking is sufficient. C10B-3 mechanically asserts allow is exactly one entry (apps/daemon/src/mcp-config.ts) and deny contains both denied paths -- a widened allow or a dropped deny entry fails closed too. GATE-INTEGRITY (round-3) is an additional, independent defense-in-depth self-hash layer on top of this lease, not a substitute for it: once the orchestrator places approved-gate.sha256 alongside this file, any further modification to verify-w10b.ts is caught even in a scenario where lease enforcement itself were somehow bypassed."
 }
 ```
 
@@ -240,15 +263,20 @@ any `allow`/`deny` list for W-C, W0, W7, W1, W2, W4, W9-ingest, or W3 (checked d
 ## Verified baseline (this run, pre-implementation)
 
 Ran `pnpm exec tsx scripts/waves/verify-w10b.ts` on branch `feat/w10b-voicebox-registration`,
-re-confirmed after the round-1 fixes below, before any implementation exists. Expected and
-confirmed: RED, nonzero exit, exactly **1/6 passing — only the `HEAD-DRIFT` infra check** — with
-`treeDirty: false`. C10B-1/2/4 fail because no `voicebox` template exists yet; C10B-3 fails closed
-on both grounds (no `"W10b"` key in `leases.json@baseCommit` yet, and zero new `MCP_TEMPLATES`
-entries); C10B-5 fails because `apps/daemon/src/mcp-config.ts` has not changed at all between
-`baseCommit` and HEAD, so no new comment exists to find. This is the intended fail-closed state,
-not a bug — see the run tail in the authoring session's report. Once implementation lands and the
-proposed lease entry is added to `leases.json`, re-running the same command with no other changes
-is the sole gate.
+re-confirmed after the round-3 fixes below, before any implementation exists. Expected and
+confirmed: RED, nonzero exit, exactly **3/8 passing — `GATE-INTEGRITY` (unpinned),
+`SCANNER-SELFTEST`, and `HEAD-DRIFT`** — with `treeDirty: false`. (This shape changed from round 1's
+"1/6, only `HEAD-DRIFT`" once `GATE-INTEGRITY` and `SCANNER-SELFTEST` were added in round 3 — both
+are infra checks whose own logic is self-contained and does not depend on VoiceBox being
+registered, so they correctly pass before implementation too.) C10B-1/2/4 fail because no
+`voicebox` template exists yet; C10B-3 fails closed on both grounds (no `"W10b"` key in
+`leases.json@baseCommit` yet, and zero new `MCP_TEMPLATES` entries); C10B-5 fails because
+`apps/daemon/src/mcp-config.ts` has not changed at all between `baseCommit` and HEAD, so no new
+comment exists to find. This is the intended fail-closed state, not a bug — see the run tail in the
+authoring session's report. Once implementation lands and the proposed lease entry is added to
+`leases.json`, re-running the same command with no other changes is the sole gate (plus, at the
+orchestrator's discretion, pinning `approved-gate.sha256` for `GATE-INTEGRITY`'s defense-in-depth
+layer).
 
 ## Round 1 adversarial review
 
@@ -284,3 +312,89 @@ clean `tsc`.
   a stated requirement rather than leaving it open.)
 
 No open questions remain from round 1. Round-2 review follows this revision.
+
+## Round 2 adversarial review
+
+**Verdict: REJECT.** Round 2 confirmed the real, committed `MCP_TEMPLATES` array (39 entries, 39
+unique literal ids at the time of review) is satisfiable and that a legitimate implementation
+(the exact frozen object plus a real `NM-25` comment) produces zero analyzer problems and passes
+all five intended checks — but it also constructed a **concrete false-green**: a type-valid object
+literal carrying the frozen direct properties (`id`, `label`, URL, `authMode`, …) followed by
+`...evilOverride` — a property spread returning an alternate `id`, an `evil.invalid` URL, `authMode:
+'oauth'`, `headerFields`, and a `` `${0}// NM-25` `` decoy. Because JavaScript object literals are
+last-write-wins, the RUNTIME object had none of the frozen values, while the round-1 verifier's
+static, first-match property reader saw only the frozen-looking literals and reported zero
+problems — a complete false-green across C10B-1 through C10B-5 simultaneously. Findings, verbatim
+summary (full log: the round-2 verdict handed to this authoring session):
+
+| # | Verdict | Gap |
+|---|---|---|
+| 1 | NOT FIXED | The verifier's authority rested solely on lease exclusion, with no orchestrator-owned approved-copy/hash binding — an implementer executing their own branch's `HEAD` copy of the verifier could change both the verifier and its own lease assertion. |
+| 2 | FIXED-WITH-DEFECT | The outside-array byte-identical check was real, but a property spread inside the NEW object (not outside the array) could still smuggle content the check never inspected. |
+| 3 | FIXED-WITH-DEFECT | Array-level spreads/non-object elements/missing-id/duplicate-id were closed, but `SpreadAssignment` *properties* (object spreads) inside an object literal were never checked — "any spread" was array-level only, not object-level. |
+| 4 | FIXED-WITH-DEFECT | The four frozen fields compared equal for the DIRECT AST properties, but a later spread could still replace those values at runtime. |
+| 5 | FIXED-WITH-DEFECT | Direct-property URL/authMode/headerFields checks were exact and correct, but `hasOwnProp` (like `findStringProp`) never accounted for a spread that could yield a different URL/authMode/headerFields at runtime. |
+| 6 | FIXED-WITH-DEFECT | Ordinary strings and no-substitution templates were correctly excluded, but the raw `scanner.scan()` loop, run without template-substitution context tracking, misclassified template-tail text following a `${...}` as a real comment (confirmed on `` `${0}// NM-25` `` and a block-comment-lookalike variant) — combined with the spread gap, C10B-5 could pass on a fabricated "comment" too. |
+
+Regression check (round 2): `pnpm exec tsc -p scripts/tsconfig.json --noEmit` exited 0; fail-closed
+init/placeholder/`treeDirty`/exit behavior intact; static-only (no daemon/network contact,
+`git`/`pnpm --version` subprocesses only); no generated executable verifier content; worktree
+clean; `73f9774c2`'s parent was exactly `b951fe864`; the full range contained exactly the two
+deliverable files; `leases.json` untouched. All of this carried forward into round 3 unchanged.
+
+## Round 3 adversarial review
+
+**Founder-authorized final round** (2026-07-28) — scoped strictly to the three closures below.
+After this revision: one confirmation review, then the gate either freezes or the wave parks.
+
+1. **Deep spread ban.** `findDeepStructuralAnomalies()` (`scripts/waves/verify-w10b.ts`) walks the
+   *entire* `MCP_TEMPLATES` subtree — every object literal, at every nesting depth, including
+   inside any array-valued field — and fails closed on: `SpreadElement` (array spread) anywhere;
+   any object-literal member that is not a plain `PropertyAssignment` (i.e. `SpreadAssignment`,
+   `ShorthandPropertyAssignment`, method/getter/setter members are all rejected); a computed or
+   non-literal property name; or a property name repeated within one object literal. The last
+   three are not literally "spread," but are the identical vulnerability class the round-2 demo
+   exploited (a later property silently overrides an earlier frozen-looking one at runtime,
+   invisible to a first-match extractor) and are closed by the same mechanism rather than left as
+   an equally-trivial adjacent bypass — see "Implementation surface" above for the corresponding
+   requirement on the frozen object itself. Verified against the exact round-2 false-green
+   construction (property spread after frozen literals) plus five further synthetic probes
+   (computed-key override, duplicate-key override, spread nested inside a nested array field,
+   array-spread nested inside a nested array, and a clean legitimate entry that must still pass) —
+   all six behaved correctly in a scratchpad self-test exercising the real algorithm against
+   synthetic source, never touching this repository's actual `mcp-config.ts` (hard-denied product
+   code).
+2. **Scanner fix.** `collectComments()` no longer hand-rolls a stateful scanner loop. It walks the
+   already-correctly-parsed AST once to record the exact `[start,end)` span of every
+   string/template-piece/regex literal token — the parser resolved template-substitution
+   boundaries correctly, which is precisely the thing a manual re-scan got wrong — then finds
+   comment-shaped text in the raw source with a simple regex and discards any match whose start
+   falls inside one of those literal spans. `SCANNER-SELFTEST` (new infra check, not a numbered
+   criterion — the two-file constraint means the fixture lives in-process rather than as a third
+   file) runs eight cases on every verifier invocation, including the exact two round-2
+   false-positive shapes (`` `${0}// NM-25` `` and `` `before ${0} /* NM-25 */ after` ``), a
+   no-substitution-template control, a plain-string control, a real-comment-adjacent-to-a-template
+   control, and a nested-template-substitution case one level deeper than round 2 demonstrated.
+3. **GATE-INTEGRITY.** New infra check mirroring `scripts/waves/verify-w9-ingest.ts`'s own
+   `GATE-INTEGRITY` shape exactly: self-hashes the file currently executing
+   (`process.argv[1]`) and compares it against an orchestrator-placed
+   `~/.claude/goal-state/mishmash-w10b-voicebox/approved-gate.sha256`. Absent (the state for every
+   run in this authoring session, and for any run before the orchestrator pins one), it passes with
+   `gateIntegrityPinned: false` recorded in the manifest; present, it must match exactly. This is
+   explicitly **defense in depth, not the primary control** — the primary control remains C10B-3's
+   lease-subset check, which already keeps this file out of the implementer's own diff. Per the
+   founder's instruction, the proposed lease's `deny` list (see "Proposed write lease" above) now
+   also names both this file and this PRD explicitly, and C10B-3 mechanically asserts that `deny`
+   list is present, not merely that `allow` omits them.
+
+**Verification performed:** re-ran the byte-for-byte PRD/verifier frozen-string comparison (still
+exact after the PRD edits above); ran a second scratchpad self-test (22 assertions, all synthetic,
+never touching repo files) covering the exact round-2 false-green demo, the two adjacent
+vulnerability-class variants (computed key, duplicate key), two deep-nesting variants, a legitimate
+entry, all eight scanner fixture cases, `GATE-INTEGRITY`'s unpinned/pinned-match/pinned-mismatch
+shapes, and the lease allow-exact/deny-required shape — all 22 passed. `pnpm exec tsc -p
+scripts/tsconfig.json --noEmit` exits 0. This verifier writes no generated script content (only
+`manifest.json` and plain-text proof artifacts), so `node --check` does not apply to anything it
+produces.
+
+No open questions remain. This PRD and verifier are presented for round-3 confirmation review.
