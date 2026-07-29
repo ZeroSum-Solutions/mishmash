@@ -32,10 +32,11 @@ describe('usage routes', () => {
   });
 
   async function createProject(): Promise<string> {
+    const id = `usage-route-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const resp = await fetch(`${baseUrl}/api/projects`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'usage route test' }),
+      body: JSON.stringify({ id, name: 'usage route test' }),
     });
     const data = (await resp.json()) as { project: { id: string } };
     return data.project.id;
