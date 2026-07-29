@@ -7,7 +7,7 @@
 present in `leases.json`; this section is the PRD-text proposal the orchestrator transcribes after
 this document freezes, mirroring how `W9-ingest`'s lease entry was added after its PRD landed.
 
-**Status: EXPANSION, PRE-IMPLEMENTATION — FIX ROUND 1.** Per `docs/plans/waves/W5-W11-gated.md`
+**Status: EXPANSION, PRE-IMPLEMENTATION — FIX ROUND 3.** Per `docs/plans/waves/W5-W11-gated.md`
 "The expansion gate", this document and `scripts/waves/verify-w10c.ts` are frozen and independently
 reviewed *before* any implementation begins. Writing implementation code from this document, or
 from the `W5-W11-gated.md` skeleton it expands, is a hard reject.
@@ -25,15 +25,68 @@ below — including the round-1 fixes — was checked by reading or running the 
 assumed from prose (e.g. the NodeNext dynamic-import workaround in §2 was confirmed by actually
 running `tsc` against a probe file, not reasoned about abstractly).
 
-**Same round, three orchestrator rulings folded in.** After the finding-closure pass above, the
-orchestrator ruled on this document's three open founder questions, under founder authority
-delegated to the orchestrator for this project — binding, not advisory. Full text in **§9 Recorded
-rulings**; summary: (1) no new toolbox-action HTTP/CLI capability — `C10C-8` (which existed only to
-gate this exact question) is **removed**, the question is closed by ruling instead; (2)
+**Same round (round 1), three orchestrator rulings folded in.** After the finding-closure pass
+above, the orchestrator ruled on this document's three open founder questions, under founder
+authority delegated to the orchestrator for this project — binding, not advisory. Full text in
+**§9 Recorded rulings**; summary: (1) no new toolbox-action HTTP/CLI capability; (2)
 `NextStepActions.tsx` **is** in scope for the exhaustive walk — `C10C-2` is extended to cover both
 consumers, asserting their partition of the 16 actions explicitly rather than ignoring the second
 surface; (3) `scripts/check-toolbox-skill-refs.test.ts` is kept, untouched, as a floor — no file
-change, prose-only note.
+change, prose-only note. **Round 2 removed `C10C-8`** on the reasoning that ruling (1) closed the
+question `C10C-8` existed to gate, so a criterion that would now trivially and permanently read
+`pass` was not measuring anything. **Round 3 corrected this: it was wrong.** See below.
+
+**Round-3 review REJECTED the round-2 draft** on 7 numbered findings, plus a coordinator correction
+that round 2's removal of `C10C-8` was itself an error. Every finding is closed below; the fixes are
+cited inline as `[R3-F<n>]`. Summary:
+- **`C10C-8` is REINSTATED** (finding 7 + coordinator correction). Round 2's reasoning conflated two
+  different questions: "does the capability question need a mechanical gate to be *decided*"
+  (no — the orchestrator's ruling decided it) and "does the fact that it *was* decided, on the
+  record, through the review lane, need a mechanical gate" (yes — that fact is exactly the kind of
+  externally-verifiable invariant this program's criteria exist to check, and the
+  `### W10C-CAPABILITY-DECISION` block that landed in `docs/plans/waves/DECISIONS.md` via the merged
+  `main` tip is real and fail-able: it can be deleted, malformed, or (structurally, though the lease
+  already prevents it) forged by this very branch). `C10C-8` no longer asks "should there be a new
+  capability" — it asks "did that question's answer land through the review lane that produced
+  `baseCommit`," reading `DECISIONS.md` at `baseCommit` (never `HEAD` — a wave branch cannot reach
+  the docs lane at all; see §5). This is **not** a claim that anyone's authority was cryptographically
+  verified — the criterion text says so explicitly, and §5/§9 below say so again.
+- **The unbound-import class (findings 2, 3) is closed.** Two prior structural checks each verified
+  a *name* was imported/destructured while a separate check counted calls to that *name's text* —
+  so an implementation that destructures `{ findDesignToolboxSkill: _unused }` (import present,
+  never called) alongside an unrelated local `function findDesignToolboxSkill() {...}` (a decoy
+  sharing the original name) passed both checks by calling the decoy. The verifier now captures the
+  actual **local identifier** each import/destructure produces and binds every call-count check to
+  that identifier, never to the exported/property name's text. `C10C-4` additionally gained the
+  PRD-required `SKILL_ID_ALIASES` import+reference check (previously specified in this document but
+  never actually checked), and both `C10C-3`/`C10C-4`'s remaining raw regex/text-presence checks
+  (`createSmokeSuite`, `.with.toolsDev`, "some `ts.createSourceFile`/`ts.forEachChild` call exists
+  anywhere") were replaced with real, connected AST checks.
+- **Alias-mediated mutation (finding 4) is closed.** `C10C-1`'s static mutation-call scan only sees
+  calls whose *arguments* directly contain the `DESIGN_TOOLBOX_ACTIONS` identifier text — aliasing an
+  element into a local variable before calling `Object.defineProperty`/`setPrototypeOf` on it dodges
+  that scan entirely. A new runtime layer inspects the actual **property descriptors and prototypes**
+  of the dynamically-imported live value — own keys, accessor-vs-data-property shape, prototype
+  identity — which cannot be dodged by aliasing, because it inspects the *executed result*, not the
+  *call sites* that produced it.
+- **Safety is now fail-closed program-wide (finding 5), not negotiable.** Every probe fetch in this
+  file sets `redirect: 'manual'` and validates origin/status before trusting a response. Isolated
+  daemon teardown no longer trusts `tools-dev stop`'s own report: it independently confirms no
+  survivor pid remains (polling, not a single point-in-time check) and escalates via **process-group**
+  signaling if anything survives — the exact gap a sibling wave (`W9-agent-spawn`) was parked over
+  today, per `DECISIONS.md`'s `W9AS-PARK` record.
+- **`C10C-2` now proves the second consumer actually RENDERS the split (finding 1).** The
+  featured/non-featured partition was previously re-derived as the complement of the featured set by
+  the verifier's own arithmetic — a fact about the verifier, not about `NextStepActions.tsx`. The
+  criterion now additionally parses that file's own real source and requires it to structurally
+  implement the split, requires its four pinned `data-testid` fragments to exist as genuine JSX
+  literals in that file, binds every required `.click()` call to its own selector-chain (not two
+  independent unbound facts that let one loop drive both surfaces or neither), and validates the
+  runtime marker's *reported id*, not just its extracted value.
+- **`C10C-7` now rejects a whitespace-only reviewer identity (finding 6).** A whitespace-only string
+  is truthy (non-empty `.length`), so the prior `if (!reviewer)` check let it through, after which it
+  matched no commit author and silently passed. Both `C10C-7` and the reinstated `C10C-8` now reject
+  any identity that normalizes to nothing after trimming.
 
 ---
 
@@ -231,6 +284,42 @@ lying without a red test somewhere in the tree.
   `e2e/tests/design-toolbox-phantom-id.test.ts` (§C10C-3) is expected to use this fixture rather
   than hand-rolling daemon lifecycle management; `e2e/ui/**` Playwright specs (§C10C-2) get the
   same isolation for free through `@/playwright/suite`'s worker-scoped tools-dev fixture.
+- **`[R3-F7]` `docs/plans/waves/DECISIONS.md` carries a real `### W10C-CAPABILITY-DECISION` record,
+  landed via the merged `main` tip.** Verified by reading it directly at this wave's `baseCommit`
+  (`1fb8ae892d0...`, after merging `origin/main`): `Decision: exempt`, `Decider: Fable 5 orchestrator
+  under gate authority delegated by Devin Wiggins (founder) on 2026-07-28`, `Date: 2026-07-28`, and a
+  non-empty `Rationale`. The same file also carries a `### W9AS-PARK` record documenting exactly the
+  fail-open teardown bug §5's `C10C-3`/`C10C-5` fixes below close (`[R3-F5]`): "teardown treats the
+  tracked group leader's `exit` event as proof the whole group is gone... while a SIGTERM-handling
+  descendant in the same group stays alive." `C10C-8` (§5) reads this file **at `baseCommit`, never
+  `HEAD`** — the proposed lease (§6) denies `DECISIONS.md` to this wave, and a wave branch cannot
+  reach the docs lane at all, so `baseCommit` is a fixed point this wave's own commits structurally
+  cannot influence.
+- **`[R3-F1]` `ts.createSourceFile` must be called with `ScriptKind.TSX` for a `.tsx` file, or its
+  JSX syntax is never recognized as JSX at all — confirmed by actually hitting this bug against the
+  real `NextStepActions.tsx` in this session.** `ts.isJsxAttribute`/`ts.isJsxExpression` etc. only
+  match nodes produced by a JSX-aware parse; parsing a `.tsx` file with `ScriptKind.TS` (this file's
+  own `parseTs` helper's original, un-conditioned default) silently produces an AST where JSX
+  constructs are absent or malformed, so a `data-testid` literal check against that AST would fail
+  for **every** implementation, correct or not — an unsatisfiability bug, not a strictness one.
+  `parseTs` now branches on the `.tsx` extension.
+- **`[R3-F5]` The daemon sidecar `tools-dev` spawns is `detached: true`, and its reported `pid`
+  therefore doubles as its own process-group id.** Confirmed by reading
+  `tools/dev/src/index.ts`'s `spawnSidecarRuntime`/`spawnDaemonRuntime` (`child_process.spawn(...,
+  { detached: true, ... })`, POSIX `setsid()` under the hood) — this is what makes
+  `process.kill(-pid, signal)` a safe, real "signal the whole group" primitive for teardown, not a
+  guess. The pid itself is reported at `DaemonStatusSnapshot.pid` (`packages/sidecar-proto/src/index.ts`,
+  `pid?: number | null`), surfaced both by `tools-dev start daemon --json`'s
+  `<result>.daemon.status.pid` and `tools-dev status daemon --json`'s top-level `.pid`. `tools-dev
+  stop daemon --namespace <ns> --json`'s result shape is `{ daemon: { status:
+  'stopped'|'not-running'|'partial', stop: { alreadyStopped, forcedPids, matchedPids,
+  remainingPids, stoppedPids }, via } }` (`stopApp`/`stoppedByGracefulResult`,
+  `tools/dev/src/index.ts:697-730`) — none of this was previously being read by the verifier's own
+  `stop` invocation, which additionally never passed `--json` at all.
+- **`[R3-F2]` `apps/daemon/src/skills.ts` exports `SKILL_ID_ALIASES`** (the deprecated-id forward
+  table, §2 above) as a named export alongside `listSkills`/`findSkillById` — this wave's PRD always
+  intended the daemon suite to import it (§C10C-4), but the verifier never actually checked for that
+  import until this round.
 
 ## 3. Threat model
 
@@ -352,6 +441,21 @@ of the real function/data, not an inference from source shape, closing `[R1-F5]`
 direction: even if a decoy fooled the AST uniqueness/scoping check, the runtime import always
 resolves the *actual* ES module export, so a Layer-A/Layer-B mismatch surfaces the decoy anyway).
 
+**Layer C (runtime property-descriptor/prototype shape — `[R3-F4]`, closes alias-mediated
+mutation):** Layer A's static mutation-call scan (below) only sees calls whose *arguments* directly
+contain the `DESIGN_TOOLBOX_ACTIONS` identifier — aliasing an array element into a local variable
+before calling `Object.defineProperty`/`Object.setPrototypeOf` on it dodges that scan entirely
+without dodging execution. Layer C inspects the **actual runtime value** Layer B already loaded:
+`Object.getPrototypeOf(DESIGN_TOOLBOX_ACTIONS) === Array.prototype`, zero extra own array
+properties beyond numeric indices/`length`, and — for every element — `Object.getPrototypeOf(el)
+=== Object.prototype`, zero own keys outside the five real `DesignToolboxAction` fields, and every
+one of those keys a plain **data** property (`Object.getOwnPropertyDescriptors(el)` — any `get`/`set`
+accessor is rejected outright, *regardless of the value it currently evaluates to*, because a getter
+that happens to return the honest value today is still not the same shape as an honest literal and
+can silently diverge tomorrow). This closes the exact gap round 3 named: a static call-site scan
+cannot see through an alias; a runtime descriptor inspection does not need to, because it inspects
+the *result*, not the code that produced it.
+
 **i18n cross-check (structural, AST-only, `[R1-F5]` hardened):** the verifier parses
 `apps/web/src/i18n/types.ts`, locates the **unique**, top-level `interface Dict { ... }`
 declaration (fails if zero or more than one `Dict` interface exists in the file), and — scanning
@@ -442,18 +546,48 @@ The verifier:
 - Confirms the file exists at the pinned path; fails with a named-missing-file detail otherwise.
 - **The explicit partition assertion (ruling 2's "assert the intended difference" instruction):**
   reads `FEATURED_DESIGN_TOOLBOX_ACTION_IDS` from the same dynamically-imported module C10C-1 Layer
-  B already loads, and requires — as its own named check, independent of whether the delegated file
-  exists yet — that `featuredIds` is a non-empty subset of the C10C-1-derived action set, that
-  `featuredIds ∪ nonFeaturedIds` (the derived set minus `featuredIds`) exactly equals the derived
-  set with **zero overlap and zero gap** (multiset), computed fresh at runtime, never hardcoded as
-  "2 featured, 14 non-featured."
-- **Structural (AST) checks, `[R1-F2]`, applied to BOTH consumer loops independently:** zero
-  `test.skip`/`.only`/`.fixme`/`.todo` anywhere; a dynamic `import()` call whose argument subtree
-  contains a string literal referencing `design-toolbox.ts` by path fragment; **two** distinct
-  `for...of` loops over that imported binding, one whose body contains a `test(` call referencing
-  `chat-plus-trigger`-shaped interaction, one whose body contains a `test(` call referencing a
-  `next-step-toolbox`-shaped `getByTestId` call — scoped to each loop body independently, at least
-  one `.click(` and at least one `.textContent(`/`.innerText(` call.
+  B already loads, checks its **runtime shape** the same way C10C-1's Layer C does (plain
+  `Array.prototype` array of plain strings, no extra own keys — `[R3-F4]`), and requires — as its
+  own named check, independent of whether the delegated file exists yet — that `featuredIds` is a
+  non-empty subset of the C10C-1-derived action set, that `featuredIds ∪ nonFeaturedIds` (the
+  derived set minus `featuredIds`) exactly equals the derived set with **zero overlap and zero gap**
+  (multiset), computed fresh at runtime, never hardcoded as "2 featured, 14 non-featured."
+- **`[R3-F1]` The cross-file structural proof (finding 1's fix — the check above proves a fact about
+  the verifier's own arithmetic, not about `NextStepActions.tsx`):** the verifier separately parses
+  `apps/web/src/components/NextStepActions.tsx`'s **own real source** (with `ScriptKind.TSX` — a
+  `.tsx` file parsed as plain `.ts` never recognizes its own JSX at all, an empirically-confirmed
+  bug this round fixed in the verifier's shared `parseTs` helper) and requires, as facts about THAT
+  file specifically:
+  - It imports `FEATURED_DESIGN_TOOLBOX_ACTION_IDS` by exact name from a `design-toolbox`-referencing
+    module, and contains a `.filter(...)` call whose callback body calls `.includes(...)` on that
+    same imported binding's own local identifier — i.e. the exact shape
+    `DESIGN_TOOLBOX_ACTIONS.filter((action) => !FEATURED_DESIGN_TOOLBOX_ACTION_IDS.includes(action.id))`
+    already used to derive `NON_FEATURED_TOOLBOX_ACTIONS` today (confirmed by direct reading this
+    round). A verifier-side re-derivation of the complement proves nothing about this file; this
+    check proves the file's own logic does the split.
+  - All four pinned `data-testid` fragments — `next-step-toolbox-action-`, `next-step-toolbox-more`,
+    `next-step-more-toolbox`, `next-step-toolbox-sub-action-` — exist as genuine JSX `data-testid`
+    attribute literal values (including inside a template literal's static parts) somewhere in the
+    file's own AST, not merely asserted by this document's prose.
+- **`[R3-F1]` Structural (AST) checks, `[R1-F2]` + `[R3-F1]`, applied to BOTH consumer loops
+  independently, on the delegated e2e spec file:** zero `test.skip`/`.only`/`.fixme`/`.todo`
+  anywhere; a dynamic `import()` call whose argument subtree contains a string literal referencing
+  `design-toolbox.ts` by path fragment; **two** distinct `for...of` loops over that imported
+  binding, one whose body contains a `test(` call referencing `chat-plus-trigger`-shaped
+  interaction, one whose body contains a `test(` call referencing a `next-step-toolbox`-shaped
+  `getByTestId` call. Within each loop, `.click()` is no longer checked as an unbound "some `.click(`
+  call exists somewhere in the loop" fact (round 3's finding: that, paired with an equally unbound
+  "the selector fragment appears somewhere," let one loop drive both surfaces, or neither, while
+  computing markers from the imported resolver) — every required `.click()` is now **bound to its
+  own selector-chain receiver**: the side-panel loop must contain a `.click()` call whose own
+  `page.getByTestId(...)`-shaped receiver subtree contains `"chat-plus-trigger"`; the next-step loop
+  must contain **three** such selector-bound `.click()` calls — one referencing
+  `"next-step-toolbox-more"` (opens the More menu), one referencing `"next-step-more-toolbox"`
+  (opens the toolbox submenu), and one referencing `"next-step-toolbox-action"` or
+  `"next-step-toolbox-sub-action"` (the actual per-action click, direct or via the submenu) —
+  proving the loop's source demonstrates both the direct-featured path and the multi-step
+  non-featured "More" navigation, not just one arbitrary click. Both loops still separately require
+  at least one `.textContent(`/`.innerText(` call.
 - **Runs the suite for real** via `pnpm --filter @open-design/e2e exec playwright test -c
   playwright.config.ts ui/design-toolbox-actions.test.ts --reporter=json` (package-relative path —
   `[R1-F1]`) and requires: `run.specs.length` **exactly equals** `2 × derivedActionCount` (16 side-panel
@@ -470,10 +604,14 @@ The verifier:
   '__NONE__'` per action. It parses every side-panel spec's captured stdout for
   `^W10C_RESOLVED (\S+) (.+)$` and every next-step spec's for `^W10C_NEXTSTEP_RESOLVED (\S+) (.+)$`
   (the confirmed-live `results[].stdout[].text` schema, §2), requiring both captured values to
-  **exactly equal** the same independently-computed `expected` for that action. A test whose body
-  never performs a real click/read cannot fabricate a correct marker across 16 actions — let alone
-  32, across two independently-titled, independently-selector-bound loops — without independently
-  discovering the same real answers the verifier computes fresh each run.
+  **exactly equal** the same independently-computed `expected` for that action. **`[R3-F1]`: the
+  marker's reported id (capture group 1) must equal the action id under test, not merely match the
+  marker's regex SHAPE** — round 3's finding: previously only the extracted *value* (group 2) was
+  ever inspected, so a spec that emitted a syntactically-valid marker reporting the WRONG id (e.g.
+  always the first action's) still passed. A test whose body never performs a real click/read
+  cannot fabricate a correct, correctly-id'd marker across 16 actions — let alone 32, across two
+  independently-titled, independently-selector-bound loops — without independently discovering the
+  same real answers the verifier computes fresh each run.
 
 **Satisfiability.** A legitimate implementation writes the two required loops, using the confirmed
 dynamic-import pattern and the confirmed selectors from §2 for both consumers (`chat-plus-trigger` /
@@ -499,6 +637,14 @@ written to prevent — is caught by the exact `2 × derivedActionCount` spec-cou
 per-consumer pinned-title coverage check, both of which fail outright at 16 specs instead of 32. An
 implementation that hardcodes "2 featured ids" instead of reading `FEATURED_DESIGN_TOOLBOX_ACTION_IDS`
 at runtime is caught the moment that constant changes, by the partition check's own fresh read.
+**`[R3-F1]`:** a spec whose next-step loop clicks only the direct-featured selector and reports a
+plausible marker for non-featured ids too (without actually driving the "More" navigation) is caught
+by the three-distinct-selector-bound-click-chain requirement; a spec that emits a marker reporting
+the wrong action's id (e.g. copy-pasted from the first iteration) is caught by the marker-id
+validation, which now checks the reported id, not just the value; and a `NextStepActions.tsx` that
+silently drops the real `.filter(...).includes(...)` split in favor of some other partition logic
+(even one that happens to produce the same runtime result today) is caught by the cross-file
+structural check, independent of whether the runtime partition currently agrees.
 
 ---
 
@@ -510,27 +656,49 @@ one no longer depends on trusting the second:
 **(a) The verifier's own direct runtime proof (the primary evidence — "boot the isolated daemon,
 make the real request, assert the real response," executed by the verifier itself, not delegated):**
 the verifier boots one isolated, namespaced, daemon-only tools-dev runtime (same mechanism as
-C10C-5 — temp `OD_DATA_DIR`, no fixed port, never 7456/51012, torn down by exact PID in a `finally`
-block regardless of outcome), fetches the real, live `skills` array from that daemon's
-`GET /api/skills` (fail-closed: `redirect: 'manual'`, origin re-validated immediately before the
-request), dynamically imports the real `findDesignToolboxSkill` from `design-toolbox.ts` (§2
+C10C-5 — temp `OD_DATA_DIR`, no fixed port, never 7456/51012), fetches the real, live `skills`
+array from that daemon's `GET /api/skills` through the **single hardened fetch path**
+(`fetchLiveSkillsOverHttp`: `redirect: 'manual'`, origin re-validated immediately before the
+request, status-checked — `[R3-F5]`; reused here, not duplicated, so the criterion has exactly one
+fetch implementation to reason about instead of a second, previously-raw `fetch(...)` call this
+round replaced), dynamically imports the real `findDesignToolboxSkill` from `design-toolbox.ts` (§2
 pattern), and asserts **directly, in the verifier's own process**: a real action (the first entry of
 the C10C-1-derived catalogue) resolves to a non-null skill against that live list; a synthetic
 action-shaped object with `preferredSkillIds: ['w10c-red-spec-phantom-skill-id']`,
 `categoryHints: []`, `searchTerms: ['w10c-red-spec-unmatchable-search-term']` resolves to `null`
 against the same live list. This is a real execution of real production code against a real,
-freshly-served registry — independent of any checked-in test file's honesty.
+freshly-served registry — independent of any checked-in test file's honesty. **`[R3-F5]` Teardown is
+independently confirmed, not trusted from `tools-dev stop`'s own report:** the verifier captures the
+daemon's own reported pid at boot (`DaemonStatusSnapshot.pid`, §2), calls `tools-dev stop daemon
+--namespace <ns> --json` (previously invoked without `--json` at all — its result was never actually
+read), polls `process.kill(pid, 0)` against both that pid and every pid `stop` itself reports as
+still-remaining until confirmed dead, and — because the sidecar is spawned `detached: true` (§2, pid
+doubles as process-group id) — escalates to a **process-group** `SIGTERM` then `SIGKILL` if anything
+survives, polling again after each. A `partial` stop or an unconfirmed survivor after full
+escalation now fails this criterion outright (`teardownOk` folded into the overall verdict); it is
+never silently ignored. This is the exact class of bug `DECISIONS.md`'s `W9AS-PARK` record documents
+a sibling wave being parked over: trusting a tracked leader's exit report while a descendant in the
+same process group survives. Only then is the temp `OD_DATA_DIR` removed.
 
 **(b) A required, structurally-bound delegated artifact:** `e2e/tests/design-toolbox-phantom-id.test.ts`
 (Vitest, exact path — `[R1-F1]`), required shape:
-- Imports `createSmokeSuite` from `@/vitest/suite` and calls it, then calls `.with.toolsDev(...)`
-  (structural presence check — real daemon boot, matching `e2e/AGENTS.md`'s pure-inspect default).
+- Contains a real `createSmokeSuite(...)` `CallExpression` (imported from `@/vitest/suite`) and a
+  real `.with.toolsDev(...)` chained `CallExpression` — **`[R3-F2]` both are now AST-bound checks**
+  (a `CallExpression` walk that matches the exact chained-property shape), not the raw
+  `/createSmokeSuite/`/`/\.with\.toolsDev/` text-regex scans this round replaced, which a comment or
+  an unrelated identically-spelled chain could also satisfy.
 - Loads `findDesignToolboxSkill` via the same dynamic-import pattern as C10C-2 (structural check:
   dynamic `import()` whose argument subtree contains a string literal referencing
-  `design-toolbox.ts`; the bound property name in the destructuring pattern must be exactly
-  `findDesignToolboxSkill`, not a substring match on any local alias — `[R1-F4]`'s exact-name fix
-  applied here too), and that bound identifier must actually be **called** (a `CallExpression`
-  whose callee is that exact identifier) at least twice.
+  `design-toolbox.ts`). **`[R3-F2]` The destructured binding must be named exactly
+  `findDesignToolboxSkill` for its ORIGINAL property, and the verifier now captures the actual LOCAL
+  identifier that binding produces** (which can differ from `findDesignToolboxSkill` under an alias,
+  e.g. `const { findDesignToolboxSkill: _unused } = await import(...)`) **and requires that LOCAL
+  identifier — not the property name's text — to be called at least twice.** This closes the
+  unbound-import class round 3 found: previously, an aliased-away (never-called) import of the real
+  function, plus an unrelated local `function findDesignToolboxSkill() {...}` sharing the original
+  name, passed both the binding-presence check and the call-count check by calling the decoy — the
+  call count was being measured against the wrong identifier. A normal, non-adversarial import (no
+  alias) is unaffected: its local name already equals the property name.
 - Contains the literal string `w10c-red-spec-phantom-skill-id` as a genuine AST `StringLiteral`/
   `NoSubstitutionTemplateLiteral` **node value** somewhere in the file — not merely present in the
   raw text (`[R1-F3]`'s "the phantom literal may appear only in a comment" fix: the verifier
@@ -548,8 +716,10 @@ satisfied.
 
 **Satisfiability.** (a) is satisfied automatically by the verifier's own code once the real
 production functions and a real daemon exist — no implementation action required beyond not
-breaking them. (b) is satisfied by a straightforward Vitest file following the pinned shape, calling
-the real function against real live data fetched from its own booted daemon — the same shape
+breaking them; teardown confirmation is entirely the verifier's own responsibility and does not
+depend on the implementation at all. (b) is satisfied by a straightforward Vitest file following the
+pinned shape, calling the real function (through its own normal, unaliased local binding) against
+real live data fetched from its own booted daemon — the same shape
 `e2e/tests/tools-dev/automations-routines.test.ts` already demonstrates for real HTTP against a real
 daemon.
 
@@ -557,10 +727,15 @@ daemon.
 `findDesignToolboxSkill` at all cannot affect (a), which the verifier computes independently of
 anything in the delegated file — this closes the round-1 finding that the entire criterion
 previously depended on trusting an uncalled import. For (b) specifically: an uncalled import is
-caught by the call-presence check; a phantom literal hidden in a comment is caught by the AST
-string-literal-node check; two trivially-passing tests with plausible titles but empty bodies would
-still make (a) — the primary evidence — correctly reflect reality, and would additionally fail (b)'s
-"actually called at least twice" structural bar.
+caught by the call-presence check, now bound to the actual local identifier the import produces
+(`[R3-F2]`) so an aliased-away import plus a same-named local lookalike no longer passes; a phantom
+literal hidden in a comment is caught by the AST string-literal-node check; a decorative-looking
+`createSmokeSuite`/`.with.toolsDev` mention inside an unrelated string or comment is caught by the
+AST-bound chained-call check (`[R3-F2]`); two trivially-passing tests with plausible titles but empty
+bodies would still make (a) — the primary evidence — correctly reflect reality, and would
+additionally fail (b)'s "actually called at least twice" structural bar. `[R3-F5]`: a `tools-dev
+stop` that reports `stopped` while a descendant process in the same group survives is caught by the
+independent pid-liveness poll, which does not trust the reported status string at all.
 
 ---
 
@@ -581,19 +756,28 @@ text.
 **(b) A required, structurally-bound delegated artifact:** `apps/daemon/tests/design-toolbox-skill-refs.test.ts`
 (Vitest, exact path — `[R1-F1]`), required shape:
 - Reads `apps/web/src/runtime/design-toolbox.ts` as **text** (`fs.readFileSync`, never an ES
-  `import` — the cross-app boundary in §2) and parses it with the TypeScript compiler API
-  (`import ts from 'typescript'`; a real `ts.createSourceFile`/`ts.forEachChild` call, positively
-  confirmed by the verifier's own AST scan — never a regex/string scan) to extract the same
-  `{id, preferredSkillIds}[]` shape as C10C-1.
+  `import` — the cross-app boundary in §2) and parses it with the TypeScript compiler API. **`[R3-F2]`
+  This is now a real, DATA-FLOW-BOUND check**, not "some call to `ts.createSourceFile` or
+  `ts.forEachChild` exists somewhere in the file" (round 3's finding: two decorative, unconnected
+  calls each independently satisfied that check without ever actually walking the parsed source) —
+  the verifier requires a variable declaration whose initializer is a direct `ts.createSourceFile(
+  ...)` call, AND a `ts.forEachChild(X, ...)` call whose first argument is an Identifier referencing
+  that same bound variable: a genuine, connected `createSourceFile → forEachChild` chain, to extract
+  the same `{id, preferredSkillIds}[]` shape as C10C-1.
 - Imports `listSkills`, `findSkillById`, and `SKILL_ID_ALIASES` from `../src/skills.js` (the daemon's
   own `.js`-extensioned internal-import convention — a plain static import, no dynamic-import
   workaround needed here per §2) — and the imports must use the **exact original exported names**
   (`element.propertyName?.text ?? element.name.text` on each `ImportSpecifier`, never a substring
   match on the local binding — `[R1-F4]`'s fix: `import { listSkills as findSkillByIdDecoration }`
   no longer passes, because the checked value is the *original* exported name `listSkills`, not the
-  local alias). Both `findSkillById` and `listSkills` must additionally be **called** somewhere in
-  the file (a `CallExpression` whose callee is exactly that identifier) — `[R1-F4]`'s "never
-  requires imports or calls" fix.
+  local alias). **`[R3-F2]` `SKILL_ID_ALIASES`'s import is now actually checked** (previously
+  specified in this document's prose but never enforced by the verifier). `findSkillById` and
+  `listSkills` must additionally be **called**, and `SKILL_ID_ALIASES` **referenced**, somewhere in
+  the file — and, per round 3's unbound-import fix, every one of these checks is now bound to the
+  actual LOCAL identifier each import produces (captured from the `ImportSpecifier`'s `.name`, which
+  can differ from the original exported name under an alias), never to the exported name's text —
+  `[R1-F4]`'s original "never requires imports or calls" fix, closed the rest of the way against
+  alias-based evasion.
 - Contains the literal string `w10c-daemon-suite-phantom-skill-id` as a genuine AST string-literal
   node value (same anti-comment fix as C10C-3).
 - Does not import `apps/web/**` (the cross-app boundary check, unchanged from the original design).
@@ -621,13 +805,19 @@ instead of `scripts/`, per the wave brief's explicit instruction.
 
 **Decoy.** `[R1-F4]`: `import { listSkills as findSkillByIdDecoration } from '../src/skills.js'`
 without ever calling it is caught by the exact-original-name + call-presence checks — the prior
-substring-on-local-binding check is gone. A test that regex-scans `design-toolbox.ts` is caught by
-the positive-evidence compiler-API-call check. "One title containing every action ID" is caught by
-the pinned exact per-action title format, which cannot describe more than one id. A phantom literal
-hidden in a comment is caught by the AST string-literal-node check. And regardless of any gap in (b),
-(a) — the verifier's own direct call against the real registry — independently and correctly reports
-whether every `preferredSkillIds` entry actually resolves, so the criterion cannot pass on a
-decorative (b) alone.
+substring-on-local-binding check is gone. **`[R3-F2]`: `import { findSkillById: _unused } from
+'../src/skills.js'` (import present, aliased away, never called) plus an unrelated local
+`function findSkillById() {...}` sharing the original name is now caught too** — the call-count
+check is bound to the LOCAL identifier the import actually produces (`_unused`), not to the text
+`findSkillById`, so calls to the local lookalike no longer satisfy it. A test that regex-scans
+`design-toolbox.ts`, or that calls `ts.createSourceFile`/`ts.forEachChild` decoratively without
+connecting the two, is caught by the data-flow-bound compiler-API check (`[R3-F2]`). An import that
+omits `SKILL_ID_ALIASES` entirely — previously undetectable — now fails the criterion directly
+(`[R3-F2]`). "One title containing every action ID" is caught by the pinned exact per-action title
+format, which cannot describe more than one id. A phantom literal hidden in a comment is caught by
+the AST string-literal-node check. And regardless of any gap in (b), (a) — the verifier's own direct
+call against the real registry — independently and correctly reports whether every
+`preferredSkillIds` entry actually resolves, so the criterion cannot pass on a decorative (b) alone.
 
 ---
 
@@ -655,8 +845,11 @@ immediately before the request, fail-closed on any mismatch or 3xx), separately 
 fall back to IPC/tools-dev discovery and reach a *different*, possibly-default-namespace daemon),
 and asserts the two responses' skill `id` **multisets** (occurrence-counted, never
 `Set`-deduplicated) are identical — an added, removed, or duplicated id on either side is visible.
-Tears the daemon down by the exact PID the boot step reported, in a `finally` block, regardless of
-outcome.
+**`[R3-F5]`** Tears the daemon down using the same shared, fail-closed `withIsolatedDaemon` helper
+C10C-3 uses (§C10C-3's teardown-confirmation description applies verbatim here: captured boot pid,
+`tools-dev stop --json` actually read, independent pid-liveness polling, process-group escalation on
+survival, `teardownOk` folded into this criterion's own overall verdict) — in a `finally` block,
+regardless of outcome, and never trusting a single reported exit status.
 
 **Satisfiability.** `od skills list` (`apps/daemon/src/cli.ts:runSkills` →
 `runLibraryList('skills', ...)`) already `fetch()`es `${base}/api/skills` directly — it is a thin
@@ -719,6 +912,12 @@ verifier checks:
   itself already contains bare names and bare emails from `git log --format=%an%x00%ae`) — so
   `"Jane Doe <jane@example.com>"` is caught if either "jane doe" or "jane@example.com" is an author,
   not only if the combined string happens to match verbatim.
+- **`[R3-F6]` `reviewer` must be non-empty AFTER trimming, not just truthy.** Round 3's finding: a
+  whitespace-only string (e.g. `" "`) is truthy (non-empty `.length`), so the prior `if (!reviewer)`
+  presence check let it through; it then matched no commit author (whitespace is not anyone's name
+  or email) and the criterion silently passed with no real reviewer identity on record. The verifier
+  now derives `reviewer` as `null` unless the raw string is non-empty after `.trim()`, so a
+  whitespace-only value is rejected at the same point a missing one already was.
 - `verdict === "APPROVE"`.
 
 **Satisfiability.** Commit the complete implementation as some real commit P; a distinct reviewer
@@ -734,24 +933,75 @@ empty or placeholder `model` field is now itself a failure.
 
 ---
 
-### C10C-8 — retired: resolved directly by orchestrator ruling, not by a mechanical gate
+### C10C-8 — `human:` The capability-decision record itself landed through the review lane
 
-**`[R1-F8]` originally added `C10C-8`** as a `human:`-marked, `DECISIONS.md`-gated criterion (mirroring
-`W9-ingest-tranche.md`'s `acceptedRisk.decisionRef` pattern) specifically because the underlying
-question — does applying a toolbox action need its own `od`/HTTP capability under `AGENTS.md`'s
-dual-track rule — was genuinely open and this PRD-expansion pass had no authority to resolve it
-unilaterally.
+**`[R1-F8]` originally added `C10C-8`** as a `human:`-marked, `DECISIONS.md`-gated criterion
+(mirroring `W9-ingest-tranche.md`'s `acceptedRisk.decisionRef` pattern) specifically because the
+underlying question — does applying a toolbox action need its own `od`/HTTP capability under
+`AGENTS.md`'s dual-track rule — was genuinely open and this PRD-expansion pass had no authority to
+resolve it unilaterally.
 
-**That authority gap no longer exists.** The orchestrator has since ruled on the question directly,
-under founder authority explicitly delegated to the orchestrator for this project (§9, ruling 1,
-cited as "Orchestrator ruling under delegated founder authority, 2026-07-28") — a binding answer,
-not a suggestion needing a further mechanical gate to confirm it happened. `C10C-8` is therefore
-**removed** rather than kept as a criterion that would trivially and permanently read `pass` by
-construction (the ruling is recorded in this PRD's own frozen text, which nothing in this wave can
-retroactively unfreeze) — a criterion that cannot fail once written is not measuring anything, the
-same principle that drove this wave's other hardening. The manifest's expected criteria set (§7)
-reverts to not including `C10C-8`. `DECISIONS.md` is correspondingly removed from the proposed
-lease's allow list (§6) — nothing in this wave's verifier reads or needs it anymore.
+**Round 2 removed it, reasoning the orchestrator's direct ruling on that question (§9, ruling 1)
+closed the gate `C10C-8` existed for.** **Round 3 reinstates it — this was wrong, per the
+orchestrator's own correction.** The mistake was conflating two different claims: "has the
+capability question been *decided*" (yes, by the ruling — that's a fact about this PRD's own frozen
+prose, and this PRD cannot mechanically verify its own prose) and "has that decision *landed on the
+record, through the review lane, at a point this wave cannot influence*" (a genuinely external,
+mechanically-checkable fact, once the ruling was transcribed into `docs/plans/waves/DECISIONS.md` —
+which it since was, via the merged `main` tip: the `### W10C-CAPABILITY-DECISION` block confirmed in
+§2). A criterion that would trivially and permanently read `pass` *by construction of this
+document's own text* is not measuring anything (round 2's instinct was correct there); a criterion
+that reads the actual, external, review-lane-gated record is a different thing entirely, and **is**
+measuring something — exactly the invariant the reviewer's finding-7 named: "the exact
+`W10C-CAPABILITY-DECISION` / `Decision: exempt` block already exists on main and IS a fail-able
+invariant."
+
+**Criterion.** `human:`-marked per `VERIFICATION-CONTRACT.md` §3 R7 — this criterion legitimately
+resolves `blocked-on-founder`, not `fail`, when the record has not yet landed (an unanswered
+question, not a defect). The verifier reads `docs/plans/waves/DECISIONS.md` **at `baseCommit`, never
+`HEAD`** (`git show <baseCommit>:docs/plans/waves/DECISIONS.md` — the proposed lease, §6, denies this
+file to W10c, and a wave branch cannot reach the docs lane at all regardless of lease wording, so
+`baseCommit` is a fixed point this wave's own commits structurally cannot influence):
+- If the file cannot be read at `baseCommit`, or no `### W10C-CAPABILITY-DECISION` heading exists in
+  it: **`blocked-on-founder`** — the capability question has not yet landed through the review lane.
+- If the heading exists, the verifier parses its block (everything up to the next `### ` heading or
+  EOF) for `- Decision: <...>`, `- Decider: <...>`, `- Date: <...>`, `- Rationale: <...>` bullet
+  lines and requires:
+  - `Decision` is exactly `exempt` or `build-now` (case-insensitive) — the two legitimate answers to
+    the underlying question; anything else is malformed.
+  - `Decider`, `Date`, and `Rationale` are all present and non-empty. **`[R3-F6]`** `Decider` is
+    additionally rejected if it normalizes to nothing after trimming (the same whitespace-only-string
+    bug class C10C-7's `reviewer` check closes).
+  - **`[R3-F7]` `Decider` is checked against commit authors**, mirroring C10C-7's reviewer-distinctness
+    pattern exactly: it must not match any author of this wave's own commits (`baseCommit..HEAD`,
+    via the same `commitAuthorsBetween`/`identityMatchesAnyAuthor` machinery C10C-7 uses) — so an
+    implementer cannot self-attribute founder/orchestrator decision authority under their own commit
+    identity while implementing this wave.
+  - A record present but failing any of the above resolves **`fail`** (a defect in a landed record),
+    not `blocked-on-founder` (which is reserved for "not yet landed at all").
+- **The criterion's own assertion text states plainly — and this document repeats it, because it is
+  the whole point of the round-3 correction — that a passing `C10C-8` proves the capability-decision
+  record landed through the review lane that produced `baseCommit`. It does NOT, and cannot, prove
+  that any particular person actually holds founder or delegated-orchestrator authority; that is a
+  human, off-repository fact this mechanism was never capable of verifying and does not claim to.**
+
+**Satisfiability.** Already satisfied today: the merged `main` tip's `### W10C-CAPABILITY-DECISION`
+block (§2) has `Decision: exempt`, a non-empty `Decider`/`Date`/`Rationale`, and a `Decider` string
+("Fable 5 orchestrator under gate authority delegated by Devin Wiggins (founder) on 2026-07-28")
+that does not match any git author identity, let alone this wave's own. Confirmed by actually
+running the verifier against this tree's `baseCommit` this round: `C10C-8` reads `pass`.
+
+**Decoy.** Deleting the `DECISIONS.md` record (or reverting past it) is caught by the missing-heading
+`blocked-on-founder` branch — not a silent pass, and not a hard `fail` either, correctly reflecting
+"the question genuinely has not been decided on the record" rather than "someone broke something." A
+malformed `Decision` value, or a `Decider`/`Date`/`Rationale` left blank, is caught by the field
+checks and resolves `fail`. A wave implementer who edits `DECISIONS.md` directly to fabricate a
+favorable record cannot do so at all without violating the LEASE check (`DECISIONS.md` stays in
+`deny`, §6) — and even setting the lease aside, `C10C-8` reads at `baseCommit`, a point strictly
+before any of this wave's own commits, so no commit this wave makes could ever be reflected in what
+`C10C-8` reads. A `Decider` value that happens to equal this wave's own implementing identity (e.g. a
+self-serving "I, the implementer, hereby rule...") is caught by the author-distinctness check. The
+manifest's expected criteria set (§7) includes `C10C-8` again.
 
 ---
 
@@ -814,12 +1064,15 @@ Mirrors `verify-w9-ingest.ts` exactly (`VERIFICATION-CONTRACT.md` §3 R9, §7 "G
     reason. scripts/check-toolbox-skill-refs.test.ts is NOT modified by this wave (orchestrator
     ruling 3, kept as a floor) -- it stays in allow only because it was already allow-listed pre-
     ruling and no criterion forbids touching it if a future amendment needs to; nothing in this
-    PRD requires editing it. DECISIONS.md is in deny -- round-1 fix R1-F8 briefly added it for a
-    since-removed C10C-8 (see C10C-8's retirement note); the orchestrator's direct ruling closed
-    that question without needing a DECISIONS.md record, so nothing in this wave reads or writes
-    it. HOUSE RULE: this wave's own PRD and verifier are in deny -- gate integrity is bound by the
-    orchestrator-held approved copy + approved-gate.sha256 (GATE-INTEGRITY criterion), not by
-    trusting the implementing branch not to edit its own gate."
+    PRD requires editing it. DECISIONS.md is in deny -- this wave (C10C-8, reinstated round 3)
+    READS it via `git show <baseCommit>:...`, which the LEASE check does not gate at all (LEASE
+    only restricts the working-tree DIFF between baseCommit and HEAD); the wave never needs, and
+    is never granted, WRITE access to it. Keeping it in deny is a second, independent guarantee on
+    top of the baseCommit-read design: even if a wave branch commit somehow touched this file, that
+    would itself be a LEASE violation, and C10C-8 would still be reading the pre-wave baseCommit
+    content regardless. HOUSE RULE: this wave's own PRD and verifier are in deny -- gate integrity
+    is bound by the orchestrator-held approved copy + approved-gate.sha256 (GATE-INTEGRITY
+    criterion), not by trusting the implementing branch not to edit its own gate."
 }
 ```
 
@@ -831,17 +1084,20 @@ that is a lease amendment recorded against `main`, not a unilateral implementati
 ## 7. Definition of "green"
 
 `manifest.criteria[].id` must equal exactly `{C10C-1, C10C-2, C10C-3, C10C-4, C10C-5, C10C-6,
-C10C-7, GATE-INTEGRITY, LEASE, HEAD-DRIFT}` — 10 ids, no fewer, no more, no duplicates (`C10C-8`
-was removed after the orchestrator's direct ruling closed the question it existed to gate; see its
-retirement note above). Every one of the ten must read `status === "pass"` — none of this wave's
-criteria are `human:`-marked any longer, so `blocked-on-founder` should never legitimately appear
-in this wave's manifest. `manifest.treeDirty === false`, `manifest.commit` matching the verified
-`HEAD`, every artifact hash-matched. Nothing in the current wave program gates on this wave's manifest
-(`W5-W11-gated.md`'s Wave 10 table lists no downstream dependent for `w10c-toolbox`), so there is no
-external "definition of green" consumer analogous to W9-ingest's relationship with W3 — this
-section exists for internal completeness only.
+C10C-7, C10C-8, GATE-INTEGRITY, LEASE, HEAD-DRIFT}` — 11 ids, no fewer, no more, no duplicates
+(`C10C-8` was reinstated in round 3 after being wrongly removed in round 2 — see its criterion
+section above for why). Every one of the eleven must read `status === "pass"` for a true wave pass.
+`C10C-8` is the sole `human:`-marked criterion in this wave and may legitimately resolve
+`blocked-on-founder` per `VERIFICATION-CONTRACT.md` §3 R7 if the `DECISIONS.md` record it reads has
+not landed at the `baseCommit` a given run resolves against — in practice, on this tree today (the
+record already landed via the merged `main` tip), it resolves `pass`, not `blocked-on-founder`.
+`manifest.treeDirty === false`, `manifest.commit` matching the verified `HEAD`, every artifact
+hash-matched. Nothing in the current wave program gates on this wave's manifest (`W5-W11-gated.md`'s
+Wave 10 table lists no downstream dependent for `w10c-toolbox`), so there is no external "definition
+of green" consumer analogous to W9-ingest's relationship with W3 — this section exists for internal
+completeness only.
 
-## 8. Verified baseline (this run, pre-implementation, post round-1 fixes + rulings)
+## 8. Verified baseline (this run, pre-implementation, post round-3 fixes)
 
 - `DESIGN_TOOLBOX_ACTIONS`: 16 entries, 31 unique `preferredSkillIds` values, **zero phantoms
   today** by either the old directory-existence method or the real frontmatter-based registry
@@ -881,18 +1137,31 @@ section exists for internal completeness only.
 - `leases.json` has no `"W10c"` entry — LEASE fails honestly.
 - `pnpm guard` / `pnpm typecheck`: both green on this tree today.
 - `od skills list --json` / `GET /api/skills`: confirmed live in this session to return matching
-  168-id multisets from the same isolated daemon — **C10C-5 is expected to already pass**, and its
-  decoy argument no longer overclaims order-detection (`[R1-F6]`); its scope is deliberately
-  limited to this listing surface per orchestrator ruling 1.
+  skill-id multisets from the same isolated daemon, with teardown independently confirmed by the
+  round-3-hardened `withIsolatedDaemon` (no survivor pid, protected-daemon ports 7456/51012
+  untouched, verified after every run) — **C10C-5 is expected to already pass**, and its decoy
+  argument no longer overclaims order-detection (`[R1-F6]`); its scope is deliberately limited to
+  this listing surface per orchestrator ruling 1.
+- `docs/plans/waves/DECISIONS.md`'s `### W10C-CAPABILITY-DECISION` block, read at this run's
+  `baseCommit`: `Decision: exempt`, non-empty `Decider`/`Date`/`Rationale`, `Decider` distinct from
+  every `baseCommit..HEAD` commit author — **C10C-8 is expected to already pass** (confirmed live
+  this round: it does).
+
+**This round's fixes were confirmed by actually running the verifier against this tree, twice** (the
+second run after fixing a real bug the first run's own output surfaced — `parseTs` was parsing
+`NextStepActions.tsx` with `ScriptKind.TS` instead of `ScriptKind.TSX`, so its JSX was never
+recognized as JSX at all and the new `data-testid`-literal check could not have passed for *any*
+implementation, correct or not; fixed and reconfirmed clean). Both runs, and the confirming re-run
+after fixing `parseTs`, report the identical scoreboard below; `typecheck` is clean; the
+default-namespace daemon (ports 7456/51012) was confirmed still running, untouched, after each run;
+no `verify-w10c-*`-namespaced process or temp data directory was left behind.
 
 It is therefore expected and correct that this verifier's run reports a **mixed** scoreboard:
-C10C-1, C10C-5, C10C-6, GATE-INTEGRITY, HEAD-DRIFT `pass`; C10C-2, C10C-3, C10C-4, C10C-7, LEASE
-`fail` — 5/10, with an overall **non-zero exit**. `C10C-8` no longer exists in the manifest (§7) —
-the question it gated is closed by direct ruling, not by a mechanical gate that would trivially
-read `pass`. This is what "clean-red" means for this wave: an accurate, evidence-backed,
-non-crashing report of current reality, not a demand that every single criterion returns false,
-and not a report where any currently-green criterion is green merely because the check is too weak
-to fail on a shaped decoy.
+C10C-1, C10C-5, C10C-6, C10C-8, GATE-INTEGRITY, HEAD-DRIFT `pass`; C10C-2, C10C-3, C10C-4, C10C-7,
+LEASE `fail` — 6/11, with an overall **non-zero exit**. This is what "clean-red" means for this
+wave: an accurate, evidence-backed, non-crashing report of current reality, not a demand that every
+single criterion returns false, and not a report where any currently-green criterion is green
+merely because the check is too weak to fail on a shaped decoy.
 
 ## 9. Recorded rulings (formerly "Open founder questions")
 
@@ -909,9 +1178,16 @@ longer open.
    composing a prompt); `AGENTS.md`'s dual-track rule binds user-facing *capabilities*, and this
    adds no new capability. Building one would be scope creep this wave does not undertake.
    `C10C-5`'s parity obligation stays scoped to the skills-listing surface the toolbox actually
-   consumes (§C10C-5's scope note). The formerly-blocking `C10C-8` gate this question required is
-   **removed** (see C10C-8's retirement note in §5) — the ruling itself closes the question; no
-   further mechanical record is needed, and none is added.
+   consumes (§C10C-5's scope note). This ruling was transcribed into
+   `docs/plans/waves/DECISIONS.md`'s `### W10C-CAPABILITY-DECISION` record (`Decision: exempt`) via
+   the merged `main` tip (§2). **`C10C-8` (§5) is reinstated, not to re-decide this question — the
+   ruling above is final and this document does not reopen it — but to mechanically verify that the
+   decision landed on the record, through the review lane, at a point (`baseCommit`) this wave's own
+   commits cannot influence.** Round 2 removed `C10C-8` on the theory that the ruling itself closed
+   the question with no further mechanical record needed; round 3 corrected that (see C10C-8's
+   criterion section, §5, for the full reasoning) — the ruling closes the *question*, but whether
+   that closure actually landed through the review lane is exactly the kind of externally-verifiable
+   fact this program's criteria exist to check, and now is checked.
 2. **Does the exhaustive per-action walk need to also cover `NextStepActions.tsx`?**
    **RULING (Orchestrator ruling under delegated founder authority, 2026-07-28): YES.** The wave's
    whole premise is that "exhaustive" means a per-action row, not an adjective, and a second

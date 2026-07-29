@@ -6,12 +6,13 @@
 // deleted, with the rest of scripts/waves/, when that program closes.
 //
 // Run: pnpm exec tsx scripts/waves/verify-w10c.ts [--repo <path>]
-// Exit 0 only when every C10C criterion (C10C-1..C10C-7) reads exactly
+// Exit 0 only when every C10C criterion (C10C-1..C10C-8) reads exactly
 // "pass", GATE-INTEGRITY/LEASE/HEAD-DRIFT all pass, and the tree is clean.
-// No criterion in this wave is human:-marked (a former C10C-8 founder-decision
-// gate was removed after the orchestrator ruled directly on the question it
-// gated -- see the FIX ROUND 1 note below). The commit-bound proof manifest
-// is written to the wave's goal-state proof directory either way.
+// C10C-8 is human:-marked and may legitimately resolve "blocked-on-founder"
+// per VERIFICATION-CONTRACT.md §3 R7 -- see the FIX ROUND 3 note below for
+// why it was reinstated after being removed in an earlier round. The
+// commit-bound proof manifest is written to the wave's goal-state proof
+// directory either way.
 //
 // ===========================================================================
 // FIX ROUND 1 -- this file was rewritten to close 8 numbered findings from an
@@ -81,6 +82,90 @@
 //     consumer, 2x the per-action spec count, a dedicated partition check);
 //     ruling 3 is KEEP scripts/check-toolbox-skill-refs.test.ts as a floor --
 //     no code change here, it was never touched by this file.
+// ===========================================================================
+// FIX ROUND 3 -- a confirmation review REJECTED the round-2 draft with 7
+// findings; the orchestrator additionally ruled that removing C10C-8 in
+// round 2 was wrong and it must be reinstated. Each fix is tagged [R3-F<n>]:
+//   F7/finding-7 (C10C-8 wrongly removed) -- REINSTATED. The
+//     `### W10C-CAPABILITY-DECISION` block that landed on main via
+//     docs/plans/waves/DECISIONS.md is a real, fail-able invariant: C10C-8
+//     now reads it at baseCommit (never HEAD, since a wave branch cannot
+//     reach the docs lane -- leases.json denies DECISIONS.md to W10c),
+//     parses Decision/Decider/Date/Rationale, and checks the decider against
+//     baseCommit's own commit authors. This proves the ruling landed through
+//     the review lane that produced baseCommit -- it does NOT and cannot
+//     cryptographically verify anyone's authority; the criterion text below
+//     says so explicitly. Modeled on the W9-agent-spawn "C9S-8" mechanism
+//     described in DECISIONS.md's W9AS-PARK record (the one part of that
+//     package the reviewer found sound).
+//   F2/F3 (unbound-import class) -- hasDestructuredBindingNamed and
+//     hasNamedImportOfExactExport verified a PROPERTY/exported name existed
+//     but threw away the LOCAL identifier the import actually binds to, and
+//     countCallsToExactIdentifier then matched calls by the exported name's
+//     TEXT -- so `const { findDesignToolboxSkill: _unused } = await
+//     import(...)` (import present, never called) plus an unrelated local
+//     `function findDesignToolboxSkill() {...}` (a lookalike decoy) passed
+//     both checks by calling the decoy. findDestructuredImportBinding /
+//     findNamedImportBinding now return the actual LOCAL NAME the import
+//     produces, and every call-count check below counts calls to THAT local
+//     name. In the non-adversarial case (no alias) this is a no-op, since an
+//     unaliased import's local name equals its exported name. C10C-4 also
+//     gained the PRD-required SKILL_ID_ALIASES import+reference check, and
+//     the decorative "some ts.createSourceFile call exists somewhere" check
+//     was replaced by usesCompilerApiForRealExtraction, which requires the
+//     createSourceFile call's OWN RETURN VALUE to be bound to a variable
+//     that is then passed as the first argument to a real ts.forEachChild
+//     call -- a genuine, connected data-flow chain, not two decorative,
+//     unrelated calls. C10C-3's raw regex checks for createSmokeSuite /
+//     .with.toolsDev were replaced with real AST CallExpression checks.
+//   F4/finding-4 (alias-mediated mutation) -- C10C-1's static
+//     scanForMutationCalls only sees calls whose arguments directly contain
+//     the DESIGN_TOOLBOX_ACTIONS identifier, so aliasing an array element
+//     into a local variable before calling Object.defineProperty/
+//     setPrototypeOf on it (or on one of its elements) dodges the scan
+//     entirely. inspectRuntimeActionsShape now inspects the ACTUAL RUNTIME
+//     VALUE returned by the dynamic import: exact own keys (no extras),
+//     every field a plain enumerable DATA property (get/set accessor
+//     descriptors are rejected outright, regardless of what value they
+//     currently return), and Object.prototype/Array.prototype identity on
+//     both the array and every element -- this is now the AUTHORITATIVE
+//     check; the static scan stays only as cheap defense-in-depth.
+//   F5/finding-5 (fail-closed safety, program-wide carry-forward) -- EVERY
+//     probe fetch in this file (including C10C-3's second, previously-raw
+//     `fetch(...)` call, now routed through fetchLiveSkillsOverHttp) sets
+//     redirect:'manual' and re-validates origin/status before trusting a
+//     response. withIsolatedDaemon's teardown no longer trusts a single
+//     `tools-dev stop` exit code: it captures the daemon's own reported PID
+//     at boot, parses the stop result's `status`/`stop.remainingPids`
+//     fields, independently polls (process.kill(pid, 0)) to CONFIRM no
+//     survivor remains, and -- since the sidecar is spawned with
+//     detached:true (its PID is also its process-group id) -- escalates to
+//     a process-GROUP SIGTERM/SIGKILL if anything survives. A `partial` stop
+//     or an unconfirmed survivor now FAILS the calling criterion instead of
+//     being silently ignored; this is exactly the bug DECISIONS.md's
+//     W9AS-PARK record identifies (trusting a group leader's exit event
+//     while a descendant in the same group survives).
+//   F1/finding-1 (C10C-2 must prove the second consumer RENDERS the split)
+//     -- deriving the non-featured id set as the complement of the featured
+//     set proved a fact about the verifier's own arithmetic, not about
+//     NextStepActions.tsx. C10C-2 now parses NextStepActions.tsx's OWN real
+//     source and requires it to import FEATURED_DESIGN_TOOLBOX_ACTION_IDS
+//     and compute its non-featured set via a `.filter(...)` referencing
+//     that same import, requires the four pinned testid fragments to exist
+//     as genuine `data-testid` JSX-attribute literal values in that file,
+//     and replaces the old "selector text appears somewhere in the loop"
+//     plus "some .click() appears somewhere in the loop" (two independent,
+//     unbound facts that let one loop drive both surfaces or neither) with
+//     countClickChainsReferencing, which requires each `.click()` call's own
+//     RECEIVER subtree to contain the relevant selector fragment. The marker
+//     parser also now validates the reported action id (capture group 1)
+//     equals the id under test, not just extracting the value.
+//   F6/finding-6 (whitespace-only reviewer) -- `if (!reviewer)` passed a
+//     whitespace-only string (truthy, non-empty length) through to
+//     identityMatchesAnyAuthor, which then matched no author -- so a
+//     whitespace reviewer field silently passed. Both C10C-7's reviewer
+//     check and C10C-8's decider check now reject a string that is empty
+//     AFTER trimming, not just a falsy/missing one.
 // ===========================================================================
 //
 // Anti-gaming compliance notes (verifier defect catalog):
@@ -503,8 +588,15 @@ function propertyName(name: TypeScriptModule.PropertyName): string | null {
   if (ts.isNoSubstitutionTemplateLiteral(name)) return name.text;
   return null;
 }
+// [R3-F1] .tsx files must parse with ScriptKind.TSX, or JSX syntax
+// (<div data-testid=...>) is never recognized as JSX at all -- discovered
+// empirically: parsing NextStepActions.tsx with the hardcoded ScriptKind.TS
+// this function previously always used meant ts.isJsxAttribute could never
+// match anything, making the testid-literal check permanently unsatisfiable
+// regardless of how correct a real implementation's source was.
 function parseTs(fileName: string, sourceText: string): TypeScriptModule.SourceFile {
-  return ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const scriptKind = fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  return ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, scriptKind);
 }
 // Collects every string-literal / no-substitution-template-literal NODE
 // VALUE in the file -- used to prove a pinned fixture string is a genuine
@@ -576,28 +668,42 @@ function hasDynamicImportReferencingFile(sf: TypeScriptModule.SourceFile, fileNa
   visit(sf);
   return found;
 }
-// Does an ObjectBindingPattern anywhere in the file destructure a property
-// named exactly `exactName`? (property name, not local alias -- [R1-F4]).
-function hasDestructuredBindingNamed(sf: TypeScriptModule.SourceFile, exactName: string): boolean {
-  let found = false;
+interface ImportBinding {
+  found: boolean;
+  localName: string | null;
+}
+// [R3-F2/F3] Does an ObjectBindingPattern anywhere in the file destructure a
+// property named exactly `exactPropertyName`, and if so, what LOCAL
+// IDENTIFIER does that binding actually produce? A destructure can rename
+// away from the original property (`{ findDesignToolboxSkill: _unused }`),
+// in which case `localName` is `_unused` -- callers MUST count calls to
+// `localName`, never to `exactPropertyName` itself, or an unrelated local
+// function sharing the property's original name silently absorbs the call
+// count instead of the real import.
+function findDestructuredImportBinding(sf: TypeScriptModule.SourceFile, exactPropertyName: string): ImportBinding {
+  let result: ImportBinding = { found: false, localName: null };
   function visit(node: TypeScriptModule.Node): void {
-    if (found) return;
+    if (result.found) return;
     if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
       const effectiveName = node.propertyName ? propertyName(node.propertyName) : ts.isIdentifier(node.name) ? node.name.text : null;
-      if (effectiveName === exactName) {
-        found = true;
+      if (effectiveName === exactPropertyName && ts.isIdentifier(node.name)) {
+        result = { found: true, localName: node.name.text };
         return;
       }
     }
     ts.forEachChild(node, visit);
   }
   visit(sf);
-  return found;
+  return result;
 }
-// [R1-F4] Real ES `import { a, b as c } from '...'` -- checks the ORIGINAL
-// exported name (propertyName ?? name), never the local alias.
-function hasNamedImportOfExactExport(sf: TypeScriptModule.SourceFile, exactExportedName: string, moduleSpecifierFragment: string): boolean {
-  let found = false;
+// [R3-F2/F3] Real ES `import { a, b as c } from '...'` -- checks the
+// ORIGINAL exported name (propertyName ?? name) for presence, but returns
+// the LOCAL identifier (`name.text`) the import actually binds in this
+// file's scope, which callers must count calls against. For a normal,
+// non-aliased import (no `as` clause) localName === exactExportedName, so
+// this is a no-op change for the common case; only an adversarial alias
+// makes the two diverge, which is exactly when the distinction matters.
+function findNamedImportBinding(sf: TypeScriptModule.SourceFile, exactExportedName: string, moduleSpecifierFragment: string): ImportBinding {
   for (const stmt of sf.statements) {
     if (!ts.isImportDeclaration(stmt)) continue;
     const spec = stmt.moduleSpecifier;
@@ -606,10 +712,70 @@ function hasNamedImportOfExactExport(sf: TypeScriptModule.SourceFile, exactExpor
     if (!clause?.namedBindings || !ts.isNamedImports(clause.namedBindings)) continue;
     for (const el of clause.namedBindings.elements) {
       const originalName = el.propertyName ? el.propertyName.text : el.name.text;
-      if (originalName === exactExportedName) found = true;
+      if (originalName === exactExportedName) return { found: true, localName: el.name.text };
     }
   }
-  return found;
+  return { found: false, localName: null };
+}
+// [R3-F2] Counts every occurrence of `exactName` as an Identifier node
+// anywhere in the file, including its own declaration site -- used to prove
+// an import is REFERENCED at least once beyond being declared (count >= 2),
+// closing the "imported and never used" half of the unbound-import class for
+// bindings (like SKILL_ID_ALIASES) that are read, not called.
+function countIdentifierReferences(sf: TypeScriptModule.SourceFile, exactName: string): number {
+  let count = 0;
+  function visit(node: TypeScriptModule.Node): void {
+    if (ts.isIdentifier(node) && node.text === exactName) count++;
+    ts.forEachChild(node, visit);
+  }
+  visit(sf);
+  return count;
+}
+// [R3-F2/F3] Proves ts.createSourceFile's OWN RETURN VALUE feeds a real
+// ts.forEachChild walk -- not two decorative, unconnected calls each
+// independently satisfying a "some call to X exists" check. Requires: (1) a
+// variable declaration whose initializer is a direct `ts.createSourceFile(
+// ...)` call, and (2) a `ts.forEachChild(X, ...)` call whose first argument
+// is an Identifier referencing one of those bound variable names.
+function usesCompilerApiForRealExtraction(sf: TypeScriptModule.SourceFile): boolean {
+  const boundNames = new Set<string>();
+  function collectBindings(node: TypeScriptModule.Node): void {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer &&
+      ts.isCallExpression(node.initializer) &&
+      ts.isPropertyAccessExpression(node.initializer.expression) &&
+      ts.isIdentifier(node.initializer.expression.expression) &&
+      node.initializer.expression.expression.text === 'ts' &&
+      node.initializer.expression.name.text === 'createSourceFile'
+    ) {
+      boundNames.add(node.name.text);
+    }
+    ts.forEachChild(node, collectBindings);
+  }
+  collectBindings(sf);
+  if (boundNames.size === 0) return false;
+  let usesIt = false;
+  function checkForEachChildUsage(node: TypeScriptModule.Node): void {
+    if (usesIt) return;
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === 'ts' &&
+      node.expression.name.text === 'forEachChild' &&
+      node.arguments[0] &&
+      ts.isIdentifier(node.arguments[0]) &&
+      boundNames.has((node.arguments[0] as TypeScriptModule.Identifier).text)
+    ) {
+      usesIt = true;
+      return;
+    }
+    ts.forEachChild(node, checkForEachChildUsage);
+  }
+  checkForEachChildUsage(sf);
+  return usesIt;
 }
 // Locates every `for (const X of <binding referencing iterableNameSubstring>)`
 // loop whose body directly contains a `test(...)` call -- required shape for
@@ -682,6 +848,136 @@ function subtreeContainsStringLiteralFragment(node: TypeScriptModule.Node, fragm
   }
   inner(node);
   return found;
+}
+// [R3-F2/F3] Real AST check for a chained method call like `X.with.toolsDev(
+// ...)`: a CallExpression whose callee, walked backwards through nested
+// PropertyAccessExpressions, matches `propertyChain` exactly -- replaces a
+// raw regex/text scan (`/\.with\.toolsDev/.test(source)`) that a comment or
+// unrelated identically-spelled chain would also satisfy.
+function hasChainedMethodCall(sf: TypeScriptModule.SourceFile, propertyChain: string[]): boolean {
+  let found = false;
+  function visit(node: TypeScriptModule.Node): void {
+    if (found) return;
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      let cur: TypeScriptModule.Expression = node.expression;
+      let matched = true;
+      for (let i = propertyChain.length - 1; i >= 0; i--) {
+        if (!ts.isPropertyAccessExpression(cur) || cur.name.text !== propertyChain[i]) {
+          matched = false;
+          break;
+        }
+        cur = cur.expression;
+      }
+      if (matched) {
+        found = true;
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sf);
+  return found;
+}
+// [R3-F1] Counts `.click()` CallExpressions whose RECEIVER subtree (e.g. the
+// `page.getByTestId('X')` in `page.getByTestId('X').click()`) contains
+// `fragment` -- binds the click to the selector, rather than treating "a
+// selector fragment appears somewhere in the loop" and "some .click() call
+// appears somewhere in the loop" as two independent, unbound facts that a
+// loop driving a DIFFERENT surface (or no surface) could also satisfy.
+function countClickChainsReferencing(node: TypeScriptModule.Node, fragment: string): number {
+  let count = 0;
+  function visit(n: TypeScriptModule.Node): void {
+    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.text === 'click') {
+      if (subtreeContainsStringLiteralFragment(n.expression.expression, fragment)) count++;
+    }
+    ts.forEachChild(n, visit);
+  }
+  visit(node);
+  return count;
+}
+// [R3-F1] Collects every literal string fragment that appears as (or inside
+// a template literal forming) a JSX `data-testid` attribute value anywhere
+// in the file -- used to prove a required testid literally exists in
+// NextStepActions.tsx's own source, not merely asserted by the verifier's
+// own arithmetic.
+function collectJsxTestIdLiteralValues(sf: TypeScriptModule.SourceFile): Set<string> {
+  const out = new Set<string>();
+  function collectLiteralsIn(n: TypeScriptModule.Node): void {
+    if (
+      ts.isStringLiteral(n) ||
+      ts.isNoSubstitutionTemplateLiteral(n) ||
+      ts.isTemplateHead(n) ||
+      ts.isTemplateMiddle(n) ||
+      ts.isTemplateTail(n)
+    ) {
+      out.add(n.text);
+    }
+    ts.forEachChild(n, collectLiteralsIn);
+  }
+  function visit(node: TypeScriptModule.Node): void {
+    if (ts.isJsxAttribute(node) && ts.isIdentifier(node.name) && node.name.text === 'data-testid' && node.initializer) {
+      if (ts.isStringLiteral(node.initializer)) {
+        out.add(node.initializer.text);
+      } else if (ts.isJsxExpression(node.initializer) && node.initializer.expression) {
+        collectLiteralsIn(node.initializer.expression);
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sf);
+  return out;
+}
+// [R3-F1] Cross-file structural proof: does NextStepActions.tsx's OWN real
+// source (a) import FEATURED_DESIGN_TOOLBOX_ACTION_IDS by exact name from a
+// design-toolbox-referencing module, and (b) compute a non-featured set via
+// a `.filter(...)` CallExpression whose callback body references that same
+// imported local binding through a `.includes(` call? This is a fact about
+// a DIFFERENT file than the one the verifier itself derives the partition
+// from -- proving the split is actually implemented there, not tautologically
+// re-derived by the verifier and merely asserted against a fixed spec file.
+function nextStepPartitionIsStructurallyReal(sf: TypeScriptModule.SourceFile): { ok: boolean; problems: string[] } {
+  const problems: string[] = [];
+  const featuredImport = findNamedImportBinding(sf, 'FEATURED_DESIGN_TOOLBOX_ACTION_IDS', 'design-toolbox');
+  if (!featuredImport.found || !featuredImport.localName) {
+    problems.push('NextStepActions.tsx does not import FEATURED_DESIGN_TOOLBOX_ACTION_IDS by exact name from a design-toolbox module');
+    return { ok: false, problems };
+  }
+  const localName = featuredImport.localName;
+  let hasFilterOverBinding = false;
+  function visit(node: TypeScriptModule.Node): void {
+    if (hasFilterOverBinding) return;
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'filter' &&
+      node.arguments[0]
+    ) {
+      const callback = node.arguments[0];
+      let referencesIncludesOnBinding = false;
+      function innerVisit(n: TypeScriptModule.Node): void {
+        if (referencesIncludesOnBinding) return;
+        if (
+          ts.isCallExpression(n) &&
+          ts.isPropertyAccessExpression(n.expression) &&
+          n.expression.name.text === 'includes' &&
+          ts.isIdentifier(n.expression.expression) &&
+          n.expression.expression.text === localName
+        ) {
+          referencesIncludesOnBinding = true;
+          return;
+        }
+        ts.forEachChild(n, innerVisit);
+      }
+      innerVisit(callback);
+      if (referencesIncludesOnBinding) hasFilterOverBinding = true;
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sf);
+  if (!hasFilterOverBinding) {
+    problems.push(`NextStepActions.tsx imports FEATURED_DESIGN_TOOLBOX_ACTION_IDS as "${localName}" but has no .filter(...) callback calling "${localName}.includes(...)" to derive the non-featured set`);
+  }
+  return { ok: problems.length === 0, problems };
 }
 
 // -----------------------------------------------------------------------
@@ -828,6 +1124,72 @@ function scanForMutationCalls(sf: TypeScriptModule.SourceFile, identifierName: s
   visit(sf);
   return hits;
 }
+// [R3-F4] Inspects the ACTUAL RUNTIME VALUE (own keys, property descriptors,
+// prototypes) of the dynamically-imported DESIGN_TOOLBOX_ACTIONS array and
+// each of its elements. This is authoritative over scanForMutationCalls,
+// which only sees calls whose ARGUMENTS directly contain the identifier
+// text -- aliasing an element into a local variable before calling
+// Object.defineProperty/setPrototypeOf on it dodges that scan entirely, but
+// cannot dodge this: whatever code path produced the final shape, the
+// runtime shape either matches an honest plain literal or it does not. A
+// getter that currently RETURNS the honest value is still rejected here,
+// because the check is against descriptor SHAPE (get/set vs a plain `value`
+// data property), never against the value a getter happens to evaluate to.
+interface RuntimeShapeCheck {
+  ok: boolean;
+  problems: string[];
+}
+function inspectRuntimeActionsShape(value: unknown): RuntimeShapeCheck {
+  const problems: string[] = [];
+  if (!Array.isArray(value)) return { ok: false, problems: ['DESIGN_TOOLBOX_ACTIONS runtime export is not an Array instance'] };
+  if (Object.getPrototypeOf(value) !== Array.prototype) problems.push('DESIGN_TOOLBOX_ACTIONS prototype is not Array.prototype');
+  const arrayOwnKeys = Object.getOwnPropertyNames(value).filter((k) => k !== 'length' && !/^\d+$/.test(k));
+  if (arrayOwnKeys.length > 0) problems.push(`DESIGN_TOOLBOX_ACTIONS has extra own properties beyond numeric indices/length: ${arrayOwnKeys.join(', ')}`);
+  value.forEach((el, idx) => {
+    if (typeof el !== 'object' || el === null) {
+      problems.push(`element ${idx} is not a plain object`);
+      return;
+    }
+    if (Object.getPrototypeOf(el) !== Object.prototype) {
+      problems.push(`element ${idx} ("${(el as Record<string, unknown>).id ?? '?'}") has a non-Object.prototype prototype -- possible inherited toJSON/valueOf injection`);
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(el as object);
+    const ownKeys = Object.keys(descriptors);
+    const unexpectedKeys = ownKeys.filter((k) => !ALLOWED_ACTION_FIELDS.has(k));
+    if (unexpectedKeys.length > 0) problems.push(`element ${idx} has unexpected own key(s) at runtime: ${unexpectedKeys.join(', ')}`);
+    for (const key of ownKeys) {
+      const d = descriptors[key]!;
+      if (typeof d.get === 'function' || typeof d.set === 'function') {
+        problems.push(`element ${idx} property "${key}" is a runtime ACCESSOR (getter/setter), not a plain data property -- rejected regardless of the value it currently returns`);
+        continue;
+      }
+      if (!d.enumerable) problems.push(`element ${idx} property "${key}" is non-enumerable at runtime`);
+      if (key === 'preferredSkillIds') {
+        const v = d.value;
+        if (!Array.isArray(v) || Object.getPrototypeOf(v) !== Array.prototype || !v.every((x) => typeof x === 'string')) {
+          problems.push(`element ${idx} preferredSkillIds is not a plain runtime string Array`);
+        } else {
+          const innerExtra = Object.getOwnPropertyNames(v).filter((k) => k !== 'length' && !/^\d+$/.test(k));
+          if (innerExtra.length) problems.push(`element ${idx} preferredSkillIds has extra own properties at runtime: ${innerExtra.join(', ')}`);
+        }
+      }
+      if (key === 'id' && typeof d.value !== 'string') problems.push(`element ${idx} id is not a plain string data value at runtime`);
+    }
+  });
+  return { ok: problems.length === 0, problems };
+}
+// [R3-F4] Lighter sibling check for FEATURED_DESIGN_TOOLBOX_ACTION_IDS
+// (consumed by C10C-2's partition proof) -- same class of attack, smaller
+// surface: a plain Array.prototype array of plain strings, no extra own keys.
+function inspectRuntimeStringArrayShape(value: unknown, label: string): RuntimeShapeCheck {
+  const problems: string[] = [];
+  if (!Array.isArray(value)) return { ok: false, problems: [`${label} runtime export is not an Array instance`] };
+  if (Object.getPrototypeOf(value) !== Array.prototype) problems.push(`${label} prototype is not Array.prototype`);
+  const extra = Object.getOwnPropertyNames(value).filter((k) => k !== 'length' && !/^\d+$/.test(k));
+  if (extra.length) problems.push(`${label} has extra own properties: ${extra.join(', ')}`);
+  if (!value.every((x) => typeof x === 'string')) problems.push(`${label} contains a non-string element`);
+  return { ok: problems.length === 0, problems };
+}
 // [R1-F5] i18n cross-check scoped specifically to the unique `Dict` interface.
 function findUniqueInterface(sf: TypeScriptModule.SourceFile, name: string): TypeScriptModule.InterfaceDeclaration[] {
   const out: TypeScriptModule.InterfaceDeclaration[] = [];
@@ -943,6 +1305,7 @@ function actionListsExactlyEqual(a: ExtractedAction[], b: ExtractedAction[]): { 
 const DESIGN_TOOLBOX_SRC_REL = 'apps/web/src/runtime/design-toolbox.ts';
 const DAEMON_SKILLS_SRC_REL = 'apps/daemon/src/skills.ts';
 const SKILLS_ROOT_REL = 'skills';
+const NEXT_STEP_ACTIONS_SRC_REL = 'apps/web/src/components/NextStepActions.tsx'; // [R3-F1]
 
 async function loadDesignToolboxModule(): Promise<{ ok: true; mod: Record<string, unknown> } | { ok: false; error: string }> {
   try {
@@ -1088,14 +1451,113 @@ interface DaemonBootFail {
   detail: string;
   rawEvidence: string;
 }
+// [R3-F5] pid liveness check -- process.kill(pid, 0) sends no signal, just
+// probes existence; it throws ESRCH once the process is truly gone. Never
+// infer death from a single point-in-time report; poll it.
+function pidIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function waitUntilDead(pids: number[], deadlineMs: number): Promise<number[]> {
+  const startedAt = Date.now();
+  let survivors = pids.filter(pidIsAlive);
+  while (survivors.length > 0 && Date.now() - startedAt < deadlineMs) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    survivors = survivors.filter(pidIsAlive);
+  }
+  return survivors;
+}
+// [R3-F5] Fail-closed teardown confirmation. DECISIONS.md's W9AS-PARK record
+// documents the exact bug this replaces: trusting a tracked group leader's
+// reported exit as proof the whole group is gone, while a descendant in the
+// same process group survives. This never trusts `tools-dev stop`'s report
+// alone -- it independently polls pid liveness (process.kill(pid, 0)) for
+// both the pid this helper itself captured at boot AND every pid `stop`
+// reports as still-remaining, and if anything is still alive, escalates via
+// process-GROUP signaling (safe here because the daemon sidecar is spawned
+// with detached:true -- POSIX setsid() makes its own pid double as its
+// process-group id, so `process.kill(-pid, signal)` reaches every
+// descendant in the group, not just the tracked leader). A `partial` status
+// or an unconfirmed survivor after full escalation is reported as
+// `ok:false`; callers MUST fold that into their criterion's overall
+// pass/fail, never silently proceed.
+interface StopParsedShape {
+  daemon?: { status?: string; stop?: { remainingPids?: number[] } };
+}
+async function confirmTeardown(namespace: string, tempDataDir: string, knownPid: number | null): Promise<{ ok: boolean; detail: string }> {
+  const stopResult = sh('pnpm', ['tools-dev', 'stop', 'daemon', '--namespace', namespace, '--json'], {
+    timeoutMs: 60_000,
+    env: { ...process.env, OD_DATA_DIR: tempDataDir },
+  });
+  const jsonStart = stopResult.stdout.indexOf('{');
+  let stopParsed: StopParsedShape | null = null;
+  if (jsonStart !== -1) {
+    try {
+      stopParsed = JSON.parse(stopResult.stdout.slice(jsonStart)) as StopParsedShape;
+    } catch {
+      stopParsed = null;
+    }
+  }
+  const reportedStatus = stopParsed?.daemon?.status ?? null;
+  const reportedRemaining = stopParsed?.daemon?.stop?.remainingPids ?? [];
+  const candidatePids = [...new Set([...(knownPid !== null ? [knownPid] : []), ...reportedRemaining])];
+  if (candidatePids.length === 0) {
+    return { ok: true, detail: `tools-dev reported status="${reportedStatus}"; no known/reported pid to confirm (stop exit=${stopResult.status})` };
+  }
+  const survivorsAfterStop = await waitUntilDead(candidatePids, 5_000);
+  if (survivorsAfterStop.length === 0) {
+    return { ok: true, detail: `tools-dev reported status="${reportedStatus}"; independent pid-liveness polling confirmed pid(s) ${candidatePids.join(', ')} dead` };
+  }
+  // Escalate: process-GROUP signal, never a single leader-only signal.
+  for (const pid of survivorsAfterStop) {
+    try {
+      process.kill(-pid, 'SIGTERM');
+    } catch {
+      /* group may already be gone, or pid was never a pgid leader -- continue to confirmation poll regardless */
+    }
+  }
+  const survivorsAfterTerm = await waitUntilDead(survivorsAfterStop, 3_000);
+  for (const pid of survivorsAfterTerm) {
+    try {
+      process.kill(-pid, 'SIGKILL');
+    } catch {
+      /* best effort -- confirmation poll below is the actual gate */
+    }
+  }
+  const survivorsAfterKill = await waitUntilDead(survivorsAfterTerm, 3_000);
+  if (survivorsAfterKill.length > 0) {
+    return { ok: false, detail: `TEARDOWN FAILED: pid(s) ${survivorsAfterKill.join(', ')} still alive after tools-dev stop (status="${reportedStatus}") + independent process-group SIGTERM + SIGKILL escalation` };
+  }
+  return { ok: true, detail: `tools-dev reported status="${reportedStatus}" but pid(s) ${survivorsAfterStop.join(', ')} were still alive after its own stop; escalated via process-group SIGTERM/SIGKILL and confirmed dead` };
+}
 async function withIsolatedDaemon<T>(
   label: string,
   fn: (daemonUrl: string) => Promise<T>,
-): Promise<{ boot: DaemonBootOk | DaemonBootFail; result: T | null }> {
+): Promise<{ boot: DaemonBootOk | DaemonBootFail; result: T | null; teardownOk: boolean; teardownDetail: string }> {
   const namespace = `verify-w10c-${label}-${process.pid}-${crypto.randomBytes(4).toString('hex')}`;
   const tempDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-w10c-data-'));
   let started = false;
-  try {
+  let bootedPid: number | null = null;
+
+  // `pnpm tools-dev ...` (a root npm-style script alias) prints a
+  // "> mishmash@... tools-dev\n> pnpm exec tools-dev ..." banner ahead of
+  // the command's own stdout, so JSON.parse on the raw stdout fails --
+  // slice from the first '{' instead of trusting stdout to be pure JSON.
+  function parseJsonTail<J>(stdout: string): J | null {
+    const start = stdout.indexOf('{');
+    if (start === -1) return null;
+    try {
+      return JSON.parse(stdout.slice(start)) as J;
+    } catch {
+      return null;
+    }
+  }
+
+  async function bootAndRun(): Promise<{ boot: DaemonBootOk | DaemonBootFail; result: T | null }> {
     // `start`, not `run`: `tools-dev run` blocks in the foreground until
     // interrupted (confirmed by reading its own CLI registration text,
     // "Start apps and keep this command alive until interrupted"); `start`
@@ -1108,26 +1570,18 @@ async function withIsolatedDaemon<T>(
       return { boot: { ok: false, detail: `tools-dev start failed with exit ${startResult.status}`, rawEvidence: `${startResult.stdout}\n${startResult.stderr}` }, result: null };
     }
     started = true;
-    // `pnpm tools-dev ...` (a root npm-style script alias) prints a
-    // "> mishmash@... tools-dev\n> pnpm exec tools-dev ..." banner ahead of
-    // the command's own stdout, so JSON.parse on the raw stdout fails --
-    // slice from the first '{' instead of trusting stdout to be pure JSON.
-    function parseJsonTail<J>(stdout: string): J | null {
-      const start = stdout.indexOf('{');
-      if (start === -1) return null;
-      try {
-        return JSON.parse(stdout.slice(start)) as J;
-      } catch {
-        return null;
-      }
-    }
+    // [R3-F5] Capture the daemon's own reported pid (DaemonStatusSnapshot.pid,
+    // packages/sidecar-proto/src/index.ts) at boot -- this is what teardown
+    // independently confirms dead, rather than trusting a later report alone.
     let daemonUrl: string | null = null;
-    const startParsed = parseJsonTail<{ daemon?: { status?: { url?: string } } }>(startResult.stdout);
+    const startParsed = parseJsonTail<{ daemon?: { status?: { url?: string; pid?: number | null } } }>(startResult.stdout);
     daemonUrl = startParsed?.daemon?.status?.url ?? null;
-    if (!daemonUrl) {
+    bootedPid = startParsed?.daemon?.status?.pid ?? null;
+    if (!daemonUrl || bootedPid === null) {
       const statusResult = sh('pnpm', ['tools-dev', 'status', 'daemon', '--namespace', namespace, '--json'], { timeoutMs: 30_000 });
-      const statusParsed = parseJsonTail<{ url?: string }>(statusResult.stdout);
-      daemonUrl = statusParsed?.url ?? null;
+      const statusParsed = parseJsonTail<{ url?: string; pid?: number | null }>(statusResult.stdout);
+      daemonUrl = daemonUrl ?? statusParsed?.url ?? null;
+      bootedPid = bootedPid ?? statusParsed?.pid ?? null;
     }
     if (!daemonUrl) {
       return { boot: { ok: false, detail: 'could not discover the isolated daemon URL from tools-dev output', rawEvidence: startResult.stdout }, result: null };
@@ -1142,9 +1596,21 @@ async function withIsolatedDaemon<T>(
     }
     const result = await fn(daemonUrl);
     return { boot: { ok: true, daemonUrl }, result };
+  }
+
+  let outcome: { boot: DaemonBootOk | DaemonBootFail; result: T | null } = {
+    boot: { ok: false, detail: 'bootAndRun did not complete', rawEvidence: '' },
+    result: null,
+  };
+  let teardownOk = true;
+  let teardownDetail = 'daemon never started -- no teardown needed';
+  try {
+    outcome = await bootAndRun();
   } finally {
     if (started) {
-      sh('pnpm', ['tools-dev', 'stop', 'daemon', '--namespace', namespace], { timeoutMs: 60_000, env: { ...process.env, OD_DATA_DIR: tempDataDir } });
+      const confirmed = await confirmTeardown(namespace, tempDataDir, bootedPid);
+      teardownOk = confirmed.ok;
+      teardownDetail = confirmed.detail;
     }
     try {
       fs.rmSync(tempDataDir, { recursive: true, force: true });
@@ -1152,9 +1618,15 @@ async function withIsolatedDaemon<T>(
       /* best effort cleanup only */
     }
   }
+  return { ...outcome, teardownOk, teardownDetail };
 }
-// Fail-closed, redirect:'manual', re-validated-origin GET for /api/skills.
-async function fetchLiveSkillsOverHttp(daemonUrl: string): Promise<{ ok: true; ids: string[] } | { ok: false; error: string }> {
+// [R3-F5] Fail-closed, redirect:'manual', re-validated-origin GET for
+// /api/skills -- the SINGLE hardened fetch path every C10C-3/C10C-5 probe
+// must go through (never a raw, ad hoc `fetch(...)` call), returning both
+// the id list (for parity/multiset checks) and the raw skill records (for
+// callers, like C10C-3's oracle, that need real objects to pass into
+// findDesignToolboxSkill).
+async function fetchLiveSkillsOverHttp(daemonUrl: string): Promise<{ ok: true; ids: string[]; skills: unknown[] } | { ok: false; error: string }> {
   try {
     const base = new URL(daemonUrl);
     const skillsUrl = new URL('/api/skills', daemonUrl);
@@ -1163,7 +1635,8 @@ async function fetchLiveSkillsOverHttp(daemonUrl: string): Promise<{ ok: true; i
     if (resp.status >= 300 && resp.status < 400) throw new Error(`unexpected redirect (status ${resp.status}) -- refusing to follow`);
     if (resp.status !== 200) throw new Error(`GET /api/skills returned status ${resp.status}`);
     const body = (await resp.json()) as { skills?: { id?: string }[] };
-    return { ok: true, ids: (body.skills ?? []).map((s) => String(s.id ?? '')) };
+    const skills = body.skills ?? [];
+    return { ok: true, ids: skills.map((s) => String(s.id ?? '')), skills };
   } catch (err) {
     return { ok: false, error: String((err as Error)?.message ?? err) };
   }
@@ -1184,7 +1657,9 @@ const REVIEW_RECORD_REL = 'docs/plans/waves/w10c-toolbox-implementation-review.j
 const CHAT_COMPOSER_JSDOM_TEST_REL = 'apps/web/tests/components/ChatComposer.design-toolbox.test.tsx';
 const REPO_ROOT_GUARD_REL = 'scripts/check-toolbox-skill-refs.test.ts';
 
-// [R1-F7] Complete owned-path list -- previously omitted the last two.
+// [R1-F7] Complete owned-path list. [R3-F1] added NEXT_STEP_ACTIONS_SRC_REL
+// -- it is now a real dependency of C10C-2's cross-file structural proof, so
+// C10C-7's stale-review check must cover it too.
 const OWNED_IMPLEMENTATION_PATHS = [
   E2E_UI_SPEC_REL,
   E2E_PHANTOM_SPEC_REL,
@@ -1194,6 +1669,7 @@ const OWNED_IMPLEMENTATION_PATHS = [
   I18N_EN_REL,
   CHAT_COMPOSER_JSDOM_TEST_REL,
   REPO_ROOT_GUARD_REL,
+  NEXT_STEP_ACTIONS_SRC_REL,
 ];
 
 let derivedActionIds: string[] | null = null; // set by C10C-1, consumed by C10C-2/C10C-4
@@ -1228,9 +1704,17 @@ async function main(): Promise<void> {
       record('C10C-1', 'dynamic import() of the real design-toolbox.ts module', 'the module loads and executes at runtime', false, '', { detail: runtimeMod.error });
       return;
     }
+    // [R3-F4] Runtime property-descriptor/prototype shape check -- the
+    // authoritative defense against alias-mediated mutation (see FIX ROUND 3
+    // header note); run BEFORE the more lenient safeExtractRuntimeActions,
+    // which only checks hasOwnProperty and would happily accept a shape this
+    // check rejects (extra keys, accessor descriptors, foreign prototypes).
+    const shapeCheck = inspectRuntimeActionsShape(runtimeMod.mod.DESIGN_TOOLBOX_ACTIONS);
+    if (!shapeCheck.ok) structuralProblems.push(`runtime shape check failed:\n${shapeCheck.problems.join('\n')}`);
+
     const runtimeActions = safeExtractRuntimeActions(runtimeMod.mod.DESIGN_TOOLBOX_ACTIONS);
     if (!runtimeActions.ok) {
-      record('C10C-1', '', 'the runtime-executed DESIGN_TOOLBOX_ACTIONS export matches the AST-derived reading', false, '', { detail: runtimeActions.error });
+      record('C10C-1', '', 'the runtime-executed DESIGN_TOOLBOX_ACTIONS export matches the AST-derived reading', false, structuralProblems.join('\n'), { detail: runtimeActions.error });
       return;
     }
     const crossCheck = actionListsExactlyEqual(layerA.actions, runtimeActions.actions);
@@ -1270,7 +1754,7 @@ async function main(): Promise<void> {
     record(
       'C10C-1',
       `AST parse of ${DESIGN_TOOLBOX_SRC_REL}/${I18N_TYPES_REL}/${I18N_EN_REL} + dynamic import() of ${DESIGN_TOOLBOX_SRC_REL}`,
-      'unique top-level exported literal-only DESIGN_TOOLBOX_ACTIONS (Layer A), no mutation calls, exactly matching its own runtime-executed export (Layer B), exactly matching the unique Dict interface, exactly matching non-empty en.ts values',
+      'unique top-level exported literal-only DESIGN_TOOLBOX_ACTIONS (Layer A), no mutation calls, exactly matching its own runtime-executed export (Layer B) whose OWN KEYS/DESCRIPTORS/PROTOTYPE are an honest plain array of plain data-property objects (no accessor, no extra key, no foreign prototype), exactly matching the unique Dict interface, exactly matching non-empty en.ts values',
       problems.length === 0,
       `derived action count: ${runtimeActions.actions.length}\nderived ids: ${[...new Set(runtimeActions.actions.map((a) => a.id))].sort().join(', ')}\n${problems.join('\n')}`,
     );
@@ -1314,8 +1798,9 @@ async function main(): Promise<void> {
 
     const partitionProblems: string[] = [];
     const featuredRaw = toolboxMod.mod.FEATURED_DESIGN_TOOLBOX_ACTION_IDS;
-    if (!Array.isArray(featuredRaw) || !featuredRaw.every((x) => typeof x === 'string')) {
-      partitionProblems.push('FEATURED_DESIGN_TOOLBOX_ACTION_IDS is not a string array at runtime');
+    const featuredShape = inspectRuntimeStringArrayShape(featuredRaw, 'FEATURED_DESIGN_TOOLBOX_ACTION_IDS'); // [R3-F4]
+    if (!featuredShape.ok) {
+      partitionProblems.push(...featuredShape.problems);
     } else {
       const featuredIds = featuredRaw as string[];
       if (featuredIds.length === 0) partitionProblems.push('FEATURED_DESIGN_TOOLBOX_ACTION_IDS is empty');
@@ -1324,6 +1809,27 @@ async function main(): Promise<void> {
       if (partitionDiff.onlyInA.length) partitionProblems.push(`featured+non-featured union has id(s) not in the derived set: ${partitionDiff.onlyInA.join(', ')}`);
       if (partitionDiff.onlyInB.length) partitionProblems.push(`derived set has id(s) covered by NEITHER featured nor non-featured: ${partitionDiff.onlyInB.join(', ')}`);
       if (partitionDiff.countMismatch.length) partitionProblems.push(`featured/non-featured partition count mismatch (overlap or duplicate): ${partitionDiff.countMismatch.join(', ')}`);
+    }
+    // [R3-F1] Cross-file structural proof: the above is a fact about the
+    // verifier's OWN arithmetic (complement of the featured set). Proving
+    // the SECOND CONSUMER actually renders that split requires parsing
+    // NextStepActions.tsx's own real source and checking it, not the
+    // verifier's derived set, structurally implements the partition and
+    // exposes the four pinned testid fragments as genuine JSX literals.
+    const nextStepSrcAbs = path.join(repoRoot, NEXT_STEP_ACTIONS_SRC_REL);
+    if (!fs.existsSync(nextStepSrcAbs)) {
+      partitionProblems.push(`${NEXT_STEP_ACTIONS_SRC_REL} does not exist -- cannot prove the second consumer structurally implements the featured/non-featured split`);
+    } else {
+      const nextStepSource = fs.readFileSync(nextStepSrcAbs, 'utf8');
+      const nextStepSf = parseTs(nextStepSrcAbs, nextStepSource);
+      const structuralPartition = nextStepPartitionIsStructurallyReal(nextStepSf);
+      if (!structuralPartition.ok) partitionProblems.push(...structuralPartition.problems.map((p) => `[${NEXT_STEP_ACTIONS_SRC_REL}] ${p}`));
+      const testIdValues = collectJsxTestIdLiteralValues(nextStepSf);
+      for (const fragment of ['next-step-toolbox-action-', 'next-step-toolbox-more', 'next-step-more-toolbox', 'next-step-toolbox-sub-action-']) {
+        if (![...testIdValues].some((v) => v.includes(fragment))) {
+          partitionProblems.push(`[${NEXT_STEP_ACTIONS_SRC_REL}] no data-testid literal containing "${fragment}" found in its own source`);
+        }
+      }
     }
 
     const specAbs = path.join(repoRoot, E2E_UI_SPEC_REL);
@@ -1345,13 +1851,34 @@ async function main(): Promise<void> {
     if (!sidePanelLoop) {
       structuralProblems.push('no for-of loop over a TOOLBOX_ACTIONS-like binding referencing "chat-plus-trigger" (the DesignToolboxPanel consumer loop) was found');
     } else {
-      if (!subtreeHasMethodCall(sidePanelLoop.statement, ['click'])) structuralProblems.push('the side-panel test loop body has no .click(...) call');
+      // [R3-F1] bind .click() to its OWN selector-chain fragment, not two
+      // independent unbound facts ("a fragment appears somewhere in the
+      // loop" + "some .click() appears somewhere in the loop") that let one
+      // loop drive both surfaces, or neither, while computing markers from
+      // the imported resolver.
+      if (countClickChainsReferencing(sidePanelLoop.statement, 'chat-plus-trigger') < 1) {
+        structuralProblems.push('the side-panel test loop has no .click() call whose OWN selector-chain references "chat-plus-trigger"');
+      }
       if (!subtreeHasMethodCall(sidePanelLoop.statement, ['textContent', 'innerText'])) structuralProblems.push('the side-panel test loop body has no .textContent(...)/.innerText(...) call');
     }
     if (!nextStepLoop) {
       structuralProblems.push('no for-of loop over a TOOLBOX_ACTIONS-like binding referencing "next-step-toolbox" (the NextStepActions consumer loop required by orchestrator ruling 2) was found');
     } else {
-      if (!subtreeHasMethodCall(nextStepLoop.statement, ['click'])) structuralProblems.push('the next-step test loop body has no .click(...) call');
+      // [R3-F1] require THREE distinct, selector-bound click chains proving
+      // the real multi-step "More" navigation structure confirmed against
+      // NextStepActions.tsx's own source (next-step-toolbox-more opens the
+      // More menu, next-step-more-toolbox opens the toolbox submenu, then
+      // either next-step-toolbox-action-<id> (featured/direct) or
+      // next-step-toolbox-sub-action-<id> (non-featured/submenu) is
+      // clicked) -- not one unbound .click() call that could belong to
+      // either surface or neither.
+      const moreTriggerClicks = countClickChainsReferencing(nextStepLoop.statement, 'next-step-toolbox-more');
+      const moreSubmenuClicks = countClickChainsReferencing(nextStepLoop.statement, 'next-step-more-toolbox');
+      const directOrSubActionClicks =
+        countClickChainsReferencing(nextStepLoop.statement, 'next-step-toolbox-action') + countClickChainsReferencing(nextStepLoop.statement, 'next-step-toolbox-sub-action');
+      if (moreTriggerClicks < 1) structuralProblems.push('the next-step test loop has no .click() call bound to the "next-step-toolbox-more" trigger selector');
+      if (moreSubmenuClicks < 1) structuralProblems.push('the next-step test loop has no .click() call bound to the "next-step-more-toolbox" submenu selector');
+      if (directOrSubActionClicks < 1) structuralProblems.push('the next-step test loop has no .click() call bound to a "next-step-toolbox-action-"/"next-step-toolbox-sub-action-" selector');
       if (!subtreeHasMethodCall(nextStepLoop.statement, ['textContent', 'innerText'])) structuralProblems.push('the next-step test loop body has no .textContent(...)/.innerText(...) call');
     }
 
@@ -1380,13 +1907,24 @@ async function main(): Promise<void> {
           continue;
         }
         const lines = pwSpecStdoutLines(spec);
-        const markerLine = lines.find((l) => markerRe.test(l.trim()));
-        if (!markerLine) {
-          coverageProblems.push(`[${label}] no marker found in captured stdout for "${id}"`);
+        // [R3-F1] the marker's reported id (capture group 1) must equal the
+        // id under test, not merely match the marker's regex SHAPE -- a
+        // spec that emits a syntactically-valid marker for the WRONG id
+        // (e.g. always the first action) previously still passed here,
+        // since only the value (group 2) was ever inspected.
+        let matchedMarker: RegExpExecArray | null = null;
+        for (const l of lines) {
+          const exec = markerRe.exec(l.trim());
+          if (exec && exec[1] === id) {
+            matchedMarker = exec;
+            break;
+          }
+        }
+        if (!matchedMarker) {
+          coverageProblems.push(`[${label}] no marker REPORTING id "${id}" found in captured stdout (a marker present for a different id does not count)`);
           continue;
         }
-        const m = markerRe.exec(markerLine.trim())!;
-        const observed = m[2] ?? '';
+        const observed = matchedMarker[2] ?? '';
         const expected = expectedByAction.get(id) ?? '__NONE__';
         if (observed !== expected) {
           coverageProblems.push(`[${label}] action "${id}": observed marker "${observed}" != independently-computed expected "${expected}"`);
@@ -1410,7 +1948,7 @@ async function main(): Promise<void> {
     record(
       'C10C-2',
       `pnpm --filter @open-design/e2e exec playwright test -c playwright.config.ts ${E2E_UI_SPEC_PKG_REL} --reporter=json`,
-      "every C10C-1-derived action id has exactly one passing, exact-titled test in EACH of the two catalogue consumers (DesignToolboxPanel + NextStepActions), the featured/non-featured partition holds exactly, and both consumers' reported runtime markers equal this verifier's own freshly-computed expected resolution",
+      "every C10C-1-derived action id has exactly one passing, exact-titled test in EACH of the two catalogue consumers (DesignToolboxPanel + NextStepActions), the featured/non-featured partition holds exactly AND is structurally proven against NextStepActions.tsx's own real source (its own FEATURED_DESIGN_TOOLBOX_ACTION_IDS import + .filter(...).includes(...) split, plus its own data-testid literals), each surface's test loop binds .click() calls to their own selector-chain (not two independent unbound facts), and both consumers' reported runtime markers -- validated by REPORTED ID, not just extracted value -- equal this verifier's own freshly-computed expected resolution",
       allOk,
       `derived action count: ${derivedActionIds.length} (expected spec count: ${expectedSpecCount})\nplaywright exit: ${run.status}\nspecs found: ${run.specs.length}\n${[...structuralProblems, ...coverageProblems].join('\n')}\n\n${run.raw}`,
     );
@@ -1424,19 +1962,21 @@ async function main(): Promise<void> {
 
     // (a) Verifier's own direct runtime proof -- primary evidence.
     const oracle = await withIsolatedDaemon('c10c3', async (daemonUrl) => {
+      // [R3-F5] single hardened fetch (redirect:'manual', origin-revalidated)
+      // reused for both the liveness smoke-test and the actual resolution
+      // inputs -- no separate raw `fetch(...)` call.
       const httpSkills = await fetchLiveSkillsOverHttp(daemonUrl);
       if (!httpSkills.ok) return { ok: false as const, detail: `HTTP probe failed: ${httpSkills.error}` };
       const toolboxMod = await loadDesignToolboxModule();
       if (!toolboxMod.ok) return { ok: false as const, detail: `could not load design-toolbox.ts: ${toolboxMod.error}` };
       const findDesignToolboxSkill = toolboxMod.mod.findDesignToolboxSkill;
       if (typeof findDesignToolboxSkill !== 'function') return { ok: false as const, detail: 'findDesignToolboxSkill is not callable at runtime' };
-      const liveSkills = (await fetch(new URL('/api/skills', daemonUrl), { redirect: 'manual' }).then((r) => r.json())) as { skills: unknown[] };
       const realActions = safeExtractRuntimeActions(toolboxMod.mod.DESIGN_TOOLBOX_ACTIONS);
       if (!realActions.ok || realActions.actions.length === 0) return { ok: false as const, detail: 'could not read a real action from DESIGN_TOOLBOX_ACTIONS' };
       const realAction = (toolboxMod.mod.DESIGN_TOOLBOX_ACTIONS as unknown[])[0];
-      const positive = (findDesignToolboxSkill as (a: unknown, s: unknown[]) => unknown)(realAction, liveSkills.skills);
+      const positive = (findDesignToolboxSkill as (a: unknown, s: unknown[]) => unknown)(realAction, httpSkills.skills);
       const phantomAction = { id: 'w10c-oracle-phantom-action', preferredSkillIds: [PHANTOM_LITERAL], categoryHints: [], searchTerms: ['w10c-red-spec-unmatchable-search-term'] };
-      const negative = (findDesignToolboxSkill as (a: unknown, s: unknown[]) => unknown)(phantomAction, liveSkills.skills);
+      const negative = (findDesignToolboxSkill as (a: unknown, s: unknown[]) => unknown)(phantomAction, httpSkills.skills);
       const positiveOk = positive !== null && positive !== undefined;
       const negativeOk = negative === null || negative === undefined;
       return {
@@ -1445,10 +1985,10 @@ async function main(): Promise<void> {
       };
     });
 
-    const oracleOk = oracle.boot.ok && oracle.result?.ok === true;
+    const oracleOk = oracle.boot.ok && oracle.result?.ok === true && oracle.teardownOk; // [R3-F5] a teardown failure fails the criterion
     const oracleEvidence = oracle.boot.ok
-      ? `daemon url: ${oracle.boot.daemonUrl}\n${oracle.result?.detail ?? 'no result'}`
-      : `boot failed: ${oracle.boot.detail}\n${oracle.boot.rawEvidence.slice(0, 4000)}`;
+      ? `daemon url: ${oracle.boot.daemonUrl}\n${oracle.result?.detail ?? 'no result'}\nteardown: ok=${oracle.teardownOk} ${oracle.teardownDetail}`
+      : `boot failed: ${oracle.boot.detail}\n${oracle.boot.rawEvidence.slice(0, 4000)}\nteardown: ok=${oracle.teardownOk} ${oracle.teardownDetail}`;
 
     // (b) Required, structurally-bound delegated artifact.
     const specAbs = path.join(repoRoot, E2E_PHANTOM_SPEC_REL);
@@ -1459,18 +1999,29 @@ async function main(): Promise<void> {
     const source = fs.readFileSync(specAbs, 'utf8');
     const sf = parseTs(specAbs, source);
     const banned = containsBannedTestMarker(sf);
-    const hasSuiteFixture = /createSmokeSuite/.test(source) && /\.with\.toolsDev/.test(source);
+    // [R3-F2/F3] real AST call-expression checks, not raw regex/text scans.
+    const hasSmokeSuiteCall = countCallsToExactIdentifier(sf, 'createSmokeSuite') >= 1;
+    const hasToolsDevChain = hasChainedMethodCall(sf, ['with', 'toolsDev']);
     const hasDynImport = hasDynamicImportReferencingFile(sf, 'design-toolbox');
-    const hasBinding = hasDestructuredBindingNamed(sf, 'findDesignToolboxSkill');
-    const callCount = countCallsToExactIdentifier(sf, 'findDesignToolboxSkill');
+    // [R3-F2/F3] bind the call-count check to the LOCAL identifier the
+    // destructure actually produces, never to the property name text --
+    // closes the unbound-import class (an aliased-away import plus a local
+    // lookalike function of the same name would otherwise pass).
+    const bindingInfo = findDestructuredImportBinding(sf, 'findDesignToolboxSkill');
+    const callCount = bindingInfo.localName ? countCallsToExactIdentifier(sf, bindingInfo.localName) : 0;
     const literals = collectAllStringLiteralValues(sf);
     const hasPhantomLiteral = literals.has(PHANTOM_LITERAL);
     const structuralProblems: string[] = [];
     if (banned.length) structuralProblems.push(`banned skip/only/fixme/todo markers: ${banned.join(', ')}`);
-    if (!hasSuiteFixture) structuralProblems.push('no createSmokeSuite(...) + .with.toolsDev(...) usage found');
+    if (!hasSmokeSuiteCall) structuralProblems.push('no real createSmokeSuite(...) CallExpression found (AST-bound)');
+    if (!hasToolsDevChain) structuralProblems.push('no real .with.toolsDev(...) chained CallExpression found (AST-bound)');
     if (!hasDynImport) structuralProblems.push('no dynamic import() call referencing "design-toolbox" found');
-    if (!hasBinding) structuralProblems.push('no destructured binding named exactly "findDesignToolboxSkill" found');
-    if (callCount < 2) structuralProblems.push(`findDesignToolboxSkill is called ${callCount} time(s), expected at least 2 (positive + negative)`);
+    if (!bindingInfo.found || !bindingInfo.localName) structuralProblems.push('no destructured binding named exactly "findDesignToolboxSkill" found');
+    if (callCount < 2) {
+      structuralProblems.push(
+        `the local binding this file's "findDesignToolboxSkill" destructure produces (local name: "${bindingInfo.localName ?? '<none>'}") is called ${callCount} time(s), expected at least 2 (positive + negative) -- calls to an unrelated same-named local identifier do not satisfy this`,
+      );
+    }
     if (!hasPhantomLiteral) structuralProblems.push(`the pinned literal "${PHANTOM_LITERAL}" was not found as a genuine string-literal AST node (a comment does not count)`);
 
     const run = runVitestFile('@open-design/e2e', E2E_PHANTOM_SPEC_PKG_REL, 'C10C-3-vitest'); // [R1-F1]
@@ -1489,7 +2040,7 @@ async function main(): Promise<void> {
     record(
       'C10C-3',
       `verifier-internal daemon boot + direct call to findDesignToolboxSkill; pnpm --filter @open-design/e2e exec vitest run ${E2E_PHANTOM_SPEC_PKG_REL} --reporter=json`,
-      "the verifier's own oracle proves the phantom-ID/positive-control behavior at runtime, AND the required delegated artifact exists, is structurally bound to the real function, and passes with the pinned paired titles",
+      "the verifier's own oracle proves the phantom-ID/positive-control behavior at runtime AND its isolated daemon's teardown is independently confirmed (never trusted from a single exit report), AND the required delegated artifact exists, is structurally bound to the real function's LOCAL binding (not a same-named local lookalike), and passes with the pinned paired titles",
       allOk,
       `oracle ok=${oracleOk}\n${oracleEvidence}\n\ndelegated file structural: ${structuralProblems.join('; ') || 'none'}\ndelegated file run: ${runProblems.join('; ') || 'none'}\nvitest exit=${run.status}\n\n${run.raw}`,
     );
@@ -1545,37 +2096,31 @@ async function main(): Promise<void> {
     const source = fs.readFileSync(specAbs, 'utf8');
     const sf = parseTs(specAbs, source);
     const banned = containsBannedTestMarker(sf);
-    let usesTsCompilerApi = false;
-    function scanForTsUsage(node: TypeScriptModule.Node): void {
-      if (usesTsCompilerApi) return;
-      if (
-        ts.isCallExpression(node) &&
-        ts.isPropertyAccessExpression(node.expression) &&
-        ts.isIdentifier(node.expression.expression) &&
-        node.expression.expression.text === 'ts' &&
-        (node.expression.name.text === 'createSourceFile' || node.expression.name.text === 'forEachChild')
-      ) {
-        usesTsCompilerApi = true;
-        return;
-      }
-      ts.forEachChild(node, scanForTsUsage);
-    }
-    scanForTsUsage(sf);
-    const hasListSkillsImport = hasNamedImportOfExactExport(sf, 'listSkills', '/skills');
-    const hasFindSkillByIdImport = hasNamedImportOfExactExport(sf, 'findSkillById', '/skills');
-    const listSkillsCalls = countCallsToExactIdentifier(sf, 'listSkills');
-    const findSkillByIdCalls = countCallsToExactIdentifier(sf, 'findSkillById');
+    // [R3-F2/F3] real, data-flow-bound compiler-API check (createSourceFile's
+    // OWN return value feeding a real forEachChild walk), replacing the
+    // decorative "some call to either exists somewhere" check.
+    const usesTsCompilerApi = usesCompilerApiForRealExtraction(sf);
+    // [R3-F2/F3] bind the call-count checks to each import's LOCAL binding,
+    // never to the exported name's text -- closes the unbound-import class.
+    const listSkillsBinding = findNamedImportBinding(sf, 'listSkills', '/skills');
+    const findSkillByIdBinding = findNamedImportBinding(sf, 'findSkillById', '/skills');
+    const skillIdAliasesBinding = findNamedImportBinding(sf, 'SKILL_ID_ALIASES', '/skills'); // [R3-F2] PRD-required check, previously never made
+    const listSkillsCalls = listSkillsBinding.localName ? countCallsToExactIdentifier(sf, listSkillsBinding.localName) : 0;
+    const findSkillByIdCalls = findSkillByIdBinding.localName ? countCallsToExactIdentifier(sf, findSkillByIdBinding.localName) : 0;
+    const skillIdAliasesRefs = skillIdAliasesBinding.localName ? countIdentifierReferences(sf, skillIdAliasesBinding.localName) : 0;
     const literals = collectAllStringLiteralValues(sf);
     const hasPhantomLiteral = literals.has(PHANTOM_LITERAL);
     const noWebImport = !/from\s+['"][^'"]*apps\/web\//.test(source);
 
     const structuralProblems: string[] = [];
     if (banned.length) structuralProblems.push(`banned skip/only/fixme/todo markers: ${banned.join(', ')}`);
-    if (!hasFindSkillByIdImport) structuralProblems.push('no import of the exact export name "findSkillById" from a "/skills" module found');
-    if (!hasListSkillsImport) structuralProblems.push('no import of the exact export name "listSkills" from a "/skills" module found');
-    if (findSkillByIdCalls < 1) structuralProblems.push('findSkillById is imported but never called');
-    if (listSkillsCalls < 1) structuralProblems.push('listSkills is imported but never called');
-    if (!usesTsCompilerApi) structuralProblems.push('no ts.createSourceFile/ts.forEachChild call found -- design-toolbox.ts extraction must use the TypeScript compiler API, not regex');
+    if (!findSkillByIdBinding.found) structuralProblems.push('no import of the exact export name "findSkillById" from a "/skills" module found');
+    if (!listSkillsBinding.found) structuralProblems.push('no import of the exact export name "listSkills" from a "/skills" module found');
+    if (!skillIdAliasesBinding.found) structuralProblems.push('no import of the exact export name "SKILL_ID_ALIASES" from a "/skills" module found');
+    if (findSkillByIdCalls < 1) structuralProblems.push(`findSkillById's local binding ("${findSkillByIdBinding.localName ?? '<none>'}") is imported but its call count is ${findSkillByIdCalls} -- calls to a differently-bound same-named local identifier do not count`);
+    if (listSkillsCalls < 1) structuralProblems.push(`listSkills's local binding ("${listSkillsBinding.localName ?? '<none>'}") is imported but its call count is ${listSkillsCalls} -- calls to a differently-bound same-named local identifier do not count`);
+    if (skillIdAliasesRefs < 2) structuralProblems.push(`SKILL_ID_ALIASES's local binding ("${skillIdAliasesBinding.localName ?? '<none>'}") is imported but never referenced elsewhere in the file`);
+    if (!usesTsCompilerApi) structuralProblems.push('no ts.createSourceFile(...) return value feeding a real ts.forEachChild(...) walk found -- a decorative/unconnected call to either does not count; design-toolbox.ts extraction must use the TypeScript compiler API, not regex');
     if (!hasPhantomLiteral) structuralProblems.push(`the pinned literal "${PHANTOM_LITERAL}" was not found as a genuine string-literal AST node`);
     if (!noWebImport) structuralProblems.push('file appears to import apps/web/** directly -- the cross-app boundary requires reading design-toolbox.ts as text, not importing it');
 
@@ -1603,7 +2148,7 @@ async function main(): Promise<void> {
     record(
       'C10C-4',
       `verifier-internal direct call to findSkillById(listSkills(...)); pnpm --filter @open-design/daemon exec vitest run ${DAEMON_SUITE_SPEC_PKG_REL} --reporter=json`,
-      "the verifier's own oracle proves every preferredSkillIds entry resolves via the real registry, AND the required delegated daemon-suite artifact is exact-name-bound, called, and passes with per-action + paired coverage",
+      "the verifier's own oracle proves every preferredSkillIds entry resolves via the real registry, AND the required delegated daemon-suite artifact imports listSkills/findSkillById/SKILL_ID_ALIASES by exact export name, calls/references each import's own LOCAL BINDING (not a same-named local lookalike), uses the compiler API via a real createSourceFile-to-forEachChild data-flow chain, and passes with per-action + paired coverage",
       allOk,
       `oracle ok=${oracleOk}\n${oracleEvidence}\n\ndelegated file structural: ${structuralProblems.join('; ') || 'none'}\ndelegated file coverage: ${coverageProblems.join('; ') || 'none'}\nvitest exit=${run.status}\n\n${run.raw}`,
     );
@@ -1647,15 +2192,17 @@ async function main(): Promise<void> {
       return { ok: problems.length === 0, evidence: `http id count: ${httpCount}\ncli id count: ${cliCount}\n${problems.join('\n')}` };
     });
     if (!outcome.boot.ok) {
-      record('C10C-5', 'pnpm tools-dev start daemon --namespace <fresh>', 'the HTTP and CLI skill-id multisets are exactly identical for the same isolated daemon', false, outcome.boot.rawEvidence, { detail: outcome.boot.detail });
+      record('C10C-5', 'pnpm tools-dev start daemon --namespace <fresh>', 'the HTTP and CLI skill-id multisets are exactly identical for the same isolated daemon, and its teardown is independently confirmed', false, `${outcome.boot.rawEvidence}\nteardown: ok=${outcome.teardownOk} ${outcome.teardownDetail}`, {
+        detail: outcome.boot.detail,
+      });
       return;
     }
     record(
       'C10C-5',
       `GET ${outcome.boot.daemonUrl}/api/skills  vs  od skills list --json --daemon-url ${outcome.boot.daemonUrl}`,
-      'the HTTP and CLI skill-id multisets are exactly identical for the same isolated daemon',
-      outcome.result?.ok ?? false,
-      `daemon url: ${outcome.boot.daemonUrl}\n${outcome.result?.evidence ?? 'no result'}`,
+      'the HTTP and CLI skill-id multisets are exactly identical for the same isolated daemon, and its teardown is independently confirmed (never trusted from a single exit report -- [R3-F5])',
+      (outcome.result?.ok ?? false) && outcome.teardownOk,
+      `daemon url: ${outcome.boot.daemonUrl}\n${outcome.result?.evidence ?? 'no result'}\nteardown: ok=${outcome.teardownOk} ${outcome.teardownDetail}`,
     );
   });
 
@@ -1692,12 +2239,17 @@ async function main(): Promise<void> {
       record('C10C-7', '', 'review record parses as JSON', false, raw.slice(0, 2000), { detail: `JSON parse failed: ${String(err)}` });
       return;
     }
-    const reviewer = typeof review.reviewer === 'string' ? review.reviewer : null;
+    // [R3-F6] a whitespace-only string is truthy (non-empty .length), so
+    // `if (!reviewer)` alone let it through -- it then matched no author in
+    // identityMatchesAnyAuthor and silently passed. Reject anything that
+    // normalizes to nothing after trim, not just falsy/missing.
+    const reviewerRaw = typeof review.reviewer === 'string' ? review.reviewer : null;
+    const reviewer = reviewerRaw !== null && reviewerRaw.trim().length > 0 ? reviewerRaw : null;
     const model = typeof review.model === 'string' ? review.model.trim() : null;
     const reviewedCommit = typeof review.reviewedCommit === 'string' ? review.reviewedCommit : null;
     const verdict = typeof review.verdict === 'string' ? review.verdict : null;
     const problems: string[] = [];
-    if (!reviewer) problems.push('"reviewer" is missing or not a string');
+    if (!reviewer) problems.push('"reviewer" is missing, not a string, or empty/whitespace-only after trim');
     if (!model) problems.push('"model" is missing, not a string, or empty after trim'); // [R1-F7]
     if (!reviewedCommit) problems.push('"reviewedCommit" is missing or not a string');
     if (verdict !== 'APPROVE') problems.push(`"verdict" is "${String(verdict)}", expected "APPROVE"`);
@@ -1727,14 +2279,102 @@ async function main(): Promise<void> {
     );
   });
 
-  // C10C-8 retired: [R1-F8] originally added a human:-marked, DECISIONS.md-gated
-  // founder-decision criterion here. The orchestrator has since ruled on that
-  // question directly (Orchestrator ruling under delegated founder authority,
-  // 2026-07-28 -- see docs/plans/waves/W10c-toolbox.md §9, ruling 1: NO new
-  // toolbox-action HTTP/CLI capability), so the gate this criterion existed to
-  // provide is no longer needed -- the ruling itself closes the question. A
-  // criterion that would now trivially and permanently read "pass" by
-  // construction is not measuring anything, so it is removed rather than kept.
+  // -----------------------------------------------------------------------
+  // C10C-8 -- [R3-F7] REINSTATED. Removing this in round 2 was wrong (the
+  // orchestrator's own correction): the `### W10C-CAPABILITY-DECISION` block
+  // that landed on main via docs/plans/waves/DECISIONS.md is a real,
+  // fail-able invariant if deleted, malformed, or not actually present at a
+  // point this wave's own commits cannot influence. human:-marked per
+  // VERIFICATION-CONTRACT.md §3 R7: a record that has not yet landed
+  // legitimately resolves "blocked-on-founder" (the founder/orchestrator
+  // has not yet ruled), never "pass"; a record that HAS landed but is
+  // malformed resolves "fail" (a defect in a landed artifact, not an
+  // unanswered question). Modeled on the W9-agent-spawn "C9S-8" mechanism
+  // DECISIONS.md's W9AS-PARK record describes -- the one part of that
+  // package the reviewer found sound.
+  // -----------------------------------------------------------------------
+  await checkCriterion('C10C-8', () => {
+    const DECISIONS_REL = 'docs/plans/waves/DECISIONS.md';
+    let raw: string;
+    try {
+      // [R3-F7] read at baseCommit, NEVER HEAD: leases.json denies
+      // DECISIONS.md to W10c and a wave branch cannot reach the docs lane
+      // at all, so baseCommit is a fixed point this wave's own commits
+      // structurally cannot have influenced.
+      raw = readFileAtCommit(baseCommit, DECISIONS_REL);
+    } catch (err) {
+      record(
+        'C10C-8',
+        `git show ${baseCommit}:${DECISIONS_REL}`,
+        'human: a well-formed W10C-CAPABILITY-DECISION record exists at baseCommit, proving the capability question landed through the review lane that produced baseCommit -- this does NOT and cannot cryptographically verify anyone\'s authority, only that the record\'s presence and shape are real at a point this wave cannot influence',
+        'blocked-on-founder',
+        '',
+        { detail: `could not read ${DECISIONS_REL} at baseCommit (${baseCommit}): ${String(err)}` },
+      );
+      return;
+    }
+    const headingToken = '### W10C-CAPABILITY-DECISION';
+    const startIdx = raw.indexOf(headingToken);
+    if (startIdx === -1) {
+      record(
+        'C10C-8',
+        `git show ${baseCommit}:${DECISIONS_REL}`,
+        'human: a well-formed W10C-CAPABILITY-DECISION record exists at baseCommit, proving the capability question landed through the review lane (not that anyone\'s authority was cryptographically verified)',
+        'blocked-on-founder',
+        raw.slice(0, 1000),
+        { detail: `no "${headingToken}" heading found at baseCommit -- the capability question has not yet landed through the review lane` },
+      );
+      return;
+    }
+    const afterHeading = raw.slice(startIdx + headingToken.length);
+    const nextHeadingRel = afterHeading.search(/^###\s/m);
+    const block = nextHeadingRel === -1 ? afterHeading : afterHeading.slice(0, nextHeadingRel);
+    const blockLines = block.split('\n').map((l) => l.trim());
+    function extractField(fieldName: string): string | null {
+      const re = new RegExp(`^-\\s*${fieldName}:\\s*(.*)$`, 'i');
+      for (const line of blockLines) {
+        const m = re.exec(line);
+        if (m) return (m[1] ?? '').trim();
+      }
+      return null;
+    }
+    const decisionRaw = extractField('Decision');
+    const deciderRaw = extractField('Decider');
+    const dateRaw = extractField('Date');
+    const rationaleRaw = extractField('Rationale');
+
+    const problems: string[] = [];
+    const decision = decisionRaw ? decisionRaw.toLowerCase() : null;
+    if (decision !== 'exempt' && decision !== 'build-now') {
+      problems.push(`"Decision" is "${decisionRaw ?? '<missing>'}", expected exactly "exempt" or "build-now"`);
+    }
+    // [R3-F6] same whitespace-only-identity bug class as C10C-7's reviewer
+    // check: reject a Decider that normalizes to nothing after trim.
+    const decider = deciderRaw && deciderRaw.trim().length > 0 ? deciderRaw : null;
+    if (!decider) problems.push('"Decider" is missing or empty/whitespace-only after trim');
+    if (!dateRaw || dateRaw.trim().length === 0) problems.push('"Date" is missing or empty');
+    if (!rationaleRaw || rationaleRaw.trim().length === 0) problems.push('"Rationale" is missing or empty');
+
+    if (decider) {
+      // [R3-F7] "decider checked against commit authors": mirrors C10C-7's
+      // reviewer-distinctness pattern -- the decider identity must not
+      // match any author of THIS WAVE's own commits (baseCommit..HEAD), so
+      // an implementer cannot self-attribute founder/orchestrator decision
+      // authority under their own commit identity.
+      const waveAuthors = commitAuthorsBetween(baseCommit, headSha);
+      if (identityMatchesAnyAuthor(decider, waveAuthors)) {
+        problems.push(`"Decider" ("${decider}") matches an author of this wave's own commits (baseCommit..HEAD) -- not distinguishable from the implementation`);
+      }
+    }
+
+    record(
+      'C10C-8',
+      `git show ${baseCommit}:${DECISIONS_REL}; parse "${headingToken}" block; decider vs. baseCommit..HEAD commit-author distinctness`,
+      'human: Decision/Decider/Date/Rationale are all present and non-empty (Decider non-whitespace-after-trim), Decision is exactly "exempt" or "build-now", and Decider is distinguishable from every baseCommit..HEAD commit author. This proves the capability-decision record landed through the review lane that produced baseCommit -- it does NOT and cannot cryptographically verify anyone\'s authority.',
+      problems.length === 0,
+      problems.join('\n') || `decision=${decisionRaw} decider=${decider} date=${dateRaw} rationale=${(rationaleRaw ?? '').slice(0, 200)}`,
+    );
+  });
 
   // =======================================================================
   // GATE-INTEGRITY / LEASE / HEAD-DRIFT
