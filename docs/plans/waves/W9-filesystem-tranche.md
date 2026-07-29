@@ -191,6 +191,77 @@ as a second, alternative route-registration form; (c) resolving a path argument 
 future risks — all three are confirmed necessary by this run's own drift evidence against the real
 tree. See "Open founder questions" — this is the single most important one.
 
+### Update (authorized verifier-fix round, discovery gap closed)
+
+The diagnosis above is preserved verbatim as history; this note records what an authorized,
+strictly-scoped verifier-fix round (touching only `scanUniverse`'s universe-DISCOVERY code in
+`scripts/waves/verify-w9-filesystem.ts` — never the drift comparison itself, no allowlist, no
+tolerance threshold) found and closed. Re-running `C9F-1` against the real tree confirmed the exact
+17 drift entries the diagnosis above estimated, with one correction: the `register*Routes`-recursion
+family is **10** routes, not 8 — `registerProjectConversationRoutes` (`routes/project/index.ts` →
+`routes/project/conversations.ts`) itself calls a second, further-nested
+`registerProjectCommentRoutes` (`routes/project/conversations.ts` → `routes/project/comments.ts`),
+a two-hop chain, not one. The fix therefore made universe discovery a proper transitive worklist
+walk, not a single extra hop.
+
+Reading the remaining routes' actual source (as the original diagnosis explicitly invited, since it
+called the 4 non-conversation, non-active-context routes "not individually confirmed by source")
+showed the `defineJsonRoute`/`mountJsonRoute` guess was right only for `/api/active`
+(`routes/active-context.ts`, exactly as diagnosed) and for nothing else. The other four needed three
+further, distinct discovery expansions, each confirmed by reading the real file before writing any
+recognizer for it:
+
+- **`GET /api/diagnostics/export` and `POST /api/attribution/claim`** both resolve through a
+  named-const path argument, but neither is a *same-file* top-level const as originally guessed —
+  `DIAGNOSTICS_EXPORT_PATH` comes from `@open-design/diagnostics` and `ATTRIBUTION_CLAIM_PATH` from
+  `@open-design/contracts`, both cross-package imports. The fix reads the TypeChecker's inferred
+  type at the identifier's use site instead of re-deriving it from a same-file AST initializer —
+  TypeScript preserves a `const`'s literal type through cross-package `.d.ts` declaration-emit
+  boundaries (`export declare const X = "literal";`), so this resolves same-file, cross-file, and
+  cross-package named consts uniformly, a strict generalization of the originally-scoped rule rather
+  than a narrower one.
+- **`POST /api/proxy/senseaudio/stream` and `POST /api/proxy/aihubmix/stream`** are not
+  `defineJsonRoute`-shaped at all. `routes/chat.ts`'s `registerChatRoutes` defines a local closure,
+  `const registerByokToolChatProxy = (routePath, opts) => { app.post(routePath, ...) }`, and invokes
+  it twice with literal path arguments. The literal path lives at the closure's OWN call sites, not
+  at the `app.post(...)` call itself (whose path argument is a plain `string`-typed parameter, not a
+  literal-typed const, so the named-const resolution above does not apply). The fix added one
+  narrowly-scoped resolution: when a path argument is an `Identifier` bound to a parameter of the
+  immediately-enclosing function, find that function's own call sites within the same scanned scope
+  and substitute the literal argument at the matching parameter position.
+- **`GET /*splat`** is registered by `apps/daemon/src/static-spa.ts`'s `registerStaticSpaFallback`,
+  called directly from `server.ts`'s own bootstrap sequence (`registerStaticSpaFallback(app,
+  STATIC_DIR)`) with a literal `app.get('/*splat', ...)` inside it — a completely ordinary
+  registration whose only problem is that `registerStaticSpaFallback` does not match the
+  `register\w*Routes` naming convention, so neither the original nor the recursive discovery walk
+  ever visited its file at all. The fix added a structural (not name-based) recognizer for the same
+  underlying pattern items (a)–(c) all target: a route-registration helper called from `server.ts`'s
+  bootstrap scope, identified by being relative-imported and invoked with the literal identifier
+  `app` as one of its own arguments — the same signal every register*Routes function in this
+  codebase already relies on for its own `app` parameter.
+
+One regression surfaced and was fixed during this round: the transitive recursion, left unbounded,
+also walks INTO `library.ts`'s own `register*Routes` body and rediscovers
+`apps/daemon/src/backup/routes.ts` (called via `registerBackupRoutes(...)` from inside `library.ts`)
+as an independently-scanned route file — reintroducing `POST /api/backup`/`POST /api/restore` to the
+static candidate set even though the live-side drift comparison deliberately excludes both as
+sibling-tranche-owned. `library.ts` is now a terminal node in the recursive walk (visited, so the
+existing hard exclusion in the per-file loop still applies to it, but never expanded further),
+preserving the original exclusion's intent instead of accidentally undoing it.
+
+Result, reproduced across repeated runs: **0 drift entries** — the live daemon's actual route
+inventory and the static candidate set now agree exactly on all discovered registrations, with no
+allowlist, exemption, or tolerance threshold added anywhere in the drift comparison itself. One
+separate, pre-existing, unrelated condition remains and was deliberately left untouched as out of
+this round's scope: `C9F-1`'s own isolated daemon boot intermittently reports a non-empty
+process-group teardown (the same three survivor process *types* — a `hermes-agent` Python process, a
+`node` process, and `cursor-agent` — recur across independent runs with fresh PIDs each time), which
+fails `C9F-1` outright per this verifier's fail-closed teardown policy regardless of the drift result
+being clean. This reproduced identically in a baseline run captured *before* any discovery-code
+change, so it predates and is independent of this round's fix; it is a daemon-boot/process-lifecycle
+question, not a universe-discovery one, and is out of scope for a round authorized to touch only
+discovery code.
+
 ## Inclusion rule (mechanical, re-runnable)
 
 Stated precisely so a future run reproduces the same set without human judgment at classification
@@ -712,8 +783,15 @@ what is attributed, what the mechanical rule proves, and that the remainder (`un
 
 ## Open founder questions (enumerated)
 
-**Item 0 is a blocking verifier defect, not a policy question — flagged separately from the rest of
-this list, which are genuinely open policy calls.** `C9F-1`'s live-daemon drift check currently
+**Item 0 was a blocking verifier defect, not a policy question — RESOLVED in a subsequent authorized
+verifier-fix round; the paragraph below is preserved as history, unedited.** `C9F-1`'s live-daemon
+drift check used to fail against `main` with 17 confirmed real drift entries, closed by the
+universe-discovery expansion recorded in "Known limitation of the mechanical UNIVERSE DISCOVERY" →
+"Update (authorized verifier-fix round, discovery gap closed)" above — re-running `C9F-1` now shows
+0 drift entries, reproduced across repeated runs, with the drift comparison itself untouched (no
+allowlist, exemption, or tolerance threshold). Original paragraph, as first recorded:
+
+> `C9F-1`'s live-daemon drift check currently
 fails against `main` with 17 confirmed real drift entries (see "Known limitation of the mechanical
 UNIVERSE DISCOVERY" above) — a `register*Routes` function reachable only through another
 `register*Routes` function in a different file (`registerProjectConversationRoutes`, 8 routes), a
