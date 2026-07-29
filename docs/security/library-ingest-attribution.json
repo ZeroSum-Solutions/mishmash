@@ -176,7 +176,7 @@
         "tier": "P0"
       },
       "control": {
-        "testRef": "a clipper ingest payload past the 5000000 byte limit gets 413",
+        "testRef": "a clipper ingest payload past the 5000000 byte limit: reject with 413",
         "mechanism": "ENFORCED kind=byte-volume scope=token-hash limit=5000000 windowMs=none overflow=reject-413"
       }
     },
@@ -243,7 +243,7 @@
       "authz": "Loopback-gated via requireLocalDaemonRequest; not a documented extension capability (only /ingest is).",
       "inputValidation": "req.params.id is passed directly to getLibraryAsset, a parameterized lookup; a missing asset returns 404.",
       "sizeRateLimit": "No dedicated volume/rate control beyond the loopback gate itself.",
-      "testRef": "GET library assets by id accepts a loopback request and rejects a non-loopback origin",
+      "testRef": "GET library assets by id rejects a non-loopback origin",
       "riskScore": {
         "exposure": 0,
         "impact": 0,
@@ -275,7 +275,7 @@
       "authz": "Loopback-gated via requireLocalDaemonRequest; serves previously-stored bytes back to the caller.",
       "inputValidation": "req.params.id is passed directly to getLibraryAsset; the resolved bytes path is re-derived (resolveAssetBytesPath), never taken from client input.",
       "sizeRateLimit": "No dedicated volume/rate control beyond the loopback gate itself.",
-      "testRef": "GET library assets raw bytes accepts a loopback request and rejects a non-loopback origin",
+      "testRef": "GET library assets raw bytes rejects a non-loopback origin",
       "riskScore": {
         "exposure": 0,
         "impact": 1,
@@ -291,7 +291,7 @@
       "authz": "Loopback-gated via requireLocalDaemonRequest; serves the stored Figma capture sidecar back to the caller.",
       "inputValidation": "req.params.id is passed directly to getLibraryAsset; the sidecar path is re-derived (resolveAssetFigmaSidecarPath), never taken from client input.",
       "sizeRateLimit": "No dedicated volume/rate control beyond the loopback gate itself.",
-      "testRef": "GET library assets figma sidecar accepts a loopback request and rejects a non-loopback origin",
+      "testRef": "GET library assets figma sidecar rejects a non-loopback origin",
       "riskScore": {
         "exposure": 0,
         "impact": 1,
@@ -307,7 +307,7 @@
       "authz": "Loopback-gated via requireLocalDaemonRequest; serves the stored element-pick markup sidecar back to the caller.",
       "inputValidation": "req.params.id is passed directly to getLibraryAsset; the sidecar path is re-derived (resolveAssetElementSidecarPath), never taken from client input.",
       "sizeRateLimit": "No dedicated volume/rate control beyond the loopback gate itself.",
-      "testRef": "GET library assets element sidecar accepts a loopback request and rejects a non-loopback origin",
+      "testRef": "GET library assets element sidecar rejects a non-loopback origin",
       "riskScore": {
         "exposure": 0,
         "impact": 1,
@@ -387,7 +387,7 @@
       "authz": "Loopback-gated via requireLocalDaemonRequest; subscribes an in-memory, non-persisted SSE listener only (impact floor 0).",
       "inputValidation": "No request body or query parameters are read.",
       "sizeRateLimit": "No dedicated volume/rate control beyond the loopback gate itself; each subscription is a bounded in-memory listener removed on socket close.",
-      "testRef": "GET library events accepts a loopback request and rejects a non-loopback origin",
+      "testRef": "GET library events rejects a non-loopback origin",
       "riskScore": {
         "exposure": 0,
         "impact": 0,
