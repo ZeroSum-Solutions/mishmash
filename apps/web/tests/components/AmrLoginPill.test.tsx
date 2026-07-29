@@ -268,7 +268,7 @@ describe('AmrLoginPill', () => {
     );
   });
 
-  it('uses the production AMR management URL by default', () => {
+  it('disables the production AMR management link instead of repointing it (retired open-design.ai host)', () => {
     renderAccountControl({
       status: 'signed-in',
       email: 'leaf@example.com',
@@ -278,17 +278,18 @@ describe('AmrLoginPill', () => {
     });
 
     expect(screen.queryByText('PROD')).toBeNull();
-    expect(screen.getByRole('link', { name: 'Manage' }).getAttribute('href')).toBe(
-      'https://open-design.ai/amr/wallet?source=open_design',
-    );
+    const href = screen.getByRole('link', { name: 'Manage' }).getAttribute('href');
+    // C2-1 / R2: the production console previously lived on the retired
+    // open-design.ai domain, which is not this fork's. Rather than invent a
+    // replacement egress destination, the link is disabled (inert same-page
+    // anchor) instead of rebranded.
+    expect(href).toBe('#');
+    expect(href).not.toContain('open-design.ai');
   });
 
-  it('bridges the attributed management URL even though its click stops propagation', async () => {
-    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+  it('never bridges or egresses to the retired open-design.ai host when the Manage link is clicked', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, _init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString();
-      if (url === '/api/attribution/bridge-url') {
-        return jsonResponse({ body: { url: 'https://open-design.ai/amr/wallet?od_bridge=odbr_12345678' } });
-      }
       if (url === '/api/system/open-external') return jsonResponse({ body: { ok: true } });
       return new Response('{}', { status: 202 });
     });
@@ -315,30 +316,36 @@ describe('AmrLoginPill', () => {
     const link = screen.getByRole('link', { name: 'Manage' }) as HTMLAnchorElement;
     fireEvent.click(link);
 
-    const url = new URL(link.href);
-    expect(url.searchParams.get('source')).toBe('open_design');
-    expect(url.searchParams.get('od_origin')).toBe('open_design');
-    expect(url.searchParams.get('od_entry_source')).toBe('settings_amr_console');
-    expect(url.searchParams.get('od_device_id')).toBe('od-install-abc');
-    expect(url.searchParams.get('od_entry_id')).toMatch(/^od-amr-/u);
+    // The click handler still stamps attribution onto the (now-inert) URL,
+    // but the base URL is the disabled anchor, not a live host.
+    expect(link.getAttribute('href')).toContain('#');
+    expect(link.getAttribute('href')).not.toContain('open-design.ai');
+
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/integrations/vela/analytics-entry',
       expect.objectContaining({ method: 'POST' }),
     );
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      '/api/attribution/bridge-url',
-      expect.objectContaining({
-        method: 'POST',
-        body: expect.stringContaining('od_device_id=od-install-abc'),
-      }),
-    ));
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/system/open-external',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ url: 'https://open-design.ai/amr/wallet?od_bridge=odbr_12345678' }),
-      }),
+
+    // The retired host is no longer in the first-party bridge allowlist, so
+    // no bridge round-trip happens at all.
+    expect(fetchMock.mock.calls.some(([reqUrl]) => reqUrl === '/api/attribution/bridge-url')).toBe(
+      false,
     );
+
+    // Whatever eventually reaches open-external must not be a live
+    // open-design.ai URL — proving there is no replacement egress.
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([reqUrl]) => reqUrl === '/api/system/open-external'),
+      ).toBe(true);
+    });
+    const openExternalCall = fetchMock.mock.calls.find(
+      ([reqUrl]) => reqUrl === '/api/system/open-external',
+    );
+    const body = JSON.parse(String((openExternalCall?.[1] as RequestInit).body));
+    expect(typeof body.url).toBe('string');
+    expect(body.url as string).not.toContain('open-design.ai');
+    expect((body.url as string).startsWith('#')).toBe(true);
   });
 
   it('renders a "Signed in" pill (with the Sign-out aria-label) when /status reports a logged-in user', async () => {
