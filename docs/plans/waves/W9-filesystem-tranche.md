@@ -46,43 +46,59 @@ merge-base with `origin/main` — this branch was freshly cut, so `HEAD === base
 writing). **Re-run the verifier to reproduce; do not trust these as a checked-in constant** — C9F-1
 re-derives them every run (`VERIFICATION-CONTRACT.md` §3 R3 / defect-catalog #8).
 
-- **Route-file universe:** parsing `server.ts` for `import { register\w*Routes } from '<relative>'`
-  finds **33 route files**, contributing **40 distinct `register*Routes`-named function bodies**
-  (several files export more than one — `import-export-routes.ts` exports three,
-  `routes/project/index.ts` four, `routes/plugins/index.ts` three, `routes/deploy.ts` two). This is
-  close to, but not identical to, the parent wave's "35 route files" figure — per `GLOBAL-GOAL.md`
-  rule 6 ("numbers in planning documents are hypotheses"), this document's own mechanically
-  re-derived count is authoritative for *this tranche's* scope; the discrepancy is flagged as an
-  open founder question below rather than silently reconciled.
+- **Route-file universe:** discovered by a **transitive worklist walk** (not a single pass over
+  `server.ts`'s own imports), seeded from `server.ts`'s `import { register\w*Routes } from
+  '<relative>'` statements, then recursively following any further `register*Routes`-named identifier
+  called from inside an already-discovered file's own body and resolved via *that* file's own
+  relative imports — repeated until no new file appears (`discoverRouteFileUniverse` /
+  `scanUniverse` in `scripts/waves/verify-w9-filesystem.ts`; see "Inclusion rule" below for the full,
+  current, normative algorithm). This finds **35 route files**, contributing **43 distinct
+  `register*Routes`-named function bodies**. This matches the parent wave's own "35 route files"
+  figure exactly — the discrepancy the original ground facts flagged as an open founder question
+  was itself an artifact of the single-hop (non-transitive) discovery bug fixed in the round recorded
+  under "Update (authorized verifier-fix round, discovery gap closed)" below; there is no remaining
+  reconciliation to make.
 - **`apps/daemon/src/routes/library.ts` is excluded in full** (23 registrations) — owned by the
   concurrently-landing sibling tranche. Any registration physically inside that file is out of
-  scope here regardless of what it does.
+  scope here regardless of what it does. `library.ts` is a **terminal node** in the transitive walk
+  above: visited (so the exclusion still applies to it), but its own body is never expanded further,
+  so its internal `registerBackupRoutes(...)` call does not re-introduce `apps/daemon/src/backup/routes.ts`
+  as an independently-discovered route file.
 - **Backup routes are excluded** — `POST /api/backup`/`POST /api/restore` are registered from
   inside `library.ts` via `registerBackupRoutes(...)` (owned by `apps/daemon/src/backup/routes.ts`,
-  W0's surface) and are therefore already excluded by the `library.ts`-file exclusion above; no
-  separate carve-out is needed.
-- **Candidate universe for this tranche: 311 registrations** from the 32 remaining route files,
-  **plus 6 bootstrap `app.<method>()` calls registered directly in `server.ts`** outside any
-  `register*Routes` function (`GET /api/health`, `GET /api/ready`, `GET /api/version`,
-  `GET /api/preview/isolation`, `GET <DIAGNOSTICS_EXPORT_PATH>`, `POST
-  /api/projects/:id/figma/import`) — **317 total candidate registrations**.
-- **Inclusion classification of the 311 (this run):**
-  - **125 CONFIRMED IN-SCOPE** (`fs-hit` — a caller-reachable filesystem primitive, `express.static`,
+  W0's surface) and are therefore already excluded by both the `library.ts`-file exclusion and its
+  terminal-node treatment above; no separate carve-out is needed.
+- **Candidate universe for this tranche: 333 total candidate registrations**, discovered across the
+  35 route files via **five mechanisms**, none of them a single flat pass (see "Inclusion rule"
+  below for the full normative statement of each): (1) the literal `app.<method>(pathLiteral, ...)`
+  call shape inside every discovered `register*Routes` function body, including `server.ts`'s own
+  bootstrap-scope calls outside any such function; (2) the declarative
+  `defineJsonRoute`/`mountJsonRoute` registration abstraction (`apps/daemon/src/http/`), resolved
+  back to its own `path`/`method`/`handle` spec; (3) a path argument that is an `Identifier` bound to
+  a named `const` string — resolved via the TypeChecker's inferred type at the identifier's use site,
+  uniformly across same-file, cross-file, and cross-package bindings; (4) a path argument that is an
+  `Identifier` bound to a *parameter* of the immediately-enclosing function, resolved by finding that
+  function's own call sites in the same scanned scope and substituting the literal argument at the
+  matching parameter position; (5) a structurally-recognized (not name-matched) bootstrap-scope
+  registration helper — a relative-imported function called from `server.ts`'s own bootstrap sequence
+  with the literal identifier `app` as one of its own arguments, whose own body (in a different file)
+  performs further literal `app.<method>()` registrations.
+- **Inclusion classification of the 333 (this run):**
+  - **136 CONFIRMED IN-SCOPE** (`fs-hit` — a caller-reachable filesystem primitive, `express.static`,
     `res.sendFile`/`res.download`, or a `multer` upload surface is reachable from the handler).
-  - **184 UNRESOLVED** (the classifier's bounded call-graph walk terminates in something it cannot
+  - **189 UNRESOLVED** (the classifier's bounded call-graph walk terminates in something it cannot
     inspect — a third-party/`node_modules` call, a class-instance dispatch through `this`, or any
     other declaration with no in-repo function body — see "Known limitation" below).
-  - **2 CONFIRMED CLEAN** (`terminal.ts`'s `POST /api/projects/:id/terminals/:tid/kill` and `DELETE
-    /api/projects/:id/terminals/:tid` — process-management only, no reachable fs primitive and
-    nothing unresolved anywhere in their call graph).
-- Of the 6 bootstrap routes, a first-pass read shows `GET <DIAGNOSTICS_EXPORT_PATH>` (reads daemon
-  logs/host metadata/crash reports, `requireLocalDaemonRequest`-gated) and `POST
-  /api/projects/:id/figma/import` (accepts a `multer` upload, resolves the project directory via
-  `resolveProjectDir`, writes into it) as unambiguous `fs-hit`s; `/api/health`, `/api/ready`, and
-  `/api/version` all call `readCurrentAppVersionInfo()`, which the verifier classifies mechanically
-  rather than this document asserting it by eye; `/api/preview/isolation` returns only in-memory
-  host info. **The verifier's own run is the source of truth for the final split, not this
-  paragraph.**
+  - **8 CONFIRMED CLEAN** (process-management-only or otherwise fs-free handlers, including
+    `terminal.ts`'s `POST /api/projects/:id/terminals/:tid/kill` and `DELETE
+    /api/projects/:id/terminals/:tid` — no reachable fs primitive and nothing unresolved anywhere in
+    their call graph).
+- These three buckets (136 + 189 + 8 = 333) partition the full candidate set exactly, including every
+  route the discovery-gap closure recorded below added (the `/api/projects/:id/conversations...`
+  family, `/api/active`, `GET <DIAGNOSTICS_EXPORT_PATH>`, `POST /api/attribution/claim`, the two
+  `senseaudio`/`aihubmix` proxy routes, and `GET /*splat`). **The verifier's own run is the source of
+  truth for the exact split and every row's file/mechanism attribution, not this paragraph** — C9F-1
+  re-derives all of this every run, per the note at the top of this section.
 - Existing, pre-existing, currently-passing tests already cover parts of this tranche's threat
   model and may be cited directly per this document's "may cite pre-existing coverage" allowance
   (mirroring the ingest tranche's S9-3 pattern): `apps/daemon/tests/plugins-uninstall-traversal.test.ts`
@@ -146,8 +162,14 @@ attribution matrix (scoped to the confirmed `fs-hit` set) and from "excluded" �
 mechanically re-derived punch list. See "Open founder questions" for the resulting decision this
 document does not make unilaterally.
 
-### Known limitation of the mechanical UNIVERSE DISCOVERY (found running this verifier against the
-real tree, not hypothetical — honestly flagged, blocks a clean `C9F-1` today)
+### Known limitation of the mechanical UNIVERSE DISCOVERY (HISTORICAL — closed, see "Update" below;
+kept verbatim as the record of what was found and why, not as the current algorithm)
+
+**Superseded.** The gap this subsection diagnoses was closed in the verifier-fix round recorded
+immediately below ("Update (authorized verifier-fix round, discovery gap closed)"), and the
+resulting current algorithm is stated normatively in "Inclusion rule" further down this document —
+that section, not this one, is what a future run should treat as authoritative. This subsection
+stays only as the diagnostic record of the original 17-route gap.
 
 `C9F-1`'s drift check (baseCommit-derived candidate set vs. a live daemon boot's own runtime
 `routeInventory`) currently reports **17 real, confirmed drift entries** that are genuine daemon
@@ -216,10 +238,15 @@ recognizer for it:
   `DIAGNOSTICS_EXPORT_PATH` comes from `@open-design/diagnostics` and `ATTRIBUTION_CLAIM_PATH` from
   `@open-design/contracts`, both cross-package imports. The fix reads the TypeChecker's inferred
   type at the identifier's use site instead of re-deriving it from a same-file AST initializer —
-  TypeScript preserves a `const`'s literal type through cross-package `.d.ts` declaration-emit
-  boundaries (`export declare const X = "literal";`), so this resolves same-file, cross-file, and
-  cross-package named consts uniformly, a strict generalization of the originally-scoped rule rather
-  than a narrower one.
+  TypeScript never widens a `const` binding's own inferred type, so this resolves same-file,
+  cross-file, and cross-package named consts uniformly, a strict generalization of the
+  originally-scoped rule rather than a narrower one. **Caveat added by the round-1 adversarial
+  review (F1, HIGH — see the dedicated update below):** *how* the cross-package declaration was
+  reached at that time — through `node_modules`, landing on each package's built `dist/*.d.ts` — was
+  not actually commit-bound for a `baseCommit` scan, and was fixed in the very next round. The
+  literal-type-preservation mechanism described above is still accurate and unchanged; only the
+  module-resolution path that reaches the declaration changed. "Inclusion rule" below states the
+  corrected, current mechanism normatively.
 - **`POST /api/proxy/senseaudio/stream` and `POST /api/proxy/aihubmix/stream`** are not
   `defineJsonRoute`-shaped at all. `routes/chat.ts`'s `registerChatRoutes` defines a local closure,
   `const registerByokToolChatProxy = (routePath, opts) => { app.post(routePath, ...) }`, and invokes
@@ -252,15 +279,99 @@ preserving the original exclusion's intent instead of accidentally undoing it.
 Result, reproduced across repeated runs: **0 drift entries** — the live daemon's actual route
 inventory and the static candidate set now agree exactly on all discovered registrations, with no
 allowlist, exemption, or tolerance threshold added anywhere in the drift comparison itself. One
-separate, pre-existing, unrelated condition remains and was deliberately left untouched as out of
-this round's scope: `C9F-1`'s own isolated daemon boot intermittently reports a non-empty
+separate, pre-existing, unrelated condition remained and was deliberately left untouched as out of
+this round's scope: `C9F-1`'s own isolated daemon boot intermittently reported a non-empty
 process-group teardown (the same three survivor process *types* — a `hermes-agent` Python process, a
-`node` process, and `cursor-agent` — recur across independent runs with fresh PIDs each time), which
-fails `C9F-1` outright per this verifier's fail-closed teardown policy regardless of the drift result
-being clean. This reproduced identically in a baseline run captured *before* any discovery-code
-change, so it predates and is independent of this round's fix; it is a daemon-boot/process-lifecycle
-question, not a universe-discovery one, and is out of scope for a round authorized to touch only
-discovery code.
+`node` process, and `cursor-agent` — recurring across independent runs with fresh PIDs each time).
+This reproduced identically in a baseline run captured *before* any discovery-code change, so it
+predated and was independent of this round's fix; it was a daemon-boot/process-lifecycle question,
+not a universe-discovery one, and was out of scope for a round authorized to touch only discovery
+code. **The round-1 adversarial review routed this item and ruled it a genuine, blocking leak — see
+"Update (round-1 review fixes)" immediately below for the diagnosis and the fix applied.**
+
+### Update (round-1 adversarial review fixes: F1 commit-binding closed, teardown group-emptiness
+closed)
+
+An adversarial reviewer who did not write the verifier or this document reviewed the discovery-gap
+closure recorded above and rejected it (round 1) on two findings plus one routed item, all fixed in
+this authorized fix round — again touching only the verifier and this document, never product code
+(this wave's implementation has not started):
+
+- **F1 (HIGH) — commit-binding gap in cross-package literal resolution, closed.** The mechanism (b)
+  cross-package `const` resolution described above and normatively in "Inclusion rule" originally
+  reached each package's declaration through `node_modules`. `withDetachedWorktree` symlinks
+  `node_modules` from the CURRENT checkout into the detached `baseCommit` worktree (there is no
+  install step in a detached worktree), and every `packages/<pkg>` workspace member inside that
+  `node_modules` tree is itself a *relative* symlink
+  (`apps/daemon/node_modules/@open-design/contracts -> ../../../../packages/contracts`). A relative
+  symlink resolves relative to its own on-disk location — always the CURRENT checkout's
+  `apps/daemon/node_modules/@open-design/`, regardless of which worktree walked through the outer
+  symlink to reach it — so cross-package resolution always landed on the CURRENT checkout's
+  `packages/<pkg>/dist/<file>.d.ts`, which is gitignored, mutable build output. Someone could mutate
+  a gitignored `.d.ts` (and the matching runtime path constant) after `baseCommit` and both the base
+  scan and the live daemon would report the same post-base path with `git status` clean — a false
+  `drift=0`. **Fix:** `buildDaemonProgram` now builds a `paths` compiler-option override, computed
+  fresh from `root`'s own `packages/<pkg>/package.json` files, that redirects every first-party
+  `@open-design/<pkg>` module specifier straight to that package's own git-tracked `src/*.ts` *inside
+  the worktree under scan* — before module resolution ever reaches `node_modules`. A base-commit scan
+  therefore only ever reads commit-bound source at that exact commit; no full package rebuild is
+  needed (this stays a single, fast `ts.createProgram` call). This does not change the classifier's
+  own const-literal-type mechanism (TypeScript never widens a `const` binding's inferred type,
+  whether the declaration is a `.ts` source file or a `.d.ts`) — it changes only *which* declaration
+  is read. Third-party dependencies (`express`, `zod`, `node:*`) are unaffected and still resolve
+  through `node_modules` as before — they are lockfile-pinned, not a mutable build artifact of this
+  repo, so they were never the F1 risk. Verified directly against this tree post-fix: `C9F-1` still
+  passes with drift 0, and both previously-affected constants (`ATTRIBUTION_CLAIM_PATH`,
+  `DIAGNOSTICS_EXPORT_PATH`) resolve to their correct literal values now sourced from
+  `packages/contracts/src/api/attribution.ts` and `packages/diagnostics/src/contract.ts`
+  respectively. Full mechanism detail lives on `buildDaemonProgram`'s own doc comment in the
+  verifier.
+- **F2 (MED) — stale PRD normative rule, closed.** This document's "Ground facts" and "Inclusion
+  rule" sections still stated the pre-discovery-gap-closure counts (33 files / 317 registrations)
+  and the single-hop, literal-only algorithm, even after the discovery-gap closure above had already
+  shipped the transitive walk and four additional discovery mechanisms. Both sections are now
+  rewritten to state the current algorithm and current counts (35 files / 43 register bodies / 333
+  registrations via five mechanisms) directly, rather than requiring a reader to reconstruct the
+  current behavior from this historical narrative.
+- **Routed item (a) — `library.ts` terminal-node exclusion — ruled PRINCIPLED, no change.** The
+  reviewer confirmed: `library.ts`'s own routes are all within the live-side excluded library
+  prefixes, and its only nested registrar is `registerBackupRoutes`. A future non-library-prefixed
+  route registered from inside `library.ts` would still appear live-only and correctly trigger drift
+  — the terminal boundary does not silently hide unrelated future drift. Left untouched.
+- **Routed item (b) — teardown survivor leak — ruled a GENUINE LEAK, closed on the verifier side.**
+  The reviewer confirmed the survivor detector was finding a real lifecycle leak, not unrelated
+  machine noise: daemon startup fires a fire-and-forget agent-detection probe (`void
+  readAppConfig(...).then(... detectAgents ...)` in `apps/daemon/src/server.ts`, never awaited by
+  `startServer`) that can spawn a `hermes-agent`/`node`/`cursor-agent` child concurrently with, or
+  just after, the verifier's own teardown SIGTERM lands. That child inherits the boot process
+  group but was never itself signaled, and the OLD `killGroupFailClosed` escalated to SIGKILL only
+  while the LEADER pid remained alive, then did exactly one final group scan — a straggler that
+  appeared mid-teardown could be caught by that one scan and reported as an unconfirmed teardown
+  without ever being escalated against. **Fix (verifier side, as required):**
+  `killGroupFailClosed` now escalates on **process-group emptiness** (the same real `ps`-table scan
+  the final verdict uses) rather than leader liveness alone — it keeps polling and, if the group is
+  still non-empty after the SIGTERM window, re-signals the whole group with SIGKILL and keeps polling
+  again, before giving up. The group can never read as empty while the leader itself is still
+  running (the leader's own pgid is its own pid), so this is a strict superset of the old check, not
+  a narrowing: still signals the whole group by its one exact known pid, still kills by exact PID
+  only, still fails closed on any unconfirmed or partial result. Verified across repeated runs
+  post-fix: **zero teardown survivors**, `C9F-8`'s teardown check passing every time.
+  **Daemon-side requirement, NOT implemented in this round (this round touches only the verifier and
+  this document — this wave's product implementation has not started):** the reviewer additionally
+  required that a daemon-side change track, cancel, and await the startup `detectAgents` probe during
+  shutdown, so a probe-spawned child is never left racing an in-flight teardown at all, rather than
+  relying solely on the verifier's post-hoc escalation to catch it after the fact. **This is recorded
+  here as a concrete implementation criterion for this wave**: `apps/daemon/src/server.ts`'s
+  `startServer` currently kicks off agent-capability warm probes as a fire-and-forget `void
+  readAppConfig(RUNTIME_DATA_DIR).then((config) => { ...; return detectAgents(config.agentCliEnv ??
+  {}); }).catch(() => detectAgents().catch(() => {}))`, never awaited by anything — `shutdownDaemonRuns`
+  (the function `startServer` returns as `shutdown`, which today awaits `design.runs.shutdownActive`,
+  `terminalService.shutdownActive`, and `design.analytics.shutdown`) has no knowledge of it at all.
+  This wave's implementation must give that kickoff a handle `shutdownDaemonRuns` can track, and
+  either await its settlement or explicitly cancel/kill whatever it spawned, before `shutdown()`
+  resolves. This is required before the wave can be considered frozen for
+  production readiness, independent of whether the verifier's own group-emptiness polling continues
+  to catch the race in practice.
 
 ## Inclusion rule (mechanical, re-runnable)
 
@@ -269,16 +380,61 @@ time (judgment is still needed to decide policy on the UNRESOLVED bucket — tha
 question, not a classifier defect):
 
 1. **Universe.** Parse `apps/daemon/src/server.ts` (at the commit under test). Collect every
-   `import { X } from '<relative path>'` where `X` matches `/^register\w*Routes$/`. Resolve each
+   `import { X } from '<relative path>'` where `X` matches `/^register\w*Routes$/`, resolving each
    relative specifier to its `.ts` file (`.js`-suffixed specifiers, `NodeNext`-style, resolve to the
-   sibling `.ts`; a bare directory specifier resolves to that directory's `index.ts`). This is the
-   **route-file universe**.
+   sibling `.ts`; a bare directory specifier resolves to that directory's `index.ts`) — the seed set.
+   Then, **transitively**: for every file already in the universe, AST-walk its own
+   `register*Routes`-named function bodies for further calls to a `register*Routes`-named identifier
+   resolved via *that file's own* relative imports, and add any newly-found file to a worklist,
+   repeating until the worklist is empty (a visited set makes this safe against any future cycle).
+   `apps/daemon/src/routes/library.ts` is a **terminal node**: if reached, it is marked visited (so
+   the hard exclusion in step 3 still applies to it) but its own body is never expanded further,
+   deliberately preventing its internal `registerBackupRoutes(...)` call from re-discovering
+   `apps/daemon/src/backup/routes.ts` as an independent route file. This is the **route-file
+   universe** — currently 35 files.
 2. **Registrations.** In each route file, AST-walk (via `ts.forEachChild`, comment-blind — a
    matching identifier inside a `//` or `/* */` comment can never leak in) every top-level function
    whose name matches `/^register\w*Routes$/` (function declaration or `const X = (...) => {...}`
-   form), and collect every `app.<get|post|put|delete|patch|options>(pathLiteral, ...middleware,
-   handler)` call inside it. Do the same for `server.ts` itself, restricted to `app.<method>(...)`
-   calls that are **not** inside any `register*Routes` function body (the 6 bootstrap routes).
+   form) — currently 43 bodies across the 35 files — and collect registrations inside each body
+   through **all** of the following mechanisms, plus the same set applied to `server.ts` itself
+   restricted to calls **not** inside any `register*Routes` function body (the bootstrap scope):
+   - **(a) Literal calls.** `app.<get|post|put|delete|patch|options>(pathLiteral, ...middleware,
+     handler)` where the path argument is a plain string literal.
+   - **(b) Named-const path arguments.** A path argument that is an `Identifier` bound to a `const`
+     string, resolved by reading the TypeChecker's inferred type at the identifier's use site rather
+     than re-deriving it from a same-file AST initializer. This resolves same-file, cross-file, *and*
+     cross-package bindings uniformly (e.g. `DIAGNOSTICS_EXPORT_PATH` from `@open-design/diagnostics`,
+     `ATTRIBUTION_CLAIM_PATH` from `@open-design/contracts`) — TypeScript never widens a `const`
+     binding's own inferred type, so the literal survives the import boundary regardless of whether
+     the declaration is same-file or cross-package. For a base-commit scan specifically, cross-package
+     resolution reads that package's own git-tracked `src/*.ts`, never a `node_modules`-resolved
+     `dist/*.d.ts` build artifact — see the F1 commit-binding note below and the corresponding comment
+     on `buildDaemonProgram` in the verifier.
+   - **(c) The `defineJsonRoute`/`mountJsonRoute` declarative shape** (`apps/daemon/src/http/`): a
+     `mountJsonRoute(app, SPEC, ...)` call whose `SPEC` argument resolves (directly, or through a
+     module-level `const` binding, following re-exports transparently via the checker) to a
+     `defineJsonRoute({ method, path, handle, ... })` call. The registration's `method`/`path`/handler
+     are read from that spec object, not from an `app.<method>()` call site (`mountJsonRoute`'s own
+     body performs the actual Express call with a *computed*, non-literal method/path, so it is never
+     visible to mechanism (a)).
+   - **(d) Call-site parameter substitution.** A path argument that is an `Identifier` bound to a
+     *parameter* of the immediately-enclosing function (not a module-level const) — resolved by
+     finding that enclosing function's own const-bound name, then every call to that name within the
+     same scanned scope, substituting the literal argument at the matching parameter position. This
+     covers a local closure defined once and invoked multiple times with different literal paths
+     (`registerByokToolChatProxy` in `routes/chat.ts`).
+   - **(e) Structural bootstrap-helper recognition.** A route-registration helper called directly from
+     `server.ts`'s own bootstrap sequence that does not match the `register*Routes` naming convention
+     (so mechanism (1)'s transitive walk never visits its file), recognized structurally rather than
+     by name: a relative-imported function invoked from `server.ts`'s bootstrap scope with the literal
+     identifier `app` as one of its own arguments — the same signal every `register*Routes` function
+     already relies on for its own `app` parameter — whose own body (in a different file) performs
+     further literal `app.<method>()` registrations (`registerStaticSpaFallback` →
+     `apps/daemon/src/static-spa.ts`'s `app.get('/*splat', ...)`).
+
+   These five mechanisms together produce **333 total candidate registrations** across the 35 files —
+   see "Ground facts" above for the current classification split, and the "Update" note below for the
+   discovery-gap history that motivated adding mechanisms (b)–(e).
 3. **Hard exclusions.** Drop every registration whose containing file is
    `apps/daemon/src/routes/library.ts` (owned by `mishmash-w9-ingest-tranche`; this tranche's
    proposed lease denies that path explicitly, so the exclusion is enforced twice — once by this
