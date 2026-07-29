@@ -25,6 +25,16 @@ below — including the round-1 fixes — was checked by reading or running the 
 assumed from prose (e.g. the NodeNext dynamic-import workaround in §2 was confirmed by actually
 running `tsc` against a probe file, not reasoned about abstractly).
 
+**Same round, three orchestrator rulings folded in.** After the finding-closure pass above, the
+orchestrator ruled on this document's three open founder questions, under founder authority
+delegated to the orchestrator for this project — binding, not advisory. Full text in **§9 Recorded
+rulings**; summary: (1) no new toolbox-action HTTP/CLI capability — `C10C-8` (which existed only to
+gate this exact question) is **removed**, the question is closed by ruling instead; (2)
+`NextStepActions.tsx` **is** in scope for the exhaustive walk — `C10C-2` is extended to cover both
+consumers, asserting their partition of the 16 actions explicitly rather than ignoring the second
+surface; (3) `scripts/check-toolbox-skill-refs.test.ts` is kept, untouched, as a floor — no file
+change, prose-only note.
+
 ---
 
 ## 1. Why this wave exists
@@ -69,13 +79,25 @@ lying without a red test somewhere in the tree.
   toolbox can look "fine" in manual QA while never attaching the *intended* skill. A test that only
   asserts "some skill resolved" cannot catch this; the per-action assertion must check the
   *specific expected* skill, computed the same way the production code computes it.
-- **A second, independent consumer exists:** `apps/web/src/components/NextStepActions.tsx` (the
-  assistant "next step" card) imports the same `DESIGN_TOOLBOX_ACTIONS` and
-  `findDesignToolboxSkill`, splitting the 16 actions across two feature rows
-  (`FEATURED_DESIGN_TOOLBOX_ACTION_IDS`) and a cascading "More → Design toolbox" flyout (the other
-  14). This wave scopes its exhaustive walk to `DesignToolboxPanel` — the single-panel, searchable,
-  title="Design toolbox" surface the skeleton's "side panel" language matches — not to
-  `NextStepActions`' split hover-flyout. See **Open founder questions**, Q2.
+- **A second, independent consumer exists, and it is IN SCOPE per orchestrator ruling (§9,
+  ruling 2).** `apps/web/src/components/NextStepActions.tsx` (the assistant "next step" card)
+  imports the same `DESIGN_TOOLBOX_ACTIONS`/`FEATURED_DESIGN_TOOLBOX_ACTION_IDS`/
+  `findDesignToolboxSkill`, splitting the 16 actions across two always-visible featured rows
+  (`data-testid="next-step-toolbox-action-<id>"`, only `auto-match`/`visual-polish` today, shown
+  only in the `default` next-step variant) and a cascading "More → Design toolbox" flyout holding
+  the other 14 (`data-testid="next-step-toolbox-sub-action-<id>"`, reached via
+  `next-step-toolbox-more` → `next-step-more-toolbox`). Both click paths ultimately call
+  `ChatPane.tsx`'s `handleToolboxAction` → `composerRef.current.applyDesignToolboxAction(id)` — the
+  **exact same imperative method** `DesignToolboxPanel`'s own row click invokes internally
+  (verified by reading both call sites), so the two consumers converge on identical composer-draft
+  behavior once an id reaches the composer; only the click *path* to trigger it differs. `C10C-2`
+  (§5) now walks both consumers and mechanically asserts the featured/non-featured **partition**
+  of the runtime-derived 16-action set (no gap, no overlap) — the "assert the intended difference
+  explicitly" instruction in ruling 2, rather than silently ignoring the second surface. Reaching
+  `NextStepActions`' default-variant featured rows requires a completed run with a turn deliverable
+  (`showNextStepActions` in `AssistantMessage.tsx`); the required test uses the same
+  fake-agent-runtime + real-daemon pattern `e2e/ui/real-daemon-run.test.ts` already establishes for
+  driving a run to completion, not a new mechanism.
 - **Skill IDs are frontmatter `name`, not directory name — with an alias table.**
   `apps/daemon/src/skills.ts:listSkills()` sets `id = data.name (frontmatter) || entry.name
   (directory)`, first-root-wins on collision. `SKILL_ID_ALIASES` (currently one entry:
@@ -124,10 +146,11 @@ lying without a red test somewhere in the tree.
   `GET /api/skills/:id` routes the web UI calls
   (`apps/daemon/src/routes/static-resource.ts:164,180`, both backed by `listAllSkills()` /
   `findSkillById()`). There is exactly one listing implementation; the CLI is a thin HTTP client
-  of it. This matters for the UI/CLI-parity criterion (§C10C-5) and for **C10C-8** (formerly a soft
-  open question, now a formal founder-decision gate — `[R1-F8]`, see below) — the **skill registry
-  data** already has CLI parity; the **toolbox action catalogue** (ids, preferred-skill mapping,
-  composed prompts) has none today.
+  of it. This matters for the UI/CLI-parity criterion (§C10C-5, scoped exactly to this listing
+  surface per orchestrator ruling 1 — §9) — the **skill registry data** already has CLI parity; the
+  **toolbox action catalogue** (ids, preferred-skill mapping, composed prompts) does not, and per
+  ruling 1 this wave does not build that parity, since the catalogue is not itself a user-facing
+  capability under `AGENTS.md`'s dual-track rule.
 - **`apps/daemon/tests/` may not import `apps/web/src/**`, and vice versa** (`AGENTS.md` →
   "Boundary constraints": "App packages must not import another app's private `src/` or `tests/`
   implementation as a shared helper. In particular, `apps/web/**` must not import
@@ -254,21 +277,22 @@ testing nothing.
   registry, paired with a positive control (C10C-3).
 - Action→skill mapping assertions moved into the daemon suite, using the real registry resolution
   algorithm (not directory existence) (C10C-4).
-- UI/CLI parity of the skill-registry data source the toolbox's resolution depends on (C10C-5).
+- UI/CLI parity of the skill-registry data source the toolbox's resolution depends on — deliberately
+  scoped to that data source, per orchestrator ruling 1 (§9) (C10C-5).
 - Standard gates: `pnpm guard` / `pnpm typecheck` (C10C-6).
 - Adversarial review of the implementation on record (C10C-7).
-- A formal, mechanically-tracked founder decision on toolbox-action-application UI/CLI parity
-  (C10C-8 — `[R1-F8]`; see §Open founder questions).
+- The exhaustive per-action walk covers **both** consumers of the shared catalogue —
+  `DesignToolboxPanel` and `NextStepActions.tsx` — asserting their featured/non-featured partition
+  explicitly, per orchestrator ruling 2 (§9) (C10C-2, extended).
 
-**Explicitly out of scope** (see also §Open founder questions):
-- Extending the exhaustive walk to `NextStepActions.tsx`'s split rendering of the same catalogue (Q2).
-- Retiring or rewriting the existing `scripts/check-toolbox-skill-refs.test.ts` guard (Q3) — the
-  proposed lease permits either keeping it as a cheap floor or hardening it, but does not mandate
-  either.
+**Explicitly out of scope** (resolved by orchestrator ruling, §9 — not open questions anymore):
+- Building a new `od`/HTTP capability for "apply a toolbox action" itself — ruling 1: the toolbox
+  is a recommendation layer over already-CLI-reachable primitives, not a new capability; no scope
+  expansion.
+- Retiring or rewriting the existing `scripts/check-toolbox-skill-refs.test.ts` guard — ruling 3:
+  kept as a cheap floor, untouched by this wave (also outside this wave's two-file authoring limit).
 - Any change to `apps/daemon/src/skills.ts`'s resolution algorithm, `SKILL_ID_ALIASES`, or any
   `skills/*/SKILL.md` frontmatter. This wave tests the existing algorithm; it does not change it.
-- Actually building a new toolbox-action-application HTTP/CLI capability — that is gated by C10C-8's
-  founder decision, not decided by this PRD (`[R1-F8]`).
 - NM-27 (gallery/archive taxonomy), NM-21 (memory scope), or any other Wave 10 slice — those are
   separate gated runs per `W5-W11-gated.md`'s Wave 10 table.
 
@@ -373,80 +397,108 @@ members are read.
 
 ---
 
-### C10C-2 — Per-action end-to-end walk from the Design Toolbox side panel, table-driven, cross-checked against a fresh runtime oracle
+### C10C-2 — Per-action end-to-end walk from BOTH catalogue consumers, table-driven, cross-checked against a fresh runtime oracle, with an explicit consumer-partition assertion
+
+**`[R1-F2]` + orchestrator ruling 2 (§9):** this criterion closes both the round-1 finding (shape-only
+checking) and the ruling that the exhaustive walk must cover `NextStepActions.tsx` as well as
+`DesignToolboxPanel`, asserting the two consumers' featured/non-featured split explicitly rather
+than ignoring the second surface.
 
 **Criterion.** Pinned artifact: `e2e/ui/design-toolbox-actions.test.ts` (Playwright, exact path —
 `[R1-F1]`). Required shape, exactly:
 
 1. At module scope (or in a `beforeAll`), load the real catalogue via the dynamic-import pattern
-   from §2: `const { DESIGN_TOOLBOX_ACTIONS } = await import(pathToFileURL(path.resolve(...,
-   'apps/web/src/runtime/design-toolbox.ts')).href);` — never a static `import` declaration
-   (`[R1-F1]`, avoids the confirmed TS2835 failure).
-2. `for (const action of DESIGN_TOOLBOX_ACTIONS) { test(`toolbox action ${JSON.stringify(action.id)}
-   resolves and applies from the side panel`, async ({ page }) => { ... }); }` — one real Playwright
-   `test()` call generated per catalogue entry, titled **exactly** `` `toolbox action "${action.id}"
-   resolves and applies from the side panel` `` (pinned so the verifier can locate each row
-   unambiguously — `[R1-F1]`'s "state exactly what must exist" instruction).
-3. Each test body: navigates into a real project's chat composer (real tools-dev daemon/web via
-   `@/playwright/suite`, real `skills/` directory); clicks `page.getByTestId('chat-plus-trigger')`;
-   clicks the `role="menuitem"` row named `"Design toolbox"`; clicks the `role="menuitem"` row whose
-   accessible name is that action's localized title; reads
-   `await page.getByTestId('chat-composer-input').textContent()`; parses out any `@<name>` token
-   from the read text as `resolvedName` (or `null` if none); and — the mechanical anti-decoy
-   requirement `[R1-F2]` — `console.log(`W10C_RESOLVED ${action.id} ${resolvedName ?? '__NONE__'}`)`
-   with the **actually-observed** value before the test ends.
+   from §2: `const { DESIGN_TOOLBOX_ACTIONS, FEATURED_DESIGN_TOOLBOX_ACTION_IDS } = await
+   import(pathToFileURL(path.resolve(..., 'apps/web/src/runtime/design-toolbox.ts')).href);` —
+   never a static `import` declaration (`[R1-F1]`, avoids the confirmed TS2835 failure).
+2. **Consumer A — `DesignToolboxPanel`:** `for (const action of DESIGN_TOOLBOX_ACTIONS) {
+   test(`toolbox action ${JSON.stringify(action.id)} resolves and applies from the side panel`,
+   async ({ page }) => { ... }); }` — one real Playwright `test()` call per catalogue entry, titled
+   **exactly** `` `toolbox action "${action.id}" resolves and applies from the side panel` ``. Body:
+   navigates into a real project's chat composer (real tools-dev daemon/web via `@/playwright/suite`,
+   real `skills/` directory); clicks `page.getByTestId('chat-plus-trigger')`; clicks the
+   `role="menuitem"` row named `"Design toolbox"`; clicks the `role="menuitem"` row whose accessible
+   name is that action's localized title; reads `await
+   page.getByTestId('chat-composer-input').textContent()`; parses out any `@<name>` token as
+   `resolvedName` (or `null`); emits `console.log(`W10C_RESOLVED ${action.id} ${resolvedName ??
+   '__NONE__'}`)` with the **actually-observed** value.
+3. **Consumer B — `NextStepActions.tsx` (orchestrator ruling 2):** `for (const action of
+   DESIGN_TOOLBOX_ACTIONS) { test(`next-step action ${JSON.stringify(action.id)} resolves and
+   applies from the assistant next-step card`, async ({ page }) => { ... }); }` — one real Playwright
+   `test()` call per catalogue entry, titled **exactly** `` `next-step action "${action.id}" resolves
+   and applies from the assistant next-step card` ``. Body: drives a real project through a
+   completed run producing a turn deliverable (the fake-agent-runtime + real-daemon pattern
+   `e2e/ui/real-daemon-run.test.ts` already establishes — `showNextStepActions` in
+   `AssistantMessage.tsx` requires `runSucceeded && hasTurnDeliverable` for the default variant); if
+   `action.id` is in the runtime-read `FEATURED_DESIGN_TOOLBOX_ACTION_IDS`, clicks
+   `page.getByTestId(`next-step-toolbox-action-${action.id}`)` directly; otherwise clicks
+   `page.getByTestId('next-step-toolbox-more')` then `page.getByTestId('next-step-more-toolbox')`
+   then `page.getByTestId(`next-step-toolbox-sub-action-${action.id}`)`; reads the same
+   `chat-composer-input` text; emits `console.log(`W10C_NEXTSTEP_RESOLVED ${action.id}
+   ${resolvedName ?? '__NONE__'}`)` — a **distinct marker prefix** so the verifier can unambiguously
+   attribute each of the 32 total marker lines to its consumer.
 
 The verifier:
 - Confirms the file exists at the pinned path; fails with a named-missing-file detail otherwise.
-- **Structural (AST) checks, `[R1-F2]`:** zero `test.skip`/`.only`/`.fixme`/`.todo` anywhere; a
-  dynamic `import()` call whose argument subtree contains a string literal referencing
-  `design-toolbox.ts` by path fragment (the computed-specifier form from §2 cannot be resolved to
-  an exact file path statically, so the verifier requires this weaker-but-real structural signal
-  instead of claiming false precision); a `for...of` loop over that imported binding whose body
-  contains a `test(` call; and — scoped **specifically to that loop body's test callback**, not
-  merely present anywhere in the file — at least one call whose callee property name is `click` and
-  at least one call whose callee property name is `textContent` (or `innerText`).
+- **The explicit partition assertion (ruling 2's "assert the intended difference" instruction):**
+  reads `FEATURED_DESIGN_TOOLBOX_ACTION_IDS` from the same dynamically-imported module C10C-1 Layer
+  B already loads, and requires — as its own named check, independent of whether the delegated file
+  exists yet — that `featuredIds` is a non-empty subset of the C10C-1-derived action set, that
+  `featuredIds ∪ nonFeaturedIds` (the derived set minus `featuredIds`) exactly equals the derived
+  set with **zero overlap and zero gap** (multiset), computed fresh at runtime, never hardcoded as
+  "2 featured, 14 non-featured."
+- **Structural (AST) checks, `[R1-F2]`, applied to BOTH consumer loops independently:** zero
+  `test.skip`/`.only`/`.fixme`/`.todo` anywhere; a dynamic `import()` call whose argument subtree
+  contains a string literal referencing `design-toolbox.ts` by path fragment; **two** distinct
+  `for...of` loops over that imported binding, one whose body contains a `test(` call referencing
+  `chat-plus-trigger`-shaped interaction, one whose body contains a `test(` call referencing a
+  `next-step-toolbox`-shaped `getByTestId` call — scoped to each loop body independently, at least
+  one `.click(` and at least one `.textContent(`/`.innerText(` call.
 - **Runs the suite for real** via `pnpm --filter @open-design/e2e exec playwright test -c
   playwright.config.ts ui/design-toolbox-actions.test.ts --reporter=json` (package-relative path —
-  `[R1-F1]`) and requires: `run.specs.length` **exactly equals** the C10C-1-derived action count
-  (no fewer — a dropped row fails; no more — an extraneous/no-op row fails, closing `[R1-F2]`'s "one
-  no-op test whose title contains all action IDs" decoy, which now also fails structurally since its
-  single title cannot match the pinned exact-title format for more than one id); every derived
-  action id maps to **exactly one** spec whose title equals the pinned exact format for that id
-  (not "contains" — exact string equality, so a single title cannot straddle two ids); every matched
-  spec is `ok === true`.
-- **`[R1-F2]`'s primary fix — an independent, freshly-computed runtime oracle, not a trust of the
-  delegated file's self-report:** for each derived action, the verifier itself dynamically imports
-  `design-toolbox.ts` (`findDesignToolboxSkill`) and `apps/daemon/src/skills.ts` (`listSkills`),
-  calls `listSkills([repoRoot/skills])` once to get the real, live `SkillInfo[]` (pure filesystem
-  read — deterministic and daemon-independent, so it is a valid stand-in for "what the real running
-  app would see" without needing to share the Playwright suite's own separately-booted daemon
-  process), and computes `expected = findDesignToolboxSkill(action, liveSkills)?.name ?? '__NONE__'`
-  for every action. It then parses every matched spec's `results[].stdout[].text` entries (the
-  confirmed-live schema path from §2) for a line matching `^W10C_RESOLVED (\S+) (.+)$`, and requires
-  the captured value to **exactly equal** the independently-computed `expected` for that action. A
-  test whose body never performs a real click/read cannot fabricate a correct marker across all 16
-  actions without independently discovering the same 16 different real answers the verifier itself
-  computes fresh each run — combined with the required `.click(`/`.textContent(` calls inside the
-  loop body (previous bullet) and the requirement that the run must actually pass (not hang/error on
-  a bogus selector), this closes the decorative-decoy class `[R1-F2]` named.
+  `[R1-F1]`) and requires: `run.specs.length` **exactly equals** `2 × derivedActionCount` (16 side-panel
+  + 16 next-step, both counts C10C-1-derived, never hardcoded); every derived action id maps to
+  **exactly one** side-panel spec (pinned title format) and **exactly one** next-step spec (pinned
+  title format), both `ok === true` — a single no-op test spanning multiple ids cannot satisfy either
+  pinned exact-title format.
+- **The independent, freshly-computed runtime oracle (`[R1-F2]`'s primary fix, shared by both
+  consumers since resolution is the same deterministic function regardless of click path):** the
+  verifier dynamically imports `design-toolbox.ts` (`findDesignToolboxSkill`) and
+  `apps/daemon/src/skills.ts` (`listSkills`), calls `listSkills([repoRoot/skills])` once (pure
+  filesystem read — deterministic, daemon-independent, a valid stand-in for "what the real running
+  app would see"), and computes `expected = findDesignToolboxSkill(action, liveSkills)?.name ??
+  '__NONE__'` per action. It parses every side-panel spec's captured stdout for
+  `^W10C_RESOLVED (\S+) (.+)$` and every next-step spec's for `^W10C_NEXTSTEP_RESOLVED (\S+) (.+)$`
+  (the confirmed-live `results[].stdout[].text` schema, §2), requiring both captured values to
+  **exactly equal** the same independently-computed `expected` for that action. A test whose body
+  never performs a real click/read cannot fabricate a correct marker across 16 actions — let alone
+  32, across two independently-titled, independently-selector-bound loops — without independently
+  discovering the same real answers the verifier computes fresh each run.
 
-**Satisfiability.** A legitimate implementation writes the one required loop, using the confirmed
-dynamic-import pattern and the confirmed selectors from §2 (`chat-plus-trigger`, the `"Design
-toolbox"` menuitem, per-action menuitems by accessible name, `chat-composer-input`), and reports the
-value it actually read. This produces 16 real passing rows today whose marker values match the
-verifier's own oracle, because both sides compute the same deterministic function over the same
-`skills/` directory.
+**Satisfiability.** A legitimate implementation writes the two required loops, using the confirmed
+dynamic-import pattern and the confirmed selectors from §2 for both consumers (`chat-plus-trigger` /
+`"Design toolbox"` menuitem / per-action menuitems for the side panel;
+`next-step-toolbox-action-<id>` / `next-step-toolbox-more` / `next-step-more-toolbox` /
+`next-step-toolbox-sub-action-<id>` for the next-step card, selecting the right one via the same
+runtime-read `FEATURED_DESIGN_TOOLBOX_ACTION_IDS` the partition check uses), and reports the values
+it actually reads. Since `NextStepActions.tsx`'s click ultimately calls the exact same
+`composerRef.current.applyDesignToolboxAction(id)` imperative method `DesignToolboxPanel` uses
+internally (verified in §2 by reading both call sites), both consumers converge on the same
+resolved-skill outcome for a given action, so both marker sets agree with the single shared oracle.
 
 **Decoy.** An implementer who pastes today's 16 ids into a local literal array instead of importing
-the real catalogue is caught by the required dynamic-import-referencing-`design-toolbox.ts` check.
-A single no-op test whose title lists every id is caught structurally (the pinned exact-title format
-cannot match more than one id per spec, and the exact-count check requires 16 distinct specs). A
-test that fabricates a plausible-looking `W10C_RESOLVED` line without actually clicking/reading is
-caught by (a) the required `.click(`/`.textContent(` call-presence check inside the loop body and
-(b) the marker value having to agree with the verifier's own fresh computation for all 16 actions
-simultaneously — hardcoding 16 correct answers today does not survive the next skill rename, which
-changes the verifier's oracle output but not a hardcoded marker.
+the real catalogue is caught by the required dynamic-import-referencing-`design-toolbox.ts` check,
+for either loop. A single no-op test whose title lists every id is caught structurally in either
+consumer (the pinned exact-title formats cannot match more than one id per spec, and the exact-count
+check requires 32 distinct specs, not "at least 16"). A test that fabricates a plausible-looking
+marker line without actually clicking/reading is caught by (a) the per-loop `.click(`/`.textContent(`
+call-presence check and (b) the marker value having to agree with the verifier's own fresh
+computation for all 16 actions across BOTH consumers simultaneously. An implementation that covers
+`DesignToolboxPanel` only and silently skips `NextStepActions` — the exact shape ruling 2 was
+written to prevent — is caught by the exact `2 × derivedActionCount` spec-count requirement and the
+per-consumer pinned-title coverage check, both of which fail outright at 16 specs instead of 32. An
+implementation that hardcodes "2 featured ids" instead of reading `FEATURED_DESIGN_TOOLBOX_ACTION_IDS`
+at runtime is caught the moment that constant changes, by the partition check's own fresh read.
 
 ---
 
@@ -581,6 +633,13 @@ decorative (b) alone.
 
 ### C10C-5 — UI/CLI parity of the skill-registry data source
 
+**Scope note (orchestrator ruling 1, §9):** this criterion is deliberately scoped to the skills
+**listing** surface the toolbox's resolution actually consumes, not to "applying a toolbox action"
+itself. The ruling held that the toolbox is a UI recommendation layer over already-CLI-reachable
+primitives (staging a skill, composing a prompt) and adds no new user-facing *capability* under
+`AGENTS.md`'s dual-track rule — so there is no companion HTTP/CLI surface for this criterion to
+parity-check, and none is added. This is a closed decision, not a scope gap to reopen.
+
 **Criterion.** The verifier boots an isolated, namespaced, daemon-only tools-dev runtime (`pnpm
 tools-dev start daemon --namespace <fresh> --json` — `start`, not `run`: `run` blocks in the
 foreground until interrupted, confirmed by reading `tools-dev`'s own CLI registration
@@ -675,55 +734,24 @@ empty or placeholder `model` field is now itself a failure.
 
 ---
 
-### C10C-8 — Founder decision on record: does toolbox-action-application need its own UI/CLI capability?
+### C10C-8 — retired: resolved directly by orchestrator ruling, not by a mechanical gate
 
-**`[R1-F8]`: this criterion did not exist in the round-1 draft, where the same question was left as
-a soft, non-blocking "open question" (former Q1). Round 1 ruled that blocking, per repository
-authority (`AGENTS.md` → "Capability exposure (UI/CLI dual-form)": "Every user-facing capability
-must be reachable through both the web UI and the `od` CLI... If a capability is UI-only, it cannot
-be composed into those external agents"), and required either action HTTP/CLI criteria with a
-matching lease, or an explicit maintainer/founder exemption, before freeze. Building new production
-HTTP/CLI surface is a product decision this PRD-expansion pass has no authority to make unilaterally
-(exactly the kind of question §Open founder questions exists to surface, not resolve) — so this
-criterion makes the required decision itself the mechanically-tracked gate, using the same
-`DECISIONS.md`-read (never write) pattern `W9-ingest-tranche.md`'s `acceptedRisk.decisionRef`
-already establishes as this program's sanctioned mechanism for exactly this situation
-(`VERIFICATION-CONTRACT.md` §3 R7).**
+**`[R1-F8]` originally added `C10C-8`** as a `human:`-marked, `DECISIONS.md`-gated criterion (mirroring
+`W9-ingest-tranche.md`'s `acceptedRisk.decisionRef` pattern) specifically because the underlying
+question — does applying a toolbox action need its own `od`/HTTP capability under `AGENTS.md`'s
+dual-track rule — was genuinely open and this PRD-expansion pass had no authority to resolve it
+unilaterally.
 
-**`human:` marked — legitimately resolves to `blocked-on-founder`, per R7.**
-
-**Criterion.** The verifier reads `docs/plans/waves/DECISIONS.md` at `HEAD` (not `baseCommit` — the
-decision may land on `main`, and therefore into this wave's history, at any point up through
-implementation, unlike an already-landed accepted-risk record read at a fixed `baseCommit`) and
-searches for a heading matching exactly `### W10C-CAPABILITY-DECISION`.
-
-- **Heading absent:** `status = "blocked-on-founder"` — the legitimate, expected pre-decision state
-  (R7: "does not block the autonomous loop; it blocks landing").
-- **Heading present, more than once:** `status = "fail"` (ambiguous — a duplicate heading id is
-  unresolvable everywhere, mirroring `W9-ingest-tranche.md`'s DECISIONS.md ruling).
-- **Heading present exactly once:** parse the block up to the next `## `/`### ` heading or EOF for
-  `- Decision: `, `- Decider: `, `- Date: `, `- Rationale: ` fields. `status = "pass"` only if all
-  hold: `Decision` is exactly `build-now` or `exempt` (trimmed); `Decider` is present and — using
-  the same `[R1-F7]` identity-matching helper as C10C-7 — distinct from every commit author across
-  `baseCommit..HEAD`; `Date` is present; `Rationale` is present and at least 20 characters after
-  trimming (rejects a placeholder). Otherwise `status = "fail"` (a malformed attempt at the record
-  is a real defect, not a legitimate pending state).
-
-**Satisfiability.** The founder (or a delegate acting on the founder's explicit instruction) adds
-one heading block to `DECISIONS.md`, choosing either `build-now` (which then requires a follow-up
-PRD amendment adding the actual capability criteria and a lease amendment — out of this fix round's
-scope, and correctly so: this PRD-expansion pass has no authority to design that surface
-unilaterally) or `exempt` (closing the question outright, matching the review's explicitly-offered
-second valid path: "an explicit maintainer/founder exemption"). Either way the `Decider` is someone
-other than whoever implements this wave, mirroring `W9-ingest-tranche.md`'s existing pattern.
-
-**Decoy.** An implementer authoring their own `Decider: <self>` entry to wave the requirement
-through is caught by the same author-distinctness check C10C-7 uses. A record citing the wrong
-heading text, or missing a required field, is caught by the exact-heading and field-presence checks
-and resolves to `fail`, not a silent pass. A record that exists but is malformed does **not** get
-the benefit of `blocked-on-founder`'s "legitimate pending state" — only a genuinely absent heading
-does; a botched one is scored as a real failure so it cannot be used to argue "we tried" without
-actually producing a valid record.
+**That authority gap no longer exists.** The orchestrator has since ruled on the question directly,
+under founder authority explicitly delegated to the orchestrator for this project (§9, ruling 1,
+cited as "Orchestrator ruling under delegated founder authority, 2026-07-28") — a binding answer,
+not a suggestion needing a further mechanical gate to confirm it happened. `C10C-8` is therefore
+**removed** rather than kept as a criterion that would trivially and permanently read `pass` by
+construction (the ruling is recorded in this PRD's own frozen text, which nothing in this wave can
+retroactively unfreeze) — a criterion that cannot fail once written is not measuring anything, the
+same principle that drove this wave's other hardening. The manifest's expected criteria set (§7)
+reverts to not including `C10C-8`. `DECISIONS.md` is correspondingly removed from the proposed
+lease's allow list (§6) — nothing in this wave's verifier reads or needs it anymore.
 
 ---
 
@@ -770,26 +798,28 @@ Mirrors `verify-w9-ingest.ts` exactly (`VERIFICATION-CONTRACT.md` §3 R9, §7 "G
     "apps/web/src/i18n/types.ts",
     "apps/web/src/i18n/locales/en.ts",
     "scripts/check-toolbox-skill-refs.test.ts",
-    "docs/plans/waves/w10c-toolbox-implementation-review.json",
-    "docs/plans/waves/DECISIONS.md"
+    "docs/plans/waves/w10c-toolbox-implementation-review.json"
   ],
   "deny": [
     "docs/plans/waves/W10c-toolbox.md",
     "scripts/waves/verify-w10c.ts",
     "docs/plans/waves/leases.json",
+    "docs/plans/waves/DECISIONS.md",
     "docs/security/**"
   ],
   "note": "Toolbox reliability (NM-19). No apps/daemon/src/** production code expected -- the
     daemon suite addition binds to existing listSkills()/findSkillById()/SKILL_ID_ALIASES without
     modifying them. i18n files are granted narrowly in case C10C-1's cross-check surfaces a real
     id/key mismatch that needs fixing; design-toolbox.ts is granted for the same amend-on-proof
-    reason. DECISIONS.md added to allow (round-1 fix, R1-F8) mirroring W9-ingest's precedent --
-    C10C-8's founder decision record may be committed on this branch, with the SAME
-    distinct-author enforcement (Decider != any commit author) W9-ingest's acceptedRisk pattern
-    uses, so an implementer cannot author their own exemption. HOUSE RULE: this wave's own PRD and
-    verifier are in deny -- gate integrity is bound by the orchestrator-held approved copy +
-    approved-gate.sha256 (GATE-INTEGRITY criterion), not by trusting the implementing branch not
-    to edit its own gate."
+    reason. scripts/check-toolbox-skill-refs.test.ts is NOT modified by this wave (orchestrator
+    ruling 3, kept as a floor) -- it stays in allow only because it was already allow-listed pre-
+    ruling and no criterion forbids touching it if a future amendment needs to; nothing in this
+    PRD requires editing it. DECISIONS.md is in deny -- round-1 fix R1-F8 briefly added it for a
+    since-removed C10C-8 (see C10C-8's retirement note); the orchestrator's direct ruling closed
+    that question without needing a DECISIONS.md record, so nothing in this wave reads or writes
+    it. HOUSE RULE: this wave's own PRD and verifier are in deny -- gate integrity is bound by the
+    orchestrator-held approved copy + approved-gate.sha256 (GATE-INTEGRITY criterion), not by
+    trusting the implementing branch not to edit its own gate."
 }
 ```
 
@@ -801,17 +831,17 @@ that is a lease amendment recorded against `main`, not a unilateral implementati
 ## 7. Definition of "green"
 
 `manifest.criteria[].id` must equal exactly `{C10C-1, C10C-2, C10C-3, C10C-4, C10C-5, C10C-6,
-C10C-7, C10C-8, GATE-INTEGRITY, LEASE, HEAD-DRIFT}` — 11 ids, no fewer, no more, no duplicates.
-Ten of the eleven must read `status === "pass"`. **C10C-8 is the sole exception, per R7**: it may
-legitimately read `status === "blocked-on-founder"` (heading genuinely absent) without that
-counting as an implementation defect — but the wave is not "fully landable" until it too reads
-`pass`. `manifest.treeDirty === false`, `manifest.commit` matching the verified `HEAD`, every
-artifact hash-matched. Nothing in the current wave program gates on this wave's manifest
+C10C-7, GATE-INTEGRITY, LEASE, HEAD-DRIFT}` — 10 ids, no fewer, no more, no duplicates (`C10C-8`
+was removed after the orchestrator's direct ruling closed the question it existed to gate; see its
+retirement note above). Every one of the ten must read `status === "pass"` — none of this wave's
+criteria are `human:`-marked any longer, so `blocked-on-founder` should never legitimately appear
+in this wave's manifest. `manifest.treeDirty === false`, `manifest.commit` matching the verified
+`HEAD`, every artifact hash-matched. Nothing in the current wave program gates on this wave's manifest
 (`W5-W11-gated.md`'s Wave 10 table lists no downstream dependent for `w10c-toolbox`), so there is no
 external "definition of green" consumer analogous to W9-ingest's relationship with W3 — this
 section exists for internal completeness only.
 
-## 8. Verified baseline (this run, pre-implementation, post round-1 fixes)
+## 8. Verified baseline (this run, pre-implementation, post round-1 fixes + rulings)
 
 - `DESIGN_TOOLBOX_ACTIONS`: 16 entries, 31 unique `preferredSkillIds` values, **zero phantoms
   today** by either the old directory-existence method or the real frontmatter-based registry
@@ -822,66 +852,77 @@ section exists for internal completeness only.
   shapes round 1 demonstrated the prior version would silently admit.
 - i18n: 48 `chat.designToolbox.action.*` keys declared in `Dict`, all 48 non-empty in `en.ts`,
   exactly matching the 16 action ids × 3 keys.
+- `FEATURED_DESIGN_TOOLBOX_ACTION_IDS`: 2 entries (`auto-match`, `visual-polish`) today, both a
+  subset of the 16 derived actions; the 14 remaining actions are exactly `DESIGN_TOOLBOX_ACTIONS`
+  minus the featured set (`NON_FEATURED_TOOLBOX_ACTIONS`'s own filter, read directly in
+  `NextStepActions.tsx`) — the partition C10C-2 now asserts holds cleanly today, confirmed by
+  direct inspection.
 - `scripts/check-toolbox-skill-refs.test.ts`: exists, passes, wired into `pnpm guard` (confirmed in
-  the 102/102 green run) — but checks directory existence, not real registry resolution (§2, §3).
+  the 102/102 green run) — checks directory existence, not real registry resolution (§2, §3).
+  **Untouched by this wave** (orchestrator ruling 3, §9) — C10C-4 supersedes its semantics with a
+  real-registry-resolution check, but superseding is not a reason to delete a fast, free,
+  zero-dependency floor; it stays exactly as-is.
 - `apps/web/tests/components/ChatComposer.design-toolbox.test.tsx`: exists, exercises 2 of 16
   actions against hand-authored fixture skills, not the live registry.
 - `e2e/ui/design-toolbox-actions.test.ts`, `e2e/tests/design-toolbox-phantom-id.test.ts`,
   `apps/daemon/tests/design-toolbox-skill-refs.test.ts`,
   `docs/plans/waves/w10c-toolbox-implementation-review.json`: **do not exist** — the delegated-file
-  halves of C10C-2/C10C-3/C10C-4 and all of C10C-7 fail honestly. **C10C-2/C10C-3/C10C-4's own
-  verifier-side runtime oracles (§(a) in each) run regardless and are expected to already report
-  the underlying claim as true** (the real functions, called directly by the verifier, do resolve
-  correctly today) — but each criterion's overall `status` still requires the delegated artifact
-  half too, so C10C-2/3/4 still read `fail` overall pre-implementation. This is the concrete answer
-  to the coordinator's "reconsider the 5-of-10 baseline" instruction: C10C-2/3/4 are now AND-gated
-  (oracle **and** artifact), so neither half alone can carry the criterion, and — unlike the prior
-  draft — a criterion that is already fully mechanically true today (C10C-1, C10C-5) is now
-  additionally hardened to be *falsifiable* against the specific decoy shapes round 1 demonstrated,
-  not merely coincidentally true.
-- `docs/plans/waves/DECISIONS.md` has no `### W10C-CAPABILITY-DECISION` heading yet (confirmed by
-  direct read) — **C10C-8 reads `blocked-on-founder`**, the legitimate pre-decision state, not
-  `fail`.
+  halves of C10C-2/C10C-3/C10C-4 and all of C10C-7 fail honestly. **C10C-2's own consumer-partition
+  check and C10C-3/C10C-4's own verifier-side runtime oracles run regardless and are expected to
+  already report their underlying claims as true** (the real functions, called directly by the
+  verifier, do resolve correctly today, and the featured/non-featured partition already holds) —
+  but each criterion's overall `status` still requires the delegated artifact half too (and, for
+  C10C-2 as of this update, BOTH consumers' full 32-spec coverage), so C10C-2/3/4 still read `fail`
+  overall pre-implementation. This is the concrete answer to the coordinator's "reconsider the
+  5-of-10 baseline" instruction from round 1: C10C-2/3/4 are AND-gated (oracle **and** artifact), so
+  neither half alone can carry the criterion, and a criterion that is already fully mechanically
+  true today (C10C-1, C10C-5) is additionally hardened to be *falsifiable* against the specific
+  decoy shapes round 1 demonstrated, not merely coincidentally true.
 - `leases.json` has no `"W10c"` entry — LEASE fails honestly.
 - `pnpm guard` / `pnpm typecheck`: both green on this tree today.
 - `od skills list --json` / `GET /api/skills`: confirmed live in this session to return matching
   168-id multisets from the same isolated daemon — **C10C-5 is expected to already pass**, and its
-  decoy argument no longer overclaims order-detection (`[R1-F6]`).
+  decoy argument no longer overclaims order-detection (`[R1-F6]`); its scope is deliberately
+  limited to this listing surface per orchestrator ruling 1.
 
-It is therefore expected and correct that this verifier's first run reports a **mixed** scoreboard:
-C10C-1, C10C-5, C10C-6, GATE-INTEGRITY, HEAD-DRIFT `pass`; C10C-8 `blocked-on-founder`; C10C-2,
-C10C-3, C10C-4, C10C-7, LEASE `fail` — with an overall **non-zero exit**. This is what "clean-red"
-means for this wave: an accurate, evidence-backed, non-crashing report of current reality, not a
-demand that every single criterion returns false, and — per this round's fix — not a report where
-any currently-green criterion is green merely because the check is too weak to fail on a shaped
-decoy.
+It is therefore expected and correct that this verifier's run reports a **mixed** scoreboard:
+C10C-1, C10C-5, C10C-6, GATE-INTEGRITY, HEAD-DRIFT `pass`; C10C-2, C10C-3, C10C-4, C10C-7, LEASE
+`fail` — 5/10, with an overall **non-zero exit**. `C10C-8` no longer exists in the manifest (§7) —
+the question it gated is closed by direct ruling, not by a mechanical gate that would trivially
+read `pass`. This is what "clean-red" means for this wave: an accurate, evidence-backed,
+non-crashing report of current reality, not a demand that every single criterion returns false,
+and not a report where any currently-green criterion is green merely because the check is too weak
+to fail on a shaped decoy.
 
-## 9. Open founder questions
+## 9. Recorded rulings (formerly "Open founder questions")
 
-Per `VERIFICATION-CONTRACT.md` and this program's operating rules, these are surfaced, not resolved
-by this PRD. Q1 is now a **formal, mechanically-tracked gate (C10C-8)**, not a soft bullet a reader
-could miss — round 1 ruled this blocking (`[R1-F8]`). Q2 and Q3 were explicitly confirmed
-non-blocking by round 1 and are unchanged.
+This section previously surfaced three open founder questions without resolving them, per
+`VERIFICATION-CONTRACT.md`'s "never resolve silently" posture. **The orchestrator has since ruled on
+all three**, under founder authority explicitly delegated to the orchestrator for this project —
+binding answers, cited below and throughout this document as "Orchestrator ruling under delegated
+founder authority, 2026-07-28." The original questions are kept for traceability; they are no
+longer open.
 
-1. **Formalized as C10C-8 above.** Should "apply a design-toolbox action" become a first-class
-   `od`/HTTP capability, or is the toolbox correctly understood as a UI-only *recommendation layer*
-   over capabilities that already have CLI parity (staging a skill, composing a prompt)? This PRD
-   does not build that surface and does not decide the question; C10C-8 requires the decision be
-   recorded in `DECISIONS.md` (either `build-now`, which then needs a follow-up PRD amendment, or
-   `exempt`) before the wave can read fully `pass`.
-2. **Does the exhaustive per-action walk need to also cover `NextStepActions.tsx`?** That component
-   shares the exact same `DESIGN_TOOLBOX_ACTIONS`/`findDesignToolboxSkill` data and resolution logic
-   as the primary `DesignToolboxPanel`, but renders it through a different UI (2 featured rows +
-   14 behind "More → Design toolbox," a cascading hover flyout rather than a single searchable
-   panel). §4 scopes this wave's C10C-2 to `DesignToolboxPanel` as "the side panel" the skeleton
-   names — round 1 confirmed this scoping is correctly non-blocking ("NM-19 names the singular side
-   panel"). Should a future wave (or an amendment to this one, before it lands) add an equivalent
-   per-action walk for `NextStepActions`, given it is a second, independently-clickable path to the
-   same 16 actions that this wave's criteria do not exercise at all?
-3. **Should `scripts/check-toolbox-skill-refs.test.ts` be retired now that C10C-4 supersedes it
-   with real registry resolution, or kept as a cheap defense-in-depth floor check?** Round 1
-   confirmed this is correctly non-blocking ("retaining the old guard as a cheap floor is an
-   implementation-policy choice"). The proposed lease (§6) permits either — it is not itself a
-   criterion. Keeping both means two guards with different resolution semantics coexist (one
-   directory-based, one registry-based); retiring the old one removes that duplication but loses a
-   zero-dependency, sub-5ms check that runs inside `pnpm guard` without booting anything.
+1. **Should "apply a design-toolbox action" become a first-class `od`/HTTP capability?**
+   **RULING (Orchestrator ruling under delegated founder authority, 2026-07-28): NO.** The toolbox
+   is a recommendation layer over primitives that are already CLI-reachable (staging a skill,
+   composing a prompt); `AGENTS.md`'s dual-track rule binds user-facing *capabilities*, and this
+   adds no new capability. Building one would be scope creep this wave does not undertake.
+   `C10C-5`'s parity obligation stays scoped to the skills-listing surface the toolbox actually
+   consumes (§C10C-5's scope note). The formerly-blocking `C10C-8` gate this question required is
+   **removed** (see C10C-8's retirement note in §5) — the ruling itself closes the question; no
+   further mechanical record is needed, and none is added.
+2. **Does the exhaustive per-action walk need to also cover `NextStepActions.tsx`?**
+   **RULING (Orchestrator ruling under delegated founder authority, 2026-07-28): YES.** The wave's
+   whole premise is that "exhaustive" means a per-action row, not an adjective, and a second
+   consumer rendering the same shared data is exactly where drift hides. `C10C-2` is extended
+   (§5) to cover both consumers, and — because the two render sets legitimately differ (2 featured
+   rows always visible vs. 14 behind "More → Design toolbox") — the criterion asserts that
+   intended difference explicitly (the featured/non-featured partition check) rather than picking
+   one consumer and ignoring the other.
+3. **Should `scripts/check-toolbox-skill-refs.test.ts` be retired now that C10C-4 supersedes it?**
+   **RULING (Orchestrator ruling under delegated founder authority, 2026-07-28): KEEP IT**, as a
+   cheap floor. It runs inside `pnpm guard`, costs nothing, and fails fast; a stronger check
+   arriving (`C10C-4`) does not make a weaker fast one harmful. This wave does not touch that file
+   — it is outside the two-file authoring limit for this PRD-expansion pass in any case. §8 records
+   that C10C-4 supersedes its semantics while the floor remains, exactly as ruled.
