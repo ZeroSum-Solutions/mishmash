@@ -68,26 +68,92 @@
 //      this file and the PRD explicitly (see the PRD's "Proposed write
 //      lease"), and C10B-3 mechanically checks that `deny` list too.
 //
-// Prior rounds (1 and 2) are recorded in the PRD's "Round 1/2/3 adversarial
-// review" sections; this header covers only what changed in round 3.
+// ROUND-4 (founder-authorized final round, after round 3 REJECTED -- see the
+// PRD's "Round 3 verdict" and "Round 4 fix" sections for full detail):
 //
-// Scope note: this verifier never imports apps/daemon/src/mcp-config.ts as a
-// live ES module -- that file's own dependency graph is not this script's
-// concern to keep resolvable across --repo. It reads the file as TEXT at
-// specific commits (git show) and parses it with the TypeScript compiler
-// API, matching the pattern in scripts/waves/verify-w9-ingest.ts.
+//   RUNTIME-IMPORT VERIFICATION. Round 3's REJECT vector: a `__proto__: {
+//   toJSON: () => (...) }` property assignment is a uniquely-named
+//   PropertyAssignment, so round 3's `findDeepStructuralAnomalies` (an AST
+//   shape scan) accepted it, every direct-property FROZEN comparison matched
+//   (the frozen-looking fields were still present as OWN properties), and
+//   `tsc` was clean -- yet `JSON.stringify` emits different, attacker-
+//   chosen values, because a literal `__proto__: value` property in an
+//   object literal is special-cased by the ECMAScript grammar (Annex
+//   B.3.1) to set the object's [[Prototype]] instead of creating an own
+//   property, and `JSON.stringify` (exactly what Express's `res.json` in
+//   apps/daemon/src/mcp-routes.ts:151 uses to serve `MCP_TEMPLATES`) calls
+//   an INHERITED `toJSON` exactly like an own one. No amount of naming more
+//   forbidden AST shapes closes this class -- the founder's ruling was
+//   explicit: stop patching source-shape denylists and instead prove the
+//   frozen expectations against ACTUAL RUNTIME BEHAVIOR.
+//
+//   C10B-1/2/4 now dynamically `import()` a throwaway copy of HEAD's
+//   committed `apps/daemon/src/mcp-config.ts` as a REAL ES module (see
+//   `importRealTemplatesAtHead()`), locate the runtime array element whose
+//   real `.id` property equals `'voicebox'`, and round-trip it through
+//   `JSON.stringify`/`JSON.parse` -- the exact transform `res.json`
+//   performs -- before comparing against `FROZEN`. This closes the ENTIRE
+//   class by construction, not by enumerating more forbidden shapes:
+//   `__proto__`/inherited `toJSON`, an own `toJSON` method, getters/
+//   accessors, a property spread overriding earlier fields (the round-2
+//   vector), `Object.defineProperty`/`Object.setPrototypeOf` mutations
+//   anywhere in the module's top-level code, and a dead-branch conditional
+//   that resolves differently than it appears to a source reader are ALL
+//   observed as whatever they actually evaluate to, because nothing here
+//   inspects source shape for these checks anymore -- only the real,
+//   fully-evaluated, actually-serialized value is. `RUNTIME-SELFTEST`
+//   (new infra check, mirroring `SCANNER-SELFTEST`'s pattern) proves this
+//   against eight synthetic fixtures, including the exact round-3 vector.
+//
+//   `findDeepStructuralAnomalies()` (the round-3 object-literal-internal
+//   spread/computed-key/duplicate-key/accessor scan) and `hasOwnProp()`
+//   (used only for the old static `headerFields`-absence check) are REMOVED
+//   as redundant: both existed solely to protect a static, first-match
+//   property reader from exactly the class of divergence the runtime check
+//   now observes directly and unconditionally. Keeping them would mean two
+//   sources of truth for the same fact, one of which (the AST scan) is
+//   demonstrably incomplete. `analyzeTemplateArray`'s array-level checks
+//   (every element is a plain object literal, has a literal string `id`, no
+//   duplicate `id` across the array) are KEPT -- they answer a genuinely
+//   different, structural-only question with no runtime equivalent: "which
+//   array slots, identified by source text, correspond to which ids, for
+//   C10B-3's baseCommit-vs-HEAD byte-diffing." That fact is inherently
+//   about a two-commit TEXT comparison, not about what a single commit's
+//   code evaluates to, so it stays an AST/text check by necessity (the
+//   founder's carve-out: "a structural/AST check may remain only for facts
+//   with no runtime observable").
+//
+// Prior rounds (1, 2, and 3) are recorded in the PRD's "Round 1/2/3
+// adversarial review" and "Round 3 verdict" sections; this header covers
+// only what changed in round 4.
+//
+// Scope note: C10B-3 still never imports apps/daemon/src/mcp-config.ts live
+// for its baseCommit-side analysis -- it reads both baseCommit's and HEAD's
+// text via `git show` and parses each with the TypeScript compiler API,
+// matching the pattern in scripts/waves/verify-w9-ingest.ts. Only C10B-1/2/4
+// (and RUNTIME-SELFTEST's synthetic fixtures) perform a real dynamic
+// `import()`, and only of HEAD's content, materialized into a throwaway
+// temp file first (see `importRealTemplatesAtHead()`) -- never a live import
+// of the file at its real repository path, so this stays independent of
+// `apps/daemon`'s own module-resolution/build graph across `--repo`.
 //
 // PORTABILITY: repoRoot comes from `process.cwd()`/`--repo`, never
 // `import.meta.url`.
 //
-// RUNTIME SAFETY: this verifier spawns no daemon and binds no port -- every
-// criterion is answered from `git show`/`git diff`/`git status` output plus
-// in-process TypeScript parsing (no raw scanner loop as of round 3). It
-// never touches a default-namespace daemon (ports 7456/51012) because it
-// never starts one. Git context is resolved from local refs only (no
-// fetch/push). This file never writes generated script content -- only
-// `manifest.json` and plain-text proof artifacts under `proofDir` -- so
-// there is nothing here for `node --check` to validate.
+// RUNTIME SAFETY: this verifier spawns no daemon and binds no port. The
+// round-4 dynamic imports load `apps/daemon/src/mcp-config.ts`'s content
+// directly (confirmed this session: it imports only `node:fs/promises`,
+// `node:fs`, `node:crypto`, `node:path`, and performs no filesystem/network
+// I/O or config-directory resolution at module-evaluation time -- every
+// data-directory/port-touching call lives inside a function body, never at
+// top level) -- so importing it is exactly as safe as any other in-process
+// TypeScript parsing this file already does, and never touches a
+// default-namespace daemon (ports 7456/51012) because it never starts one.
+// Git context is resolved from local refs only (no fetch/push). This file
+// never writes generated script content -- only `manifest.json`, plain-text
+// proof artifacts under `proofDir`, and throwaway temp files under the OS
+// temp directory that are deleted immediately after each import -- so there
+// is nothing here for `node --check` to validate.
 
 import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -95,6 +161,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type TypeScriptModule from 'typescript';
 import type {
   ArrayLiteralExpression,
@@ -408,17 +475,24 @@ function readFileAtCommit(commit: string, relPath: string): string | null {
 interface TemplateBlock {
   id: string;
   rawText: string; // exact source text of the object literal, trimmed
-  node: ObjectLiteralExpression;
 }
 
 interface ArrayScan {
   file: SourceFile;
   arrayNode: ArrayLiteralExpression;
-  /** Non-empty means the array could NOT be safely reasoned about (round-1
-   * finding 3, round-3 finding 1): a spread/call/other non-object-literal
-   * element, an object literal with no plain string-literal `id`, a
-   * duplicate `id`, or a deep structural anomaly (spread/computed-key/
-   * duplicate-key/accessor at ANY nesting depth -- round-3 finding 1). Every
+  /** Non-empty means the array could NOT be safely reasoned about BY ID
+   * (round-1 finding 3): a spread/call/other non-object-literal element, an
+   * object literal with no plain string-literal `id`, or a duplicate `id`
+   * across the array. This is a purely structural, text-identification fact
+   * -- "which array slots correspond to which ids" -- used ONLY by C10B-3's
+   * baseCommit-vs-HEAD byte-diffing, which has no runtime equivalent (it is
+   * inherently a two-commit TEXT comparison; see the header's round-4 note).
+   * It is deliberately NOT used to validate the frozen fields of the
+   * `voicebox` entry itself -- as of round 4, that is proven at runtime (see
+   * `importRealTemplatesAtHead()` / `serializeAsWireWould()` below), which is
+   * why the round-3 per-object deep-anomaly scan (spread/computed-key/
+   * duplicate-key/accessor INSIDE one object literal) was removed rather
+   * than kept alongside the runtime check as a second source of truth. Every
    * consumer below must check this is empty before trusting `clean`. */
   problems: string[];
   /** One block per id, populated only when `problems` is empty. */
@@ -470,73 +544,28 @@ function findStringProp(
   return undefined;
 }
 
-/** True iff a property with this name is present at all, any value shape. */
-function hasOwnProp(obj: ObjectLiteralExpression, name: string): boolean {
-  for (const prop of obj.properties) {
-    if (!ts.isPropertyAssignment(prop) && !ts.isShorthandPropertyAssignment(prop)) continue;
-    if (!ts.isIdentifier(prop.name) || prop.name.text !== name) continue;
-    return true;
-  }
-  return false;
-}
-
 function shortText(sourceFile: SourceFile, node: TsNode): string {
   return node.getText(sourceFile).replace(/\s+/g, ' ').slice(0, 100);
 }
 
-/** Round-3 finding 1 (deep spread ban) + its two sibling vulnerabilities in
- * the same class (a later property silently overriding an earlier
- * frozen-looking one at runtime, invisible to a first-match string
- * extractor): computed property names and duplicate property names within
- * one object literal. Walks the WHOLE subtree given (the entire
- * MCP_TEMPLATES array, or any node within it) at every nesting depth --
- * "shallow bans don't count" applies to all three, not just the literally-
- * named spread case. Every object-literal member must be a plain
- * `PropertyAssignment` with an `Identifier`/`StringLiteral`/`NumericLiteral`
- * key; anything else (`SpreadAssignment`, `ShorthandPropertyAssignment`,
- * `MethodDeclaration`, get/set accessors, computed keys) is rejected.
- * `SpreadElement` (array spread) is rejected wherever it appears, including
- * nested inside a hypothetical `headerFields`/`envFields` array. */
-function findDeepStructuralAnomalies(root: TsNode, sourceFile: SourceFile): string[] {
-  const problems: string[] = [];
-  function visit(node: TsNode): void {
-    if (ts.isSpreadElement(node)) {
-      problems.push(`array spread (SpreadElement) at offset ${node.getStart(sourceFile)}: ${shortText(sourceFile, node)}`);
-    } else if (ts.isObjectLiteralExpression(node)) {
-      const seenNames = new Set<string>();
-      for (const prop of node.properties) {
-        if (!ts.isPropertyAssignment(prop)) {
-          problems.push(
-            `non-plain object member (${ts.SyntaxKind[prop.kind]} -- spread/shorthand/method/accessor are all rejected) at offset ${prop.getStart(sourceFile)}: ${shortText(sourceFile, prop)}`,
-          );
-          continue;
-        }
-        if (!ts.isIdentifier(prop.name) && !ts.isStringLiteral(prop.name) && !ts.isNumericLiteral(prop.name)) {
-          problems.push(
-            `computed or non-literal property name at offset ${prop.getStart(sourceFile)}: ${shortText(sourceFile, prop)}`,
-          );
-          continue;
-        }
-        const key = prop.name.text;
-        if (seenNames.has(key)) {
-          problems.push(
-            `duplicate property '${key}' within one object literal at offset ${prop.getStart(sourceFile)}: ${shortText(sourceFile, prop)}`,
-          );
-        }
-        seenNames.add(key);
-      }
-    }
-    ts.forEachChild(node, visit);
-  }
-  visit(root);
-  return problems;
-}
+// NOTE (round 4): `findDeepStructuralAnomalies()` and `hasOwnProp()` --
+// round 3's per-object-literal spread/computed-key/duplicate-key/accessor
+// scan, and the static `headerFields`-presence check it protected -- were
+// REMOVED here. Both existed only to defend a static, first-match property
+// reader (`findStringProp`, still below, now used solely for `id`) against
+// exactly the class of divergence round 3's REJECT demonstrated it cannot
+// fully enumerate (`__proto__`/inherited `toJSON`). C10B-1/2/4 now prove the
+// frozen fields against the real, imported, fully-evaluated runtime value
+// instead (see `importRealTemplatesAtHead()` / `serializeAsWireWould()` /
+// `compareFrozenFields()` below) -- keeping the AST scan alongside that
+// would be a second, weaker source of truth for the same fact, which the
+// founder's round-4 ruling was explicit should not happen.
 
 function analyzeTemplateArray(sourceText: string, syntheticFileName: string): ArrayScan | null {
   const located = locateTemplateArray(sourceText, syntheticFileName);
   if (!located) return null;
   const { file, arrayNode } = located;
-  const problems: string[] = [...findDeepStructuralAnomalies(arrayNode, file)];
+  const problems: string[] = [];
   const byId = new Map<string, TemplateBlock[]>();
 
   for (const element of arrayNode.elements) {
@@ -553,7 +582,7 @@ function analyzeTemplateArray(sourceText: string, syntheticFileName: string): Ar
       );
       continue;
     }
-    const block: TemplateBlock = { id, rawText: element.getText(file).trim(), node: element };
+    const block: TemplateBlock = { id, rawText: element.getText(file).trim() };
     const list = byId.get(id);
     if (list) list.push(block);
     else byId.set(id, [block]);
@@ -590,6 +619,188 @@ function splitAroundArray(
   const start = scan.arrayNode.getStart(scan.file);
   const end = scan.arrayNode.getEnd();
   return { before: sourceText.slice(0, start), after: sourceText.slice(end) };
+}
+
+// ---------------------------------------------------------------------
+// RUNTIME-IMPORT VERIFICATION (round 4 -- see the header's "ROUND-4" note
+// for the full rationale). C10B-1/2/4 no longer trust a static AST read for
+// the frozen fields of the `voicebox` entry; they import the REAL module and
+// observe what it actually evaluates to and actually serializes.
+// ---------------------------------------------------------------------
+interface RuntimeImportResult {
+  ok: boolean;
+  templates?: unknown[];
+  error?: string;
+}
+
+/** Materializes HEAD's committed text for TEMPLATE_FILE into a throwaway
+ * `.mts` file (the `.mts` extension forces ESM regardless of any nearby
+ * package.json, since the temp directory has none of its own) and
+ * dynamically `import()`s it as a REAL module -- the same module
+ * apps/daemon/src/mcp-routes.ts imports and re-exports through
+ * `res.json({ servers: cfg.servers, templates: MCP_TEMPLATES })`
+ * (mcp-routes.ts:151). Confirmed this session: TEMPLATE_FILE's only imports
+ * are `node:fs/promises`, `node:fs`, `node:crypto`, and `node:path` -- no
+ * workspace-package resolution needed, no I/O or port binding at
+ * module-evaluation time -- so this import is safe to perform from a
+ * throwaway path outside the real repository layout, and never touches a
+ * daemon or a port (see header "RUNTIME SAFETY"). A fresh cache-busted
+ * import every call (`?bust=<hrtime>`), matching this file's existing
+ * "every criterion independently re-reads/re-scans, never shares state
+ * across criteria" principle (see the comment above `main()`'s criteria). */
+async function importRealTemplatesAtHead(): Promise<RuntimeImportResult> {
+  const headText = readFileAtCommit(headSha, TEMPLATE_FILE);
+  if (headText === null) return { ok: false, error: `${TEMPLATE_FILE} does not exist at HEAD` };
+  return importTemplatesModuleFromSource(headText, `HEAD's ${TEMPLATE_FILE}`);
+}
+
+/** Shared by `importRealTemplatesAtHead()` and `RUNTIME-SELFTEST`'s
+ * synthetic fixtures -- both need "write this exact source text to a
+ * throwaway `.mts` file, import it fresh, hand back its `MCP_TEMPLATES`
+ * export" and must go through the identical mechanism for the selftest to
+ * actually prove anything about the real path. */
+async function importTemplatesModuleFromSource(
+  sourceText: string,
+  label: string,
+): Promise<RuntimeImportResult> {
+  let tmpDir: string | null = null;
+  try {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-w10b-runtime-'));
+    const tmpFile = path.join(tmpDir, 'mcp-config.mts');
+    fs.writeFileSync(tmpFile, sourceText);
+    const url = `${pathToFileURL(tmpFile).href}?bust=${process.hrtime.bigint()}`;
+    const mod = (await import(url)) as { MCP_TEMPLATES?: unknown };
+    if (!Array.isArray(mod.MCP_TEMPLATES)) {
+      return {
+        ok: false,
+        error: `${label}'s MCP_TEMPLATES export is not an array (got ${typeof mod.MCP_TEMPLATES})`,
+      };
+    }
+    return { ok: true, templates: mod.MCP_TEMPLATES };
+  } catch (err) {
+    return { ok: false, error: `dynamic import of ${label} failed: ${String((err as Error)?.stack ?? err)}` };
+  } finally {
+    if (tmpDir) {
+      try {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      } catch {
+        /* best-effort cleanup, never fails the check */
+      }
+    }
+  }
+}
+
+/** Finds every runtime array element whose real `.id` property (ordinary JS
+ * property access -- follows the prototype chain exactly like any other
+ * reader, including apps/daemon/src/mcp-routes.ts) equals 'voicebox'. */
+function findVoiceboxRuntimeEntries(templates: unknown[]): unknown[] {
+  return templates.filter(
+    (t) => t !== null && typeof t === 'object' && (t as Record<string, unknown>)['id'] === 'voicebox',
+  );
+}
+
+/** Round-trips `entry` through the exact transformation Express's `res.json`
+ * performs: `JSON.stringify`, then whatever a wire client would
+ * `JSON.parse` back. This is precisely what makes a `__proto__`/inherited-
+ * `toJSON`/accessor/`defineProperty` trick visible -- `JSON.stringify`
+ * resolves an inherited `toJSON` exactly like an own one and REPLACES the
+ * entire serialized value with its return, discarding whatever the object's
+ * own properties looked like to a static reader. */
+function serializeAsWireWould(entry: unknown): { value: Record<string, unknown> | null; problem?: string } {
+  let json: string | undefined;
+  try {
+    json = JSON.stringify(entry);
+  } catch (err) {
+    return { value: null, problem: `JSON.stringify(entry) threw: ${String(err)}` };
+  }
+  if (json === undefined) {
+    return { value: null, problem: 'JSON.stringify(entry) returned undefined -- entry serializes to nothing' };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch (err) {
+    return { value: null, problem: `JSON.parse(JSON.stringify(entry)) threw: ${String(err)}` };
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { value: null, problem: `serialized entry is not a plain object: ${json}` };
+  }
+  return { value: parsed as Record<string, unknown> };
+}
+
+/** Compares the actually-served (wire-serialized) shape of the voicebox
+ * entry against FROZEN, restricted to `fields`. Empty return = exact match:
+ * every named field is present with a value strictly equal to FROZEN's. */
+function compareFrozenFields(
+  wireShape: Record<string, unknown>,
+  fields: readonly (keyof typeof FROZEN)[],
+): string[] {
+  const problems: string[] = [];
+  for (const field of fields) {
+    const actual = wireShape[field];
+    const expected = FROZEN[field];
+    if (actual !== expected) {
+      problems.push(
+        `runtime-serialized ${String(field)}=${JSON.stringify(actual)}, want exactly ${JSON.stringify(expected)}`,
+      );
+    }
+  }
+  return problems;
+}
+
+/** Used only by `RUNTIME-SELFTEST`: writes a synthetic module `source` to a
+ * throwaway file, imports it through the identical mechanism
+ * `importRealTemplatesAtHead()` uses, and runs it through the same
+ * find/serialize/compare pipeline C10B-1/2/4 use -- so the selftest proves
+ * something about the REAL path, not a reimplementation of it. `expectClean`
+ * says whether this fixture is supposed to compare byte-for-byte equal to
+ * FROZEN (the legitimate-entry control) or supposed to be DETECTED as
+ * diverging (every attack-shape fixture) -- either outcome not matching
+ * `expectClean` is a selftest failure, including a fixture that was
+ * expected to diverge but compared clean (a false green in the mechanism
+ * itself, which is exactly what round 4 exists to rule out). */
+async function runOneRuntimeSelftestCase(
+  name: string,
+  source: string,
+  expectClean: boolean,
+): Promise<{ name: string; ok: boolean; detail: string }> {
+  const runtime = await importTemplatesModuleFromSource(source, `RUNTIME-SELFTEST fixture '${name}'`);
+  if (!runtime.ok || !runtime.templates) {
+    return { name, ok: false, detail: `fixture import failed: ${runtime.error ?? 'unknown error'}` };
+  }
+  const matches = findVoiceboxRuntimeEntries(runtime.templates);
+  if (matches.length !== 1) {
+    return {
+      name,
+      ok: false,
+      detail: `expected exactly 1 runtime element with id 'voicebox' in the fixture, found ${matches.length}`,
+    };
+  }
+  const wire = serializeAsWireWould(matches[0]);
+  if (!wire.value) {
+    return { name, ok: false, detail: `fixture entry did not serialize to a plain object: ${wire.problem}` };
+  }
+  const actualKeys = Object.keys(wire.value).sort();
+  const frozenKeys = Object.keys(FROZEN).sort();
+  const keySetProblems =
+    actualKeys.join(',') !== frozenKeys.join(',')
+      ? [`key set mismatch: actual=[${actualKeys.join(', ')}] frozen=[${frozenKeys.join(', ')}]`]
+      : [];
+  const fieldProblems = compareFrozenFields(wire.value, frozenKeys as (keyof typeof FROZEN)[]);
+  const allProblems = [...keySetProblems, ...fieldProblems];
+  const isClean = allProblems.length === 0;
+  const matchesExpectation = isClean === expectClean;
+  return {
+    name,
+    ok: matchesExpectation,
+    detail: matchesExpectation
+      ? isClean
+        ? 'correctly detected as clean (matches FROZEN exactly)'
+        : `correctly detected ${allProblems.length} divergence(s) from FROZEN: ${allProblems.join(' | ')}`
+      : isClean
+        ? 'FALSE GREEN -- fixture should have diverged from FROZEN but compared clean'
+        : `expected clean but found divergence(s): ${allProblems.join(' | ')}`,
+  };
 }
 
 // ---------------------------------------------------------------------
@@ -669,102 +880,131 @@ async function main(): Promise<void> {
   // criterion -- every check must stand on its own regardless of run order.
 
   // -----------------------------------------------------------------
-  // C10B-1 -- registration present: exactly one clean, unambiguous
-  // MCP_TEMPLATES element with id 'voicebox'. Fails closed on anything the
-  // scan could not safely account for, at any nesting depth (round-1
-  // findings 2/3, round-3 finding 1).
+  // C10B-1 -- registration present, proven at RUNTIME (round 4 -- see the
+  // header's "ROUND-4" note): dynamically imports HEAD's real
+  // MCP_TEMPLATES, requires exactly one runtime element whose real `.id`
+  // equals 'voicebox', and requires its wire-serialized (JSON.stringify,
+  // exactly like res.json) own-key set to be EXACTLY FROZEN's key set -- no
+  // more, no fewer. The key-set check is what closes the round-3 vector at
+  // this criterion: a __proto__/inherited-toJSON override, an accessor, a
+  // spread, or a post-declaration defineProperty/setPrototypeOf mutation
+  // cannot smuggle an extra or missing wire field past this check, because
+  // it inspects the actually-serialized value, not source shape.
   // -----------------------------------------------------------------
-  await checkCriterion('C10B-1', () => {
-    const headText = readFileAtCommit(headSha, TEMPLATE_FILE);
-    if (headText === null) {
-      record('C10B-1', `git show ${headSha}:${TEMPLATE_FILE}`, "MCP_TEMPLATES has exactly one clean element with id 'voicebox'", false, '', {
-        detail: `${TEMPLATE_FILE} does not exist at HEAD`,
-      });
-      return;
-    }
-    const scan = analyzeTemplateArray(headText, TEMPLATE_FILE);
-    if (!scan) {
-      record('C10B-1', `parse ${TEMPLATE_FILE}@HEAD`, 'MCP_TEMPLATES array literal is found and parseable', false, '', {
-        detail: 'could not locate `const MCP_TEMPLATES: McpTemplate[] = [...]` in the file',
-      });
-      return;
-    }
-    if (scan.problems.length > 0) {
+  await checkCriterion('C10B-1', async () => {
+    const runtime = await importRealTemplatesAtHead();
+    if (!runtime.ok || !runtime.templates) {
       record(
         'C10B-1',
-        `parse ${TEMPLATE_FILE}@HEAD, analyze every MCP_TEMPLATES element at every nesting depth`,
-        "MCP_TEMPLATES has exactly one clean element with id 'voicebox'",
+        `dynamic import() of a throwaway copy of HEAD's ${TEMPLATE_FILE}`,
+        "MCP_TEMPLATES has exactly one runtime element with id === 'voicebox'",
         false,
-        scan.problems.join('\n'),
-        { detail: `array could not be safely analyzed: ${scan.problems.length} problem(s)` },
+        '',
+        { detail: runtime.error ?? 'runtime import failed for an unknown reason' },
       );
       return;
     }
-    const clean = scan.clean as Map<string, TemplateBlock>;
-    const block = clean.get('voicebox');
+    const matches = findVoiceboxRuntimeEntries(runtime.templates);
+    if (matches.length !== 1) {
+      record(
+        'C10B-1',
+        `import HEAD's real MCP_TEMPLATES module, filter runtime elements by (t.id === 'voicebox')`,
+        "MCP_TEMPLATES has exactly one runtime element with id === 'voicebox'",
+        false,
+        `${runtime.templates.length} total runtime template(s); ${matches.length} with id === 'voicebox'`,
+        {
+          detail:
+            matches.length === 0
+              ? "no runtime element with id 'voicebox' -- VoiceBox is not registered yet"
+              : `${matches.length} runtime elements claim id 'voicebox' -- ambiguous`,
+        },
+      );
+      return;
+    }
+    const wire = serializeAsWireWould(matches[0]);
+    if (!wire.value) {
+      record(
+        'C10B-1',
+        'JSON.stringify(entry) then JSON.parse -- the same transform res.json performs',
+        "the voicebox entry serializes to a plain object exactly as apps/daemon/src/mcp-routes.ts:151's res.json would send it",
+        false,
+        '',
+        { detail: wire.problem },
+      );
+      return;
+    }
+    const actualKeys = Object.keys(wire.value).sort();
+    const frozenKeys = Object.keys(FROZEN).sort();
+    const extra = actualKeys.filter((k) => !frozenKeys.includes(k));
+    const missing = frozenKeys.filter((k) => !actualKeys.includes(k));
+    const keySetOk = extra.length === 0 && missing.length === 0;
     record(
       'C10B-1',
-      `parse ${TEMPLATE_FILE}@HEAD, analyze every MCP_TEMPLATES element at every nesting depth, look up id==='voicebox'`,
-      "MCP_TEMPLATES has exactly one clean element with id 'voicebox'",
-      Boolean(block),
-      block ? block.rawText : `MCP_TEMPLATES has ${clean.size} clean entries; ids: ${[...clean.keys()].join(', ')}`,
-      { detail: block ? undefined : "no object with id 'voicebox' present -- VoiceBox is not registered yet" },
+      "import HEAD's real MCP_TEMPLATES module, find the id==='voicebox' element, JSON.stringify it exactly as res.json would",
+      `exactly one runtime element has id === 'voicebox', and its wire-serialized own-key set is exactly {${frozenKeys.join(', ')}} -- no more, no fewer`,
+      keySetOk,
+      `wire-serialized keys: [${actualKeys.join(', ')}]${extra.length ? `\nEXTRA keys not in FROZEN: [${extra.join(', ')}]` : ''}${missing.length ? `\nMISSING frozen keys: [${missing.join(', ')}]` : ''}`,
+      { detail: keySetOk ? undefined : `extra=${JSON.stringify(extra)} missing=${JSON.stringify(missing)}` },
     );
   });
 
   // -----------------------------------------------------------------
-  // C10B-2 -- correct transport/config shape, exact (round-1 findings 5 +
-  // ruling 2): full-string URL equality, authMode exactly 'none', no
-  // headerFields property. Depends on C10B-1's deep-anomaly scan, so a
-  // spread/computed-key override anywhere is already excluded before these
-  // direct-property checks run at all (round-3 finding 1).
+  // C10B-2 -- correct transport/config shape, exact, proven at RUNTIME
+  // (round 4): the same wire-serialized voicebox entry C10B-1 established
+  // must have transport/url/category/authMode strictly equal to FROZEN and
+  // no 'headerFields' key at all. Depends on C10B-1 for the key-set
+  // guarantee (an extra/missing field is already caught there); this
+  // criterion checks the specific VALUES of the config-shape fields.
   // -----------------------------------------------------------------
-  await checkCriterion('C10B-2', () => {
-    const headText = readFileAtCommit(headSha, TEMPLATE_FILE);
-    const scan = headText === null ? null : analyzeTemplateArray(headText, `${TEMPLATE_FILE}@head-c2`);
-    if (!scan || scan.problems.length > 0) {
-      record(
-        'C10B-2',
-        `parse ${TEMPLATE_FILE}@HEAD, analyze every MCP_TEMPLATES element at every nesting depth`,
-        'transport/url/category/authMode/headerFields match the frozen configuration exactly',
-        false,
-        scan ? scan.problems.join('\n') : '',
-        { detail: !scan ? 'MCP_TEMPLATES array not found at HEAD' : `array could not be safely analyzed: ${scan.problems.length} problem(s)` },
-      );
-      return;
-    }
-    const clean = scan.clean as Map<string, TemplateBlock>;
-    const block = clean.get('voicebox');
-    if (!block) {
+  await checkCriterion('C10B-2', async () => {
+    const runtime = await importRealTemplatesAtHead();
+    if (!runtime.ok || !runtime.templates) {
       record(
         'C10B-2',
         '',
-        'transport/url/category/authMode/headerFields match the frozen configuration exactly',
+        'transport/url/category/authMode match FROZEN exactly at runtime; no headerFields key is served',
         false,
         '',
-        { detail: "no object with id 'voicebox' present -- see C10B-1" },
+        { detail: runtime.error ?? 'runtime import failed for an unknown reason' },
       );
       return;
     }
-    const transport = findStringProp(block.node, scan.file, 'transport');
-    const url = findStringProp(block.node, scan.file, 'url');
-    const category = findStringProp(block.node, scan.file, 'category');
-    const authMode = findStringProp(block.node, scan.file, 'authMode');
-    const hasHeaderFields = hasOwnProp(block.node, 'headerFields');
-
-    const problems: string[] = [];
-    if (transport !== FROZEN.transport) problems.push(`transport=${JSON.stringify(transport)}, want ${JSON.stringify(FROZEN.transport)}`);
-    if (url !== FROZEN.url) problems.push(`url=${JSON.stringify(url)}, want exactly ${JSON.stringify(FROZEN.url)} (full-string equality -- credentials/query/fragment are therefore rejected too)`);
-    if (category !== FROZEN.category) problems.push(`category=${JSON.stringify(category)}, want ${JSON.stringify(FROZEN.category)}`);
-    if (authMode !== FROZEN.authMode) problems.push(`authMode=${JSON.stringify(authMode)}, want exactly ${JSON.stringify(FROZEN.authMode)} (present, not absent)`);
-    if (hasHeaderFields) problems.push("'headerFields' property present -- round-1 ruling pins X-Voicebox-Client-Id (and headerFields entirely) absent");
-
+    const matches = findVoiceboxRuntimeEntries(runtime.templates);
+    if (matches.length !== 1) {
+      record(
+        'C10B-2',
+        '',
+        'transport/url/category/authMode match FROZEN exactly at runtime; no headerFields key is served',
+        false,
+        '',
+        { detail: `see C10B-1 -- ${matches.length} runtime element(s) with id 'voicebox'` },
+      );
+      return;
+    }
+    const wire = serializeAsWireWould(matches[0]);
+    if (!wire.value) {
+      record(
+        'C10B-2',
+        '',
+        'transport/url/category/authMode match FROZEN exactly at runtime; no headerFields key is served',
+        false,
+        '',
+        { detail: wire.problem },
+      );
+      return;
+    }
+    const problems = compareFrozenFields(wire.value, ['transport', 'url', 'category', 'authMode']);
+    if ('headerFields' in wire.value) {
+      problems.push(
+        `runtime-serialized entry has a 'headerFields' key (value=${JSON.stringify(wire.value['headerFields'])}) -- round-1 ruling pins X-Voicebox-Client-Id (and headerFields entirely) absent`,
+      );
+    }
     record(
       'C10B-2',
-      `parse ${TEMPLATE_FILE}@HEAD, inspect the id==='voicebox' object's transport/url/category/authMode/headerFields`,
-      `transport===${JSON.stringify(FROZEN.transport)}, url===${JSON.stringify(FROZEN.url)} exactly, category===${JSON.stringify(FROZEN.category)}, authMode===${JSON.stringify(FROZEN.authMode)} exactly, no headerFields property`,
+      "import HEAD's real MCP_TEMPLATES module, JSON.stringify the id==='voicebox' entry exactly as res.json would, inspect transport/url/category/authMode/headerFields",
+      `runtime-serialized transport===${JSON.stringify(FROZEN.transport)}, url===${JSON.stringify(FROZEN.url)} exactly, category===${JSON.stringify(FROZEN.category)}, authMode===${JSON.stringify(FROZEN.authMode)} exactly, no headerFields key served`,
       problems.length === 0,
-      problems.join('\n') || `transport=${transport} url=${url} category=${category} authMode=${authMode} headerFields=${hasHeaderFields}`,
+      problems.join('\n') || JSON.stringify(wire.value),
       { detail: problems.length === 0 ? undefined : problems.join('; ') },
     );
   });
@@ -775,10 +1015,13 @@ async function main(): Promise<void> {
   // lease (mcp-config.ts only), asserting BOTH allow===exactly one entry
   // AND deny contains this verifier and the PRD (round-3: "the
   // implementation lease proposal must keep your own PRD + verifier in the
-  // DENY list"); both baseCommit and HEAD's MCP_TEMPLATES arrays must
-  // analyze cleanly at every nesting depth; the file's text OUTSIDE the
-  // array's own span must be byte-identical; every pre-existing entry
-  // byte-identical; exactly one net-new id, 'voicebox'.
+  // DENY list"); both baseCommit and HEAD's MCP_TEMPLATES arrays must be
+  // structurally identifiable by id (every element a plain object literal
+  // with a literal string id, no duplicate id across the array -- see
+  // `ArrayScan.problems`' doc comment for why this stays AST/text-based
+  // post-round-4); the file's text OUTSIDE the array's own span must be
+  // byte-identical; every pre-existing entry byte-identical; exactly one
+  // net-new id, 'voicebox'.
   // -----------------------------------------------------------------
   function globToRegExp(glob: string): RegExp {
     let re = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&');
@@ -848,7 +1091,7 @@ async function main(): Promise<void> {
         problems.push('could not locate MCP_TEMPLATES at baseCommit and/or HEAD');
       } else if (baseScan.problems.length > 0 || headScan.problems.length > 0) {
         problems.push(
-          `array could not be safely analyzed -- base: [${baseScan.problems.join(' | ')}] head: [${headScan.problems.join(' | ')}]`,
+          `array elements could not be identified by id -- base: [${baseScan.problems.join(' | ')}] head: [${headScan.problems.join(' | ')}]`,
         );
       } else {
         const baseSplit = splitAroundArray(baseText, baseScan);
@@ -880,8 +1123,8 @@ async function main(): Promise<void> {
 
     record(
       'C10B-3',
-      `git diff --name-only ${baseCommit}...HEAD subset-of leases.json@baseCommit["W10b"] (allow exactly mcp-config.ts, deny includes this PRD+verifier); MCP_TEMPLATES array analyzed cleanly both sides at every nesting depth; non-array file text byte-identical; additive-only array diff`,
-      "diff is within the narrowed W10b lease (exact allow, required deny entries present); both baseCommit and HEAD's MCP_TEMPLATES arrays analyze with zero anomalies at every nesting depth; every file byte outside the array is unchanged; every pre-existing entry is byte-identical; exactly one new entry, id voicebox",
+      `git diff --name-only ${baseCommit}...HEAD subset-of leases.json@baseCommit["W10b"] (allow exactly mcp-config.ts, deny includes this PRD+verifier); MCP_TEMPLATES array elements identifiable by id both sides; non-array file text byte-identical; additive-only array diff`,
+      "diff is within the narrowed W10b lease (exact allow, required deny entries present); both baseCommit and HEAD's MCP_TEMPLATES arrays are structurally identifiable by id with zero ambiguity; every file byte outside the array is unchanged; every pre-existing entry is byte-identical; exactly one new entry, id voicebox",
       problems.length === 0,
       problems.join('\n') ||
         (diffNames.length === 0 ? 'no diff between baseCommit and HEAD' : `changed files: ${diffNames.join(', ')}`),
@@ -890,53 +1133,59 @@ async function main(): Promise<void> {
   });
 
   // -----------------------------------------------------------------
-  // C10B-4 -- no voiceover-workflow scope creep (round-1 finding 4): byte-
-  // exact equality against the ONE frozen string per free-text field.
-  // Depends on C10B-1's deep-anomaly scan (round-3 finding 1), so a spread
-  // that would otherwise smuggle a different runtime description/example
-  // past this check is already excluded before it runs.
+  // C10B-4 -- no voiceover-workflow scope creep (round-1 finding 4), proven
+  // at RUNTIME (round 4): byte-exact equality against the ONE frozen string
+  // per free-text field, checked on the actually-served (wire-serialized)
+  // value rather than a static AST read -- the same mechanism as C10B-2, so
+  // a __proto__/inherited-toJSON override, a spread, an accessor, or a
+  // post-declaration mutation cannot smuggle different wording past this
+  // check either.
   // -----------------------------------------------------------------
-  await checkCriterion('C10B-4', () => {
-    const headText = readFileAtCommit(headSha, TEMPLATE_FILE);
-    const scan = headText === null ? null : analyzeTemplateArray(headText, `${TEMPLATE_FILE}@head-c4`);
-    if (!scan || scan.problems.length > 0) {
+  await checkCriterion('C10B-4', async () => {
+    const runtime = await importRealTemplatesAtHead();
+    if (!runtime.ok || !runtime.templates) {
       record(
         'C10B-4',
-        `parse ${TEMPLATE_FILE}@HEAD, analyze every MCP_TEMPLATES element at every nesting depth`,
-        'label/description/example/homepage are byte-identical to the frozen strings',
+        '',
+        'label/description/example/homepage are byte-identical to the frozen strings, at runtime',
         false,
-        scan ? scan.problems.join('\n') : '',
-        { detail: !scan ? 'MCP_TEMPLATES array not found at HEAD' : `array could not be safely analyzed: ${scan.problems.length} problem(s)` },
+        '',
+        { detail: runtime.error ?? 'runtime import failed for an unknown reason' },
       );
       return;
     }
-    const clean = scan.clean as Map<string, TemplateBlock>;
-    const block = clean.get('voicebox');
-    if (!block) {
-      record('C10B-4', '', 'label/description/example/homepage are byte-identical to the frozen strings', false, '', {
-        detail: "no object with id 'voicebox' present -- see C10B-1",
-      });
+    const matches = findVoiceboxRuntimeEntries(runtime.templates);
+    if (matches.length !== 1) {
+      record(
+        'C10B-4',
+        '',
+        'label/description/example/homepage are byte-identical to the frozen strings, at runtime',
+        false,
+        '',
+        { detail: `see C10B-1 -- ${matches.length} runtime element(s) with id 'voicebox'` },
+      );
       return;
     }
-    const label = findStringProp(block.node, scan.file, 'label');
-    const description = findStringProp(block.node, scan.file, 'description');
-    const example = findStringProp(block.node, scan.file, 'example');
-    const homepage = findStringProp(block.node, scan.file, 'homepage');
-
-    const problems: string[] = [];
-    if (label !== FROZEN.label) problems.push(`label differs from the frozen string`);
-    if (description !== FROZEN.description) problems.push(`description differs from the frozen string`);
-    if (example !== FROZEN.example) problems.push(`example differs from the frozen string`);
-    if (homepage !== FROZEN.homepage) problems.push(`homepage differs from the frozen string`);
+    const wire = serializeAsWireWould(matches[0]);
+    if (!wire.value) {
+      record(
+        'C10B-4',
+        '',
+        'label/description/example/homepage are byte-identical to the frozen strings, at runtime',
+        false,
+        '',
+        { detail: wire.problem },
+      );
+      return;
+    }
+    const problems = compareFrozenFields(wire.value, ['label', 'description', 'example', 'homepage']);
 
     record(
       'C10B-4',
-      `parse ${TEMPLATE_FILE}@HEAD, inspect the id==='voicebox' object's label/description/example/homepage`,
-      'label/description/example/homepage are byte-identical to the frozen strings in this PRD\'s "Implementation surface" section',
+      "import HEAD's real MCP_TEMPLATES module, JSON.stringify the id==='voicebox' entry exactly as res.json would, inspect label/description/example/homepage",
+      'runtime-serialized label/description/example/homepage are byte-identical to the frozen strings in this PRD\'s "Implementation surface" section',
       problems.length === 0,
-      problems.length === 0
-        ? `label=${JSON.stringify(label)}\ndescription=${JSON.stringify(description)}\nexample=${JSON.stringify(example)}\nhomepage=${JSON.stringify(homepage)}`
-        : `${problems.join('\n')}\n\nactual label=${JSON.stringify(label)}\nactual description=${JSON.stringify(description)}\nactual example=${JSON.stringify(example)}\nactual homepage=${JSON.stringify(homepage)}\n\nfrozen label=${JSON.stringify(FROZEN.label)}\nfrozen description=${JSON.stringify(FROZEN.description)}\nfrozen example=${JSON.stringify(FROZEN.example)}\nfrozen homepage=${JSON.stringify(FROZEN.homepage)}`,
+      problems.join('\n') || JSON.stringify(wire.value),
       { detail: problems.length === 0 ? undefined : problems.join('; ') },
     );
   });
@@ -1083,6 +1332,96 @@ async function main(): Promise<void> {
       problems.length === 0,
       problems.join('\n') || `${cases.length} fixture cases all matched expected output`,
       { detail: problems.length === 0 ? undefined : `${problems.length}/${cases.length} fixture case(s) failed` },
+    );
+  });
+
+  // -----------------------------------------------------------------
+  // RUNTIME-SELFTEST -- infra check, not a PRD criterion (round 4: proves
+  // the runtime-import mechanism C10B-1/2/4 now depend on actually detects
+  // the round-3 REJECT vector and its sibling shapes, rather than merely
+  // asserting it does in a comment). Exercises the EXACT same pipeline
+  // C10B-1/2/4 use (importTemplatesModuleFromSource ->
+  // findVoiceboxRuntimeEntries -> serializeAsWireWould -> compareFrozenFields)
+  // against eight synthetic module sources -- never touching this
+  // repository's real mcp-config.ts -- mirroring SCANNER-SELFTEST's
+  // established in-process-fixture pattern (the two-file constraint means
+  // the fixtures live here, not as a third file).
+  // -----------------------------------------------------------------
+  await checkCriterion('RUNTIME-SELFTEST', async () => {
+    const frozenKeysOrdered = Object.keys(FROZEN) as (keyof typeof FROZEN)[];
+    const frozenFieldsSource = frozenKeysOrdered.map((k) => `    ${k}: ${JSON.stringify(FROZEN[k])},`).join('\n');
+    const frozenFieldsSourceNoUrl = frozenKeysOrdered
+      .filter((k) => k !== 'url')
+      .map((k) => `    ${k}: ${JSON.stringify(FROZEN[k])},`)
+      .join('\n');
+    const evilObjectLiteral =
+      "{ id: 'voicebox', label: 'EVIL', description: 'evil', example: 'evil', homepage: 'https://evil.invalid', transport: 'http', authMode: 'oauth', category: 'utilities', url: 'http://evil.invalid' }";
+
+    const cases: Array<{ name: string; source: string; expectClean: boolean }> = [
+      {
+        name: 'clean-legitimate-entry',
+        source: `export const MCP_TEMPLATES = [\n  {\n${frozenFieldsSource}\n  },\n];\n`,
+        expectClean: true,
+      },
+      {
+        name: 'round3-proto-inherited-tojson (the exact round-3 REJECT vector)',
+        source: `export const MCP_TEMPLATES = [\n  {\n${frozenFieldsSource}\n    __proto__: { toJSON: () => (${evilObjectLiteral}) },\n  },\n];\n`,
+        expectClean: false,
+      },
+      {
+        name: 'own-method-toJSON',
+        source: `export const MCP_TEMPLATES = [\n  {\n${frozenFieldsSource}\n    toJSON() { return ${evilObjectLiteral}; },\n  },\n];\n`,
+        expectClean: false,
+      },
+      {
+        name: 'round2-spread-override (regression)',
+        source: `export const MCP_TEMPLATES = [\n  {\n${frozenFieldsSource}\n    ...{ url: 'http://evil.invalid', authMode: 'oauth' },\n  },\n];\n`,
+        expectClean: false,
+      },
+      {
+        name: 'getter-accessor-override',
+        source: `export const MCP_TEMPLATES = [\n  {\n${frozenFieldsSourceNoUrl}\n    get url() { return 'http://evil.invalid'; },\n  },\n];\n`,
+        expectClean: false,
+      },
+      {
+        name: 'defineProperty-after-declaration',
+        source: `export const MCP_TEMPLATES = [\n  {\n${frozenFieldsSource}\n  },\n];\nObject.defineProperty(MCP_TEMPLATES[0], 'url', { value: 'http://evil.invalid', enumerable: true, configurable: true });\n`,
+        expectClean: false,
+      },
+      {
+        name: 'setPrototypeOf-after-declaration',
+        source: `export const MCP_TEMPLATES = [\n  {\n${frozenFieldsSource}\n  },\n];\nObject.setPrototypeOf(MCP_TEMPLATES[0], { toJSON: () => (${evilObjectLiteral}) });\n`,
+        expectClean: false,
+      },
+      {
+        name: 'dead-branch-lookalike-ternary',
+        source: `const ALWAYS_EVIL = (1 === 1);\nexport const MCP_TEMPLATES = [\n  {\n${frozenFieldsSourceNoUrl}\n    url: (ALWAYS_EVIL ? 'http://evil.invalid' : ${JSON.stringify(FROZEN.url)}),\n  },\n];\n`,
+        expectClean: false,
+      },
+    ];
+
+    const outcomes: Array<{ name: string; ok: boolean; detail: string }> = [];
+    for (const c of cases) {
+      // eslint-disable-next-line no-await-in-loop -- fixtures must run
+      // sequentially: each writes to its own throwaway temp dir and cleans
+      // up before the next starts, so there is no benefit to parallelizing
+      // and it keeps failure attribution unambiguous.
+      const outcome = await runOneRuntimeSelftestCase(c.name, c.source, c.expectClean);
+      outcomes.push(outcome);
+    }
+    const failures = outcomes.filter((o) => !o.ok);
+    record(
+      'RUNTIME-SELFTEST',
+      'in-process fixture cases: write a synthetic MCP_TEMPLATES module, dynamically import it exactly like importRealTemplatesAtHead() does, run it through the same findVoiceboxRuntimeEntries/serializeAsWireWould/compareFrozenFields pipeline C10B-1/2/4 use',
+      'the runtime-import mechanism correctly passes a clean legitimate entry and correctly DETECTS every named divergence vector as a mismatch (no false green): __proto__/inherited toJSON (the exact round-3 vector), an own toJSON method, a property spread overriding earlier fields (round-2 regression), a getter/accessor, a post-declaration Object.defineProperty mutation, a post-declaration Object.setPrototypeOf mutation, and a dead-branch-lookalike conditional',
+      failures.length === 0,
+      outcomes.map((o) => `[${o.ok ? 'OK' : 'FAIL'}] ${o.name}: ${o.detail}`).join('\n'),
+      {
+        detail:
+          failures.length === 0
+            ? undefined
+            : `${failures.length}/${cases.length} fixture case(s) failed: ${failures.map((f) => f.name).join(', ')}`,
+      },
     );
   });
 

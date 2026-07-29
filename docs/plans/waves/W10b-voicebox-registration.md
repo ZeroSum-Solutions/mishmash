@@ -169,13 +169,27 @@ wording this entry may take other than the one written here.
   **outside** the array's span to be byte-identical to `baseCommit`, so a comment placed after the
   whole `const MCP_TEMPLATES = [...]` statement would itself fail that check.
 
-  **The object literal above must be exactly what it appears to be** (round-3 finding 1): no
-  property spread (`...expr`), no computed property name (`[expr]: value`), and no property name
-  repeated within the object — at any nesting depth, including inside any array-valued field. Any
-  of these would let a later property silently win at runtime (JavaScript's own last-write-wins
-  object-literal semantics) while looking frozen to a naive first-match reader; C10B-1 through
-  C10B-4 all now depend on a scan that fails closed the instant any of these appears anywhere in
-  `MCP_TEMPLATES`, not just in the new entry.
+  **The object literal above must be exactly what it appears to be** (round-3 finding 1; mechanism
+  replaced in round 4 after round-3 REJECTED the round-3 version of this guarantee — see "Round 3
+  verdict" and "Round 4 fix" below). Rounds 1–3 tried to enforce this by banning source *shapes*
+  one at a time — property spread, computed property name, duplicate property name, then (round 3)
+  also methods/getters/setters, all "at any nesting depth" — and round 3's own reviewer broke that
+  approach with a shape none of those bans named: a literal `__proto__: { toJSON: () => (...) }`
+  property, which the ECMAScript grammar (Annex B.3.1) special-cases to set the object's
+  `[[Prototype]]` rather than create an own property, so `JSON.stringify` (exactly what
+  `apps/daemon/src/mcp-routes.ts:151`'s `res.json` uses to serve `MCP_TEMPLATES`) resolves an
+  *inherited* `toJSON` and emits attacker-controlled data while every direct-property, first-match
+  AST check still saw the frozen-looking literals and reported zero anomalies. As of round 4,
+  C10B-1/2/4 no longer read source shape for this guarantee at all: they import HEAD's real,
+  committed module as an actual ES module and assert that the *actually-served* value — the
+  `id === 'voicebox'` entry, round-tripped through `JSON.stringify`/`JSON.parse` exactly as
+  `res.json` would send it — is byte-for-byte identical to the frozen fields below, with no extra
+  or missing key. Any mechanism that would make a later property silently win at runtime (spread,
+  computed-key smuggling, `__proto__`/inherited `toJSON`, an own `toJSON` method, a getter/setter,
+  or a post-declaration `Object.defineProperty`/`Object.setPrototypeOf` mutation) now fails this
+  check by definition, because the check observes the effect, not the syntax that produced it —
+  see "Round 4 fix" below for the full mechanism and why it closes the class rather than one more
+  instance of it.
 
 No other file changes. Not `packages/contracts/**` (no new category — W1's lease). Not
 `apps/web/**` (no new UI; the picker already groups by an existing category). Not
@@ -189,22 +203,23 @@ frozen/external, not part of the implementer's lease.
 ## Success criteria
 
 All five are mechanical; none require human judgment (VERIFICATION-CONTRACT.md §3 R7 does not
-apply — nothing here is marked `human:`). **This table reflects round-1 and round-3
-adversarial-review fixes** (finding numbers refer to "Round 1 adversarial review" and "Round 3
-adversarial review" below); the pre-fix versions are superseded, not merely amended in place,
-because several mechanisms changed shape, not just wording. Three further infra checks —
-`LEASE` (folded into C10B-3), `GATE-INTEGRITY`, and `SCANNER-SELFTEST` — are not numbered PRD
-criteria (matching how `scripts/waves/verify-w9-ingest.ts` treats its own `LEASE`/`HEAD-DRIFT`/
-`GATE-INTEGRITY` checks) but still gate the verifier's overall exit code; see "Definition of
-green."
+apply — nothing here is marked `human:`). **This table reflects round-1, round-3, and round-4
+adversarial-review fixes** (finding numbers refer to "Round 1 adversarial review," "Round 3
+adversarial review," "Round 3 verdict," and "Round 4 fix" below); the pre-fix versions are
+superseded, not merely amended in place, because several mechanisms changed shape, not just
+wording — most recently C10B-1/2/4's move from a static AST read to a runtime-import check in
+round 4. Four further infra checks — `LEASE` (folded into C10B-3), `GATE-INTEGRITY`,
+`SCANNER-SELFTEST`, and `RUNTIME-SELFTEST` (round 4) — are not numbered PRD criteria (matching how
+`scripts/waves/verify-w9-ingest.ts` treats its own `LEASE`/`HEAD-DRIFT`/`GATE-INTEGRITY` checks)
+but still gate the verifier's overall exit code; see "Definition of green."
 
 | ID | Assertion |
 |---|---|
-| **C10B-1** | Parsing `MCP_TEMPLATES` at HEAD with the TypeScript compiler API finds **zero anomalies at any nesting depth** across the *entire* array (round-1 findings 2/3; round-3 finding 1): no array spread, no element that isn't a plain object literal, no object literal whose `id` isn't a literal string, no duplicate `id` anywhere in the array, and — inside every object literal anywhere in the array, at every depth — no property spread, no computed/non-literal property name, no method/getter/setter member, and no property name repeated within one object literal. Once the array is safe to reason about, exactly one element has `id === 'voicebox'`. Any anomaly fails this criterion closed; it does not fall through to a looser check. |
-| **C10B-2** | That element's `transport` is exactly `'http'`; its `url` is exactly the string `'http://127.0.0.1:17493/mcp'` — full-string equality, not component checks (finding 5: component checks silently allowed credentials/query/fragment through) — so `http://user:pass@127.0.0.1:17493/mcp?x#y` is rejected outright, not partially accepted; its `category` is exactly `'utilities'`; its `authMode` is exactly `'none'`, present not absent (finding 5); it has **no `headerFields` property at all** (round-1 ruling — pins `X-Voicebox-Client-Id` absent by construction, not merely unfilled). Depends on C10B-1's deep-anomaly scan, so a property spread that would otherwise override these values at runtime is already excluded before this check runs (round-3 finding 1). |
-| **C10B-3** | No extra surface, proven several independent ways (round-1 findings 1/2/3; round-3 findings 1/3): (a) `git diff --name-only <baseCommit>...HEAD` is a subset of the `"W10b"` lease read from `leases.json@baseCommit`, whose `allow` list is asserted to be *exactly* `["apps/daemon/src/mcp-config.ts"]` **and** whose `deny` list is asserted to contain both this PRD and `scripts/waves/verify-w10b.ts` — a widened `allow` or a missing `deny` entry fails this criterion, not just an out-of-lease diff; (b) both `baseCommit`'s and HEAD's `MCP_TEMPLATES` arrays pass C10B-1's deep zero-anomaly analysis; (c) the file's text **outside** the `MCP_TEMPLATES` array literal's own span (before its `[`, after its `]`) is byte-identical between `baseCommit` and HEAD; (d) every pre-existing array entry, keyed by `id`, is byte-identical between `baseCommit` and HEAD; (e) exactly one `id` is new, and it is `'voicebox'`. |
-| **C10B-4** | No voiceover-workflow scope creep, by exact match instead of denylist (finding 4: a finite blocklist is always evadable by paraphrase — "narration audio," string concatenation, a newline mid-phrase, all defeat a regex scan). The `id: 'voicebox'` element's `label`, `description`, `example`, and `homepage` are each **byte-for-byte identical** to the frozen strings in "Implementation surface" above (mirrored verbatim as `verify-w10b.ts`'s `FROZEN` constant). Depends on C10B-1's deep-anomaly scan for the same reason as C10B-2 (round-3 finding 1). There is no wording these fields may take other than the one already reviewed. |
-| **C10B-5** | Documentation record, proven via real comment tokens, never text inside a string or template literal at any interpolation depth (round-1 finding 6; round-3 finding 2 — a hand-rolled scanner loop previously misclassified template-tail text as a comment once a `${...}` substitution was involved). `collectComments()` walks the parsed AST to record every string/template-literal token's exact span, then finds comment-shaped text in the raw source and discards any match whose start falls inside one of those spans — so text can only count as a comment if it is genuinely outside every literal the parser found. At least one comment present at HEAD but **absent** at `baseCommit` contains the literal substring `NM-25`. `SCANNER-SELFTEST` (an infra check, not a numbered criterion) proves this mechanism against the exact round-2 false-positive shapes. |
+| **C10B-1** | Proven at RUNTIME as of round 4 (round-3 REJECTED the prior AST-based version of this criterion — see "Round 3 verdict" and "Round 4 fix" below). The verifier dynamically `import()`s a throwaway copy of HEAD's real, committed `apps/daemon/src/mcp-config.ts` as an actual ES module — never a static text/AST read for this criterion — and requires exactly one runtime array element whose real `.id` property equals `'voicebox'`. That element is round-tripped through `JSON.stringify`/`JSON.parse` — the exact transform `apps/daemon/src/mcp-routes.ts:151`'s `res.json` performs — and its own-enumerable key set must be exactly `{id, label, description, example, homepage, transport, authMode, category, url}`, no more and no fewer. Missing registration, an ambiguous (duplicate) `id`, or an extra/missing wire-serialized key all fail this criterion closed. |
+| **C10B-2** | Proven at RUNTIME as of round 4, on the same wire-serialized entry C10B-1 establishes: `transport` is exactly `'http'`; `url` is exactly the string `'http://127.0.0.1:17493/mcp'` — full-string equality, not component checks (finding 5: component checks silently allowed credentials/query/fragment through) — so `http://user:pass@127.0.0.1:17493/mcp?x#y` is rejected outright, not partially accepted; `category` is exactly `'utilities'`; `authMode` is exactly `'none'`, present not absent (finding 5); and no `headerFields` key is present in the actually-served JSON (round-1 ruling — pins `X-Voicebox-Client-Id` absent by construction, not merely unfilled). Because these are runtime-observed values, not a static property read, a property spread, `__proto__`/inherited `toJSON`, an accessor, or a post-declaration mutation that would otherwise override them is caught automatically — round-3 finding 1 was exactly this dependency's weak point when the underlying guarantee was AST-based; round 4 removes the dependency by making the check itself runtime-based instead of hardening the AST scan further. |
+| **C10B-3** | No extra surface, proven several independent ways (round-1 findings 1/2/3; round-3 findings 1/3): (a) `git diff --name-only <baseCommit>...HEAD` is a subset of the `"W10b"` lease read from `leases.json@baseCommit`, whose `allow` list is asserted to be *exactly* `["apps/daemon/src/mcp-config.ts"]` **and** whose `deny` list is asserted to contain both this PRD and `scripts/waves/verify-w10b.ts` — a widened `allow` or a missing `deny` entry fails this criterion, not just an out-of-lease diff; (b) both `baseCommit`'s and HEAD's `MCP_TEMPLATES` arrays are structurally identifiable by id (every element a plain object literal with a literal string `id`, no duplicate `id` across the array) — a narrower, purely textual check than round 3's, since the frozen-value correctness of the `voicebox` entry itself is proven at runtime by C10B-1/2/4 as of round 4, not by this structural scan; (c) the file's text **outside** the `MCP_TEMPLATES` array literal's own span (before its `[`, after its `]`) is byte-identical between `baseCommit` and HEAD; (d) every pre-existing array entry, keyed by `id`, is byte-identical between `baseCommit` and HEAD; (e) exactly one `id` is new, and it is `'voicebox'`. |
+| **C10B-4** | No voiceover-workflow scope creep, by exact match instead of denylist (finding 4: a finite blocklist is always evadable by paraphrase — "narration audio," string concatenation, a newline mid-phrase, all defeat a regex scan). Proven at RUNTIME as of round 4, on the same wire-serialized entry C10B-1/2 use: `label`, `description`, `example`, and `homepage` are each **byte-for-byte identical** to the frozen strings in "Implementation surface" above (mirrored verbatim as `verify-w10b.ts`'s `FROZEN` constant), as actually served by `JSON.stringify`, not as read from source. There is no wording these fields may take other than the one already reviewed, and no source-shape trick (spread, `__proto__`/inherited `toJSON`, accessor, post-declaration mutation) can present different wording at runtime without this criterion catching it. |
+| **C10B-5** | Documentation record, proven via real comment tokens, never text inside a string or template literal at any interpolation depth (round-1 finding 6; round-3 finding 2 — a hand-rolled scanner loop previously misclassified template-tail text as a comment once a `${...}` substitution was involved). `collectComments()` walks the parsed AST to record every string/template-literal token's exact span, then finds comment-shaped text in the raw source and discards any match whose start falls inside one of those spans — so text can only count as a comment if it is genuinely outside every literal the parser found. At least one comment present at HEAD but **absent** at `baseCommit` contains the literal substring `NM-25`. `SCANNER-SELFTEST` (an infra check, not a numbered criterion) proves this mechanism against the exact round-2 false-positive shapes. Unaffected by round 4 — this criterion was never part of the round-3 REJECT finding. |
 
 ### Why these five and not more
 
@@ -227,9 +242,10 @@ file, not a wave-completion criterion.)
 ## Definition of "green"
 
 The wave is green when a single `pnpm exec tsx scripts/waves/verify-w10b.ts` run against a clean
-tree (`treeDirty: false`) reports `status: "pass"` for C10B-1 through C10B-5, plus the three infra
-checks `GATE-INTEGRITY`, `SCANNER-SELFTEST`, and `HEAD-DRIFT` (LEASE is folded into C10B-3, not a
-separate manifest entry), in `~/.claude/goal-state/mishmash-w10b-voicebox/proof/manifest.json`,
+tree (`treeDirty: false`) reports `status: "pass"` for C10B-1 through C10B-5, plus the four infra
+checks `GATE-INTEGRITY`, `SCANNER-SELFTEST`, `RUNTIME-SELFTEST` (round 4), and `HEAD-DRIFT` (LEASE
+is folded into C10B-3, not a separate manifest entry), in
+`~/.claude/goal-state/mishmash-w10b-voicebox/proof/manifest.json`,
 with `exitCode: 0` overall. `GATE-INTEGRITY` passes trivially (recorded
 `gateIntegrityPinned: false`) until the orchestrator places
 `~/.claude/goal-state/mishmash-w10b-voicebox/approved-gate.sha256`; once pinned it must match this
@@ -263,13 +279,18 @@ any `allow`/`deny` list for W-C, W0, W7, W1, W2, W4, W9-ingest, or W3 (checked d
 ## Verified baseline (this run, pre-implementation)
 
 Ran `pnpm exec tsx scripts/waves/verify-w10b.ts` on branch `feat/w10b-voicebox-registration`,
-re-confirmed after the round-3 fixes below, before any implementation exists. Expected and
-confirmed: RED, nonzero exit, exactly **3/8 passing — `GATE-INTEGRITY` (unpinned),
-`SCANNER-SELFTEST`, and `HEAD-DRIFT`** — with `treeDirty: false`. (This shape changed from round 1's
-"1/6, only `HEAD-DRIFT`" once `GATE-INTEGRITY` and `SCANNER-SELFTEST` were added in round 3 — both
-are infra checks whose own logic is self-contained and does not depend on VoiceBox being
-registered, so they correctly pass before implementation too.) C10B-1/2/4 fail because no
-`voicebox` template exists yet; C10B-3 fails closed on both grounds (no `"W10b"` key in
+re-confirmed after the round-4 fix below, before any implementation exists. Expected and
+confirmed: RED, nonzero exit, exactly **4/9 passing — `GATE-INTEGRITY` (unpinned),
+`SCANNER-SELFTEST`, `RUNTIME-SELFTEST`, and `HEAD-DRIFT`** — with `treeDirty: false`. (This shape
+changed from round 1's "1/6, only `HEAD-DRIFT`" once `GATE-INTEGRITY` and `SCANNER-SELFTEST` were
+added in round 3, and from round 3's "3/8" once `RUNTIME-SELFTEST` was added in round 4 — all
+three are infra checks whose own logic is self-contained and does not depend on VoiceBox being
+registered, so they correctly pass before implementation too; `RUNTIME-SELFTEST` in particular
+exercises eight synthetic fixtures against the real runtime-import pipeline, never touching this
+repository's actual `mcp-config.ts`, so it is meaningful to run — and does run clean — even before
+any `voicebox` entry exists.) C10B-1/2/4 fail because no `voicebox` template exists yet (the
+dynamic import succeeds against the real, unmodified module and correctly finds zero runtime
+elements with `id === 'voicebox'`); C10B-3 fails closed on both grounds (no `"W10b"` key in
 `leases.json@baseCommit` yet, and zero new `MCP_TEMPLATES` entries); C10B-5 fails because
 `apps/daemon/src/mcp-config.ts` has not changed at all between `baseCommit` and HEAD, so no new
 comment exists to find. This is the intended fail-closed state, not a bug — see the run tail in the
@@ -397,4 +418,132 @@ scripts/tsconfig.json --noEmit` exits 0. This verifier writes no generated scrip
 `manifest.json` and plain-text proof artifacts), so `node --check` does not apply to anything it
 produces.
 
-No open questions remain. This PRD and verifier are presented for round-3 confirmation review.
+No open questions remained at authoring time. This PRD and verifier were presented for round-3
+confirmation review — see "Round 3 verdict" immediately below for the actual outcome.
+
+## Round 3 verdict
+
+**REJECT.** All three round-3 closures above (deep spread ban, scanner fix, `GATE-INTEGRITY`) were
+independently re-verified by the round-3 reviewer and confirmed genuine — they were not the reject
+reason. The reject reason was a **new vector neither round 1 nor round 2 had probed**:
+
+> **BLOCKER — runtime serialization override still false-passes.** The walker accepts every
+> uniquely named `PropertyAssignment` and does not constrain initializer shapes
+> (`verify-w10b.ts:500`); direct field checks then ignore prototype behavior (`verify-w10b.ts:458`).
+> A probe using all exact `FROZEN` values plus `__proto__: { toJSON: () => ({ evil runtime
+> fields… }) }` produced zero structural anomalies, all eight frozen comparisons equal,
+> `hasOwnHeaderFields: false`, and zero TypeScript diagnostics — yet `JSON.stringify` emitted the
+> evil URL, OAuth mode, header fields, and description. This is product-relevant because the route
+> serializes `MCP_TEMPLATES` through `res.json` (`mcp-routes.ts:151`). It violates the PRD's
+> "exactly what it appears to be" requirement (PRD:172) and false-greens C10B-1/2/4.
+>
+> VERDICT: REJECT because a type-valid `__proto__`/inherited-`toJSON` property-assignment shape
+> still converts an apparently frozen template into attacker-controlled runtime JSON while every
+> relevant verifier check passes.
+
+Root cause: `id: 'voicebox'` and every other frozen field really were present as own properties on
+the object literal in round 3's fixed version — round 3's `findDeepStructuralAnomalies()` correctly
+saw a well-formed, uniquely-named `PropertyAssignment` for each of them and reported zero anomalies,
+exactly as designed. What round 3's AST scan could not see is that `__proto__: { toJSON: () =>
+(...) }`, written as an ordinary-looking property assignment, is special-cased by the ECMAScript
+grammar (Annex B.3.1: "`__proto__` Property Names in Object Initializers") to set the object's
+`[[Prototype]]` rather than create an own property — and that `JSON.stringify` (what
+`apps/daemon/src/mcp-routes.ts:151`'s `res.json` uses to serve `MCP_TEMPLATES`) calls a `toJSON`
+method found via the prototype chain exactly as it would call an own one, discarding every other
+property on the object in favor of whatever that method returns. A static, source-shape-based
+reader has no way to know this without also reimplementing the object-literal grammar's own
+special cases and the exact algorithm `JSON.stringify` uses to look up `toJSON` — which is itself
+just one more shape to enumerate, alongside spread, computed keys, duplicate keys, and accessors.
+Round 2 and round 3 each closed one shape; round 3's reviewer found the next one. A denylist of
+shapes was never going to terminate.
+
+## Round 4 fix (founder-authorized final round)
+
+**Founder ruling (binding, verbatim in substance):** do not patch the `__proto__` case as one more
+structural check. Close the entire CLASS of literal-vs-runtime divergence by proving the frozen
+expectations at RUNTIME — import the real production module (or exercise the real route on an
+isolated daemon) and assert the actually-serialized values (`JSON.stringify` output, or the HTTP
+response body) against the frozen expected serialization. A structural/AST check may remain only
+for facts with no runtime observable. If this change makes some structural checks redundant,
+remove them rather than keep two sources of truth. The runtime assertion must be robust by
+construction to `__proto__`/inherited `toJSON`, accessors, methods, `Object.assign`/
+`defineProperty`/`setPrototypeOf` mutations, and dead branches satisfying node-walk constants —
+sibling wave packages were rejected for the same class of finding.
+
+**Mechanism.** `verify-w10b.ts`'s `importRealTemplatesAtHead()` materializes HEAD's committed text
+for `apps/daemon/src/mcp-config.ts` into a throwaway `.mts` file and dynamically `import()`s it as
+a REAL ES module — not a text/AST read. `findVoiceboxRuntimeEntries()` locates the runtime array
+element(s) whose real `.id` property equals `'voicebox'` (ordinary JS property access, following
+the prototype chain exactly like any other reader). `serializeAsWireWould()` round-trips that
+element through `JSON.stringify` then `JSON.parse` — precisely the transformation Express's
+`res.json` performs and a wire client would undo — and `compareFrozenFields()` compares the result
+against `FROZEN` field-by-field, with C10B-1 additionally asserting the wire-serialized own-key set
+is exactly `FROZEN`'s key set (no extra, no missing). C10B-1/2/4 each independently perform this
+import (a fresh cache-busted `import()` per call, per this file's pre-existing "every criterion
+re-reads/re-scans, never shares state" principle), and this repo's own
+`apps/daemon/src/mcp-config.ts` has zero non-Node-builtin imports and does no I/O or port binding
+at module-evaluation time (confirmed this session by reading the file), so the import is exactly as
+safe as the rest of the verifier's "no daemon, no port" contract — the daemon-route alternative the
+founder also authorized was not needed here.
+
+**Why this closes the CLASS, not one instance.** `JSON.stringify` is the actual mechanism Node uses
+to decide what gets served; asserting against its real output — on the real, fully-evaluated
+object, after every top-level module statement has already run — means the check no longer asks
+"does the source look safe," it asks "is the data that would actually leave this process correct."
+That question is insensitive to *how* a divergence would be produced:
+- **`__proto__`/inherited `toJSON`** (round 3's vector): `JSON.stringify` resolves an inherited
+  `toJSON` exactly like an own one — the runtime check observes exactly this, because it calls
+  `JSON.stringify` too.
+- **An own `toJSON` method**: same mechanism, no `__proto__` needed — also observed directly.
+- **A property spread overriding earlier fields** (round 2's vector): last-write-wins is a runtime
+  fact about the object's actual properties, which `JSON.stringify` serializes as they really are.
+- **Getters/accessors**: `JSON.stringify` invokes them during property enumeration (absent a
+  `toJSON`) — the returned value, not the source text, is what gets compared.
+- **`Object.defineProperty`/`Object.setPrototypeOf` after the array literal**: since the whole
+  module is actually executed by a real `import()`, any top-level mutation has already run by the
+  time `MCP_TEMPLATES` is read back — there is no "before" state to be fooled by.
+- **Dead branches satisfying node-walk constants**: a real `import()` only ever executes the branch
+  JavaScript actually takes; there is no walk to fool.
+
+`RUNTIME-SELFTEST` (new infra check, mirroring `SCANNER-SELFTEST`'s established in-process-fixture
+pattern) proves this against eight synthetic module sources run through the exact same pipeline
+C10B-1/2/4 use: a clean legitimate entry (must still pass), the exact round-3
+`__proto__`/inherited-`toJSON` vector, an own `toJSON` method, the round-2 spread-override vector
+(regression), a getter/accessor override, a post-declaration `Object.defineProperty` mutation, a
+post-declaration `Object.setPrototypeOf` mutation, and a dead-branch-lookalike ternary. All eight
+behaved correctly this session (see "Verification performed" below) — the seven attack-shape
+fixtures were all detected as divergent, and the clean fixture stayed clean.
+
+**Structural checks removed as redundant.** `findDeepStructuralAnomalies()` (round 3's per-object
+spread/computed-key/duplicate-key/accessor scan across the whole `MCP_TEMPLATES` subtree) and
+`hasOwnProp()` (used only by the old static `headerFields`-absence check) are **removed**, not kept
+alongside the runtime check. Both existed solely to protect a static, first-match property reader
+(`findStringProp`) from exactly the class of divergence the runtime check now observes directly and
+unconditionally; keeping them would be two sources of truth for the same fact, one of which is
+demonstrably incomplete (that incompleteness is the round-3 finding itself). `findStringProp` is
+retained, but only for locating each array element's literal `id` — a fact `analyzeTemplateArray`
+still needs for C10B-3's baseCommit-vs-HEAD byte-diffing, which is answered per the founder's own
+carve-out: it is inherently a two-commit TEXT comparison with no runtime equivalent (there is no
+single execution whose output could tell you "did this OTHER, unrelated array entry's source text
+change between two commits"), so it correctly stays AST/text-based. `TemplateBlock.node` (the
+`ObjectLiteralExpression` handle the removed static checks used) is also removed, since nothing
+reads it anymore.
+
+**What did NOT change.** C10B-3 and C10B-5 keep their pre-round-4 mechanisms untouched — neither
+was implicated in the round-3 finding, and both answer questions (cross-commit text diffing;
+comment-token provenance) that have no meaningful runtime-observable restatement. `GATE-INTEGRITY`
+is unaffected. The frozen object literal in "Implementation surface" above is unchanged byte-for-
+byte; only how its correctness is PROVEN changed.
+
+**Verification performed:** `pnpm exec tsc -p scripts/tsconfig.json --noEmit` exits 0 (no
+diagnostics — confirmed after all round-4 edits, including the dynamic `import()` calls and the new
+`RUNTIME-SELFTEST` fixtures). `pnpm exec tsx scripts/waves/verify-w10b.ts` against the
+pre-implementation tree (no `voicebox` entry exists yet) reports RED, exit 1, `treeDirty: false`,
+with the correct 4/9 shape recorded in "Verified baseline" above — critically, `RUNTIME-SELFTEST`
+itself passes pre-implementation (it never touches the real `mcp-config.ts`), proving the mechanism
+detects all seven attack shapes correctly even before any implementation exists to protect. The
+merge from `main` (bringing in unrelated docs-only lease/decision-record commits) was clean, with
+no conflicts, and the `baseCommit...HEAD` diff still contains exactly the two deliverable files
+(this PRD and `scripts/waves/verify-w10b.ts`).
+
+No open questions remain. This PRD and verifier are presented for round-4 confirmation review.
