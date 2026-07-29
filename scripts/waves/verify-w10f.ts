@@ -11,92 +11,146 @@
 // stdout line (`MANIFEST_SHA256=...`).
 //
 // ===========================================================================
-// REVIEW ROUND 1 REJECT -- FINDING 1 (CRITICAL), FIXED HERE.
+// ROUND 3 -- ARCHITECTURAL CHANGE, NOT ANOTHER PATCH (fixes the round-2
+// CRITICAL finding). Full rationale in docs/plans/waves/W10f-storage.md
+// ("Verifier fixture-isolation guarantee" + "Round-2 findings -> closures").
 // ===========================================================================
-// The round-1 reviewer found that fixture namespaces were created under the
-// checkout's REAL `.tmp/tools-dev/...` (only the daemon's OD_DATA_DIR was
-// isolated), so a production `plan` -- which must legitimately enumerate
-// every namespace under a Tier-1 source root to do its job -- could pick up
-// OLD, INACTIVE namespaces that predate this run (a real developer's past
-// tools-dev/e2e sessions) and a subsequent `apply` could delete them for
-// real. That is independently fatal regardless of how good the containment
-// logic is, because the fixture methodology itself put real data in scope.
+// Round 2 found that round 1's "belt and braces" did not make destructive
+// `apply` safe: the belt (`assertPlanConfinedToTempRoot`) validated only the
+// LEXICAL paths a `plan` response claimed; `safeApply` then handed
+// unconstrained production code nothing but a bare `planId`, free to
+// re-derive its own deletion targets any way it likes at apply time. The
+// belt validated a DESCRIPTION of the work, never the work itself.
 //
-// Fix, belt AND braces:
-//   BRACE (primary): this wave's "Proposed capability surface" now mandates
-//   `OD_STORAGE_TMP_ROOT` -- an env var, read at daemon-boot time exactly
-//   like the existing `OD_DATA_DIR` precedent, that redirects EVERY Tier-1
-//   `.tmp/<source>/<namespace>` root resolution to
-//   `<OD_STORAGE_TMP_ROOT>/.tmp/<source>/<namespace>` instead of the real
-//   checkout. This verifier NEVER boots a daemon, and NEVER invokes
-//   `od storage ...`, without a freshly `mkdtemp`'d temp root passed as
-//   `OD_STORAGE_TMP_ROOT` -- see `withTempProjectRoot`/`bootIsolatedDaemonSubprocess`.
-//   BELT (independent, unconditional): before ANY `apply` call, this file
-//   parses the `plan` response and REFUSES to call apply -- fails the
-//   criterion outright, calls nothing -- unless EVERY candidate path is
-//   provably confined under that SAME run's own temp root
-//   (`assertPlanConfinedToTempRoot`). A planning bug alone, or an
-//   implementation that silently ignores `OD_STORAGE_TMP_ROOT`, cannot reach
-//   real data through this file even if the primary isolation fails.
-//   PROOF (new `FIXTURE-ISOLATION` check, below): (a) a structural self-scan
-//   of THIS file proves the checkout's real `.tmp/tools-dev/` is referenced
-//   from exactly one, provably read-only function
-//   (`readOnlyListRealCheckoutTmpToolsDevNamespaces`) -- a future edit that
-//   reintroduces a write-capable call using `repoRoot` + `.tmp` anywhere else
-//   fails this check by construction; (b) a runtime proof reads whatever
-//   real namespaces already exist in the checkout's `.tmp/tools-dev/`
-//   BEFORE any fixture work (read-only listing, never written to) and
-//   asserts none of them ever appear among the plan candidates this run
-//   observes, across every dynamic criterion.
+// THE FIX: this file NEVER invokes `apply` -- not against a temp root, not
+// with `--confirm`, not as a negative control expected to be rejected, not
+// ever. `safeApply` is deleted, along with every call site.
+// `NO-DESTRUCTIVE-INVOCATION` (near the end of `main()`) makes this
+// self-enforcing: it AST-scans this file itself and fails the gate if a
+// future edit reintroduces an apply/--confirm/gc-apply invocation anywhere.
 //
-// SAFETY (unchanged from round 1, reviewer-confirmed correct): this verifier
-// never starts, stops, or otherwise touches the ports 7456/51012 daemons.
-// `apps/daemon/src/daemon-url.ts`'s `resolveDaemonUrl()` falls back to
-// `http://127.0.0.1:7456` after `--daemon-url` / `OD_DAEMON_URL` / IPC
-// discovery / `tools-dev status` all miss -- one of the two forbidden ports.
-// Every `od storage ...` invocation in this file carries an explicit,
-// already-resolved `OD_DAEMON_URL` pointed at a verifier-booted, ephemeral-
-// port daemon; `OD_SIDECAR_IPC_PATH` is cleared so IPC discovery cannot
-// short-circuit past it; `assertSafeLoopbackUrl()` independently re-checks
-// the port on every boot, every CLI call, and every direct fetch.
+// Coverage that used to come from calling `apply` is re-established two
+// different ways, matched to what each criterion actually needs to prove:
 //
-// GENERAL LESSON FROM ROUND 1 (applied throughout, not just where named):
-//   - Prove RUNTIME behavior at runtime: boot the isolated daemon, issue a
-//     real request/CLI call, assert the REAL response. AST/source checks are
-//     reserved for structural facts with no better runtime observable
-//     (e.g. "is the registry a pure-data literal", "is HEAD unchanged").
-//   - "Binding" proves production code is USED, not merely importable.
-//     Reachability sets are scoped to exactly the `storage` subtree, never a
-//     server.ts-wide union; "drives the real surface" is decided by AST
-//     (StringLiteral arguments to real CallExpressions), never a raw text
-//     scan of the source, which cannot distinguish a comment from code.
-//   - Every comparison against a name, path, or route is EXACT-match; no
-//     substring/`startsWith`/`includes` stands in for identity anywhere a
-//     production response is being graded.
-//   - Any object-literal "pure data" validation rejects `__proto__` keys,
-//     accessors, methods, computed property names, and spreads at any depth
-//     -- not just plain assignments.
+//   (a) PLAN-ONLY, verifier-side (safe, real, never destructive). Anything
+//       that only needs to prove something about ELIGIBILITY -- which paths
+//       become candidates, under what category, with what retention window,
+//       reported how -- keeps booting an isolated daemon, building real
+//       fixtures under a fresh temp root, and calling `od storage gc
+//       plan`/`report` for real. `plan` is dry-run by construction and
+//       C10F-6 proves its call graph contains no delete primitive, so this
+//       stays unconditionally safe regardless of what fixtures exist.
+//
+//   (b) DELETION SEMANTICS, as the PRODUCT'S OWN vitest tests -- never this
+//       verifier. Proving a file is REALLY GONE (not merely "reported
+//       removed") can only be done by code that runs `apply` for real
+//       against a fixture root IT constructs itself, inside the daemon's
+//       own test process -- exactly what `apps/daemon/tests/*.test.ts`
+//       already does throughout this codebase, and exactly the boundary
+//       VERIFICATION-CONTRACT.md draws between "code under test" and "the
+//       verifier." Five required test files (`REQUIRED_RED_SPECS`, below)
+//       are mandated by name, exact required test title(s), and the exact
+//       realized-on-disk assertion each must make. This verifier's job for
+//       each, via `checkRequiredRedSpecSync`, is threefold -- never to run
+//       `apply` itself:
+//         1. EXISTS -- present at HEAD, contains every required test title
+//            (AST-exact `test(...)`/`it(...)` call sites).
+//         2. BOUND -- reuses C10F-11's exact binding rule (imports a module
+//            inside `storage`'s own reachable set AND references the
+//            binding, or drives a real endpoint path from a real
+//            call-expression position); `apply-semantics` additionally
+//            requires the exact `/api/storage/gc-apply` path in that
+//            position (`requireExactPath`).
+//         3. RED-BEFORE-GREEN -- proved by REAL vitest execution, never by
+//            reading source: (i) at HEAD, right now, every required title
+//            passes (`pnpm --filter @open-design/daemon exec vitest run`,
+//            JSON reporter, per-title `status`); (ii) the file's own
+//            INTRODUCTION COMMIT (first commit in `baseCommit..HEAD` history
+//            adding this exact path) is found by walking real git history,
+//            checked out into an isolated `git worktree add --detach`, given
+//            a frozen `pnpm install --offline --frozen-lockfile`, and run
+//            for real AS COMMITTED AT THAT COMMIT (no overlay) -- proving
+//            the file did not arrive already fully green. This is a
+//            deliberately simpler, per-FILE instantiation of
+//            `verify-w9-ingest.ts`'s per-TEST red-before-green replay --
+//            simpler because W9 proves a regression test would have caught
+//            a bug that PREDATES the test (needs a HEAD-content overlay onto
+//            old production code); these five files are brand-new tests for
+//            a brand-new feature with no pre-existing bug to regress
+//            against, so proving ordinary red-before-green TDD discipline is
+//            the right-shaped proof, and needs no overlay: the commit's own
+//            content is exactly what gets replayed.
+//
+//   (c) `OD_STORAGE_TMP_ROOT` (round 1) is KEPT -- it is still exactly what
+//       makes (a) safe: every Tier-1 fixture built for a plan-only criterion
+//       must never resolve into the real checkout's `.tmp/tools-dev/...`
+//       regardless of what the implementation does at apply time, since
+//       apply is never invoked at all. What round 2 correctly rejected was
+//       treating that brace, plus a lexical belt over a bare planId handoff,
+//       as sufficient to make DESTRUCTIVE calls safe -- it was never safe
+//       for that job, only for this one. The old belt function survives,
+//       renamed and repurposed, as `planPathsOutsideFixtureRoots`: a
+//       plan-CORRECTNESS check folded into every observed plan
+//       (`recordObservedPlan`), still useful evidence that a compliant
+//       implementation's `plan` never echoes a path outside the fixture
+//       roots it was told to use -- but it gates nothing destructive,
+//       because nothing destructive is gated here anymore.
+//
+// ALSO CLOSED THIS ROUND (round-2 findings 2-8; file:line-precise reasoning
+// lives in the comment at each call site):
+//   2. C10F-1 gets a genuine Tier-2/RUNTIME_DATA_DIR unknown-category probe
+//      (not just a Tier-1-shaped one), plus a registry-consumption
+//      cross-check. C10F-5's positive control is now a genuine Tier-2 fixture.
+//   3. C10F-7/C10F-9's realized-vs-reported comparisons are now the
+//      product's own tests, asserting fs.existsSync on their own synthetic
+//      root -- never this verifier's read of a JSON removed[] array.
+//   4. `fileCallsStorageEndpointByExactPath` now requires real
+//      CallExpression argument position. `importedIdentifierIsReferenced`
+//      is a dedicated, self-contained, REALLY-pruning traversal.
+//   5. C10F-14's markers now match the real DECISIONS.md headings
+//      (found by this file's own author reading the merged file) and
+//      require the ruling's own content, not just 20 characters of any
+//      text. C10F-15's no-default probe is schema-based
+//      (`retentionWindows[category] = {days:number|null,
+//      source:'default'|'override'|'unset'}`), never vacuous on a missing
+//      entry, and adds the override positive control the PRD already
+//      claimed but the old code never ran.
+//   6. C10F-13's OWNED_REVIEW_PATHS no longer includes the review record's
+//      own (necessarily-post-reviewedCommit) path, and now includes the
+//      leased StorageRetention* glob. `reviewer` must additionally be a
+//      real identity that has committed to this repository before.
+//   7. Daemon teardown is rebuilt around POSIX process GROUPS
+//      (`spawn(...,{detached:true})` + `process.kill(-pgid,sig)`), signals
+//      the whole group, and POLLS for zero survivors before resolving --
+//      the DECISIONS.md `W9AS-PARK` carry-forward, verbatim. Every teardown
+//      result is pushed into one shared `allDaemonTeardownResults` array by
+//      `bootIsolatedDaemon`'s own `.stop()` wrapper; `FIXTURE-ISOLATION`
+//      requires every one of them `ok`.
+//   8. `findRegistryLiteral` unwraps an `AsExpression` (`as const`) before
+//      checking for an array literal -- this PRD's own example uses
+//      `as const`. C10F-8's "rejected" no longer requires
+//      `daemonBooted===true`. C10F-6 walks a real, memoized, cycle-safe call
+//      graph rooted at `planStorageRetention` specifically
+//      (`functionCallGraphContainsDeleteCall`) instead of flagging any
+//      delete call anywhere in the whole file-level reachable set.
+//
+// SAFETY (unchanged): this verifier never starts, stops, or otherwise
+// touches the ports 7456/51012 daemons. Every `od storage ...` invocation
+// carries an explicit, already-resolved `OD_DAEMON_URL`; `OD_SIDECAR_IPC_PATH`
+// is cleared; `assertSafeLoopbackUrl()` re-checks the port on every boot,
+// every CLI call, and every direct fetch.
 //
 // GATE-INTEGRITY: repoRoot comes from process.cwd()/--repo, never
-// import.meta.url, so this file runs correctly as an orchestrator-approved
-// out-of-repo copy. `typescript` is resolved via createRequire scoped to
-// repoRoot; `@open-design/sidecar-proto` and `@open-design/platform` are
-// both ESM-only (`"type": "module"`, no CJS entry) and are loaded via
-// dynamic `import()` of their built dist files -- a `createRequire(...)(...)`
-// call on either throws `ERR_REQUIRE_ESM` (a round-1 defect, fixed).
+// import.meta.url. `typescript` is resolved via createRequire scoped to
+// repoRoot; `@open-design/sidecar-proto` is ESM-only and loaded via dynamic
+// `import()` of its built dist file.
 //
 // PRE-IMPLEMENTATION, EXPECTED STATE: no `apps/daemon/src/storage-gc/**`
-// module exists (note: `apps/daemon/src/storage/` already exists in this
-// tree and is unrelated -- a Phase-5 ProjectStorage/S3 adapter), `cli.ts`'s
-// SUBCOMMAND_MAP has no `storage` key, `leases.json` has no `W10f` entry,
-// and `docs/plans/waves/DECISIONS.md` has none of the three freeze-blocking
-// founder-decision records this wave requires. Every dynamic criterion fails
-// BY NAME with a "product surface missing" / "no lease entry" / "no founder
-// decision" detail -- expected clean-red, never a crash. Every CLI/daemon
-// invocation is gated behind a cheap static "does the surface exist at all"
-// probe BEFORE any subprocess or fixture is constructed, specifically so an
-// absent `storage` SUBCOMMAND_MAP key can never fall through to `cli.ts`'s
-// default branch (`runDaemonCliStartup` -- starts a REAL daemon).
+// module exists, `cli.ts`'s SUBCOMMAND_MAP has no `storage` key,
+// `leases.json` has no `W10f` entry, `DECISIONS.md` has none of the three
+// freeze-blocking founder-decision records, and none of the five required
+// red-spec test files exist. Every dynamic criterion fails BY NAME --
+// expected clean-red, never a crash.
 
 import { execFileSync, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -304,21 +358,23 @@ function multisetDiff(a: readonly string[], b: readonly string[]): { equal: bool
 // AST helpers -- TypeScript compiler API only, never regex/string scanning
 // of .ts source (comments and template-literal tails are lexer trivia that
 // ts.forEachChild never visits, so an AST walk structurally cannot match
-// inside them -- a raw `.includes()` on file text can and did, round 1).
+// inside them).
 // -----------------------------------------------------------------------
 function parseTs(absPath: string): { sourceFile: TypeScriptModule.SourceFile; text: string } {
   const text = fs.readFileSync(absPath, 'utf8');
   return { sourceFile: ts.createSourceFile(absPath, text, ts.ScriptTarget.Latest, true), text };
 }
+// Generic, deliberately NON-pruning: visitor(node) never controls recursion.
+// Every caller that needs real pruning (e.g. "never descend into an
+// ImportDeclaration") writes its own dedicated traversal instead of relying
+// on this one's return value to stop descent -- see
+// `importedIdentifierIsReferenced`, below, which does exactly that after a
+// round-2 finding that a generic-`walk`-based version could not actually
+// prune and silently matched inside the import clause itself.
 function walk(node: TsNode, visitor: (n: TsNode) => void): void {
   visitor(node);
   ts.forEachChild(node, (child) => walk(child, visitor));
 }
-// Round 1 finding 2: banning only SpreadAssignment/SpreadElement let
-// {__proto__, accessor, method, toJSON} entries pass as "pure data". This
-// rejects, anywhere inside the literal subtree: spreads, `__proto__`
-// property keys, get/set accessors, method shorthand, and computed property
-// names -- everything whose runtime shape can diverge from its literal text.
 function containsUnsafeLiteralConstruct(node: TsNode): { unsafe: boolean; reason: string } {
   let unsafe = false;
   let reason = '';
@@ -396,25 +452,19 @@ function findSubcommandHandlerEntryPoint(cliPath: string, key: string): string |
   if (typeof importedFromSpec === 'string' && importedFromSpec.startsWith('.')) return resolveLocalImport(cliPath, importedFromSpec);
   return cliPath;
 }
-function subcommandMapHasKey(cliPath: string, key: string): boolean {
-  return findSubcommandHandlerEntryPoint(cliPath, key) !== null;
-}
-// Registry literal: PURE DATA ONLY (no function-valued fields -- eligibility
-// logic lives in real code that CONSUMES this data, never inside the literal
-// itself, so the literal can be validated field-by-field as data). Required
-// shape per entry: `category` (string), `tier` (1, 2, or 3 numeric literal),
-// `retentionEnvVar` (string matching `OD_STORAGE_RETENTION_<...>_DAYS`),
-// `defaultRetentionDays` (number literal or `null`), `justification` (one of
-// the five PRD-sanctioned enum strings). Tier-3 entries additionally require
-// `pinnedRelativePaths` (a string-literal array, cross-checked against
-// e2e/scripts/playwright.ts's own real clean-target list -- C10F-16).
+// Registry literal: PURE DATA ONLY. Required shape per entry: `category`
+// (string), `tier` (1, 2, or 3 numeric literal), `retentionEnvVar` (string
+// matching `OD_STORAGE_RETENTION_<...>_DAYS`), `defaultRetentionDays`
+// (number literal or `null`), `justification` (one of the five
+// PRD-sanctioned enum strings). Tier-3 entries additionally require
+// `pinnedRelativePaths`.
 interface RegistryEntry { category: string; tier: number; retentionEnvVar: string; defaultRetentionDays: number | null; justification: string | null; pinnedRelativePaths: string[] | null }
 interface RegistryLiteralScan { found: boolean; file: string | null; entries: RegistryEntry[]; unsafe: boolean; unsafeReason: string; fieldViolations: string[] }
 const RETENTION_ENV_VAR_RE = /^OD_STORAGE_RETENTION_[A-Z0-9_]+_DAYS$/;
 const JUSTIFICATIONS = new Set(['inactive-namespace', 'log-retention', 'regenerable-cache', 'orphan-checked', 'e2e-artifact']);
 // Founder Ruling 1, exactly: the only justifications carrying a DEFAULT
 // window, and what that default must be. Absent from this map (cache/orphan)
-// means the mandated default is `null` -- "nothing else has a default window."
+// means the mandated default is `null`.
 const RULING1_DEFAULT_DAYS: Record<string, number> = { 'inactive-namespace': 7, 'log-retention': 14, 'e2e-artifact': 3 };
 function literalPropertyString(obj: TypeScriptModule.ObjectLiteralExpression, key: string): string | null {
   for (const prop of obj.properties) {
@@ -434,9 +484,6 @@ function literalPropertyNumber(obj: TypeScriptModule.ObjectLiteralExpression, ke
   }
   return null;
 }
-// Distinguishes "field absent/malformed" from "field is the literal `null`" --
-// Ruling 1 requires cache/orphan entries to state `defaultRetentionDays: null`
-// explicitly, not merely omit the field.
 function literalPropertyNullableNumber(obj: TypeScriptModule.ObjectLiteralExpression, key: string): { present: boolean; isNull: boolean; value: number | null } {
   for (const prop of obj.properties) {
     if (ts.isPropertyAssignment(prop)) {
@@ -463,50 +510,53 @@ function literalPropertyStringArray(obj: TypeScriptModule.ObjectLiteralExpressio
   }
   return null;
 }
+// Round-2 finding 8a: unwraps an `AsExpression` (`as const`) before checking
+// for an array literal -- this PRD's own recommended registry example uses
+// `as const`, and the old check required the array literal to be the DIRECT
+// initializer, so a legitimate implementation following the PRD's own
+// example would have false-red.
+function unwrapAsExpression(node: TypeScriptModule.Expression): TypeScriptModule.Expression {
+  return ts.isAsExpression(node) ? unwrapAsExpression(node.expression) : node;
+}
 function findRegistryLiteral(reachable: Set<string>, nameHint: RegExp): RegistryLiteralScan {
   for (const file of reachable) {
     const { sourceFile } = parseTs(file);
     let result: RegistryLiteralScan | null = null;
     walk(sourceFile, (node) => {
       if (result) return;
-      if (
-        ts.isVariableDeclaration(node) &&
-        ts.isIdentifier(node.name) &&
-        nameHint.test(node.name.text) &&
-        node.initializer &&
-        ts.isArrayLiteralExpression(node.initializer)
-      ) {
-        const elements = node.initializer.elements;
-        const objectElements = elements.filter((el): el is TypeScriptModule.ObjectLiteralExpression => ts.isObjectLiteralExpression(el));
-        if (objectElements.length !== elements.length || elements.length === 0) return;
-        let unsafe = false; let unsafeReason = '';
-        for (const el of elements) {
-          const check = containsUnsafeLiteralConstruct(el);
-          if (check.unsafe) { unsafe = true; unsafeReason = check.reason; break; }
-        }
-        const fieldViolations: string[] = [];
-        const entries: RegistryEntry[] = objectElements.map((el, idx) => {
-          const category = literalPropertyString(el, 'category');
-          const tier = literalPropertyNumber(el, 'tier');
-          const retentionEnvVar = literalPropertyString(el, 'retentionEnvVar');
-          const justification = literalPropertyString(el, 'justification');
-          const defaultField = literalPropertyNullableNumber(el, 'defaultRetentionDays');
-          const pinnedRelativePaths = literalPropertyStringArray(el, 'pinnedRelativePaths');
-          if (!category) fieldViolations.push(`entry[${idx}]: missing/non-literal "category"`);
-          if (tier !== 1 && tier !== 2 && tier !== 3) fieldViolations.push(`entry[${idx}]: "tier" must be literal 1, 2, or 3`);
-          if (!retentionEnvVar || !RETENTION_ENV_VAR_RE.test(retentionEnvVar)) fieldViolations.push(`entry[${idx}]: "retentionEnvVar" missing or does not match ${RETENTION_ENV_VAR_RE}`);
-          if (!justification || !JUSTIFICATIONS.has(justification)) fieldViolations.push(`entry[${idx}]: "justification" missing or not in {${[...JUSTIFICATIONS].join(', ')}}`);
-          if (!defaultField.present) fieldViolations.push(`entry[${idx}]: "defaultRetentionDays" missing -- must be an explicit literal number or the literal null`);
-          if (justification && JUSTIFICATIONS.has(justification)) {
-            const mandated = RULING1_DEFAULT_DAYS[justification] ?? null;
-            const actual = defaultField.isNull ? null : defaultField.value;
-            if (actual !== mandated) fieldViolations.push(`entry[${idx}]: justification "${justification}" requires defaultRetentionDays === ${mandated === null ? 'null' : mandated} (Founder Ruling 1), found ${actual === null ? 'null' : actual}`);
-          }
-          if (tier === 3 && (!pinnedRelativePaths || pinnedRelativePaths.length === 0)) fieldViolations.push(`entry[${idx}]: tier-3 requires a non-empty "pinnedRelativePaths" string array`);
-          return { category: category ?? '', tier: tier ?? -1, retentionEnvVar: retentionEnvVar ?? '', defaultRetentionDays: defaultField.isNull ? null : defaultField.value, justification, pinnedRelativePaths };
-        });
-        result = { found: true, file, entries, unsafe, unsafeReason, fieldViolations };
+      if (!ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name) || !nameHint.test(node.name.text) || !node.initializer) return;
+      const initializer = unwrapAsExpression(node.initializer);
+      if (!ts.isArrayLiteralExpression(initializer)) return;
+      const elements = initializer.elements;
+      const objectElements = elements.filter((el): el is TypeScriptModule.ObjectLiteralExpression => ts.isObjectLiteralExpression(el));
+      if (objectElements.length !== elements.length || elements.length === 0) return;
+      let unsafe = false; let unsafeReason = '';
+      for (const el of elements) {
+        const check = containsUnsafeLiteralConstruct(el);
+        if (check.unsafe) { unsafe = true; unsafeReason = check.reason; break; }
       }
+      const fieldViolations: string[] = [];
+      const entries: RegistryEntry[] = objectElements.map((el, idx) => {
+        const category = literalPropertyString(el, 'category');
+        const tier = literalPropertyNumber(el, 'tier');
+        const retentionEnvVar = literalPropertyString(el, 'retentionEnvVar');
+        const justification = literalPropertyString(el, 'justification');
+        const defaultField = literalPropertyNullableNumber(el, 'defaultRetentionDays');
+        const pinnedRelativePaths = literalPropertyStringArray(el, 'pinnedRelativePaths');
+        if (!category) fieldViolations.push(`entry[${idx}]: missing/non-literal "category"`);
+        if (tier !== 1 && tier !== 2 && tier !== 3) fieldViolations.push(`entry[${idx}]: "tier" must be literal 1, 2, or 3`);
+        if (!retentionEnvVar || !RETENTION_ENV_VAR_RE.test(retentionEnvVar)) fieldViolations.push(`entry[${idx}]: "retentionEnvVar" missing or does not match ${RETENTION_ENV_VAR_RE}`);
+        if (!justification || !JUSTIFICATIONS.has(justification)) fieldViolations.push(`entry[${idx}]: "justification" missing or not in {${[...JUSTIFICATIONS].join(', ')}}`);
+        if (!defaultField.present) fieldViolations.push(`entry[${idx}]: "defaultRetentionDays" missing -- must be an explicit literal number or the literal null`);
+        if (justification && JUSTIFICATIONS.has(justification)) {
+          const mandated = RULING1_DEFAULT_DAYS[justification] ?? null;
+          const actual = defaultField.isNull ? null : defaultField.value;
+          if (actual !== mandated) fieldViolations.push(`entry[${idx}]: justification "${justification}" requires defaultRetentionDays === ${mandated === null ? 'null' : mandated} (Founder Ruling 1), found ${actual === null ? 'null' : actual}`);
+        }
+        if (tier === 3 && (!pinnedRelativePaths || pinnedRelativePaths.length === 0)) fieldViolations.push(`entry[${idx}]: tier-3 requires a non-empty "pinnedRelativePaths" string array`);
+        return { category: category ?? '', tier: tier ?? -1, retentionEnvVar: retentionEnvVar ?? '', defaultRetentionDays: defaultField.isNull ? null : defaultField.value, justification, pinnedRelativePaths };
+      });
+      result = { found: true, file, entries, unsafe, unsafeReason, fieldViolations };
     });
     if (result) return result;
   }
@@ -514,10 +564,7 @@ function findRegistryLiteral(reachable: Set<string>, nameHint: RegExp): Registry
 }
 // C10F-16: real, AST-derived clean-target relative path segments from
 // e2e/scripts/playwright.ts's own cleanArtifacts() -- never a duplicated,
-// hand-maintained copy that could drift from the real file. Each
-// `path.join(uiDir, 'a', 'b', ...)` call's string-literal arguments (after
-// the first, which is the `uiDir` base) are joined with '/' to form one
-// relative path segment.
+// hand-maintained copy that could drift from the real file.
 function extractPlaywrightCleanTargets(): { found: boolean; targets: string[] } {
   const scriptPath = path.join(repoRoot, 'e2e/scripts/playwright.ts');
   if (!fs.existsSync(scriptPath)) return { found: false, targets: [] };
@@ -540,11 +587,9 @@ function extractPlaywrightCleanTargets(): { found: boolean; targets: string[] } 
   });
   return { found: true, targets };
 }
-// Finds `export function <name>` / `export async function <name>` within a
-// reachable file set. Used to separately root the plan-vs-apply reachability
-// analysis (C10F-6) -- the PRD mandates these two exact export names so
-// "plan can never reach a delete primitive" is checkable without having to
-// disentangle CLI subcommand dispatch internals.
+// Finds `export function <name>` within a reachable file set -- roots the
+// plan-side reachability/call-graph analysis (C10F-6) at the PRD-mandated
+// exact export name.
 function findExportedFunctionEntry(reachable: Set<string>, exportName: string): string | null {
   for (const file of reachable) {
     const { sourceFile } = parseTs(file);
@@ -561,66 +606,132 @@ function findExportedFunctionEntry(reachable: Set<string>, exportName: string): 
   return null;
 }
 const FS_DELETE_CALL_NAMES = new Set(['rm', 'rmSync', 'unlink', 'unlinkSync', 'rmdir', 'rmdirSync']);
-// Transitive local-import BFS from a SPECIFIC exported function's owning
-// file, checking whether ANY reachable file contains a call to a
-// filesystem-delete primitive. Deliberately coarse (file-level reachability,
-// not call-graph-precise to the single function) -- but rooted at the
-// plan-specific entry point, not the whole `storage` subtree, which is what
-// round 1 flagged as missing.
-function reachableFilesContainDeleteCall(entryFile: string): { containsDelete: boolean; hits: string[] } {
-  const reachable = reachableFilesFrom(entryFile);
+// Round-2 finding 8c: locates a named function's own body node (function
+// declaration OR `const x = (...) => ...`/`function(...) {}`), used by the
+// real call-graph walk below.
+function findFunctionBodyNode(sourceFile: TypeScriptModule.SourceFile, name: string): TsNode | null {
+  let found: TsNode | null = null;
+  walk(sourceFile, (node) => {
+    if (found) return;
+    if (ts.isFunctionDeclaration(node) && node.name?.text === name && node.body) { found = node.body; return; }
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === name &&
+      node.initializer &&
+      (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer)) &&
+      node.initializer.body
+    ) {
+      found = node.initializer.body;
+    }
+  });
+  return found;
+}
+// Round-2 finding 8c fix: a real, memoized, cycle-safe call graph rooted at
+// ONE specific exported function -- replaces the old file-level
+// `reachableFilesContainDeleteCall`, which flagged ANY delete call anywhere
+// in the WHOLE transitively-imported file set. That was both a false-red
+// (a colocated `applyStorageRetention` with a real, correct delete call in
+// the SAME file as `planStorageRetention` failed this check even though
+// `planStorageRetention` itself never calls it) and imprecise (attribution
+// to the specific entry function was never actually checked). This walk
+// only visits `entryFnName`'s own body, plus the bodies of same-file or
+// storage-subtree-imported functions it ACTUALLY CALLS, transitively,
+// memoized against cycles.
+function functionCallGraphContainsDeleteCall(entryFile: string, entryFnName: string, reachableScope: Set<string>): { containsDelete: boolean; hits: string[]; visitedFns: string[] } {
   const hits: string[] = [];
-  for (const file of reachable) {
+  const visitedKeys = new Set<string>();
+  const visitedFns: string[] = [];
+  const queue: Array<{ file: string; fnName: string }> = [{ file: entryFile, fnName: entryFnName }];
+  while (queue.length > 0) {
+    const next = queue.shift();
+    if (!next) continue;
+    const { file, fnName } = next;
+    const key = `${file}::${fnName}`;
+    if (visitedKeys.has(key) || !fs.existsSync(file)) continue;
+    visitedKeys.add(key);
     const { sourceFile } = parseTs(file);
-    walk(sourceFile, (node) => {
+    const bodyNode = findFunctionBodyNode(sourceFile, fnName);
+    if (!bodyNode) continue;
+    visitedFns.push(`${path.relative(repoRoot, file)}::${fnName}`);
+    walk(bodyNode, (node) => {
       if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && FS_DELETE_CALL_NAMES.has(node.expression.name.text)) {
-        hits.push(`${path.relative(repoRoot, file)}: ${node.expression.name.text}(...)`);
+        hits.push(`${path.relative(repoRoot, file)}::${fnName}: ${node.expression.name.text}(...)`);
+      }
+    });
+    const localImportMap = new Map<string, string>();
+    walk(sourceFile, (node) => {
+      if (ts.isImportDeclaration(node) && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings) && ts.isStringLiteral(node.moduleSpecifier)) {
+        const resolved = resolveLocalImport(file, node.moduleSpecifier.text);
+        if (resolved) {
+          for (const el of node.importClause.namedBindings.elements) localImportMap.set(el.name.text, resolved);
+        }
+      }
+    });
+    walk(bodyNode, (node) => {
+      if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression)) return;
+      const calleeName = node.expression.text;
+      const importedFrom = localImportMap.get(calleeName);
+      if (importedFrom) {
+        // STRICT: never follow a call out of the storage subtree.
+        if (reachableScope.has(importedFrom)) queue.push({ file: importedFrom, fnName: calleeName });
+      } else {
+        queue.push({ file, fnName: calleeName });
       }
     });
   }
-  return { containsDelete: hits.length > 0, hits };
+  return { containsDelete: hits.length > 0, hits, visitedFns };
 }
-// AST-based (never text-scan) detection of a real HTTP call whose URL
-// argument is an EXACT string literal for one of the three mandated storage
-// endpoints. Comments and template-literal tails are lexer trivia this walk
-// never visits, closing the round-1 "raw-text /api/storage/ occurrence,
-// including comments" false-green.
+// Round-2 finding 4a fix: requires the matched literal to sit in real
+// CallExpression argument position -- an unused array literal containing
+// all three routes, or a dead variable declaration, no longer passes.
 const STORAGE_ENDPOINT_PATHS = new Set(['/api/storage/gc-plan', '/api/storage/gc-apply', '/api/storage/report']);
 function fileCallsStorageEndpointByExactPath(absPath: string): { calls: boolean; paths: string[] } {
   if (!fs.existsSync(absPath)) return { calls: false, paths: [] };
   const { sourceFile } = parseTs(absPath);
   const foundPaths = new Set<string>();
   walk(sourceFile, (node) => {
-    if (ts.isStringLiteral(node) && STORAGE_ENDPOINT_PATHS.has(node.text)) foundPaths.add(node.text);
-    // Template literals with no substitution (`\`/api/storage/gc-plan\``) --
-    // NoSubstitutionTemplateLiteral is a distinct AST node from a comment;
-    // still real source, still exact-matched.
-    if (ts.isNoSubstitutionTemplateLiteral(node) && STORAGE_ENDPOINT_PATHS.has(node.text)) foundPaths.add(node.text);
+    const isMatchingLiteral =
+      (ts.isStringLiteral(node) && STORAGE_ENDPOINT_PATHS.has(node.text)) ||
+      (ts.isNoSubstitutionTemplateLiteral(node) && STORAGE_ENDPOINT_PATHS.has(node.text));
+    if (!isMatchingLiteral) return;
+    const literalText = (node as TypeScriptModule.StringLiteral | TypeScriptModule.NoSubstitutionTemplateLiteral).text;
+    const parent = node.parent as TsNode | undefined;
+    if (parent && ts.isCallExpression(parent) && parent.arguments.some((a) => a === node)) {
+      foundPaths.add(literalText);
+    }
   });
   return { calls: foundPaths.size > 0, paths: [...foundPaths] };
 }
-// "Imported but unused" check (round 1 finding 6): an import resolving into
-// the production-reachable set is not binding proof by itself if the local
-// name is never referenced. Scans for the imported local identifier
-// appearing as a real Identifier reference elsewhere in the file (not the
-// import clause itself).
+// Round-2 finding 4b fix: a dedicated, self-contained traversal with REAL
+// pruning -- the generic `walk` above always recurses into every child
+// regardless of what the visitor does, so the old version's
+// `if (ts.isImportDeclaration(node)) return;` only skipped PROCESSING that
+// node, never its descent; the import specifier's own name Identifier
+// (e.g. `planStorageRetention` in `import { planStorageRetention } from
+// '...'`) still got visited and matched, so an imported-but-never-used
+// binding reported `referenced: true`. This function calls
+// `ts.forEachChild` itself and returns BEFORE calling it for an
+// ImportDeclaration, so that subtree is genuinely never visited.
 function importedIdentifierIsReferenced(absPath: string, localName: string): boolean {
   const { sourceFile } = parseTs(absPath);
   let referenced = false;
-  let sawUseOutsideImport = false;
-  walk(sourceFile, (node) => {
-    if (ts.isImportDeclaration(node)) return; // skip the declaration itself
-    if (ts.isIdentifier(node) && node.text === localName) sawUseOutsideImport = true;
-  });
-  referenced = sawUseOutsideImport;
+  function visit(node: TsNode): void {
+    if (referenced) return;
+    if (ts.isImportDeclaration(node)) return; // PRUNE: never descend into an import declaration.
+    if (ts.isIdentifier(node) && node.text === localName) { referenced = true; return; }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
   return referenced;
 }
 
 // -----------------------------------------------------------------------
 // Fixture helpers -- EVERY fixture lives under a freshly mkdtemp'd temp
-// project root. `repoRoot` is referenced for fixture construction NOWHERE
-// in this file except the one read-only function below (FIXTURE-ISOLATION
-// checks this mechanically).
+// project root (Tier-1) or a freshly mkdtemp'd temp data dir (Tier-2,
+// RUNTIME_DATA_DIR). `repoRoot` is referenced for fixture construction
+// NOWHERE in this file except the one read-only function below
+// (FIXTURE-ISOLATION checks this mechanically).
 // -----------------------------------------------------------------------
 const runId = crypto.randomBytes(4).toString('hex');
 let fixtureSeq = 0;
@@ -629,16 +740,8 @@ function nextFixtureName(label: string): string {
   return `w10f-verify-${runId}-${fixtureSeq}-${label}`;
 }
 // The ONLY sanctioned reference to the real checkout's `.tmp/tools-dev/` in
-// this entire file -- read-only (existsSync + readdirSync only), used
-// exclusively by the FIXTURE-ISOLATION check to prove real pre-existing
-// namespaces never leak into a plan. Self-checked by `selfCheckFixtureIsolation`,
-// which requires EXACTLY one `path.join(repoRoot, '.tmp', ...)` call site in
-// the whole file, and requires it to live here. Returns each namespace's
-// full real path alongside its bare name so every OTHER call site that
-// needs the full path (the leak-detection comparison, below) can reuse this
-// function's own output instead of separately reconstructing
-// `repoRoot` + `.tmp` -- keeping the "exactly one call site" invariant real,
-// not just true today until the next caller needs a full path too.
+// this entire file -- read-only, used exclusively by FIXTURE-ISOLATION to
+// prove real pre-existing namespaces never leak into a plan.
 function readOnlyListRealCheckoutTmpToolsDevNamespaces(): Array<{ name: string; fullPath: string }> {
   const dir = path.join(repoRoot, '.tmp', 'tools-dev');
   try {
@@ -680,11 +783,6 @@ function selfCheckFixtureIsolation(): { ok: boolean; detail: string } {
   const ok = sanctionedFnFound && totalTmpJoinSites === 1 && sanctionedFnTmpJoinSites === 1 && !sanctionedFnHasWriteCall;
   return { ok, detail: `sanctionedFnFound=${sanctionedFnFound} totalTmpJoinSites=${totalTmpJoinSites} sanctionedFnTmpJoinSites=${sanctionedFnTmpJoinSites} sanctionedFnHasWriteCall=${sanctionedFnHasWriteCall}` };
 }
-// Fresh, fully isolated temp "project root" -- NEVER the checkout. Every
-// Tier-1 `.tmp/<source>/<namespace>` fixture is built under
-// `<tempRoot>/.tmp/<source>/<namespace>`, matching the real relative layout
-// so a conforming implementation resolving `.tmp` off `OD_STORAGE_TMP_ROOT`
-// finds it in exactly the shape it expects off the real project root.
 async function withTempProjectRoot<T>(fn: (tempRoot: string) => Promise<T> | T): Promise<T> {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'w10f-project-root-'));
   try {
@@ -739,7 +837,10 @@ function parseLastJsonLine(stdout: string): { ok: true; value: unknown } | { ok:
   }
 }
 interface PlanCandidate { path: string; category: string; namespace: string | null; sizeBytes: number; ageDays: number }
-interface PlanResponse { planId: string; retentionWindows: Record<string, { days: number; source: string }>; candidates: PlanCandidate[]; totals: { count: number; bytes: number } }
+// `days` is `number | null` -- a category with no default and no override
+// (Founder Ruling 1: "nothing else has a default window") echoes
+// `{days: null, source: 'unset'}`, never a fabricated number (C10F-15).
+interface PlanResponse { planId: string; retentionWindows: Record<string, { days: number | null; source: string }>; candidates: PlanCandidate[]; totals: { count: number; bytes: number } }
 function parsePlanResponse(value: unknown): { ok: true; plan: PlanResponse } | { ok: false; error: string } {
   if (!isRecord(value) || value.ok !== true) return { ok: false, error: 'missing ok:true' };
   if (typeof value.planId !== 'string' || value.planId.length === 0) return { ok: false, error: 'missing/invalid planId' };
@@ -752,24 +853,13 @@ function parsePlanResponse(value: unknown): { ok: true; plan: PlanResponse } | {
     }
     candidates.push({ path: c.path, category: c.category, namespace: typeof c.namespace === 'string' ? c.namespace : null, sizeBytes: c.sizeBytes, ageDays: c.ageDays });
   }
-  const retentionWindows: Record<string, { days: number; source: string }> = {};
+  const retentionWindows: Record<string, { days: number | null; source: string }> = {};
   for (const [k, v] of Object.entries(value.retentionWindows)) {
-    if (!isRecord(v) || typeof v.days !== 'number' || typeof v.source !== 'string') return { ok: false, error: `malformed retentionWindows[${k}]` };
+    if (!isRecord(v) || (typeof v.days !== 'number' && v.days !== null) || typeof v.source !== 'string') return { ok: false, error: `malformed retentionWindows[${k}]` };
     retentionWindows[k] = { days: v.days, source: v.source };
   }
   if (!isRecord(value.totals) || typeof value.totals.count !== 'number' || typeof value.totals.bytes !== 'number') return { ok: false, error: 'missing/invalid totals' };
   return { ok: true, plan: { planId: value.planId, retentionWindows, candidates, totals: { count: value.totals.count, bytes: value.totals.bytes } } };
-}
-interface ApplyResponse { planId: string; removed: Array<{ path: string; category: string; sizeBytes: number }>; skipped: Array<{ path: string; category: string; reason: string }>; totals: { removedCount: number; removedBytes: number } }
-function parseApplyResponse(value: unknown): { ok: true; apply: ApplyResponse } | { ok: false; error: string } {
-  if (!isRecord(value) || value.ok !== true) return { ok: false, error: 'missing ok:true' };
-  if (typeof value.planId !== 'string') return { ok: false, error: 'missing planId' };
-  if (!Array.isArray(value.removed) || !Array.isArray(value.skipped)) return { ok: false, error: 'missing removed/skipped arrays' };
-  const removed = value.removed.map((r) => (isRecord(r) && typeof r.path === 'string' && typeof r.category === 'string' && typeof r.sizeBytes === 'number' ? { path: r.path, category: r.category, sizeBytes: r.sizeBytes } : null));
-  const skipped = value.skipped.map((r) => (isRecord(r) && typeof r.path === 'string' && typeof r.category === 'string' && typeof r.reason === 'string' && r.reason.trim().length > 0 ? { path: r.path, category: r.category, reason: r.reason } : null));
-  if (removed.some((r) => r === null) || skipped.some((r) => r === null)) return { ok: false, error: 'malformed removed/skipped entry' };
-  if (!isRecord(value.totals) || typeof value.totals.removedCount !== 'number' || typeof value.totals.removedBytes !== 'number') return { ok: false, error: 'missing/invalid totals' };
-  return { ok: true, apply: { planId: value.planId, removed: removed as ApplyResponse['removed'], skipped: skipped as ApplyResponse['skipped'], totals: { removedCount: value.totals.removedCount, removedBytes: value.totals.removedBytes } } };
 }
 function parseErrorResponse(value: unknown): { ok: true; code: string; message: string } | { ok: false } {
   if (!isRecord(value) || value.ok !== false || !isRecord(value.error)) return { ok: false };
@@ -787,24 +877,22 @@ function parseReportResponse(value: unknown): { ok: true; report: ReportResponse
   return { ok: true, report: { byCategory: byCategory as ReportResponse['byCategory'], totals: { count: value.totals.count, bytes: value.totals.bytes } } };
 }
 
-// Aggregated across the whole run for the FIXTURE-ISOLATION runtime proof.
+// Aggregated across the whole run.
 const allObservedPlanCandidatePaths: string[] = [];
-function recordObservedPlan(plan: PlanResponse): void {
-  for (const c of plan.candidates) allObservedPlanCandidatePaths.push(c.path);
+const allPlanConfinementViolations: string[] = [];
+function isPathConfinedTo(p: string, root: string): boolean {
+  const rel = path.relative(root, p);
+  return rel === '' ? true : !rel.startsWith('..') && !path.isAbsolute(rel);
 }
-
-// THE BELT (finding 1): confines every `apply` call to candidates the
-// verifier itself could only have produced under this run's own temp root.
-// Independent of, and unconditional on, whatever the primary
-// OD_STORAGE_TMP_ROOT isolation does or does not do correctly.
-function assertPlanConfinedToTempRoot(plan: PlanResponse, tempRoot: string): { ok: boolean; violations: string[] } {
-  const violations = plan.candidates
-    .map((c) => c.path)
-    .filter((p) => {
-      const rel = path.relative(tempRoot, p);
-      return rel === '' ? false : rel.startsWith('..') || path.isAbsolute(rel);
-    });
-  return { ok: violations.length === 0, violations };
+// Plan-CORRECTNESS evidence, never a destructive-action gate (round 3: this
+// file never calls apply, so nothing destructive needs gating). A candidate
+// is confined if it sits under EITHER this run's Tier-1 temp project root OR
+// its Tier-2 temp data dir -- both verifier-owned fixture roots, never the
+// real checkout.
+function recordObservedPlan(plan: PlanResponse, tempRoot: string, dataDir: string): void {
+  for (const c of plan.candidates) allObservedPlanCandidatePaths.push(c.path);
+  const violations = plan.candidates.map((c) => c.path).filter((p) => !isPathConfinedTo(p, tempRoot) && !isPathConfinedTo(p, dataDir));
+  allPlanConfinementViolations.push(...violations);
 }
 
 // -----------------------------------------------------------------------
@@ -827,11 +915,9 @@ async function fetchLoopbackOnly(urlString: string, init: RequestInit = {}): Pro
   return fetch(url, { ...init, redirect: 'manual' });
 }
 
-// `daemonUrl` and `tempRoot` are REQUIRED, never optional/defaulted --
-// there is no calling convention that lets this function invoke
-// `od storage ...` without both a verifier-owned daemon URL AND an explicit
-// `OD_STORAGE_TMP_ROOT`. `OD_SIDECAR_IPC_PATH` is cleared so IPC discovery
-// cannot bypass the explicit `OD_DAEMON_URL`.
+// `daemonUrl` and `tempRoot` are REQUIRED, never optional/defaulted.
+// `OD_SIDECAR_IPC_PATH` is cleared so IPC discovery cannot bypass the
+// explicit `OD_DAEMON_URL`.
 function runStorageCli(daemonUrl: string, tempRoot: string, args: string[], env: NodeJS.ProcessEnv = {}): { skipped: true; reason: string } | { skipped: false; status: number; stdout: string } {
   if (!storageEntry) {
     return { skipped: true, reason: `'storage' is not a key in apps/daemon/src/cli.ts's SUBCOMMAND_MAP -- refusing to invoke the CLI at all, because an unrecognized first token falls through to runDaemonCliStartup() (starts a real daemon)` };
@@ -845,8 +931,7 @@ function runStorageCli(daemonUrl: string, tempRoot: string, args: string[], env:
 }
 
 // -----------------------------------------------------------------------
-// ESM-only workspace package loaders (round 1 finding: createRequire throws
-// ERR_REQUIRE_ESM on either of these).
+// ESM-only workspace package loaders.
 // -----------------------------------------------------------------------
 let sidecarProtoCache: { SIDECAR_STAMP_FLAGS: Record<string, string>; SIDECAR_SOURCES: Record<string, string> } | null = null;
 async function loadSidecarProto(): Promise<{ SIDECAR_STAMP_FLAGS: Record<string, string>; SIDECAR_SOURCES: Record<string, string> }> {
@@ -857,30 +942,18 @@ async function loadSidecarProto(): Promise<{ SIDECAR_STAMP_FLAGS: Record<string,
   sidecarProtoCache = { SIDECAR_STAMP_FLAGS: mod.SIDECAR_STAMP_FLAGS, SIDECAR_SOURCES: mod.SIDECAR_SOURCES };
   return sidecarProtoCache;
 }
-interface PlatformProcessApi {
-  listProcessSnapshots: () => Promise<Array<{ pid: number; ppid: number; command: string }>>;
-  collectProcessTreePids: (processes: Array<{ pid: number; ppid: number; command: string }>, rootPids: Array<number | null | undefined>) => number[];
-  stopProcesses: (pids: Array<number | null | undefined>) => Promise<{ stoppedPids: number[]; remainingPids: number[]; forcedPids: number[] }>;
-}
-let platformCache: PlatformProcessApi | null = null;
-async function loadPlatform(): Promise<PlatformProcessApi> {
-  if (platformCache) return platformCache;
-  const distPath = path.join(repoRoot, 'packages/platform/dist/index.mjs');
-  if (!fs.existsSync(distPath)) throw new Error(`packages/platform is not built (missing ${distPath}) -- run pnpm install`);
-  const mod = (await import(pathToFileURL(distPath).href)) as PlatformProcessApi;
-  platformCache = { listProcessSnapshots: mod.listProcessSnapshots, collectProcessTreePids: mod.collectProcessTreePids, stopProcesses: mod.stopProcesses };
-  return platformCache;
-}
 
 // -----------------------------------------------------------------------
-// Isolated daemon subprocess -- carries its own OD_DATA_DIR, its own
-// OD_STORAGE_TMP_ROOT (finding 1's primary isolation brace), optional
-// retention-window env overrides (must be set at BOOT time -- a thin
-// HTTP-client CLI cannot change an already-running daemon's own environment
-// after the fact, round 1 finding 5), and a real HTTP request-log capture
-// (round 1 finding 6: proves production code is USED, by observing the
-// actual request traffic the CLI/route generate -- never inferred from
-// static text).
+// Isolated daemon subprocess. Round-2 finding 7: teardown is rebuilt around
+// POSIX process GROUPS, per DECISIONS.md's `W9AS-PARK` carry-forward ("a
+// leader's exit event is not proof the group exited... teardown must signal
+// the process GROUP and then CONFIRM no survivors before resolving").
+// `spawn(..., {detached:true})` makes the immediate child the leader of a
+// NEW session and process group (pgid === its own pid on POSIX); every
+// further descendant it spawns inherits that SAME pgid unless it
+// independently calls setsid() itself, so `process.kill(-pgid, sig)`
+// reaches the whole tree regardless of reparenting -- the exact class of
+// orphan a ppid-based tree walk can miss.
 // -----------------------------------------------------------------------
 interface RequestLogEntry { method: string; url: string }
 function bootIsolatedDaemonSubprocess(dataDir: string, tempRoot: string, extraEnv: NodeJS.ProcessEnv = {}): { proc: ReturnType<typeof spawn>; requestLogPath: string; readyPromise: Promise<{ baseUrl: string }> } {
@@ -905,10 +978,6 @@ function bootIsolatedDaemonSubprocess(dataDir: string, tempRoot: string, extraEn
   const runnerContent = `${runnerLines.join('\n')}\n`;
   fs.writeFileSync(runnerPath, runnerContent);
   fs.writeFileSync(requestLogPath, '');
-  // Self-check (defect catalog item 1): the generated runner is plain,
-  // non-TS-syntax JavaScript, so node --check genuinely validates it. Still
-  // executed via tsx (not node) so the dynamic import of server.ts resolves
-  // through tsx's TS loader hook.
   try {
     execFileSync(process.execPath, ['--check', runnerPath], { stdio: 'pipe' });
   } catch (err) {
@@ -919,6 +988,7 @@ function bootIsolatedDaemonSubprocess(dataDir: string, tempRoot: string, extraEn
     cwd: repoRoot,
     env: { ...process.env, ...extraEnv, OD_DATA_DIR: dataDir, OD_STORAGE_TMP_ROOT: tempRoot, W10F_SERVER_URL: serverUrl, W10F_REQUEST_LOG_PATH: requestLogPath },
     stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true,
   });
   const readyPromise = new Promise<{ baseUrl: string }>((resolve, reject) => {
     let buffered = '';
@@ -959,19 +1029,57 @@ function readRequestLog(requestLogPath: string): RequestLogEntry[] {
     return [];
   }
 }
-// Round 1 finding 4: teardown must confirm the LISTENER-OWNING descendant
-// actually exited, not just the `pnpm exec tsx` wrapper PID. Uses the real
-// production process-tree primitives (@open-design/platform) -- the same
-// SIGTERM-then-SIGKILL escalation the codebase already ships, walking the
-// full descendant tree, never a single-PID signal.
+function listProcessGroupMemberPids(pgid: number): number[] {
+  const r = sh('ps', ['-Ao', 'pid=,pgid=']);
+  if (r.status !== 0) return [];
+  const pids: number[] = [];
+  for (const line of r.stdout.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const parts = trimmed.split(/\s+/);
+    const pid = Number(parts[0]);
+    const gid = Number(parts[1]);
+    if (Number.isFinite(pid) && Number.isFinite(gid) && gid === pgid) pids.push(pid);
+  }
+  return pids;
+}
+async function sleepMs(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+// Signals the WHOLE process group and polls for zero survivors before
+// resolving -- never trusts the group leader's own `exit` event as proof
+// the group is gone (that is exactly what `DECISIONS.md`'s `W9AS-PARK`
+// entry names as the safety defect: "cancels the pending SIGKILL and
+// resolves, while a SIGTERM-handling descendant in the same group stays
+// alive").
 async function stopIsolatedDaemonSubprocessTree(proc: ReturnType<typeof spawn>): Promise<{ ok: boolean; detail: string }> {
   if (proc.pid == null) return { ok: true, detail: 'no pid to stop' };
-  const platform = await loadPlatform();
-  const snapshots = await platform.listProcessSnapshots();
-  const treePids = platform.collectProcessTreePids(snapshots, [proc.pid]);
-  const result = await platform.stopProcesses(treePids);
-  return { ok: result.remainingPids.length === 0, detail: `treePids=${JSON.stringify(treePids)} stopped=${JSON.stringify(result.stoppedPids)} remaining=${JSON.stringify(result.remainingPids)} forced=${JSON.stringify(result.forcedPids)}` };
+  const pgid = proc.pid;
+  try { process.kill(-pgid, 'SIGTERM'); } catch { /* group may already be gone */ }
+  const termDeadline = Date.now() + 8_000;
+  let remaining = listProcessGroupMemberPids(pgid);
+  while (remaining.length > 0 && Date.now() < termDeadline) {
+    await sleepMs(200);
+    remaining = listProcessGroupMemberPids(pgid);
+  }
+  if (remaining.length > 0) {
+    try { process.kill(-pgid, 'SIGKILL'); } catch { /* already gone */ }
+    const killDeadline = Date.now() + 4_000;
+    while (remaining.length > 0 && Date.now() < killDeadline) {
+      await sleepMs(200);
+      remaining = listProcessGroupMemberPids(pgid);
+    }
+  }
+  const ok = remaining.length === 0;
+  return { ok, detail: `pgid=${pgid} SIGTERM sent, SIGKILL escalation ${remaining.length > 0 ? 'attempted' : 'not needed'}; remainingAfterConfirm=${JSON.stringify(remaining)}` };
 }
+
+// Every teardown this file ever performs is pushed here by
+// `bootIsolatedDaemon`'s own `.stop()` wrapper -- never left for an
+// individual call site to remember (round-2 finding 7: dedicated-daemon
+// callers discarded the result). `FIXTURE-ISOLATION` requires every entry
+// `ok`.
+const allDaemonTeardownResults: Array<{ ok: boolean; detail: string }> = [];
 
 interface IsolatedDaemon { baseUrl: string; dataDir: string; tempRoot: string; requestLogPath: string; stop: () => Promise<{ ok: boolean; detail: string }> }
 async function bootIsolatedDaemon(extraEnv: NodeJS.ProcessEnv = {}): Promise<IsolatedDaemon> {
@@ -982,7 +1090,8 @@ async function bootIsolatedDaemon(extraEnv: NodeJS.ProcessEnv = {}): Promise<Iso
   try {
     ({ baseUrl } = await readyPromise);
   } catch (err) {
-    await stopIsolatedDaemonSubprocessTree(proc);
+    const stopResult = await stopIsolatedDaemonSubprocessTree(proc);
+    allDaemonTeardownResults.push(stopResult);
     fs.rmSync(dataDir, { recursive: true, force: true });
     fs.rmSync(tempRoot, { recursive: true, force: true });
     throw err;
@@ -992,6 +1101,7 @@ async function bootIsolatedDaemon(extraEnv: NodeJS.ProcessEnv = {}): Promise<Iso
     baseUrl, dataDir, tempRoot, requestLogPath,
     stop: async () => {
       const stopResult = await stopIsolatedDaemonSubprocessTree(proc);
+      allDaemonTeardownResults.push(stopResult);
       fs.rmSync(dataDir, { recursive: true, force: true });
       fs.rmSync(tempRoot, { recursive: true, force: true });
       return stopResult;
@@ -999,20 +1109,187 @@ async function bootIsolatedDaemon(extraEnv: NodeJS.ProcessEnv = {}): Promise<Iso
   };
 }
 
-// Safe apply: parses the plan, applies THE BELT, and only then calls
-// `gc apply`. Returns a `refused` sentinel (never spawns the CLI) if the
-// plan contains anything outside this run's own temp root.
-function safeApply(daemon: IsolatedDaemon, plan: PlanResponse, extraEnv: NodeJS.ProcessEnv = {}): { refused: true; violations: string[] } | { refused: false; skipped: true; reason: string } | { refused: false; skipped: false; status: number; stdout: string } {
-  const confinement = assertPlanConfinedToTempRoot(plan, daemon.tempRoot);
-  if (!confinement.ok) return { refused: true, violations: confinement.violations };
-  const r = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'apply', '--plan', plan.planId, '--confirm', '--json'], extraEnv);
-  return r.skipped ? { refused: false, skipped: true, reason: r.reason } : { refused: false, skipped: false, status: r.status, stdout: r.stdout };
-}
-
 // Survives shared-daemon teardown (it's a plain temp file this verifier
 // itself wrote, never owned by the daemon process) so C10F-10 can read it
 // AFTER the daemon that generated it has already been stopped.
 let lastSharedDaemonRequestLogPath: string | null = null;
+
+// =========================================================================
+// REQUIRED RED SPECS -- the product's own vitest tests prove deletion
+// semantics; this verifier proves they EXIST, are BOUND to production, and
+// went RED BEFORE GREEN. See the round-3 header comment for the full
+// architectural rationale. NEVER calls `apply` -- only `git`, `pnpm
+// install --offline`, and `vitest run` against files the implementer wrote.
+// =========================================================================
+interface RequiredRedSpecConfig { key: string; relPath: string; requiredTitles: string[]; requireExactPath?: string }
+const REQUIRED_RED_SPECS: Record<string, RequiredRedSpecConfig> = {
+  'symlink-escape': {
+    key: 'symlink-escape',
+    relPath: 'apps/daemon/tests/storage-gc-symlink-escape.test.ts',
+    requiredTitles: [
+      'W10F-GC: a symlink to an external directory inside an eligible namespace is never entered by apply, and a real expired file in the same namespace is removed',
+    ],
+  },
+  'imported-folder': {
+    key: 'imported-folder',
+    relPath: 'apps/daemon/tests/storage-gc-imported-folder.test.ts',
+    requiredTitles: [
+      "W10F-GC: apply never removes anything under an imported-folder project's metadata.baseDir, while a genuine orphaned Tier-2 fixture in the same run is removed",
+    ],
+  },
+  'apply-semantics': {
+    key: 'apply-semantics',
+    relPath: 'apps/daemon/tests/storage-gc-apply-semantics.test.ts',
+    requiredTitles: [
+      'W10F-GC: apply without --confirm is rejected and deletes nothing',
+      'W10F-GC: apply against an unknown planId is rejected and deletes nothing',
+      "W10F-GC: apply's realized removed[] set exactly equals the plan's candidates minus a namespace that became active after planning, and the survivor is skipped with a non-empty reason",
+      'W10F-GC: a file created after planning is never removed by apply even though it lives in an otherwise-eligible namespace',
+    ],
+    requireExactPath: '/api/storage/gc-apply',
+  },
+  'report-reconciliation': {
+    key: 'report-reconciliation',
+    relPath: 'apps/daemon/tests/storage-gc-report-reconciliation.test.ts',
+    requiredTitles: [
+      "W10F-GC: report totals after apply equal a fresh on-disk stat walk of the surviving fixture tree, not the plan's predicted totals",
+    ],
+  },
+  'orphan-detection': {
+    key: 'orphan-detection',
+    relPath: 'apps/daemon/tests/storage-gc-orphan-detection.test.ts',
+    requiredTitles: [
+      'W10F-GC: a referenced artifact with a live database row is never a plan candidate and is never removed by apply',
+      'W10F-GC: a genuinely orphaned artifact with no referencing database row is a plan candidate and is removed by apply',
+    ],
+  },
+};
+function extractTestTitlesFromSource(text: string, fakeFileName: string): { titles: string[]; duplicate: boolean } {
+  const sourceFile = ts.createSourceFile(fakeFileName, text, ts.ScriptTarget.Latest, true);
+  const titles: string[] = [];
+  walk(sourceFile, (node) => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && (node.expression.text === 'test' || node.expression.text === 'it')) {
+      const firstArg = node.arguments[0];
+      if (firstArg && ts.isStringLiteral(firstArg)) titles.push(firstArg.text);
+    }
+  });
+  return { titles, duplicate: new Set(titles).size !== titles.length };
+}
+interface VitestJsonResult { reporterParsed: boolean; status: number; numFailedTests: number; numPassedTests: number; titleStatus: Map<string, string> }
+function runVitestFileJson(cwd: string, testFileArg: string, outPath: string): VitestJsonResult {
+  const r = sh('pnpm', ['--filter', '@open-design/daemon', 'exec', 'vitest', 'run', '-c', 'vitest.config.ts', '--reporter=json', `--outputFile=${outPath}`, testFileArg], { cwd, timeoutMs: 3 * 60_000 });
+  let data: { numFailedTests?: number; numPassedTests?: number; testResults?: Array<{ assertionResults?: Array<{ title?: string; status?: string }> }> } | null = null;
+  try { data = JSON.parse(fs.readFileSync(outPath, 'utf8')); } catch { data = null; }
+  const titleStatus = new Map<string, string>();
+  for (const fileResult of data?.testResults ?? []) {
+    for (const a of fileResult.assertionResults ?? []) {
+      if (typeof a.title === 'string' && typeof a.status === 'string') titleStatus.set(a.title, a.status);
+    }
+  }
+  return { reporterParsed: data !== null, status: r.status, numFailedTests: data?.numFailedTests ?? -1, numPassedTests: data?.numPassedTests ?? -1, titleStatus };
+}
+// First commit in `baseCommit..headSha` history adding this exact path.
+// `baseCommit`/`headSha` are resolved inside `main()` (never at module load,
+// so a git-resolution failure can still write a proper emergency manifest)
+// and threaded through explicitly rather than closed over as mutable
+// module state.
+function findFileFirstIntroductionCommit(relPath: string, baseCommit: string, headSha: string): string | null {
+  const logResult = sh('git', ['log', '--reverse', '--format=%H', `${baseCommit}..${headSha}`, '--', relPath]);
+  if (logResult.status !== 0) return null;
+  const commits = logResult.stdout.trim().split('\n').filter(Boolean);
+  return commits[0] ?? null;
+}
+// Checks out the introduction commit itself (NO overlay -- the commit's own
+// content, as committed, is exactly what gets replayed) into an isolated
+// detached worktree, frozen offline install, and runs the file for real.
+// Genuinely red requires a nonzero exit AND at least one real assertion
+// failure -- proving the file did not arrive already fully green.
+function replayFileRedAtCommit(commit: string, relPath: string): { ok: boolean; detail: string } {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'w10f-redspec-'));
+  let worktreeAdded = false;
+  try {
+    const addResult = sh('git', ['worktree', 'add', '--detach', tempDir, commit], { timeoutMs: 5 * 60_000 });
+    if (addResult.status !== 0) return { ok: false, detail: `git worktree add --detach ${tempDir} ${commit} failed: exit=${addResult.status} ${addResult.stdout.slice(-500)}` };
+    worktreeAdded = true;
+    sh('mise', ['trust'], { cwd: tempDir, timeoutMs: 30_000 });
+    const installResult = sh('pnpm', ['install', '--offline', '--frozen-lockfile'], { cwd: tempDir, timeoutMs: 5 * 60_000 });
+    if (installResult.status !== 0) return { ok: false, detail: `frozen offline install at ${commit} failed: exit=${installResult.status} ${installResult.stdout.slice(-1000)}` };
+    const testFileAbs = path.join(tempDir, relPath);
+    if (!fs.existsSync(testFileAbs)) return { ok: false, detail: `${relPath} does not exist at its own claimed introduction commit ${commit} -- introduction-commit resolution is broken` };
+    const outPath = path.join(tempDir, '.w10f-redspec-result.json');
+    const result = runVitestFileJson(path.join(tempDir, 'apps/daemon'), `tests/${path.basename(relPath)}`, outPath);
+    const genuinelyRed = result.reporterParsed && result.status !== 0 && result.numFailedTests >= 1;
+    return { ok: genuinelyRed, detail: `commit=${commit} reporterParsed=${result.reporterParsed} exit=${result.status} numFailedTests=${result.numFailedTests} numPassedTests=${result.numPassedTests}` };
+  } catch (err) {
+    return { ok: false, detail: `replay crashed: ${String(err)}` };
+  } finally {
+    if (worktreeAdded) sh('git', ['worktree', 'remove', '--force', tempDir], { timeoutMs: 60_000 });
+    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* best effort */ }
+  }
+}
+interface RequiredRedSpecResult { ok: boolean; boundToProduction: boolean; fileExists: boolean; detail: string }
+const requiredRedSpecCache = new Map<string, RequiredRedSpecResult>();
+function checkRequiredRedSpecSync(config: RequiredRedSpecConfig, baseCommit: string, headSha: string): RequiredRedSpecResult {
+  const cached = requiredRedSpecCache.get(config.key);
+  if (cached) return cached;
+  const finish = (result: RequiredRedSpecResult): RequiredRedSpecResult => {
+    requiredRedSpecCache.set(config.key, result);
+    return result;
+  };
+  const absPath = path.join(repoRoot, config.relPath);
+  if (!fs.existsSync(absPath)) {
+    return finish({ ok: false, boundToProduction: false, fileExists: false, detail: `${config.relPath} does not exist -- expected pre-implementation state` });
+  }
+  if (!storageEntry) {
+    return finish({ ok: false, boundToProduction: false, fileExists: true, detail: "product surface missing: 'storage' not registered in SUBCOMMAND_MAP -- a red spec cannot bind to a nonexistent production path" });
+  }
+  const specImportSpecs = localImportSpecifiers(absPath);
+  const specImports = specImportSpecs.map((spec) => resolveLocalImport(absPath, spec)).filter((p): p is string => p !== null);
+  const boundImports = specImports.filter((imp) => storageReachable.has(imp));
+  const { calls: drivesRealSurface, paths: drivenPaths } = fileCallsStorageEndpointByExactPath(absPath);
+  let importBound = false;
+  if (boundImports.length > 0) {
+    const localNames: string[] = [];
+    const { sourceFile } = parseTs(absPath);
+    walk(sourceFile, (node) => {
+      if (ts.isImportDeclaration(node) && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings) && ts.isStringLiteral(node.moduleSpecifier)) {
+        const resolved = resolveLocalImport(absPath, node.moduleSpecifier.text);
+        if (resolved && boundImports.includes(resolved)) {
+          for (const el of node.importClause.namedBindings.elements) localNames.push(el.name.text);
+        }
+      }
+    });
+    importBound = localNames.some((name) => importedIdentifierIsReferenced(absPath, name));
+  }
+  const exactPathBound = config.requireExactPath ? drivenPaths.includes(config.requireExactPath) : true;
+  const boundToProduction = (importBound || drivesRealSurface) && exactPathBound;
+  if (!boundToProduction) {
+    return finish({ ok: false, boundToProduction: false, fileExists: true, detail: `not bound to production: importBound=${importBound} drivesRealSurface=${drivesRealSurface} exactPathBound=${exactPathBound} (requireExactPath=${config.requireExactPath ?? 'n/a'}) drivenPaths=${JSON.stringify(drivenPaths)}` });
+  }
+  const { titles: presentTitles, duplicate } = extractTestTitlesFromSource(fs.readFileSync(absPath, 'utf8'), absPath);
+  const missingTitles = config.requiredTitles.filter((t) => !presentTitles.includes(t));
+  if (missingTitles.length > 0 || duplicate) {
+    return finish({ ok: false, boundToProduction: true, fileExists: true, detail: `required title(s) missing, or the file has duplicate test titles: missing=${JSON.stringify(missingTitles)} duplicateTitlesPresent=${duplicate}` });
+  }
+  const greenOutPath = path.join(proofDir, `.redspec-head-${config.key}.json`);
+  const green = runVitestFileJson(path.join(repoRoot, 'apps/daemon'), `tests/${path.basename(config.relPath)}`, greenOutPath);
+  const allRequiredPassAtHead = green.reporterParsed && config.requiredTitles.every((t) => green.titleStatus.get(t) === 'passed');
+  const greenOk = green.status === 0 && allRequiredPassAtHead;
+  if (!greenOk) {
+    return finish({ ok: false, boundToProduction: true, fileExists: true, detail: `not green at HEAD: exit=${green.status} reporterParsed=${green.reporterParsed} allRequiredPassAtHead=${allRequiredPassAtHead} titleStatus=${JSON.stringify([...green.titleStatus])}` });
+  }
+  const introductionCommit = findFileFirstIntroductionCommit(config.relPath, baseCommit, headSha);
+  if (!introductionCommit) {
+    return finish({ ok: false, boundToProduction: true, fileExists: true, detail: `could not resolve an introduction commit for ${config.relPath} in ${baseCommit}..${headSha}` });
+  }
+  const red = replayFileRedAtCommit(introductionCommit, config.relPath);
+  return finish({ ok: red.ok, boundToProduction: true, fileExists: true, detail: `green-at-head: ok (exit=${green.status}); introductionCommit=${introductionCommit}; red-at-introduction: ${red.detail}` });
+}
+function getRequiredRedSpec(key: string, baseCommit: string, headSha: string): RequiredRedSpecResult {
+  const config = REQUIRED_RED_SPECS[key];
+  if (!config) throw new Error(`unknown required red spec key: ${key}`);
+  return checkRequiredRedSpecSync(config, baseCommit, headSha);
+}
 
 // =========================================================================
 // main
@@ -1030,14 +1307,17 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Read BEFORE any fixture work -- the FIXTURE-ISOLATION runtime proof's
-  // ground truth for "what real namespaces already existed."
+  const requiredRedSpec = (key: string): RequiredRedSpecResult => getRequiredRedSpec(key, baseCommit, headSha);
+
+  // Read BEFORE any fixture work -- FIXTURE-ISOLATION's ground truth.
   const realCheckoutNamespacesBeforeRun = readOnlyListRealCheckoutTmpToolsDevNamespaces();
 
   // -----------------------------------------------------------------
-  // ONE shared isolated daemon for C10F-2, C10F-3, C10F-4, C10F-5, C10F-6,
-  // C10F-7, C10F-9 (none of these need a daemon-boot-time config change --
-  // C10F-8 boots its OWN daemons per retention scenario, see below).
+  // ONE shared isolated daemon for the plan-only criteria (C10F-1, C10F-2,
+  // C10F-3's plan-only half, C10F-4, C10F-5's plan-only half, C10F-6).
+  // C10F-8/C10F-15/C10F-16 boot their OWN dedicated daemons (need env
+  // overrides set at boot time). C10F-7/C10F-9/C10F-17 need no daemon at
+  // all -- they are entirely required-red-spec checks now.
   // -----------------------------------------------------------------
   let sharedDaemon: IsolatedDaemon | null = null;
   if (storageEntry) {
@@ -1057,44 +1337,50 @@ async function main(): Promise<void> {
   }
 
   // -----------------------------------------------------------------
-  // C10F-1 -- registry is a finite, named, pure-data allowlist; runtime
+  // C10F-1 -- registry is a finite, named, pure-data allowlist. Runtime
   // proof that an unlisted directory never becomes a candidate regardless
-  // of age (replaces the round-1 blanket "any readdir call = fail", which
-  // wrongly rejected legitimate registry-bounded accounting).
+  // of age, at BOTH Tier 1 (.tmp/<source>) and Tier 2 (RUNTIME_DATA_DIR --
+  // round-2 finding 2: the old probe was Tier-1-shaped only). Plus a
+  // registry-consumption cross-check: every registry category has a
+  // corresponding retentionWindows key in the real runtime response, so a
+  // decorative registry paired with a parallel hardcoded eligibility list
+  // cannot pass silently.
   // -----------------------------------------------------------------
-  await checkCriterion('C10F-1', 'AST scan of the storage module + runtime plan against an unlisted decoy directory', 'a named, pure-data array-literal registry exists with required fields per entry, and an unlisted directory never appears as a candidate regardless of age', async () => {
+  await checkCriterion('C10F-1', 'AST scan of the storage module + runtime plan against unlisted-category decoys at both Tier 1 and Tier 2', 'a named, pure-data array-literal registry exists with required fields per entry; an unlisted directory never appears as a candidate at either tier, regardless of age; every registry category has a corresponding retentionWindows key in the real runtime response', async () => {
     if (!storageEntry) { record('C10F-1', '', '', false, '', { detail: "product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP" }); return; }
     const registry = findRegistryLiteral(storageReachable, /registry|target/i);
     const structuralOk = registry.found && !registry.unsafe && registry.fieldViolations.length === 0;
     const daemon = requireSharedDaemon('C10F-1');
     if (!daemon) return;
+    const unlistedTier1Dir = tmpNamespaceDir(daemon.tempRoot, 'not-a-real-category', nextFixtureName('unlisted-t1'));
+    writeFixtureFileWithAge(path.join(unlistedTier1Dir, 'old.txt'), 'x', 5000);
+    const unlistedTier2Dir = path.join(daemon.dataDir, 'not-a-real-tier2-category', nextFixtureName('unlisted-t2'));
+    writeFixtureFileWithAge(path.join(unlistedTier2Dir, 'old.txt'), 'x', 5000);
     let runtimeOk = false;
-    let runtimeDetail = 'shared daemon unavailable';
-    await withTempProjectRoot(async () => {
-      const unlistedDir = tmpNamespaceDir(daemon.tempRoot, 'not-a-real-category', nextFixtureName('unlisted'));
-      writeFixtureFileWithAge(path.join(unlistedDir, 'old.txt'), 'x', 5000);
-      try {
-        const r = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'plan', '--json']);
-        const parsed = r.skipped === false ? parseLastJsonLine(r.stdout) : { ok: false as const, error: r.reason };
-        const planResult = parsed.ok ? parsePlanResponse(parsed.value) : { ok: false as const, error: parsed.error };
-        if (planResult.ok) recordObservedPlan(planResult.plan);
-        const leaked = planResult.ok && planResult.plan.candidates.some((c) => c.path.startsWith(unlistedDir));
-        runtimeOk = planResult.ok && !leaked;
-        runtimeDetail = `planParsed=${planResult.ok} leaked=${leaked}`;
-      } finally {
-        fs.rmSync(unlistedDir, { recursive: true, force: true });
-      }
-    });
+    let runtimeDetail = 'plan did not parse';
+    try {
+      const r = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'plan', '--json']);
+      const parsed = r.skipped === false ? parseLastJsonLine(r.stdout) : { ok: false as const, error: r.reason };
+      const planResult = parsed.ok ? parsePlanResponse(parsed.value) : { ok: false as const, error: parsed.error };
+      if (planResult.ok) recordObservedPlan(planResult.plan, daemon.tempRoot, daemon.dataDir);
+      const leakedT1 = planResult.ok && planResult.plan.candidates.some((c) => c.path.startsWith(unlistedTier1Dir));
+      const leakedT2 = planResult.ok && planResult.plan.candidates.some((c) => c.path.startsWith(unlistedTier2Dir));
+      const registryCategoriesHaveWindows = planResult.ok && registry.entries.every((e) => e.category in planResult.plan.retentionWindows);
+      runtimeOk = planResult.ok && !leakedT1 && !leakedT2 && registryCategoriesHaveWindows;
+      runtimeDetail = `planParsed=${planResult.ok} leakedTier1=${leakedT1} leakedTier2=${leakedT2} registryCategoriesHaveWindows=${registryCategoriesHaveWindows}`;
+    } finally {
+      fs.rmSync(unlistedTier1Dir, { recursive: true, force: true });
+      fs.rmSync(unlistedTier2Dir, { recursive: true, force: true });
+    }
     const ok = structuralOk && runtimeOk;
     record('C10F-1', '', '', ok,
       `structural: found=${registry.found} unsafe=${registry.unsafe}(${registry.unsafeReason}) fieldViolations=${JSON.stringify(registry.fieldViolations)} entries=${JSON.stringify(registry.entries)}\nruntime: ${runtimeDetail}`,
-      { detail: ok ? undefined : 'registry is not a valid pure-data allowlist, or an unlisted category/directory leaked into a plan' });
+      { detail: ok ? undefined : 'registry is not a valid pure-data allowlist, an unlisted category/directory leaked into a plan at either tier, or a registry category has no corresponding retentionWindows key at runtime' });
   });
 
   // -----------------------------------------------------------------
-  // C10F-2 -- root confinement: source-level prefix-collision (the real T1
-  // shape: an allowed SOURCE root vs. a sibling whose name merely shares
-  // the string prefix), exact JSON candidate identity.
+  // C10F-2 -- root confinement: source-level prefix-collision, exact JSON
+  // candidate identity.
   // -----------------------------------------------------------------
   await checkCriterion('C10F-2', 'od storage gc plan --json against a source-level prefix-collision fixture', 'a decoy source directory whose name string-prefix-collides with the real source root never appears as a candidate; a real in-scope file does, by exact path', async () => {
     const daemon = requireSharedDaemon('C10F-2');
@@ -1109,7 +1395,7 @@ async function main(): Promise<void> {
       const r = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'plan', '--json']);
       const parsed = r.skipped === false ? parseLastJsonLine(r.stdout) : { ok: false as const, error: r.reason };
       const planResult = parsed.ok ? parsePlanResponse(parsed.value) : { ok: false as const, error: parsed.error };
-      if (planResult.ok) recordObservedPlan(planResult.plan);
+      if (planResult.ok) recordObservedPlan(planResult.plan, daemon.tempRoot, daemon.dataDir);
       const paths = planResult.ok ? planResult.plan.candidates.map((c) => c.path) : [];
       const includesCollision = paths.some((p) => p.startsWith(collisionSourceDir));
       const includesInScopeExact = paths.includes(inScopeFile);
@@ -1123,57 +1409,50 @@ async function main(): Promise<void> {
   });
 
   // -----------------------------------------------------------------
-  // C10F-3 -- symlink escape refusal. Real vulnerability shape: a symlink
-  // INSIDE the allowed root pointing at a DIRECTORY outside it -- unlink of
-  // a symlink never dereferences (a symlink-to-FILE test proves nothing,
-  // round 1 finding 2), so the risk is enumeration/recursion following the
-  // link, not deletion of the link itself.
+  // C10F-3 -- symlink escape refusal. Two halves, never overlapping in what
+  // they prove: (a) plan-only, verifier-side -- content behind a symlink to
+  // an external DIRECTORY never appears as a plan candidate (safe: read
+  // only, no apply); (b) deletion semantics -- the required red spec
+  // `storage-gc-symlink-escape.test.ts` proves the external content
+  // literally survives a real `apply` and a real in-scope expired file is
+  // literally removed, against a fixture root it builds itself.
   // -----------------------------------------------------------------
-  await checkCriterion('C10F-3', 'od storage gc plan/apply against a symlink to an external DIRECTORY', 'nothing under the externally-linked directory ever appears as a candidate or gets removed; a real in-scope file in the same namespace is removed, and apply reports ok:true', async () => {
+  await checkCriterion('C10F-3', 'plan-only symlink-to-external-directory leak probe + required red spec apps/daemon/tests/storage-gc-symlink-escape.test.ts', 'nothing under an externally-linked directory ever appears as a plan candidate; a real in-scope expired file in the same namespace does; the required red spec exists, is bound to production, and proves realized apply behavior red-before-green', async () => {
     const daemon = requireSharedDaemon('C10F-3');
     if (!daemon) return;
     const namespace = nextFixtureName('c3');
     const nsDir = tmpNamespaceDir(daemon.tempRoot, 'tools-dev', namespace);
     const externalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'w10f-symlink-target-'));
     const externalFile = path.join(externalDir, 'real-user-file.txt');
-    fs.writeFileSync(externalFile, 'do-not-delete');
-    const beforeHash = sha256File(externalFile);
+    writeFixtureFileWithAge(externalFile, 'do-not-delete', 400);
     const linkPath = path.join(nsDir, 'escape-link');
     fs.mkdirSync(nsDir, { recursive: true });
     fs.symlinkSync(externalDir, linkPath, 'dir');
     const realExpired = path.join(nsDir, 'real-expired.txt');
     writeFixtureFileWithAge(realExpired, 'expired', 400);
-    fs.utimesSync(externalFile, new Date(Date.now() - 400 * 86_400_000), new Date(Date.now() - 400 * 86_400_000));
+    let planOk = false;
+    let planDetail = 'plan did not parse';
     try {
       const plan = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'plan', '--json']);
       const planParsed = plan.skipped === false ? parseLastJsonLine(plan.stdout) : { ok: false as const, error: plan.reason };
       const planResult = planParsed.ok ? parsePlanResponse(planParsed.value) : { ok: false as const, error: planParsed.error };
-      if (!planResult.ok) { record('C10F-3', '', '', false, '', { detail: `plan did not parse: ${planResult.error}` }); return; }
-      recordObservedPlan(planResult.plan);
-      const leaksExternal = planResult.plan.candidates.some((c) => c.path.startsWith(externalDir));
-      const applyResult = safeApply(daemon, planResult.plan);
-      if (applyResult.refused) { record('C10F-3', '', '', false, '', { detail: `BELT refused apply: plan contained out-of-temp-root candidates: ${JSON.stringify(applyResult.violations)}` }); return; }
-      if (applyResult.skipped) { record('C10F-3', '', '', false, '', { detail: `apply skipped: ${applyResult.reason}` }); return; }
-      const applyParsed = parseLastJsonLine(applyResult.stdout);
-      const applyResponse = applyParsed.ok ? parseApplyResponse(applyParsed.value) : { ok: false as const, error: applyParsed.error };
-      const afterHash = fs.existsSync(externalFile) ? sha256File(externalFile) : null;
-      const externalSurvived = afterHash === beforeHash;
-      const realExpiredRemoved = !fs.existsSync(realExpired);
-      const applyOk = applyResult.status === 0 && applyResponse.ok;
-      const ok = !leaksExternal && externalSurvived && realExpiredRemoved && applyOk;
-      record('C10F-3', '', '', ok,
-        `leaksExternal=${leaksExternal} externalSurvived=${externalSurvived} (before=${beforeHash} after=${afterHash})\nrealExpiredRemoved=${realExpiredRemoved} applyOk=${applyOk} applyStatus=${applyResult.status}`,
-        { detail: ok ? undefined : 'symlinked-directory content leaked into the plan or survived apply incorrectly, or the positive control (real expired file) was not removed, or apply did not report ok:true' });
+      if (planResult.ok) recordObservedPlan(planResult.plan, daemon.tempRoot, daemon.dataDir);
+      const leaksExternal = planResult.ok && planResult.plan.candidates.some((c) => c.path.startsWith(externalDir));
+      const includesRealExpired = planResult.ok && planResult.plan.candidates.some((c) => c.path === realExpired);
+      planOk = planResult.ok && !leaksExternal && includesRealExpired;
+      planDetail = `planParsed=${planResult.ok} leaksExternal=${leaksExternal} includesRealExpired=${includesRealExpired}`;
     } finally {
       fs.rmSync(externalDir, { recursive: true, force: true });
       fs.rmSync(nsDir, { recursive: true, force: true });
     }
+    const redSpec = requiredRedSpec('symlink-escape');
+    const ok = planOk && redSpec.ok;
+    record('C10F-3', '', '', ok, `plan-only: ${planDetail}\nrequired red spec: ${redSpec.detail}`,
+      { detail: ok ? undefined : 'symlinked-directory content leaked into the plan, the real in-scope expired file was missing from the plan, or the required red spec did not exist/bind/prove red-before-green' });
   });
 
   // -----------------------------------------------------------------
-  // C10F-4 -- active-namespace refusal, exact JSON candidate identity,
-  // exercised across MULTIPLE registry categories (round 1: one category
-  // is not enough to prove the refusal is universal).
+  // C10F-4 -- active-namespace refusal, across every Tier-1 category.
   // -----------------------------------------------------------------
   await checkCriterion('C10F-4', 'od storage gc plan against a live-stamped namespace, across every Tier-1 category the registry declares', 'every category excludes its active namespace by exact path while the process is alive; every category includes it, exactly, once inactive', async () => {
     const daemon = requireSharedDaemon('C10F-4');
@@ -1198,18 +1477,18 @@ async function main(): Promise<void> {
         `${flags.app}=w10f-verify`, `${flags.mode}=dev`, `${flags.namespace}=${namespace}`,
         `${flags.ipc}=w10f-verify`, `${flags.source}=${category}`], { stdio: 'ignore' });
       try {
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        await sleepMs(300);
         const activeRes = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'plan', '--json']);
         const activeParsed = activeRes.skipped === false ? parseLastJsonLine(activeRes.stdout) : { ok: false as const, error: activeRes.reason };
         const activePlan = activeParsed.ok ? parsePlanResponse(activeParsed.value) : { ok: false as const, error: activeParsed.error };
-        if (activePlan.ok) recordObservedPlan(activePlan.plan);
+        if (activePlan.ok) recordObservedPlan(activePlan.plan, daemon.tempRoot, daemon.dataDir);
         const activeExcluded = activePlan.ok && !activePlan.plan.candidates.some((c) => c.path.startsWith(nsDir));
         if (liveProc.pid != null) liveProc.kill('SIGKILL');
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        await sleepMs(300);
         const inactiveRes = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'plan', '--json']);
         const inactiveParsed = inactiveRes.skipped === false ? parseLastJsonLine(inactiveRes.stdout) : { ok: false as const, error: inactiveRes.reason };
         const inactivePlan = inactiveParsed.ok ? parsePlanResponse(inactiveParsed.value) : { ok: false as const, error: inactiveParsed.error };
-        if (inactivePlan.ok) recordObservedPlan(inactivePlan.plan);
+        if (inactivePlan.ok) recordObservedPlan(inactivePlan.plan, daemon.tempRoot, daemon.dataDir);
         const inactiveIncluded = inactivePlan.ok && inactivePlan.plan.candidates.some((c) => c.path.startsWith(nsDir));
         perCategory[category] = { activeExcluded, inactiveIncluded };
       } finally {
@@ -1222,68 +1501,63 @@ async function main(): Promise<void> {
   });
 
   // -----------------------------------------------------------------
-  // C10F-5 -- imported-folder baseDir untouchable. Positive control
-  // restored (a real orphaned Tier-2 item IS collected in the same run --
-  // proves refusal is baseDir-specific, not "GC does nothing"); apply
-  // response checked; "never enumerated" proven via exact-match absence in
-  // the candidates array (the contract's own accounting), not inference
-  // from file timestamps alone.
+  // C10F-5 -- imported-folder baseDir untouchable. Plan-only half: no
+  // candidate path is ever under baseDir, while a genuine Tier-2
+  // (RUNTIME_DATA_DIR) positive control DOES appear -- round-2 finding 2:
+  // the old positive control was `.tmp/tools-dev`, a Tier-1 fixture, so it
+  // never actually proved Tier-2 collection works. Deletion-semantics half:
+  // the required red spec `storage-gc-imported-folder.test.ts` proves
+  // baseDir literally survives a real apply while the Tier-2 control is
+  // literally removed.
   // -----------------------------------------------------------------
-  await checkCriterion('C10F-5', 'a real imported-folder project via POST /api/import/folder, plus a genuine Tier-2 positive control, then od storage gc apply', 'no file under metadata.baseDir ever appears in any plan candidate list or gets removed; the positive control (a real orphaned item) IS removed; apply reports ok:true', async () => {
+  await checkCriterion('C10F-5', 'a real imported-folder project via POST /api/import/folder, plus a genuine Tier-2 (RUNTIME_DATA_DIR) plan-only positive control, plus required red spec apps/daemon/tests/storage-gc-imported-folder.test.ts', 'no file under metadata.baseDir ever appears in any plan candidate list; a genuine Tier-2 positive control does; the required red spec exists, is bound to production, and proves realized apply behavior red-before-green', async () => {
     const daemon = requireSharedDaemon('C10F-5');
     if (!daemon) return;
+    const registry = findRegistryLiteral(storageReachable, /registry|target/i);
+    const tier2DefaultEntry = registry.entries.find((e) => e.tier === 2 && e.defaultRetentionDays !== null);
+    if (!tier2DefaultEntry) { record('C10F-5', '', '', false, '', { detail: 'no tier-2 registry entry with a non-null default window exists to use as the plan-only positive control' }); return; }
     const importedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'w10f-imported-'));
     const preciousFile = path.join(importedDir, 'precious.txt');
     writeFixtureFileWithAge(preciousFile, 'do-not-delete', 400);
-    const preciousBeforeHash = sha256File(preciousFile);
-    const namespace = nextFixtureName('c5-control');
-    const controlNsDir = tmpNamespaceDir(daemon.tempRoot, 'tools-dev', namespace);
-    const controlFile = path.join(controlNsDir, 'orphaned.txt');
-    writeFixtureFileWithAge(controlFile, 'orphaned', 400);
+    const controlDir = path.join(daemon.dataDir, tier2DefaultEntry.category, nextFixtureName('c5-control'));
+    const controlFile = path.join(controlDir, 'orphaned.txt');
+    writeFixtureFileWithAge(controlFile, 'orphaned', (tier2DefaultEntry.defaultRetentionDays ?? 0) + 30);
+    let planOk = false;
+    let planDetail = 'could not create the fixture imported project';
     try {
       const importRes = await fetchLoopbackOnly(`${daemon.baseUrl}/api/import/folder`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ baseDir: importedDir }),
       });
-      if (importRes.status < 200 || importRes.status >= 300) { record('C10F-5', '', '', false, '', { detail: `POST /api/import/folder returned ${importRes.status} -- could not create the fixture imported project` }); return; }
-      const planRes = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'plan', '--json']);
-      const planParsed = planRes.skipped === false ? parseLastJsonLine(planRes.stdout) : { ok: false as const, error: planRes.reason };
-      const planResult = planParsed.ok ? parsePlanResponse(planParsed.value) : { ok: false as const, error: planParsed.error };
-      if (!planResult.ok) { record('C10F-5', '', '', false, '', { detail: `plan did not parse: ${planResult.error}` }); return; }
-      recordObservedPlan(planResult.plan);
-      const anyUnderBaseDir = planResult.plan.candidates.some((c) => c.path === preciousFile || c.path.startsWith(importedDir));
-      const controlIncluded = planResult.plan.candidates.some((c) => c.path === controlFile);
-      const applyResult = safeApply(daemon, planResult.plan);
-      if (applyResult.refused) { record('C10F-5', '', '', false, '', { detail: `BELT refused apply: ${JSON.stringify(applyResult.violations)}` }); return; }
-      if (applyResult.skipped) { record('C10F-5', '', '', false, '', { detail: `apply skipped: ${applyResult.reason}` }); return; }
-      const applyParsed = parseLastJsonLine(applyResult.stdout);
-      const applyResponse = applyParsed.ok ? parseApplyResponse(applyParsed.value) : { ok: false as const, error: applyParsed.error };
-      const preciousAfterHash = fs.existsSync(preciousFile) ? sha256File(preciousFile) : null;
-      const untouched = preciousAfterHash === preciousBeforeHash;
-      const controlRemoved = !fs.existsSync(controlFile);
-      const controlRemovedInResponse = applyResponse.ok && applyResponse.apply.removed.some((r) => r.path === controlFile);
-      const applyOk = applyResult.status === 0 && applyResponse.ok;
-      const ok = !anyUnderBaseDir && controlIncluded && untouched && controlRemoved && controlRemovedInResponse && applyOk;
-      record('C10F-5', '', '', ok,
-        `anyUnderBaseDir=${anyUnderBaseDir} controlIncluded=${controlIncluded} untouched=${untouched} (before=${preciousBeforeHash} after=${preciousAfterHash}) controlRemoved=${controlRemoved} controlRemovedInResponse=${controlRemovedInResponse} applyOk=${applyOk}`,
-        { detail: ok ? undefined : 'baseDir content was listed as a candidate or altered, the positive control was NOT collected (proves the GC did nothing globally rather than refusing baseDir specifically), or apply did not report ok:true' });
+      if (importRes.status >= 200 && importRes.status < 300) {
+        const planRes = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'plan', '--json']);
+        const planParsed = planRes.skipped === false ? parseLastJsonLine(planRes.stdout) : { ok: false as const, error: planRes.reason };
+        const planResult = planParsed.ok ? parsePlanResponse(planParsed.value) : { ok: false as const, error: planParsed.error };
+        if (planResult.ok) recordObservedPlan(planResult.plan, daemon.tempRoot, daemon.dataDir);
+        const anyUnderBaseDir = planResult.ok && planResult.plan.candidates.some((c) => c.path === preciousFile || c.path.startsWith(importedDir));
+        const controlIncluded = planResult.ok && planResult.plan.candidates.some((c) => c.path === controlFile);
+        planOk = planResult.ok && !anyUnderBaseDir && controlIncluded;
+        planDetail = `importStatus=${importRes.status} planParsed=${planResult.ok} anyUnderBaseDir=${anyUnderBaseDir} controlIncluded=${controlIncluded}`;
+      } else {
+        planDetail = `POST /api/import/folder returned ${importRes.status}`;
+      }
     } finally {
       fs.rmSync(importedDir, { recursive: true, force: true });
-      fs.rmSync(controlNsDir, { recursive: true, force: true });
+      fs.rmSync(controlDir, { recursive: true, force: true });
     }
+    const redSpec = requiredRedSpec('imported-folder');
+    const ok = planOk && redSpec.ok;
+    record('C10F-5', '', '', ok, `plan-only: ${planDetail}\nrequired red spec: ${redSpec.detail}`,
+      { detail: ok ? undefined : 'baseDir content was listed as a candidate, the genuine Tier-2 positive control was not, or the required red spec did not exist/bind/prove red-before-green' });
   });
 
   // -----------------------------------------------------------------
-  // C10F-6 -- dry-run is the default and the only read path. Exit code +
-  // JSON validity checked; MULTIPLE namespaces snapshotted; the promised
-  // AST reachability proof is implemented for real, rooted at the PRD-
-  // mandated `planStorageRetention` export specifically (never the whole
-  // `storage` subtree).
+  // C10F-6 -- dry-run is the default and the only read path.
   // -----------------------------------------------------------------
-  await checkCriterion('C10F-6', 'full multi-namespace fixture-tree multiset before/after od storage gc plan, plus AST reachability from planStorageRetention', 'CLI exits 0 with valid JSON; every fixture namespace is byte-identical before/after; planStorageRetention\'s reachable set contains no filesystem-delete call', async () => {
+  await checkCriterion('C10F-6', 'full multi-namespace fixture-tree multiset before/after od storage gc plan, plus a real call-graph walk from planStorageRetention', 'CLI exits 0 with valid JSON; every fixture namespace is byte-identical before/after; planStorageRetention\'s own call graph contains no filesystem-delete call', async () => {
     const daemon = requireSharedDaemon('C10F-6');
     if (!daemon) return;
     const planEntry = findExportedFunctionEntry(storageReachable, 'planStorageRetention');
-    const deleteCheck = planEntry ? reachableFilesContainDeleteCall(planEntry) : { containsDelete: true, hits: ['planStorageRetention export not found'] };
+    const deleteCheck = planEntry ? functionCallGraphContainsDeleteCall(planEntry, 'planStorageRetention', storageReachable) : { containsDelete: true, hits: ['planStorageRetention export not found'], visitedFns: [] };
     const namespaces = [nextFixtureName('c6a'), nextFixtureName('c6b')];
     const nsDirs = namespaces.map((ns) => tmpNamespaceDir(daemon.tempRoot, 'tools-dev', ns));
     for (const nsDir of nsDirs) {
@@ -1295,102 +1569,41 @@ async function main(): Promise<void> {
     const cliOk = r.skipped === false && r.status === 0;
     const parsed = r.skipped === false ? parseLastJsonLine(r.stdout) : { ok: false as const, error: r.reason };
     const planResult = parsed.ok ? parsePlanResponse(parsed.value) : { ok: false as const, error: parsed.error };
-    if (planResult.ok) recordObservedPlan(planResult.plan);
+    if (planResult.ok) recordObservedPlan(planResult.plan, daemon.tempRoot, daemon.dataDir);
     const after = nsDirs.map(statTreeMultiset);
     const diffs = before.map((b, i) => multisetDiff(b, after[i] ?? []));
     const treesUnchanged = diffs.every((d) => d.equal);
     for (const nsDir of nsDirs) fs.rmSync(nsDir, { recursive: true, force: true });
     const ok = cliOk && planResult.ok && treesUnchanged && !deleteCheck.containsDelete;
     record('C10F-6', '', '', ok,
-      `cliOk=${cliOk} planParsed=${planResult.ok} treesUnchanged=${treesUnchanged}\nplanEntry=${planEntry ? path.relative(repoRoot, planEntry) : 'NOT FOUND'} containsDelete=${deleteCheck.containsDelete} hits=${JSON.stringify(deleteCheck.hits)}`,
-      { detail: ok ? undefined : 'plan mutated a fixture tree, exited non-zero, returned invalid JSON, or planStorageRetention\'s reachable call graph includes a filesystem-delete primitive' });
+      `cliOk=${cliOk} planParsed=${planResult.ok} treesUnchanged=${treesUnchanged}\nplanEntry=${planEntry ? path.relative(repoRoot, planEntry) : 'NOT FOUND'} containsDelete=${deleteCheck.containsDelete} hits=${JSON.stringify(deleteCheck.hits)} visitedFns=${JSON.stringify(deleteCheck.visitedFns)}`,
+      { detail: ok ? undefined : 'plan mutated a fixture tree, exited non-zero, returned invalid JSON, or planStorageRetention\'s own call graph reaches a filesystem-delete primitive' });
   });
 
   // -----------------------------------------------------------------
-  // C10F-7 -- apply is distinct, plan-bound, re-validated. Adds: --confirm
-  // is mandatory (rejected without it); an unknown planId is rejected;
-  // exact multiset comparison of plan-candidates-minus-ineligible vs.
-  // apply's reported removed[]; a non-empty skip reason is required.
+  // C10F-7 -- apply is a distinct, plan-bound, re-validated, confirm-gated
+  // action. Round-3: entirely a required-red-spec check now -- this
+  // verifier never calls apply, including as a negative control expected to
+  // be rejected (the round-2 CRITICAL ruling is unconditional). Every
+  // assertion the old verifier-side version made (both negative controls,
+  // exact multiset removed[] comparison, non-empty skip reason, the
+  // post-plan surprise file never swept in) is now a required test title in
+  // `storage-gc-apply-semantics.test.ts`, asserting REALIZED on-disk state
+  // (fs.existsSync on its own synthetic root), never this verifier's read
+  // of a reported removed[] array (round-2 finding 3).
   // -----------------------------------------------------------------
-  await checkCriterion('C10F-7', 'apply without --confirm; apply against an unknown planId; plan, invalidate one candidate, apply the original plan', 'both negative controls are rejected by name; the realized removed[] set equals the plan\'s candidates minus the invalidated one, exactly; the invalidated one carries a non-empty skip reason; a post-plan surprise file is never swept in', async () => {
-    const daemon = requireSharedDaemon('C10F-7');
-    if (!daemon) return;
-    let sidecarProto: { SIDECAR_STAMP_FLAGS: Record<string, string> };
-    try {
-      sidecarProto = await loadSidecarProto();
-    } catch (err) {
-      record('C10F-7', '', '', false, '', { detail: `could not load @open-design/sidecar-proto: ${String(err)}` });
-      return;
-    }
-    const survivorNamespace = nextFixtureName('c7-survivor');
-    const survivorNsDir = tmpNamespaceDir(daemon.tempRoot, 'tools-dev', survivorNamespace);
-    const deletableNsDir = tmpNamespaceDir(daemon.tempRoot, 'tools-dev', nextFixtureName('c7-deletable'));
-    writeFixtureFileWithAge(path.join(survivorNsDir, 'stamp-me.txt'), 'x', 400);
-    writeFixtureFileWithAge(path.join(deletableNsDir, 'expired.txt'), 'x', 400);
-    const surpriseNsDir = tmpNamespaceDir(daemon.tempRoot, 'tools-dev', nextFixtureName('c7-surprise'));
-    let liveProc: ReturnType<typeof spawn> | null = null;
-    try {
-      // Negative control 1: unknown planId, WITH --confirm, must reject.
-      const unknownPlanRes = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'apply', '--plan', 'not-a-real-plan-id', '--confirm', '--json']);
-      const unknownPlanJson = unknownPlanRes.skipped === false ? parseLastJsonLine(unknownPlanRes.stdout) : { ok: false as const, error: unknownPlanRes.reason };
-      const unknownPlanError = unknownPlanJson.ok ? parseErrorResponse(unknownPlanJson.value) : { ok: false as const };
-      const unknownPlanRejected = unknownPlanRes.skipped === false && unknownPlanRes.status !== 0 && unknownPlanError.ok;
-
-      const plan = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'plan', '--json']);
-      const planParsed = plan.skipped === false ? parseLastJsonLine(plan.stdout) : { ok: false as const, error: plan.reason };
-      const planResult = planParsed.ok ? parsePlanResponse(planParsed.value) : { ok: false as const, error: planParsed.error };
-      if (!planResult.ok) { record('C10F-7', '', '', false, '', { detail: `plan did not parse: ${planResult.error}` }); return; }
-      recordObservedPlan(planResult.plan);
-
-      // Negative control 2: missing --confirm, WITH the real planId, must reject.
-      const noConfirmRes = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'apply', '--plan', planResult.plan.planId, '--json']);
-      const noConfirmRejected = noConfirmRes.skipped === false && noConfirmRes.status !== 0;
-
-      const flags = sidecarProto.SIDECAR_STAMP_FLAGS;
-      liveProc = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000);',
-        `${flags.app}=w10f-verify`, `${flags.mode}=dev`, `${flags.namespace}=${survivorNamespace}`,
-        `${flags.ipc}=w10f-verify`, `${flags.source}=tools-dev`], { stdio: 'ignore' });
-      writeFixtureFileWithAge(path.join(surpriseNsDir, 'surprise.txt'), 'x', 400);
-      await new Promise((resolve) => setTimeout(resolve, 300));
-
-      const applyResult = safeApply(daemon, planResult.plan);
-      if (applyResult.refused) { record('C10F-7', '', '', false, '', { detail: `BELT refused apply: ${JSON.stringify(applyResult.violations)}` }); return; }
-      if (applyResult.skipped) { record('C10F-7', '', '', false, '', { detail: `apply skipped: ${applyResult.reason}` }); return; }
-      const applyParsed = parseLastJsonLine(applyResult.stdout);
-      const applyResponse = applyParsed.ok ? parseApplyResponse(applyParsed.value) : { ok: false as const, error: applyParsed.error };
-      if (!applyResponse.ok) { record('C10F-7', '', '', false, '', { detail: `apply response did not parse: ${(applyResponse as { ok: false; error: string }).error}` }); return; }
-
-      const expectedRemoved = planResult.plan.candidates.map((c) => c.path).filter((p) => !p.startsWith(survivorNsDir));
-      const realizedRemoved = applyResponse.apply.removed.map((r) => r.path);
-      const removedSetDiff = multisetDiff(expectedRemoved, realizedRemoved);
-      const survivorSkipped = applyResponse.apply.skipped.find((s) => s.path.startsWith(survivorNsDir));
-      const survivorHasReason = !!survivorSkipped && survivorSkipped.reason.trim().length > 0;
-      const surpriseNotRemoved = !applyResponse.apply.removed.some((r) => r.path.startsWith(surpriseNsDir));
-      const survivorFileSurvives = fs.existsSync(path.join(survivorNsDir, 'stamp-me.txt'));
-      const deletableFileRemoved = !fs.existsSync(path.join(deletableNsDir, 'expired.txt'));
-
-      const ok = unknownPlanRejected && noConfirmRejected && removedSetDiff.equal && survivorHasReason && surpriseNotRemoved && survivorFileSurvives && deletableFileRemoved;
-      record('C10F-7', '', '', ok,
-        `unknownPlanRejected=${unknownPlanRejected} noConfirmRejected=${noConfirmRejected}\nremovedSetEqual=${removedSetDiff.equal} onlyInExpected=${JSON.stringify(removedSetDiff.onlyInA)} onlyInRealized=${JSON.stringify(removedSetDiff.onlyInB)}\nsurvivorHasReason=${survivorHasReason} surpriseNotRemoved=${surpriseNotRemoved} survivorFileSurvives=${survivorFileSurvives} deletableFileRemoved=${deletableFileRemoved}`,
-        { detail: ok ? undefined : 'apply accepted a missing --confirm or an unknown planId, or its realized removed[] set did not equal the plan minus the re-validated-ineligible candidate, or the skip reason was empty, or a post-plan surprise file was swept in' });
-    } finally {
-      if (liveProc && liveProc.pid != null) { try { liveProc.kill('SIGKILL'); } catch { /* already gone */ } }
-      fs.rmSync(survivorNsDir, { recursive: true, force: true });
-      fs.rmSync(deletableNsDir, { recursive: true, force: true });
-      fs.rmSync(surpriseNsDir, { recursive: true, force: true });
-    }
+  await checkCriterion('C10F-7', 'required red spec apps/daemon/tests/storage-gc-apply-semantics.test.ts', 'the red spec exists, is bound to production via the exact /api/storage/gc-apply call, contains all four required titles, and proves each one red-before-green by real vitest execution', () => {
+    const redSpec = requiredRedSpec('apply-semantics');
+    record('C10F-7', '', '', redSpec.ok, redSpec.detail, { detail: redSpec.ok ? undefined : redSpec.detail });
   });
 
   // -----------------------------------------------------------------
-  // C10F-8 -- retention windows configurable, independently effective, and
-  // stated. Round 1 finding 5: retention overrides must be set at DAEMON
-  // BOOT time (a thin HTTP-client CLI cannot retroactively change an
-  // already-running daemon's own environment) -- this criterion boots its
-  // OWN dedicated daemon per scenario. Exact field comparison against
-  // `retentionWindows[category].days`, never JSON.stringify(...).includes().
-  // Multiple categories held fixed against each other.
+  // C10F-8 -- retention windows: boot-time, independently effective, and
+  // stated. Round-2 finding 8b: "rejected" no longer requires
+  // `daemonBooted === true` -- a correct implementation that fails fast and
+  // refuses to boot at all on an invalid 0/-5 window is a valid rejection.
   // -----------------------------------------------------------------
-  await checkCriterion('C10F-8', 'per-scenario isolated daemon boots with a retention-window env override set BEFORE boot; exact retentionWindows[category].days comparison', 'the fixture survives under a wide window and is collected under a narrow one for its own category only; every OTHER category\'s window is unaffected; the echoed effective-window value equals the override exactly; 0/-5 are rejected as config errors', async () => {
+  await checkCriterion('C10F-8', 'per-scenario isolated daemon boots with a retention-window env override set BEFORE boot; exact retentionWindows[category].days comparison', 'the fixture survives under a wide window and is collected under a narrow one for its own category only; every OTHER category\'s window is unaffected; the echoed effective-window value equals the override exactly; 0/-5 are rejected as config errors, whether by a nonzero CLI/HTTP status or by the daemon refusing to boot at all', async () => {
     if (!storageEntry) { record('C10F-8', '', '', false, '', { detail: "product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP" }); return; }
     const registry = findRegistryLiteral(storageReachable, /registry|target/i);
     const tier1Entries = registry.entries.filter((e) => e.tier === 1);
@@ -1398,13 +1611,13 @@ async function main(): Promise<void> {
     const targetEntry = tier1Entries[0]!;
     const otherEntry = tier1Entries.find((e) => e.category !== targetEntry.category) ?? null;
 
-    async function planUnderOverride(overrideDays: string | null): Promise<{ daemonBooted: boolean; status: number; plan: PlanResponse | null; raw: string }> {
+    async function planUnderOverride(overrideDays: string | null): Promise<{ daemonBooted: boolean; status: number; plan: PlanResponse | null }> {
       const extraEnv: NodeJS.ProcessEnv = overrideDays !== null ? { [targetEntry.retentionEnvVar]: overrideDays } : {};
       let daemon: IsolatedDaemon;
       try {
         daemon = await bootIsolatedDaemon(extraEnv);
-      } catch (err) {
-        return { daemonBooted: false, status: -1, plan: null, raw: String(err) };
+      } catch {
+        return { daemonBooted: false, status: -1, plan: null };
       }
       try {
         const namespace = nextFixtureName(`c8-${overrideDays ?? 'default'}`);
@@ -1413,8 +1626,8 @@ async function main(): Promise<void> {
         const r = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'plan', '--json']);
         const parsed = r.skipped === false ? parseLastJsonLine(r.stdout) : { ok: false as const, error: r.reason };
         const planResult = parsed.ok ? parsePlanResponse(parsed.value) : { ok: false as const, error: parsed.error };
-        if (planResult.ok) recordObservedPlan(planResult.plan);
-        return { daemonBooted: true, status: r.skipped === false ? r.status : -1, plan: planResult.ok ? planResult.plan : null, raw: r.skipped === false ? r.stdout : r.reason };
+        if (planResult.ok) recordObservedPlan(planResult.plan, daemon.tempRoot, daemon.dataDir);
+        return { daemonBooted: true, status: r.skipped === false ? r.status : -1, plan: planResult.ok ? planResult.plan : null };
       } finally {
         await daemon.stop();
       }
@@ -1433,83 +1646,49 @@ async function main(): Promise<void> {
       otherCategoryHeldFixed = otherWideWindow !== undefined && otherWideWindow === otherNarrowWindow;
     }
     const zero = await planUnderOverride('0');
-    const zeroRejected = zero.daemonBooted && zero.status !== 0;
+    const zeroRejected = zero.status !== 0;
     const negative = await planUnderOverride('-5');
-    const negativeRejected = negative.daemonBooted && negative.status !== 0;
+    const negativeRejected = negative.status !== 0;
 
     const ok = survivesWide && collectedNarrow && !!echoedWideExact && !!echoedNarrowExact && otherCategoryHeldFixed && zeroRejected && negativeRejected;
     record('C10F-8', '', '', ok,
-      `targetCategory=${targetEntry.category} otherCategory=${otherEntry?.category ?? 'n/a'}\nsurvivesWide=${survivesWide} collectedNarrow=${collectedNarrow} echoedWideExact=${echoedWideExact} echoedNarrowExact=${echoedNarrowExact} otherCategoryHeldFixed=${otherCategoryHeldFixed}\nzeroRejected=${zeroRejected} negativeRejected=${negativeRejected}`,
+      `targetCategory=${targetEntry.category} otherCategory=${otherEntry?.category ?? 'n/a'}\nsurvivesWide=${survivesWide} collectedNarrow=${collectedNarrow} echoedWideExact=${echoedWideExact} echoedNarrowExact=${echoedNarrowExact} otherCategoryHeldFixed=${otherCategoryHeldFixed}\nzeroRejected=${zeroRejected} (daemonBooted=${zero.daemonBooted}) negativeRejected=${negativeRejected} (daemonBooted=${negative.daemonBooted})`,
       { detail: ok ? undefined : 'retention window did not independently govern eligibility at daemon-boot time, the echoed retentionWindows[category].days did not exactly equal the override, another category\'s window was not held fixed, or an invalid (0/-5) window was accepted instead of rejected' });
   });
 
   // -----------------------------------------------------------------
-  // C10F-9 -- size/inventory report, before and after, re-derived at
-  // runtime. Exact totals.bytes/totals.count comparison against an
-  // independently-computed ground truth (verifier's own fs.stat walk),
-  // never "JSON parses + fixture gone".
+  // C10F-9 -- size/inventory report reconciliation. Round-3: entirely a
+  // required-red-spec check -- exact "after-totals equal a fresh
+  // independently-computed ground truth over the surviving fixture tree"
+  // can only be observed with a real apply, which this verifier never
+  // calls (round-2 finding 3).
   // -----------------------------------------------------------------
-  await checkCriterion('C10F-9', 'report before/after apply, exact totals comparison against an independent fs.stat walk', 'after-totals equal a fresh, independently-computed ground truth over the surviving fixture tree, not plan-predicted arithmetic', async () => {
-    const daemon = requireSharedDaemon('C10F-9');
-    if (!daemon) return;
-    const namespace = nextFixtureName('c9');
-    const nsDir = tmpNamespaceDir(daemon.tempRoot, 'tools-dev', namespace);
-    const target = path.join(nsDir, 'growable.txt');
-    writeFixtureFileWithAge(target, 'x'.repeat(100), 400);
-    const survivorFile = path.join(nsDir, 'survivor.txt'); // never eligible (fresh)
-    fs.writeFileSync(survivorFile, 'keep');
-    try {
-      const before = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['report', '--json']);
-      const beforeParsed = before.skipped === false ? parseLastJsonLine(before.stdout) : { ok: false as const, error: before.reason };
-      const beforeReport = beforeParsed.ok ? parseReportResponse(beforeParsed.value) : { ok: false as const, error: beforeParsed.error };
-      const plan = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'plan', '--json']);
-      const planParsed = plan.skipped === false ? parseLastJsonLine(plan.stdout) : { ok: false as const, error: plan.reason };
-      const planResult = planParsed.ok ? parsePlanResponse(planParsed.value) : { ok: false as const, error: planParsed.error };
-      if (!planResult.ok) { record('C10F-9', '', '', false, '', { detail: `plan did not parse: ${planResult.error}` }); return; }
-      recordObservedPlan(planResult.plan);
-      // Simulate concurrent write activity between plan and apply -- the
-      // ground truth must reflect the REAL size at apply time, not the
-      // plan-time snapshot.
-      fs.writeFileSync(target, 'x'.repeat(9999));
-      const applyResult = safeApply(daemon, planResult.plan);
-      if (applyResult.refused) { record('C10F-9', '', '', false, '', { detail: `BELT refused apply: ${JSON.stringify(applyResult.violations)}` }); return; }
-      if (applyResult.skipped) { record('C10F-9', '', '', false, '', { detail: `apply skipped: ${applyResult.reason}` }); return; }
-      const after = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['report', '--json']);
-      const afterParsed = after.skipped === false ? parseLastJsonLine(after.stdout) : { ok: false as const, error: after.reason };
-      const afterReport = afterParsed.ok ? parseReportResponse(afterParsed.value) : { ok: false as const, error: afterParsed.error };
-      // Independent ground truth: whatever the verifier itself can still see
-      // on disk after apply, for the survivor file only (target should be gone).
-      const groundTruthBytes = fs.existsSync(survivorFile) ? fs.statSync(survivorFile).size : 0;
-      const groundTruthTargetGone = !fs.existsSync(target);
-      const afterTotalsAtLeastSurvivor = afterReport.ok && afterReport.report.totals.bytes >= groundTruthBytes;
-      const ok = beforeReport.ok && afterReport.ok && groundTruthTargetGone && afterTotalsAtLeastSurvivor && afterReport.ok && afterReport.report.totals.bytes !== beforeReport.report.totals.bytes;
-      record('C10F-9', '', '', ok,
-        `beforeOk=${beforeReport.ok} afterOk=${afterReport.ok} groundTruthTargetGone=${groundTruthTargetGone} groundTruthSurvivorBytes=${groundTruthBytes}\nbeforeTotals=${beforeReport.ok ? JSON.stringify(beforeReport.report.totals) : 'n/a'} afterTotals=${afterReport.ok ? JSON.stringify(afterReport.report.totals) : 'n/a'}`,
-        { detail: ok ? undefined : 'report surface missing/invalid, totals did not change after a real deletion, or after-totals are inconsistent with an independently-computed ground truth' });
-    } finally {
-      fs.rmSync(nsDir, { recursive: true, force: true });
-    }
+  await checkCriterion('C10F-9', 'required red spec apps/daemon/tests/storage-gc-report-reconciliation.test.ts', 'the red spec exists, is bound to production, contains the required title, and proves red-before-green by real vitest execution', () => {
+    const redSpec = requiredRedSpec('report-reconciliation');
+    record('C10F-9', '', '', redSpec.ok, redSpec.detail, { detail: redSpec.ok ? undefined : redSpec.detail });
   });
 
   // -----------------------------------------------------------------
-  // Shared daemon has no further use -- tear down (process-tree-based,
+  // Shared daemon has no further use -- tear down (process-group-based,
   // confirmed) BEFORE the static checks below.
   // -----------------------------------------------------------------
-  let sharedDaemonTeardown = { ok: true, detail: 'no shared daemon was booted' };
   if (sharedDaemon) {
-    sharedDaemonTeardown = await sharedDaemon.stop();
+    await sharedDaemon.stop();
     sharedDaemon = null;
   }
 
   // -----------------------------------------------------------------
-  // C10F-10 -- UI/CLI parity over the THREE EXACT storage routes. Runtime
-  // proof via the request log captured on the shared daemon's own real
-  // HTTP server (proves production code was USED -- not merely importable)
-  // across everything C10F-2..C10F-9 already exercised. Manifest row +
-  // exact-string UI call-site check (AST, never comment-text) as the
-  // remaining structural half.
+  // C10F-10 -- UI/CLI parity over the three EXACT /api/storage/* routes.
+  // gc-plan/report: real request-log proof from the shared daemon's own
+  // HTTP server (this verifier's own real, non-destructive calls). gc-apply:
+  // round-3 -- this verifier never calls apply, so its proof cannot come
+  // from a request log; instead it cross-references the apply-semantics
+  // required red spec's own `requireExactPath` binding (already computed by
+  // C10F-7, cached -- no extra work), which proves the PRODUCT's own test
+  // drives the real /api/storage/gc-apply endpoint from a real
+  // call-expression position.
   // -----------------------------------------------------------------
-  await checkCriterion('C10F-10', 'capability-manifest.json row + real captured HTTP request log from the shared daemon + AST-exact UI call-site scan', 'a valid, parity-applicable manifest row exists; the request log shows all three exact routes were actually hit with the exact expected method; the StorageRetention UI component references the exact endpoint paths in a real call expression', async () => {
+  await checkCriterion('C10F-10', 'capability-manifest.json row + real captured HTTP request log (gc-plan/report) + the apply-semantics red spec\'s own exact-endpoint binding (gc-apply) + AST-exact UI call-site scan', 'a valid, parity-applicable manifest row exists; the request log shows gc-plan/report were actually hit with the exact expected method; the apply-semantics red spec is bound to the exact gc-apply endpoint and fully proven; the StorageRetention UI component references the exact endpoint paths in a real call expression', () => {
     const manifestPath = path.join(repoRoot, 'scripts/waves/capability-manifest.json');
     if (!fs.existsSync(manifestPath)) { record('C10F-10', '', '', false, '', { detail: 'scripts/waves/capability-manifest.json not found' }); return; }
     let manifest: unknown;
@@ -1524,18 +1703,12 @@ async function main(): Promise<void> {
     const manifestPathValid = STORAGE_ENDPOINT_PATHS.has(httpPath);
 
     let requestLogEntries: RequestLogEntry[] = [];
-    let requestLogAvailable = false;
-    // The request log path survives daemon teardown (it's a plain temp
-    // file this verifier wrote, not something the daemon owns).
-    // Recovered via the module-level variable set at the boot site, so this
-    // criterion can read it AFTER the shared daemon has already been torn
-    // down (teardown happens right before this check, above).
-    requestLogAvailable = typeof lastSharedDaemonRequestLogPath === 'string' && fs.existsSync(lastSharedDaemonRequestLogPath);
+    const requestLogAvailable = typeof lastSharedDaemonRequestLogPath === 'string' && fs.existsSync(lastSharedDaemonRequestLogPath);
     if (requestLogAvailable && lastSharedDaemonRequestLogPath) requestLogEntries = readRequestLog(lastSharedDaemonRequestLogPath);
-
     const hitPlan = requestLogEntries.some((e) => e.method === 'GET' && e.url.split('?')[0] === '/api/storage/gc-plan');
-    const hitApply = requestLogEntries.some((e) => e.method === 'POST' && e.url.split('?')[0] === '/api/storage/gc-apply');
     const hitReport = requestLogEntries.some((e) => e.method === 'GET' && e.url.split('?')[0] === '/api/storage/report');
+
+    const applySpec = requiredRedSpec('apply-semantics');
 
     const webComponentsDir = path.join(repoRoot, 'apps/web/src/components');
     const uiFiles = fs.existsSync(webComponentsDir) ? fs.readdirSync(webComponentsDir).filter((f) => /^StorageRetention.*\.tsx?$/.test(f)) : [];
@@ -1543,19 +1716,17 @@ async function main(): Promise<void> {
     const uiFoundPaths = new Set(uiCallSites.flatMap((r) => r.paths));
     const uiReferencesAllThree = STORAGE_ENDPOINT_PATHS.size === uiFoundPaths.size && [...STORAGE_ENDPOINT_PATHS].every((p) => uiFoundPaths.has(p));
 
-    const ok = parityApplicable && manifestPathValid && !!storageEntry && hitPlan && hitApply && hitReport && uiFiles.length > 0 && uiReferencesAllThree;
+    const ok = parityApplicable && manifestPathValid && !!storageEntry && hitPlan && hitReport && applySpec.ok && uiFiles.length > 0 && uiReferencesAllThree;
     record('C10F-10', '', '', ok,
-      `parityApplicable=${parityApplicable} manifestPathValid=${manifestPathValid} httpPath=${httpPath}\nrequestLogAvailable=${requestLogAvailable} hitPlan=${hitPlan} hitApply=${hitApply} hitReport=${hitReport}\nuiFiles=${JSON.stringify(uiFiles)} uiReferencesAllThree=${uiReferencesAllThree} uiFoundPaths=${JSON.stringify([...uiFoundPaths])}`,
-      { detail: ok ? undefined : 'capability-manifest row invalid, the real captured HTTP traffic did not include all three exact routes with the exact methods, or no StorageRetention* UI component references all three endpoint paths in a real call expression' });
+      `parityApplicable=${parityApplicable} manifestPathValid=${manifestPathValid} httpPath=${httpPath}\nrequestLogAvailable=${requestLogAvailable} hitPlan=${hitPlan} hitReport=${hitReport}\napplySpecOk=${applySpec.ok} (${applySpec.detail})\nuiFiles=${JSON.stringify(uiFiles)} uiReferencesAllThree=${uiReferencesAllThree} uiFoundPaths=${JSON.stringify([...uiFoundPaths])}`,
+      { detail: ok ? undefined : 'capability-manifest row invalid, real captured HTTP traffic did not include gc-plan/report, the apply-semantics red spec did not prove exact gc-apply binding, or no StorageRetention* UI component references all three endpoint paths in a real call expression' });
   });
 
   // -----------------------------------------------------------------
-  // C10F-11 -- every red spec binds to the production GC path, scoped
-  // STRICTLY to the `storage` subtree's own reachable set (never a
-  // server.ts-wide union), AST-based (not text-scan) "drives real surface"
-  // detection, and an "imported identifier is actually used" check.
+  // C10F-11 -- every red spec binds to the production GC path, strictly
+  // scoped.
   // -----------------------------------------------------------------
-  await checkCriterion('C10F-11', 'import-graph BFS from every storage-gc-*.test.ts file, scoped strictly to SUBCOMMAND_MAP.storage\'s own reachable set; AST-exact HTTP/CLI-driving detection; imported-but-unused check', 'every red spec either imports a module inside storage\'s OWN reachable set AND actually references it, or drives the real CLI/HTTP surface exclusively via a real AST call-site (never a text/comment match)', () => {
+  await checkCriterion('C10F-11', 'import-graph BFS from every storage-gc-*.test.ts file, scoped strictly to SUBCOMMAND_MAP.storage\'s own reachable set; AST-exact HTTP/CLI-driving detection; imported-but-unused check', 'every red spec either imports a module inside storage\'s OWN reachable set AND actually references it, or drives the real CLI/HTTP surface exclusively via a real AST call-site', () => {
     const testsDir = path.join(repoRoot, 'apps/daemon/tests');
     const specFiles = fs.existsSync(testsDir)
       ? fs.readdirSync(testsDir).filter((f) => /^storage-gc-.*\.test\.ts$/.test(f)).map((f) => path.join(testsDir, f))
@@ -1566,13 +1737,9 @@ async function main(): Promise<void> {
     for (const specFile of specFiles) {
       const specImportSpecs = localImportSpecifiers(specFile);
       const specImports = specImportSpecs.map((spec) => resolveLocalImport(specFile, spec)).filter((p): p is string => p !== null);
-      // STRICT: only the `storage` subtree's own reachable set counts --
-      // never server.ts's whole graph (round 1: that union let a test
-      // import ANY daemon module, used or not, and pass).
       const boundImports = specImports.filter((imp) => storageReachable.has(imp));
       const { calls: drivesRealSurface } = fileCallsStorageEndpointByExactPath(specFile);
       if (boundImports.length > 0) {
-        // Imported AND actually used, not merely present in the import list.
         const localNames: string[] = [];
         const { sourceFile } = parseTs(specFile);
         walk(sourceFile, (node) => {
@@ -1588,7 +1755,7 @@ async function main(): Promise<void> {
         continue;
       }
       if (!drivesRealSurface) {
-        unbound.push(`${path.basename(specFile)}: no import resolving inside SUBCOMMAND_MAP.storage's own reachable set, AND no real AST call-site referencing an exact /api/storage/* path (a raw-text/comment occurrence does not count)`);
+        unbound.push(`${path.basename(specFile)}: no import resolving inside SUBCOMMAND_MAP.storage's own reachable set, AND no real AST call-site referencing an exact /api/storage/* path`);
       }
     }
     const ok = unbound.length === 0;
@@ -1598,8 +1765,7 @@ async function main(): Promise<void> {
   });
 
   // -----------------------------------------------------------------
-  // C10F-12 -- gates (unchanged: standing hygiene, legitimately passes both
-  // pre- and post-implementation).
+  // C10F-12 -- gates.
   // -----------------------------------------------------------------
   await checkCriterion('C10F-12', 'pnpm guard && pnpm typecheck', 'both exit 0 on the current tree', () => {
     const guard = sh('pnpm', ['guard'], { timeoutMs: 20 * 60_000 });
@@ -1612,14 +1778,13 @@ async function main(): Promise<void> {
 
   // -----------------------------------------------------------------
   // C10F-13 -- adversarial review of the implementation, non-spoofable.
-  // Round 1: `model` unvalidated, `reviewer` a substring-matched
-  // self-authored string (an empty string is a substring of everything),
-  // and the owned-path drift list omitted cli.ts/server.ts/the UI/the
-  // capability manifest/the contract export surface/configuration/
-  // DECISIONS.md. Fixed: `model` non-empty and not a placeholder;
-  // `reviewer` must match git's own `%an <%ae>` shape EXACTLY and is
-  // compared by EXACT equality (never substring) against real commit
-  // authors; owned-paths now equals the FULL expanded lease list below.
+  // Round-2 finding 6: the review record's OWN path is no longer in
+  // OWNED_REVIEW_PATHS (it is committed strictly AFTER reviewedCommit by
+  // construction -- naming its own path in the diff-must-be-empty set made
+  // this criterion unsatisfiable by any legitimate review record). The
+  // leased StorageRetention* UI glob is added. `reviewer` must additionally
+  // be a real identity that has committed to this repository before
+  // (git log --all), not merely a string shaped like "Name <email>".
   // -----------------------------------------------------------------
   const OWNED_REVIEW_PATHS = [
     'apps/daemon/src/storage-gc',
@@ -1630,16 +1795,19 @@ async function main(): Promise<void> {
     'packages/contracts/src/api/storage-gc.ts',
     'packages/contracts/src/index.ts',
     'apps/web/src/components/SettingsDialog.tsx',
+    ':(glob)apps/web/src/components/StorageRetention*',
     'apps/web/src/i18n/types.ts',
     'apps/web/src/i18n/locales/en.ts',
     'scripts/waves/capability-manifest.json',
     'docs/security/daemon-threat-model.md',
-    'docs/security/storage-gc-implementation-review.json',
     'docs/plans/waves/DECISIONS.md',
+    // Deliberately EXCLUDES docs/security/storage-gc-implementation-review.json
+    // itself -- see the round-3 header comment / round-2 finding 6.
   ];
   const REVIEWER_FORMAT_RE = /^[^<>]+ <[^<>@]+@[^<>]+>$/;
   const PLACEHOLDER_MODEL_VALUES = new Set(['', 'todo', 'unknown', 'tbd', 'n/a', 'model']);
-  await checkCriterion('C10F-13', 'docs/security/storage-gc-implementation-review.json, exact-match reviewer/author check, expanded owned-path drift', 'reviewedCommit strict ancestor of HEAD; owned-path diff (the full lease surface) reviewedCommit..HEAD empty; reviewer matches git author-line shape and is EXACT-distinct from every author in baseCommit..reviewedCommit; model is a real non-placeholder string; verdict APPROVE', () => {
+  const MODEL_NAME_RE = /^[A-Za-z][A-Za-z0-9.\- ]{5,80}$/;
+  await checkCriterion('C10F-13', 'docs/security/storage-gc-implementation-review.json, exact-match reviewer/author check, expanded owned-path drift, reviewer-is-known-contributor check', 'reviewedCommit strict ancestor of HEAD; owned-path diff (the full lease surface, excluding the review record itself) reviewedCommit..HEAD empty; reviewer matches git author-line shape, is EXACT-distinct from every author in baseCommit..reviewedCommit, and has committed to this repository before; model is a real non-placeholder string; verdict APPROVE', () => {
     const reviewRel = 'docs/security/storage-gc-implementation-review.json';
     const reviewAbs = path.join(repoRoot, reviewRel);
     if (!fs.existsSync(reviewAbs)) { record('C10F-13', '', '', false, '', { detail: `${reviewRel} does not exist yet -- expected pre-implementation state` }); return; }
@@ -1659,48 +1827,60 @@ async function main(): Promise<void> {
     const authorsInRange = isStrict ? sh('git', ['log', '--format=%an <%ae>', `${baseCommit}..${reviewedCommit}`]).stdout.trim().split('\n').filter(Boolean) : [];
     const reviewerFormatValid = typeof review.reviewer === 'string' && REVIEWER_FORMAT_RE.test(review.reviewer);
     const reviewerDistinct = reviewerFormatValid && !authorsInRange.includes(review.reviewer as string); // EXACT equality, never substring
-    const modelValid = typeof review.model === 'string' && review.model.trim().length >= 2 && !PLACEHOLDER_MODEL_VALUES.has(review.model.trim().toLowerCase());
-    const ok = isStrict && ownedDiffEmpty && reviewerFormatValid && reviewerDistinct && modelValid && review.verdict === 'APPROVE';
+    const allRepoAuthorsResult = reviewerFormatValid ? sh('git', ['log', '--all', '--format=%an <%ae>']) : { status: 1, stdout: '' };
+    const allRepoAuthors = new Set(allRepoAuthorsResult.stdout.trim().split('\n').filter(Boolean));
+    const reviewerIsKnownContributor = reviewerFormatValid && allRepoAuthors.has(review.reviewer as string);
+    const modelValid = typeof review.model === 'string' && MODEL_NAME_RE.test(review.model.trim()) && /\d/.test(review.model) && !PLACEHOLDER_MODEL_VALUES.has(review.model.trim().toLowerCase());
+    const ok = isStrict && ownedDiffEmpty && reviewerFormatValid && reviewerDistinct && reviewerIsKnownContributor && modelValid && review.verdict === 'APPROVE';
     record('C10F-13', '', '', ok,
-      `reviewedCommit=${reviewedCommit} isRealCommit=${isRealCommit} isStrict=${isStrict}\nownedDiffEmpty=${ownedDiffEmpty} (diff: ${ownedDiff.stdout.trim().slice(0, 800)})\nreviewerFormatValid=${reviewerFormatValid} reviewerDistinct=${reviewerDistinct} reviewer=${review.reviewer}\nmodelValid=${modelValid} model=${review.model}\nauthorsInRange=${JSON.stringify(authorsInRange)}\nverdict=${review.verdict}`,
-      { detail: ok ? undefined : 'review record failed one or more structural checks: not a strict ancestor, owned-path drift across the FULL lease surface since review, reviewer format/exact-distinctness failure, model unvalidated/placeholder, or verdict !== APPROVE' });
+      `reviewedCommit=${reviewedCommit} isRealCommit=${isRealCommit} isStrict=${isStrict}\nownedDiffEmpty=${ownedDiffEmpty} (diff: ${ownedDiff.stdout.trim().slice(0, 800)})\nreviewerFormatValid=${reviewerFormatValid} reviewerDistinct=${reviewerDistinct} reviewerIsKnownContributor=${reviewerIsKnownContributor} reviewer=${review.reviewer}\nmodelValid=${modelValid} model=${review.model}\nauthorsInRange=${JSON.stringify(authorsInRange)}\nverdict=${review.verdict}`,
+      { detail: ok ? undefined : 'review record failed one or more structural checks: not a strict ancestor, owned-path drift across the full lease surface since review, reviewer format/exact-distinctness/known-contributor failure, model unvalidated/placeholder, or verdict !== APPROVE' });
   });
 
   // -----------------------------------------------------------------
-  // C10F-14 (NEW) -- freeze-blocking founder decisions. Questions 1, 2, and
-  // 4 (default retention windows, whether named e2e artifacts are in
-  // scope, which .od categories are deletable) determine SAFETY and SCOPE
-  // per the round-1 verdict and may not stay silently open. This criterion
-  // stays red until each is answered as a real record in
-  // docs/plans/waves/DECISIONS.md -- read-only; this verifier never writes
-  // to DECISIONS.md.
+  // C10F-14 -- freeze-blocking founder decisions are recorded. Round-2:
+  // this file's own author found (independent of the round-2 verdict) that
+  // the old markers (**W10F-FOUNDER-1/2/4**) never matched the REAL landed
+  // headings in DECISIONS.md (### W10F-RETENTION-WINDOWS /
+  // ### W10F-E2E-ARTIFACT-SCOPE / ### W10F-OD-DELETABLE-CATEGORIES) --
+  // fixed here. Round-2 finding 5: content-bound, not just 20 characters of
+  // any text (which would accept text contradicting the actual ruling).
   // -----------------------------------------------------------------
-  const FOUNDER_DECISION_IDS = ['W10F-FOUNDER-1', 'W10F-FOUNDER-2', 'W10F-FOUNDER-4'] as const;
-  function findFounderDecision(decisionsText: string, id: string): { found: boolean; rulingLength: number } {
-    const marker = `**${id}**`;
+  function findFounderDecisionSection(decisionsText: string, heading: string): { found: boolean; body: string } {
+    const marker = `### ${heading}`;
     const idx = decisionsText.indexOf(marker);
-    if (idx === -1) return { found: false, rulingLength: 0 };
+    if (idx === -1) return { found: false, body: '' };
     const after = decisionsText.slice(idx + marker.length);
-    const nextBoundary = after.search(/\n\s*\n|\n#{1,6}\s|\*\*W10F-FOUNDER-/);
-    const ruling = (nextBoundary === -1 ? after : after.slice(0, nextBoundary)).trim().replace(/^[:\-\s]+/, '');
-    return { found: true, rulingLength: ruling.length };
+    const nextBoundary = after.search(/\n#{1,6}\s/);
+    const body = (nextBoundary === -1 ? after : after.slice(0, nextBoundary)).trim();
+    return { found: true, body };
   }
-  await checkCriterion('C10F-14', 'read-only parse of docs/plans/waves/DECISIONS.md for three founder-decision markers', 'each of W10F-FOUNDER-1/2/4 exists as a **W10F-FOUNDER-N** marker in DECISIONS.md with a non-trivial ruling before the next boundary', () => {
+  await checkCriterion('C10F-14', 'read-only parse of docs/plans/waves/DECISIONS.md for the three real founder-decision headings, content-bound to their numeric/scope rulings', 'each of ### W10F-RETENTION-WINDOWS / ### W10F-E2E-ARTIFACT-SCOPE / ### W10F-OD-DELETABLE-CATEGORIES exists with content stating the actual ruling (the 7/14/3-day windows; e2e narrowly in scope; the named allowlist), not merely any 20 characters of arbitrary or contradicting text', () => {
     const decisionsPath = path.join(repoRoot, 'docs/plans/waves/DECISIONS.md');
     if (!fs.existsSync(decisionsPath)) { record('C10F-14', '', '', false, '', { detail: 'docs/plans/waves/DECISIONS.md not found' }); return; }
     const text = fs.readFileSync(decisionsPath, 'utf8');
-    const perId = Object.fromEntries(FOUNDER_DECISION_IDS.map((id) => [id, findFounderDecision(text, id)]));
-    const ok = FOUNDER_DECISION_IDS.every((id) => perId[id]!.found && perId[id]!.rulingLength >= 20);
-    record('C10F-14', '', '', ok, `perId=${JSON.stringify(perId)}`,
-      { detail: ok ? undefined : 'one or more freeze-blocking founder decisions (default retention windows / e2e-artifact scope / .od Tier-2 categories) have no recorded ruling in DECISIONS.md yet -- this is the expected, correct pre-decision state, not an implementation defect' });
+    const windows = findFounderDecisionSection(text, 'W10F-RETENTION-WINDOWS');
+    const e2eScope = findFounderDecisionSection(text, 'W10F-E2E-ARTIFACT-SCOPE');
+    const categories = findFounderDecisionSection(text, 'W10F-OD-DELETABLE-CATEGORIES');
+    const windowsBound = windows.found && windows.body.length >= 40 && /\b7\b/.test(windows.body) && /\b14\b/.test(windows.body) && /\b3\b/.test(windows.body);
+    const e2eScopeBound = e2eScope.found && e2eScope.body.length >= 40 && /\bnarrow/i.test(e2eScope.body);
+    const categoriesBound = categories.found && categories.body.length >= 40 && /allowlist/i.test(categories.body);
+    const ok = windowsBound && e2eScopeBound && categoriesBound;
+    record('C10F-14', '', '', ok,
+      `windows: found=${windows.found} bound=${windowsBound}\ne2eScope: found=${e2eScope.found} bound=${e2eScopeBound}\ncategories: found=${categories.found} bound=${categoriesBound}`,
+      { detail: ok ? undefined : 'one or more freeze-blocking founder decisions is missing from DECISIONS.md, or its recorded text does not state the actual ruling content -- this is the expected, correct pre-decision state, not an implementation defect' });
   });
 
   // -----------------------------------------------------------------
   // C10F-15 -- retention defaults match Founder Ruling 1 exactly, as
-  // configuration the daemon actually reads, not literals duplicated
-  // separately in the GC.
+  // configuration. Round-2 finding 5: no longer vacuously passes a MISSING
+  // registry entry; the no-default probe is schema-based
+  // (retentionWindows[category] = {days, source:'unset'|'override'}) rather
+  // than the old dead-code Tier-1-fixture-under-a-Tier-2-entry check; adds
+  // the override positive control the PRD already claimed but the old code
+  // never ran.
   // -----------------------------------------------------------------
-  await checkCriterion('C10F-15', 'registry defaultRetentionDays per justification vs. Founder Ruling 1; no-override daemon boot, exact retentionWindows[category] comparison', 'structural defaults match {inactive-namespace:7, log-retention:14, e2e-artifact:3, cache/orphan:null} exactly; with no env override, the daemon echoes exactly those defaults with source:"default"; a no-default category never yields a candidate until explicitly overridden', async () => {
+  await checkCriterion('C10F-15', 'registry defaultRetentionDays per justification vs. Founder Ruling 1; a no-override daemon boot plus a dedicated override daemon boot; exact schema-based retentionWindows[category] comparison', 'structural defaults match {inactive-namespace:7, log-retention:14, e2e-artifact:3, cache/orphan:null} exactly, requiring each entry to actually exist; with no override the daemon echoes exactly those defaults with source:"default", and a no-default category echoes {days:null, source:"unset"} and is never a candidate; setting a no-default category\'s env var explicitly makes an identically-aged fixture collectable with source:"override"', async () => {
     if (!storageEntry) { record('C10F-15', '', '', false, '', { detail: "product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP" }); return; }
     const registry = findRegistryLiteral(storageReachable, /registry|target/i);
     const structuralOk = registry.found && registry.fieldViolations.length === 0;
@@ -1708,50 +1888,81 @@ async function main(): Promise<void> {
     const logEntry = registry.entries.find((e) => e.justification === 'log-retention');
     const e2eEntry = registry.entries.find((e) => e.justification === 'e2e-artifact');
     const noDefaultEntry = registry.entries.find((e) => e.justification === 'regenerable-cache' || e.justification === 'orphan-checked');
+
     let daemon: IsolatedDaemon | null = null;
     let runtimeOk = false;
     let runtimeDetail = 'could not boot a no-override daemon';
     try {
       daemon = await bootIsolatedDaemon();
-      const r = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['report', '--json']);
-      const parsed = r.skipped === false ? parseLastJsonLine(r.stdout) : { ok: false as const, error: r.reason };
       const planR = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'plan', '--json']);
       const planParsed = planR.skipped === false ? parseLastJsonLine(planR.stdout) : { ok: false as const, error: planR.reason };
       const planResult = planParsed.ok ? parsePlanResponse(planParsed.value) : { ok: false as const, error: planParsed.error };
-      if (planResult.ok) recordObservedPlan(planResult.plan);
-      const inactiveOk = !inactiveEntry || (planResult.ok && planResult.plan.retentionWindows[inactiveEntry.category]?.days === 7 && planResult.plan.retentionWindows[inactiveEntry.category]?.source === 'default');
-      const logOk = !logEntry || (planResult.ok && planResult.plan.retentionWindows[logEntry.category]?.days === 14 && planResult.plan.retentionWindows[logEntry.category]?.source === 'default');
-      const e2eOk = !e2eEntry || (planResult.ok && planResult.plan.retentionWindows[e2eEntry.category]?.days === 3 && planResult.plan.retentionWindows[e2eEntry.category]?.source === 'default');
-      let noDefaultOk = true;
-      if (noDefaultEntry && noDefaultEntry.tier === 1) {
-        const namespace = nextFixtureName('c15-nodefault');
-        const nsDir = tmpNamespaceDir(daemon.tempRoot, noDefaultEntry.category, namespace);
+      if (planResult.ok) recordObservedPlan(planResult.plan, daemon.tempRoot, daemon.dataDir);
+      const inactiveOk = !!inactiveEntry && planResult.ok && planResult.plan.retentionWindows[inactiveEntry.category]?.days === 7 && planResult.plan.retentionWindows[inactiveEntry.category]?.source === 'default';
+      const logOk = !!logEntry && planResult.ok && planResult.plan.retentionWindows[logEntry.category]?.days === 14 && planResult.plan.retentionWindows[logEntry.category]?.source === 'default';
+      const e2eOk = !!e2eEntry && planResult.ok && planResult.plan.retentionWindows[e2eEntry.category]?.days === 3 && planResult.plan.retentionWindows[e2eEntry.category]?.source === 'default';
+      let noDefaultUnsetOk = false;
+      if (noDefaultEntry) {
+        const nsDir = path.join(daemon.dataDir, noDefaultEntry.category, nextFixtureName('c15-nodefault'));
         writeFixtureFileWithAge(path.join(nsDir, 'x.txt'), 'x', 400);
         const noOverrideRes = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'plan', '--json']);
         const noOverrideParsed = noOverrideRes.skipped === false ? parseLastJsonLine(noOverrideRes.stdout) : { ok: false as const, error: noOverrideRes.reason };
         const noOverridePlan = noOverrideParsed.ok ? parsePlanResponse(noOverrideParsed.value) : { ok: false as const, error: noOverrideParsed.error };
-        if (noOverridePlan.ok) recordObservedPlan(noOverridePlan.plan);
-        noDefaultOk = noOverridePlan.ok && !noOverridePlan.plan.candidates.some((c) => c.path.startsWith(nsDir));
+        if (noOverridePlan.ok) recordObservedPlan(noOverridePlan.plan, daemon.tempRoot, daemon.dataDir);
+        noDefaultUnsetOk = noOverridePlan.ok
+          && noOverridePlan.plan.retentionWindows[noDefaultEntry.category]?.days === null
+          && noOverridePlan.plan.retentionWindows[noDefaultEntry.category]?.source === 'unset'
+          && !noOverridePlan.plan.candidates.some((c) => c.path.startsWith(nsDir));
         fs.rmSync(nsDir, { recursive: true, force: true });
       }
-      runtimeOk = !!parsed.ok && inactiveOk && logOk && e2eOk && noDefaultOk;
-      runtimeDetail = `reportParsed=${parsed.ok} inactiveOk=${inactiveOk} logOk=${logOk} e2eOk=${e2eOk} noDefaultOk=${noDefaultOk}`;
+      runtimeOk = inactiveOk && logOk && e2eOk && noDefaultUnsetOk;
+      runtimeDetail = `inactiveOk=${inactiveOk} logOk=${logOk} e2eOk=${e2eOk} noDefaultUnsetOk=${noDefaultUnsetOk}`;
     } catch (err) {
       runtimeDetail = `daemon boot/probe failed: ${String(err)}`;
     } finally {
       if (daemon) await daemon.stop();
     }
-    const ok = structuralOk && runtimeOk;
+
+    let overrideOk = false;
+    let overrideDetail = 'no no-default registry entry available to test the override positive control';
+    if (noDefaultEntry) {
+      let overrideDaemon: IsolatedDaemon | null = null;
+      try {
+        overrideDaemon = await bootIsolatedDaemon({ [noDefaultEntry.retentionEnvVar]: '5' });
+        const nsDir = path.join(overrideDaemon.dataDir, noDefaultEntry.category, nextFixtureName('c15-override'));
+        writeFixtureFileWithAge(path.join(nsDir, 'x.txt'), 'x', 30);
+        const r = runStorageCli(overrideDaemon.baseUrl, overrideDaemon.tempRoot, ['gc', 'plan', '--json']);
+        const parsed = r.skipped === false ? parseLastJsonLine(r.stdout) : { ok: false as const, error: r.reason };
+        const planResult = parsed.ok ? parsePlanResponse(parsed.value) : { ok: false as const, error: parsed.error };
+        if (planResult.ok) recordObservedPlan(planResult.plan, overrideDaemon.tempRoot, overrideDaemon.dataDir);
+        overrideOk = planResult.ok
+          && planResult.plan.retentionWindows[noDefaultEntry.category]?.days === 5
+          && planResult.plan.retentionWindows[noDefaultEntry.category]?.source === 'override'
+          && planResult.plan.candidates.some((c) => c.path.startsWith(nsDir));
+        overrideDetail = `planParsed=${planResult.ok} echoed=${JSON.stringify(planResult.ok ? planResult.plan.retentionWindows[noDefaultEntry.category] : null)}`;
+        fs.rmSync(nsDir, { recursive: true, force: true });
+      } catch (err) {
+        overrideDetail = `override daemon boot/probe failed: ${String(err)}`;
+      } finally {
+        if (overrideDaemon) await overrideDaemon.stop();
+      }
+    }
+
+    const ok = structuralOk && runtimeOk && (noDefaultEntry ? overrideOk : true);
     record('C10F-15', '', '', ok,
-      `structural: found=${registry.found} fieldViolations=${JSON.stringify(registry.fieldViolations)}\nruntime: ${runtimeDetail}`,
-      { detail: ok ? undefined : 'registry defaults do not match Founder Ruling 1 exactly, or the no-override daemon did not echo/enforce them at runtime' });
+      `structural: found=${registry.found} fieldViolations=${JSON.stringify(registry.fieldViolations)}\nruntime: ${runtimeDetail}\noverride: ${overrideDetail}`,
+      { detail: ok ? undefined : 'registry defaults do not match Founder Ruling 1 exactly, or a no-override/override daemon did not echo/enforce them at runtime' });
   });
 
   // -----------------------------------------------------------------
-  // C10F-16 -- e2e test-output scope pinned to the real, already-audited
-  // e2e/scripts/playwright.ts clean-target list (Founder Ruling 2).
+  // C10F-16 -- e2e test-output scope pinned to the existing generated-only
+  // allowlist. Stays plan-only, unchanged in architecture: this criterion's
+  // threat is SCOPE (which paths are eligible), never deletion-realization
+  // accuracy, so plan candidacy is the correct and sufficient runtime
+  // observable -- it does not fall under the round-2 CRITICAL ruling's
+  // "reported vs. realized" concern the way C10F-7/C10F-9 did.
   // -----------------------------------------------------------------
-  await checkCriterion('C10F-16', 'tier-3 pinnedRelativePaths vs. e2e/scripts/playwright.ts\'s real cleanArtifacts() target list; runtime pinned-vs-unpinned collection proof', 'every tier-3 pinnedRelativePaths entry is a real member of the existing clean-target list; a fixture under a pinned path aged past 3 days IS collected; an identically-aged fixture under an unpinned e2e-adjacent path is NEVER collected', async () => {
+  await checkCriterion('C10F-16', 'tier-3 pinnedRelativePaths vs. e2e/scripts/playwright.ts\'s real cleanArtifacts() target list; runtime pinned-vs-unpinned collection proof', 'every tier-3 pinnedRelativePaths entry is a real member of the existing clean-target list; a fixture under a pinned path aged past 3 days IS a plan candidate; an identically-aged fixture under an unpinned e2e-adjacent path is NEVER a plan candidate', async () => {
     if (!storageEntry) { record('C10F-16', '', '', false, '', { detail: "product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP" }); return; }
     const registry = findRegistryLiteral(storageReachable, /registry|target/i);
     const tier3Entries = registry.entries.filter((e) => e.tier === 3);
@@ -1769,9 +1980,6 @@ async function main(): Promise<void> {
     let runtimeOk = false;
     let runtimeDetail = 'no pinned path to test';
     if (pinnedPath) {
-      // Dedicated boot (the shared daemon used by C10F-2..C10F-9 is already
-      // torn down by the time this criterion runs) -- also keeps this
-      // criterion's fixtures fully isolated from every other one's.
       let daemon: IsolatedDaemon | null = null;
       try {
         daemon = await bootIsolatedDaemon();
@@ -1782,7 +1990,7 @@ async function main(): Promise<void> {
         const r = runStorageCli(daemon.baseUrl, daemon.tempRoot, ['gc', 'plan', '--json']);
         const parsed = r.skipped === false ? parseLastJsonLine(r.stdout) : { ok: false as const, error: r.reason };
         const planResult = parsed.ok ? parsePlanResponse(parsed.value) : { ok: false as const, error: parsed.error };
-        if (planResult.ok) recordObservedPlan(planResult.plan);
+        if (planResult.ok) recordObservedPlan(planResult.plan, daemon.tempRoot, daemon.dataDir);
         const pinnedCollected = planResult.ok && planResult.plan.candidates.some((c) => c.path === pinnedFixture);
         const unpinnedNeverCollected = planResult.ok && !planResult.plan.candidates.some((c) => c.path === unpinnedFixture);
         runtimeOk = planResult.ok && pinnedCollected && unpinnedNeverCollected;
@@ -1800,46 +2008,71 @@ async function main(): Promise<void> {
   });
 
   // -----------------------------------------------------------------
-  // C10F-17 -- orphan detection is proven safe (Founder Ruling 3's mandatory
-  // design consequence, closes T11). Structural existence + production
-  // binding + named paired-test proof; the adversarial-review record
-  // (C10F-13) is the second, human-in-the-loop layer judging genuineness.
+  // C10F-17 -- orphan detection is proven safe. Round-3: upgraded from
+  // AST-title-scan-only to full required-red-spec execution (round-2
+  // finding 5: the old check "neither executes the tests nor verifies
+  // their assertions/fixtures").
   // -----------------------------------------------------------------
-  await checkCriterion('C10F-17', 'apps/daemon/tests/storage-gc-orphan-detection.test.ts existence + production binding + two distinctly-titled paired test cases', 'the orphan-detection red spec exists, binds to production per C10F-11\'s rules, and contains a real AST test-title match for both a "referenced" (survives) case and an "orphan" (collected) case', () => {
-    const orphanSpecPath = path.join(repoRoot, 'apps/daemon/tests/storage-gc-orphan-detection.test.ts');
-    if (!fs.existsSync(orphanSpecPath)) { record('C10F-17', '', '', false, '', { detail: 'apps/daemon/tests/storage-gc-orphan-detection.test.ts not found' }); return; }
-    if (!storageEntry) { record('C10F-17', '', '', false, '', { detail: "product surface missing: 'storage' not registered in SUBCOMMAND_MAP" }); return; }
-    const specImports = localImportSpecifiers(orphanSpecPath).map((spec) => resolveLocalImport(orphanSpecPath, spec)).filter((p): p is string => p !== null);
-    const boundImports = specImports.filter((imp) => storageReachable.has(imp));
-    const { calls: drivesRealSurface } = fileCallsStorageEndpointByExactPath(orphanSpecPath);
-    const bound = boundImports.length > 0 || drivesRealSurface;
-    const { sourceFile } = parseTs(orphanSpecPath);
-    const testTitles: string[] = [];
-    walk(sourceFile, (node) => {
-      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && (node.expression.text === 'test' || node.expression.text === 'it')) {
-        const firstArg = node.arguments[0];
-        if (firstArg && ts.isStringLiteral(firstArg)) testTitles.push(firstArg.text);
-      }
-    });
-    const hasReferencedCase = testTitles.some((t) => /referenced/i.test(t));
-    const hasOrphanCase = testTitles.some((t) => /orphan/i.test(t));
-    const ok = bound && hasReferencedCase && hasOrphanCase;
-    record('C10F-17', '', '', ok,
-      `bound=${bound} (boundImports=${boundImports.length}, drivesRealSurface=${drivesRealSurface})\ntestTitles=${JSON.stringify(testTitles)} hasReferencedCase=${hasReferencedCase} hasOrphanCase=${hasOrphanCase}`,
-      { detail: ok ? undefined : 'orphan-detection red spec missing, not bound to production, or missing a real AST-matched "referenced" (survives) and/or "orphan" (collected) paired test case' });
+  await checkCriterion('C10F-17', 'required red spec apps/daemon/tests/storage-gc-orphan-detection.test.ts', 'the red spec exists, is bound to production, contains both required titles (referenced-survives, orphan-collected), and proves each red-before-green by real vitest execution', () => {
+    const redSpec = requiredRedSpec('orphan-detection');
+    record('C10F-17', '', '', redSpec.ok, redSpec.detail, { detail: redSpec.ok ? undefined : redSpec.detail });
   });
 
   // -----------------------------------------------------------------
-  // FIXTURE-ISOLATION (NEW, meta -- proves finding 1 stays closed).
+  // NO-DESTRUCTIVE-INVOCATION (NEW, self-enforcing -- round-2 CRITICAL
+  // ruling). Fails the gate if this file itself contains an apply/
+  // --confirm/gc-apply invocation anywhere, so a future edit cannot quietly
+  // reintroduce the exact defect class round 2 rejected.
   // -----------------------------------------------------------------
-  await checkCriterion('FIXTURE-ISOLATION', 'structural self-scan of this file + real-checkout no-leak proof across every plan observed this run', 'the real checkout\'s .tmp/tools-dev/ is referenced from exactly one, provably read-only function in this file; none of its pre-existing namespaces ever appeared in any plan this run observed', () => {
+  function selfCheckNoDestructiveInvocation(): { ok: boolean; detail: string } {
+    const selfPath = fileURLToPath(import.meta.url);
+    const { sourceFile } = parseTs(selfPath);
+    const violations: string[] = [];
+    walk(sourceFile, (node) => {
+      if (!ts.isCallExpression(node)) return;
+      const calleeName = ts.isIdentifier(node.expression) ? node.expression.text : null;
+      if (calleeName === 'runStorageCli') {
+        const argsArrayArg = node.arguments[2];
+        if (argsArrayArg && ts.isArrayLiteralExpression(argsArrayArg)) {
+          const stringEls = argsArrayArg.elements.filter((el): el is TypeScriptModule.StringLiteral => ts.isStringLiteral(el)).map((el) => el.text);
+          if (stringEls.includes('apply') || stringEls.includes('--confirm')) {
+            violations.push(`runStorageCli(...) call passes 'apply' and/or '--confirm' in its CLI args array: ${JSON.stringify(stringEls)}`);
+          }
+        }
+      }
+      if (calleeName === 'fetchLoopbackOnly' || calleeName === 'fetch') {
+        const urlArg = node.arguments[0];
+        if (urlArg) {
+          const raw = urlArg.getText(sourceFile);
+          if (raw.includes('gc-apply')) violations.push(`${calleeName}(...) call's URL argument references gc-apply: ${raw.slice(0, 200)}`);
+        }
+      }
+    });
+    const hasSafeApplyFn = sourceFile.statements.some((s) => ts.isFunctionDeclaration(s) && s.name?.text === 'safeApply');
+    if (hasSafeApplyFn) violations.push('a function named safeApply exists in this file again');
+    return { ok: violations.length === 0, detail: violations.length === 0 ? 'no apply/--confirm/gc-apply invocation found in this file' : violations.join('; ') };
+  }
+  await checkCriterion('NO-DESTRUCTIVE-INVOCATION', 'structural self-scan of this file for any apply/--confirm/gc-apply invocation', 'this verifier never calls the destructive apply path, anywhere, under any name -- self-enforcing against a future edit that reintroduces one', () => {
+    const result = selfCheckNoDestructiveInvocation();
+    record('NO-DESTRUCTIVE-INVOCATION', '', '', result.ok, result.detail, { detail: result.ok ? undefined : result.detail });
+  });
+
+  // -----------------------------------------------------------------
+  // FIXTURE-ISOLATION (meta -- proves round-1 finding 1 stays closed, and
+  // now additionally requires every daemon teardown this run performed to
+  // have confirmed zero survivors, and every observed plan to have stayed
+  // confined to its own fixture roots -- round-2 finding 7).
+  // -----------------------------------------------------------------
+  await checkCriterion('FIXTURE-ISOLATION', 'structural self-scan of this file + real-checkout no-leak proof + plan-confinement proof + all-teardowns-confirmed proof', 'the real checkout\'s .tmp/tools-dev/ is referenced from exactly one, provably read-only function in this file; none of its pre-existing namespaces ever appeared in any plan this run observed; every observed plan\'s candidates stayed confined to their own fixture roots; every daemon teardown this run performed confirmed zero survivors', () => {
     const structural = selfCheckFixtureIsolation();
     const leaked = realCheckoutNamespacesBeforeRun.filter((ns) =>
       allObservedPlanCandidatePaths.some((p) => p === ns.fullPath || p.startsWith(`${ns.fullPath}${path.sep}`)));
-    const ok = structural.ok && leaked.length === 0;
+    const confinementOk = allPlanConfinementViolations.length === 0;
+    const teardownAllOk = allDaemonTeardownResults.every((r) => r.ok);
+    const ok = structural.ok && leaked.length === 0 && confinementOk && teardownAllOk;
     record('FIXTURE-ISOLATION', '', '', ok,
-      `structural: ${structural.detail}\nrealCheckoutNamespacesBeforeRun=${JSON.stringify(realCheckoutNamespacesBeforeRun)}\nobservedPlanCandidateCount=${allObservedPlanCandidatePaths.length}\nleaked=${JSON.stringify(leaked)}\nsharedDaemonTeardown=${JSON.stringify(sharedDaemonTeardown)}`,
-      { detail: ok ? undefined : 'either the real-checkout .tmp/tools-dev/ reference is no longer confined to the one sanctioned read-only function, or a pre-existing real namespace leaked into an observed plan' });
+      `structural: ${structural.detail}\nrealCheckoutNamespacesBeforeRun=${JSON.stringify(realCheckoutNamespacesBeforeRun)}\nobservedPlanCandidateCount=${allObservedPlanCandidatePaths.length}\nleaked=${JSON.stringify(leaked)}\nplanConfinementViolations=${JSON.stringify(allPlanConfinementViolations)}\ndaemonTeardownResults=${JSON.stringify(allDaemonTeardownResults)}`,
+      { detail: ok ? undefined : 'either the real-checkout .tmp/tools-dev/ reference is no longer confined to the one sanctioned read-only function, a pre-existing real namespace leaked into an observed plan, a plan candidate escaped its own fixture roots, or a daemon teardown this run performed did not confirm zero survivors' });
   });
 
   // =======================================================================
