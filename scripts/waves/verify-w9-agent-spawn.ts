@@ -1,59 +1,73 @@
 // verify-w9-agent-spawn.ts -- wave mishmash-w9-agent-spawn-tranche (agent-spawn
-// route hardening, first/highest-risk of the rolling W9 tranches per
-// W5-W11-gated.md's "agent spawn -> filesystem -> deploy -> external fetch ->
-// Library ingest -> imports -> long tail" ordering) completion verifier.
+// route hardening, first/highest-risk of the rolling W9 tranches) completion
+// verifier.
 //
 // PROGRAM SCAFFOLDING, not product surface: this file exists for the wave
 // program defined in docs/plans/waves/ (see VERIFICATION-CONTRACT.md) and is
 // deleted, with the rest of scripts/waves/, when that program closes.
 //
 // Run: pnpm exec tsx scripts/waves/verify-w9-agent-spawn.ts [--repo <path>]
-// Exit 0 only when every C9S criterion passes, LEASE/HEAD-DRIFT pass, the
-// tree is clean, the initial manifest placeholder wrote successfully, and
-// archival succeeded (construct + reread-verify). The commit-bound proof
-// manifest is written to the wave's goal-state proof directory either way.
+// Exit 0 only when every mechanical criterion passes (C9S-8 may legitimately
+// be "blocked-on-founder", a non-failing terminal state), LEASE/HEAD-DRIFT
+// pass, the tree is clean, and archival succeeds.
 //
-// THIS IS A ROUND-0 (PRE-IMPLEMENTATION) VERIFIER, written and frozen per the
-// NM-41C expansion gate (W5-W11-gated.md lines 8-24) BEFORE any implementation
-// work on apps/daemon/src/routes/runs.ts exists. It is expected -- and
-// correct, fail-closed behavior -- for every substantive C9S criterion except
-// C9S-1 to report FAIL against the current tree: the attribution matrix, the
-// new red-team test file, the threat-model doc extension, and the
-// implementation-review record are all implementation deliverables this
-// document specifies but does not itself create. C9S-1 (route-inventory
-// freeze) is expected to PASS today, because it only asserts that this
-// document's own frozen route table matches reality -- a property of the
-// PRD's own accuracy, not of unfinished hardening work. Mirrors exactly how
-// scripts/waves/verify-w9-ingest.ts's own criteria are structured (inventory
-// freeze vs. substantive hardening are different kinds of claims).
+// ROUND 2 (fix round 1 of the program's 2-round cap) -- applies all eight
+// round-1 adversarial blockers verbatim. See W9-agent-spawn-tranche.md's
+// "AUTHOR-FLAGGED / DISPOSITIONS" for the full disposition list. Summary of
+// what changed structurally in this file vs round 1:
 //
-// DELIBERATE SCOPE REDUCTIONS vs. the verify-w9-ingest.ts house precedent
-// (each flagged as an open question in W9-agent-spawn-tranche.md for the
-// adversarial reviewer to rule on, not silently decided here):
-//   1. Exposure classifier is 3-valued (0/1/3), not 4-valued -- this
-//      codebase has exactly two existing auth primitives that plausibly
-//      apply to inbound run-creation auth (requireLocalDaemonRequest,
-//      authorizeToolRequest); no third "self-service bearer" shape exists
-//      yet to bind an intermediate value to.
-//   2. The "is this cited test genuinely new, and did it fail on its
-//      introduction commit's parent" check implements the introduction-
-//      commit AST lookup (real, mechanical) and validates the checked-in
-//      red-evidence transcript structurally, but does NOT implement
-//      verify-w9-ingest.ts's full detached-worktree Vitest-Node-API replay.
-//      That machinery is substantial (it took the ingest tranche multiple
-//      adversarial rounds to harden) and nothing exists yet for it to
-//      replay against in this tranche's current, pre-implementation tree.
+//   1. SCOPE: four files now frozen (routes/runs.ts, routes/terminal.ts, one
+//      route each from routes/routine.ts and routes/media.ts), not one.
+//   2. EXPOSURE SCALE: 4-valued (0=authorizeToolRequest genuine auth,
+//      1=reserved/unused, 2=requireLocalDaemonRequest|isLocalSameOrigin
+//      loopback-only, 3=none) -- corrected from round 1's scale, which
+//      wrongly treated loopback-only as the SAFEST tier under this tranche's
+//      own local-process attacker model.
+//   3. ANTI-GAMING: bare-identifier-only guard matching with explicit local-
+//      shadowing detection (closes the "fake.authorizeToolRequest" and
+//      "locally shadowed real guard" gaming vectors the round-1 review
+//      demonstrated); a computed/dynamic route path is now a hard fail for
+//      the two fully-frozen files, never a silent skip; every HEAD-dependent
+//      read (route source, daemon-boot import, attribution matrix, threat-
+//      model doc, test suite) is sourced from ONE detached temporary git
+//      worktree pinned to headSha, created once near the start of the run --
+//      not the mutable primary worktree -- closing the round-1 "mutate,
+//      read favorably, restore before treeDirty checks" gap structurally
+//      rather than by bracketed hashing.
+//   4. MATRIX SEMANTICS: impact is integer-bounded [0,3]; control/acceptedRisk
+//      is a true XOR (round 1 silently accepted both); the primary testRef is
+//      fully validated and globally unique, not merely non-placeholder;
+//      acceptedRisk.decisionRef requires the EXACT W9AS-ACCEPT- prefix; the
+//      P0 set used by C9S-4/C9S-6 is derived live from the matrix's own
+//      validated riskScore, never a hardcoded table.
+//   5. RATE-LIMIT PROOF: the over-limit matcher now binds the declared
+//      `limit` value (round 1 had it as a dead parameter -- a real bug);
+//      every cited transport assertion's own BODY text (not just its name)
+//      must contain a real status-code assertion; corpus-case matching is
+//      AST-scoped to test titles/bodies (comment-immune); the full detached-
+//      worktree Vitest-Node-API replay is REQUIRED now (ported from
+//      verify-w9-ingest.ts), not deferred; corpus grows from 5 to 8 cases.
+//   6. THREAT-MODEL DOC: the bounded-section/fence-aware/exact-citation
+//      machinery is ported verbatim from verify-w9-ingest.ts's own six-round-
+//      hardened version rather than reinvented loosely.
+//   7. IMPLEMENTATION REVIEW: relocated OUT OF THE REPO to
+//      ~/.claude/goal-state/mishmash-w9-agent-spawn-tranche/reviews/
+//      implementation-review.json -- the W7 disposition-record trust model
+//      (orchestrator-only-writable, outside every lease, so an implementer
+//      cannot forge it) -- replacing an in-repo, implementer-authored,
+//      structurally-unsatisfiable record.
+//   8. RUN-ID OWNERSHIP: a dedicated criterion (C9S-8) that resolves to a
+//      normal pass (real control, or a founder-signed accepted-risk record)
+//      or the legal `blocked-on-founder` terminal state (VERIFICATION-
+//      CONTRACT.md §2 rule 3) when neither exists yet -- never silently
+//      assumed either way, never counted as a plain failure on its own.
 //
-// ISOLATION (hard rule, non-negotiable): every daemon boot this verifier
-// performs uses port 0 (OS-assigned ephemeral -- strictly stronger than
-// picking "a random high port", which can still collide) and a fresh
-// fs.mkdtempSync OD_DATA_DIR, and is torn down by its own exact child PID
-// (SIGTERM then a bounded SIGKILL fallback) -- never a process scan, never
-// the default namespace (ports 7456 / 51012). This verifier never issues a
-// `git fetch`/`git push` -- git context is resolved from local refs only.
-//
-// PORTABILITY: repoRoot comes from `process.cwd()`/`--repo`, never
-// `import.meta.url`.
+// ISOLATION (hard rule, unchanged): every daemon boot uses port 0 (OS-
+// assigned) and a fresh mkdtemp OD_DATA_DIR, torn down by its own exact child
+// PID. This verifier never touches ports 7456/51012 and never issues a `git
+// fetch`/`git push`. The new detached-worktree machinery is git-local
+// (`git worktree add --detach`) and offline (`pnpm install --offline
+// --frozen-lockfile` against the already-warm shared pnpm store).
 
 import { spawn, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -122,10 +136,6 @@ try {
   emergencyExit(`init failed: ${String((err as Error)?.stack ?? err)}`);
 }
 
-// Distinguishes a spawn failure / timeout-induced kill (spawnSync sets
-// `.error` and/or a non-null `.signal` in those cases) from an ORDINARY
-// nonzero exit code, so a caller checking only `status !== 0` cannot
-// mistake "the process never really ran" for "the process ran and failed".
 function sh(
   cmd: string,
   args: string[],
@@ -163,6 +173,7 @@ function slugify(s: string): string {
   );
 }
 
+type CriterionStatus = 'pass' | 'fail' | 'blocked-on-founder';
 interface CriterionResult {
   id: string;
   command: string;
@@ -170,7 +181,7 @@ interface CriterionResult {
   artifact: string | null;
   artifactSha256: string | null;
   exitCode: number;
-  status: 'pass' | 'fail';
+  status: CriterionStatus;
   durationMs: number;
   detail?: string | undefined;
 }
@@ -231,6 +242,40 @@ function record(
       status: 'fail',
       durationMs: opts.durationMs ?? 0,
       detail: `record() itself failed: ${String(err)}`,
+    });
+  }
+}
+/** C9S-8's legal third state (VERIFICATION-CONTRACT.md §2 rule 3): a real,
+ * mechanically-decided "not yet resolved by the implementer or the founder"
+ * state -- never a plain failure, never a silent assumption either way. */
+function recordBlockedOnFounder(id: string, command: string, assertion: string, evidence: string, detail?: string): void {
+  try {
+    const { artifact, artifactSha256 } = artifactFor(
+      id,
+      `# ${id}\n# assertion: ${assertion}\n# verdict: blocked-on-founder\n${detail ? `# detail: ${detail}\n` : ''}\n${evidence}\n`,
+    );
+    results.push({
+      id,
+      command,
+      assertion,
+      artifact,
+      artifactSha256,
+      exitCode: 2,
+      status: 'blocked-on-founder',
+      durationMs: 0,
+      detail,
+    });
+  } catch (err) {
+    results.push({
+      id,
+      command,
+      assertion,
+      artifact: null,
+      artifactSha256: null,
+      exitCode: 1,
+      status: 'fail',
+      durationMs: 0,
+      detail: `recordBlockedOnFounder() itself failed: ${String(err)}`,
     });
   }
 }
@@ -331,9 +376,6 @@ function readFileAtCommit(commit: string, relPath: string): string {
   const r = sh('git', ['show', `${commit}:${relPath}`]);
   if (r.status !== 0) throw new Error(`git show ${commit}:${relPath} failed (exit=${r.status}): ${r.stdout.slice(0, 300)}`);
   return r.stdout;
-}
-function fileExistsAtCommit(commit: string, relPath: string): boolean {
-  return sh('git', ['cat-file', '-e', `${commit}:${relPath}`]).status === 0;
 }
 function resolveCommit(sha: string): boolean {
   return sh('git', ['cat-file', '-e', `${sha}^{commit}`]).status === 0;
@@ -440,10 +482,51 @@ function archiveRunArtifacts(manifest: ManifestShape): { runDir: string; ok: boo
 }
 
 // =========================================================================
-// Route collector -- AST-scoped to registerRunRoutes's own function body.
+// BLOCKER 3e FIX -- detached HEAD worktree. Every HEAD-dependent read (route
+// source, the isolated daemon boot's imported files, the attribution matrix,
+// the threat-model doc, the dedicated test suite) is sourced from ONE
+// detached temporary git worktree pinned to headSha, created once here and
+// removed at the very end of main(). This structurally closes the "mutate a
+// HEAD file, let the verifier read it favorably, restore it before the
+// end-of-run treeDirty check" gap: the detached worktree is a separate
+// checkout the primary (mutable) worktree cannot write into, no matter what
+// happens there mid-run.
+// =========================================================================
+let headWorktreeDir = '';
+function createDetachedHeadWorktree(): { ok: true; dir: string } | { ok: false; error: string } {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w9as-head-'));
+  fs.rmdirSync(dir); // `git worktree add` wants the target path to not exist yet.
+  const add = sh('git', ['worktree', 'add', '--detach', dir, headSha], { timeoutMs: 5 * 60_000 });
+  if (add.status !== 0) return { ok: false, error: `git worktree add --detach ${dir} ${headSha} failed (exit=${add.status}): ${add.stdout.slice(-500)}` };
+  sh('mise', ['trust'], { cwd: dir, timeoutMs: 30_000 });
+  const install = sh('pnpm', ['install', '--offline', '--frozen-lockfile'], { cwd: dir, timeoutMs: 5 * 60_000 });
+  if (install.status !== 0) {
+    sh('git', ['worktree', 'remove', '--force', dir], { timeoutMs: 60_000 });
+    return { ok: false, error: `pnpm install --offline --frozen-lockfile in detached HEAD worktree failed (exit=${install.status}): ${install.stdout.slice(-1000)}` };
+  }
+  return { ok: true, dir };
+}
+function removeDetachedHeadWorktree(dir: string): void {
+  if (!dir) return;
+  sh('git', ['worktree', 'remove', '--force', dir], { timeoutMs: 60_000 });
+  try {
+    fs.rmSync(dir, { recursive: true, force: true });
+  } catch {
+    /* best effort */
+  }
+}
+
+// =========================================================================
+// Route collector -- AST-scoped to a named registrar function's own body.
 // Recursive ts.forEachChild walk (never a whole-file text scan, so an
-// identifier inside a comment cannot leak in -- comments are lexer trivia a
-// forEachChild walk never visits).
+// identifier inside a comment cannot leak in). BLOCKER 3a FIX: separately
+// counts every app.<method>(...) call found (any first argument) vs. the
+// subset with a STATIC string/no-substitution-template first argument --
+// callers that require full-function freezing (runs.ts, terminal.ts) treat
+// any difference as a hard fail; callers that only scope to a named subset
+// of routes within a much larger file (routine.ts, media.ts) report the
+// difference as informational only, since those files' other routes are out
+// of this tranche's scope entirely (see PRD "Scoping note on rows 16-17").
 // =========================================================================
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'options']);
 
@@ -452,10 +535,13 @@ interface RouteRegistration {
   routePath: string;
   middlewareArgs: TsNode[];
   finalHandler: TsNode | null;
+  handlerParamNames: (string | null)[];
 }
 interface CollectResult {
   registrations: RouteRegistration[];
   duplicates: string[];
+  totalCallCount: number;
+  staticCallCount: number;
 }
 
 function findFunctionBody(sourceFile: TypeScriptModule.SourceFile, fnName: string): TsNode | null {
@@ -472,12 +558,25 @@ function findFunctionBody(sourceFile: TypeScriptModule.SourceFile, fnName: strin
   return found;
 }
 
-function collectRunRouteRegistrations(sourceText: string, label: string): CollectResult {
+function paramNamesOf(handler: TsNode | null): (string | null)[] {
+  if (!handler) return [];
+  if (!ts.isArrowFunction(handler) && !ts.isFunctionExpression(handler)) return [];
+  return handler.parameters.map((p) => (ts.isIdentifier(p.name) ? p.name.text : null));
+}
+
+function collectScopedRouteRegistrations(
+  sourceText: string,
+  label: string,
+  fnName: string,
+  pathFilter: readonly string[] | null,
+): CollectResult {
   const sourceFile = ts.createSourceFile(label, sourceText, ts.ScriptTarget.Latest, true);
-  const fnBody = findFunctionBody(sourceFile, 'registerRunRoutes');
-  if (!fnBody) throw new Error(`registerRunRoutes function body not found in ${label}`);
+  const fnBody = findFunctionBody(sourceFile, fnName);
+  if (!fnBody) throw new Error(`${fnName} function body not found in ${label}`);
   const registrations: RouteRegistration[] = [];
   const counts = new Map<string, number>();
+  let totalCallCount = 0;
+  let staticCallCount = 0;
   const visit = (node: TsNode) => {
     if (
       ts.isCallExpression(node) &&
@@ -487,29 +586,43 @@ function collectRunRouteRegistrations(sourceText: string, label: string): Collec
       ts.isIdentifier(node.expression.name) &&
       HTTP_METHODS.has(node.expression.name.text)
     ) {
+      totalCallCount += 1;
       const method = node.expression.name.text.toUpperCase();
       const args = [...node.arguments];
       const pathArg = args[0];
-      if (args.length >= 2 && pathArg && (ts.isStringLiteral(pathArg) || ts.isNoSubstitutionTemplateLiteral(pathArg))) {
-        const routePath = pathArg.text;
-        const finalHandler = args[args.length - 1] ?? null;
-        const middlewareArgs = args.slice(1, -1);
-        registrations.push({ method, routePath, middlewareArgs, finalHandler });
-        const key = `${method} ${routePath}`;
-        counts.set(key, (counts.get(key) ?? 0) + 1);
+      const isStaticPath = Boolean(pathArg) && (ts.isStringLiteral(pathArg!) || ts.isNoSubstitutionTemplateLiteral(pathArg!));
+      if (args.length >= 2 && isStaticPath) {
+        staticCallCount += 1;
+        const routePath = (pathArg as TypeScriptModule.StringLiteralLike).text;
+        if (!pathFilter || pathFilter.includes(routePath)) {
+          const finalHandler = args[args.length - 1] ?? null;
+          const middlewareArgs = args.slice(1, -1);
+          registrations.push({
+            method,
+            routePath,
+            middlewareArgs,
+            finalHandler,
+            handlerParamNames: paramNamesOf(finalHandler),
+          });
+          const key = `${method} ${routePath}`;
+          counts.set(key, (counts.get(key) ?? 0) + 1);
+        }
       }
     }
     ts.forEachChild(node, visit);
   };
   ts.forEachChild(fnBody, visit);
   const duplicates = [...counts.entries()].filter(([, n]) => n > 1).map(([k]) => k);
-  return { registrations, duplicates };
+  return { registrations, duplicates, totalCallCount, staticCallCount };
 }
 
 // -------------------------------------------------------------------------
-// Exposure classifier -- 3-valued (0/1/3), position-anchored straight-line
-// grammar. See W9-agent-spawn-tranche.md S9S-2 for the full prose spec and
-// the rationale for dropping the ingest tranche's intermediate "2" value.
+// Exposure classifier -- 4-valued (0/1/2/3), corrected ordering per the
+// round-1 ruling. BLOCKER 3c FIX: both guard primitives must be BARE
+// identifiers (never a property access on an arbitrary object -- closes the
+// "fake.authorizeToolRequest" gaming vector) AND must not be locally
+// shadowed between the registrar function's own top-level bindings and the
+// guard's call site (closes the "locally shadowed real guard" vector).
 // -------------------------------------------------------------------------
 function isNegationOfIdentifier(expr: TsNode, varName: string): boolean {
   if (ts.isPrefixUnaryExpression(expr) && expr.operator === ts.SyntaxKind.ExclamationToken) {
@@ -525,26 +638,54 @@ function consequentUnconditionallyExits(stmt: TsNode): boolean {
   }
   return false;
 }
-function calleeName(expr: TsNode): string | null {
-  if (ts.isIdentifier(expr)) return expr.text;
-  if (ts.isPropertyAccessExpression(expr) && ts.isIdentifier(expr.name)) return expr.name.text;
-  return null;
+function calleeIsBareIdentifier(expr: TsNode, name: string): boolean {
+  return ts.isIdentifier(expr) && expr.text === name;
+}
+/** Walks the registrar function's own top-level statements (never a nested
+ * scope) for any `const`/`let`/`var` declaration of `name` that appears
+ * BEFORE `beforeNode` -- i.e. any local rebinding that would shadow an
+ * outer/imported identifier of the same name at the point of use. A fake
+ * local `const authorizeToolRequest = () => true` declared earlier in the
+ * same function shadows the real one; this returns true for that case. */
+function isShadowedBeforeUse(fnBody: TsNode, name: string, beforeNode: TsNode): boolean {
+  if (!ts.isBlock(fnBody)) return false;
+  let shadowed = false;
+  for (const stmt of fnBody.statements) {
+    if (stmt === beforeNode || stmt.getStart() >= beforeNode.getStart()) break;
+    if (ts.isVariableStatement(stmt)) {
+      for (const decl of stmt.declarationList.declarations) {
+        if (ts.isIdentifier(decl.name) && decl.name.text === name) {
+          // A real ctx-destructure binding (`const { authorizeToolRequest } =
+          // ctx.auth`) is NOT shadowing -- it IS the real binding. Only a
+          // plain identifier declaration (`const authorizeToolRequest = ...`)
+          // that is not itself destructuring from `ctx` counts as a shadow.
+          shadowed = true;
+        }
+        if (ts.isObjectBindingPattern(decl.name)) {
+          for (const el of decl.name.elements) {
+            if (ts.isBindingElement(el) && ts.isIdentifier(el.name) && el.name.text === name) {
+              const isCtxDestructure =
+                decl.initializer &&
+                ts.isPropertyAccessExpression(decl.initializer) &&
+                ts.isIdentifier(decl.initializer.expression) &&
+                decl.initializer.expression.text === 'ctx';
+              if (!isCtxDestructure) shadowed = true;
+              else shadowed = false; // a genuine ctx-destructure re-affirms the real binding
+            }
+          }
+        }
+      }
+    }
+  }
+  return shadowed;
 }
 
-/** Exposure 0: `requireLocalDaemonRequest` is a literal identifier among the
- * route registration's own middleware arguments (real Express middleware,
- * always invoked -- no reachability ambiguity). */
-function hasRequireLocalDaemonRequestMiddleware(reg: RouteRegistration): boolean {
-  return reg.middlewareArgs.some((arg) => ts.isIdentifier(arg) && arg.text === 'requireLocalDaemonRequest');
-}
-
-/** Exposure 1: the handler's own direct body.statements begin (index 0, 1)
- * with `const grant = authorizeToolRequest(...)` immediately followed by a
- * top-level `if (!grant)` whose consequent unconditionally exits. Position-
- * anchored deliberately -- a guard appearing after any other statement
- * (e.g. after a response write) does not count, because by construction it
- * cannot be a real gate at that point. */
-function hasDirectAuthorizeToolRequestGuard(reg: RouteRegistration): boolean {
+/** Exposure 0: direct top-level `const grant = authorizeToolRequest(...)`
+ * immediately followed by an unconditional-exit `if (!grant)`, bare
+ * identifier, not locally shadowed. Position-anchored: must be
+ * statements[0]/[1] of the handler's own body (a guard appearing after any
+ * other statement, e.g. a response write, is not a real gate). */
+function hasDirectAuthorizeToolRequestGuard(reg: RouteRegistration, fnBody: TsNode): boolean {
   const handler = reg.finalHandler;
   if (!handler) return false;
   if (!ts.isArrowFunction(handler) && !ts.isFunctionExpression(handler)) return false;
@@ -558,37 +699,130 @@ function hasDirectAuthorizeToolRequestGuard(reg: RouteRegistration): boolean {
   if (!decl || first.declarationList.declarations.length !== 1) return false;
   if (!ts.isIdentifier(decl.name) || decl.name.text !== 'grant') return false;
   if (!decl.initializer || !ts.isCallExpression(decl.initializer)) return false;
-  if (calleeName(decl.initializer.expression) !== 'authorizeToolRequest') return false;
+  if (!calleeIsBareIdentifier(decl.initializer.expression, 'authorizeToolRequest')) return false;
+  if (isShadowedBeforeUse(fnBody, 'authorizeToolRequest', handler)) return false;
   if (!ts.isIfStatement(second)) return false;
   if (!isNegationOfIdentifier(second.expression, 'grant')) return false;
   if (!second.thenStatement) return false;
   return consequentUnconditionallyExits(second.thenStatement);
 }
 
-function classifyExposure(reg: RouteRegistration): number {
-  if (hasRequireLocalDaemonRequestMiddleware(reg)) return 0;
-  if (hasDirectAuthorizeToolRequestGuard(reg)) return 1;
+/** Exposure 2(a): `requireLocalDaemonRequest` as a literal, non-shadowed
+ * bare-identifier middleware argument. */
+function hasRequireLocalDaemonRequestMiddleware(reg: RouteRegistration, fnBody: TsNode): boolean {
+  return reg.middlewareArgs.some((arg) => {
+    if (!ts.isIdentifier(arg) || arg.text !== 'requireLocalDaemonRequest') return false;
+    return !isShadowedBeforeUse(fnBody, 'requireLocalDaemonRequest', arg);
+  });
+}
+/** Exposure 2(b): the handler's first direct top-level statement is
+ * `if (!isLocalSameOrigin(req, ...)) { <unconditional exit> }` -- the real
+ * shape used by POST /api/orbit/run. Bare identifier, not shadowed,
+ * position-anchored to statement[0]. */
+function hasDirectIsLocalSameOriginGuard(reg: RouteRegistration, fnBody: TsNode): boolean {
+  const handler = reg.finalHandler;
+  if (!handler) return false;
+  if (!ts.isArrowFunction(handler) && !ts.isFunctionExpression(handler)) return false;
+  if (!ts.isBlock(handler.body)) return false;
+  const first = handler.body.statements[0];
+  if (!first || !ts.isIfStatement(first)) return false;
+  const cond = first.expression;
+  if (!ts.isPrefixUnaryExpression(cond) || cond.operator !== ts.SyntaxKind.ExclamationToken) return false;
+  if (!ts.isCallExpression(cond.operand)) return false;
+  if (!calleeIsBareIdentifier(cond.operand.expression, 'isLocalSameOrigin')) return false;
+  if (isShadowedBeforeUse(fnBody, 'isLocalSameOrigin', handler)) return false;
+  if (!first.thenStatement) return false;
+  return consequentUnconditionallyExits(first.thenStatement);
+}
+
+function classifyExposure(reg: RouteRegistration, fnBody: TsNode): number {
+  if (hasDirectAuthorizeToolRequestGuard(reg, fnBody)) return 0;
+  if (hasRequireLocalDaemonRequestMiddleware(reg, fnBody) || hasDirectIsLocalSameOriginGuard(reg, fnBody)) return 2;
   return 3;
 }
 
 // -------------------------------------------------------------------------
-// Frozen route set + impact floors -- S9S-1 / S9S-2. Impact is a
-// reviewer-owned floor; a row may claim impact >= floor, never below.
+// Frozen route set + impact floors -- S9S-1/S9S-2, 17 routes across 4 files.
 // -------------------------------------------------------------------------
+interface OwnedFile {
+  relPath: string;
+  fnName: string;
+  pathFilter: readonly string[] | null; // null = whole function frozen
+  fullFreeze: boolean; // whether totalCallCount === staticCallCount is enforced
+  livePathPrefixes: readonly string[];
+  liveSiblingExclusions: readonly string[]; // {method} {path} pairs known-adjacent but out of scope
+}
+const OWNED_FILES: OwnedFile[] = [
+  {
+    relPath: 'apps/daemon/src/routes/runs.ts',
+    fnName: 'registerRunRoutes',
+    pathFilter: null,
+    fullFreeze: true,
+    livePathPrefixes: ['/api/runs', '/api/chat'],
+    // Two sibling files register routes under the same /api/runs prefix.
+    // routes/chat.ts owns the feedback route; routes/genui.ts owns the
+    // GenUI surface + devloop-iterations + replay routes (5). Both are
+    // empirically discovered, out-of-scope-for-this-tranche siblings, named
+    // explicitly here so the exclusion is auditable rather than silently
+    // baked into a regex (mirrors S9S-1's own stated design).
+    liveSiblingExclusions: [
+      'POST /api/runs/:id/feedback',
+      'GET /api/runs/:runId/genui',
+      'POST /api/runs/:runId/genui/:surfaceId/respond',
+      'GET /api/runs/:runId/genui/:surfaceId',
+      'GET /api/runs/:runId/devloop-iterations',
+      'POST /api/runs/:runId/replay',
+    ],
+  },
+  {
+    relPath: 'apps/daemon/src/routes/terminal.ts',
+    fnName: 'registerTerminalRoutes',
+    pathFilter: null,
+    fullFreeze: true,
+    livePathPrefixes: ['/api/projects/:id/terminals'],
+    liveSiblingExclusions: [],
+  },
+  {
+    relPath: 'apps/daemon/src/routes/routine.ts',
+    fnName: 'registerRoutineRoutes',
+    pathFilter: ['/api/routines/:id/run'],
+    fullFreeze: false,
+    livePathPrefixes: ['/api/routines/:id/run'],
+    liveSiblingExclusions: [],
+  },
+  {
+    relPath: 'apps/daemon/src/routes/media.ts',
+    fnName: 'registerMediaRoutes',
+    pathFilter: ['/api/orbit/run'],
+    fullFreeze: false,
+    livePathPrefixes: ['/api/orbit/run'],
+    liveSiblingExclusions: [],
+  },
+];
+
 interface ImpactFloorRow {
   key: string;
   impactFloor: number;
   impactRationale: string;
 }
 const FROZEN_IMPACT_FLOORS: ImpactFloorRow[] = [
-  { key: 'POST /api/runs', impactFloor: 3, impactRationale: 'spawns a new OS child process running a caller-selected registered agent CLI, with caller-supplied prompt/model/tool-bundle, inheriting daemon-constructed env' },
-  { key: 'POST /api/chat', impactFloor: 3, impactRationale: 'same spawn path via startChatRun' },
-  { key: 'POST /api/runs/:id/cancel', impactFloor: 2, impactRationale: "terminates another caller's in-flight child process by id; no ownership check" },
-  { key: 'GET /api/runs/:id/events', impactFloor: 1, impactRationale: "streams the live run's stdout/stderr/tool-result content back to the caller; no ownership check" },
-  { key: 'GET /api/runs/:id/agui', impactFloor: 1, impactRationale: 'same content, AGUI-mapped envelope; no ownership check' },
-  { key: 'GET /api/runs/:id/result-package', impactFloor: 1, impactRationale: "returns workspace file listing + artifact manifests for the run's project; no ownership check" },
-  { key: 'GET /api/runs', impactFloor: 1, impactRationale: 'lists status/metadata for every run system-wide; no per-caller scoping' },
-  { key: 'GET /api/runs/:id', impactFloor: 0, impactRationale: 'status/timestamps/ids only, best-effort documented assumption -- see PRD open question 4' },
+  { key: 'POST /api/runs', impactFloor: 3, impactRationale: 'spawns a new OS child process; caller-selected agent/prompt/model/tool-bundle' },
+  { key: 'GET /api/runs', impactFloor: 1, impactRationale: 'lists status/metadata (incl. childPid, error detail, workspace provenance) for every run system-wide' },
+  { key: 'GET /api/runs/:id', impactFloor: 1, impactRationale: "statusBody returns process/error/workspace/tool detail, not bare ids (corrected round 2)" },
+  { key: 'GET /api/runs/:id/events', impactFloor: 1, impactRationale: 'streams live stdout/stderr/tool-result content; no ownership check' },
+  { key: 'GET /api/runs/:id/agui', impactFloor: 1, impactRationale: 'same content, AGUI envelope; no ownership check' },
+  { key: 'GET /api/runs/:id/result-package', impactFloor: 1, impactRationale: 'workspace file listing + artifact manifests; no ownership check' },
+  { key: 'POST /api/runs/:id/cancel', impactFloor: 2, impactRationale: "terminates another caller's in-flight child by id; no ownership check" },
+  { key: 'POST /api/chat', impactFloor: 3, impactRationale: 'same spawn path as POST /api/runs, via startChatRun' },
+  { key: 'POST /api/projects/:id/terminals', impactFloor: 3, impactRationale: 'spawns a new interactive PTY shell rooted at the project cwd' },
+  { key: 'GET /api/projects/:id/terminals', impactFloor: 1, impactRationale: 'lists live terminal sessions for a project' },
+  { key: 'GET /api/projects/:id/terminals/:tid/stream', impactFloor: 1, impactRationale: 'streams live shell output' },
+  { key: 'POST /api/projects/:id/terminals/:tid/stdin', impactFloor: 3, impactRationale: 'injects arbitrary keystrokes into a live shell -- equivalent to remote command execution once a session exists' },
+  { key: 'POST /api/projects/:id/terminals/:tid/resize', impactFloor: 0, impactRationale: 'UI geometry only' },
+  { key: 'POST /api/projects/:id/terminals/:tid/kill', impactFloor: 2, impactRationale: "terminates another caller's shell session; no ownership check" },
+  { key: 'DELETE /api/projects/:id/terminals/:tid', impactFloor: 2, impactRationale: 'kill alias, same as POST .../kill' },
+  { key: 'POST /api/routines/:id/run', impactFloor: 3, impactRationale: 'triggers the shared agent runner on demand; caller does not control prompt content, only trigger timing' },
+  { key: 'POST /api/orbit/run', impactFloor: 3, impactRationale: 'triggers the shared agent runner (Orbit); exposure is 2 (loopback-gated) today' },
 ];
 const FROZEN_ROUTE_KEYS = new Set(FROZEN_IMPACT_FLOORS.map((r) => r.key));
 const IMPACT_FLOOR_BY_KEY = new Map(FROZEN_IMPACT_FLOORS.map((r) => [r.key, r.impactFloor]));
@@ -598,15 +832,11 @@ function tierFor(score: number): 'P0' | 'P1' | 'P2' {
   if (score === 4) return 'P1';
   return 'P2';
 }
-const P0_ROUTE_KEYS = new Set(
-  FROZEN_IMPACT_FLOORS.filter((r) => tierFor(3 + r.impactFloor) === 'P0').map((r) => r.key),
-);
 
 // -------------------------------------------------------------------------
-// Self-probes -- the classifier is not trusted for a route verdict in a run
-// where it cannot classify its own known fixtures correctly. Each fixture is
-// run through the exact collectRunRouteRegistrations/classifyExposure
-// pipeline the real criteria use, never a separate mock.
+// Self-probes -- 14 fixtures (up from round 1's 8). Each is run through the
+// exact collectScopedRouteRegistrations/classifyExposure pipeline the real
+// criteria use, never a separate mock.
 // -------------------------------------------------------------------------
 interface SelfProbeOutcome {
   name: string;
@@ -615,12 +845,15 @@ interface SelfProbeOutcome {
 }
 function probeFixture(name: string, source: string, expected: number): SelfProbeOutcome {
   try {
-    const collected = collectRunRouteRegistrations(source, `self-probe:${name}`);
+    const collected = collectScopedRouteRegistrations(source, `self-probe:${name}`, 'registerRunRoutes', null);
     const reg = collected.registrations[0];
     if (!reg || collected.registrations.length !== 1) {
       return { name, ok: false, detail: `expected exactly 1 registration, found ${collected.registrations.length}` };
     }
-    const actual = classifyExposure(reg);
+    const sourceFile = ts.createSourceFile(`self-probe:${name}`, source, ts.ScriptTarget.Latest, true);
+    const fnBody = findFunctionBody(sourceFile, 'registerRunRoutes');
+    if (!fnBody) return { name, ok: false, detail: 'could not locate registerRunRoutes body in fixture' };
+    const actual = classifyExposure(reg, fnBody);
     return actual === expected
       ? { name, ok: true, detail: `exposure=${actual} (expected ${expected})` }
       : { name, ok: false, detail: `exposure=${actual}, expected ${expected}` };
@@ -628,118 +861,118 @@ function probeFixture(name: string, source: string, expected: number): SelfProbe
     return { name, ok: false, detail: `probe crashed: ${String(err)}` };
   }
 }
+/** Computed-path fixtures assert the COLLECTOR's hard-fail behavior, not the
+ * classifier -- expected is the required (totalCallCount, staticCallCount)
+ * pair, which must differ for the probe to pass. */
+function probeComputedPath(name: string, source: string): SelfProbeOutcome {
+  try {
+    const collected = collectScopedRouteRegistrations(source, `self-probe:${name}`, 'registerRunRoutes', null);
+    return collected.totalCallCount !== collected.staticCallCount
+      ? { name, ok: true, detail: `totalCallCount=${collected.totalCallCount} staticCallCount=${collected.staticCallCount} (mismatch correctly detected)` }
+      : { name, ok: false, detail: `totalCallCount=${collected.totalCallCount} staticCallCount=${collected.staticCallCount} (computed path NOT detected -- gaming vector open)` };
+  } catch (err) {
+    return { name, ok: false, detail: `probe crashed: ${String(err)}` };
+  }
+}
 function runExposureSelfProbes(): SelfProbeOutcome[] {
+  const wrap = (body: string) => `function registerRunRoutes(app, ctx) {\n${body}\n}`;
   return [
     probeFixture(
       'real-requireLocalDaemonRequest-middleware',
-      `function registerRunRoutes(app, ctx) {
-        app.post('/api/runs', requireLocalDaemonRequest, async (req, res) => {
-          res.json({ ok: true });
-        });
-      }`,
+      wrap(`  app.post('/api/runs', requireLocalDaemonRequest, async (req, res) => {\n    res.json({ ok: true });\n  });`),
+      2,
+    ),
+    probeFixture(
+      'real-authorizeToolRequest-direct-guard-bare',
+      wrap(`  app.post('/api/runs', async (req, res) => {\n    const grant = authorizeToolRequest(req);\n    if (!grant) {\n      return res.status(401).json({ error: 'unauthorized' });\n    }\n    res.json({ ok: true });\n  });`),
       0,
     ),
     probeFixture(
-      'real-authorizeToolRequest-direct-guard',
-      `function registerRunRoutes(app, ctx) {
-        app.post('/api/runs', async (req, res) => {
-          const grant = authorizeToolRequest(req);
-          if (!grant) {
-            return res.status(401).json({ error: 'unauthorized' });
-          }
-          res.json({ ok: true });
-        });
-      }`,
-      1,
+      'real-authorizeToolRequest-bound-via-ctx-destructure-no-shadow',
+      wrap(`  const { authorizeToolRequest } = ctx.auth;\n  app.post('/api/runs', async (req, res) => {\n    const grant = authorizeToolRequest(req);\n    if (!grant) {\n      return res.status(401).json({ error: 'unauthorized' });\n    }\n    res.json({ ok: true });\n  });`),
+      0,
+    ),
+    probeFixture(
+      'real-isLocalSameOrigin-inline-guard',
+      wrap(`  app.post('/api/orbit/run', async (req, res) => {\n    if (!isLocalSameOrigin(req, ctx.port)) {\n      return res.status(403).json({ error: 'cross-origin request rejected' });\n    }\n    res.json({ ok: true });\n  });`),
+      2,
     ),
     probeFixture(
       'guard-inside-dead-if-false-branch',
-      `function registerRunRoutes(app, ctx) {
-        app.post('/api/runs', async (req, res) => {
-          if (false) {
-            const grant = authorizeToolRequest(req);
-            if (!grant) {
-              return res.status(401).json({ error: 'unauthorized' });
-            }
-          }
-          res.json({ ok: true });
-        });
-      }`,
+      wrap(`  app.post('/api/runs', async (req, res) => {\n    if (false) {\n      const grant = authorizeToolRequest(req);\n      if (!grant) {\n        return res.status(401).json({ error: 'unauthorized' });\n      }\n    }\n    res.json({ ok: true });\n  });`),
       3,
     ),
     probeFixture(
       'guard-result-never-checked',
-      `function registerRunRoutes(app, ctx) {
-        app.post('/api/runs', async (req, res) => {
-          const grant = authorizeToolRequest(req);
-          res.json({ ok: true });
-        });
-      }`,
+      wrap(`  app.post('/api/runs', async (req, res) => {\n    const grant = authorizeToolRequest(req);\n    res.json({ ok: true });\n  });`),
       3,
     ),
     probeFixture(
       'guard-after-response-write',
-      `function registerRunRoutes(app, ctx) {
-        app.post('/api/runs', async (req, res) => {
-          res.json({ ok: true });
-          const grant = authorizeToolRequest(req);
-          if (!grant) {
-            return;
-          }
-        });
-      }`,
+      wrap(`  app.post('/api/runs', async (req, res) => {\n    res.json({ ok: true });\n    const grant = authorizeToolRequest(req);\n    if (!grant) {\n      return;\n    }\n  });`),
       3,
     ),
     probeFixture(
       'no-guard-todays-real-shape',
-      `function registerRunRoutes(app, ctx) {
-        app.post('/api/runs', async (req, res) => {
-          res.json({ ok: true });
-        });
-      }`,
+      wrap(`  app.post('/api/runs', async (req, res) => {\n    res.json({ ok: true });\n  });`),
       3,
     ),
     probeFixture(
       'requireLocalDaemonRequest-mentioned-only-in-comment',
-      `function registerRunRoutes(app, ctx) {
-        // requireLocalDaemonRequest should probably gate this
-        app.post('/api/runs', async (req, res) => {
-          res.json({ ok: true });
-        });
-      }`,
+      wrap(`  // requireLocalDaemonRequest should probably gate this\n  app.post('/api/runs', async (req, res) => {\n    res.json({ ok: true });\n  });`),
       3,
     ),
     probeFixture(
       'authorizeToolRequest-nested-inside-if-branch',
-      `function registerRunRoutes(app, ctx) {
-        app.post('/api/runs', async (req, res) => {
-          if (req.query.strict) {
-            const grant = authorizeToolRequest(req);
-            if (!grant) {
-              return res.status(401).json({ error: 'unauthorized' });
-            }
-          }
-          res.json({ ok: true });
-        });
-      }`,
+      wrap(`  app.post('/api/runs', async (req, res) => {\n    if (req.query.strict) {\n      const grant = authorizeToolRequest(req);\n      if (!grant) {\n        return res.status(401).json({ error: 'unauthorized' });\n      }\n    }\n    res.json({ ok: true });\n  });`),
       3,
+    ),
+    // BLOCKER 3c: property-access alias on an arbitrary object no longer
+    // counts -- this is exactly the round-1 gaming vector the reviewer
+    // demonstrated ("a fake/shadowed fake.authorizeToolRequest passed as
+    // exposure 1").
+    probeFixture(
+      'property-access-alias-not-bare-identifier',
+      wrap(`  app.post('/api/runs', async (req, res) => {\n    const grant = fake.authorizeToolRequest(req);\n    if (!grant) {\n      return res.status(401).json({ error: 'unauthorized' });\n    }\n    res.json({ ok: true });\n  });`),
+      3,
+    ),
+    // BLOCKER 3c: a locally-shadowed fake overriding the real ctx-bound
+    // identifier before the guard call.
+    probeFixture(
+      'locally-shadowed-authorizeToolRequest-fake',
+      wrap(`  const { authorizeToolRequest: realAuthorizeToolRequest } = ctx.auth;\n  const authorizeToolRequest = () => true;\n  app.post('/api/runs', async (req, res) => {\n    const grant = authorizeToolRequest(req);\n    if (!grant) {\n      return res.status(401).json({ error: 'unauthorized' });\n    }\n    res.json({ ok: true });\n  });`),
+      3,
+    ),
+    probeFixture(
+      'locally-shadowed-requireLocalDaemonRequest-fake',
+      wrap(`  const requireLocalDaemonRequest = (req, res, next) => next();\n  app.post('/api/runs', requireLocalDaemonRequest, async (req, res) => {\n    res.json({ ok: true });\n  });`),
+      3,
+    ),
+    // BLOCKER 3a: computed/dynamic route paths must hard-fail the collector,
+    // never silently vanish from the frozen count.
+    probeComputedPath(
+      'computed-path-constant-identifier',
+      wrap(`  const RUNS_PATH = '/api/runs';\n  app.post('/api/runs', async (req, res) => { res.json({ ok: true }); });\n  app.post(RUNS_PATH, async (req, res) => { res.json({ ok: true }); });`),
+    ),
+    probeComputedPath(
+      'computed-path-template-with-substitution',
+      wrap(`  const base = '/api';\n  app.post('/api/runs', async (req, res) => { res.json({ ok: true }); });\n  app.post(\`\${base}/runs2\`, async (req, res) => { res.json({ ok: true }); });`),
     ),
   ];
 }
 
 // -------------------------------------------------------------------------
 // Isolated daemon boot for live route-inventory introspection (C9S-1).
-// Copied pattern from scripts/waves/verify-w9-ingest.ts's
-// bootDaemonForRouteInventory: port 0 (OS-assigned, never 7456/51012), a
-// fresh mkdtemp OD_DATA_DIR, killed only by this function's own exact child
-// PID (SIGTERM, bounded SIGKILL fallback -- never a process scan).
+// Sourced from the DETACHED HEAD WORKTREE, not the primary worktree. Port 0
+// (OS-assigned, never 7456/51012), fresh mkdtemp OD_DATA_DIR, killed only by
+// this function's own exact child PID.
 // -------------------------------------------------------------------------
-async function bootDaemonForAgentSpawnRouteInventory(): Promise<{ method: string; path: string }[]> {
+async function bootDaemonForAgentSpawnRouteInventory(worktreeDir: string): Promise<{ method: string; path: string }[]> {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w9as-verify-'));
   const bootScript = `
 import { pathToFileURL } from 'node:url';
 process.env.OD_DATA_DIR = ${JSON.stringify(dataDir)};
-const mod = await import(pathToFileURL(${JSON.stringify(path.join(repoRoot, 'apps/daemon/src/server.ts'))}).href);
+const mod = await import(pathToFileURL(${JSON.stringify(path.join(worktreeDir, 'apps/daemon/src/server.ts'))}).href);
 const started = await mod.startServer({ port: 0, host: '127.0.0.1', returnServer: true });
 console.log('OD_W9AS_VERIFIER_READY ' + JSON.stringify({ routeInventory: started.routeInventory }));
 await started.shutdown();
@@ -747,7 +980,7 @@ process.exit(0);
 `;
   const scriptPath = path.join(proofDir, `.boot-daemon.${process.pid}.${crypto.randomBytes(3).toString('hex')}.mjs`);
   fs.writeFileSync(scriptPath, bootScript);
-  const child = spawn('pnpm', ['exec', 'tsx', scriptPath], { cwd: repoRoot, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn('pnpm', ['exec', 'tsx', scriptPath], { cwd: worktreeDir, stdio: ['ignore', 'pipe', 'pipe'] });
   let buffered = '';
   const routes = await new Promise<{ method: string; path: string }[] | null>((resolve) => {
     const timeout = setTimeout(() => resolve(null), 60_000);
@@ -802,7 +1035,7 @@ process.exit(0);
 }
 
 // -------------------------------------------------------------------------
-// Attribution matrix -- S9S-3/S9S-4. Shared load + field-quality helpers.
+// Attribution matrix -- S9S-3/S9S-4.
 // -------------------------------------------------------------------------
 interface AttributionRow {
   route?: unknown;
@@ -817,9 +1050,9 @@ interface AttributionRow {
   acceptedRisk?: { decisionRef?: unknown };
 }
 const ATTRIBUTION_PATH_REL = 'docs/security/agent-spawn-attribution.json';
-function loadAttributionMatrix(): { rows: AttributionRow[] } | { error: string } {
-  const abs = path.join(repoRoot, ATTRIBUTION_PATH_REL);
-  if (!fs.existsSync(abs)) return { error: `${ATTRIBUTION_PATH_REL} does not exist` };
+function loadAttributionMatrix(worktreeDir: string): { rows: AttributionRow[] } | { error: string } {
+  const abs = path.join(worktreeDir, ATTRIBUTION_PATH_REL);
+  if (!fs.existsSync(abs)) return { error: `${ATTRIBUTION_PATH_REL} does not exist (HEAD worktree)` };
   try {
     const parsed = JSON.parse(fs.readFileSync(abs, 'utf8'));
     if (!Array.isArray(parsed)) return { error: `${ATTRIBUTION_PATH_REL} does not parse to a JSON array` };
@@ -845,20 +1078,20 @@ function routeAssociationTerms(routeKey: string): string[] {
     .filter((seg) => seg.length > 0 && seg !== 'api' && !seg.startsWith(':'));
 }
 const EXPOSURE_KEYWORDS: Record<number, RegExp> = {
-  0: /requirelocaldaemonrequest|loopback/i,
-  1: /authorizetoolrequest|tool token/i,
+  0: /authorizetoolrequest|tool token|capability grant/i,
+  2: /requirelocaldaemonrequest|islocalsameorigin|loopback/i,
   3: /\bnone\b|no gate|zero-config/i,
 };
 
 interface EnforcedDeclaration {
   kind: 'request-rate' | 'byte-volume';
-  scope: 'token-hash' | 'origin' | 'pairing-attempt';
+  scope: 'token-hash' | 'origin';
   limit: number;
   windowMs: number | null;
   overflow: 'reject-429' | 'reject-413';
 }
 function parseEnforcedDeclaration(mechanism: string): EnforcedDeclaration | null {
-  const m = /^ENFORCED kind=(request-rate|byte-volume) scope=(token-hash|origin|pairing-attempt) limit=(\d+) windowMs=(\d+|none) overflow=(reject-429|reject-413)$/.exec(
+  const m = /^ENFORCED kind=(request-rate|byte-volume) scope=(token-hash|origin) limit=(\d+) windowMs=(\d+|none) overflow=(reject-429|reject-413)$/.exec(
     mechanism.trim(),
   );
   if (!m) return null;
@@ -875,13 +1108,21 @@ function containsExactNumericToken(text: string, n: number): boolean {
 }
 const POSITIVE_SIGNAL_RE = /accept|allow|succeed|within|under.?limit|ok\b/i;
 const NEGATIVE_SIGNAL_RE = /reject|deny|block|refuse|over.?limit|exceed/i;
+// BLOCKER 5 FIX: the over-limit matcher now binds `limit` too, not only the
+// overflow status -- round 1's version accepted a `limit` parameter it never
+// checked.
 function matchesUnderLimitAssertion(fullName: string, routeTerms: readonly string[], limit: number): boolean {
   const hasTerm = routeTerms.some((t) => fullName.toLowerCase().includes(t));
   return hasTerm && POSITIVE_SIGNAL_RE.test(fullName) && containsExactNumericToken(fullName, limit);
 }
 function matchesOverLimitAssertion(fullName: string, routeTerms: readonly string[], limit: number, overflowStatus: number): boolean {
   const hasTerm = routeTerms.some((t) => fullName.toLowerCase().includes(t));
-  return hasTerm && NEGATIVE_SIGNAL_RE.test(fullName) && containsExactNumericToken(fullName, overflowStatus);
+  return (
+    hasTerm &&
+    NEGATIVE_SIGNAL_RE.test(fullName) &&
+    containsExactNumericToken(fullName, limit) &&
+    containsExactNumericToken(fullName, overflowStatus)
+  );
 }
 function hasDistinctSignalPair(candidates: readonly { fullName: string }[]): boolean {
   const positives = candidates.filter((c) => POSITIVE_SIGNAL_RE.test(c.fullName) && !NEGATIVE_SIGNAL_RE.test(c.fullName));
@@ -889,20 +1130,38 @@ function hasDistinctSignalPair(candidates: readonly { fullName: string }[]): boo
   if (positives.length === 0 || negatives.length === 0) return false;
   return positives.some((p) => negatives.some((n) => n.fullName !== p.fullName));
 }
+// BLOCKER 5 FIX: body-text status-code assertion. Requires the cited test's
+// own source body (captured verbatim during AST extraction) to contain a
+// real status-code check naming the exact expected code, within a short
+// token window of the word "status" -- closes "examines test names only".
+function bodyAssertsStatusCode(bodyText: string, code: number): boolean {
+  const windows: string[] = [];
+  let idx = bodyText.toLowerCase().indexOf('status');
+  while (idx !== -1) {
+    windows.push(bodyText.slice(Math.max(0, idx - 20), idx + 80));
+    idx = bodyText.toLowerCase().indexOf('status', idx + 1);
+  }
+  return windows.some((w) => containsExactNumericToken(w, code));
+}
 
 // -------------------------------------------------------------------------
-// Static test-title extraction (AST) -- whether a cited test existed at a
-// given commit is decided by a real TS-AST parse, matching only the static
-// first argument of an it/test declaration (including it.each(...)(...)'s
-// outer title call) -- never a substring scan of the file text.
+// Test declaration extraction (AST) -- titles AND body source text, so
+// corpus-case matching and body-text assertion checks are scoped to real
+// test declarations, never combined raw source text including comments
+// (BLOCKER 5 FIX: "one comment satisfies all five" regex-over-whole-file
+// gap).
 // -------------------------------------------------------------------------
-function extractStaticTestTitlesFromSource(sourceText: string, label: string): Set<string> {
-  const titles = new Set<string>();
+interface TestDeclaration {
+  title: string;
+  bodyText: string;
+}
+function extractTestDeclarations(sourceText: string, label: string): TestDeclaration[] {
+  const out: TestDeclaration[] = [];
   let sourceFile: TypeScriptModule.SourceFile;
   try {
     sourceFile = ts.createSourceFile(label, sourceText, ts.ScriptTarget.Latest, true);
   } catch {
-    return titles;
+    return out;
   }
   const isItOrTestRoot = (expr: TsNode): boolean => {
     if (ts.isIdentifier(expr)) return expr.text === 'it' || expr.text === 'test';
@@ -913,28 +1172,230 @@ function extractStaticTestTitlesFromSource(sourceText: string, label: string): S
   const visit = (node: TsNode) => {
     if (ts.isCallExpression(node) && isItOrTestRoot(node.expression)) {
       const first = node.arguments[0];
+      const second = node.arguments[1];
       if (first && (ts.isStringLiteral(first) || ts.isNoSubstitutionTemplateLiteral(first))) {
-        titles.add(first.text);
+        const bodyText = second ? second.getFullText(sourceFile) : '';
+        out.push({ title: first.text, bodyText });
       }
     }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  return titles;
+  return out;
+}
+function extractStaticTestTitlesFromSource(sourceText: string, label: string): Set<string> {
+  return new Set(extractTestDeclarations(sourceText, label).map((d) => d.title));
 }
 
-function findIntroductionCommit(relPath: string): { introducedAt: string; parentSha: string } | null {
-  const log = sh('git', ['log', '--reverse', '--format=%H', `${baseCommit}..${headSha}`, '--', relPath]);
-  if (log.status !== 0) return null;
-  const commits = log.stdout.split('\n').map((l) => l.trim()).filter(Boolean);
-  if (commits.length === 0) return null;
-  const first = commits[0];
-  if (!first) return null;
-  const parent = sh('git', ['rev-parse', `${first}^`]);
-  if (parent.status !== 0) return null;
-  return { introducedAt: first, parentSha: parent.stdout.trim() };
+function findIntroductionCommit(relPath: string, leafTitle: string): { introducedAt: string; parentOfIntroduction: string } | null {
+  const logResult = sh('git', ['log', '--reverse', '--format=%H', `${baseCommit}..${headSha}`, '--', relPath]);
+  if (logResult.status !== 0) return null;
+  const commits = logResult.stdout.trim().split('\n').filter(Boolean);
+  for (const commit of commits) {
+    let content: string;
+    try {
+      content = readFileAtCommit(commit, relPath);
+    } catch {
+      continue;
+    }
+    if (extractStaticTestTitlesFromSource(content, `${commit}:${relPath}`).has(leafTitle)) {
+      const parentResult = sh('git', ['rev-parse', `${commit}^`]);
+      if (parentResult.status !== 0) return null;
+      return { introducedAt: commit, parentOfIntroduction: parentResult.stdout.trim() };
+    }
+  }
+  return null;
 }
 
+// =========================================================================
+// BLOCKER 5 FIX -- full detached-worktree Vitest-Node-API replay, ported
+// from verify-w9-ingest.ts (required now, per the ruling: "its six-round
+// hardening cost is a reason to reuse it, not defer it"). Bypasses the JSON
+// reporter entirely; walks the real reported task forest via vitest/node's
+// public API. See verify-w9-ingest.ts for the full forensic justification;
+// reproduced here only where the mechanism itself needs it.
+// =========================================================================
+interface SerializedTaskNode {
+  type: 'module' | 'suite' | 'test';
+  name: string;
+  fullName: string;
+  state: string;
+  errors: string[];
+  children?: SerializedTaskNode[];
+}
+interface SerializedReplayForest {
+  moduleCount: number;
+  modules: SerializedTaskNode[];
+  unhandledErrors: string[];
+}
+function generateReplayMarker(): string {
+  return `W9AS_REPLAY_RESULT_JSON_${crypto.randomBytes(16).toString('hex')}:`;
+}
+function buildReplayRunnerScript(marker: string): string {
+  return [
+    "import { startVitest } from 'vitest/node';",
+    '',
+    'function serializeErrors(errors) {',
+    "  return (errors || []).map((e) => (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)));",
+    '}',
+    'function serializeNode(node) {',
+    "  if (node.type === 'test') {",
+    '    const result = node.result();',
+    "    return { type: 'test', name: node.name, fullName: node.fullName, state: result.state, errors: serializeErrors(result.errors) };",
+    '  }',
+    '  const children = [...node.children].map(serializeNode);',
+    '  return {',
+    '    type: node.type,',
+    "    name: node.type === 'module' ? node.relativeModuleId : node.name,",
+    "    fullName: node.type === 'module' ? node.moduleId : node.fullName,",
+    '    state: node.state(),',
+    '    errors: serializeErrors(node.errors()),',
+    '    children,',
+    '  };',
+    '}',
+    '',
+    'const targetFile = process.argv[2];',
+    "const ctx = await startVitest('test', [targetFile], { root: process.cwd(), watch: false, reporters: [], config: 'vitest.config.ts' });",
+    'const testModules = ctx.state.getTestModules();',
+    'const unhandledErrors = ctx.state.getUnhandledErrors();',
+    'const serialized = { moduleCount: testModules.length, modules: testModules.map(serializeNode), unhandledErrors: serializeErrors(unhandledErrors) };',
+    `console.log(${JSON.stringify(marker)} + JSON.stringify(serialized));`,
+    'await ctx.close();',
+    'process.exit(process.exitCode ?? 0);',
+    '',
+  ].join('\n');
+}
+function evaluateTaskForestConsistency(forest: SerializedReplayForest, targetFullName: string, controlFullName: string): string[] {
+  const problems: string[] = [];
+  if (forest.moduleCount !== 1 || forest.modules.length !== 1) {
+    problems.push(`expected exactly 1 module task, got moduleCount=${forest.moduleCount} modules.length=${forest.modules.length}`);
+  }
+  const moduleNode = forest.modules[0];
+  if (!moduleNode) {
+    problems.push('no module task found in the serialized forest');
+    return problems;
+  }
+  let targetState: string | null = null;
+  let controlState: string | null = null;
+  let failedLeafCount = 0;
+  let soleFailedLeafFullName: string | null = null;
+  const disallowedErrorNodes: string[] = [];
+  function walk(node: SerializedTaskNode): void {
+    const isTargetTestNode = node.type === 'test' && node.fullName === targetFullName;
+    if (node.errors.length > 0 && !isTargetTestNode) {
+      disallowedErrorNodes.push(`${node.type} "${node.fullName}": ${JSON.stringify(node.errors)}`);
+    }
+    if (node.type === 'test') {
+      if (node.state === 'failed') {
+        failedLeafCount += 1;
+        soleFailedLeafFullName = node.fullName;
+      }
+      if (node.fullName === targetFullName) targetState = node.state;
+      if (node.fullName === controlFullName) controlState = node.state;
+      return;
+    }
+    for (const child of node.children ?? []) walk(child);
+  }
+  walk(moduleNode);
+
+  if (forest.unhandledErrors.length > 0) problems.push(`run-level unhandled errors present: ${JSON.stringify(forest.unhandledErrors)}`);
+  if (disallowedErrorNodes.length > 0) problems.push(`errors present outside the target test's own assertion failure: ${disallowedErrorNodes.join('; ')}`);
+  if (failedLeafCount !== 1) problems.push(`expected exactly 1 failed test leaf in the entire tree, found ${failedLeafCount}`);
+  else if (soleFailedLeafFullName !== targetFullName) problems.push(`the one failed test leaf is "${soleFailedLeafFullName}", expected the target "${targetFullName}"`);
+  if (targetState === null) problems.push(`target test "${targetFullName}" not found in the serialized forest`);
+  else if (targetState !== 'failed') problems.push(`target test state is "${targetState}", expected "failed"`);
+  if (controlState === null) problems.push(`CONTROL_TEST "${controlFullName}" not found in the serialized forest`);
+  else if (controlState !== 'passed') problems.push(`CONTROL_TEST state is "${controlState}", expected "passed"`);
+  return problems;
+}
+interface ReplayOutcome {
+  ok: boolean;
+  problems: string[];
+  evidenceLines: string[];
+}
+function replayRedEvidence(parentSha: string, containingFileRel: string, targetFullName: string, controlTestFullName: string): ReplayOutcome {
+  const problems: string[] = [];
+  const evidenceLines: string[] = [];
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'od-w9as-replay-'));
+  let worktreeAdded = false;
+  try {
+    const addResult = sh('git', ['worktree', 'add', '--detach', tempDir, parentSha], { timeoutMs: 5 * 60_000 });
+    evidenceLines.push(`git worktree add --detach ${tempDir} ${parentSha} => exit=${addResult.status}`);
+    if (addResult.status !== 0) {
+      problems.push(`git worktree add failed (exit=${addResult.status}): ${addResult.stdout.slice(-500)}`);
+      return { ok: false, problems, evidenceLines };
+    }
+    worktreeAdded = true;
+
+    sh('mise', ['trust'], { cwd: tempDir, timeoutMs: 30_000 });
+    const installResult = sh('pnpm', ['install', '--offline', '--frozen-lockfile'], { cwd: tempDir, timeoutMs: 5 * 60_000 });
+    evidenceLines.push(`pnpm install --offline --frozen-lockfile => exit=${installResult.status}`);
+    if (installResult.status !== 0) {
+      problems.push(`frozen offline install failed (exit=${installResult.status}): ${installResult.stdout.slice(-1000)}`);
+      return { ok: false, problems, evidenceLines };
+    }
+
+    const headFileAbs = path.join(headWorktreeDir || repoRoot, 'apps/daemon', containingFileRel);
+    const targetFileAbs = path.join(tempDir, 'apps/daemon', containingFileRel);
+    try {
+      fs.mkdirSync(path.dirname(targetFileAbs), { recursive: true });
+      fs.copyFileSync(headFileAbs, targetFileAbs);
+    } catch (err) {
+      problems.push(`could not overlay HEAD test file: ${String(err)}`);
+      return { ok: false, problems, evidenceLines };
+    }
+    evidenceLines.push(`overlay: HEAD:apps/daemon/${containingFileRel} -> ${targetFileAbs}`);
+
+    const marker = generateReplayMarker();
+    const runnerScriptAbs = path.join(tempDir, 'apps/daemon', '.w9as-replay-runner.mjs');
+    fs.writeFileSync(runnerScriptAbs, buildReplayRunnerScript(marker));
+    const targetFileArg = `tests/${path.basename(containingFileRel)}`;
+    const argvList = ['--filter', '@open-design/daemon', 'exec', 'node', '.w9as-replay-runner.mjs', targetFileArg];
+    evidenceLines.push(`argv: pnpm ${argvList.join(' ')} (cwd=${path.join(tempDir, 'apps/daemon')})`);
+    const runResult = sh('pnpm', argvList, { cwd: path.join(tempDir, 'apps/daemon'), timeoutMs: 3 * 60_000 });
+
+    if (runResult.processError) {
+      const outputHash = sha256Bytes(`--- stdout ---\n${runResult.stdout}\n--- stderr ---\n${runResult.stderr}`);
+      evidenceLines.push(`exit=${runResult.status} processError=true stdout+stderr sha256=${outputHash}`);
+      problems.push('replay child process reported a spawn error or was killed (timeout/signal) -- not a genuine test-driven red exit');
+      return { ok: false, problems, evidenceLines };
+    }
+
+    const markerLines = runResult.stdout.split('\n').filter((l) => l.startsWith(marker));
+    const outputHash = sha256Bytes(`--- runner output ---\n${markerLines[0] ?? ''}\n--- stdout ---\n${runResult.stdout}\n--- stderr ---\n${runResult.stderr}`);
+    evidenceLines.push(`exit=${runResult.status} processError=false stdout+stderr+runnerOutput sha256=${outputHash}`);
+    if (markerLines.length !== 1) {
+      problems.push(`replay runner produced ${markerLines.length} marker-prefixed line(s) on stdout, expected exactly 1`);
+      return { ok: false, problems, evidenceLines };
+    }
+    const markerLine = markerLines[0]!;
+
+    let forest: SerializedReplayForest | null = null;
+    try {
+      forest = JSON.parse(markerLine.slice(marker.length)) as SerializedReplayForest;
+    } catch (err) {
+      problems.push(`replay runner's serialized forest could not be parsed: ${String(err)}`);
+      return { ok: false, problems, evidenceLines };
+    }
+    evidenceLines.push(`forest: moduleCount=${forest.moduleCount} unhandledErrors=${JSON.stringify(forest.unhandledErrors)}`);
+
+    const forestProblems = evaluateTaskForestConsistency(forest, targetFullName, controlTestFullName);
+    problems.push(...forestProblems);
+    if (runResult.status === 0) problems.push('replay child process exited 0 (expected nonzero for a genuine red state)');
+
+    return { ok: problems.length === 0, problems, evidenceLines };
+  } catch (err) {
+    problems.push(`replay crashed: ${String(err)}`);
+    return { ok: false, problems, evidenceLines };
+  } finally {
+    if (worktreeAdded) sh('git', ['worktree', 'remove', '--force', tempDir], { timeoutMs: 60_000 });
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch {
+      /* best effort */
+    }
+  }
+}
 function parseRedTranscript(content: string): { parentSha?: string; command?: string; test?: string; controlTest?: string } {
   const out: { parentSha?: string; command?: string; test?: string; controlTest?: string } = {};
   for (const line of content.split('\n')) {
@@ -951,7 +1412,8 @@ function parseRedTranscript(content: string): { parentSha?: string; command?: st
 }
 
 // -------------------------------------------------------------------------
-// Dedicated test suite discovery + run (glob, never a fixed list).
+// Dedicated test suite discovery + run -- sourced from the detached HEAD
+// worktree.
 // -------------------------------------------------------------------------
 interface AssertionResult {
   fullName: string;
@@ -973,8 +1435,8 @@ interface SuiteJson {
   numPendingTests?: number;
   testResults: FileTestResult[];
 }
-function discoverAgentSpawnTestFiles(): string[] {
-  const testsDir = path.join(repoRoot, 'apps/daemon/tests');
+function discoverAgentSpawnTestFiles(worktreeDir: string): string[] {
+  const testsDir = path.join(worktreeDir, 'apps/daemon/tests');
   if (!fs.existsSync(testsDir)) return [];
   return fs
     .readdirSync(testsDir)
@@ -982,12 +1444,12 @@ function discoverAgentSpawnTestFiles(): string[] {
     .sort()
     .map((f) => `tests/${f}`);
 }
-function runAgentSpawnSuite(testFiles: string[]): { suite: { status: number }; data: SuiteJson | null } {
+function runAgentSpawnSuite(worktreeDir: string, testFiles: string[]): { suite: { status: number }; data: SuiteJson | null } {
   const jsonPath = path.join(proofDir, `suite-run.${process.pid}.json`);
   const suite = sh(
     'pnpm',
     ['--filter', '@open-design/daemon', 'exec', 'vitest', 'run', '-c', 'vitest.config.ts', '--reporter=json', `--outputFile=${jsonPath}`, ...testFiles],
-    { timeoutMs: 3 * 60_000 },
+    { cwd: worktreeDir, timeoutMs: 3 * 60_000 },
   );
   let data: SuiteJson | null = null;
   try {
@@ -999,10 +1461,8 @@ function runAgentSpawnSuite(testFiles: string[]): { suite: { status: number }; d
 }
 
 // -------------------------------------------------------------------------
-// DECISIONS.md accepted-risk resolution -- W9AS-ACCEPT-<slug> headings,
-// read at baseCommit (never HEAD, mirroring the LEASE rule -- a branch
-// cannot author its own accepted risk after the fact by editing the
-// baseCommit view of the file).
+// DECISIONS.md accepted-risk resolution -- W9AS-ACCEPT-<slug> headings, read
+// at baseCommit (git object store, immune to worktree mutation already).
 // -------------------------------------------------------------------------
 interface AcceptedRiskBlock {
   slug: string;
@@ -1036,7 +1496,7 @@ function parseAcceptedRiskBlocks(decisionsText: string): { blocks: Map<string, A
 }
 
 // -------------------------------------------------------------------------
-// Lease helpers -- shared by LEASE and C9S-7 (owned-path diff check).
+// Lease helpers.
 // -------------------------------------------------------------------------
 function globToRegExp(glob: string): RegExp {
   let re = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&');
@@ -1056,117 +1516,215 @@ function loadLeaseAllowGlobs(): string[] | null {
 }
 
 // =========================================================================
+// BLOCKER 6 FIX -- threat-model doc bounded-section/fence-aware/exact-
+// citation machinery, ported VERBATIM from verify-w9-ingest.ts's own
+// six-round-hardened C9-7 (there; C9S-6 here), adapted for this tranche's
+// tag/section names.
+// =========================================================================
+function checkThreatModelSection(
+  worktreeDir: string,
+  p0Keys: readonly string[],
+  expectedRefByKey: Map<string, string>,
+  associatedRoutesByRef: Map<string, Set<string>>,
+  passedTestNames: Set<string>,
+): { ok: boolean; evidence: string } {
+  const threatModelPath = path.join(worktreeDir, 'docs/security/daemon-threat-model.md');
+  if (!fs.existsSync(threatModelPath)) {
+    return { ok: false, evidence: 'docs/security/daemon-threat-model.md does not exist (HEAD worktree)' };
+  }
+  const text = fs.readFileSync(threatModelPath, 'utf8');
+  const afterHeading = text.split(/^##\s+Wave 9\b.*$/m)[1];
+  const waveSection = afterHeading?.split(/\n##\s+/)[0];
+  if (!waveSection) {
+    return { ok: false, evidence: `no "## Wave 9" heading found; head of file: ${text.slice(0, 300)}` };
+  }
+  const MARKDOWN_BULLET_LINE = /^\s*(?:[-*+]|\d+\.)\s+/;
+  const FENCE_MARKER_LINE = /^( {0,3})(`{3,}|~{3,})(.*)$/;
+  const INDENTED_CODE_LINE = /^ {4,}/;
+  const bulletLines: string[] = [];
+  let fence: { char: string; length: number } | null = null;
+  for (const line of waveSection.split('\n')) {
+    const fenceMatch = FENCE_MARKER_LINE.exec(line);
+    if (fenceMatch) {
+      const run = fenceMatch[2]!;
+      const rest = fenceMatch[3]!;
+      const char = run[0]!;
+      const length = run.length;
+      if (!fence) {
+        const invalidBacktickOpener = char === '`' && rest.includes('`');
+        if (!invalidBacktickOpener) {
+          fence = { char, length };
+          continue;
+        }
+      } else {
+        if (char === fence.char && length >= fence.length && rest.trim() === '') fence = null;
+        continue;
+      }
+    }
+    if (fence) continue;
+    if (INDENTED_CODE_LINE.test(line)) continue;
+    if (MARKDOWN_BULLET_LINE.test(line) && /\[C9S-\d+\]/.test(line)) bulletLines.push(line);
+  }
+  const problems: string[] = [];
+  const bulletsCoveringP0 = new Set<string>();
+  for (const line of bulletLines) {
+    const backtickMatches = [...line.matchAll(/`([^`]+)`/g)].map((m) => m[1] ?? '');
+    const cited = backtickMatches.find((t) => t.length > 20);
+    if (!cited) {
+      problems.push(`no backtick-quoted test name found: ${line.slice(0, 120)}`);
+      continue;
+    }
+    if (!passedTestNames.has(cited)) {
+      problems.push(`cited test not an exact PASSED match: "${cited.slice(0, 160)}"`);
+      continue;
+    }
+    const lineLower = line.toLowerCase();
+    const p0KeysInLine = p0Keys.filter((k) => lineLower.includes(k.toLowerCase()));
+    if (p0KeysInLine.length === 0) continue;
+    if (p0KeysInLine.length > 1) {
+      problems.push(`bullet names ${p0KeysInLine.length} P0 route keys in one line (must be exactly one): ${line.slice(0, 160)}`);
+      continue;
+    }
+    const routeKey = p0KeysInLine[0]!;
+    const expectedRef = expectedRefByKey.get(routeKey) ?? '';
+    if (cited !== expectedRef) {
+      problems.push(`bullet for ${routeKey} cites "${cited}", expected exactly "${expectedRef}"`);
+      continue;
+    }
+    const associatedRoutes = associatedRoutesByRef.get(cited);
+    if (!associatedRoutes || associatedRoutes.size !== 1 || !associatedRoutes.has(routeKey)) {
+      problems.push(`bullet for ${routeKey} cites "${cited}", which is not globally associated with exactly this route`);
+      continue;
+    }
+    bulletsCoveringP0.add(routeKey);
+  }
+  const uncoveredP0 = p0Keys.filter((k) => !bulletsCoveringP0.has(k));
+  const ok = bulletLines.length > 0 && problems.length === 0 && uncoveredP0.length === 0;
+  return {
+    ok,
+    evidence: `[C9S-N] bullets found: ${bulletLines.length}\nP0 routes: ${p0Keys.join(', ') || 'none'}\nuncovered P0 routes: ${uncoveredP0.join(', ') || 'none'}\n${problems.join('\n') || 'all citations matched'}`,
+  };
+}
+
+// =========================================================================
 // main()
 // =========================================================================
 async function main(): Promise<void> {
   const placeholderWrite = writeManifestFile(buildManifest(false, true, false));
   if (!placeholderWrite.written) {
-    console.error('verify-w9-agent-spawn: FATAL: could not write the initial wroteOk:false placeholder manifest -- aborting rather than risk leaving a stale prior manifest unflagged.');
+    console.error('verify-w9-agent-spawn: FATAL: could not write the initial wroteOk:false placeholder manifest -- aborting.');
     process.exit(1);
   }
 
   const selfProbeResults = runExposureSelfProbes();
   const selfProbeFailures = selfProbeResults.filter((p) => !p.ok);
 
-  let baseCommitCollect: CollectResult | null = null;
-  let baseCommitError = '';
-  try {
-    const baseText = readFileAtCommit(baseCommit, 'apps/daemon/src/routes/runs.ts');
-    baseCommitCollect = collectRunRouteRegistrations(baseText, `${baseCommit}:routes/runs.ts`);
-  } catch (err) {
-    baseCommitError = String((err as Error)?.stack ?? err);
+  const worktree = createDetachedHeadWorktree();
+  if (!worktree.ok) {
+    record('C9S-1', 'git worktree add --detach <tmp> <headSha>', 'a detached HEAD worktree can be created for HEAD-state-integrity reads', false, '', {
+      detail: `detached HEAD worktree creation failed: ${worktree.error}`,
+    });
+  } else {
+    headWorktreeDir = worktree.dir;
   }
-  let headCollect: CollectResult | null = null;
-  let headError = '';
-  try {
-    const headText = fs.readFileSync(path.join(repoRoot, 'apps/daemon/src/routes/runs.ts'), 'utf8');
-    headCollect = collectRunRouteRegistrations(headText, 'HEAD:routes/runs.ts');
-  } catch (err) {
-    headError = String((err as Error)?.stack ?? err);
+
+  // -----------------------------------------------------------------------
+  // Per-owned-file AST collection (baseCommit + HEAD-from-detached-worktree).
+  // -----------------------------------------------------------------------
+  interface FileCollectState {
+    file: OwnedFile;
+    baseCommitCollect: CollectResult | null;
+    baseCommitError: string;
+    headCollect: CollectResult | null;
+    headError: string;
   }
+  const fileStates: FileCollectState[] = OWNED_FILES.map((file) => {
+    let baseCommitCollect: CollectResult | null = null;
+    let baseCommitError = '';
+    try {
+      const baseText = readFileAtCommit(baseCommit, file.relPath);
+      baseCommitCollect = collectScopedRouteRegistrations(baseText, `${baseCommit}:${file.relPath}`, file.fnName, file.pathFilter);
+    } catch (err) {
+      baseCommitError = String((err as Error)?.stack ?? err);
+    }
+    let headCollect: CollectResult | null = null;
+    let headError = '';
+    if (headWorktreeDir) {
+      try {
+        const headText = fs.readFileSync(path.join(headWorktreeDir, file.relPath), 'utf8');
+        headCollect = collectScopedRouteRegistrations(headText, `HEAD:${file.relPath}`, file.fnName, file.pathFilter);
+      } catch (err) {
+        headError = String((err as Error)?.stack ?? err);
+      }
+    } else {
+      headError = 'detached HEAD worktree unavailable';
+    }
+    return { file, baseCommitCollect, baseCommitError, headCollect, headError };
+  });
+
   const headExposureByKey = new Map<string, number>();
-  if (headCollect) {
-    for (const reg of headCollect.registrations) {
-      headExposureByKey.set(`${reg.method} ${reg.routePath}`, classifyExposure(reg));
+  for (const fState of fileStates) {
+    if (!fState.headCollect || !headWorktreeDir) continue;
+    try {
+      const headText = fs.readFileSync(path.join(headWorktreeDir, fState.file.relPath), 'utf8');
+      const sourceFile = ts.createSourceFile(`HEAD:${fState.file.relPath}`, headText, ts.ScriptTarget.Latest, true);
+      const fnBody = findFunctionBody(sourceFile, fState.file.fnName);
+      if (!fnBody) continue;
+      for (const reg of fState.headCollect.registrations) {
+        headExposureByKey.set(`${reg.method} ${reg.routePath}`, classifyExposure(reg, fnBody));
+      }
+    } catch {
+      /* leave unset; downstream checks report missing entries */
     }
   }
 
-  // C9S-1: route snapshot frozen at baseCommit, drift-checked, gated on the
-  // exposure-classifier self-probes.
+  // C9S-1: route snapshot frozen across 4 files, self-probe-gated.
   await checkCriterion('C9S-1', async () => {
+    if (!headWorktreeDir) return; // already recorded above
     if (selfProbeFailures.length > 0) {
       record(
         'C9S-1',
-        'exposure-classifier self-probes (8 fixtures) run through the real collectRunRouteRegistrations/classifyExposure pipeline',
-        'every self-probe fixture classifies at its expected exposure',
+        'exposure-classifier self-probes (14 fixtures) run through the real collector/classifier pipeline',
+        'every self-probe fixture classifies at its expected exposure (or, for computed-path probes, is correctly flagged)',
         false,
         selfProbeResults.map((p) => `[${p.ok ? 'PASS' : 'FAIL'}] ${p.name}: ${p.detail}`).join('\n'),
-        { detail: `${selfProbeFailures.length}/${selfProbeResults.length} self-probes failed -- exposure classifier is not trustworthy this run` },
+        { detail: `${selfProbeFailures.length}/${selfProbeResults.length} self-probes failed -- classifier/collector is not trustworthy this run` },
       );
       return;
     }
-    if (!baseCommitCollect) {
-      record('C9S-1', `git show ${baseCommit}:apps/daemon/src/routes/runs.ts`, 'frozen route set derives from baseCommit, not a HEAD literal', false, '', {
-        detail: `could not derive baseCommit route set: ${baseCommitError}${headError ? ` | HEAD error: ${headError}` : ''}`,
-      });
-      return;
+    const problems: string[] = [];
+    for (const fState of fileStates) {
+      const { file, baseCommitCollect, baseCommitError, headCollect, headError } = fState;
+      if (!baseCommitCollect) {
+        problems.push(`${file.relPath}: could not derive baseCommit route set: ${baseCommitError}`);
+        continue;
+      }
+      if (!headCollect) {
+        problems.push(`${file.relPath}: could not derive HEAD route set: ${headError}`);
+        continue;
+      }
+      if (file.fullFreeze && baseCommitCollect.totalCallCount !== baseCommitCollect.staticCallCount) {
+        problems.push(`${file.relPath}@baseCommit: ${baseCommitCollect.totalCallCount - baseCommitCollect.staticCallCount} computed/dynamic route path(s) detected in a fully-frozen function -- hard fail`);
+      }
+      if (file.fullFreeze && headCollect.totalCallCount !== headCollect.staticCallCount) {
+        problems.push(`${file.relPath}@HEAD: ${headCollect.totalCallCount - headCollect.staticCallCount} computed/dynamic route path(s) detected in a fully-frozen function -- hard fail`);
+      }
+      const baseKeys = new Set(baseCommitCollect.registrations.map((r) => `${r.method} ${r.routePath}`));
+      const headKeys = new Set(headCollect.registrations.map((r) => `${r.method} ${r.routePath}`));
+      const relevantFrozenKeys = [...FROZEN_ROUTE_KEYS].filter((k) => file.livePathPrefixes.some((p) => k.split(' ')[1] === p || k.split(' ')[1]?.startsWith(p)));
+      for (const key of relevantFrozenKeys) {
+        if (!baseKeys.has(key)) problems.push(`${file.relPath}@baseCommit: missing frozen route ${key}`);
+        if (!headKeys.has(key)) problems.push(`${file.relPath}@HEAD: missing frozen route ${key}`);
+      }
+      if (baseCommitCollect.duplicates.length > 0) problems.push(`${file.relPath}@baseCommit: duplicate registrations: ${baseCommitCollect.duplicates.join(', ')}`);
+      if (headCollect.duplicates.length > 0) problems.push(`${file.relPath}@HEAD: duplicate registrations: ${headCollect.duplicates.join(', ')}`);
     }
-    const baseKeys = new Set(baseCommitCollect.registrations.map((r) => `${r.method} ${r.routePath}`));
-    const missing = [...FROZEN_ROUTE_KEYS].filter((k) => !baseKeys.has(k));
-    const extra = [...baseKeys].filter((k) => !FROZEN_ROUTE_KEYS.has(k));
-    if (baseCommitCollect.duplicates.length > 0 || missing.length > 0 || extra.length > 0) {
-      record(
-        'C9S-1',
-        `AST-scan git show ${baseCommit}:apps/daemon/src/routes/runs.ts, scoped to registerRunRoutes`,
-        'baseCommit route set matches the reviewer-frozen FROZEN_IMPACT_FLOORS key set exactly, with zero duplicate registrations',
-        false,
-        `baseCommit duplicates: ${baseCommitCollect.duplicates.join(', ') || 'none'}\nmissing from baseCommit vs frozen table: ${missing.join(', ') || 'none'}\nextra in baseCommit vs frozen table: ${extra.join(', ') || 'none'}`,
-      );
-      return;
-    }
-    // HEAD AST self-consistency: this is the mechanism that actually catches
-    // drift (a route added to or removed from registerRunRoutes since
-    // baseCommit), because it is scoped to the exact function via AST, not a
-    // live-path heuristic. A path-prefix-based live comparison cannot serve
-    // this role here: apps/daemon/src/routes/genui.ts independently registers
-    // several genuinely different routes under the same /api/runs/:runId/*
-    // prefix (discovered empirically -- an earlier draft of this verifier
-    // flagged them as false-positive "added" drift), and routes/chat.ts adds
-    // one more (POST /api/runs/:id/feedback). routeInventory carries no
-    // source-file attribution, so no live-boot-based filter can reliably
-    // distinguish "a 9th route landed inside registerRunRoutes" from "a
-    // sibling file legitimately shares the path prefix" -- the AST scope is
-    // the only sound way to answer that question.
-    if (!headCollect) {
-      record('C9S-1', 'AST-scan apps/daemon/src/routes/runs.ts (HEAD), scoped to registerRunRoutes', 'HEAD route set matches the frozen table exactly, with zero duplicate registrations', false, '', {
-        detail: `could not derive HEAD route set: ${headError}`,
-      });
-      return;
-    }
-    const headKeys = new Set(headCollect.registrations.map((r) => `${r.method} ${r.routePath}`));
-    const headMissing = [...FROZEN_ROUTE_KEYS].filter((k) => !headKeys.has(k));
-    const headExtra = [...headKeys].filter((k) => !FROZEN_ROUTE_KEYS.has(k));
-    if (headCollect.duplicates.length > 0 || headMissing.length > 0 || headExtra.length > 0) {
-      record(
-        'C9S-1',
-        'AST-scan apps/daemon/src/routes/runs.ts (HEAD), scoped to registerRunRoutes',
-        'HEAD route set matches the frozen table exactly, with zero duplicate registrations -- this is the drift signal (a route added to or removed from registerRunRoutes since baseCommit)',
-        false,
-        `HEAD duplicates: ${headCollect.duplicates.join(', ') || 'none'}\nmissing from HEAD vs frozen table: ${headMissing.join(', ') || 'none'}\nextra in HEAD vs frozen table (drift): ${headExtra.join(', ') || 'none'}`,
-      );
-      return;
-    }
-    // Live isolated daemon boot: confirms the file's declared routes really
-    // wire into Express's real route table (catching a registration-time
-    // integration bug the AST scan cannot see -- e.g. a thrown/caught error
-    // during registerRunRoutes that silently drops a handler). Presence is
-    // checked per exact frozen key (count === 1), never by diffing every
-    // live route under a shared path prefix against the frozen set.
+
     let liveRoutesRaw: { method: string; path: string }[];
     try {
-      liveRoutesRaw = await bootDaemonForAgentSpawnRouteInventory();
+      liveRoutesRaw = await bootDaemonForAgentSpawnRouteInventory(headWorktreeDir);
     } catch (err) {
-      record('C9S-1', 'isolated daemon boot (port 0, mkdtemp OD_DATA_DIR) -> routeInventory', 'a live daemon boots and reports its own route registrations', false, '', {
+      record('C9S-1', 'isolated daemon boot from the detached HEAD worktree (port 0, mkdtemp OD_DATA_DIR) -> routeInventory', 'a live daemon boots and reports its own route registrations', false, '', {
         detail: `daemon boot failed: ${String((err as Error)?.stack ?? err)}`,
       });
       return;
@@ -1177,34 +1735,39 @@ async function main(): Promise<void> {
       const k = `${r.method} ${r.path}`;
       liveCounts.set(k, (liveCounts.get(k) ?? 0) + 1);
     }
-    const liveProblems: string[] = [];
     for (const key of FROZEN_ROUTE_KEYS) {
       const count = liveCounts.get(key) ?? 0;
-      if (count !== 1) liveProblems.push(`${key}: live count ${count} (expected exactly 1)`);
+      if (count !== 1) problems.push(`${key}: live count ${count} (expected exactly 1)`);
     }
-    const exposureHistogram = baseCommitCollect.registrations
-      .map((r) => `${r.method} ${r.routePath} => exposure ${classifyExposure(r)}`)
-      .join('\n');
-    const ok = liveProblems.length === 0;
+    // BLOCKER 3b FIX: allowlist-based drift check for the two fully-frozen
+    // files' owned prefixes -- anything present live at an owned prefix that
+    // is neither a frozen key nor a named sibling exclusion is a hard fail.
+    for (const file of OWNED_FILES.filter((f) => f.fullFreeze)) {
+      const ownedFrozenKeys = new Set([...FROZEN_ROUTE_KEYS].filter((k) => file.livePathPrefixes.some((p) => k.split(' ')[1]?.startsWith(p))));
+      const liveAtPrefix = [...liveCounts.keys()].filter((k) => file.livePathPrefixes.some((p) => k.split(' ')[1]?.startsWith(p)));
+      for (const liveKey of liveAtPrefix) {
+        if (ownedFrozenKeys.has(liveKey)) continue;
+        if (file.liveSiblingExclusions.includes(liveKey)) continue;
+        problems.push(`${file.relPath}: unaccounted live route at owned prefix, neither frozen nor a named sibling exclusion: ${liveKey}`);
+      }
+    }
+    const exposureLines = [...headExposureByKey.entries()].map(([k, v]) => `${k} => exposure ${v}`).join('\n');
     record(
       'C9S-1',
-      'self-probes (8/8 pass) + baseCommit AST self-consistency + HEAD AST self-consistency (drift signal) + boot real isolated daemon -> per-key live presence count',
-      "8-route frozen snapshot matches routes/runs.ts's own registerRunRoutes at both baseCommit and HEAD, and each of the 8 routes appears exactly once in a live daemon's real route table",
-      ok,
-      `self-probes: ${selfProbeResults.length}/${selfProbeResults.length} pass\nframe=${FROZEN_ROUTE_KEYS.size}\nlive presence problems: ${liveProblems.join(', ') || 'none -- all 8 frozen keys present exactly once live'}\n\nbaseCommit exposure histogram:\n${exposureHistogram}`,
+      '14 self-probes + per-file baseCommit/HEAD AST self-consistency (computed-path hard-fail for fully-frozen files) + isolated daemon boot from the detached HEAD worktree -> allowlist-checked live route presence',
+      '17-route frozen snapshot matches routes/runs.ts, routes/terminal.ts, routes/routine.ts (1 route), and routes/media.ts (1 route) at both baseCommit and HEAD, and each frozen route appears exactly once live, with no unaccounted sibling registrations at owned prefixes',
+      problems.length === 0,
+      `${problems.join('\n') || 'no problems'}\n\nlive-derived exposure (HEAD):\n${exposureLines}`,
     );
   });
 
-  // Load the attribution matrix once, shared by C9S-2 / C9S-3 / C9S-4.
-  const attribution = loadAttributionMatrix();
+  // Load the attribution matrix once, from the detached HEAD worktree.
+  const attribution = headWorktreeDir ? loadAttributionMatrix(headWorktreeDir) : { error: 'detached HEAD worktree unavailable' };
 
-  // C9S-2: attribution matrix riskScore matches the frozen impact floors +
-  // the classifier's own live re-derivation of exposure from HEAD.
+  // C9S-2: riskScore formula, integer-bounded impact.
   await checkCriterion('C9S-2', () => {
     if ('error' in attribution) {
-      record('C9S-2', `read ${ATTRIBUTION_PATH_REL}`, 'every row\'s riskScore.tier exactly equals tierFor(exposure+impact), exposure live-derived from HEAD, impact >= the frozen floor', false, '', {
-        detail: attribution.error,
-      });
+      record('C9S-2', `read ${ATTRIBUTION_PATH_REL} (HEAD worktree)`, "every row's riskScore is integer-bounded [0,3] impact, formula-consistent, and exposure exactly matches the live-derived value", false, '', { detail: attribution.error });
       return;
     }
     const problems: string[] = [];
@@ -1225,6 +1788,9 @@ async function main(): Promise<void> {
       const declaredImpact = typeof rs?.impact === 'number' ? rs.impact : NaN;
       const declaredScore = typeof rs?.score === 'number' ? rs.score : NaN;
       const declaredTier = typeof rs?.tier === 'string' ? rs.tier : '';
+      if (!Number.isInteger(declaredImpact) || declaredImpact < 0 || declaredImpact > 3) {
+        problems.push(`${key}: declared impact ${declaredImpact} is not an integer in [0,3]`);
+      }
       if (declaredExposure !== liveExposure) problems.push(`${key}: declared exposure ${declaredExposure} !== live-derived ${liveExposure}`);
       if (!(declaredImpact >= floor)) problems.push(`${key}: declared impact ${declaredImpact} < frozen floor ${floor}`);
       const expectedScore = liveExposure + declaredImpact;
@@ -1233,14 +1799,28 @@ async function main(): Promise<void> {
     }
     record(
       'C9S-2',
-      `read ${ATTRIBUTION_PATH_REL}; cross-check against FROZEN_IMPACT_FLOORS and live HEAD-derived exposure`,
-      'every row\'s riskScore is formula-consistent and impact never claims below its frozen floor',
+      `read ${ATTRIBUTION_PATH_REL} (HEAD worktree); cross-check against FROZEN_IMPACT_FLOORS + integer bounds + live HEAD-derived exposure`,
+      "every row's riskScore is integer-bounded, formula-consistent, and impact never claims below its frozen floor",
       problems.length === 0,
       problems.join('\n') || `${attribution.rows.length} rows checked, all formula-consistent`,
     );
   });
 
-  // C9S-3: structural completeness + exposure===3 attribution.
+  // Compute matrix-derived P0 keys (used by C9S-4/C9S-6) -- from the SAME
+  // live exposure + declared (already-validated) impact, never a static
+  // table (BLOCKER 4 FIX).
+  const p0RouteKeysFromMatrix = new Set<string>();
+  if (!('error' in attribution)) {
+    for (const row of attribution.rows) {
+      const key = typeof row.route === 'string' ? row.route : '';
+      const liveExposure = headExposureByKey.get(key);
+      const declaredImpact = typeof row.riskScore?.impact === 'number' ? row.riskScore.impact : undefined;
+      if (liveExposure !== undefined && declaredImpact !== undefined && tierFor(liveExposure + declaredImpact) === 'P0') {
+        p0RouteKeysFromMatrix.add(key);
+      }
+    }
+  }
+
   let decisionsAtBase = '';
   let decisionsError = '';
   try {
@@ -1249,8 +1829,8 @@ async function main(): Promise<void> {
     decisionsError = String((err as Error)?.stack ?? err);
   }
   const acceptedRiskBlocks = decisionsAtBase ? parseAcceptedRiskBlocks(decisionsAtBase).blocks : new Map<string, AcceptedRiskBlock[]>();
-  const testFiles = discoverAgentSpawnTestFiles();
-  const suiteResult = testFiles.length > 0 ? runAgentSpawnSuite(testFiles) : { suite: { status: 1 }, data: null };
+  const testFiles = headWorktreeDir ? discoverAgentSpawnTestFiles(headWorktreeDir) : [];
+  const suiteResult = testFiles.length > 0 && headWorktreeDir ? runAgentSpawnSuite(headWorktreeDir, testFiles) : { suite: { status: 1 }, data: null };
   const passedAssertionsByFile = new Map<string, AssertionResult[]>();
   if (suiteResult.data) {
     for (const fileResult of suiteResult.data.testResults) {
@@ -1259,13 +1839,24 @@ async function main(): Promise<void> {
   }
   const allPassedFullNames = new Set<string>();
   for (const list of passedAssertionsByFile.values()) for (const a of list) allPassedFullNames.add(a.fullName);
+  const testDeclarationsByFile = new Map<string, TestDeclaration[]>();
+  if (headWorktreeDir) {
+    for (const rel of testFiles) {
+      try {
+        const text = fs.readFileSync(path.join(headWorktreeDir, 'apps/daemon', rel), 'utf8');
+        testDeclarationsByFile.set(rel, extractTestDeclarations(text, rel));
+      } catch {
+        /* leave unset */
+      }
+    }
+  }
+  const allTestDeclarations = [...testDeclarationsByFile.values()].flat();
   const globalCitationOwner = new Map<string, string>(); // fullName -> routeKey
+  const associatedRoutesByRef = new Map<string, Set<string>>();
 
   await checkCriterion('C9S-3', () => {
     if ('error' in attribution) {
-      record('C9S-3', `read ${ATTRIBUTION_PATH_REL}`, 'exactly 8 rows (no orphans/gaps/duplicates), six required fields non-placeholder, every exposure===3 row attributed', false, '', {
-        detail: attribution.error,
-      });
+      record('C9S-3', `read ${ATTRIBUTION_PATH_REL} (HEAD worktree)`, 'exactly 17 rows, six required fields non-placeholder, every exposure>=2 row attributed via exactly one of control/acceptedRisk', false, '', { detail: attribution.error });
       return;
     }
     const rows = attribution.rows;
@@ -1283,71 +1874,103 @@ async function main(): Promise<void> {
     let unattributed = 0;
     let knownVulnerable = 0;
     const rowDetails: string[] = [];
+
+    function resolveTestRef(ref: string, routeKey: string, requirePair: boolean): boolean {
+      if (!allPassedFullNames.has(ref)) {
+        rowDetails.push(`${routeKey}: testRef "${ref}" is not a currently-passing test in the discovered suite`);
+        return false;
+      }
+      const terms = routeAssociationTerms(routeKey);
+      const hasTermMatch = terms.some((t) => ref.toLowerCase().includes(t));
+      const existingOwner = globalCitationOwner.get(ref);
+      if (existingOwner && existingOwner !== routeKey) {
+        rowDetails.push(`${routeKey}: testRef "${ref}" already cited by ${existingOwner} -- global citation uniqueness violated`);
+        return false;
+      }
+      if (!hasTermMatch) {
+        rowDetails.push(`${routeKey}: testRef "${ref}" does not contain a path-derived association term (${terms.join('/')})`);
+        return false;
+      }
+      const owningFile = [...passedAssertionsByFile.entries()].find(([, list]) => list.some((a) => a.fullName === ref))?.[0];
+      if (requirePair) {
+        if (!owningFile || !hasDistinctSignalPair(passedAssertionsByFile.get(owningFile) ?? [])) {
+          rowDetails.push(`${routeKey}: cited file (control) does not contain a distinct paired positive+negative passing assertion`);
+          return false;
+        }
+      }
+      globalCitationOwner.set(ref, routeKey);
+      const set = associatedRoutesByRef.get(ref) ?? new Set<string>();
+      set.add(routeKey);
+      associatedRoutesByRef.set(ref, set);
+      return true;
+    }
+
     for (const row of rows) {
       const key = typeof row.route === 'string' ? row.route : '<missing>';
       const REQUIRED_FIELDS: (keyof AttributionRow)[] = ['owner', 'authn', 'authz', 'inputValidation', 'sizeRateLimit', 'testRef'];
       const placeholderFields = REQUIRED_FIELDS.filter((f) => isPlaceholderText(row[f]));
-      if (placeholderFields.length > 0) {
-        structuralProblems.push(`${key}: placeholder/missing fields: ${placeholderFields.join(', ')}`);
-      }
+      if (placeholderFields.length > 0) structuralProblems.push(`${key}: placeholder/missing fields: ${placeholderFields.join(', ')}`);
       const liveExposure = headExposureByKey.get(key);
       const authnText = typeof row.authn === 'string' ? row.authn : '';
       if (liveExposure !== undefined) {
         const keywordRe = EXPOSURE_KEYWORDS[liveExposure];
-        if (keywordRe && !keywordRe.test(authnText)) {
-          structuralProblems.push(`${key}: authn field does not name its live-derived exposure class (${liveExposure})`);
-        }
+        if (keywordRe && !keywordRe.test(authnText)) structuralProblems.push(`${key}: authn field does not name its live-derived exposure class (${liveExposure})`);
       }
-      if (liveExposure !== 3) continue; // attribution requirement only applies to exposure===3 rows
-      const terms = routeAssociationTerms(key);
+      // Primary testRef, when present, must ALSO resolve fully (BLOCKER 4 FIX).
+      if (typeof row.testRef === 'string' && row.testRef.trim() && !isPlaceholderText(row.testRef)) {
+        resolveTestRef(row.testRef.trim(), key, false);
+      }
+      if (liveExposure === undefined || liveExposure < 2) continue; // attribution required only for exposure>=2 rows
+
       const control = row.control;
       const acceptedRisk = row.acceptedRisk;
+      const hasControl = control != null && typeof control === 'object';
+      const hasAcceptedRisk = acceptedRisk != null && typeof acceptedRisk === 'object';
+      // BLOCKER 4 FIX: true XOR, not if/else-if.
+      if (hasControl && hasAcceptedRisk) {
+        rowDetails.push(`${key}: exposure>=2 row carries BOTH control and acceptedRisk -- exactly one is required`);
+        unattributed++;
+        continue;
+      }
       let rowAttributed = false;
       let rowKnownVulnerable = false;
-      if (control && typeof control.testRef === 'string' && typeof control.mechanism === 'string') {
-        const testRef = control.testRef;
-        if (!allPassedFullNames.has(testRef)) {
-          rowDetails.push(`${key}: control.testRef "${testRef}" is not a currently-passing test in the discovered suite`);
-        } else {
-          const owningFile = [...passedAssertionsByFile.entries()].find(([, list]) => list.some((a) => a.fullName === testRef))?.[0];
-          const hasTermMatch = terms.some((t) => testRef.toLowerCase().includes(t));
-          const existingOwner = globalCitationOwner.get(testRef);
-          if (existingOwner && existingOwner !== key) {
-            rowDetails.push(`${key}: control.testRef "${testRef}" already cited by ${existingOwner} -- global citation uniqueness violated`);
-          } else if (!hasTermMatch) {
-            rowDetails.push(`${key}: control.testRef "${testRef}" does not contain a path-derived association term (${terms.join('/')})`);
-          } else if (!owningFile || !hasDistinctSignalPair(passedAssertionsByFile.get(owningFile) ?? [])) {
-            rowDetails.push(`${key}: cited file does not contain a distinct paired positive+negative passing assertion`);
-          } else {
-            globalCitationOwner.set(testRef, key);
-            rowAttributed = true;
-          }
+      if (hasControl) {
+        const testRef = typeof control!.testRef === 'string' ? control!.testRef : '';
+        const mechanism = typeof control!.mechanism === 'string' ? control!.mechanism : '';
+        if (!testRef || !mechanism) {
+          rowDetails.push(`${key}: control missing testRef/mechanism`);
+        } else if (resolveTestRef(testRef, key, true)) {
+          rowAttributed = true;
         }
-      } else if (acceptedRisk && typeof acceptedRisk.decisionRef === 'string') {
-        const slug = acceptedRisk.decisionRef.replace(/^W9AS-ACCEPT-/, '');
-        const blocks = acceptedRiskBlocks.get(slug) ?? [];
-        if (decisionsError) {
-          rowDetails.push(`${key}: could not read DECISIONS.md at baseCommit: ${decisionsError}`);
-        } else if (blocks.length !== 1) {
-          rowDetails.push(`${key}: decisionRef "${acceptedRisk.decisionRef}" resolves to ${blocks.length} blocks in DECISIONS.md@baseCommit (need exactly 1, unambiguous)`);
+      } else if (hasAcceptedRisk) {
+        const decisionRef = typeof acceptedRisk!.decisionRef === 'string' ? acceptedRisk!.decisionRef : '';
+        // BLOCKER 4 FIX: exact prefix required, not strip-then-match.
+        if (!/^W9AS-ACCEPT-[a-z0-9-]+$/.test(decisionRef)) {
+          rowDetails.push(`${key}: acceptedRisk.decisionRef "${decisionRef}" does not carry the exact W9AS-ACCEPT-<slug> prefix`);
         } else {
-          const block = blocks[0];
-          const authorsInRange = commitAuthorsBetween(baseCommit, headSha);
-          if (!block) {
-            rowDetails.push(`${key}: accepted-risk block resolution failed unexpectedly`);
-          } else if (block.route !== key) {
-            rowDetails.push(`${key}: accepted-risk block's Route "${block.route}" !== row key "${key}"`);
-          } else if (!block.accepter || !block.date || !block.rationale) {
-            rowDetails.push(`${key}: accepted-risk block missing Accepter/Date/Rationale`);
-          } else if (authorsInRange.has(block.accepter.trim().toLowerCase())) {
-            rowDetails.push(`${key}: Accepter "${block.accepter}" matches a commit author between baseCommit and HEAD -- cannot self-accept`);
+          const slug = decisionRef.replace(/^W9AS-ACCEPT-/, '');
+          const blocks = acceptedRiskBlocks.get(slug) ?? [];
+          if (decisionsError) {
+            rowDetails.push(`${key}: could not read DECISIONS.md at baseCommit: ${decisionsError}`);
+          } else if (blocks.length !== 1) {
+            rowDetails.push(`${key}: decisionRef "${decisionRef}" resolves to ${blocks.length} blocks in DECISIONS.md@baseCommit (need exactly 1)`);
           } else {
-            rowAttributed = true;
-            rowKnownVulnerable = true;
+            const block = blocks[0]!;
+            const authorsInRange = commitAuthorsBetween(baseCommit, headSha);
+            if (block.route !== key) {
+              rowDetails.push(`${key}: accepted-risk block's Route "${block.route}" !== row key "${key}"`);
+            } else if (!block.accepter || !block.date || !block.rationale) {
+              rowDetails.push(`${key}: accepted-risk block missing Accepter/Date/Rationale`);
+            } else if (authorsInRange.has(block.accepter.trim().toLowerCase())) {
+              rowDetails.push(`${key}: Accepter "${block.accepter}" matches a commit author between baseCommit and HEAD -- cannot self-accept`);
+            } else {
+              rowAttributed = true;
+              rowKnownVulnerable = true;
+            }
           }
         }
       } else {
-        rowDetails.push(`${key}: exposure===3 but neither control nor acceptedRisk present`);
+        rowDetails.push(`${key}: exposure>=2 but neither control nor acceptedRisk present`);
       }
       if (rowAttributed) attributed++;
       else unattributed++;
@@ -1357,26 +1980,24 @@ async function main(): Promise<void> {
     const ok = structuralProblems.length === 0 && unattributed === 0;
     record(
       'C9S-3',
-      `read ${ATTRIBUTION_PATH_REL}; structural check + per-exposure-3-row control/acceptedRisk resolution against the discovered agent-spawn-*.test.ts suite and DECISIONS.md@${baseCommit}`,
-      'exactly 8 rows, no orphans/gaps/duplicates, six fields non-placeholder, authn names its live exposure class, every exposure===3 row attributed (unattributed===0)',
+      `read ${ATTRIBUTION_PATH_REL} (HEAD worktree); structural check + primary testRef validation + per-exposure>=2-row true-XOR control/acceptedRisk resolution`,
+      'exactly 17 rows, six fields non-placeholder, authn names its live exposure class, primary testRef globally unique when present, every exposure>=2 row attributed via exactly one mechanism (unattributed===0)',
       ok,
       `attributed=${attributed} unattributed=${unattributed} known-vulnerable=${knownVulnerable}\n${[...structuralProblems, ...rowDetails].join('\n') || 'no problems'}`,
     );
   });
 
-  // C9S-4: P0-row size/rate-limit resolution via the ENFORCED grammar.
+  // C9S-4: matrix-derived P0-row size/rate-limit resolution, transport-proven.
   await checkCriterion('C9S-4', () => {
     if ('error' in attribution) {
-      record('C9S-4', `read ${ATTRIBUTION_PATH_REL}`, 'every P0-tier row\'s sizeRateLimit resolves via the ENFORCED grammar, backed by a real paired under/over-limit control test', false, '', {
-        detail: attribution.error,
-      });
+      record('C9S-4', `read ${ATTRIBUTION_PATH_REL} (HEAD worktree)`, "every matrix-derived P0 row's sizeRateLimit resolves via the ENFORCED grammar, bound by both limit and overflow tokens, with body-text status assertions", false, '', { detail: attribution.error });
       return;
     }
     const problems: string[] = [];
     let checked = 0;
     for (const row of attribution.rows) {
       const key = typeof row.route === 'string' ? row.route : '<missing>';
-      if (!P0_ROUTE_KEYS.has(key)) continue;
+      if (!p0RouteKeysFromMatrix.has(key)) continue;
       checked++;
       const mechanism = typeof row.sizeRateLimit === 'string' ? row.sizeRateLimit : '';
       const parsed = parseEnforcedDeclaration(mechanism);
@@ -1393,114 +2014,171 @@ async function main(): Promise<void> {
       const siblingAssertions = owningFile ? passedAssertionsByFile.get(owningFile) ?? [] : [];
       const terms = routeAssociationTerms(key);
       const overflowStatus = parsed.overflow === 'reject-429' ? 429 : 413;
-      const hasUnder = siblingAssertions.some((a) => matchesUnderLimitAssertion(a.fullName, terms, parsed.limit));
-      const hasOver = siblingAssertions.some((a) => matchesOverLimitAssertion(a.fullName, terms, parsed.limit, overflowStatus));
-      if (!hasUnder || !hasOver) {
-        problems.push(`${key}: same-file suite missing a bound under-limit-accepted (${hasUnder}) and/or over-limit-rejected (${hasOver}) assertion for limit=${parsed.limit} overflow=${overflowStatus}`);
+      const underMatches = siblingAssertions.filter((a) => matchesUnderLimitAssertion(a.fullName, terms, parsed.limit));
+      const overMatches = siblingAssertions.filter((a) => matchesOverLimitAssertion(a.fullName, terms, parsed.limit, overflowStatus));
+      if (underMatches.length === 0 || overMatches.length === 0) {
+        problems.push(`${key}: same-file suite missing a bound under-limit-accepted (${underMatches.length}) and/or over-limit-rejected (${overMatches.length}) assertion for limit=${parsed.limit} overflow=${overflowStatus}`);
+        continue;
+      }
+      // BLOCKER 5 FIX: body-text status-code assertion, not name-matching alone.
+      const overDecl = allTestDeclarations.find((d) => d.title === overMatches[0]!.title);
+      if (!overDecl || !bodyAssertsStatusCode(overDecl.bodyText, overflowStatus)) {
+        problems.push(`${key}: over-limit assertion "${overMatches[0]!.title}" body does not contain a real status-code assertion for ${overflowStatus}`);
       }
     }
     record(
       'C9S-4',
-      `parse each P0 row's sizeRateLimit against the ENFORCED grammar; verify a bound paired under/over-limit passing assertion in the cited control file`,
-      'every P0-tier row resolves size/rate-limit via a real, bound, currently-passing control',
-      problems.length === 0 && checked === P0_ROUTE_KEYS.size,
-      `P0 rows checked: ${checked}/${P0_ROUTE_KEYS.size} (${[...P0_ROUTE_KEYS].join(', ')})\n${problems.join('\n') || 'no problems'}`,
+      "parse each matrix-derived P0 row's sizeRateLimit against the ENFORCED grammar; verify a limit+overflow-bound paired under/over-limit passing assertion AND a body-text status-code assertion in the cited control file",
+      'every matrix-derived P0-tier row resolves size/rate-limit via a real, bound, currently-passing, body-verified control',
+      problems.length === 0 && checked === p0RouteKeysFromMatrix.size,
+      `P0 rows checked (matrix-derived): ${checked}/${p0RouteKeysFromMatrix.size} (${[...p0RouteKeysFromMatrix].join(', ')})\n${problems.join('\n') || 'no problems'}`,
     );
   });
 
-  // C9S-5: dedicated red-team test file(s).
+  // C9S-5: dedicated red-team corpus (8 cases), full replay for new tests.
   await checkCriterion('C9S-5', () => {
+    if (!headWorktreeDir) {
+      record('C9S-5', '', 'the dedicated test file set exists, boots a real daemon, passes, zero skip/only/todo/pending, implements all 8 named corpus cases, new tests independently replayed', false, '', { detail: 'detached HEAD worktree unavailable' });
+      return;
+    }
     if (testFiles.length === 0) {
-      record('C9S-5', 'glob apps/daemon/tests/agent-spawn-*.test.ts', 'the dedicated test file set exists, boots a real daemon, passes, zero skip/only/todo, implements the 5 named red-team corpus cases', false, '', {
-        detail: 'no files matching agent-spawn-*.test.ts found in apps/daemon/tests/',
+      record('C9S-5', 'glob apps/daemon/tests/agent-spawn-*.test.ts (HEAD worktree)', 'the dedicated test file set exists, boots a real daemon, passes, zero skip/only/todo/pending, implements all 8 named corpus cases, new tests independently replayed', false, '', {
+        detail: 'no files matching agent-spawn-*.test.ts found',
       });
       return;
     }
-    const bannedMarker = /\b(?:it|describe|test)\s*(?:\.\s*(?:skip|only|todo)\s*\(|\[\s*['"](?:skip|only|todo)['"]\s*\]\s*\()/;
+    const bannedMarker = /\b(?:it|describe|test)\s*(?:\.\s*(?:skip|only|todo|concurrent\.skip)\s*\(|\[\s*['"](?:skip|only|todo)['"]\s*\]\s*\(|\.\s*skipIf\s*\()/;
     const markerHits: string[] = [];
     for (const rel of testFiles) {
-      const text = fs.readFileSync(path.join(repoRoot, 'apps/daemon', rel), 'utf8');
+      const text = fs.readFileSync(path.join(headWorktreeDir, 'apps/daemon', rel), 'utf8');
       if (bannedMarker.test(text)) markerHits.push(rel);
     }
-    const REQUIRED_CASE_HINTS = [
+    const pendingCount = suiteResult.data?.numPendingTests ?? 0;
+    // BLOCKER 5 FIX: corpus-case matching is scoped to extracted test
+    // titles/bodies, never combined raw source text including comments.
+    const CORPUS_CASE_HINTS: RegExp[] = [
       /unknown.?agent.?id/i,
       /(oversized|too large|413|max.?body)/i,
       /(rate.?limit|429|spawn.?storm|rapid)/i,
       /(cross.?caller|foreign|another caller|other caller)/i,
       /(sandbox|escape|imported.?project|traversal)/i,
+      /(denied|unauthorized).*(spawn|before.*start)/i,
+      /(concurren|child.*budget|process count)/i,
+      /(capability|scope|binding).*(agent|model|prompt|tool.?bundle)/i,
     ];
-    const combinedText = testFiles.map((rel) => fs.readFileSync(path.join(repoRoot, 'apps/daemon', rel), 'utf8')).join('\n');
-    const missingCases = REQUIRED_CASE_HINTS.filter((re) => !re.test(combinedText));
-    const suitePassed = suiteResult.suite.status === 0 && (suiteResult.data?.numFailedTests ?? 1) === 0 && suiteResult.data !== null;
-    const ok = markerHits.length === 0 && missingCases.length === 0 && suitePassed;
-    record(
-      'C9S-5',
-      `glob apps/daemon/tests/agent-spawn-*.test.ts (${testFiles.length} file(s)); pnpm --filter @open-design/daemon exec vitest run --reporter=json`,
-      'suite exists, is green, zero skip/only/todo markers, and textually implements all 5 named red-team corpus cases',
-      ok,
-      `files: ${testFiles.join(', ')}\nsuite status=${suiteResult.suite.status} numFailedTests=${suiteResult.data?.numFailedTests ?? 'n/a'} numPassedTests=${suiteResult.data?.numPassedTests ?? 'n/a'}\nskip/only/todo markers: ${markerHits.join(', ') || 'none'}\nmissing corpus case hints: ${missingCases.length}`,
+    const missingCases = CORPUS_CASE_HINTS.filter(
+      (re) => !allTestDeclarations.some((d) => re.test(d.title) || re.test(d.bodyText)),
     );
-  });
+    const suitePassed = suiteResult.suite.status === 0 && (suiteResult.data?.numFailedTests ?? 1) === 0 && suiteResult.data !== null;
 
-  // C9S-6: threat-model doc extension.
-  await checkCriterion('C9S-6', () => {
-    const threatModelPath = path.join(repoRoot, 'docs/security/daemon-threat-model.md');
-    if (!fs.existsSync(threatModelPath)) {
-      record('C9S-6', 'read docs/security/daemon-threat-model.md', 'a [C9S-N]-tagged "Wave 9 -- agent spawn" section exists with one bullet per P0 route', false, '', {
-        detail: 'docs/security/daemon-threat-model.md does not exist',
-      });
-      return;
-    }
-    const text = fs.readFileSync(threatModelPath, 'utf8');
-    const headingMatch = /^#{1,6}.*wave\s*9.*agent\s*spawn/im.exec(text);
-    if (!headingMatch) {
-      record('C9S-6', 'read docs/security/daemon-threat-model.md', 'a [C9S-N]-tagged "Wave 9 -- agent spawn" section exists with one bullet per P0 route', false, '', {
-        detail: 'no heading matching "Wave 9 ... agent spawn" found',
-      });
-      return;
-    }
-    const sectionText = text.slice(headingMatch.index);
-    const bulletLines = sectionText.split('\n').filter((l) => /\[C9S-\d+\]/.test(l));
-    const problems: string[] = [];
-    for (const key of P0_ROUTE_KEYS) {
-      const matching = bulletLines.filter((l) => l.includes(key));
-      if (matching.length !== 1) {
-        problems.push(`${key}: expected exactly 1 [C9S-N] bullet naming it, found ${matching.length}`);
+    // Independent-replay requirement for every genuinely-new cited test
+    // (BLOCKER 5 FIX: required now, not deferred).
+    const replayProblems: string[] = [];
+    const replayEvidenceLog: string[] = [];
+    for (const [ref] of globalCitationOwner) {
+      const owningRel = [...testDeclarationsByFile.entries()].find(([, decls]) => decls.some((d) => d.title === ref))?.[0];
+      if (!owningRel) continue;
+      let existedAtBase = false;
+      try {
+        const baseText = readFileAtCommit(baseCommit, `apps/daemon/${owningRel}`);
+        existedAtBase = extractStaticTestTitlesFromSource(baseText, `${baseCommit}:${owningRel}`).has(ref);
+      } catch {
+        existedAtBase = false;
+      }
+      if (existedAtBase) continue; // pre-existing coverage cited directly -- no replay required
+      const redPath = path.join(headWorktreeDir, 'docs/security/agent-spawn-red', `${slugify(ref)}.txt`);
+      if (!fs.existsSync(redPath)) {
+        replayProblems.push(`new test "${ref}" (${owningRel}) has no red-evidence artifact at docs/security/agent-spawn-red/${slugify(ref)}.txt`);
         continue;
       }
-      const bullet = matching[0] ?? '';
-      const otherP0MentionedToo = [...P0_ROUTE_KEYS].some((other) => other !== key && bullet.includes(other));
-      if (otherP0MentionedToo) problems.push(`${key}: its bullet also names a different P0 route (must name exactly one)`);
+      const parsedTranscript = parseRedTranscript(fs.readFileSync(redPath, 'utf8'));
+      if (!parsedTranscript.parentSha || !/^[0-9a-f]{40}$/i.test(parsedTranscript.parentSha)) {
+        replayProblems.push(`red evidence for "${ref}": PARENT_SHA missing or not a full 40-hex commit`);
+        continue;
+      }
+      if (!resolveCommit(parsedTranscript.parentSha) || parsedTranscript.parentSha === headSha || !isAncestor(baseCommit, parsedTranscript.parentSha) || !isAncestor(parsedTranscript.parentSha, headSha)) {
+        replayProblems.push(`red evidence for "${ref}": PARENT_SHA does not satisfy baseCommit <= PARENT_SHA < HEAD`);
+        continue;
+      }
+      if (!parsedTranscript.test || parsedTranscript.test !== ref) {
+        replayProblems.push(`red evidence for "${ref}": TEST field does not exactly match testRef`);
+        continue;
+      }
+      if (!parsedTranscript.controlTest) {
+        replayProblems.push(`red evidence for "${ref}": CONTROL_TEST field missing`);
+        continue;
+      }
+      const introduction = findIntroductionCommit(`apps/daemon/${owningRel}`, ref);
+      if (!introduction) {
+        replayProblems.push(`red evidence for "${ref}": could not independently determine the introduction commit`);
+        continue;
+      }
+      if (introduction.parentOfIntroduction !== parsedTranscript.parentSha) {
+        replayProblems.push(`red evidence for "${ref}": PARENT_SHA does not equal the introduction commit's first parent`);
+        continue;
+      }
+      const replay = replayRedEvidence(parsedTranscript.parentSha, owningRel, ref, parsedTranscript.controlTest);
+      if (!replay.ok) replayProblems.push(`red-evidence replay failed for "${ref}": ${replay.problems.join('; ')}`);
+      replayEvidenceLog.push(`--- replay for "${ref}" ---\n${replay.evidenceLines.join('\n')}\n${replay.ok ? 'REPLAY OK' : `REPLAY FAILED: ${replay.problems.join('; ')}`}`);
     }
+
+    const ok = markerHits.length === 0 && pendingCount === 0 && missingCases.length === 0 && suitePassed && replayProblems.length === 0;
     record(
-      'C9S-6',
-      'read docs/security/daemon-threat-model.md; locate the Wave 9 -- agent spawn section; check [C9S-N] bullet-per-P0-route association',
-      'each P0 route has exactly one [C9S-N]-tagged bullet naming exactly that route',
-      problems.length === 0,
-      problems.join('\n') || `${P0_ROUTE_KEYS.size} P0 routes each have exactly one associated bullet`,
+      'C9S-5',
+      `glob apps/daemon/tests/agent-spawn-*.test.ts (${testFiles.length} file(s), HEAD worktree); pnpm --filter @open-design/daemon exec vitest run --reporter=json; independent detached-worktree replay for every genuinely-new cited test`,
+      'suite exists, is green, zero skip/only/todo/pending, textually implements all 8 named corpus cases (title/body-scoped), and every new citation independently replays red at its introduction commit\'s parent',
+      ok,
+      `files: ${testFiles.join(', ')}\nsuite status=${suiteResult.suite.status} numFailedTests=${suiteResult.data?.numFailedTests ?? 'n/a'} numPassedTests=${suiteResult.data?.numPassedTests ?? 'n/a'} numPendingTests=${pendingCount}\nskip/only/todo/pending markers: ${markerHits.join(', ') || 'none'}\nmissing corpus case hints: ${missingCases.length}\n${replayProblems.join('\n')}\n\n${replayEvidenceLog.join('\n\n') || '(no new-test replays triggered this run)'}`,
     );
   });
 
-  // C9S-7: adversarial implementation-review record.
+  // C9S-6: threat-model doc, ported bounded-section machinery.
+  await checkCriterion('C9S-6', () => {
+    if (!headWorktreeDir) {
+      record('C9S-6', '', 'threat-model doc extended with a bounded Wave 9 section; each matrix-derived P0 route has its own bullet', false, '', { detail: 'detached HEAD worktree unavailable' });
+      return;
+    }
+    const expectedRefByKey = new Map<string, string>();
+    if (!('error' in attribution)) {
+      for (const row of attribution.rows) {
+        const key = typeof row.route === 'string' ? row.route : '';
+        if (!p0RouteKeysFromMatrix.has(key)) continue;
+        const hasControl = row.control != null && typeof row.control.testRef === 'string';
+        const expectedRef = hasControl ? (row.control!.testRef as string).trim() : typeof row.testRef === 'string' ? row.testRef.trim() : '';
+        expectedRefByKey.set(key, expectedRef);
+      }
+    }
+    const result = checkThreatModelSection(headWorktreeDir, [...p0RouteKeysFromMatrix], expectedRefByKey, associatedRoutesByRef, allPassedFullNames);
+    record(
+      'C9S-6',
+      'read docs/security/daemon-threat-model.md (HEAD worktree); bounded to the next "## " heading; CommonMark-aware fence tracker excludes code; one-P0-key-per-bullet + exact-expected-citation check',
+      'every matrix-derived P0 route has its own bullet naming exactly that route and citing exactly its expected reference',
+      result.ok,
+      result.evidence,
+    );
+  });
+
+  // C9S-7: out-of-repo, orchestrator-owned implementation review (W7 pattern).
   await checkCriterion('C9S-7', () => {
-    const reviewPath = path.join(repoRoot, 'docs/security/agent-spawn-implementation-review.json');
+    const reviewPath = path.join(os.homedir(), '.claude', 'goal-state', WAVE_SLUG, 'reviews', 'implementation-review.json');
     if (!fs.existsSync(reviewPath)) {
-      record('C9S-7', 'read docs/security/agent-spawn-implementation-review.json', 'reviewedCommit is a real strict ancestor of HEAD with an empty owned-path diff to HEAD; reviewer distinct from every baseCommit..reviewedCommit author; verdict APPROVE', false, '', {
-        detail: 'docs/security/agent-spawn-implementation-review.json does not exist',
+      record('C9S-7', `read ${reviewPath}`, 'reviewedCommit is a real strict ancestor of HEAD with an empty owned-path diff to HEAD; reviewer distinct from every baseCommit..reviewedCommit author; verdict APPROVE', false, '', {
+        detail: `no record at ${reviewPath} -- this is an orchestrator-owned, out-of-repo location no implementer lease grants write access to (W7 disposition-record trust model)`,
       });
       return;
     }
-    let review: { reviewer?: unknown; model?: unknown; reviewedCommit?: unknown; verdict?: unknown };
+    let review: { reviewer?: unknown; model?: unknown; reviewedCommit?: unknown; verdict?: unknown; jobId?: unknown };
     try {
       review = JSON.parse(fs.readFileSync(reviewPath, 'utf8'));
     } catch (err) {
-      record('C9S-7', 'parse docs/security/agent-spawn-implementation-review.json', 'file parses as JSON with the required fields', false, '', { detail: String(err) });
+      record('C9S-7', `parse ${reviewPath}`, 'file parses as JSON with the required fields', false, '', { detail: String(err) });
       return;
     }
     const problems: string[] = [];
     const reviewer = typeof review.reviewer === 'string' ? review.reviewer.trim() : '';
     const reviewedCommit = typeof review.reviewedCommit === 'string' ? review.reviewedCommit.trim() : '';
     if (!reviewer) problems.push('reviewer missing/empty');
+    if (!review.model) problems.push('model missing/empty');
     if (!reviewedCommit || !resolveCommit(reviewedCommit)) {
       problems.push(`reviewedCommit "${reviewedCommit}" does not resolve to a real commit`);
     } else {
@@ -1511,22 +2189,66 @@ async function main(): Promise<void> {
         const diffResult = sh('git', ['diff', '--name-only', `${reviewedCommit}..${headSha}`]);
         const changed = diffResult.stdout.trim().split('\n').filter(Boolean);
         const ownedChanged = changed.filter((f) => allowGlobs.some((re) => re.test(f)));
-        if (ownedChanged.length > 0) {
-          problems.push(`owned-path diff from reviewedCommit to HEAD is non-empty: ${ownedChanged.join(', ')}`);
-        }
+        if (ownedChanged.length > 0) problems.push(`owned-path diff from reviewedCommit to HEAD is non-empty: ${ownedChanged.join(', ')}`);
       }
       const authorsInRange = commitAuthorsBetween(baseCommit, reviewedCommit);
-      if (reviewer && authorsInRange.has(reviewer.toLowerCase())) {
-        problems.push(`reviewer "${reviewer}" matches a commit author between baseCommit and reviewedCommit -- reviewer must be distinct from author`);
-      }
+      if (reviewer && authorsInRange.has(reviewer.toLowerCase())) problems.push(`reviewer "${reviewer}" matches a commit author between baseCommit and reviewedCommit -- reviewer must be distinct from author`);
     }
     if (review.verdict !== 'APPROVE') problems.push(`verdict "${String(review.verdict)}" !== "APPROVE"`);
     record(
       'C9S-7',
-      'read docs/security/agent-spawn-implementation-review.json; reviewedCommit resolvability/ancestry + owned-path diff + author-distinctness checks',
+      `read ${reviewPath} (out-of-repo, orchestrator-owned, W7 disposition-record trust model); reviewedCommit resolvability/ancestry + owned-path diff + author-distinctness checks`,
       'reviewedCommit is a real strict ancestor of HEAD whose owned-path diff to HEAD is empty; reviewer distinct from every baseCommit..reviewedCommit author; verdict is APPROVE',
       problems.length === 0,
-      problems.join('\n') || `reviewer=${reviewer} model=${String(review.model)} reviewedCommit=${reviewedCommit} verdict=${String(review.verdict)}`,
+      problems.join('\n') || `reviewer=${reviewer} model=${String(review.model)} reviewedCommit=${reviewedCommit} verdict=${String(review.verdict)} jobId=${String(review.jobId ?? '')}`,
+    );
+  });
+
+  // C9S-8: run-id/session ownership -- founder-blockable, per the ruling.
+  await checkCriterion('C9S-8', () => {
+    // Variant (b): a founder-signed shared-namespace acceptance.
+    const namespaceBlocks = acceptedRiskBlocks.get('shared-local-namespace') ?? [];
+    if (namespaceBlocks.length === 1) {
+      const block = namespaceBlocks[0]!;
+      const authorsInRange = commitAuthorsBetween(baseCommit, headSha);
+      if (block.accepter && block.date && block.rationale && !authorsInRange.has(block.accepter.trim().toLowerCase())) {
+        record(
+          'C9S-8',
+          'read DECISIONS.md@baseCommit for ### W9AS-ACCEPT-shared-local-namespace',
+          'run-id/session ownership resolves to a real control or a founder-signed accepted-risk record',
+          true,
+          `variant (b): founder-signed acceptance found -- accepter=${block.accepter}, date=${block.date}, rationale=${block.rationale}`,
+        );
+        return;
+      }
+    }
+    // Variant (a): a real, tested, route-associated ownership control cited
+    // by name in the attribution matrix (informal convention: any row's
+    // control.mechanism mentioning "ownership" or "per-caller").
+    if (!('error' in attribution)) {
+      const ownershipRow = attribution.rows.find((r) => {
+        const mech = typeof r.control?.mechanism === 'string' ? r.control.mechanism : '';
+        return /ownership|per-caller|caller-scoped/i.test(mech);
+      });
+      if (ownershipRow) {
+        const testRef = typeof ownershipRow.control?.testRef === 'string' ? ownershipRow.control.testRef : '';
+        if (testRef && allPassedFullNames.has(testRef)) {
+          record(
+            'C9S-8',
+            'scan attribution matrix rows for a control.mechanism naming real ownership/per-caller scoping, cross-checked against a currently-passing testRef',
+            'run-id/session ownership resolves to a real control or a founder-signed accepted-risk record',
+            true,
+            `variant (a): real ownership control found on route ${String(ownershipRow.route)}, testRef "${testRef}" currently passing`,
+          );
+          return;
+        }
+      }
+    }
+    recordBlockedOnFounder(
+      'C9S-8',
+      'read DECISIONS.md@baseCommit for ### W9AS-ACCEPT-shared-local-namespace; scan attribution matrix for a real ownership control',
+      'run-id/session ownership resolves to a real control or a founder-signed accepted-risk record, or is explicitly parked pending a founder decision',
+      'Neither variant (a) a real, tested ownership/capability-scoping control, nor variant (b) a founder-signed ### W9AS-ACCEPT-shared-local-namespace DECISIONS.md record exists yet. This is the legal blocked-on-founder terminal state (VERIFICATION-CONTRACT.md §2 rule 3) -- it does not block the autonomous implementation loop, only landing.',
     );
   });
 
@@ -1546,13 +2268,7 @@ async function main(): Promise<void> {
     }
     const approvedHashPath = path.join(os.homedir(), '.claude', 'goal-state', WAVE_SLUG, 'approved-gate.sha256');
     if (!gateIntegrityPinned) {
-      record(
-        'GATE-INTEGRITY',
-        '',
-        'defense-in-depth self-hash check',
-        true,
-        `sha256: ${selfSha256}\nUNPINNED -- no approved-gate.sha256 present. Not tamper-protected by this check until an orchestrator pins one post-approval; see manifest.gateIntegrityPinned=false.`,
-      );
+      record('GATE-INTEGRITY', '', 'defense-in-depth self-hash check', true, `sha256: ${selfSha256}\nUNPINNED -- no approved-gate.sha256 present. Not tamper-protected by this check until an orchestrator pins one post-approval; see manifest.gateIntegrityPinned=false.`);
       return;
     }
     const approved = fs.readFileSync(approvedHashPath, 'utf8').trim();
@@ -1576,7 +2292,7 @@ async function main(): Promise<void> {
     const lease = leasesRaw.waves[LEASE_KEY];
     if (!lease) {
       record('LEASE', '', '', false, '', {
-        detail: `no "${LEASE_KEY}" entry in leases.json@baseCommit -- expected to self-resolve once this PRD lands on main and an implementation branch's baseCommit includes the applied lease row (see W9-agent-spawn-tranche.md "PROPOSED write lease"); this document is not yet applied by an orchestrator`,
+        detail: `no "${LEASE_KEY}" entry in leases.json@baseCommit -- expected to self-resolve once this PRD lands on main and an implementation branch's baseCommit includes the applied lease row`,
       });
       return;
     }
@@ -1592,7 +2308,7 @@ async function main(): Promise<void> {
     record(
       'LEASE',
       `git diff --name-only ${baseCommit}...HEAD subset-of leases.json[${LEASE_KEY}] read via git show ${baseCommit}:docs/plans/waves/leases.json`,
-      `no writes outside the ${LEASE_KEY} lease, read from baseCommit so the wave cannot widen its own lease`,
+      `no writes outside the ${LEASE_KEY} lease, read from baseCommit`,
       violations.length === 0,
       violations.join('\n') || (diffNames.length === 0 ? 'no diff between baseCommit and HEAD' : `all ${diffNames.length} changed files inside the lease`),
     );
@@ -1600,10 +2316,12 @@ async function main(): Promise<void> {
 
   const headShaFinal = sh('git', ['rev-parse', 'HEAD']).stdout.trim();
   await checkCriterion('HEAD-DRIFT', () => {
-    record('HEAD-DRIFT', 'git rev-parse HEAD (re-resolved at end)', 'HEAD must not move during the run', headShaFinal === headSha, `initial=${headSha} final=${headShaFinal}`, {
+    record('HEAD-DRIFT', 'git rev-parse HEAD (re-resolved at end)', 'HEAD must not move during the run (secondary check -- the detached HEAD worktree is the primary defense against HEAD-state mutation)', headShaFinal === headSha, `initial=${headSha} final=${headShaFinal}`, {
       detail: headShaFinal === headSha ? undefined : 'HEAD moved during the run',
     });
   });
+
+  removeDetachedHeadWorktree(headWorktreeDir);
 
   for (const r of results) {
     if (!r.artifact || !r.artifactSha256) continue;
@@ -1626,8 +2344,13 @@ async function main(): Promise<void> {
   const finalManifest: ManifestShape = { ...preArchiveManifest, archiveOk: archiveResult.ok };
   const { written: manifestWritten, sha256: manifestSha256 } = writeManifestFile(finalManifest);
 
+  // Only a genuine "fail" blocks the run; "blocked-on-founder" is a legal
+  // terminal state that does not block the autonomous loop (VERIFICATION-
+  // CONTRACT.md §2 rule 3) -- only landing, which is an orchestrator/human
+  // decision outside this script's exit code.
   const failures = results.filter((r) => r.status === 'fail');
-  console.log(`\nverify-w9-agent-spawn: ${results.length - failures.length}/${results.length} criteria pass (treeDirty=${treeDirty}, wroteOk=true, gateIntegrityPinned=${gateIntegrityPinned}, archiveOk=${archiveResult.ok})`);
+  const blockedOnFounder = results.filter((r) => r.status === 'blocked-on-founder');
+  console.log(`\nverify-w9-agent-spawn: ${results.length - failures.length - blockedOnFounder.length}/${results.length} criteria pass, ${blockedOnFounder.length} blocked-on-founder (treeDirty=${treeDirty}, wroteOk=true, gateIntegrityPinned=${gateIntegrityPinned}, archiveOk=${archiveResult.ok})`);
   for (const r of results) console.log(`  [${r.status.toUpperCase()}] ${r.id}${r.detail ? ` (${r.detail})` : ''}`);
   if (treeDirty) console.log('  ⚠ tree is dirty: this run is advisory, never a wave pass (VERIFICATION-CONTRACT.md §2)');
   if (!archiveResult.ok) console.log('  ⚠ per-run archival FAILED (construct-then-reread-verify) -- this fails the run');
@@ -1637,6 +2360,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
+  removeDetachedHeadWorktree(headWorktreeDir);
   writeEmergencyManifest(`unhandled error in main(): ${String((err as Error)?.stack ?? err)}`, results);
   process.exit(1);
 });
