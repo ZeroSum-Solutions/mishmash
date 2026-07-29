@@ -337,7 +337,7 @@ export function migrateLegacyDataDirSync(
     // migration ran when it hadn't (this is the original #710 footgun).
     throw new LegacyMigrationError(
       'legacy_dir_invalid',
-      `OD_LEGACY_DATA_DIR="${legacyDir}" is not a usable legacy data dir (expected app.sqlite directly inside it). Quit Open Design, fix the path, and relaunch.`,
+      `OD_LEGACY_DATA_DIR="${legacyDir}" is not a usable legacy data dir (expected app.sqlite directly inside it). Quit MishMash, fix the path, and relaunch.`,
     );
   }
 
