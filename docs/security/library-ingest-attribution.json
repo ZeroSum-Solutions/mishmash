@@ -62,7 +62,7 @@
       "authn": "Loopback-gated via requireLocalDaemonRequest middleware; non-loopback callers are rejected before the handler runs.",
       "authz": "No further authorization beyond the loopback gate; returns pairing/token summary only.",
       "inputValidation": "No request body or query parameters are read.",
-      "sizeRateLimit": "ENFORCED kind=request-rate scope=origin limit=50 windowMs=10000 overflow=reject-429 (connectionOk, routes/library.ts).",
+      "sizeRateLimit": "A bounded, per-process, global fixed-window request-rate limit (50 requests / 10s, connectionOk in routes/library.ts, not partitioned per caller) rejects a caller over the limit with 429.",
       "testRef": "a library connection status request past the 50 request limit gets 429",
       "riskScore": {
         "exposure": 0,
@@ -187,7 +187,7 @@
       "authn": "No route-level authorization gate; relies on the global /api origin middleware (a zero-config, pairing-code-adjacent surface for this file).",
       "authz": "No route-level gate by design: the zero-config, pre-pairing daemon-detection probe the extension calls before any token exists.",
       "inputValidation": "No request body or query parameters are read.",
-      "sizeRateLimit": "ENFORCED kind=request-rate scope=origin limit=30 windowMs=10000 overflow=reject-429 (clipperProbeOk, routes/library.ts).",
+      "sizeRateLimit": "A bounded, per-process, global fixed-window request-rate limit (30 requests / 10s, clipperProbeOk in routes/library.ts, not partitioned per caller -- a pre-pairing probe has no caller identity to key on) rejects a caller over the limit with 429.",
       "testRef": "the clipper probe request past the 30 request limit gets 429",
       "riskScore": {
         "exposure": 3,
@@ -226,7 +226,7 @@
       "authn": "Loopback-gated via requireLocalDaemonRequest middleware; non-loopback callers are rejected before the handler runs.",
       "authz": "No further authorization beyond the loopback gate; forces a full reconcile pass, bypassing the program-wide throttle by design (the explicit \"Sync now\" action).",
       "inputValidation": "No request body fields are read.",
-      "sizeRateLimit": "ENFORCED kind=request-rate scope=origin limit=10 windowMs=60000 overflow=reject-429 (syncOk, routes/library.ts) -- bounds how often the force-bypass itself can be invoked.",
+      "sizeRateLimit": "A bounded, per-process, global fixed-window request-rate limit (10 requests / 60s, syncOk in routes/library.ts, not partitioned per caller) bounds how often the force-bypass itself can be invoked, rejecting a caller over the limit with 429.",
       "testRef": "a library sync request past the 10 sync limit gets 429",
       "riskScore": {
         "exposure": 0,
@@ -258,7 +258,7 @@
       "authn": "Loopback-gated via requireLocalDaemonRequest middleware; non-loopback callers are rejected before the handler runs.",
       "authz": "No further authorization beyond the loopback gate; only unlinks bytes the daemon owns and that live under LIBRARY_DIR.",
       "inputValidation": "req.params.id is passed directly to getLibraryAsset, a parameterized lookup; a missing asset returns 404.",
-      "sizeRateLimit": "ENFORCED kind=request-rate scope=origin limit=50 windowMs=10000 overflow=reject-429 (deleteAssetOk, routes/library.ts).",
+      "sizeRateLimit": "A bounded, per-process, global fixed-window request-rate limit (50 requests / 10s, deleteAssetOk in routes/library.ts, not partitioned per caller) rejects a caller over the limit with 429.",
       "testRef": "a library assets delete request past the 50 request limit gets 429",
       "riskScore": {
         "exposure": 0,
@@ -322,7 +322,7 @@
       "authn": "Loopback-gated via requireLocalDaemonRequest middleware; non-loopback callers are rejected before the handler runs.",
       "authz": "No further authorization beyond the loopback gate; copies stored bytes into a caller-named project directory.",
       "inputValidation": "req.body.projectId is required and type-checked; req.body.dir is sanitized by ensureProjectSubdir before use as a path segment.",
-      "sizeRateLimit": "ENFORCED kind=request-rate scope=origin limit=50 windowMs=10000 overflow=reject-429 (applyAssetOk, routes/library.ts).",
+      "sizeRateLimit": "A bounded, per-process, global fixed-window request-rate limit (50 requests / 10s, applyAssetOk in routes/library.ts, not partitioned per caller) rejects a caller over the limit with 429.",
       "testRef": "a library assets apply request past the 50 request limit gets 429",
       "riskScore": {
         "exposure": 0,
@@ -354,7 +354,7 @@
       "authn": "Gated by authorizeToolRequest; requires a valid run-scoped tool token bound to this endpoint and operation.",
       "authz": "Gated by authorizeToolRequest('library:search'); read-only, no persisted mutation (impact floor 0).",
       "inputValidation": "req.body.query/kind/date/limit are individually type-checked before being passed to listLibraryAssets.",
-      "sizeRateLimit": "ENFORCED kind=request-rate scope=token-hash limit=50 windowMs=10000 overflow=reject-429 (toolSearchOk, routes/library.ts).",
+      "sizeRateLimit": "A bounded, per-process, global fixed-window request-rate limit (50 requests / 10s, toolSearchOk in routes/library.ts, not partitioned per token) rejects a caller over the limit with 429.",
       "testRef": "a tools library search request past the 50 request limit gets 429",
       "riskScore": {
         "exposure": 1,
@@ -370,7 +370,7 @@
       "authn": "Gated by authorizeToolRequest; requires a valid run-scoped tool token bound to this endpoint and operation.",
       "authz": "Gated by authorizeToolRequest('library:apply'); copies stored bytes into a project scoped by the grant (or the request body when the grant carries none).",
       "inputValidation": "req.body.assetId is required and type-checked; req.body.dir is sanitized by ensureProjectSubdir before use as a path segment.",
-      "sizeRateLimit": "ENFORCED kind=request-rate scope=token-hash limit=50 windowMs=10000 overflow=reject-429 (toolApplyOk, routes/library.ts).",
+      "sizeRateLimit": "A bounded, per-process, global fixed-window request-rate limit (50 requests / 10s, toolApplyOk in routes/library.ts, not partitioned per token) rejects a caller over the limit with 429.",
       "testRef": "a tools library apply request past the 50 request limit gets 429",
       "riskScore": {
         "exposure": 1,
