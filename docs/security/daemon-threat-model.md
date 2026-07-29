@@ -119,3 +119,36 @@ against the current run, not asserted from memory.
   above are now verified against the real end-to-end bootstrap transport, not
   a workaround:
   `POST /api/library/pair/confirm — real cross-origin bootstrap transport > (C0-5/mint) a genuine not-yet-paired chrome-extension Origin header can mint a token via pair/confirm`.
+
+## Wave 9
+
+Library-ingest route-hardening tranche (`docs/plans/waves/W9-ingest-tranche.md`).
+`registerLibraryRoutes` (`apps/daemon/src/routes/library.ts`) exposes 23
+`GET`/`POST`/`DELETE`/`OPTIONS` registrations under `/api/library/*` and
+`/api/tools/library/*`; the complete mechanically-generated attribution for
+every one of them — owner, authentication class, authorization, input
+validation, and size/rate-limit resolution — lives in
+`docs/security/library-ingest-attribution.json`, one row per route, never
+duplicated here. This section covers only the three routes this tranche's own
+risk-ranking (score `exposure + impact`) rates P0: routes with no route-level
+authorization gate of their own (`exposure === 3`) whose impact floor pushes
+the combined score to 5 or 6.
+
+Every gap this section closes had no dedicated volume or rate control on this
+route surface at all before this tranche (ground fact: "There is no request-
+or byte-volume control on any `/api/library/*` route"). The remaining 20
+routes are either already loopback- or token-gated, or — for the five reads
+that previously relied solely on the global `/api` origin middleware (asset
+detail, raw bytes, the Figma sidecar, the element sidecar, and the live
+events feed) — are now explicitly loopback-gated via
+`requireLocalDaemonRequest`, matching this file's own documented split
+("reads ride the daemon's loopback binding ... like the rest of `/api`").
+Both classes of change, and the read-only routes that remain intentionally
+gate-free by design (the pre-pairing `clipper-probe` probe, and every
+`OPTIONS` preflight), are attributed in the JSON matrix; this section's own
+bullets are reserved for the mechanically-verified P0 rows.
+
+- [C9-6] POST /api/library/pair/confirm closes the pairing-code brute-force window this tranche's ground facts identified (a 6-digit code with no attempt counter, reachable pre-pairing from any extension-shaped origin): a bounded per-process pairing-attempt counter (5 attempts / 60s, pairConfirmAttemptOk in routes/library.ts) rejects any confirm attempt past the limit with 429: `the pair confirm attempt past the 5 attempt limit gets 429`
+- [C9-6] POST /api/library/ingest closes the clipper/token caller class's previously-uncapped dataUrl/text payload gap (LIBRARY_UPLOAD_MAX_BYTES applies only to manual-upload, and a URL-sourced fetch's own cap does not apply to dataUrl/text bodies): an explicit byte-volume cap (5,000,000 bytes, CLIPPER_INGEST_MAX_BYTES in routes/library.ts) rejects an oversized clipper payload with 413: `a clipper ingest payload past the 5000000 byte limit gets 413`
+- [C9-6] GET /api/library/assets closes its per-caller reconcile-trigger exposure (the route's own reconcile-on-list throttle, RECONCILE_THROTTLE_MS, is program-wide, not per-caller, and the route itself carries no gate of its own): a bounded per-origin request-rate limit (20 requests / 10s, assetsListOk in routes/library.ts) rejects a caller over the limit with 429: `a library assets list request past the 20 request limit gets 429`
+
