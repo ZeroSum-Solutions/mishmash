@@ -3432,6 +3432,22 @@ await checkCriterion('C1-9', 'one priced fake-claude run + one unpriced fake-agy
       if (!found) {
         problems.push(`the unpriced run's rendered message node (${selector}) did not appear within 15s -- cannot verify a rendered unknown/unavailable pricing indication`);
       } else {
+        // GATE AMENDMENT: bounded wait for the async cost/pricing badge
+        // (useRunUsageForRun, AssistantMessage.tsx:~1608-1638, GET
+        // /api/runs/:id/usage) to actually render before taking the
+        // synchronous DOM snapshot below -- identical mechanism/rationale
+        // to C1-2/C1-11's amendment (see `waitForContainerText`'s
+        // docblock). The needle is "unavailable" specifically, not
+        // "unknown": `RunPricingStatus` (AssistantMessage.tsx:1640-1658) is
+        // the ONLY renderer of either qualifying word for this message, and
+        // it emits exactly "Cost: unavailable ..." when
+        // `pricingVersion === "unavailable"` -- "unknown" is never actually
+        // producible by this code path, so waiting for it would not be
+        // "polling for what the assertion requires," it would be waiting on
+        // dead text. On timeout this falls straight through to the
+        // unchanged snapshot/assertions that follow, so a genuine absence
+        // still fails exactly as before.
+        await waitForContainerText(page, selector, ['unavailable'], 8_000);
         const text = await locator.first().innerText({ timeout: 5_000 }).catch(() => '');
         // ROUND 2 FIX (finding 7): round 1 only failed on a bare confident
         // zero and silently PASSED when no cost indication rendered at all.
