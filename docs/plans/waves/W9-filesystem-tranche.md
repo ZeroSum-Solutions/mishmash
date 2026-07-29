@@ -184,8 +184,11 @@ question, not a classifier defect):
    visible and counted, per `VERIFICATION-CONTRACT.md`'s own philosophy applied to scope
    determination rather than only to attribution.
 
-**Self-probes.** `C9F-1` additionally requires 10 fixture probes (run through the *exact same*
-`classifyRegistration` function the real routes use, never a separate mock) to classify correctly:
+**Self-probes.** `C9F-1` additionally requires 12 fixture probes (run through the *exact same*
+`scanUniverse`/`classifyExposure` code path the real routes use, never a separate mock, against
+route files that properly type `app: Express` the way every real `register*Routes` function does
+— an untyped fixture parameter would make `req`/`res` resolve to `any` and silently exercise a
+different, unrepresentative code path) to classify correctly:
 a direct `fs.readFile` call (expect `fs-hit`); a call to a same-file helper that calls
 `writeFile` (expect `fs-hit`, proving the same-file hop); a call to a relative-imported helper two
 hops deep that bottoms out in `unlink` (expect `fs-hit`, proving the cross-file hop); `ctx.foo()`
@@ -197,9 +200,15 @@ calls `mkdir` (expect `fs-hit`, proving the type-descent hop); `express.static(.
 function (expect `unresolved`, never `clean`); a `SpreadAssignment` inside the `server.ts` deps
 object literal (expect `unresolved` for every property the classifier cannot otherwise prove,
 never silently `clean` — this directly guards against defect-catalog item #2, object spreads
-bypassing an AST literal projection); and a handler with zero calls at all (expect `clean`). A
-failed probe fails `C9F-1` outright — the classifier is not trusted for a real verdict in a run
-where it cannot classify its own known fixtures correctly.
+bypassing an AST literal projection); a handler with zero fs-relevant calls at all, only known-safe
+builtins like `res.json` (expect `clean` — proving `res.json`/`res.send`/other TS-lib and
+Express-typed calls are recognized as inspectable-and-safe rather than falling into the generic
+"any node_modules declaration is unresolved" rule, which would otherwise misclassify nearly every
+handler in the codebase, since nearly every handler calls `res.json` or similar); `requireLocalDaemonRequest`
+present as a middleware-array argument (expect `exposure=0`); and the straight-line
+`const grant = authorizeToolRequest(...); if (!grant) return;` in-body guard shape (expect
+`exposure=1`). A failed probe fails `C9F-1` outright — the classifier is not trusted for a real
+verdict in a run where it cannot classify its own known fixtures correctly.
 
 ## Risk-ranking rule (mechanical, re-runnable)
 
@@ -313,13 +322,24 @@ required fields from `VERIFICATION-CONTRACT.md` §6:
   "authz": "…",
   "inputValidation": "…",
   "sizeRateLimit": "…",
-  "testRef": "exact vitest fullName",
+  "testRef": "apps/daemon/tests/plugins-upload-zip.test.ts :: exact vitest fullName",
   "riskScore": { "exposure": 3, "impact": 3, "score": 6, "tier": "P0" },
-  "control": { "mechanism": "…", "testRef": "…" },      // present when exposure === 3, OR
+  "control": { "mechanism": "…", "testRef": "apps/daemon/tests/plugins-upload-zip.test.ts :: exact vitest fullName" },      // present when exposure === 3, OR
   "acceptedRisk": { "decisionRef": "W9F-ACCEPT-…" },     // present when exposure === 3, mutually exclusive with control
   "impactOverrideReason": "…"                              // present only if declaredImpact > mechanicalImpact
 }
 ```
+
+**`testRef`/`control.testRef` shape, mechanically enforced:** exactly `"<repo-relative test file
+path> :: <exact vitest fullName>"` — a literal `` :: `` separator between the file the assertion
+lives in and that assertion's own `fullName` as Vitest's own JSON reporter reports it (the
+concatenation of every enclosing `describe` title and the assertion's own `it`/`test` title, in
+Vitest's own separator convention). The verifier parses on the FIRST `::` occurrence; a citation
+with no `::` fails `C9F-5` outright as malformed, not as an implicit "bare name in some
+unspecified file." The verifier does not merely check this string is well-formed — per `C9F-5`, it
+**executes** the named file with Vitest and requires the exact `fullName` to appear among that
+run's own passing assertions; a citation naming a real file and a real-sounding name that Vitest's
+own run does not report as `passed` still fails.
 
 **None of the six required fields may be a bare placeholder** — reused verbatim from the ingest
 tranche's S9-3 mechanism: a 12-character floor, a denylist of stock filler (`x`, `n/a`, `tbd`,
@@ -346,35 +366,56 @@ to sign, during implementation, never for this expansion PRD to pre-decide.
 
 ## Threat model
 
-### T1 — Path traversal (encoded / absolute / `..` forms)
+**Mechanical scope for T1–T3 (`C9F-6`), stated as a rule, not left implicit:** the traversal,
+symlink, and `baseDir` requirements below apply only to attributed **P0/P1** rows whose own route
+`path` contains at least one `:param` segment — a cheap, re-derivable proxy for "this route
+resolves a caller-supplied identifier into a filesystem path" (a project id, file name, plugin id,
+skill id, or similar). A P0/P1 row reachable at a fully static path has no caller-controlled path
+component for a traversal/symlink/`baseDir` spec to exercise, and requiring one anyway would make
+that row's criterion **unsatisfiable**, not stronger — the scoping rule exists specifically to keep
+every criterion in this document satisfiable by a legitimate implementation, per this tranche's own
+self-check obligation.
 
-Every attributed row whose handler resolves a caller-supplied path segment (a project id, file
-name, folder path, plugin id, skill id, or similar) into a filesystem path must have a red-then-green
-spec proving each of: a literal `../` segment is rejected; a URL-encoded traversal (`%2e%2e%2f`,
-double-encoded `%252e%252e%252f`) is rejected; an absolute path (`/etc/passwd`,
-`C:\Windows\...`-shaped on the platforms this repo supports) is rejected; a null-byte-embedded
-segment is rejected. `apps/daemon/src/projects.ts`'s `isSafeId` (allowlist `/^[A-Za-z0-9._-]+$/`,
-explicit `.`/`..`/`...` rejection) is the existing choke point for project ids and is directly
-citable for any row that funnels through it; a row that resolves a path a *different* way needs its
-own equivalent proof, not a borrowed citation (per the global testRef-uniqueness rule below).
+**How `C9F-6` actually checks all three (stated plainly, not implied):** whether a named assertion
+*exists and, when actually executed moments earlier via a real Vitest run, reports `passed`* is a
+genuine runtime fact, and that is exactly what `C9F-6` checks — it runs the cited file for real and
+requires each attack form's pattern to match a PASSING assertion's own `fullName`. What it does
+**not** do is inspect the assertion's *body* to confirm it truly constructs each attack form and
+observes a real rejection — that is a name-pattern proxy over a real pass/fail result, the same
+class of mechanically-feasible-signal limitation the sibling ingest tranche's own paired-control
+check accepts and documents rather than hides. A reviewer reading a matrix row's cited assertions
+is still expected to spot-check that the name matches the body, the same way ingest's own residual
+notes assume for its paired-control check.
+
+### T1 — Path traversal (encoded / absolute / `..` / null-byte forms)
+
+Every in-scope row (per the scoping rule above) must have a red-then-green spec proving each of:
+a literal `../` segment is rejected; a URL-encoded traversal (`%2e%2e%2f`, double-encoded
+`%252e%252e%252f`) is rejected; an absolute path (`/etc/passwd`, `C:\Windows\...`-shaped on the
+platforms this repo supports) is rejected; a null-byte-embedded segment is rejected.
+`apps/daemon/src/projects.ts`'s `isSafeId` (allowlist `/^[A-Za-z0-9._-]+$/`, explicit `.`/`..`/`...`
+rejection) is the existing choke point for project ids and is directly citable for any row that
+funnels through it; a row that resolves a path a *different* way needs its own equivalent proof,
+not a borrowed citation (per the global testRef-uniqueness rule below).
 
 **Satisfiability:** a legitimate implementation either funnels through `isSafeId`/`resolveProjectDir`
 (cite the existing coverage) or adds an equivalent allowlist check with its own red-then-green spec;
-either way the four forms above are provably rejected and a same-file positive control (a normal,
-legitimate id) still succeeds.
-**Decoy:** a shaped fake that only tests the literal string `"../"` and never the encoded or
-absolute forms passes a naive grep-based check but fails this criterion, because the verifier
-requires all four forms to appear as distinct, named assertions (not one parametrized test whose
-name only mentions one form — see C9F-6's exact assertion-count requirement below).
+either way the four forms (`../`, encoded, absolute, null-byte) are provably rejected by distinct,
+currently-passing, exactly-named assertions in the cited file, and a same-file positive control (a
+normal, legitimate id) still succeeds.
+**Decoy:** a shaped fake that only tests the literal string `"../"` and never the encoded, absolute,
+or null-byte forms fails this criterion, because the verifier requires each of the four forms to
+match a distinct PASSING assertion title from a live run (not merely text present anywhere in the
+file, and not a `.skip`/`.todo` assertion, which never reports `passed`).
 
 ### T2 — Symlink escape out of allowed roots
 
-Every attributed row that reads, writes, or serves bytes at a caller-influenced path must have a
-red-then-green spec proving a symlink planted *inside* the allowed root but pointing *outside* it
-(e.g. a project folder containing a symlink to `/etc`) is rejected before the target bytes are
-read/written/served — `realpath`-based resolution (already used in
-`apps/daemon/src/projects.ts`, `routes/static-resource.ts`, `import-export-routes.ts`, and others)
-is the citable existing mechanism; a row using a different resolution path needs its own proof.
+Every in-scope row (per the scoping rule above) must have a red-then-green spec proving a symlink
+planted *inside* the allowed root but pointing *outside* it (e.g. a project folder containing a
+symlink to `/etc`) is rejected before the target bytes are read/written/served — `realpath`-based
+resolution (already used in `apps/daemon/src/projects.ts`, `routes/static-resource.ts`,
+`import-export-routes.ts`, and others) is the citable existing mechanism; a row using a different
+resolution path needs its own proof.
 
 **Satisfiability:** the implementation resolves the final path via `realpath` (or equivalent) before
 any fs operation and compares the resolved path's prefix against the resolved allowed root; a
@@ -386,24 +427,30 @@ because the symlink target never appears in the unresolved string at all.
 
 ### T3 — Containment in `RUNTIME_DATA_DIR`-derived roots (the `baseDir` exception, precisely)
 
-Every attributed row must have its resolved-path prefix checked against exactly one of: (a)
-`PROJECTS_DIR` (or another `RUNTIME_DATA_DIR`-derived constant) for a managed project/artifact, or
-(b) `metadata.baseDir` for an imported-folder project, **and never silently either one** — the two
-must be distinguishable in the row's own evidence. A red spec proves a managed-project request
-cannot escape `PROJECTS_DIR` via a crafted `baseDir`-shaped metadata payload it does not actually
-own (i.e., a managed project cannot spoof the imported-folder branch to redirect writes elsewhere);
-a **paired positive control** proves a genuine imported-folder project's legitimate `baseDir` access
-still succeeds (this is the "handle the exception precisely" requirement from the task brief — a
+Every in-scope row (per the scoping rule above) must have its resolved-path prefix checked against
+exactly one of: (a) `PROJECTS_DIR` (or another `RUNTIME_DATA_DIR`-derived constant) for a managed
+project/artifact, or (b) `metadata.baseDir` for an imported-folder project, **and never silently
+either one** — the two must be distinguishable in the row's own evidence. `C9F-6` requires TWO
+distinct PASSING assertion titles in the cited file: one whose title contains `baseDir` together
+with a word from `{spoof, escape, managed, reject, denied}` (a managed-project request cannot spoof
+the imported-folder branch to redirect writes elsewhere), and a **different** one whose title
+contains `baseDir` or `imported-folder`/`imported folder` together with a word from `{legitimate,
+allow, succeed, control, accept}` (a genuine imported-folder project's legitimate `baseDir` access
+still succeeds). This is the "handle the exception precisely" requirement from the task brief — a
 containment check that also breaks the sanctioned exception is not a passing check, it is a
-different bug).
+different bug, and is caught exactly as reliably as under-containment because both sides are
+required as distinct titles, never one title satisfying both patterns at once.
 
 **Satisfiability:** the implementation's containment check branches explicitly on whether the
 project metadata legitimately carries an absolute `baseDir` (mirroring
-`hasExternalProjectRoot`/`resolveProjectDir`'s existing branch), and both the negative (spoofed
-`baseDir` on a managed project) and positive (real imported-folder access) specs pass.
+`hasExternalProjectRoot`/`resolveProjectDir`'s existing branch); name one passing assertion
+something like `"rejects a spoofed baseDir on a managed project"` and a different one something like
+`"control: a genuine imported-folder project's baseDir access still succeeds"`, and both patterns
+above are satisfied by construction.
 **Decoy:** a shaped fake that hard-codes "always require the resolved path to start with
-`PROJECTS_DIR`" breaks every legitimate imported-folder project and fails the required positive
-control outright — over-containment is caught exactly as reliably as under-containment.
+`PROJECTS_DIR`" breaks every legitimate imported-folder project; its positive-control assertion
+would have to report a real rejection to stay passing, so it cannot simultaneously claim success —
+over-containment is caught exactly as reliably as under-containment.
 
 ### T4 — Size limits on writes
 
@@ -453,13 +500,13 @@ All criteria inherit `VERIFICATION-CONTRACT.md` §3. Verified by `scripts/waves/
 
 | ID | Criterion | Verification |
 |---|---|---|
-| C9F-1 | Route snapshot + three-bucket inclusion classification frozen at `baseCommit`, drift-checked against a live daemon boot, duplicate-checked, partition-checked, classifier self-probed | AST scan of `git show <baseCommit>:...` scoped to `register*Routes` bodies + `server.ts` bootstrap calls; live `routeInventory` comparison via an isolated `startServer({port:0})`; 10/10 self-probes pass; `fs-hit ∪ unresolved ∪ clean` exactly equals the candidate universe with no overlap |
-| C9F-2 | Risk-ranking formula (exposure 0/1/3 + mechanical impact 0–3) enforced exactly per confirmed-in-scope row; exposure-classifier self-probed | AST-derived `exposure` matches the middleware-array + straight-line-guard grammar exactly; `impact` matches the reachable-primitive-class rule (or a declared override with a ≥20-char reason and `declaredImpact > mechanicalImpact`); `score`/`tier` formula-exact; 6+ self-probes (one per exposure tier shape, incl. the reserved-tier-2 no-op case) pass |
+| C9F-1 | Route snapshot + three-bucket inclusion classification frozen at `baseCommit`, drift-checked against a live daemon boot, duplicate-checked, partition-checked, classifier self-probed | AST scan of `git show <baseCommit>:...` scoped to `register*Routes` bodies + `server.ts` bootstrap calls; live `routeInventory` comparison via an isolated, real-child-process daemon boot with confirmed-empty process-group teardown; 12/12 self-probes pass; `fs-hit ∪ unresolved ∪ clean` exactly equals the candidate universe with no overlap |
+| C9F-2 | Risk-ranking formula (exposure 0/1/3 + mechanical impact 0–3) enforced exactly per confirmed-in-scope row; exposure-classifier self-probed | AST-derived `exposure` matches the middleware-array + straight-line-guard grammar exactly; `impact` matches the reachable-primitive-class rule (or a declared override with a ≥20-char reason and `declaredImpact > mechanicalImpact`); `score`/`tier` formula-exact; the same 12/12 `C9F-1` self-probes (which cover both classifiers) pass |
 | C9F-3 | Attribution matrix exists, covers exactly the confirmed in-scope (`fs-hit`) set, structurally well-formed | `docs/security/filesystem-tranche-attribution.json` parses; exactly one row per `fs-hit` route (mechanically re-derived count, never hardcoded), no orphans/gaps/duplicates; attributed/unattributed/known-vulnerable/unresolved-out-of-tranche counts reported |
 | C9F-4 | Every matrix row fully, structurally attributed | All six required fields clear the floor/denylist/repetition checks; `authn` names the row's own exposure class; `acceptedRisk.decisionRef` resolves to a unique, fully-structured, route-bound, non-self-accepted `### W9F-ACCEPT-*` entry in `DECISIONS.md@baseCommit`; `control`/`acceptedRisk` mutually exclusive and required exactly when `exposure === 3` |
 | C9F-5 | Every `testRef`/`control.testRef` real, currently-passing, globally-unique-per-route, route-associated; new citations independently replayed | Exact `fullName` equality against a live Vitest run of the cited file; one global citation map spans every row's `testRef` AND `control.testRef` (reuse across two routes fails both); a path-derived association term must appear; "new" decided by AST-derived historical-title match at `baseCommit`; a genuinely new citation requires an isolated detached-worktree replay (frozen offline install, HEAD-file overlay, Vitest's own Node API through a verifier-generated runner script + CSPRNG marker — never the JSON reporter, matching the ingest tranche's own fix for the reporter's nested-suite blind spot) showing exactly one failed leaf matching the target and a named control test passing |
-| C9F-6 | Containment threat class (T1 path traversal + T2 symlink escape + T3 `RUNTIME_DATA_DIR`/`baseDir` containment) | For every attributed row touching a caller-influenced path: named assertions for `../`, encoded-`../`, absolute-path, and null-byte forms (T1); a real-symlink-escape red spec with a same-root positive control (T2); a spoofed-`baseDir`-on-managed-project red spec paired with a genuine-imported-folder positive control (T3) — all as exact, named, currently-passing assertions in the row's cited test file(s) |
-| C9F-7 | Size-limit threat class (T4) | For every `P0`-tier row with mechanical `impact === 3`: `control.mechanism` matches the anchored `ENFORCED` grammar exactly; paired at-limit-accepted / over-limit-rejected assertions, digit-bounded to the declared `limit` and `overflow` status, in the same cited file — or a verified `acceptedRisk` |
+| C9F-6 | Containment threat class (T1 path traversal + T2 symlink escape + T3 `RUNTIME_DATA_DIR`/`baseDir` containment) | For every P0/P1 row whose `path` carries a `:param` segment: the cited file is EXECUTED via a live Vitest run, and its own REAL PASSING assertion titles (never raw file text) must include distinct matches for `../`, encoded-`../`, absolute-path, and null-byte forms (T1); a symlink-escape match (T2); and a distinct baseDir-spoof-rejected / baseDir-legitimate-accepted pair (T3) — a name-pattern proxy over a real, currently-passing run, not semantic body verification (stated explicitly, not implied) |
+| C9F-7 | Size-limit threat class (T4) | For every `P0`-tier row with mechanical `impact === 3`: `control.mechanism` matches the anchored `ENFORCED` grammar exactly; the cited file is EXECUTED via a live Vitest run, and its REAL PASSING assertion titles must include a distinct at-limit-accepted title and a distinct over-limit-rejected title, each digit-bounded to the declared `limit` and `overflow` status — or a verified `acceptedRisk` |
 | C9F-8 | Loopback-gating threat class (T5) | For every mechanically `exposure === 0` row: a real HTTP probe against an isolated daemon (redirect `manual`, fail-closed URL validation, refuses non-loopback targets and ports 7456/51012) shows an exact 401/403 for a non-loopback-shaped request and success for a loopback-equivalent request |
 | C9F-9 | Gates | `pnpm guard` and `pnpm typecheck` exit 0 on the current tree |
 | C9F-10 | Adversarial review of the **implementation** on record, non-spoofable | `docs/security/filesystem-tranche-implementation-review.json`: `reviewedCommit` resolves and is a STRICT ancestor of `HEAD`; the owned-path diff between `reviewedCommit` and `HEAD` is empty; `reviewer` distinct from every commit author in `baseCommit..reviewedCommit`; `verdict === "APPROVE"` |
@@ -479,20 +526,40 @@ rule 1).
 ## Runtime probe discipline
 
 C9F-1's live-daemon comparison and C9F-8's loopback-gating probes are the only two criteria that
-start a real daemon process. Both:
+start a real daemon process. Both boot it as a genuine **child process**, never in-process inside
+the verifier itself — an in-process `import()` + same-process function-call "shutdown" would be
+bounding the risk from outside (remember to reset state, trust a resolved promise) rather than
+making it structurally impossible, and gives no real process to confirm dead. Concretely:
 
-- Bind to `port: 0` (OS-assigned) and pass a fresh `mkdtemp`-created directory as `OD_DATA_DIR` —
-  **never** the default namespace, **never** ports 7456 or 51012 (pids 16481/16729 — untouched by
-  this verifier, always).
-- Tear down via the daemon's own returned `shutdown()` **and** an exact-PID kill check (never a
-  broad process-name match).
+- The daemon boots as a `spawn(..., { detached: true })` child with its own process group (pgid
+  equals its own pid on POSIX). It receives `OD_DATA_DIR` (a fresh `mkdtemp` directory) and
+  `OD_BIND_HOST=127.0.0.1` only through that child's own `env` object — a fresh shallow copy of
+  `process.env`, never an assignment to the verifier's own `process.env` — so nothing spawned later
+  in the same verifier run (`pnpm guard`, `git`, worktree installs, further daemon boots) can ever
+  inherit a stray value from an isolated daemon boot.
+- Binds to `port: 0` (OS-assigned) — **never** the default namespace, **never** ports 7456 or 51012
+  (pids 16481/16729 — untouched by this verifier, always); a resolved port of `0` or a forbidden
+  port is a hard failure that still runs the teardown routine below before throwing.
+- **Teardown fails closed and is independently confirmed, not merely awaited.** Shutdown signals
+  the whole process **group** (`process.kill(-pid, 'SIGTERM')`), polls for real exit, escalates to
+  `SIGKILL` if the group has not exited within a bounded timeout, and then — because a leader's own
+  `exit` event is not proof the whole group exited — **re-scans the live system process table**
+  (`ps -Ao pid=,pgid=,comm=`) for any surviving member of that process group. Only when that
+  independent scan confirms zero survivors does teardown report `ok: true`. A failed or partial
+  teardown returns `ok: false`, and every call site treats that as a **criterion failure**, folded
+  into the criterion's own recorded verdict before `record()` runs — never logged after the fact
+  where it can no longer change the outcome, and never silently swallowed via a bare
+  `.catch(() => {})`.
 - Any probe `fetch()` uses `redirect: 'manual'` and fail-closed URL validation: parse the target,
   resolve it, and refuse anything that is not a loopback address, and separately refuse ports 7456
   and 51012 even if they were somehow loopback-resolved (defect-catalog #10, verbatim).
-- A probe that cannot start the daemon (port bind failure, install/build issue) is an **evidence
-  failure** for that criterion, distinguished from a genuine rejected-request result — never
-  conflated with a real 4xx (defect-catalog #4's spirit, applied to probe infrastructure itself, not
-  only to the HTTP assertions).
+- A probe that cannot start the daemon (port bind failure, install/build issue, ready-marker
+  timeout) is an **evidence failure** for that criterion, distinguished from a genuine
+  rejected-request result — never conflated with a real 4xx (defect-catalog #4's spirit, applied to
+  probe infrastructure itself, not only to the HTTP assertions). Because the daemon under probe is
+  itself fully isolated (its own process, its own `OD_DATA_DIR`, its own ephemeral port), even a
+  request that unexpectedly succeeds against it cannot reach production data — the safety property
+  holds by construction, not merely because the probes are written to expect rejection.
 
 ## Proposed lease
 
