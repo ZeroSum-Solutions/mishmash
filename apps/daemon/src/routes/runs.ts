@@ -3,6 +3,7 @@ import type Database from 'better-sqlite3';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import {
+  buildModelRouting,
   defaultScenarioPluginIdForProjectMetadata,
   RUN_RESULT_PACKAGE_SCHEMA,
   type AppliedPluginSnapshot,
@@ -63,7 +64,6 @@ import {
 import {
   amrUserIdForRunAnalytics,
   agentProviderIdForRunAnalytics,
-  hasExplicitRequestedModelForAnalytics,
   runtimeTypeForRunAnalytics,
   scanRunEventsForUsageAnalytics,
   summarizeRunTimingAnalytics,
@@ -145,6 +145,8 @@ interface ChatRun {
   assistantMessageId: string | null;
   agentId: string | null;
   model?: string | null;
+  modelRequested?: string | null;
+  modelReported?: string | null;
   status: ChatRunStatus;
   createdAt: number;
   updatedAt: number;
@@ -492,6 +494,34 @@ function hasCompleteByokOpenCodeConfig(meta: JsonRecord): boolean {
 function toOdNativeEvent(record: RunEventRecord): OdNativeEvent | null {
   if (!AGUI_NATIVE_EVENT_KINDS.has(record.event as OdNativeEvent['kind'])) return null;
   return { kind: record.event, ...toJsonRecord(record.data) } as OdNativeEvent;
+}
+
+// C1-5: the model_id stamped on the run_finished PostHog event. Reuses
+// buildModelRouting -- the SAME canonical logic GET /api/runs/:id's
+// persisted modelRouting.resolved field already uses -- rather than
+// re-deriving a parallel fallback chain: `run.model` is the resolved field
+// server.ts sets at spawn time from resolveModelForAgent's fallback; when
+// resolution deliberately deferred to the CLI's own default (run.model
+// null), the fallback is `run.modelReported`, the CLI's own echo tracked
+// directly on the run object. `usageAnalytics.agent_reported_model` (from
+// scanRunEventsForUsageAnalytics) is NOT a safe substitute for that
+// fallback: its own needAgentModel optimization skips computing it
+// whenever the RAW requested model looked "explicit," even when that raw
+// request was invalid and got silently discarded by resolution -- exactly
+// the scenario a substitution-triggering run produces. Exported so a red
+// spec can pin this without booting a full daemon.
+export function resolveFinishedModelIdForAnalytics(run: {
+  modelRequested?: string | null;
+  model?: string | null;
+  modelReported?: string | null;
+}): string {
+  return modelIdForTracking(
+    buildModelRouting({
+      requestedRaw: run.modelRequested,
+      resolvedRaw: run.model,
+      reportedRaw: run.modelReported,
+    }).resolved,
+  );
 }
 
 export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
@@ -1260,16 +1290,9 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
           firstTokenSeen: Boolean(run.analyticsTelemetry?.firstTokenAt),
           artifactWriteSeen: artifactCount > 0 || designSystemCreated || previewModuleCount > 0,
         });
-        // C1-5: this must be the RESOLVED model (`run.model`, set at spawn
-        // time from resolveModelForAgent's fallback -- see server.ts's own
-        // "Routing truth (NM-13a)" comment at the `run.model = safeModel`
-        // assignment), not the raw requested model from the request body.
-        // Telemetry that records pre-resolution input silently disagrees
-        // with what the CLI actually executed whenever a substitution
-        // happened.
-        const finishedModelId = hasExplicitRequestedModelForAnalytics(run.model)
-          ? modelIdForTracking(run.model)
-          : modelIdForTracking(usageAnalytics.agent_reported_model);
+        // C1-5: must be the RESOLVED model, not the raw requested one --
+        // see resolveFinishedModelIdForAnalytics's own doc comment above.
+        const finishedModelId = resolveFinishedModelIdForAnalytics(run);
         const runtimeVersions = getDetectedRuntimeVersions(run.agentId);
         for (const [index, retryEvent] of runRetryEventsForAnalytics(run.events).entries()) {
           design.analytics.capture({
