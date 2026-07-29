@@ -1,0 +1,63 @@
+{
+  "reviewer": "sol",
+  "model": "gpt-5.6-sol",
+  "reviewedCommit": "810464dd3fa0abf251700fab4d0185d064cb19e5",
+  "verdict": "APPROVE",
+  "reviewedAt": "2026-07-29",
+  "rounds": 5,
+  "scope": "W9 library-ingest tranche implementation: rate limiting, loopback gating, and the clipper ingest byte-volume cap on POST /api/library/ingest.",
+  "roundHistory": [
+    {
+      "round": 2,
+      "verdict": "REJECT",
+      "reason": "CLIPPER_INGEST_MAX_BYTES was compared against a hand-listed field set that omitted caller-supplied sourceTitle, sourceUrl and tags, all of which reached registerLibraryAsset and were persisted on the asset row. An ingest with text:'hi' and a 5,000,001-byte sourceTitle was scored as two bytes."
+    },
+    {
+      "round": 3,
+      "verdict": "REJECT",
+      "reason": "The enumeration defect was confirmed closed by construction (the hand-list was deleted, not extended), but two new findings: (1) clipperIngestByteVolume called JSON.stringify with no error handling, so a parser-valid 10,000-deep nested value threw RangeError and reached Express's generic error handling instead of the mandated structured 413; (2) MAX_REMOTE_BYTES validates only the DECLARED Content-Length, so a response omitting or falsifying it is fully materialized by arrayBuffer() before its real length is checked."
+    },
+    {
+      "round": 4,
+      "verdict": "REJECT",
+      "reason": "Implementation assessed causally sound on every static and executable-probe axis, but the reviewer's sandbox denied temporary-directory creation (EPERM), Vitest collected zero tests, and the mandated red/green and full-suite runtime gate produced no evidence. Approval was withheld as unsupported."
+    },
+    {
+      "round": 5,
+      "verdict": "APPROVE",
+      "reason": "The sole round-4 evidentiary gap was closed by an independently captured runtime record. No round-4 finding was revised."
+    }
+  ],
+  "findingsClosed": [
+    "Byte accounting is now derived by construction: clipperIngestByteVolume sums every key of the raw parsed request body, so a caller-supplied field that begins reaching persistence is counted automatically with no matching edit at the call site. Only dataUrl and url are excluded, substituted by the resolved bytes actually persisted.",
+    "The counter is a total function. Its per-value JSON.stringify is wrapped in a catch that is deliberately NOT narrowed to RangeError, returning Infinity on any throw. Infinity flows through the pre-existing payloadSize > CLIPPER_INGEST_MAX_BYTES comparison into the existing structured 413, adding no new branch and no new error code. An unmeasurable body fails CLOSED through the same refusal path an ordinary oversized body takes, never as a 500 and never admitted."
+  ],
+  "findingsRoutedElsewhere": [
+    {
+      "finding": "fetchRemoteBytes fully materializes a response via arrayBuffer() before checking its real length, so a chunked response omitting or falsifying Content-Length can consume unbounded memory before either MAX_REMOTE_BYTES or the clipper cap runs. This is an unbounded pre-check resource path, not an uncounted-storage bypass: nothing is written to disk during the fetch and the returned bytes do represent what persists.",
+      "ruling": "Real, but outbound-fetch hardening is the W9-external-fetch tranche's subject, and that package was in flight and unfrozen. Fixing it inside this wave would have been scope creep into another wave's subject. Routed there with a requirement that the control bound the transfer WHILE STREAMING and abort past the limit, asserted at runtime rather than by inspecting source for a streaming API.",
+      "obligationDischargedHere": "docs/security/library-ingest-attribution.json was corrected so its claims are true of this code: overflow=reject-413 holds including the deep-JSON case, and the url substitution states only what is genuinely bounded (persisted bytes) while naming the pre-check buffering gap plainly rather than implying a bound fetchRemoteBytes does not provide."
+    }
+  ],
+  "evidenceBasis": {
+    "note": "Recorded explicitly because it is material to how much this verdict is worth. The reviewer was NOT able to execute tests in rounds 3, 4 or 5 and said so each time rather than approving on unverified claims.",
+    "round3Blocker": "pinned read-only review checkout had no node_modules; process spawn returned EACCES",
+    "round4Blocker": "sandbox denied temporary-directory creation (EPERM); Vitest collected zero tests",
+    "round5Blocker": "persisted despite a writable TMPDIR being supplied: default loading hit EPERM writing apps/daemon/node_modules/.vite-temp, and --configLoader runner hit EPERM creating a directory under the supplied TMPDIR",
+    "runtimeEvidenceProducedBy": "the orchestrator, who is not the author of the change, running the tests in the foreground",
+    "runtimeEvidenceRecord": "~/.claude/goal-state/mishmash-w9-ingest-tranche/reviews/orchestrator-runtime-evidence-r4.md",
+    "runtimeEvidence": {
+      "negativeControl": "The pre-fix implementation (parent d4c6a8a65) was materialized via git show, the spec run against it, and the file restored by a shell trap with the restore confirmed clean. Result: expected 500 to be 413 -- the exact reported symptom.",
+      "discrimination": "The positive control PASSED in that same failing run (1 failed | 1 passed), establishing that the spec discriminates rather than merely being broken.",
+      "greenAtHead": "2 passed",
+      "fullLibrarySuite": "27 files, 83 tests passed"
+    },
+    "reviewerVerification": "The round-5 reviewer stated its verdict basis was the captured record rather than its own run, then independently checked that record's internal consistency: that parent d4c6a8a65 is a real strict ancestor of the pinned HEAD, and that the cited failure mode matches the actual assertions in the test file. HEAD was confirmed at 810464dd3fa0abf251700fab4d0185d064cb19e5 both at the start of the review and immediately before the verdict, with a clean worktree."
+  },
+  "reviewLogs": [
+    "~/.claude/goal-state/mishmash-w9-ingest-tranche/reviews/sol-impl-r2.log",
+    "~/.claude/goal-state/mishmash-w9-ingest-tranche/reviews/sol-impl-r3.log",
+    "~/.claude/goal-state/mishmash-w9-ingest-tranche/reviews/sol-impl-r4.log",
+    "~/.claude/goal-state/mishmash-w9-ingest-tranche/reviews/sol-impl-r5.log"
+  ]
+}
