@@ -2030,7 +2030,7 @@ async function renderOpenRouterImage(
       'authorization': `Bearer ${credentials.apiKey}`,
       'content-type': 'application/json',
       'HTTP-Referer': 'https://opendesign.dev',
-      'X-Title': 'Open Design',
+      'X-Title': 'MishMash',
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(Math.max(OPENAI_IMAGE_HEADERS_TIMEOUT_MS, OPENAI_IMAGE_BODY_TIMEOUT_MS)),
@@ -2190,7 +2190,7 @@ async function renderOpenRouterVideo(
       // OpenRouter attribution headers per
       // https://openrouter.ai/docs/app-attribution
       'HTTP-Referer': 'https://opendesign.dev',
-      'X-Title': 'Open Design',
+      'X-Title': 'MishMash',
     },
     body: JSON.stringify(body),
   }));
@@ -2239,7 +2239,7 @@ async function renderOpenRouterVideo(
       headers: {
         'authorization': `Bearer ${credentials.apiKey}`,
         'HTTP-Referer': 'https://opendesign.dev',
-        'X-Title': 'Open Design',
+        'X-Title': 'MishMash',
       },
     }));
     const pollText = await pollResp.text();

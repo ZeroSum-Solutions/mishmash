@@ -522,7 +522,7 @@ interface Props {
   ) => Promise<{ message?: string; url?: string } | void> | { message?: string; url?: string } | void;
   activePluginActionPaths?: Set<string>;
   hiddenPluginActionPaths?: Set<string>;
-  // "Share to Open Design" button on each completed assistant message —
+  // "Share to MishMash" button on each completed assistant message —
   // wired by ProjectView to handleSend with the bundled
   // `od-share-to-community` scenario's trigger prompt.
   onShareToOpenDesign?: (assistantMessageId: string) => void;

@@ -668,7 +668,7 @@ function codexExecutableGuidance(
   ) {
     return '';
   }
-  return ` Configured Codex path failed: ${configuredOverridePath}. Open Design also detected a PATH Codex CLI at ${pathResolvedPath}. Update CODEX_BIN or clear the custom path to use the detected binary.`;
+  return ` Configured Codex path failed: ${configuredOverridePath}. MishMash also detected a PATH Codex CLI at ${pathResolvedPath}. Update CODEX_BIN or clear the custom path to use the detected binary.`;
 }
 
 function codexExecutableFallbackSuccessDetail(
@@ -1180,7 +1180,7 @@ function openAIChatCompletionsProviderCall(
       authorization: `Bearer ${apiKey}`,
       ...(new URL(baseUrl).hostname === 'openrouter.ai' ? {
         'HTTP-Referer': 'https://opendesign.dev',
-        'X-Title': 'Open Design',
+        'X-Title': 'MishMash',
       } : {}),
     },
     body: {
@@ -2068,7 +2068,7 @@ function runQuietCommand(command: string, args: string[], cwd: string): Promise<
 async function prepareOpenCodeConnectionTestCwd(tempDir: string): Promise<void> {
   await fsp.writeFile(
     path.join(tempDir, 'README.md'),
-    'Open Design OpenCode connection test.\n',
+    'MishMash OpenCode connection test.\n',
     'utf8',
   );
   try {
