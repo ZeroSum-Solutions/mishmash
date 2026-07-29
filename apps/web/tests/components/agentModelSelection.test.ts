@@ -86,4 +86,51 @@ describe('agent model selection', () => {
       reasoning: 'high',
     });
   });
+
+  // C1-2: the correction must not be hardcoded to `agent.id === 'amr'` --
+  // every agent whose catalog explicitly disables a model must correct a
+  // saved choice pointing at it, so a disabled model id can never sit
+  // selected in the UI. Deliberately exercises a THIRD agent id (not 'amr',
+  // not the pre-existing 'codex' fixture above) to prove this isn't a
+  // second hardcoded special case.
+  it('corrects a disabled model id on a non-AMR agent to the catalog default', () => {
+    const grokAgent: AgentInfo = {
+      id: 'grok-build',
+      name: 'Grok Build',
+      bin: 'grok',
+      available: true,
+      version: '1.0.0',
+      models: [
+        { id: 'grok-5-fast', label: 'Grok 5 Fast', enabled: true, default: true },
+        { id: 'grok-4-legacy', label: 'Grok 4 (legacy)', enabled: false, default: false },
+      ],
+    };
+
+    expect(
+      normalizeAgentModelChoice(grokAgent, { model: 'grok-4-legacy', reasoning: 'high' }),
+    ).toEqual({ model: 'grok-5-fast', reasoning: 'high' });
+    expect(
+      effectiveAgentModelChoice(grokAgent, { model: 'grok-4-legacy', reasoning: 'high' }),
+    ).toEqual({ model: 'grok-5-fast', reasoning: 'high' });
+  });
+
+  it('does not correct a non-AMR model id the catalog has simply never listed (a legitimate custom id)', () => {
+    // Distinguishes "the catalog knows this id and disabled it" (correctable)
+    // from "the catalog doesn't mention this id at all" (a free-form custom
+    // model most agents accept -- must never be silently rewritten). Mirrors
+    // the pre-existing codexAgent test above but with a non-empty, partially
+    // populated models array so the two code paths can't be conflated.
+    const grokAgent: AgentInfo = {
+      id: 'grok-build',
+      name: 'Grok Build',
+      bin: 'grok',
+      available: true,
+      version: '1.0.0',
+      models: [{ id: 'grok-5-fast', label: 'Grok 5 Fast', enabled: true, default: true }],
+    };
+
+    expect(
+      effectiveAgentModelChoice(grokAgent, { model: 'grok-9-preview-custom', reasoning: 'high' }),
+    ).toEqual({ model: 'grok-9-preview-custom', reasoning: 'high' });
+  });
 });

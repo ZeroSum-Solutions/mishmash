@@ -358,11 +358,14 @@ test('kimi stream marks a tool_result as an error when the Bash wrapper reports 
   ]);
 });
 
-// Companion fixture from the same run: a Write tool failure surfaces raw
-// OS error text (EPERM) with no "Command failed with exit code" marker and
-// no structured field — documents the known blind spot (isError stays
-// false for non-Bash tool failures) rather than a silent regression.
-test('kimi stream leaves isError false for a non-Bash tool failure with no consistent marker', () => {
+// Companion fixture from the same run: a Write tool failure surfaces raw OS
+// error text (EPERM) with no "Command failed with exit code" marker and no
+// structured field. NM-33/C1-10 closed this gap (see
+// json-event-stream-kimi.test.ts) — KIMI_TOOL_FAILURE_RE now recognizes raw
+// OS/API error tokens (EPERM/ENOENT/EACCES/etc.), not just the Bash
+// wrapper's own "Command failed with exit code" marker, so this no longer
+// reads as clean.
+test('kimi stream marks isError true for a non-Bash tool failure via a raw OS error token', () => {
   const { events, handler } = collectEvents('kimi');
 
   handler.feed(
@@ -378,7 +381,7 @@ test('kimi stream leaves isError false for a non-Bash tool failure with no consi
       type: 'tool_result',
       toolUseId: 'Write_0',
       content: "EPERM: operation not permitted, open '/System/kimi-test.txt'",
-      isError: false,
+      isError: true,
     },
   ]);
 });

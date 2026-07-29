@@ -224,9 +224,60 @@ type OnboardingAgentTestState =
 // Function backed by KV), so this is a cross-origin POST from the desktop
 // client. Overridable at build time via NEXT_PUBLIC_NEWSLETTER_URL — e.g. point
 // it at a local `wrangler pages dev` instance during development.
-const NEWSLETTER_SUBSCRIBE_URL =
-  process.env.NEXT_PUBLIC_NEWSLETTER_URL ?? 'https://open-design.ai/subscribe';
+// C2-1a: this used to fall back to the upstream Open Design marketing site
+// (`open-design.ai/subscribe`) whenever the env var was unset, silently
+// POSTing a MishMash user's email to a third party unrelated to this
+// product. MishMash has no newsletter endpoint of its own configured by
+// default, so there is no default here anymore — `shouldSubmitNewsletterEmail`
+// below skips the submission entirely rather than leak the address
+// anywhere unconfigured.
+const NEWSLETTER_SUBSCRIBE_URL = process.env.NEXT_PUBLIC_NEWSLETTER_URL;
 const NEWSLETTER_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Pure decision for whether a newsletter signup should actually be sent:
+ *  a well-formed email AND a real, MishMash-owned subscribe URL configured.
+ *  Exported so the "no default -> no leak" guarantee (C2-1a) is directly
+ *  testable without rendering the full EntryShell component tree. */
+export function shouldSubmitNewsletterEmail(
+  rawEmail: string,
+  subscribeUrl: string | undefined,
+): boolean {
+  if (!subscribeUrl) return false;
+  const email = rawEmail.trim().toLowerCase();
+  return NEWSLETTER_EMAIL_RE.test(email);
+}
+
+// NM-20 / C1-8: the home topbar's Usage panel is scoped to a single project
+// via a `?usageProject=<id>` query param rather than a dedicated route --
+// EntryShell only owns the home-level `view` switch (see `useRoute` below),
+// not project-scoped routing, and the query string is deliberately
+// invisible to `parseRoute` (router.ts reads only `location.pathname`), so
+// this can never change which home sub-view renders. Exported so the
+// decision is directly testable without mounting the full component tree.
+export function parseUsageProjectIdFromSearch(search: string): string | null {
+  const value = new URLSearchParams(search).get('usageProject');
+  return value && value.length > 0 ? value : null;
+}
+
+export interface UsageTotalSummary {
+  totalCostUsd: number | null;
+  pricingVersion: string;
+}
+
+// C1-9: an unpriced/unpriceable total must read as "unavailable", never a
+// bare confident $0.00; a partial total (some runs in the project priced,
+// some didn't) must say so rather than presenting as a complete figure.
+// C1-7: the API's totalCostUsd is always a real number now (the exact sum
+// of whatever IS priced, 0 when nothing is) -- pricingVersion is the sole
+// "is this confident/complete" signal, so an unpriced project's genuine $0
+// sum must not be mistaken for a real figure here.
+export function formatUsageTotal(summary: UsageTotalSummary): string {
+  if (summary.pricingVersion === 'unavailable' || summary.totalCostUsd === null) return 'Cost unavailable';
+  const amount = `$${summary.totalCostUsd.toFixed(4)}`;
+  return summary.pricingVersion === 'partial'
+    ? `${amount} (partial — some runs unpriced)`
+    : amount;
+}
 const ONBOARDING_BYOK_AUTO_FETCH_DELAY_MS = 300;
 const ONBOARDING_BYOK_AUTO_TEST_DELAY_MS = 500;
 
@@ -575,6 +626,39 @@ export function EntryShell({
   useEffect(() => {
     writeStoredRailOpen(railOpen);
   }, [railOpen]);
+  // NM-20 / C1-8: cost & usage meter panel. `usageProjectId` comes from the
+  // `?usageProject=<id>` query param (see parseUsageProjectIdFromSearch
+  // above) rather than component props, so a deep link into this panel
+  // works without threading a new prop through App/EntryView.
+  const [usageProjectId, setUsageProjectId] = useState<string | null>(null);
+  const [usagePanelOpen, setUsagePanelOpen] = useState(false);
+  const [usageSummary, setUsageSummary] = useState<UsageTotalSummary | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setUsageProjectId(parseUsageProjectIdFromSearch(window.location.search));
+  }, []);
+  useEffect(() => {
+    if (!usagePanelOpen || !usageProjectId) return;
+    let cancelled = false;
+    setUsageSummary(null);
+    fetch(`/api/projects/${encodeURIComponent(usageProjectId)}/usage`)
+      .then((resp) => (resp.ok ? resp.json() : null))
+      .then((data: unknown) => {
+        if (cancelled || !data || typeof data !== 'object') return;
+        const body = data as { totalCostUsd?: unknown; pricingVersion?: unknown };
+        setUsageSummary({
+          totalCostUsd: typeof body.totalCostUsd === 'number' ? body.totalCostUsd : null,
+          pricingVersion: typeof body.pricingVersion === 'string' ? body.pricingVersion : 'unavailable',
+        });
+      })
+      .catch(() => {
+        // Best-effort, matching this file's other fetch-on-demand panels:
+        // a failed lookup just leaves the panel on its loading state.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [usagePanelOpen, usageProjectId]);
   const [localProviderModelsCache, setLocalProviderModelsCache] =
     useState<ProviderModelsCache>({});
   const hasSharedProviderModelsCache =
@@ -1012,6 +1096,17 @@ export function EntryShell({
                   {t('entry.useEverywhereTitle')}
                 </span>
               </button>
+              <button
+                type="button"
+                className="use-everywhere-chip od-tooltip"
+                onClick={() => setUsagePanelOpen(true)}
+                data-tooltip="Usage"
+                data-tooltip-placement="bottom"
+                aria-label="Project usage"
+                data-testid="entry-usage-button"
+              >
+                <span className="use-everywhere-chip__label">Usage</span>
+              </button>
             </div>
             <UpdaterPopup
               allowSilentUpdates={config.allowSilentUpdates}
@@ -1216,6 +1311,54 @@ export function EntryShell({
         }}
         onClose={() => setNewProjectOpen(false)}
       />
+      {usagePanelOpen ? (
+        <div
+          className="entry-usage-panel-overlay"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'center',
+            paddingTop: '64px',
+            zIndex: 1000,
+          }}
+          onClick={() => setUsagePanelOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-label="Project usage"
+            className="entry-usage-panel"
+            style={{
+              background: 'var(--od-surface, #fff)',
+              borderRadius: '12px',
+              padding: '20px',
+              minWidth: '280px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 style={{ margin: '0 0 12px', fontSize: '16px' }}>Project usage</h2>
+            {!usageProjectId ? (
+              <p style={{ margin: 0, fontSize: '13px' }}>Open a project to see its usage.</p>
+            ) : !usageSummary ? (
+              <p style={{ margin: 0, fontSize: '13px' }}>Loading…</p>
+            ) : (
+              <div data-testid="entry-usage-total" style={{ fontSize: '20px', fontWeight: 600 }}>
+                {formatUsageTotal(usageSummary)}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setUsagePanelOpen(false)}
+              style={{ marginTop: '16px' }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -2250,10 +2393,17 @@ function OnboardingView({
   // button shows loading while this settles; failures are swallowed so
   // onboarding completion never depends on the marketing site. A blank or
   // malformed email is simply skipped. Only a boolean opt-in is tracked — the
-  // address itself is never sent to analytics.
+  // address itself is never sent to analytics. C2-1a: also skipped entirely
+  // when no MishMash-owned NEXT_PUBLIC_NEWSLETTER_URL is configured, rather
+  // than falling back to sending it anywhere.
   async function submitNewsletterEmail(rawEmail: string): Promise<void> {
+    // The `!NEWSLETTER_SUBSCRIBE_URL` half is redundant with what
+    // shouldSubmitNewsletterEmail already checks internally -- it is here so
+    // TypeScript's control-flow narrowing (which cannot see through the
+    // helper call) proves the fetch below a real, non-empty `string`
+    // without an `as string` cast.
+    if (!NEWSLETTER_SUBSCRIBE_URL || !shouldSubmitNewsletterEmail(rawEmail, NEWSLETTER_SUBSCRIBE_URL)) return;
     const email = rawEmail.trim().toLowerCase();
-    if (!email || !NEWSLETTER_EMAIL_RE.test(email)) return;
     emitOnboardingClick('newsletter_email', 'subscribe', { newsletter_opt_in: true });
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 5000);
