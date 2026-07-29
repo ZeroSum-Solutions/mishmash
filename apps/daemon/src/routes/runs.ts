@@ -1247,8 +1247,15 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
           firstTokenSeen: Boolean(run.analyticsTelemetry?.firstTokenAt),
           artifactWriteSeen: artifactCount > 0 || designSystemCreated || previewModuleCount > 0,
         });
-        const finishedModelId = hasExplicitRequestedModelForAnalytics(reqBody.model)
-          ? modelIdForTracking(reqBody.model)
+        // C1-5: this must be the RESOLVED model (`run.model`, set at spawn
+        // time from resolveModelForAgent's fallback -- see server.ts's own
+        // "Routing truth (NM-13a)" comment at the `run.model = safeModel`
+        // assignment), not the raw requested model from the request body.
+        // Telemetry that records pre-resolution input silently disagrees
+        // with what the CLI actually executed whenever a substitution
+        // happened.
+        const finishedModelId = hasExplicitRequestedModelForAnalytics(run.model)
+          ? modelIdForTracking(run.model)
           : modelIdForTracking(usageAnalytics.agent_reported_model);
         const runtimeVersions = getDetectedRuntimeVersions(run.agentId);
         for (const [index, retryEvent] of runRetryEventsForAnalytics(run.events).entries()) {
