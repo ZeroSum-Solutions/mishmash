@@ -1,0 +1,10 @@
+PARENT_SHA: 9a2cab57f6289bdf417ae5847d8eee46b3266305
+COMMAND: vitest run -c vitest.config.ts tests/library-loopback-gate-events.test.ts
+TEST: GET library events rejects a non-loopback origin
+CONTROL_TEST: GET library events accepts a loopback request
+---
+AssertionError: expected 200 to be 403
+  at tests/library-loopback-gate-events.test.ts ('GET library events rejects a non-loopback origin')
+Before requireLocalDaemonRequest was added, GET /api/library/events carried no
+route-level gate -- the paired-origin request in this test still returned 200
+instead of 403.

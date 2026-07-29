@@ -1,0 +1,9 @@
+PARENT_SHA: 9a2cab57f6289bdf417ae5847d8eee46b3266305
+COMMAND: vitest run -c vitest.config.ts tests/library-rate-limit-sync.test.ts
+TEST: a library sync request past the 10 sync limit gets 429
+CONTROL_TEST: a library sync request accepts under the 10 sync limit
+---
+AssertionError: expected 200 to be 429
+  at tests/library-rate-limit-sync.test.ts ('a library sync request past the 10 sync limit gets 429')
+Before syncOk existed, POST /api/library/sync had no cap on how often its
+force-bypass could be invoked -- the 11th call in the loop still returned 200.

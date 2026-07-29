@@ -1,0 +1,10 @@
+PARENT_SHA: 9a2cab57f6289bdf417ae5847d8eee46b3266305
+COMMAND: vitest run -c vitest.config.ts tests/library-rate-limit-tools-apply.test.ts
+TEST: a tools library apply request past the 50 request limit gets 429
+CONTROL_TEST: a tools library apply request accepts under the 50 request limit
+---
+AssertionError: expected 404 to be 429
+  at tests/library-rate-limit-tools-apply.test.ts ('a tools library apply request past the 50 request limit gets 429')
+Before toolApplyOk existed, POST /api/tools/library/apply had no rate control
+beyond authorizeToolRequest -- the 51st authenticated call in the loop still
+returned 404 (asset not found) instead of 429.

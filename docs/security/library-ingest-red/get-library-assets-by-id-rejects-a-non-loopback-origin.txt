@@ -1,0 +1,11 @@
+PARENT_SHA: 9a2cab57f6289bdf417ae5847d8eee46b3266305
+COMMAND: vitest run -c vitest.config.ts tests/library-loopback-gate-assets-id.test.ts
+TEST: GET library assets by id rejects a non-loopback origin
+CONTROL_TEST: GET library assets by id accepts a loopback request
+---
+AssertionError: expected 200 to be 403
+  at tests/library-loopback-gate-assets-id.test.ts ('GET library assets by id rejects a non-loopback origin')
+Before requireLocalDaemonRequest was added, GET /api/library/assets/:id carried
+no route-level gate -- the global /api origin middleware allowlists a PAIRED
+extension origin for any method, so the paired-origin request in this test
+still returned 200 instead of 403.
