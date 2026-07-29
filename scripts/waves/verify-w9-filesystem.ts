@@ -147,6 +147,19 @@ function slugify(s: string): string {
   );
 }
 
+// 'not-exercised' is a genuine third state, distinct from both 'pass' and
+// 'fail': a criterion whose population to check was legitimately empty (a
+// mechanical fact, e.g. zero exposure===0 fs-hit routes existed at
+// baseCommit), so nothing was actually verified either way. Reporting such
+// a case as 'pass' is the exact vacuous-.every()-over-an-empty-array
+// failure shape; reporting it as 'fail' would be a false red for a state
+// that is not actually wrong. It counts as `!== 'pass'` everywhere a
+// consumer checks for green (this file's own exit code, and any future
+// downstream consumer following VERIFICATION-CONTRACT.md's own
+// `status === 'pass'` definition of green), so it can never silently pass
+// as done -- it can only ever be visibly, honestly distinct.
+type CriterionStatus = 'pass' | 'fail' | 'not-exercised';
+
 interface CriterionResult {
   id: string;
   command: string;
@@ -154,7 +167,7 @@ interface CriterionResult {
   artifact: string | null;
   artifactSha256: string | null;
   exitCode: number;
-  status: 'pass' | 'fail';
+  status: CriterionStatus;
   durationMs: number;
   detail?: string | undefined;
 }
@@ -185,24 +198,27 @@ function record(
   assertion: string,
   ok: boolean,
   evidence: string,
-  opts: { detail?: string | undefined; durationMs?: number } = {},
+  opts: { detail?: string | undefined; durationMs?: number; status?: 'not-exercised' } = {},
 ): void {
   try {
+    const wantsNotExercised = opts.status === 'not-exercised';
+    const verdictLabel = wantsNotExercised ? 'not-exercised' : ok ? 'pass' : 'fail';
     const { artifact, artifactSha256 } = artifactFor(
       id,
-      `# ${id}\n# assertion: ${assertion}\n# verdict: ${ok ? 'pass' : 'fail'}\n${opts.detail ? `# detail: ${opts.detail}\n` : ''}\n${evidence}\n`,
+      `# ${id}\n# assertion: ${assertion}\n# verdict: ${verdictLabel}\n${opts.detail ? `# detail: ${opts.detail}\n` : ''}\n${evidence}\n`,
     );
-    const effectiveOk = ok && artifact !== null;
+    const artifactWriteFailed = artifact === null;
+    const status: CriterionStatus = artifactWriteFailed ? 'fail' : wantsNotExercised ? 'not-exercised' : ok ? 'pass' : 'fail';
     results.push({
       id,
       command,
       assertion,
       artifact,
       artifactSha256,
-      exitCode: effectiveOk ? 0 : 1,
-      status: effectiveOk ? 'pass' : 'fail',
+      exitCode: status === 'pass' ? 0 : 1,
+      status,
       durationMs: opts.durationMs ?? 0,
-      detail: artifact === null ? `${opts.detail ? `${opts.detail}; ` : ''}artifact write failed -- forced fail` : opts.detail,
+      detail: artifactWriteFailed ? `${opts.detail ? `${opts.detail}; ` : ''}artifact write failed -- forced fail` : opts.detail,
     });
   } catch (err) {
     results.push({
@@ -1137,6 +1153,7 @@ interface RouteRow {
 interface UniverseScanResult {
   rows: RouteRow[];
   duplicates: string[];
+  chainedDuplicates: string[];
   routeFileCount: number;
   fnCount: number;
 }
@@ -1150,6 +1167,39 @@ function buildDaemonProgram(root: string): { program: TypeScriptModule.Program; 
   return { program, serverPath: path.join(root, SERVER_RELPATH) };
 }
 
+/** True when the handler declares a third ("next") parameter and actually
+ * calls it somewhere in its own body (a direct, generous recursive search --
+ * being generous here is the SAFE direction, since this check only ever
+ * EXEMPTS a duplicate from the hard-fail path, and the fewer legitimate
+ * chains it under-recognizes, the more false hard-fails result, not the
+ * reverse). This is how Express deliberately chains two handlers under the
+ * SAME {method, path} -- confirmed live in this codebase's own
+ * `DELETE /api/design-systems/:id` (registered once in
+ * `routes/static-resource.ts`, which calls `next()` for `user:`-prefixed
+ * ids, and again in `routes/design-systems.ts`, which has no `next`
+ * parameter and is the terminal handler for everything else). Treating
+ * every duplicate registration as an unconditional hard fail would make
+ * `C9F-1` permanently unsatisfiable against a real, working, deliberate
+ * pattern this codebase already uses -- not a hypothetical risk, found by
+ * running this exact check against the real tree. */
+function handlerAcceptsAndCallsNext(handler: TsNode): boolean {
+  if (!(ts.isArrowFunction(handler) || ts.isFunctionExpression(handler))) return false;
+  const nextParam = handler.parameters[2];
+  if (!nextParam || !ts.isIdentifier(nextParam.name)) return false;
+  const nextName = nextParam.name.text;
+  let found = false;
+  const visit = (node: TsNode): void => {
+    if (found) return;
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === nextName) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  if (handler.body) visit(handler.body);
+  return found;
+}
+
 function scanUniverse(root: string): UniverseScanResult {
   const { program, serverPath } = buildDaemonProgram(root);
   const serverSourceFile = program.getSourceFile(serverPath);
@@ -1159,6 +1209,7 @@ function scanUniverse(root: string): UniverseScanResult {
   const routeFiles = discoverRouteFileUniverse(serverSourceFile, serverPath);
   const rows: RouteRow[] = [];
   const seen = new Map<string, number>();
+  const handlersByKey = new Map<string, TsNode[]>();
 
   const classifyOne = (call: AppCall, file: string, fnName: string): RouteRow => {
     const result = classifier.reachable(call.handler, 0);
@@ -1166,6 +1217,9 @@ function scanUniverse(root: string): UniverseScanResult {
     const exposure = classifyExposure(call.middlewareArgs, call.handler);
     const key = `${call.method} ${call.routePath}`;
     seen.set(key, (seen.get(key) ?? 0) + 1);
+    const handlers = handlersByKey.get(key) ?? [];
+    handlers.push(call.handler);
+    handlersByKey.set(key, handlers);
     return {
       method: call.method,
       routePath: call.routePath,
@@ -1195,8 +1249,23 @@ function scanUniverse(root: string): UniverseScanResult {
     rows.push(classifyOne(call, SERVER_RELPATH, '__bootstrap__'));
   }
 
-  const duplicates = [...seen.entries()].filter(([, n]) => n > 1).map(([k]) => k);
-  return { rows, duplicates, routeFileCount: routeFiles.size, fnCount };
+  // A duplicate {method,path} group is a genuine hazard (hard fail) only
+  // when FEWER than (count-1) of its handlers fall through via `next()` --
+  // i.e. two or more handlers that NEVER fall through, meaning at least one
+  // of them is unconditionally unreachable dead code. A group where exactly
+  // one handler is the non-chaining terminal stop is the deliberate Express
+  // pattern above and is ALLOWED, but still reported in evidence as a
+  // "chained duplicate" -- visible and counted, never silently invisible.
+  const duplicates: string[] = [];
+  const chainedDuplicates: string[] = [];
+  for (const [key, count] of seen.entries()) {
+    if (count <= 1) continue;
+    const handlers = handlersByKey.get(key) ?? [];
+    const nonChaining = handlers.filter((h) => !handlerAcceptsAndCallsNext(h));
+    if (nonChaining.length > 1) duplicates.push(key);
+    else chainedDuplicates.push(`${key} (${count} handlers, Express next()-chain, allowed)`);
+  }
+  return { rows, duplicates, chainedDuplicates, routeFileCount: routeFiles.size, fnCount };
 }
 
 // -----------------------------------------------------------------------
@@ -1807,9 +1876,12 @@ async function checkC9F1(): Promise<void> {
       record(
         'C9F-1',
         'scanUniverse(baseCommit worktree)',
-        'no duplicate {method,path} registrations at baseCommit',
+        'no HAZARDOUS duplicate {method,path} registrations at baseCommit (a legitimate Express next()-chain, where all but one handler falls through, is reported separately and does not fail this check)',
         false,
-        `duplicates: ${atBase.duplicates.join(', ')}`,
+        [
+          `hazardous duplicates (2+ handlers that never fall through -- at least one is unreachable): ${atBase.duplicates.join(', ')}`,
+          `chained duplicates (allowed, reported for visibility): ${atBase.chainedDuplicates.join(', ') || 'none'}`,
+        ].join('\n'),
         { durationMs: Date.now() - startedAt },
       );
       return;
@@ -1825,8 +1897,26 @@ async function checkC9F1(): Promise<void> {
     let driftOk = true;
     try {
       live = await bootIsolatedDaemon();
+      // Three exclusions, all confirmed by directly reading the runtime
+      // inventory guard (route-registration-guard.ts) and the source:
+      //  - /api/library/* and /api/tools/library/* -- sibling tranche.
+      //  - /api/backup and /api/restore -- registered via
+      //    registerBackupRoutes(...) called from INSIDE the excluded
+      //    library.ts (W0-owned; confirmed identical to the ingest
+      //    tranche's own documented exclusion for the same file boundary).
+      //  - USE/ALL registrations -- route-registration-guard.ts tracks
+      //    app.use(stringPath, ...)/app.all(...) the same as
+      //    get/post/put/patch/delete/options, but these mount routers or
+      //    apply middleware across many routes rather than a single
+      //    classifiable handler; this tranche's classification model is
+      //    scoped to the leaf HTTP_METHODS set (S1 of the inclusion rule),
+      //    so both sides of the drift comparison exclude them uniformly.
       const liveFiltered = live.routeInventory.filter(
-        (r) => !(r.path.startsWith('/api/library/') || r.path.startsWith('/api/tools/library/')),
+        (r) =>
+          !(r.path.startsWith('/api/library/') || r.path.startsWith('/api/tools/library/')) &&
+          !(r.method === 'POST' && (r.path === '/api/backup' || r.path === '/api/restore')) &&
+          r.method !== 'USE' &&
+          r.method !== 'ALL',
       );
       const baseKeys = new Map<string, number>();
       for (const r of atBase.rows) {
@@ -1875,6 +1965,7 @@ async function checkC9F1(): Promise<void> {
       `unresolved: ${unresolved.length}`,
       `clean: ${clean.length}`,
       `partition check: ${partitionOk ? 'ok' : 'FAILED'}`,
+      `chained (allowed) duplicates: ${atBase.chainedDuplicates.join(', ') || 'none'}`,
       `self-probes: ${selfProbes.passCount}/${selfProbes.total} pass`,
       `live-daemon drift check: ${driftOk ? 'ok' : 'FAILED'}`,
       ...driftLines,
@@ -2003,7 +2094,14 @@ async function checkC9F2(): Promise<void> {
     }
 
     const selfProbes = runSelfProbes(repoRoot);
-    const ok = problems.length === 0 && selfProbes.pass;
+    // matrix.rows.length > 0 is a real gate, not a defensive no-op: an
+    // empty matrix means the per-row formula loop below never ran, so
+    // `problems.length === 0` would otherwise pass vacuously despite
+    // checking nothing. Unlike C9F-8's exposure-0 case, an empty matrix is
+    // never a legitimate population here (C9F-3 independently requires it
+    // to be non-empty against the real, always-nonzero fs-hit set) -- so
+    // this is a genuine FAIL, not a not-exercised state.
+    const ok = problems.length === 0 && selfProbes.pass && matrix.rows.length > 0;
     record(
       'C9F-2',
       'per-row formula check against attribution matrix + exposure self-probes',
@@ -2060,10 +2158,16 @@ async function checkC9F3(): Promise<void> {
       );
       return;
     }
+    // Presence, not occurrence count: the matrix attributes a ROUTE, not a
+    // handler registration. A {method,path} key registered twice (e.g. a
+    // legitimate Express next()-chain -- see `handlerAcceptsAndCallsNext`)
+    // still needs exactly ONE matrix row. `actualKeys` below still counts
+    // occurrences, so a matrix that itself contains two rows for the same
+    // key is still caught as a real duplicate (expected 1, matrix has 2).
     const expectedKeys = new Map<string, number>();
     for (const r of fsHit) {
       const k = `${r.method} ${r.routePath}`;
-      expectedKeys.set(k, (expectedKeys.get(k) ?? 0) + 1);
+      expectedKeys.set(k, 1);
     }
     const actualKeys = new Map<string, number>();
     for (const row of matrix.rows) {
@@ -2077,11 +2181,17 @@ async function checkC9F3(): Promise<void> {
       const a = actualKeys.get(k) ?? 0;
       if (e !== a) problems.push(`${k}: expected ${e} row(s), matrix has ${a}`);
     }
+    // fsHit.length > 0 is a defensive assertion, not a real gate in
+    // practice: it is re-derived from the real, always-populated route
+    // surface (never user input, never optional), so it should never
+    // actually be zero. Guarded anyway so a `problems.length === 0`
+    // vacuous pass can never occur even in a scenario this run did not
+    // anticipate.
     record(
       'C9F-3',
       'multiset key comparison: matrix rows vs confirmed in-scope set',
       'exactly one row per fs-hit route, no orphans, no gaps, no duplicates',
-      problems.length === 0,
+      problems.length === 0 && fsHit.length > 0,
       [`expected fs-hit routes: ${fsHit.length}`, `matrix rows: ${matrix.rows.length}`, ...problems].join('\n'),
       { durationMs: Date.now() - startedAt },
     );
@@ -2507,11 +2617,15 @@ async function checkC9F5(): Promise<void> {
         }
       }
     }
+    // citationToRoute.size > 0 guards against the same vacuous-pass shape:
+    // an attribution matrix with rows but no testRef/control.testRef
+    // strings at all would leave `problems` empty (the citation loop never
+    // executes) without a single real Vitest run ever happening.
     record(
       'C9F-5',
       'live vitest execution of every cited file (memoized per file) + independent worktree replay for new controls',
       'every testRef/control.testRef confirmed passed in a REAL run, globally unique, route-associated; new controls independently replayed red-then-green; paired positive+negative control required in-file',
-      problems.length === 0,
+      problems.length === 0 && citationToRoute.size > 0,
       [`distinct citations: ${citationToRoute.size}`, ...runDetails, ...problems].join('\n'),
       { durationMs: Date.now() - startedAt },
     );
@@ -2717,7 +2831,7 @@ async function checkC9F7(): Promise<void> {
       'C9F-7',
       'anchored ENFORCED-grammar match + digit-bounded limit/overflow token check against REAL PASSED assertion titles',
       'every P0 row with mechanical impact 3 resolves size/rate limit via the anchored grammar with a currently-passing, digit-bound accept/reject control pair, or a verified acceptedRisk',
-      problems.length === 0,
+      problems.length === 0 && checkedRows > 0,
       [`P0 upload-surface rows checked: ${checkedRows}`, ...runDetails, ...problems].join('\n'),
       { durationMs: Date.now() - startedAt },
     );
@@ -2741,9 +2855,20 @@ async function checkC9F8(): Promise<void> {
     const atBase = await getUniverseAtBaseCommit();
     const exposure0 = atBase.rows.filter((r) => r.classification === 'fs-hit' && r.exposure === 0);
     if (exposure0.length === 0) {
-      record('C9F-8', 'no exposure-0 rows found', 'loopback-gating threat class', true, 'no exposure===0 fs-hit routes at baseCommit -- vacuously satisfied', {
-        durationMs: Date.now() - startedAt,
-      });
+      // Genuinely empty population, not a pass: no daemon boots, no HTTP
+      // request is issued, nothing about the loopback-gating threat class is
+      // actually exercised. Recording this as 'pass' would be exactly the
+      // vacuous-.every()-over-an-empty-set shape (0/0 probes "pass" without
+      // anything having been tested) -- reported as 'not-exercised' instead,
+      // which is neither a false green nor a false red.
+      record(
+        'C9F-8',
+        'no exposure-0 rows found -- probe loop never runs',
+        'loopback-gating threat class',
+        false,
+        'no exposure===0 fs-hit routes at baseCommit -- the probe loop has zero rows to exercise; nothing was tested either way',
+        { durationMs: Date.now() - startedAt, status: 'not-exercised' },
+      );
       return;
     }
     live = await bootIsolatedDaemon();
@@ -3002,7 +3127,8 @@ async function main(): Promise<void> {
 
   console.log('\n=== verify-w9-filesystem scoreboard ===');
   for (const r of results) {
-    console.log(`${r.status === 'pass' ? 'PASS' : 'FAIL'}  ${r.id.padEnd(14)} ${r.assertion}`);
+    const label = r.status === 'pass' ? 'PASS' : r.status === 'not-exercised' ? 'N/EX' : 'FAIL';
+    console.log(`${label}  ${r.id.padEnd(14)} ${r.assertion}`);
   }
   console.log(`\nmanifest: ${path.join(proofDir, 'manifest.json')} (written=${written.written}, sha256=${written.sha256})`);
   console.log(`archive: ${archive.runDir} (ok=${archive.ok})`);

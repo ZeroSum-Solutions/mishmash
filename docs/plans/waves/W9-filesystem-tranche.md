@@ -137,14 +137,59 @@ git repository. Every call the walk cannot resolve counts as **UNRESOLVED**, nev
 provably safe" are never conflated (this mirrors `VERIFICATION-CONTRACT.md` §6's own rule that
 `auth:none` must never be silently read as "safe").
 
-**UNRESOLVED is not automatically in-scope for this tranche's matrix.** Folding all 184 unresolved
+**UNRESOLVED is not automatically in-scope for this tranche's matrix.** Folding all unresolved
 registrations into this one tranche would erase the wave's own threat-boundary partition (agent
 spawn / filesystem / deploy / external-fetch / imports / long tail would stop being distinct). Instead:
 UNRESOLVED is reported every run as an explicit, visible, counted third bucket (`C9F-1`'s own
-evidence file lists every one of the 184 by `{method, path, file}`), separate from both the
-attribution matrix (scoped to the 125 confirmed) and from "excluded" — it is a standing, mechanically
-re-derived punch list. See "Open founder questions" for the resulting decision this document does
-not make unilaterally.
+evidence file lists every one by `{method, path, file}`), separate from both the
+attribution matrix (scoped to the confirmed `fs-hit` set) and from "excluded" — it is a standing,
+mechanically re-derived punch list. See "Open founder questions" for the resulting decision this
+document does not make unilaterally.
+
+### Known limitation of the mechanical UNIVERSE DISCOVERY (found running this verifier against the
+real tree, not hypothetical — honestly flagged, blocks a clean `C9F-1` today)
+
+`C9F-1`'s drift check (baseCommit-derived candidate set vs. a live daemon boot's own runtime
+`routeInventory`) currently reports **17 real, confirmed drift entries** that are genuine daemon
+routes the live inventory sees and the static classifier does not, after excluding the sibling
+tranche's `/api/library/*`, W0's `/api/backup`/`/api/restore`, and `USE`/`ALL`-method middleware
+mounts (all three exclusions are correct and confirmed; the residual is not explained by any of
+them). Two distinct, confirmed root causes, found by reading the actual source, not guessed:
+
+1. **A `register*Routes`-named function called from *inside* another `register*Routes` function in
+   a *different* file, never imported by `server.ts` directly.**
+   `routes/project/index.ts`'s `registerProjectRoutes` imports and calls
+   `registerProjectConversationRoutes` from `./conversations.ts` — a file `server.ts` never imports
+   and this tranche's universe-discovery (Inclusion rule step 1, scoped to `server.ts`'s own
+   top-level imports) therefore never visits. This accounts for 8 of the 17 drift entries (the
+   `/api/projects/:id/conversations...` family) — confirmed by reading
+   `apps/daemon/src/routes/project/index.ts`'s own import list directly.
+2. **A declarative route-registration abstraction this tranche's AST scan does not recognize at
+   all.** `routes/active-context.ts` (and likely others among the 4 remaining drift entries —
+   `POST /api/attribution/claim`, `POST /api/proxy/senseaudio/stream`, `POST
+   /api/proxy/aihubmix/stream`, `GET /*splat` — not individually confirmed by source, unlike item 1
+   above) registers `/api/active` through `defineJsonRoute`/`mountJsonRoute` helpers
+   (`apps/daemon/src/http/index.ts`) that take a route-definition object (carrying its own `path`
+   field) rather than calling `app.get(...)`/`app.post(...)` directly — confirmed by reading
+   `apps/daemon/src/routes/active-context.ts:103,111` directly. This inclusion rule's AST scan
+   (Inclusion rule step 2) matches only the literal `app.<method>(stringLiteral, ...)` call shape and
+   does not yet resolve this second registration abstraction, nor a path argument that is an
+   `Identifier` bound to a top-level `const` (confirmed separately for
+   `GET /api/diagnostics/export`, registered via `app.get(DIAGNOSTICS_EXPORT_PATH, ...)` in
+   `server.ts` itself, where `DIAGNOSTICS_EXPORT_PATH` is a named constant, not an inline string
+   literal).
+
+**This is a real, load-bearing satisfiability gap, not a cosmetic one: `C9F-1` cannot pass cleanly
+today, and will not pass cleanly after implementation either, until this is fixed** — the drift
+check compares against the *live* daemon, so these 17 routes remain visible drift regardless of
+what the implementer does to the *attributed* route set. Fixing it requires: (a) recursive universe
+discovery — after finding a `register*Routes` function, also scan its own body for calls to further
+`register*Routes`-named identifiers resolved via relative imports in *that* file, not only
+`server.ts`, transitively; (b) recognizing the `defineJsonRoute`/`mountJsonRoute` registration shape
+as a second, alternative route-registration form; (c) resolving a path argument that is an
+`Identifier` bound to a same-file top-level `const string literal`. None of these are hypothetical
+future risks — all three are confirmed necessary by this run's own drift evidence against the real
+tree. See "Open founder questions" — this is the single most important one.
 
 ## Inclusion rule (mechanical, re-runnable)
 
@@ -169,9 +214,22 @@ question, not a classifier defect):
    rule, once by the lease boundary). No other file is hard-excluded; a route otherwise reachable
    through a different file is in-scope even if it delegates to library-owned code (it does not — no
    in-scope route imports from `library.ts` today, checked directly).
-4. **Duplicate check.** Any `{method, path}` key appearing more than once — at `baseCommit`, at
-   `HEAD`, or in a live daemon's own runtime `routeInventory` — is a hard fail on its own, never a
-   silent last-registration-wins pick (mirrors the ingest tranche's S9-1).
+4. **Duplicate check, with one confirmed real exception.** A `{method, path}` key appearing more
+   than once is checked, never silently last-registration-wins-picked — but this tranche's own
+   candidate set contains a **verified, deliberate** exception the ingest tranche's narrower
+   single-file scope never had to handle: `DELETE /api/design-systems/:id` is registered twice —
+   once in `routes/static-resource.ts` (whose handler declares a third `next` parameter and calls
+   it for `user:`-prefixed ids), and once in `routes/design-systems.ts` (the terminal handler, no
+   `next` parameter, handles everything else). This is a real, working Express chaining pattern,
+   confirmed by reading both handler bodies directly — not a hypothetical. Treating every duplicate
+   as an unconditional hard fail would make `C9F-1` permanently unsatisfiable against code this
+   tranche has no reason or lease to change. The rule is therefore: a duplicate group is a **hard
+   fail** only when **two or more** of its handlers never fall through via `next()` (meaning at
+   least one is unconditionally unreachable dead code); a group with **at most one** non-chaining
+   (terminal) handler is a **legitimate chain** — allowed, but still reported in evidence as a
+   "chained duplicate," visible and counted, never silently invisible. The attribution matrix
+   (`C9F-3`) still requires exactly **one** row for such a key, not one per handler — the matrix
+   attributes a route, not an individual registration.
 5. **Classification.** For each remaining registration, walk its final handler's reachable call
    graph (see "Known limitation" above for the exact resolution rules and their bound) and assign
    exactly one of: **`fs-hit`** (a filesystem primitive, static-serving call, or upload-middleware
@@ -652,9 +710,25 @@ what is attributed, what the mechanical rule proves, and that the remainder (`un
   tranche's confirmed-in-scope set overlaps that surface.
 - Anything `LIBRARY_UI_VISIBLE` gates for end users (W3's problem).
 
-## Open founder questions (enumerated; none block landing this PRD)
+## Open founder questions (enumerated)
 
-1. **The 184-route UNRESOLVED bucket.** Should a follow-up pass (either inside this tranche, before
+**Item 0 is a blocking verifier defect, not a policy question — flagged separately from the rest of
+this list, which are genuinely open policy calls.** `C9F-1`'s live-daemon drift check currently
+fails against `main` with 17 confirmed real drift entries (see "Known limitation of the mechanical
+UNIVERSE DISCOVERY" above) — a `register*Routes` function reachable only through another
+`register*Routes` function in a different file (`registerProjectConversationRoutes`, 8 routes), a
+declarative `defineJsonRoute`/`mountJsonRoute` registration abstraction this AST scan does not yet
+recognize, and a `const`-bound path-argument identifier the scan does not yet resolve. This is not
+a hypothetical edge case awaiting a founder ruling — it is a concrete engineering gap in the
+inclusion rule's universe discovery, found by running this verifier against the real tree, and it
+needs a fix round (recursive `register*Routes` discovery, `defineJsonRoute`/`mountJsonRoute`
+recognition, same-file `const`-path resolution) before `C9F-1` — and therefore this whole
+tranche — can ever reach clean, regardless of what the implementation itself does. Recorded here
+because it was found late in this expansion's own self-check and time did not allow fixing it in
+this round; an adversarial reviewer should treat it as a required revision, not an optional
+follow-up.
+
+1. **The UNRESOLVED bucket.** Should a follow-up pass (either inside this tranche, before
    it is treated as "complete," or as its own micro-tranche) manually triage the UNRESOLVED bucket
    into confirmed-in-scope / confirmed-clean, or is a standing, re-derived, visible "not yet
    classified" list an acceptable permanent state for this wave program? The mechanical classifier's
