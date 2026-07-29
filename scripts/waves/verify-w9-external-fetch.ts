@@ -1646,7 +1646,14 @@ function runSsrfSuite(testFiles: string[], attempt: number): { ok: boolean; resu
     assertions: tr.assertionResults.map((a) => ({ fullName: a.fullName, state: a.status })),
     hasSkipOrOnlyOrTodo: tr.assertionResults.some((a) => a.status === 'pending' || a.status === 'todo') || anyOnlyMarker,
   }));
-  const allPassed = results.every((f) => f.assertions.every((a) => a.state === 'passed') && !f.hasSkipOrOnlyOrTodo);
+  // Vacuity guard: `.every()` over a possibly-empty collection vacuously
+  // returns true, so a matched file with zero recorded assertions (or a
+  // suite run that produced zero file results at all) must NOT silently
+  // count as "passed" -- pair every `.every()` here with an explicit
+  // `length > 0` check rather than trust the vacuous default.
+  const allPassed =
+    results.length > 0 &&
+    results.every((f) => f.assertions.length > 0 && f.assertions.every((a) => a.state === 'passed') && !f.hasSkipOrOnlyOrTodo);
   return { ok: allPassed && r.status === 0 && !anyOnlyMarker, results, raw };
 }
 
@@ -1754,22 +1761,145 @@ async function confirmProcessTreeStopped(observedPids: ReadonlySet<number>): Pro
   };
 }
 
+/** Mechanically extracts the production MAX_REMOTE_BYTES constant from
+ * apps/daemon/src/routes/library.ts rather than hardcoding a copy that could
+ * silently drift from the real value. Only matches the exact `N * N * N`
+ * numeric-literal shape the source currently uses -- no eval, no arbitrary
+ * expression parsing. */
+function extractMaxRemoteBytesConstant(): number {
+  const abs = path.join(repoRoot, 'apps/daemon/src/routes/library.ts');
+  const text = fs.readFileSync(abs, 'utf8');
+  const m = /const MAX_REMOTE_BYTES\s*=\s*(\d+)\s*\*\s*(\d+)\s*\*\s*(\d+)\s*;/.exec(text);
+  if (!m) {
+    throw new Error(
+      'could not mechanically extract MAX_REMOTE_BYTES from library.ts (expected `const MAX_REMOTE_BYTES = N * N * N;`) -- CXF-11 refuses to guess a bound that could drift from production',
+    );
+  }
+  return Number(m[1]) * Number(m[2]) * Number(m[3]);
+}
+
+// CXF-11 / CXF-6-positive-control sentinel targets. 93.184.216.34 is a real,
+// non-private public IPv4 literal (same fixture the codebase's own
+// brand-safe-fetch.test.ts uses) so `assertPublicBrandUrl`'s IP-literal
+// branch passes it with NO DNS lookup at all -- the SSRF pre-check that runs
+// before these sentinels are ever reached is 100% real production logic.
+// Nothing about these constants weakens or bypasses that check; they merely
+// choose an address the check already treats as legitimately public.
+const W9XF_ACCEPT_PROBE_HOST = '93.184.216.34';
+const W9XF_ACCEPT_PROBE_PATH_PREFIX = '/__w9xf_accept_probe__/';
+const W9XF_LEAK_PROBE_URL = `http://${W9XF_ACCEPT_PROBE_HOST}/__w9xf_leak_probe__`;
+// CXF-11's POSITIVE CONTROL sentinel: an ordinary, genuinely in-bounds
+// transfer (a few KB, also declaring no Content-Length -- the same code path
+// as the leak probe) that must complete normally in the SAME run that proves
+// the oversized leak probe is bounded/rejected. Without this, a broken
+// measurement mechanism that always reports "unbounded" regardless of input
+// -- or a fix that overzealously cancels every transfer -- would go
+// undetected: the leak probe alone cannot distinguish "correctly bounds an
+// oversized transfer" from "cancels everything, oversized or not."
+const W9XF_OK_PROBE_URL = `http://${W9XF_ACCEPT_PROBE_HOST}/__w9xf_ok_probe__`;
+function w9xfAcceptProbeUrl(key: string): string {
+  return `http://${W9XF_ACCEPT_PROBE_HOST}${W9XF_ACCEPT_PROBE_PATH_PREFIX}${encodeURIComponent(key)}`;
+}
+
 // =========================================================================
 // ROUND-1 addition (finding 2a): isolated daemon boot + loopback canary +
 // live HTTP probe. This is the mechanism that lets CXF-6 OBSERVE a P0 row's
 // guard actually firing, rather than inferring it from source shape. PORTED
 // from verify-w10f.ts's bootIsolatedDaemonSubprocess/bootIsolatedDaemon.
+//
+// ROUND-2 addition (CXF-11 + Ruling 1/3): the runner ALSO installs a
+// SELECTIVE globalThis.fetch stub and a loopback-only telemetry side-channel
+// before importing server.ts. The stub is the ONLY deviation from real
+// production code -- route dispatch, the SSRF guard's own pre-checks
+// (assertPublicBrandUrl, createValidatingLookup), and fetchRemoteBytes all
+// run for real. It intercepts exactly three sentinel URLs (a leak-probe
+// target for CXF-11's negative-control transfer-bound measurement, an
+// ok-probe target for CXF-11's OWN positive control -- an ordinary in-bounds
+// transfer that must complete normally in the same run -- and an
+// accept-probe target for CXF-6's positive control) and passes every other
+// URL straight through to the real fetch unmodified -- so every EXISTING
+// reject-path probe (which targets the loopback canary, a different address
+// entirely) is completely
+// unaffected by this change. Per Ruling 1 condition 1, interception is
+// EMPIRICALLY PROVEN at the start of CXF-6 (see the stub-interception
+// self-check below), never merely assumed from reading this source.
 // =========================================================================
-function buildIsolatedDaemonRunnerScript(serverTsUrl: string): string {
+function buildIsolatedDaemonRunnerScript(serverTsUrl: string, maxRemoteBytes: number): string {
+  const hardCap = maxRemoteBytes + 10 * 1024 * 1024;
   return [
+    'import http from "node:http";',
+    `const W9XF_LEAK_URL = ${JSON.stringify(W9XF_LEAK_PROBE_URL)};`,
+    `const W9XF_OK_URL = ${JSON.stringify(W9XF_OK_PROBE_URL)};`,
+    `const W9XF_ACCEPT_PREFIX = ${JSON.stringify(`http://${W9XF_ACCEPT_PROBE_HOST}${W9XF_ACCEPT_PROBE_PATH_PREFIX}`)};`,
+    `const W9XF_HARD_CAP = ${hardCap};`,
+    'const __blankTransferTelemetry = () => ({ bytesEnqueued: 0, sawCancel: false, cancelledAtBytes: null, streamClosed: false });',
+    'const __telemetry = { acceptInvocations: {}, leak: __blankTransferTelemetry(), ok: __blankTransferTelemetry() };',
+    'const __realFetch = globalThis.fetch;',
+    'globalThis.fetch = async (input, init) => {',
+    '  const urlStr = typeof input === "string" ? input : (input && typeof input === "object" && "url" in input) ? String(input.url) : String(input);',
+    '  if (urlStr === W9XF_LEAK_URL) {',
+    '    __telemetry.leak = __blankTransferTelemetry();',
+    '    const chunk = new Uint8Array(65536).fill(65);',
+    '    const stream = new ReadableStream({',
+    '      pull(controller) {',
+    '        if (__telemetry.leak.bytesEnqueued >= W9XF_HARD_CAP) { __telemetry.leak.streamClosed = true; controller.close(); return; }',
+    '        controller.enqueue(chunk);',
+    '        __telemetry.leak.bytesEnqueued += chunk.byteLength;',
+    '      },',
+    '      cancel(_reason) {',
+    '        __telemetry.leak.sawCancel = true;',
+    '        __telemetry.leak.cancelledAtBytes = __telemetry.leak.bytesEnqueued;',
+    '      },',
+    '    });',
+    '    return new Response(stream, { status: 200, headers: { "content-type": "application/octet-stream" } });',
+    '  }',
+    '  if (urlStr === W9XF_OK_URL) {',
+    '    __telemetry.ok = __blankTransferTelemetry();',
+    '    const chunk = new Uint8Array(4096).fill(66);',
+    '    const okTotal = 3 * chunk.byteLength;',
+    '    const stream = new ReadableStream({',
+    '      pull(controller) {',
+    '        if (__telemetry.ok.bytesEnqueued >= okTotal) { __telemetry.ok.streamClosed = true; controller.close(); return; }',
+    '        controller.enqueue(chunk);',
+    '        __telemetry.ok.bytesEnqueued += chunk.byteLength;',
+    '      },',
+    '      cancel(_reason) {',
+    '        __telemetry.ok.sawCancel = true;',
+    '        __telemetry.ok.cancelledAtBytes = __telemetry.ok.bytesEnqueued;',
+    '      },',
+    '    });',
+    '    return new Response(stream, { status: 200, headers: { "content-type": "text/plain" } });',
+    '  }',
+    '  if (urlStr.startsWith(W9XF_ACCEPT_PREFIX)) {',
+    '    const key = decodeURIComponent(urlStr.slice(W9XF_ACCEPT_PREFIX.length));',
+    '    __telemetry.acceptInvocations[key] = (__telemetry.acceptInvocations[key] || 0) + 1;',
+    '    return new Response("w9xf-accept-probe-ok", { status: 200, headers: { "content-type": "text/plain" } });',
+    '  }',
+    '  return __realFetch(input, init);',
+    '};',
+    'const __telemetryServer = http.createServer((req, res) => {',
+    '  const u = new URL(req.url ?? "/", "http://127.0.0.1");',
+    '  if (u.pathname === "/telemetry") { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(__telemetry)); return; }',
+    '  if (u.pathname === "/reset" && req.method === "POST") {',
+    '    __telemetry.acceptInvocations = {};',
+    '    __telemetry.leak = __blankTransferTelemetry();',
+    '    __telemetry.ok = __blankTransferTelemetry();',
+    '    res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ ok: true })); return;',
+    '  }',
+    '  res.writeHead(404); res.end();',
+    '});',
+    'await new Promise((resolve, reject) => { __telemetryServer.once("error", reject); __telemetryServer.listen(0, "127.0.0.1", resolve); });',
+    'const __telemetryAddr = __telemetryServer.address();',
+    'const __telemetryPort = __telemetryAddr && typeof __telemetryAddr === "object" ? __telemetryAddr.port : 0;',
     'const { startServer } = await import(process.env.W9XF_SERVER_URL);',
     'const started = await startServer({ port: 0, host: "127.0.0.1", returnServer: true });',
-    'process.stdout.write(JSON.stringify({ ready: true, url: started.url, routeInventory: started.routeInventory ?? null }) + "\\n");',
+    'process.stdout.write(JSON.stringify({ ready: true, url: started.url, routeInventory: started.routeInventory ?? null, telemetryUrl: `http://127.0.0.1:${__telemetryPort}` }) + "\\n");',
     'process.on("SIGTERM", async () => { try { await started.shutdown?.(); } finally { process.exit(0); } });',
   ].join('\n');
 }
 interface IsolatedDaemonHandle {
   baseUrl: string;
+  telemetryUrl: string;
   dataDir: string;
   routeInventory: unknown;
   observedPids: Set<number>;
@@ -1780,7 +1910,7 @@ async function bootIsolatedDaemon(): Promise<IsolatedDaemonHandle> {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'w9xf-daemon-data-'));
   const runnerPath = path.join(os.tmpdir(), `w9xf-daemon-runner-${process.pid}-${Date.now()}.mjs`);
   const serverTsUrl = pathToFileURL(path.join(repoRoot, 'apps/daemon/src/server.ts')).href;
-  fs.writeFileSync(runnerPath, buildIsolatedDaemonRunnerScript(serverTsUrl));
+  fs.writeFileSync(runnerPath, buildIsolatedDaemonRunnerScript(serverTsUrl, extractMaxRemoteBytesConstant()));
   const platform = await loadPlatform();
   const proc = spawn('pnpm', ['exec', 'tsx', runnerPath], {
     cwd: repoRoot,
@@ -1797,7 +1927,7 @@ async function bootIsolatedDaemon(): Promise<IsolatedDaemonHandle> {
     })();
   }, 200);
   try {
-    const ready = await new Promise<{ url: string; routeInventory: unknown }>((resolve, reject) => {
+    const ready = await new Promise<{ url: string; routeInventory: unknown; telemetryUrl: string }>((resolve, reject) => {
       let buffered = '';
       const timeout = setTimeout(() => reject(new Error('isolated daemon did not report ready within 30s')), 30_000);
       proc.stdout?.on('data', (chunk: Buffer) => {
@@ -1805,10 +1935,10 @@ async function bootIsolatedDaemon(): Promise<IsolatedDaemonHandle> {
         const line = buffered.split('\n').find((l) => l.trim().startsWith('{'));
         if (line) {
           try {
-            const parsed = JSON.parse(line.trim()) as { ready?: boolean; url?: string; routeInventory?: unknown };
-            if (parsed.ready && typeof parsed.url === 'string') {
+            const parsed = JSON.parse(line.trim()) as { ready?: boolean; url?: string; routeInventory?: unknown; telemetryUrl?: string };
+            if (parsed.ready && typeof parsed.url === 'string' && typeof parsed.telemetryUrl === 'string') {
               clearTimeout(timeout);
-              resolve({ url: parsed.url, routeInventory: parsed.routeInventory ?? null });
+              resolve({ url: parsed.url, routeInventory: parsed.routeInventory ?? null, telemetryUrl: parsed.telemetryUrl });
             }
           } catch {
             /* keep buffering */
@@ -1825,7 +1955,8 @@ async function bootIsolatedDaemon(): Promise<IsolatedDaemonHandle> {
       });
     });
     assertSafeLoopbackUrl(ready.url);
-    return { baseUrl: ready.url, dataDir, routeInventory: ready.routeInventory, observedPids, proc };
+    assertSafeLoopbackUrl(ready.telemetryUrl);
+    return { baseUrl: ready.url, telemetryUrl: ready.telemetryUrl, dataDir, routeInventory: ready.routeInventory, observedPids, proc };
   } catch (err) {
     clearInterval(trackTimer);
     await confirmProcessTreeStopped(observedPids).catch(() => {});
@@ -1947,6 +2078,68 @@ async function executeSsrfProbe(daemon: IsolatedDaemonHandle, canary: CanaryServ
   const statusOk = spec.rejectStatusIn.includes(resp.status);
   const ok = canaryHits === 0 && statusOk;
   return { ok, detail: `status=${resp.status} canaryHits=${canaryHits} rejectStatusIn=${JSON.stringify(spec.rejectStatusIn)} url=${url.toString()}` };
+}
+
+interface W9xfTransferTelemetry {
+  bytesEnqueued: number;
+  sawCancel: boolean;
+  cancelledAtBytes: number | null;
+  streamClosed: boolean;
+}
+interface W9xfTelemetry {
+  acceptInvocations: Record<string, number>;
+  leak: W9xfTransferTelemetry;
+  ok: W9xfTransferTelemetry;
+}
+/** Reads the isolated daemon's in-process fetch-stub telemetry (accept-probe invocation counts, leak-probe and ok-probe byte tracking) over the loopback-only telemetry side-channel started in the runner script. */
+async function queryTelemetry(daemon: IsolatedDaemonHandle): Promise<W9xfTelemetry> {
+  const url = assertSafeLoopbackUrl(new URL('/telemetry', daemon.telemetryUrl).toString());
+  const resp = await fetch(url, { redirect: 'manual' });
+  return (await resp.json()) as W9xfTelemetry;
+}
+async function resetTelemetry(daemon: IsolatedDaemonHandle): Promise<void> {
+  const url = assertSafeLoopbackUrl(new URL('/reset', daemon.telemetryUrl).toString());
+  await fetch(url, { method: 'POST', redirect: 'manual' });
+}
+
+// =========================================================================
+// RULING 1/3 addition: positive-control probe. Points a row's caller-
+// controlled field at a stubbed-but-legitimately-public sentinel target
+// (globalThis.fetch intercepts only this one sentinel URL; the route, its
+// guard's pre-checks, and the handler are unmodified production code) and
+// asserts the stub was actually invoked -- proof the guard's own pre-check
+// let a public target reach the real fetch call, discriminating a genuine
+// control from a guard that would refuse ANY input (blanket denial), which
+// the reject-only probe alone cannot rule out. Per Ruling 1 condition 4,
+// the returned detail states the seam explicitly.
+// =========================================================================
+async function executeAcceptControlProbe(daemon: IsolatedDaemonHandle, spec: ProbeSpec, key: string): Promise<{ ok: boolean; detail: string }> {
+  await resetTelemetry(daemon);
+  const url = assertSafeLoopbackUrl(new URL(spec.path, daemon.baseUrl).toString());
+  const target = w9xfAcceptProbeUrl(key);
+  const bodyText = spec.bodyTemplate !== undefined ? JSON.stringify(spec.bodyTemplate).split(PROBE_TARGET_PLACEHOLDER).join(target) : undefined;
+  let resp: Response;
+  try {
+    resp = await fetch(url, {
+      method: spec.method,
+      headers: { 'content-type': 'application/json', ...(spec.headers ?? {}) },
+      redirect: 'manual',
+      ...(bodyText !== undefined ? { body: bodyText } : {}),
+    });
+  } catch (err) {
+    return { ok: false, detail: `accept-control probe fetch threw: ${String(err)}` };
+  }
+  try {
+    await resp.arrayBuffer();
+  } catch {
+    /* best effort */
+  }
+  const telemetry = await queryTelemetry(daemon);
+  const invoked = (telemetry.acceptInvocations[key] ?? 0) >= 1;
+  return {
+    ok: invoked,
+    detail: `status=${resp.status} stubInvoked=${invoked} [SEAM: transport is STUBBED for this one sentinel public-IP URL only -- route dispatch, the guard's own pre-check, and the handler are real production code; a stub invocation proves the guard's pre-check let a legitimate public target through, which a blanket-denial guard could never do] url=${url.toString()}`,
+  };
 }
 
 // =========================================================================
@@ -2691,10 +2884,39 @@ async function main(): Promise<void> {
         /* best effort */
       }
 
+      // RULING 1 condition 1: prove the fetch stub is actually on the path
+      // the handler takes -- never assume it from reading safe-fetch.ts's
+      // source. POST /api/library/ingest -> fetchRemoteBytes ->
+      // fetchExternalBrandAsset is the one call chain named in the finding,
+      // and it needs no attribution matrix to exercise, so this runs
+      // unconditionally, before any accept-probe result below is trusted.
+      await resetTelemetry(daemon);
+      const stubProveUrl = assertSafeLoopbackUrl(new URL('/api/library/ingest', daemon.baseUrl).toString());
+      const stubProveResp = await fetch(stubProveUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        redirect: 'manual',
+        body: JSON.stringify({ url: w9xfAcceptProbeUrl('boot-self-check') }),
+      });
+      try {
+        await stubProveResp.arrayBuffer();
+      } catch {
+        /* best effort */
+      }
+      const stubProveTelemetry = await queryTelemetry(daemon);
+      const stubInterceptionProven = (stubProveTelemetry.acceptInvocations['boot-self-check'] ?? 0) >= 1;
+      infraNotes.push(
+        `probe-infra self-check: fetch-stub interception proven=${stubInterceptionProven} (POST /api/library/ingest with a stub-sentinel url; status=${stubProveResp.status}) -- if false, no per-row accept-probe result below can be trusted`,
+      );
+
       let ok: boolean;
       let evidenceBody: string;
       let failDetail: string | undefined;
-      if (!attribution) {
+      if (!stubInterceptionProven) {
+        ok = false;
+        evidenceBody = infraNotes.join('\n');
+        failDetail = 'fetch-stub interception could not be empirically proven at boot -- treated as inconclusive, not silently passed';
+      } else if (!attribution) {
         ok = false;
         evidenceBody = infraNotes.join('\n');
         failDetail = 'no attribution matrix (see CXF-3) -- probe infra itself is sound (see evidence), nothing to probe yet';
@@ -2729,10 +2951,20 @@ async function main(): Promise<void> {
             continue;
           }
           const probeResult = await executeSsrfProbe(daemon, canary, control.probe);
+          // RULING 3: a reject-only probe cannot distinguish a genuine
+          // control from a guard that blindly refuses everything. The
+          // positive control below points the SAME field at a stubbed-but-
+          // legitimately-public sentinel through the SAME route/guard/
+          // handler code path and requires it to actually reach the stub --
+          // proof the guard's pre-check discriminates rather than denying
+          // blanket.
+          const acceptResult = await executeAcceptControlProbe(daemon, control.probe, key);
           if (!probeResult.ok) {
             problems.push(`${key}: live SSRF probe FAILED (guard did not observably fire): ${probeResult.detail}`);
+          } else if (!acceptResult.ok) {
+            problems.push(`${key}: positive control FAILED (cannot rule out blanket denial): ${acceptResult.detail}`);
           } else {
-            infraNotes.push(`${key}: live probe passed (${probeResult.detail})`);
+            infraNotes.push(`${key}: reject probe passed (${probeResult.detail}); accept probe passed (${acceptResult.detail})`);
           }
         }
         ok = problems.length === 0;
@@ -2756,7 +2988,7 @@ async function main(): Promise<void> {
       record(
         'CXF-6',
         '',
-        "every P0-tier row's GUARDED declaration is bound to the mechanically-found guard function AND its own declared control.probe is executed live against a real isolated daemon, refusing an escaping target with zero canary hits -- or a verified accepted risk; the isolated daemon's own process-tree teardown must also confirm zero survivors",
+        "every P0-tier row's GUARDED declaration is bound to the mechanically-found guard function AND its own declared control.probe is executed live against a real isolated daemon, refusing an escaping target with zero canary hits AND accepting a stubbed-but-legitimately-public positive-control target through the same code path (Ruling 3: rules out blanket denial) -- or a verified accepted risk; fetch-stub interception is empirically proven before any accept-probe result is trusted (Ruling 1); the isolated daemon's own process-tree teardown must also confirm zero survivors",
         finalOk,
         `${evidenceBody}\nteardown: ok=${teardownOk} ${teardownDetail}`,
         { detail: finalOk ? undefined : (failDetail ?? `isolated daemon teardown failed: ${teardownDetail}`) },
@@ -2914,6 +3146,148 @@ async function main(): Promise<void> {
     record('CXF-10', '', 'reviewedCommit strict ancestor of HEAD, owned-path diff empty, reviewer+model non-placeholder and non-denylisted, review record absent at reviewedCommit, verdict APPROVE', ok, problems.join('\n') || 'no problems found', {
       detail: ok ? undefined : `${problems.length} problem(s)`,
     });
+  });
+
+  // =======================================================================
+  // CXF-11 (routed finding, absorbed round 2): fetchRemoteBytes in
+  // apps/daemon/src/routes/library.ts:112 checks the DECLARED Content-Length
+  // (an attacker-controlled or absent header) before fetch, then fully
+  // materializes the body via resp.arrayBuffer() BEFORE the real length is
+  // ever checked -- a response that omits or lies about Content-Length is
+  // buffered without bound. Independent of the attribution matrix: this
+  // probes the actual production function's memory behavior directly, not a
+  // PRD-declared claim about it, so it can genuinely pass or fail today.
+  //
+  // Per Ruling 1 (approved with conditions): the ONLY deviation from real
+  // production code is the transport. Route dispatch, the SSRF pre-check
+  // (assertPublicBrandUrl -- genuinely evaluated against a real public IP
+  // literal, no DNS, no bypass), and fetchRemoteBytes itself all run for
+  // real inside a real booted daemon. globalThis.fetch is stubbed to return
+  // a genuine ReadableStream Response that streams past MAX_REMOTE_BYTES
+  // while declaring no Content-Length -- the transport is the seam, the
+  // buffering DECISION is what's under test (condition 4: stated here and
+  // in the recorded evidence, never implied).
+  //
+  // POSITIVE CONTROL, in the SAME run as the negative control above: an
+  // ordinary, genuinely in-bounds transfer (12 KiB, also declaring no
+  // Content-Length -- same code path, same seam) must complete normally.
+  // This is a vacuity guard, not decoration -- without it, a measurement
+  // mechanism that always reports "unbounded" regardless of input (or a
+  // fix that overzealously cancels every transfer, in-bounds or not) would
+  // make the leak probe alone pass or fail for the wrong reason. The
+  // criterion only PASSES when it can show BOTH discriminating outcomes in
+  // one run: the oversized transfer bounded/rejected AND the ordinary
+  // transfer completing untouched.
+  // =======================================================================
+  await checkCriterion('CXF-11', async () => {
+    let daemon: IsolatedDaemonHandle | null = null;
+    const infraNotes: string[] = [];
+    try {
+      daemon = await bootIsolatedDaemon();
+      const maxRemoteBytes = extractMaxRemoteBytesConstant();
+      const hardCap = maxRemoteBytes + 10 * 1024 * 1024;
+      const slack = 4 * 1024 * 1024; // tolerance for reasonable chunked-read overshoot before an abort takes effect
+      await resetTelemetry(daemon);
+      const url = assertSafeLoopbackUrl(new URL('/api/library/ingest', daemon.baseUrl).toString());
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        redirect: 'manual',
+        body: JSON.stringify({ url: W9XF_LEAK_PROBE_URL }),
+      });
+      try {
+        await resp.arrayBuffer();
+      } catch {
+        /* best effort -- the daemon's own response body is not what we're measuring */
+      }
+      // Grace period: let any async reader.cancel()/abort still in flight
+      // settle before reading the byte count it produced.
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const telemetry = await queryTelemetry(daemon);
+      const leak = telemetry.leak;
+      // RULING 1 condition 2: the assertion is the OBSERVABLE CONSEQUENCE
+      // (how many bytes the stream actually delivered before the transfer
+      // stopped growing), never "a streaming API was called". bytesEnqueued
+      // only grows when the CONSUMER pulls more (ReadableStream's pull() is
+      // demand-driven), so it is a direct measure of what fetchRemoteBytes
+      // actually consumed, whether or not it called an explicit cancel().
+      const bounded = leak.bytesEnqueued <= maxRemoteBytes + slack && leak.bytesEnqueued < hardCap;
+      infraNotes.push(
+        `[SEAM: transport stubbed for one sentinel leak-probe URL only -- route /api/library/ingest, its SSRF pre-check, and fetchRemoteBytes are real production code] ` +
+          `MAX_REMOTE_BYTES=${maxRemoteBytes} slack=${slack} hardCap=${hardCap} bytesEnqueued=${leak.bytesEnqueued} sawCancel=${leak.sawCancel} cancelledAtBytes=${leak.cancelledAtBytes} streamClosedAtHardCap=${leak.streamClosed} daemonResponseStatus=${resp.status}`,
+      );
+      infraNotes.push(
+        bounded
+          ? 'bounded: the stream stopped being pulled at/near MAX_REMOTE_BYTES -- transfer-time enforcement, not a post-materialization re-check'
+          : 'UNBOUNDED: the stream was pulled to (or past) the hard safety cap without the consumer stopping near MAX_REMOTE_BYTES -- this run, against the CURRENT unfixed production code, is the negative-control demonstration Ruling 1 condition 3 requires: a criterion that does not fail here would itself be broken',
+      );
+
+      // POSITIVE CONTROL: same call chain, a sentinel that streams a small,
+      // genuinely in-bounds total (12 KiB, well under MAX_REMOTE_BYTES) and
+      // closes on its own. Run in the SAME daemon instance, same probe run,
+      // right after the negative control above.
+      await resetTelemetry(daemon);
+      const okResp = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        redirect: 'manual',
+        body: JSON.stringify({ url: W9XF_OK_PROBE_URL }),
+      });
+      let okBody: unknown;
+      try {
+        okBody = await okResp.json();
+      } catch {
+        /* best effort */
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const okTelemetry = await queryTelemetry(daemon);
+      const okLeak = okTelemetry.ok;
+      const okExpectedBytes = 3 * 4096;
+      const positiveControlPassed =
+        okResp.status === 200 && okLeak.streamClosed && !okLeak.sawCancel && okLeak.bytesEnqueued === okExpectedBytes;
+      infraNotes.push(
+        `[SEAM: transport stubbed for one sentinel ok-probe URL only -- same route/guard/fetchRemoteBytes code path as the leak probe above] ` +
+          `expectedBytes=${okExpectedBytes} bytesEnqueued=${okLeak.bytesEnqueued} sawCancel=${okLeak.sawCancel} streamClosed=${okLeak.streamClosed} daemonResponseStatus=${okResp.status} assetId=${okBody && typeof okBody === 'object' && 'asset' in okBody ? String((okBody as { asset?: { id?: unknown } }).asset?.id ?? '') : '(none)'}`,
+      );
+      infraNotes.push(
+        positiveControlPassed
+          ? 'POSITIVE CONTROL PASSED: the ordinary in-bounds transfer completed untouched (full expected byte count delivered, no cancellation, HTTP 200) in the same run as the negative control -- proves the mechanism discriminates rather than always reporting unbounded or cancelling everything'
+          : 'POSITIVE CONTROL FAILED: an ordinary in-bounds transfer did NOT complete normally -- either the measurement mechanism itself is broken, or a fix is overzealously cancelling transfers that were never over the limit',
+      );
+
+      const ok = bounded && positiveControlPassed;
+      let teardownOk = true;
+      let teardownDetail = '';
+      if (daemon) {
+        const stopResult = await stopIsolatedDaemon(daemon);
+        teardownOk = stopResult.ok;
+        teardownDetail = stopResult.detail;
+      }
+      const finalOk = ok && teardownOk;
+      record(
+        'CXF-11',
+        '',
+        'fetchRemoteBytes bounds the TRANSFER as it streams (aborts once the running total crosses MAX_REMOTE_BYTES) rather than re-checking length only after resp.arrayBuffer() has already fully materialized the body -- asserted at runtime against a real booted daemon: a negative control (a response streaming past MAX_REMOTE_BYTES with no Content-Length) must be bounded/rejected, AND a positive control (an ordinary in-bounds transfer, same code path) must complete untouched in the same run -- by measuring bytes actually delivered, not by inspecting source for a streaming API call',
+        finalOk,
+        `${infraNotes.join('\n')}\nteardown: ok=${teardownOk} ${teardownDetail}`,
+        {
+          detail: finalOk
+            ? undefined
+            : !teardownOk
+              ? `isolated daemon teardown failed: ${teardownDetail}`
+              : !bounded
+                ? 'fetchRemoteBytes buffered past MAX_REMOTE_BYTES + slack before ever checking length'
+                : 'positive control failed -- an ordinary in-bounds transfer did not complete untouched (see evidence)',
+        },
+      );
+    } catch (err) {
+      let teardownDetail = 'not attempted (crashed before reaching teardown)';
+      if (daemon) {
+        const stopResult = await stopIsolatedDaemon(daemon).catch((e: unknown) => ({ ok: false, detail: `stop itself threw: ${String(e)}` }));
+        teardownDetail = `ok=${stopResult.ok} ${stopResult.detail}`;
+      }
+      record('CXF-11', '', '', false, `${infraNotes.join('\n')}\nteardown: ${teardownDetail}`, { detail: `CXF-11 crashed: ${String(err)}` });
+    }
   });
 
   // =======================================================================
