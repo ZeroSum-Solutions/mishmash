@@ -254,6 +254,8 @@ declared done without its gate going green on its own terms. Every ruling made u
 delegation is recorded here and remains founder-vetoable.
 
 ### W9AS-ACCEPT-shared-local-namespace
+- Route: `POST /api/runs/:id/cancel` (named as the representative route; this acceptance covers every run-id- and terminal-session-scoped route in the W9 agent-spawn tranche, including `GET /api/runs/:id/events`, `GET /api/runs/:id/agui`, `GET /api/runs/:id/result-package`, `POST /api/projects/:id/terminals/:tid/kill`, and `DELETE /api/projects/:id/terminals/:tid`)
+- Accepted risk: run IDs and terminal session IDs live in a shared local namespace, so any local process already running as the user can reach the loopback daemon and act on any run or session it did not create — there is no per-caller ownership scoping on these routes
 - Accepter: Devin Wiggins (founder), delegated 2026-07-28 to the Fable 5 orchestrator
 - Date: 2026-07-28
 - Rationale: MishMash is a local-first, single-user product whose daemon binds loopback only. Run IDs are therefore a shared local namespace: any process already running as the user can reach the daemon and act on any run ID. This is accepted rather than mitigated, because per-caller ownership scoping would add an authentication substrate the product does not otherwise have, to defend against an attacker who — having already achieved local code execution as the user — could read the data directly anyway. The threat model must state this explicitly and name "arbitrary local processes" as in-scope-but-accepted, so the acceptance is visible rather than implied by silence.
@@ -340,3 +342,20 @@ cannot reach), the verifier must parse and bind its `Accepted risk` and `Route` 
 than only its heading, and the PRD must state plainly that this proves "landed on main through
 the review lane", NOT "cryptographically signed by the founder". An honest weak control beats a
 strong-sounding one.
+
+### W1-C1-12-DECISION-ACCEPTANCE
+- Decision: accepted
+- Decider: Fable 5 orchestrator under gate authority delegated by Devin Wiggins (founder) on 2026-07-28
+- Date: 2026-07-29
+- Records: `docs/decisions/gemini-lane.md`, `docs/decisions/deepseek-path-hygiene.md`
+- Rationale: C1-12 terminates at `blocked-on-founder` by construction — the verifier can prove
+  that both NM-14 and NM-37C decision records exist at their leased paths, are structurally
+  complete, and strictly predate the wave's first implementation commit, but it can never
+  machine-verify that the decisions themselves are *right*. That last step is the founder's, and
+  it is taken here: both records were read in full and are accepted as correct. The Gemini lane
+  record states the routing consequence and its fallback; the DeepSeek path-hygiene record states
+  the constraint and why the alternative was rejected. Neither is a placeholder, and neither
+  defers a question it was written to answer. W1 is therefore clear to land at 16 pass /
+  1 blocked-on-founder / 0 fail, which is the maximum honest score this gate can report.
+- Precedent: this acceptance resolves a founder judgment call, not a failing criterion. It is not
+  a waiver, and it does not license landing any wave whose gate reports a hard failure.
