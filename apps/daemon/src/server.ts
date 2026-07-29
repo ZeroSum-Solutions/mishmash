@@ -7083,6 +7083,15 @@ export async function startServer({
         return;
       }
       if (ev.type === 'tool_result' && typeof ev.toolUseId === 'string') {
+        // NM-33/C1-10: kimi's CLI process exits 0 even when a tool call it
+        // made failed -- unlike Claude/codex there is no turn-level
+        // stop_reason/is_error frame to trust, so a failed tool call would
+        // otherwise read as a completed run. Track it here (where isError
+        // is already normalized per-lane) and let the code===0 guard below
+        // override the apparent clean exit.
+        if (def.id === 'kimi' && Boolean(ev.isError)) {
+          run.kimiToolFailureObserved = true;
+        }
         const verdict = toolLoopGuard.observeToolResult(
           ev.toolUseId,
           Boolean(ev.isError),
@@ -7698,6 +7707,22 @@ export async function startServer({
           ));
           return finishWithRetryDecision('failed', code ?? 1, signal ?? null);
         }
+      }
+      // Kimi silent-success guard (NM-33/C1-10): kimi's `-p` mode exits 0
+      // regardless of whether a tool call it made actually failed -- there
+      // is no turn-level stop_reason/is_error frame like Claude/codex have,
+      // so a genuinely failed tool call would otherwise read as a completed
+      // run. `run.kimiToolFailureObserved` is set above whenever a
+      // tool_result's (generalized, non-Bash-only) isError detection fired
+      // during this run. A warning beside an apparently-successful run is
+      // not a fix -- the run itself must terminate failed.
+      if (code === 0 && !run.cancelRequested && run.kimiToolFailureObserved) {
+        send('error', createSseErrorPayload(
+          'AGENT_EXECUTION_FAILED',
+          'A tool call failed during this run. Kimi reported the failure in the tool result but completed the process normally, so this run is marked failed rather than silently succeeding.',
+          { retryable: true },
+        ));
+        return finishWithRetryDecision('failed', code, signal);
       }
       // Empty-output guard: a clean `code === 0` exit with no visible
       // output means the run silently finished without producing anything.
