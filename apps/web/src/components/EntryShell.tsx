@@ -267,8 +267,12 @@ export interface UsageTotalSummary {
 // C1-9: an unpriced/unpriceable total must read as "unavailable", never a
 // bare confident $0.00; a partial total (some runs in the project priced,
 // some didn't) must say so rather than presenting as a complete figure.
+// C1-7: the API's totalCostUsd is always a real number now (the exact sum
+// of whatever IS priced, 0 when nothing is) -- pricingVersion is the sole
+// "is this confident/complete" signal, so an unpriced project's genuine $0
+// sum must not be mistaken for a real figure here.
 export function formatUsageTotal(summary: UsageTotalSummary): string {
-  if (summary.totalCostUsd === null) return 'Cost unavailable';
+  if (summary.pricingVersion === 'unavailable' || summary.totalCostUsd === null) return 'Cost unavailable';
   const amount = `$${summary.totalCostUsd.toFixed(4)}`;
   return summary.pricingVersion === 'partial'
     ? `${amount} (partial — some runs unpriced)`

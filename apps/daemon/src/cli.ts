@@ -8555,8 +8555,12 @@ async function runUsage(args) {
   // parse a pretty-printed object, whose last line is a bare "}".
   if (flags.json) return process.stdout.write(JSON.stringify(data) + '\n');
   const total = data?.totalCostUsd;
+  // C1-7: totalCostUsd is always a real number now (0 when nothing is
+  // priced) -- pricingVersion is the sole "is this confident/complete"
+  // signal, so an unpriced project's genuine $0 sum must not print as a
+  // real figure here.
   const totalLabel =
-    typeof total === 'number'
+    typeof total === 'number' && data?.pricingVersion !== 'unavailable'
       ? `$${total.toFixed(4)}${data?.pricingVersion === 'partial' ? ' (partial — some runs unpriced)' : ''}`
       : 'unavailable';
   console.log(`Project ${projectId}: ${totalLabel} across ${data?.runCount ?? 0} run(s), ${data?.pricedRunCount ?? 0} priced.`);
