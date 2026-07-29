@@ -13,7 +13,7 @@
 `docs/plans/waves/DECISIONS.md`. The last entry landed on `main` at `ff47420b8` (round-1
 disposition, ruling 2) — confirmed directly by reading `origin/main`, not assumed.
 
-**Status: FOUNDER-AUTHORIZED FIDELITY ROUND (round 7, post-confirmation-#4 REJECT).**
+**Status: FOUNDER-AUTHORIZED FIDELITY ROUND (round 8, post-confirmation-#5 REJECT).**
 Round 1 returned REJECT (9 findings); round 2 returned REJECT again; round 2's own confirmation
 pass returned REJECT a third consecutive time, firing the program's stop rule and escalating to a
 founder-delegated ceremony, which ruled six mechanical defects and authorized one ceremony-bounded
@@ -37,13 +37,36 @@ runner-script-driven walk of Vitest's own reported task forest (`vitest/node`'s 
 `ctx.state.getTestModules()`/`getUnhandledErrors()`). **Point 4:** the round-6 fence regex was a
 character class, not an alternation, so it still accepted mixed runs, unlimited indentation before
 recognizing a marker, and backtick openers with backtick-containing info strings. The founder
-authorized exactly one further scoped round (this one) implementing the full point-2 redesign and
+authorized exactly one further scoped round (round 7) implementing the full point-2 redesign and
 the point-4 grammar correction, followed by exactly one more fidelity-only confirmation
-(confirmation #5). Points 1, 3, and 5, item 6 (archive finalization), the round-4 regression fix,
-the const guards, the prelude binding, and both-stream `sh()` all remain settled and untouched —
-the ceremony's original analysis (round 2's attribution-authority work, the C9-10 redesign, the
-floor corrections, the stale-proof mechanics, and all three author-flagged residual-risk notes in
-**Adversarial review** below) likewise. Every finding across all seven rounds is disposed in
+(confirmation #5). Confirmation #5 ruled point 4 FIXED, permanently closed, and additionally
+**validated the point-2 Node-API redesign itself**: the Node API correctly exposes nested-suite and
+unhandled errors, and the predicate correctly rejects errors outside the target — target-skip/pass
+rejection, control-error rejection, module-failure rejection, and unhandled-error rejection were all
+confirmed correct, against this worktree's actually-installed `vitest@4.1.6`. It found no design-level
+failure in round 7's redesign, only three implementation defects inside it, and the founder
+authorized exactly one further scoped round (round 8, this one) fixing exactly those three, followed
+by exactly one more fidelity-only confirmation (confirmation #6). **Defect 1 (exit-code clobbering):**
+the generated runner called `process.exit(0)` unconditionally after serializing, overriding Vitest's
+own `process.exitCode = 1` for a failed run, so the parent's `runResult.status === 0` check rejected
+every genuine red replay — contradicting the accepted-case claim then in this document. Fixed by
+letting the runner exit with whatever `process.exitCode` Vitest itself already set
+(`process.exitCode ?? 0`) instead of forcing zero. **Defect 2 (spoofable marker):** the marker was a
+fixed, predictable string, and extraction trusted the first stdout line with that prefix, so the
+executed HEAD test file could raw-write the same prefix plus attacker-chosen JSON ahead of the real
+serialization. Fixed with a per-invocation CSPRNG marker generated fresh in the verifier process per
+replay and embedded only into that replay's own generated runner source, plus extraction that fails
+closed unless the marker appears on stdout **exactly once**. **Defect 3 (exact-one-failure
+regression):** failed leaves were stored by `fullName` and only names unequal to the target were
+rejected, so two failed leaves that happened to share the target's exact `fullName` filtered each
+other out and were silently accepted, violating the single-failed-leaf promise. Fixed by counting
+failed leaves by node during the walk (never deduplicated by name), requiring the count to be exactly
+one and that leaf's `fullName` to equal the target's. All three fixes are detailed with citations in
+Round 8 below. Points 1, 3, 4, and 5, item 6 (archive finalization), the round-4 regression fix, the
+const guards, the prelude binding, and both-stream `sh()` all remain settled and untouched — the
+ceremony's original analysis (round 2's attribution-authority work, the C9-10 redesign, the floor
+corrections, the stale-proof mechanics, and all three author-flagged residual-risk notes in
+**Adversarial review** below) likewise. Every finding across all eight rounds is disposed in
 **AUTHOR-FLAGGED / DISPOSITIONS** at the end of this document, which is the authoritative change
 record; earlier prose in this document reflects the current, fixed state, not the history — the
 dispositions section carries the history. Any verdict on this round other than APPROVE goes
@@ -352,15 +375,22 @@ and, **for every route whose mechanically-derived `exposure === 3`**, exactly on
   the run completes — walks the run's own **reported task forest** (`ctx.state.getTestModules()`,
   recursively through each module/suite/test's `.children`) plus its **unhandled-errors
   collection** (`ctx.state.getUnhandledErrors()`), serializing `{type, name, fullName, state,
-  errors}` for every node to one JSON line on stdout behind a fixed marker prefix. This is the
+  errors}` for every node to one JSON line on stdout behind a per-invocation marker — a CSPRNG
+  value the verifier generates fresh for each replay and embeds only into that replay's own
+  generated runner source — extracted only when it appears on stdout **exactly once** (zero or
+  multiple occurrences is an evidence failure, never a first-match trust). This is the
   same public "reported tasks" surface Vitest's own reporters are built on, so it is not a fragile
   reach into private internals.
 
   The replay passes only when, over that serialized forest: exactly one module (file) task exists;
-  walking the entire tree, the **only** failed leaf anywhere is the target test, and the **only**
+  walking the entire tree and counting every failed test leaf by node — never deduplicated by
+  name — that count is exactly one and its `fullName` equals the target test's; the **only**
   errors anywhere belong to the target's own test-level result — no suite or module task may carry
   any error, at any depth; the unhandled-errors collection is empty; and the control test's own
-  leaf state is `passed`. A missing test, install failure, a spawn error or timeout (surfaced
+  leaf state is `passed`. The runner process must also exit nonzero: it preserves whatever
+  `process.exitCode` Vitest's own run outcome already set instead of forcing a fixed exit status, so
+  a genuine red replay reaches the parent as a nonzero exit and an all-green run is rejected outright
+  for carrying no red evidence. A missing test, install failure, a spawn error or timeout (surfaced
   distinctly by the verifier's process wrapper, never conflated with an ordinary nonzero exit), a
   missing or unparsable runner output line, or any error anywhere else in the tree is an evidence
   failure, not a pass. The replay's own constructed argv, resolved commits, the full serialized
@@ -553,7 +583,7 @@ All criteria inherit `VERIFICATION-CONTRACT.md` §3. Verified by `scripts/waves/
 | C9-2 | Existing ingest-security suite is green | Real vitest JSON-reporter run of **glob-discovered** `apps/daemon/tests/library-*.test.ts` files; zero failed, zero pending/skipped, zero `skip`/`only`/`todo` markers (spaced and bracket-alias forms included) |
 | C9-3 | Attribution matrix exists and covers exactly the frozen route set | `docs/security/library-ingest-attribution.json` parses as JSON; exactly one row per frozen `{method,path}`, no orphans, no gaps, no duplicates |
 | C9-4 | Every row is fully, structurally attributed | Every field clears a placeholder floor (length + denylist + anti-repetition, not mere non-emptiness); `authn` must name its row's mechanically-derived exposure class; `acceptedRisk.decisionRef` resolves to a unique, fully-structured, route-bound, non-self-accepted `### W9-ACCEPT-*` entry in `DECISIONS.md@baseCommit`; evidence reports attributed/unattributed/known-vulnerable counts |
-| C9-5 | Every `testRef`/`control.testRef` names a real, currently-passing, globally-route-unique test; new controls carry independently-replayed red evidence | Exact `fullName` equality; a path-derived association term must appear; **one global map spans every row's `testRef` AND `control.testRef`** — reuse across two routes fails; "new" decided by an AST-derived test-title match at `baseCommit`; a new control's citation requires an isolated detached-worktree replay at the AST-verified introduction-commit parent (frozen offline install, HEAD-file overlay) — **the replay runs Vitest's own Node API through a verifier-generated runner script, never the JSON reporter**, and passes only when the full reported task forest shows exactly one file, the ONLY failed leaf and the ONLY error anywhere is the target's own assertion failure, no suite/module carries any error, the unhandled-errors collection is empty, and the control test passed; the checked-in transcript's `COMMAND`/output are descriptive only; every `control.testRef` (new or pre-existing) additionally requires a genuine paired positive+negative control in-file — **two DISTINCT passing assertions**, never one omnibus name satisfying both sides |
+| C9-5 | Every `testRef`/`control.testRef` names a real, currently-passing, globally-route-unique test; new controls carry independently-replayed red evidence | Exact `fullName` equality; a path-derived association term must appear; **one global map spans every row's `testRef` AND `control.testRef`** — reuse across two routes fails; "new" decided by an AST-derived test-title match at `baseCommit`; a new control's citation requires an isolated detached-worktree replay at the AST-verified introduction-commit parent (frozen offline install, HEAD-file overlay) — **the replay runs Vitest's own Node API through a verifier-generated runner script, never the JSON reporter**, and passes only when the full reported task forest shows exactly one file and exactly one failed test leaf anywhere in the tree (counted per node, never deduplicated by name), that leaf's `fullName` equal to the target's, the ONLY error anywhere belongs to the target's own assertion failure, no suite/module carries any error, the unhandled-errors collection is empty, and the control test passed; the checked-in transcript's `COMMAND`/output are descriptive only; every `control.testRef` (new or pre-existing) additionally requires a genuine paired positive+negative control in-file — **two DISTINCT passing assertions**, never one omnibus name satisfying both sides |
 | C9-6 | Every P0-tier row's size/rate-limit dimension is explicitly, mechanically resolved | For every row with `riskScore.tier === 'P0'` (today: `pair/confirm`, `ingest`, `GET /assets`): `control.mechanism` matches the anchored `ENFORCED kind=... scope=... limit=... windowMs=... overflow=...` grammar exactly, `control.testRef` passes C9-5's full bar (incl. replay for a new control), AND the same file's real-transport coverage shows **two DISTINCT** passing assertions — one under-limit-accepted, one over-limit-rejected — each bound to the same route, the declaration's own parsed `limit`, and (over-limit side) the declared overflow status code, **matched as an exact numeric token (digit-bounded), never an unbounded substring** — or a verified `acceptedRisk` |
 | C9-7 | Threat-model doc extended, mechanically cited, P0-complete | `docs/security/daemon-threat-model.md` carries a "Wave 9" section bounded to the next `## ` heading; every `[C9-N]` bullet's cited test is an exact match; **each P0-tier route requires its own bullet naming exactly that one P0 route key** and citing exactly that row's expected reference (`control.testRef` if controlled, else primary `testRef`), already globally associated with only that route — a bullet naming several P0 routes, or reusing an unrelated citation, no longer counts |
 | C9-8 | Full risk-score formula enforced per row | AST-derived `exposure` (straight-line dominance grammar, self-probe-verified, comment-blind, duplicate-checked) matches exactly; `impact >= FROZEN_IMPACT_FLOORS[route]`; `score === exposure+impact` exactly; `tier === tierFor(score)` exactly; **gated on all 9 exposure-classifier self-probes passing** |
@@ -1155,10 +1185,16 @@ anti-gaming principle the pre-existing verifier-built argv already used — that
 
 The runner walks the entire forest recursively, serializing `{type, name, fullName, state, errors}`
 for every module/suite/test node, plus the unhandled-errors collection, to one JSON line on stdout
-behind a fixed marker prefix (Vitest's own console output is not suppressed and may share stdout;
-the marker line is found by exact prefix match, never by assuming stdout is pure JSON). All of the
-above was additionally validated **empirically**, in isolated scratch temp directories (never the
-repo worktree, never any daemon), against a real `vitest@4.1.6` run:
+behind a per-invocation marker (a CSPRNG value the verifier generates fresh per replay and embeds
+only into that replay's own generated runner source; round 8, see below). Vitest's own console
+output is not suppressed and may share stdout with the runner's own line, so extraction requires
+the marker to appear on stdout **exactly once** — zero or multiple occurrences is an evidence
+failure, never a first-match trust. After serializing, the runner closes the Vitest context and
+exits with whatever `process.exitCode` Vitest itself already set (`process.exitCode ?? 0`) instead
+of forcing a fixed exit status (round 8, see below), so a genuine red run reaches the parent as a
+nonzero exit and a genuine all-green run reaches it as zero. All of the above was additionally
+validated **empirically**, in isolated scratch temp directories (never the repo worktree, never any
+daemon), against a real `vitest@4.1.6` run:
 - A nested `describe`'s throwing `afterAll`, alongside a failing target and a passing control:
   the serialized tree shows the nested suite's own `errors` populated with the hook's message,
   while the file's own `errors` stays empty — the replay predicate correctly **rejects** it.
@@ -1167,18 +1203,43 @@ repo worktree, never any daemon), against a real `vitest@4.1.6` run:
   correctly **rejects** it.
 - The legitimate shape — a failing target, a passing control, and an unrelated nested `describe`
   with no errors of its own — produces a fully clean tree and an empty unhandled-errors collection;
-  the replay predicate correctly **accepts** it.
+  `evaluateTaskForestConsistency` reports zero problems for it. (Round 7 validated only this
+  predicate in isolation; round 8 additionally validated the full pipeline end-to-end, including the
+  runner's real process exit status — see below.)
 - `cliFilters` targeting was independently confirmed against a two-file scratch project: only the
   named file's module appears in the result (`moduleCount: 1`), the unrelated file never runs.
+- **(Round 8)** The same legitimate shape was driven through the actual parent-process status path,
+  not just the predicate: the runner process exited nonzero (matching Vitest's own `process.exitCode`
+  for a failed run), and the full acceptance path — predicate plus the `runResult.status === 0`
+  rejection — accepted it. A companion all-green scratch run (target and control both passing)
+  exited status 0 and was correctly rejected outright for carrying no red evidence.
+- **(Round 8)** A test file that raw-writes a decoy line starting with the runner's own marker,
+  followed by attacker-chosen JSON, ahead of the real serialization was confirmed to produce two
+  marker-prefixed lines on stdout; extraction requires exactly one and rejects the replay when it
+  finds zero or more than one.
+- **(Round 8)** Two failed test leaves sharing the exact same `fullName` as the target were
+  confirmed to be rejected: failed leaves are counted per node during the walk, never deduplicated
+  by name, so a count of two fails the replay regardless of what either leaf is named. A duplicate-
+  named **passing** sibling next to the real failing target was also probed in both declaration
+  orders: the failed-leaf count is unaffected (it is always exactly one, correctly attributed to the
+  real failure) and never causes an insecure accept, but the pre-existing, unchanged
+  `targetState`/`controlState` matching is itself by `fullName` and is therefore order-dependent
+  under a name collision — whichever same-named node the walk visits last determines the observed
+  target state, so a passing duplicate visited after the real failure can produce a spurious
+  rejection (fails closed, never an insecure accept). This is a pre-existing characteristic of the
+  file's `fullName`-as-identity-key trust model, unchanged by round 8 and out of this round's scope;
+  duplicate literal test titles are already an ambiguous shape the rest of the verifier does not
+  fully disambiguate either.
 
 The replay now passes only when: exactly one module (file) task exists in the forest; walking the
-entire tree, the ONLY failed leaf anywhere is the target test, and the ONLY errors anywhere belong
+entire tree and counting every failed test leaf by node — never deduplicated by name — that count
+is exactly one and its `fullName` equals the target test's; the ONLY errors anywhere belong
 to the target's own test-level result — no suite or module task may carry any error, at any depth;
-the unhandled-errors collection is empty; and the control's own leaf state is `passed`. `sh()`'s
-existing `processError` flag (round 5, unchanged) still fails the replay outright, before even
-attempting to read the runner's output, on a spawn error or timeout. The transcript hash now covers
-the runner's own serialized output plus both process streams, per the ruling. See S9-3, updated
-with the full mechanism and the forensic citations above.
+the unhandled-errors collection is empty; the control's own leaf state is `passed`; and the runner
+process itself exits nonzero. `sh()`'s existing `processError` flag (round 5, unchanged) still fails
+the replay outright, before even attempting to read the runner's output, on a spawn error or
+timeout. The transcript hash now covers the runner's own serialized output plus both process
+streams, per the ruling. See S9-3, updated with the full mechanism and the forensic citations above.
 
 **Point 4 (fence tracking — grammar correction, RESOLVED).** The round-6 regex, `` [`~]{3,} ``, was
 a character CLASS, not an alternation — CommonMark requires a fence's own run to be entirely one
@@ -1225,3 +1286,103 @@ info-string shapes named above. No settled design (attribution authority, C9-10,
 stale-proof mechanics, the three r3 accepted-LOW residuals, item 6, the round-4 regression fix,
 points 1, 3, or 5, the const guards, the prelude binding, or both-stream `sh()`) changed in this
 round.
+
+### Round 8 (founder-authorized fidelity round #5 — confirmation #5 REJECT, 3 implementation defects)
+
+Round 7's own fidelity-only confirmation (confirmation #5) ruled point 4 (fence tracking) FIXED and
+permanently closed — the PRD matches — and additionally **validated the point-2 Node-API redesign
+itself**: the Node API correctly exposes nested-suite and unhandled errors, and the predicate
+rejects errors outside the target, confirmed against this worktree's actually-installed
+`vitest@4.1.6` APIs and state shapes. Target-skip/pass rejection, control-error rejection,
+module-failure rejection, and unhandled-error rejection were all separately confirmed correct. It
+found no design-level failure in round 7's redesign — only three implementation defects inside it —
+and the founder authorized exactly this round, fixing exactly those three, followed by exactly one
+more fidelity-only confirmation (confirmation #6).
+
+**Defect 1 (exit-code clobbering, RESOLVED).** The generated runner called `process.exit(0)`
+unconditionally (`buildReplayRunnerScript`) after serializing and closing the Vitest context,
+overriding whatever `process.exitCode` Vitest itself had already set for the run. Vitest's own
+`TestRun.end()` (invoked automatically inside `startVitest`/`ctx.start`'s own `finally` block, no
+CLI-specific logic required) sets `process.exitCode = 1` whenever `hasFailed(modules)` is true, and
+its `_checkUnhandledErrors()` does the same for a nonempty unhandled-errors collection — both run
+and settle before the runner script's own trailing `process.exit(0)` line ever executed, so that
+line silently discarded the correct outcome every single time and forced status `0` regardless of
+whether the run was red or green. The parent's own `runResult.status === 0` check
+(`replayRedEvidence`) then rejected every genuine red replay, contradicting this document's own
+previously-claimed accepted case. Fixed by removing the forced exit and letting the runner exit with
+`process.exit(process.exitCode ?? 0)` — Vitest's own determination, preserved rather than clobbered.
+
+**Defect 2 (spoofable marker, RESOLVED).** The marker was a fixed, checked-in string
+(`W9_REPLAY_RESULT_JSON:`), and extraction took the first stdout line starting with it
+(`.find(...)`). Because the marker was predictable from the verifier's own source, the executed HEAD
+test file could raw-write that exact prefix plus attacker-chosen JSON to stdout ahead of the real
+serialization, and a first-match extraction would trust whichever line came first — including the
+attacker's. Fixed with a per-invocation CSPRNG marker (`generateReplayMarker`, built on
+`crypto.randomBytes(16).toString('hex')`) generated fresh in the verifier process for every replay and embedded only
+into that replay's own generated runner source (`buildReplayRunnerScript` now takes the marker as a
+parameter); the executed test file cannot know it without a deliberate multi-step read of the
+runner source mid-replay, the accepted LOW-risk trust profile. Extraction now requires the marker to
+appear on stdout **exactly once** (`.filter(...)`, `markerLines.length !== 1`) — zero occurrences
+(the runner never reached its own serialization step) or more than one (some other write produced a
+colliding prefix) both fail closed as an evidence failure, never a first-match trust.
+
+**Defect 3 (exact-one-failure regression, RESOLVED).** `evaluateTaskForestConsistency` stored failed
+leaves in a `string[]` keyed by `fullName` and rejected only the names unequal to the target
+(`failedLeaves.filter((f) => f !== targetFullName)`). Two failed leaves that happened to share the
+target's exact `fullName` both got filtered out by that comparison and canceled each other from the
+"other failed" list, so a second, unrelated failure with a colliding name was silently accepted — an
+exact synthetic replay of this shape produced zero problems, violating the single-failed-leaf
+promise this document already made. Fixed by counting failed `test`-type nodes by occurrence during
+the walk (`failedLeafCount`, incremented once per failed leaf regardless of name, never deduplicated
+by a name set) and separately recording the sole failed leaf's own `fullName`
+(`soleFailedLeafFullName`); the predicate now requires `failedLeafCount === 1` and that the one
+failed leaf's `fullName` equal the target's, rejecting any other count outright. A companion probe
+(duplicate `fullName`, one passing and one failing, in both declaration orders) confirmed this fix
+never produces an insecure accept: the failed-leaf count is always exactly one and correctly
+attributed. It also surfaced a pre-existing, out-of-scope characteristic — the separate, unchanged
+`targetState`/`controlState` matching in the same walk is itself by `fullName`, so under a name
+collision the state observed for the target is whichever same-named node the walk visits last; a
+passing duplicate visited after the real failure can therefore produce a spurious **rejection**
+(fails closed), never an insecure accept. This is consistent with the rest of the verifier's existing
+`fullName`-as-identity-key trust model (duplicate literal test titles are already an ambiguous shape
+elsewhere in this file) and is unchanged by this round; it is recorded here as a known, safe-direction
+edge case rather than silently left undocumented.
+
+**Verification this round:** scoped typecheck (`tsc -p scripts/tsconfig.json --noEmit`) clean; full
+repository `pnpm typecheck` clean; `pnpm guard` 102/102 — unchanged from round 7, confirming the
+guard suite itself was untouched. Byte-diff confirmed unchanged (grep-verified absent from the
+diff): `staticBooleanValue`/`isLocalSameOriginReachable` (point 1), the title-parser block (point 3),
+`containsExactNumericToken` (point 5), the fence-tracking block including `FENCE_MARKER_LINE` (point
+4), `archiveRunArtifacts` (item 6), `hasDistinctSignalPair` (the round-4 regression fix), the
+const-guard/prelude-binding matchers, and `sh()` itself. The working-tree diff against the prior
+confirmed-good commit touches exactly 7 hunks (51 insertions, 16 deletions, one file), all inside
+`buildReplayRunnerScript`, `evaluateTaskForestConsistency`, and `replayRedEvidence` — the same
+replay hunk these three defects live in, nothing else.
+
+New probes, all in isolated scratch temp directories against a real installed `vitest@4.1.6` (never
+the repo worktree, never any daemon), driving a faithful reconstruction of the actual generated
+runner script and the actual predicate logic (verified byte-identical to the committed source aside
+from the one necessary, reasoned deviation — an absolute-path import instead of the bare
+`vitest/node` specifier, required because the scratch directories have no `node_modules` of their
+own) through a real child-process spawn and the real `runResult.status === 0` check, not the
+predicate in isolation:
+- A legitimate red replay (failing target, passing control, unrelated clean nested `describe`)
+  produced a real nonzero runner exit status and was accepted end-to-end.
+- An all-green scratch run (target and control both passing) produced a real exit status `0` and
+  was rejected outright for carrying no red evidence.
+- A marker-spoof test file, given the per-invocation marker through a side channel to simulate the
+  accepted worst-case multi-step leak and printing a clean decoy line ahead of the real
+  serialization, produced two marker-prefixed stdout lines; extraction correctly rejected the replay
+  for finding other than exactly one.
+- Two failed test leaves sharing one `fullName` produced `failedLeafCount` `2` and were correctly
+  rejected; the duplicate-named-passing-sibling case was probed in both declaration orders with the
+  disposition above.
+- The prior probe suite was re-run against this round's code unchanged in intent: a nested
+  `describe`'s throwing `afterAll` still correctly rejected (nested suite's own `errors` populated,
+  file's own `errors` empty); a standalone unhandled promise rejection still correctly rejected
+  (`unhandledErrors` populated); the fence-tracking grammar is byte-identical to the round-7
+  commit and out of this round's edited scope entirely.
+
+No settled design (attribution authority, C9-10, floor corrections, stale-proof mechanics, the three
+r3 accepted-LOW residuals, item 6, the round-4 regression fix, points 1, 3, 4, or 5, the const
+guards, the prelude binding, or both-stream `sh()`) changed in this round.
