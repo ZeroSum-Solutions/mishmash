@@ -535,9 +535,18 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
     // `LIBRARY_UPLOAD_MAX_BYTES` below applies only to manual-upload, and a
     // `dataUrl`/`text` clipper payload previously had no cap at all (only a
     // URL-sourced fetch was bounded, via fetchRemoteBytes's MAX_REMOTE_BYTES
-    // above). See CLIPPER_INGEST_MAX_BYTES's own docblock.
+    // above). See CLIPPER_INGEST_MAX_BYTES's own docblock. The limit bounds
+    // TOTAL persisted bytes for this request, not just the primary payload:
+    // `figmaCapture` (-> Figma IR sidecar), `elementHtml` (-> element
+    // sidecar), and `metadata` (-> asset row) are all caller-supplied and
+    // all persisted below, so a tiny `bytes`/`text` payload paired with an
+    // oversized sidecar field must not bypass the cap.
     if (sourceKind === 'clipper') {
-      const payloadSize = bytes ? bytes.length : text !== undefined ? Buffer.byteLength(text, 'utf8') : 0;
+      const payloadSize =
+        (bytes ? bytes.length : text !== undefined ? Buffer.byteLength(text, 'utf8') : 0) +
+        (figmaIr ? Buffer.byteLength(figmaIr, 'utf8') : 0) +
+        (elementHtml ? Buffer.byteLength(elementHtml, 'utf8') : 0) +
+        (metadata ? Buffer.byteLength(JSON.stringify(metadata), 'utf8') : 0);
       if (payloadSize > CLIPPER_INGEST_MAX_BYTES) {
         return sendApiError(
           res,
