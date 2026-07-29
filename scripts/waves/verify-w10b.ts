@@ -551,7 +551,7 @@ async function main(): Promise<void> {
       }
       if (!lease) {
         problems.push(
-          'no "W10b" entry in leases.json@baseCommit -- expected until the orchestrator adds the proposed entry from docs/plans/waves/W10b-voicebox-registration.md §7 (fails closed by design; see that PRD\'s "Verified baseline" section)',
+          'no "W10b" entry in leases.json@baseCommit -- expected until the orchestrator adds the entry proposed in docs/plans/waves/W10b-voicebox-registration.md\'s "Proposed write lease" section (fails closed by design; see that PRD\'s "Verified baseline" section)',
         );
       }
     }
