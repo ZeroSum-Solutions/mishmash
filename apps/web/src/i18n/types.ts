@@ -731,7 +731,6 @@ export interface Dict {
   'settings.memoryDelete': string;
   'settings.memoryPreview': string;
   'settings.memoryEmpty': string;
-  'settings.memoryEmptyHintZh': string;
   'settings.memoryEmptyHintEn': string;
   'settings.memoryName': string;
   'settings.memoryDesc': string;
@@ -3355,8 +3354,6 @@ export interface Dict {
   'designFiles.usefulInfoTip2': string;
   'designFiles.usefulInfoTip4': string;
   'designFiles.usefulInfoTip5': string;
-  'designFiles.usefulInfoTip6': string;
-  'designFiles.usefulInfoTip7': string;
   'designFiles.usefulInfoTip9': string;
   'designFiles.usefulInfoTip10': string;
   'designFiles.usefulInfoTip11': string;
