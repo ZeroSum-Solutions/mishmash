@@ -50,6 +50,7 @@ import {
   type OdCard,
   type OdCardBrandBrowserAssist,
   type RunContextSelection,
+  type RunModelRouting,
   type WorkspaceContextItem,
 } from "@open-design/contracts";
 import { OdCardView, type BrandBrowserAssistConfirm } from "./OdCard";
@@ -114,7 +115,15 @@ export type QuestionFormSubmitHandler = (
   context?: RunContextSelection,
 ) => boolean | void | Promise<boolean | void>;
 
-const DISCORD_INVITE_URL = "https://discord.gg/mHAjSMV6gz";
+// C2-9a: this used to be the upstream Open Design project's own Discord
+// invite -- live brand egress sending MishMash users into a different
+// product's community. MishMash has no Discord/community chat of its own
+// yet, so this repoints to the project's actual, verified home
+// (`git remote -v` -> origin, git@github.com:wiggdevin/mishmash.git; see
+// docs/FORK-PIN.md "origin is our private repo") rather than either
+// leaving a fabricated invite link or an unreachable one -- the feedback
+// flow still needs a real, working destination for "tell us more".
+const DISCORD_INVITE_URL = "https://github.com/wiggdevin/mishmash";
 const viewedInlineQuestionForms = new Set<string>();
 const QUESTION_FORM_DRAFT_STORAGE_PREFIX = "open-design:question-form-draft:";
 
@@ -712,6 +721,7 @@ function AssistantMessageImpl({
     | Extract<AgentEvent, { kind: "usage" }>
     | undefined;
   const roleName = assistantRoleName(message, t);
+  const modelRouting = useModelRoutingForRun(message.runId, !streaming);
   const roleIconId = agentIconId(message.agentId, message.agentName);
   const hasEmptyResponse = events.some(
     (e) => e.kind === "status" && e.label === "empty_response"
@@ -868,6 +878,7 @@ function AssistantMessageImpl({
           <span className="role-name">{roleName}</span>
         </div>
       ) : null}
+      {modelRouting ? <ModelRoutingStatus routing={modelRouting} /> : null}
       <div className="assistant-flow">
         {taskActivity ? (
           <TaskActivityCard
@@ -1478,6 +1489,107 @@ export function assistantRoleLabel(
   );
 }
 
+// Routing truth (NM-13a / C1-2 / C1-4 / C1-11). Fetches the run's own
+// requested/resolved/reported/displayState record directly from the daemon
+// (GET /api/runs/:id) rather than threading a new field through the SSE
+// event union -- this component only needs the FINAL record once the run
+// has a chance to settle, and every AssistantMessage already has the run id
+// on `message.runId`. Skips the fetch while streaming (nothing has settled
+// yet) and when there is no run id (e.g. a locally-synthesized message).
+function useModelRoutingForRun(
+  runId: string | null | undefined,
+  enabled: boolean,
+): RunModelRouting | null {
+  const [routing, setRouting] = useState<RunModelRouting | null>(null);
+  useEffect(() => {
+    setRouting(null);
+    if (!enabled || !runId) return;
+    const controller = new AbortController();
+    fetch(`/api/runs/${encodeURIComponent(runId)}`, { signal: controller.signal })
+      .then((resp) => (resp.ok ? resp.json() : null))
+      .then((data: unknown) => {
+        const candidate = (data as { modelRouting?: unknown } | null)?.modelRouting;
+        if (
+          candidate &&
+          typeof candidate === "object" &&
+          typeof (candidate as RunModelRouting).requested === "string" &&
+          typeof (candidate as RunModelRouting).resolved === "string" &&
+          typeof (candidate as RunModelRouting).displayState === "string"
+        ) {
+          setRouting(candidate as RunModelRouting);
+        }
+      })
+      .catch(() => {
+        // Best-effort: the routing status is supplementary information: a
+        // fetch failure (offline, run already GC'd) just means no badge
+        // renders, never a broken message.
+      });
+    return () => controller.abort();
+  }, [runId, enabled]);
+  return routing;
+}
+
+const MODEL_ROUTING_STATUS_BASE_STYLE: Record<string, string> = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.35em",
+  marginTop: "2px",
+  marginBottom: "4px",
+  padding: "2px 8px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  lineHeight: "1.5",
+  width: "fit-content",
+};
+
+// A substitution (resolved !== requested) is the one state that must be
+// impossible to miss -- "if there is a fallback to any model, this should
+// be clear" (backlog D3). An unverified lane says so plainly rather than
+// implying false certainty. A verified run renders nothing: only surface
+// what's noteworthy. `role="status"` is a real, non-generic accessible
+// role, and the explicit `aria-label` pins the computed accessible name to
+// the same text regardless of markup changes nearby -- a data-testid or a
+// colour-only badge would not satisfy either requirement.
+function ModelRoutingStatus({ routing }: { routing: RunModelRouting }) {
+  if (routing.displayState === "substituted") {
+    const label = `Model substituted: requested "${routing.requested}", ran "${routing.resolved}".`;
+    return (
+      <span
+        className="assistant-model-routing assistant-model-routing-substituted"
+        role="status"
+        aria-label={label}
+        style={{
+          ...MODEL_ROUTING_STATUS_BASE_STYLE,
+          color: "#7a4b00",
+          background: "#fff3d6",
+          border: "1px solid #f0c96a",
+        }}
+      >
+        {label}
+      </span>
+    );
+  }
+  if (routing.displayState === "unverified") {
+    const label = `Model unverified: ${routing.resolved} likely ran, but the CLI did not confirm it.`;
+    return (
+      <span
+        className="assistant-model-routing assistant-model-routing-unverified"
+        role="status"
+        aria-label={label}
+        style={{
+          ...MODEL_ROUTING_STATUS_BASE_STYLE,
+          color: "#4a4a4a",
+          background: "#eef0f2",
+          border: "1px solid #d7dbe0",
+        }}
+      >
+        {label}
+      </span>
+    );
+  }
+  return null;
+}
+
 function assistantModelDetail(message: ChatMessage): string | null {
   const initializing = message.events?.find(
     (e) => e.kind === "status" && e.label === "initializing" && e.detail
@@ -2023,23 +2135,23 @@ function AssistantFeedback({
           ) : null}
           {reasonRating === "positive" ? (
             <p className="assistant-feedback-discord-note">
-              Share what you made with the{" "}
+              Share what you made on{" "}
               <a
                 href={DISCORD_INVITE_URL}
                 data-testid="assistant-feedback-discord-positive"
               >
-                Discord
-              </a>{" "}
-              community, or drop a screenshot and tell us what worked well.
+                GitHub
+              </a>
+              , or drop a screenshot and tell us what worked well.
             </p>
           ) : (
             <p className="assistant-feedback-discord-note">
-              Share more context in{" "}
+              Share more context on{" "}
               <a
                 href={DISCORD_INVITE_URL}
                 data-testid="assistant-feedback-discord-negative"
               >
-                Discord
+                GitHub
               </a>{" "}
               so the team can understand what went wrong and follow up directly.
             </p>
