@@ -224,9 +224,28 @@ type OnboardingAgentTestState =
 // Function backed by KV), so this is a cross-origin POST from the desktop
 // client. Overridable at build time via NEXT_PUBLIC_NEWSLETTER_URL — e.g. point
 // it at a local `wrangler pages dev` instance during development.
-const NEWSLETTER_SUBSCRIBE_URL =
-  process.env.NEXT_PUBLIC_NEWSLETTER_URL ?? 'https://open-design.ai/subscribe';
+// C2-1a: this used to fall back to the upstream Open Design marketing site
+// (`open-design.ai/subscribe`) whenever the env var was unset, silently
+// POSTing a MishMash user's email to a third party unrelated to this
+// product. MishMash has no newsletter endpoint of its own configured by
+// default, so there is no default here anymore — `shouldSubmitNewsletterEmail`
+// below skips the submission entirely rather than leak the address
+// anywhere unconfigured.
+const NEWSLETTER_SUBSCRIBE_URL = process.env.NEXT_PUBLIC_NEWSLETTER_URL;
 const NEWSLETTER_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Pure decision for whether a newsletter signup should actually be sent:
+ *  a well-formed email AND a real, MishMash-owned subscribe URL configured.
+ *  Exported so the "no default -> no leak" guarantee (C2-1a) is directly
+ *  testable without rendering the full EntryShell component tree. */
+export function shouldSubmitNewsletterEmail(
+  rawEmail: string,
+  subscribeUrl: string | undefined,
+): boolean {
+  if (!subscribeUrl) return false;
+  const email = rawEmail.trim().toLowerCase();
+  return NEWSLETTER_EMAIL_RE.test(email);
+}
 const ONBOARDING_BYOK_AUTO_FETCH_DELAY_MS = 300;
 const ONBOARDING_BYOK_AUTO_TEST_DELAY_MS = 500;
 
@@ -2250,15 +2269,17 @@ function OnboardingView({
   // button shows loading while this settles; failures are swallowed so
   // onboarding completion never depends on the marketing site. A blank or
   // malformed email is simply skipped. Only a boolean opt-in is tracked — the
-  // address itself is never sent to analytics.
+  // address itself is never sent to analytics. C2-1a: also skipped entirely
+  // when no MishMash-owned NEXT_PUBLIC_NEWSLETTER_URL is configured, rather
+  // than falling back to sending it anywhere.
   async function submitNewsletterEmail(rawEmail: string): Promise<void> {
+    if (!shouldSubmitNewsletterEmail(rawEmail, NEWSLETTER_SUBSCRIBE_URL)) return;
     const email = rawEmail.trim().toLowerCase();
-    if (!email || !NEWSLETTER_EMAIL_RE.test(email)) return;
     emitOnboardingClick('newsletter_email', 'subscribe', { newsletter_opt_in: true });
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 5000);
     try {
-      await fetch(NEWSLETTER_SUBSCRIBE_URL, {
+      await fetch(NEWSLETTER_SUBSCRIBE_URL as string, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, source: 'client' }),
