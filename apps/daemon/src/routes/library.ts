@@ -63,6 +63,15 @@ export interface RegisterLibraryRoutesDeps
 
 const MAX_REMOTE_BYTES = 25 * 1024 * 1024;
 
+// `LIBRARY_UPLOAD_MAX_BYTES` (packages/contracts) + the MIME allowlist apply
+// only to `sourceKind === 'manual-upload'`; a URL-based ingest is capped at
+// `MAX_REMOTE_BYTES` above via `fetchRemoteBytes`, but neither cap applies to
+// the clipper/token caller class's `dataUrl`/`text` bodies, which were
+// otherwise bounded only by the daemon's blanket 128 MB
+// `express.json({ limit })` for this route (server.ts). This closes that gap
+// for the clipper class specifically.
+const CLIPPER_INGEST_MAX_BYTES = 5_000_000;
+
 /** Strip the internal absolute `filePath` before returning an asset to a client. */
 function toPublicAsset(record: LibraryAssetRecord): LibraryAsset {
   const { filePath: _filePath, ...rest } = record;
@@ -72,6 +81,31 @@ function toPublicAsset(record: LibraryAssetRecord): LibraryAsset {
 function bearerToken(req: Request): string | undefined {
   const header = req.get('authorization') ?? '';
   return /^Bearer\s+(.+)$/i.exec(header.trim())?.[1];
+}
+
+/**
+ * Bounded per-process fixed-window request counter. Closes the "no request-
+ * or byte-volume control on any /api/library/* route" gap documented in
+ * docs/security/daemon-threat-model.md's Wave 9 section: every call site in
+ * `registerLibraryRoutes` gets its own fresh counter map (one per daemon
+ * boot, since the factory is invoked from inside that function's closure),
+ * keyed by caller (e.g. Origin header) where a meaningful per-caller key
+ * exists, or a fixed key for routes with no such identity. A window resets
+ * on the first call after it elapses; the request that starts a new window
+ * always counts as call #1 of that window.
+ */
+function createFixedWindowLimiter(limit: number, windowMs: number): (key: string) => boolean {
+  const windows = new Map<string, { count: number; windowStart: number }>();
+  return (key: string): boolean => {
+    const now = Date.now();
+    const entry = windows.get(key);
+    if (!entry || now - entry.windowStart >= windowMs) {
+      windows.set(key, { count: 1, windowStart: now });
+      return true;
+    }
+    entry.count += 1;
+    return entry.count <= limit;
+  };
 }
 
 /**
@@ -224,6 +258,25 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
   const RECONCILE_THROTTLE_MS = 10_000;
   let lastReconcileAt = 0;
   let reconcileInFlight: Promise<ReconcileLibraryResult> | null = null;
+
+  // --- rate/volume controls -------------------------------------------------
+  // Ground-facts gap this closes: "There is no request- or byte-volume
+  // control on any /api/library/* route" (docs/plans/waves/
+  // W9-ingest-tranche.md). Each limiter below is a fresh, independent
+  // fixed-window counter created for this daemon boot; see
+  // createFixedWindowLimiter's own docblock. Numbers are deliberately
+  // generous for legitimate single-user local usage while still closing a
+  // real, previously-unbounded gap; see docs/security/daemon-threat-
+  // model.md's Wave 9 section for the per-route rationale.
+  const pairConfirmAttemptOk = createFixedWindowLimiter(5, 60_000);
+  const assetsListOk = createFixedWindowLimiter(20, 10_000);
+  const clipperProbeOk = createFixedWindowLimiter(30, 10_000);
+  const connectionOk = createFixedWindowLimiter(50, 10_000);
+  const syncOk = createFixedWindowLimiter(10, 60_000);
+  const deleteAssetOk = createFixedWindowLimiter(50, 10_000);
+  const applyAssetOk = createFixedWindowLimiter(50, 10_000);
+  const toolSearchOk = createFixedWindowLimiter(50, 10_000);
+  const toolApplyOk = createFixedWindowLimiter(50, 10_000);
   const EMPTY_RECONCILE: ReconcileLibraryResult = {
     designSystems: 0,
     projectAssets: 0,
@@ -278,6 +331,22 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
   });
   app.post('/api/library/pair/confirm', (req, res) => {
     applyExtensionCors(req, res);
+    // Bounded pairing-attempt throttle (C9-6 P0 control): startPairing()
+    // mints a 6-digit code with no attempt counter of its own
+    // (library-tokens.ts), and this route is reachable pre-pairing from any
+    // extension-shaped origin (the zero-config bypass) -- a genuine, narrow
+    // brute-force window. Counts every attempt (valid or not), globally,
+    // since library-tokens.ts's `pendingPairing` is itself a single
+    // outstanding code -- there is only ever one code to guess against at a
+    // time. See docs/security/daemon-threat-model.md's Wave 9 section.
+    if (!pairConfirmAttemptOk('global')) {
+      return sendApiError(
+        res,
+        429,
+        'PAIR_CONFIRM_RATE_LIMITED',
+        'too many pairing confirmation attempts; try again shortly',
+      );
+    }
     const body = req.body ?? {};
     const code = String(body.code ?? '');
     const extensionOrigin = String(body.extensionOrigin ?? '');
@@ -293,6 +362,14 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
 
   // Loopback-only: web UI connection status.
   app.get('/api/library/connection', requireLocalDaemonRequest, (_req, res) => {
+    if (!connectionOk('global')) {
+      return sendApiError(
+        res,
+        429,
+        'LIBRARY_CONNECTION_RATE_LIMITED',
+        'too many connection status requests; try again shortly',
+      );
+    }
     res.json(libraryConnectionStatus(db));
   });
 
@@ -454,6 +531,23 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
       return sendApiError(res, 502, 'INGEST_FETCH_FAILED', err instanceof Error ? err.message : String(err));
     }
 
+    // Byte-volume cap for the clipper/token caller class (C9-6 P0 control):
+    // `LIBRARY_UPLOAD_MAX_BYTES` below applies only to manual-upload, and a
+    // `dataUrl`/`text` clipper payload previously had no cap at all (only a
+    // URL-sourced fetch was bounded, via fetchRemoteBytes's MAX_REMOTE_BYTES
+    // above). See CLIPPER_INGEST_MAX_BYTES's own docblock.
+    if (sourceKind === 'clipper') {
+      const payloadSize = bytes ? bytes.length : text !== undefined ? Buffer.byteLength(text, 'utf8') : 0;
+      if (payloadSize > CLIPPER_INGEST_MAX_BYTES) {
+        return sendApiError(
+          res,
+          413,
+          'PAYLOAD_TOO_LARGE',
+          `clipper ingest payload exceeds the ${Math.round(CLIPPER_INGEST_MAX_BYTES / 1_000_000)} MB limit`,
+        );
+      }
+    }
+
     // Manual uploads (local web UI / `od library import`) are restricted to a
     // safe inline size and design-relevant formats — images, fonts, text/HTML,
     // and JSON/design data. Audio, video, and other binaries are turned away.
@@ -529,12 +623,27 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
   });
 
   app.get('/api/library/clipper-probe', (_req, res) => {
+    if (!clipperProbeOk('global')) {
+      return sendApiError(res, 429, 'CLIPPER_PROBE_RATE_LIMITED', 'too many probe requests; try again shortly');
+    }
     res.json({ ok: true });
   });
 
   // --- assets --------------------------------------------------------------
 
   app.get('/api/library/assets', async (req, res) => {
+    // Per-caller request-rate limit (C9-6 P0 control): `runReconcile` below
+    // is already throttled program-wide (RECONCILE_THROTTLE_MS), but that
+    // throttle is shared across every caller and never rejects the request
+    // itself -- an unauthenticated caller (this route carries no route-level
+    // gate; see docs/security/daemon-threat-model.md's Wave 9 section) could
+    // still hit the route itself at any rate. Keyed by Origin where present
+    // (a stable per-caller-class identity; requests with no Origin --
+    // ordinary local UI/CLI callers -- share one bucket).
+    const originKey = req.get('origin') || '(no-origin)';
+    if (!assetsListOk(originKey)) {
+      return sendApiError(res, 429, 'LIBRARY_ASSETS_RATE_LIMITED', 'too many list requests; try again shortly');
+    }
     // Keep the Library current with design systems / agent output before
     // listing, so an opened grid already shows them. Throttled + best-effort —
     // never blocks the list on a reconcile error.
@@ -561,6 +670,14 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
   // Backfills design systems and agent deliverables that predate this feature,
   // and is the explicit "pull in everything now" entry point. Loopback-only.
   app.post('/api/library/sync', requireLocalDaemonRequest, async (_req, res) => {
+    if (!syncOk('global')) {
+      return sendApiError(
+        res,
+        429,
+        'LIBRARY_SYNC_RATE_LIMITED',
+        'too many forced sync requests; try again shortly',
+      );
+    }
     try {
       const summary = await runReconcile(true);
       res.json(summary);
@@ -569,13 +686,24 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
     }
   });
 
-  app.get('/api/library/assets/:id', (req, res) => {
+  // Loopback-only (C9-6/C9-8 hardening): per the file header's own
+  // documented split ("reads ride the daemon's loopback binding + same-
+  // origin middleware like the rest of /api"), this read had no route-level
+  // gate of its own, relying entirely on server.ts's global /api origin
+  // middleware -- which lets any request with no Origin header through
+  // (every non-browser local caller). Not a documented extension
+  // capability (only /ingest is); explicit requireLocalDaemonRequest
+  // matches the file's own stated intent for reads.
+  app.get('/api/library/assets/:id', requireLocalDaemonRequest, (req, res) => {
     const asset = getLibraryAsset(db, req.params.id);
     if (!asset) return sendApiError(res, 404, 'NOT_FOUND', 'asset not found');
     res.json({ asset: toPublicAsset(asset) });
   });
 
   app.delete('/api/library/assets/:id', requireLocalDaemonRequest, async (req, res) => {
+    if (!deleteAssetOk('global')) {
+      return sendApiError(res, 429, 'LIBRARY_DELETE_RATE_LIMITED', 'too many delete requests; try again shortly');
+    }
     const asset = getLibraryAsset(db, req.params.id);
     if (!asset) return sendApiError(res, 404, 'NOT_FOUND', 'asset not found');
     // Only unlink bytes we own and that live under LIBRARY_DIR.
@@ -590,7 +718,10 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
     res.json({ ok: true });
   });
 
-  app.get('/api/library/assets/:id/raw', async (req, res) => {
+  // Loopback-only -- see GET /api/library/assets/:id's comment above; the
+  // same reasoning applies to every read below that serves stored bytes
+  // back to the caller.
+  app.get('/api/library/assets/:id/raw', requireLocalDaemonRequest, async (req, res) => {
     const asset = getLibraryAsset(db, req.params.id);
     if (!asset) return sendApiError(res, 404, 'NOT_FOUND', 'asset not found');
     const abs = resolveAssetBytesPath(asset, PROJECTS_DIR);
@@ -613,7 +744,7 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
   // Serve the OD Figma capture IR sidecar (clipper-captured `html` assets) as a
   // downloadable JSON, importable via the OD Figma plugin. Reads ride loopback
   // same-origin like /raw; the clipper downloads its own captures directly.
-  app.get('/api/library/assets/:id/figma', async (req, res) => {
+  app.get('/api/library/assets/:id/figma', requireLocalDaemonRequest, async (req, res) => {
     const asset = getLibraryAsset(db, req.params.id);
     if (!asset) return sendApiError(res, 404, 'NOT_FOUND', 'asset not found');
     const sidecar = resolveAssetFigmaSidecarPath(asset, LIBRARY_DIR);
@@ -636,7 +767,7 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
   // --- captured element markup --------------------------------------------
   // Serve the outerHTML sidecar of an element-pick screenshot. Read on demand
   // by the Library preview's "Element HTML" panel.
-  app.get('/api/library/assets/:id/element', async (req, res) => {
+  app.get('/api/library/assets/:id/element', requireLocalDaemonRequest, async (req, res) => {
     const asset = getLibraryAsset(db, req.params.id);
     if (!asset) return sendApiError(res, 404, 'NOT_FOUND', 'asset not found');
     const sidecar = resolveAssetElementSidecarPath(asset, LIBRARY_DIR);
@@ -658,6 +789,9 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
   // --- apply to project (web / Insert from Library) ------------------------
 
   app.post('/api/library/assets/:id/apply', requireLocalDaemonRequest, async (req, res) => {
+    if (!applyAssetOk('global')) {
+      return sendApiError(res, 429, 'LIBRARY_APPLY_RATE_LIMITED', 'too many apply requests; try again shortly');
+    }
     const asset = getLibraryAsset(db, req.params.id);
     if (!asset) return sendApiError(res, 404, 'NOT_FOUND', 'asset not found');
     const projectId = typeof req.body?.projectId === 'string' ? req.body.projectId : '';
@@ -736,6 +870,9 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
   app.post('/api/tools/library/search', async (req, res) => {
     const grant = authorizeToolRequest(req, res, 'library:search');
     if (!grant) return;
+    if (!toolSearchOk('global')) {
+      return sendApiError(res, 429, 'TOOL_LIBRARY_SEARCH_RATE_LIMITED', 'too many search requests; try again shortly');
+    }
     const body = req.body ?? {};
     const filter: LibraryAssetFilter = {};
     if (typeof body.query === 'string' && body.query.trim()) filter.q = body.query.trim();
@@ -749,6 +886,9 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
   app.post('/api/tools/library/apply', async (req, res) => {
     const grant = authorizeToolRequest(req, res, 'library:apply');
     if (!grant) return;
+    if (!toolApplyOk('global')) {
+      return sendApiError(res, 429, 'TOOL_LIBRARY_APPLY_RATE_LIMITED', 'too many apply requests; try again shortly');
+    }
     const assetId = typeof req.body?.assetId === 'string' ? req.body.assetId : '';
     if (!assetId) return sendApiError(res, 400, 'BAD_REQUEST', 'assetId is required');
     const asset = getLibraryAsset(db, assetId);
@@ -769,7 +909,10 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
 
   // --- live events ---------------------------------------------------------
 
-  app.get('/api/library/events', (req, res) => {
+  // Loopback-only -- see GET /api/library/assets/:id's comment above. No
+  // persisted mutation (impact floor 0), but still a read of live ingest
+  // activity, so the same "reads ride the loopback binding" intent applies.
+  app.get('/api/library/events', requireLocalDaemonRequest, (req, res) => {
     const sse = createSseResponse(res);
     const listener = (event: string, data: unknown) => sse.send(event, data);
     sseClients.add(listener);
