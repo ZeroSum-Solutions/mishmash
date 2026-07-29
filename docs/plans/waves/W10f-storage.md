@@ -9,8 +9,8 @@
 criterion): the orchestrator adds the entry only after this PRD and its verifier are frozen and
 independently approved.
 
-**Status: EXPANSION DRAFT, pre-review, pre-freeze.** This document is an **expansion of the
-`W5-W11-gated.md` Wave 10 skeleton (`w10f-storage` row, NM-36C paragraph)**, produced under the
+**Status: EXPANSION DRAFT, fix round 2 (round 1 REJECTed).** This document is an **expansion of
+the `W5-W11-gated.md` Wave 10 skeleton (`w10f-storage` row, NM-36C paragraph)**, produced under the
 "expansion gate" (`W5-W11-gated.md` lines 8–24): written and frozen *before* any implementation
 work starts, reviewed by an adversarial reviewer who did not write it and will not implement it,
 and unfrozen for a `/goal` run only after that review returns APPROVE. **No implementation exists
@@ -19,6 +19,15 @@ expands, or from its own reading of the codebase before this PRD and its verifie
 reviewed is committing the exact self-certification failure the expansion gate exists to prevent
 (`W5-W11-gated.md` lines 10–13) — a hard reject.
 
+**Round-1 disposition.** Round 1 REJECTed with one CRITICAL finding (the verifier's own fixture
+methodology could delete real data in the operator's checkout) and seven HIGH findings (weak or
+false-greenable criteria, a spoofable review record, an incomplete lease, and three founder
+questions that determine safety/scope left silently open). Every finding is closed in this round —
+see **Round-1 findings → closures** near the end. The three freeze-blocking founder questions have
+since been answered by founder delegation (see **Founder rulings**, immediately after Scope) — this
+PRD encodes them, but the mechanical gate (C10F-14) still stays red until the actual decision
+records land in `docs/plans/waves/DECISIONS.md`, which this wave's author does not edit.
+
 ---
 
 ## Why this wave exists
@@ -26,698 +35,665 @@ reviewed is committing the exact self-certification failure the expansion gate e
 The `W5-W11-gated.md` Wave 10 skeleton states the problem in one line: **".tmp at 30 GB, e2e
 artifacts, and .od growth need a retention policy and GC. This item had no home in the first draft
 and would have been silently dropped."** That 30 GB figure is the skeleton's own claim, not
-independently measured in this session — per `GLOBAL-GOAL.md` operating rule 6 ("numbers in
-planning documents are hypotheses"), the implementer must re-measure actual `.tmp`/`.od` disk usage
-on a representative dev machine before finalizing default retention-window numbers, and must not
-treat 30 GB as verified.
+independently measured in this session.
 
 **This PRD inverts the skeleton's framing on purpose.** The skeleton is written as a disk-space
 problem. It is not one. A garbage collector that runs against a live daemon's data directory is
 code whose failure mode is **irreversible deletion of a user's design work**. Disk space recovered
 is a nice-to-have; a user's project silently vanishing is the kind of defect this program's own
-non-negotiable operating rule 1 exists to prevent for backup/restore ("nothing is exposed, migrated,
-or enriched before it can be restored") — the same principle applies in reverse here: **nothing is
-deleted that cannot be proven, mechanically, to be disposable.** Every criterion in this document is
-written from that threat model, not from "does it free disk space."
+non-negotiable operating rule 1 exists to prevent for backup/restore — the same principle applies
+in reverse here: **nothing is deleted that cannot be proven, mechanically, to be disposable.**
+Round 1 sharpened this further: **the gate itself is part of the threat surface.** A verifier that
+runs real `apply` calls to prove GC safety must not, in the process, become the very data-loss
+incident it exists to prevent — see "Verifier fixture-isolation guarantee" below.
 
 ## Ground facts (verified directly in this tree)
 
 - **`RUNTIME_DATA_DIR` is the one daemon data-root truth source**, per root `AGENTS.md` → "Daemon
-  data directory contract" (binding on this wave). `apps/daemon/src/server.ts:842` resolves it via
-  `resolveDataDir(process.env.OD_DATA_DIR, PROJECT_ROOT, …)` (`apps/daemon/src/daemon-paths.ts`),
-  which defaults to `<project-root>/.od` when `OD_DATA_DIR` is unset
-  (`apps/daemon/src/daemon-paths.ts:139`). Every daemon-owned subdirectory the GC may ever touch is
-  derived from this constant: `ARTIFACTS_DIR`, `CRITIQUE_ARTIFACTS_DIR`, `PROJECTS_DIR`,
-  `USER_SKILLS_DIR`, `USER_DESIGN_SYSTEMS_DIR`, `BRANDS_DIR`, `LIBRARY_DIR`, the plugin
-  asset-cache dir, `USER_DESIGN_TEMPLATES_DIR` (`server.ts:868-908`).
+  data directory contract" (binding). `apps/daemon/src/server.ts:842` resolves it via
+  `resolveDataDir(process.env.OD_DATA_DIR, PROJECT_ROOT, …)`, defaulting to `<project-root>/.od`
+  when unset. Every daemon-owned subdirectory the GC may ever touch derives from this constant:
+  `ARTIFACTS_DIR`, `CRITIQUE_ARTIFACTS_DIR`, `PROJECTS_DIR`, `USER_SKILLS_DIR`,
+  `USER_DESIGN_SYSTEMS_DIR`, `BRANDS_DIR`, `LIBRARY_DIR`, the plugin asset-cache dir,
+  `USER_DESIGN_TEMPLATES_DIR`.
 - **`.tmp/<source>/<namespace>/...` is the other allowed root family**, per root `AGENTS.md` →
-  "Boundary constraints" ("Default runtime files live under
-  `<project-root>/.tmp/<source>/<namespace>/...`"). `packages/sidecar/src/paths.ts` implements the
-  resolution: `resolveProjectTmpRoot` → `<projectRoot>/<contract.defaults.projectTmpDirName>`
-  (`projectTmpDirName: '.tmp'` in `packages/sidecar-proto/src/index.ts:67`), then
-  `resolveSourceRuntimeRoot` → `<tmpRoot>/<source>`. `SIDECAR_SOURCES` (`sidecar-proto/src/index.ts:19`)
-  enumerates `packaged | tools-dev | tools-pack`; `tools-serve` is a fourth control plane
-  (`tools/serve`) that follows the same convention in practice. Namespace is validated/normalized
-  through the same contract. Root `AGENTS.md` → "Validation strategy" independently confirms this
-  for logs specifically: `pnpm tools-dev logs --namespace <name> --json` paths must resolve under
-  `.tmp/tools-dev/<namespace>/...`.
-- **Sidecar liveness is a real, checkable OS-process fact, not a namespace-string heuristic.**
-  `packages/sidecar-proto/src/index.ts:62` fixes the stamp shape at exactly five fields — `app,
-  mode, namespace, ipc, source` — encoded as `--od-stamp-*` CLI flags
-  (`SIDECAR_STAMP_FLAGS`/`STAMP_*_FLAG`). `packages/platform/src/process.ts` supplies the
-  production primitives: `readProcessStampFromCommand`/`matchesStampedProcess` decode a process
-  command line's stamp and test it against criteria (e.g. `{ namespace: 'foo' }`); `isProcessAlive`
-  probes a PID with signal 0; `listProcessSnapshots()` (`packages/platform/src/process.ts:366`)
-  lists live OS processes for matching (`collectProcessTreePids` combines the two to also cover a
-  namespace's child-process tree, the same helper `tools/dev/src/index.ts` already calls in
-  production). Root `AGENTS.md` → "Boundary constraints" ("Sidecar
-  process stamps must have exactly five fields… Orchestration layers must call package primitives;
-  do not hand-build `--od-stamp-*` args or process-scan regexes") makes reuse of these exact
-  primitives, not a bespoke reimplementation, the binding contract.
+  "Boundary constraints." `packages/sidecar/src/paths.ts`'s `resolveProjectTmpRoot` takes
+  `projectRoot` as a **parameter** — it is not hardcoded to the checkout. `SIDECAR_SOURCES`
+  enumerates `packaged | tools-dev | tools-pack`; `tools-serve` is a fourth control plane that
+  follows the same convention.
+- **A compiled `od` CLI's own notion of "project root" is normally fixed to the checkout**:
+  `apps/daemon/src/backup/cli.ts` resolves it via `resolveProjectRootFromNestedModule`, walking up
+  from the CLI file's own on-disk location — never `cwd`. **This wave's GC surface is the
+  deliberate exception** (`OD_STORAGE_TMP_ROOT`, below) because a gate that must run real `apply`
+  calls to prove GC safety cannot share the checkout's real `.tmp` tree with the operator's own dev
+  sessions — round 1's CRITICAL finding was exactly this gap.
+- **Sidecar liveness is a real, checkable OS-process fact.** `packages/sidecar-proto/src/index.ts`
+  fixes the stamp shape at exactly five fields; `packages/platform/src/process.ts` supplies
+  `readProcessStampFromCommand`/`matchesStampedProcess`/`isProcessAlive`/`listProcessSnapshots`/
+  `collectProcessTreePids`/`stopProcesses` (SIGTERM-then-SIGKILL, confirming exit — not assuming a
+  signal landed). Root `AGENTS.md` requires reuse of these exact primitives, never a bespoke
+  reimplementation — including for this wave's own verifier daemon-subprocess teardown (round-1
+  finding 4).
 - **Imported-folder projects have a real, already-defended external-root mechanism.**
-  `apps/daemon/src/projects.ts`: `hasExternalProjectRoot(metadata)` tests
-  `path.isAbsolute(path.normalize(metadata.baseDir))`; `resolveProjectDir` returns
-  `path.normalize(metadata.baseDir)` directly for such projects instead of a path under
-  `PROJECTS_DIR`. The same file already treats this boundary as security-sensitive:
-  `assertVisibleForImportedProject` rejects hidden path segments specifically because an imported
-  folder is "the user's OWN directory" reachable from daemon file operations. Root `AGENTS.md` →
-  "Daemon data directory contract" states the same rule as policy: "Imported-folder projects are
-  the explicit exception: they use `metadata.baseDir` for the user-selected external workspace."
-  **`PROJECTS_DIR` itself (all managed project content) is excluded from this wave's GC scope
-  entirely** — see Scope below; the `baseDir` criterion exists as defense-in-depth against a
-  registry/metadata scan that discovers an imported project's external root incidentally while
-  enumerating `PROJECTS_DIR` siblings, not because `PROJECTS_DIR` walking is otherwise in scope.
-- **A path-containment helper already exists in this codebase and is worth citing, not
-  reinventing.** `apps/daemon/src/daemon-paths.ts:isPathWithin(base, target)` uses
-  `path.relative(path.resolve(base), path.resolve(target))` and rejects a result starting with
-  `..` or absolute — the correct primitive shape (not a `string.startsWith(base)` check, which
-  wrongly admits a sibling directory whose name has the base as a prefix, e.g. `/data/x` under base
-  `/data`). It does **not**, as written, resolve symlinks (`fs.realpathSync`) before comparing —
-  the GC's own containment check must do so (see Threat model, T2).
-- **This codebase already ships two GC-shaped precedents worth learning from, not copying
-  wholesale:**
-  - `apps/daemon/src/plugins/snapshots.ts` + `gc.ts`: an unreferenced-snapshot TTL sweep
-    (`pruneExpiredSnapshots`), a periodic timer disableable via `OD_SNAPSHOT_GC_INTERVAL_MS=0`, an
-    `OD_SNAPSHOT_RETENTION_DAYS` env knob (`apps/daemon/src/app-config.ts:72-73`,
-    `readPluginEnvKnobs`), and a synchronous CLI escape hatch (`od plugin snapshots prune --before
-    <ts>`). This wave's env-knob naming should follow the same `OD_*` convention.
-  - `apps/daemon/src/memory-cleanup.ts`: a one-time, marker-file-gated migration cleanup — **not**
-    a standing GC, explicitly documented as such in its own header. Cited here only to show the
-    codebase's existing bar for "never take the daemon down on a single bad entry" error handling,
-    which this wave's GC must match.
-  - Neither precedent deletes anything outside `RUNTIME_DATA_DIR`, and neither has a dry-run mode
-    — this wave is stricter than both, deliberately, because its blast radius (arbitrary
-    `.tmp`/`.od` growth across three named categories) is larger than either precedent's.
-- **An unconditional, already-shipped artifact wipe exists for e2e, and it is out of this wave's
-  scope.** `e2e/scripts/playwright.ts`'s `clean` command (`pnpm exec tsx e2e/scripts/playwright.ts
-  clean`) unconditionally `rm -rf`s `e2e/ui/{.od-data,test-results,reports/*,.DS_Store}` with no
-  retention window, no dry-run, and no root-confinement machinery — it is a CI/dev hygiene reset
-  tool, always run before/between suites, not a retention policy. See Scope for why this wave does
-  not extend or wrap it.
-- **`SIDECAR_SOURCES` (`packages/sidecar-proto/src/index.ts:19`) is exactly `{ packaged, tools-dev,
-  tools-pack }` — there is no `'e2e'` source.** e2e's own isolated per-Playwright-worker runtime
-  root is provisioned by setting `OD_DATA_DIR` directly (`e2e/lib/tools-dev/cli.ts:33`,
-  `OD_DATA_DIR: suite.dataDir`) for a `tools-dev`-sourced daemon it boots itself — confirmed
-  `tools/dev/src/config.ts`/`index.ts` never set `OD_DATA_DIR` themselves for an ordinary (non-e2e)
-  `tools-dev` run, so a developer's real project data stays under the default `RUNTIME_DATA_DIR`
-  (`.od/`), never under `.tmp/tools-dev/<namespace>/`, which is what makes Tier 1's "no
-  user-authored content by construction" claim (Scope) hold for the ordinary case. The assessment
-  doc's literal `.tmp/e2e` 27 GB figure was **not** independently re-confirmed as a real directory
-  name in this tree (this fresh worktree has no `.tmp/` at all to inspect) — it most plausibly names
-  accumulated `.tmp/tools-dev/<namespace>/...` roots across many past e2e runs (Tier 1, in scope),
-  not a separate, uncontracted `.tmp/e2e/` path, but this PRD does not assert that as settled fact;
-  the implementer must confirm the real accumulation path on a populated checkout before finalizing
-  the Tier 1 scanner (open question 1).
-- **`apps/daemon/src/storage/` already exists and is unrelated to this wave.** It holds
-  `aws-sigv4.ts` / `project-storage.ts` / `daemon-db.ts` / `db-inspect.ts` — a Phase-5 `ProjectStorage`
-  adapter interface for S3-compatible blob backends (spec §15.6), nothing to do with retention or
-  GC. This wave's proposed module lives at `apps/daemon/src/storage-gc/` specifically to avoid
-  colliding with, or being confused with, that existing directory — see "Proposed lease".
+  `apps/daemon/src/projects.ts`: `hasExternalProjectRoot`/`resolveProjectDir`.
+  `POST /api/import/folder` (`apps/daemon/src/import-export-routes.ts:241`) is the real production
+  route that creates such a project — C10F-5's red spec uses it directly.
+- **`apps/daemon/src/storage/` already exists and is unrelated to this wave** — a Phase-5
+  `ProjectStorage`/S3 adapter. This wave's module lives at `apps/daemon/src/storage-gc/`
+  specifically to avoid colliding with it.
+- **Wiring a Settings section requires more than the panel component itself.**
+  `apps/web/src/components/SettingsDialog.tsx`'s `SettingsSection` is a closed string-literal union
+  and every nav entry reads translated copy via a typed `t('settings.…')` call; root `AGENTS.md` →
+  "i18n keys": `apps/web/src/i18n/types.ts` (typed `Dict`) and `apps/web/src/i18n/locales/en.ts`
+  (the only locale file) are both required together, or the build fails typecheck.
+- **`e2e/scripts/playwright.ts`'s `cleanArtifacts()` already names the exact, already-audited set of
+  paths this repo treats as "100% machine-generated, safe to always wipe"**: `.od-data`,
+  `test-results`, `reports/test-results`, `reports/visual-test-results`, `reports/html`,
+  `reports/playwright-html-report`, `reports/results.json`, `reports/visual-results.json`,
+  `reports/visual-screenshots`, `reports/visual-report`, `reports/junit.xml`, `.DS_Store` (all
+  under `e2e/ui/`) — an unconditional, no-retention-window, no-dry-run CI hygiene tool with a
+  different threat profile than this wave's GC. Founder Ruling 2 (below) brings a **narrow, aged**
+  subset of this same, already-vetted path family into this wave's scope instead of inventing a new
+  "is this generated content" heuristic — see "Founder rulings."
+
+## Verifier fixture-isolation guarantee (closes round-1 finding 1, CRITICAL — outranks everything else in this document)
+
+**The single most safety-critical property this PRD states.** The verifier proves storage-GC
+safety by running real `plan`/`apply` cycles against fixtures. Round 1 found those fixtures were
+built under the checkout's REAL `.tmp/tools-dev/...`, so a production `plan` could pick up **real,
+inactive namespaces from the operator's own past dev sessions**, and a subsequent `apply` would
+delete them. Fatal regardless of how correct the rest of the implementation is.
+
+**Fix, belt and braces — both mandatory, neither substitutes for the other:**
+
+1. **BRACE (primary isolation).** The storage-gc surface **must** accept `OD_STORAGE_TMP_ROOT` — an
+   env var, read at daemon-boot time exactly like the existing `OD_DATA_DIR` precedent — that
+   redirects every Tier-1 `.tmp/<source>/<namespace>` root resolution to
+   `<OD_STORAGE_TMP_ROOT>/.tmp/<source>/<namespace>`. Unset, it falls back to the real project root
+   exactly as today.
+2. **BELT (independent, unconditional, verifier-side).** Before issuing **any** `apply` call, the
+   verifier parses the `plan` response and refuses to call `apply` at all — fails the criterion
+   outright — unless every candidate path is provably confined under that run's own
+   `OD_STORAGE_TMP_ROOT`. Does not depend on the implementation honoring brace 1 correctly.
+3. **PROOF (`FIXTURE-ISOLATION`, a verifier-safety meta-check, never a product criterion).**
+   Structural: the verifier's own source is self-scanned to confirm the real checkout's
+   `.tmp/tools-dev/` is referenced from **exactly one**, provably read-only function — a future edit
+   that reintroduces a write-capable call elsewhere fails this check by construction. Runtime:
+   before any fixture work, a read-only listing of whatever namespaces already exist in the real
+   checkout is taken (never written to), and none may ever appear among the plan candidates
+   observed across the entire run.
+
+Every fixture in every dynamic criterion is built under a freshly `mkdtemp`'d temp project root —
+never the checkout — and every daemon this verifier boots carries that temp root as
+`OD_STORAGE_TMP_ROOT`.
 
 ## Threat model
 
-**The central threat is the GC itself.** Every entry below is a way the GC could destroy something
-it must not, ranked by how directly it causes irreversible user-data loss. This table is the spine
-the success criteria are built from — every criterion below cites which threat(s) it closes.
-
 | ID | Threat | Why it's catastrophic, not just buggy |
 |---|---|---|
-| T1 | **Root escape.** A candidate path is computed (config value, joined segments, decoded from a stored record) that resolves outside every allowed root, and the GC deletes it anyway. | Nothing bounds the blast radius — could reach the user's home directory, another app's data, or the repo itself. |
-| T2 | **Symlink escape.** A path *inside* an allowed root is actually a symlink whose target is outside it (or inside `PROJECTS_DIR`/`baseDir`), and the GC follows the link before deleting. | `isPathWithin`-shaped string/relative-path checks operate on the symlink's own path, not its resolved target — a check that looks correct on the literal path is silently wrong once a symlink is in play. |
-| T3 | **Active-namespace deletion.** A `.tmp/<source>/<namespace>` runtime root is deleted while a live process (dev daemon, tools-dev session, e2e worker) is still using it — sockets, lock files, or in-flight writes. | Not "old scratch," but a running session's working state; deletion mid-use can corrupt that session's data or crash it destructively rather than gracefully. |
-| T4 | **Imported-folder deletion.** Any enumeration or deletion reaches into a `metadata.baseDir` external workspace. | This is not daemon-owned data — it is the user's own filesystem, outside the entire `RUNTIME_DATA_DIR`/`.tmp` boundary this wave is chartered to operate in. Deleting inside it is deleting a user's actual files, full stop. |
-| T5 | **Generic-walker misclassification.** The GC is implemented as "walk `RUNTIME_DATA_DIR` recursively, delete anything older than N days," rather than an explicit, named, per-category allowlist. | A generic walker cannot distinguish disposable scratch from `PROJECTS_DIR` content that simply hasn't been opened recently — staleness and disposability are unrelated properties for user content. This is the single most likely path to catastrophic loss and the reason C10F-1 exists. |
-| T6 | **TOCTOU between plan and apply.** A dry-run plan is computed, time passes (a session becomes active, a symlink is swapped, a file is opened), and apply blindly executes the stale plan. | Dry-run-by-default is worthless as a safety property if apply doesn't re-validate; the report becomes a false promise. |
-| T7 | **Partial-failure inconsistency.** Apply fails partway through and the report doesn't accurately reflect what was actually removed vs. what merely failed. | An operator (human or automation) making a "do I need to run this again / is my disk actually reclaimed" decision from a report that lies about partial state is a data-integrity failure one layer up from deletion itself. |
-| T8 | **Retention-window misconfiguration treated as "delete everything now."** A `0`, negative, missing, or malformed retention-window value is silently coerced into "everything is eligible" instead of being rejected. | The single knob users/operators are expected to tune becomes the single easiest way to accidentally nuke everything in a category. |
-| T9 | **Report/reality drift.** The before/after size report is computed once and cached, or derived from the plan rather than the filesystem, so it can diverge from what's actually on disk. | Silent drift here defeats the entire audit value of "size/inventory report before and after" — an operator trusts a number that isn't real. |
+| T1 | **Root escape.** A candidate path resolves outside every allowed root, deleted anyway. | Nothing bounds the blast radius. |
+| T2 | **Symlink escape.** An in-root symlink's target — especially a whole DIRECTORY — is outside it, enumerated/deleted through. | Unlink of a symlink never dereferences; the real risk is recursion following the link. |
+| T3 | **Active-namespace deletion.** Deleted while a live process still uses it. | Corrupts or crashes a running session destructively. |
+| T4 | **Imported-folder deletion.** Reaches into `metadata.baseDir`. | The user's own filesystem, outside this wave's entire boundary. |
+| T5 | **Generic-walker misclassification.** "Walk RUNTIME_DATA_DIR, delete anything old" instead of an explicit allowlist. | Staleness and disposability are unrelated properties for user content. |
+| T6 | **TOCTOU between plan and apply.** A stale plan blindly executed. | Dry-run-by-default is worthless if apply doesn't re-validate. |
+| T7 | **Partial-failure inconsistency.** Report doesn't reflect what was actually removed vs. skipped. | A data-integrity failure one layer up from deletion itself. |
+| T8 | **Retention-window misconfiguration treated as "delete everything now."** | The one operator-tunable knob becomes the easiest way to nuke a category. |
+| T9 | **Report/reality drift.** Totals cached/derived from the plan rather than the filesystem. | Defeats the report's entire audit value. |
+| T10 | **The gate itself deletes real data.** The verifier's own fixtures reach the operator's real checkout. | Round-1 CRITICAL. Closed by `OD_STORAGE_TMP_ROOT` + the belt check + `FIXTURE-ISOLATION`. |
+| T11 | **Orphan-detection false positive.** A referenced artifact is misclassified as orphaned and deleted (Founder Ruling 3's "dangerous" category). | The orphan check is itself a bug surface with the same blast radius as T5 — a wrong "no referencing row" read destroys live, referenced user content. |
 
 ## Scope
 
-**In scope:**
+**In scope**, per the pure-data registry (below), gated by Founder Rulings 1–3:
 
-1. A **finite, explicitly named target registry** (never a generic recursive walk of
-   `RUNTIME_DATA_DIR` — see C10F-1) covering:
-   - **Tier 1 — ephemeral tooling runtime roots**, pre-approved as safe by this PRD because they
-     hold no user-authored content by construction: `.tmp/tools-dev/<namespace>`,
-     `.tmp/tools-serve/<namespace>`, `.tmp/tools-pack/<namespace>` (dormant in this fork per root
-     `AGENTS.md`, but its `.tmp` convention still applies if anything lands there). Eligibility:
-     age past the category's retention window **and** namespace inactive (T3, C10F-3).
-   - **Tier 2 — `RUNTIME_DATA_DIR`-derived generated/cache content.** Each candidate category
-     requires, as part of the registry entry itself (not a separate doc), a written justification
-     that is one of: **(a)** provably orphaned — no live SQLite row references it, checked at GC
-     run time, not assumed from age alone, or **(b)** a pure regenerable cache with no
-     user-authored content (e.g. the plugin asset cache: derived, safe to lose, rebuilt on next
-     access). A category without one of these two justifications **must not** be added to the
-     registry in v1 — defer it and name it explicitly in the report's "deferred categories"
-     section (open question 4 lists the categories this PRD is not resolving).
-2. Dry-run planning, apply-with-re-validation, and a before/after size+inventory report, per the
-   design in "Proposed capability surface" below.
-3. Configurable, named, independently-effective retention windows, one per registry category.
-4. UI + CLI surfaces over one shared `/api/storage/*` contract, per root `AGENTS.md` → "Capability
-   exposure."
+1. **Tier 1 — ephemeral tooling runtime roots** (`justification: 'inactive-namespace'`):
+   `.tmp/tools-dev/<namespace>`, `.tmp/tools-serve/<namespace>`, `.tmp/tools-pack/<namespace>`
+   (dormant in this fork). Eligibility: age past the category's window **and** namespace inactive
+   (T3). **Default window: 7 days** (Ruling 1).
+2. **Tier 2 — `RUNTIME_DATA_DIR`-derived content**, exactly the Ruling-3 allowlist, never more:
+   - `justification: 'log-retention'` — daemon-owned log files under the resolved data root.
+     **Default window: 14 days** (Ruling 1).
+   - `justification: 'regenerable-cache'` — caches provably regenerable from a durable source (e.g.
+     the plugin asset cache). **No default window** — not collectable until an operator explicitly
+     sets one (Ruling 1: "a category with no stated window is NOT collectable").
+   - `justification: 'orphan-checked'` — staging/temp artifacts with no referencing database row.
+     **No default window**, same reason. **Closes T11 via C10F-17's mandatory paired red spec**
+     (referenced survives; orphaned is collected) — Ruling 3's explicit "design consequence."
+3. **Tier 3 — e2e test-output artifacts** (`justification: 'e2e-artifact'`, Ruling 2): **only** the
+   subset of `e2e/scripts/playwright.ts`'s own already-audited clean-target paths (Ground facts),
+   pinned literally in the registry (`pinnedRelativePaths`) and cross-checked against that file's
+   real target list at verifier run time — never a new "is this generated" heuristic. **Default
+   window: 3 days.**
+4. Dry-run planning, apply-with-re-validation bound to a specific plan, and a before/after
+   size+inventory report.
+5. Configurable, boot-time, independently-effective, **and stated** retention windows: the resolved
+   value actually governing eligibility is echoed verbatim in every `plan`/`report` response, and
+   the DEFAULTS themselves are configuration values the implementation reads (C10F-15), never
+   literals the GC hardcodes separately from what it's configured with.
+6. UI + CLI surfaces over one shared `/api/storage/*` contract.
 
-**Explicitly out of scope:**
+**Explicitly, permanently out of scope — the non-deletable set, named per Founder Ruling 3 so the
+boundary is auditable** (default is always "keep"; a category not provably in the Tier-2/3
+allowlist above is not deletable, full stop): **projects and project files** (`PROJECTS_DIR`,
+wholesale, managed or imported, any age); **artifacts referenced by any project**; **the SQLite
+database and its journals**; **app configuration**; **MCP config and tokens**; **connector
+credentials**; **memory**; **automation state**; **plugin state**; **agent runtime homes**; and
+**anything under an imported-folder project's `metadata.baseDir`**.
 
-- **`PROJECTS_DIR` content, wholesale — managed or imported, any age.** No project's files are a
-  GC target in this wave, regardless of staleness. If a future wave wants project-level archival or
-  deletion, that is a different, explicitly product-facing feature (the user deciding to delete
-  *their* project), not background GC, and needs its own PRD.
-- **`e2e/ui/{reports,test-results,.od-data}`.** These sit outside both allowed-root families
-  (neither `RUNTIME_DATA_DIR`-derived nor `.tmp/<source>/<namespace>`) and already have an
-  unconditional owner (`e2e/scripts/playwright.ts clean`) with a different, CI-hygiene-shaped
-  threat profile (ephemeral test output, wiped before every run, never user data). Folding it into
-  this wave's retention-window/dry-run machinery would be scope creep across two genuinely
-  different tools with different safety requirements. **This is a real reading of the skeleton's
-  "e2e artifacts" phrase, not a silent narrowing — flagged explicitly as open question 2** because
-  the skeleton did name e2e artifacts as one of the three growth vectors and a founder may want
-  unification.
-- **Scheduled/automatic background sweeps.** v1 ships plan+apply as an operator/automation-invoked
-  action (CLI or UI-triggered), not a timer running inside the daemon process (unlike the existing
-  snapshot GC's `setInterval`). Open question 3.
-- **AI/semantic classification of "important" vs "disposable" files.** Eligibility is purely
-  mechanical: registry category + age + (namespace liveness | SQLite reference check).
+- **`e2e/ui/{reports,test-results,.od-data}` beyond the Tier-3 pinned allowlist.** Anything a user
+  could plausibly have authored or moved into an e2e-adjacent directory (Ruling 2: "if the
+  implementation cannot distinguish generated from user-placed content in a directory, that
+  directory is out of scope") stays with `e2e/scripts/playwright.ts clean`, unconditional, no
+  retention window, a different tool for a different threat profile.
+- **Scheduled/automatic background sweeps.** v1 ships plan+apply as operator/automation-invoked,
+  not a daemon-internal timer (Open founder question 3, advisory).
+- **AI/semantic classification of "important" vs "disposable."** Eligibility is purely mechanical.
 - Anything already covered by W0's backup/restore, W9's route-hardening tranches, or W4's cover
-  storage — this wave does not re-litigate those threat models.
+  storage.
+
+## Founder rulings (delegate-authorized; recorded separately in `docs/plans/waves/DECISIONS.md`, which this wave's author does not edit)
+
+The three freeze-blocking questions round 1 raised (defaults, e2e scope, `.od` deletable set) have
+been answered by founder delegation. This PRD encodes the rulings below as its own authoritative
+scope text; **C10F-14 still mechanically requires the real decision records to exist in
+`DECISIONS.md` at the base commit before the gate can pass** — a ruling stated here is not a
+substitute for the recorded, founder-signed entry.
+
+**Ruling 1 — retention window defaults.** Safety-first, generous, explicitly overridable:
+Tier-1 inactive `.tmp/<source>/<namespace>` roots: **7 days**. Tier-3 e2e/test artifacts: **3
+days**. Tier-2 `log-retention` (daemon-owned logs under the resolved data root): **14 days**.
+**Nothing else has a default window** — a category with no stated default is not collectable
+without an explicit operator override. Defaults must be configuration values the implementation
+reads (not literals buried in the GC), and C10F-15 asserts the stated defaults match the configured
+ones so the PRD and the code cannot drift.
+
+**Ruling 2 — are named e2e artifacts in scope? Yes, narrowly.** Only artifacts under the
+repository's own test-output paths (`.tmp/**` — already Tier 1 — `test-results/**`,
+`playwright-report/**`), and only past the 3-day window. Anything a user could plausibly have
+authored or moved there is out of scope; if the implementation cannot distinguish generated from
+user-placed content in a directory, that directory is out of scope. Operationalized as Tier 3,
+pinned to `e2e/scripts/playwright.ts`'s own already-audited target list (C10F-16) — reusing an
+existing, reviewed boundary rather than inventing a new heuristic.
+
+**Ruling 3 — which `.od` categories are deletable? An explicit allowlist, never a denylist.**
+Deletable: (a) log files past their window, (b) caches provably regenerable from a durable source,
+(c) orphaned staging/temp artifacts with no referencing database row. Everything else is not
+deletable — the non-deletable set is named explicitly in Scope above so the boundary is auditable.
+If a category cannot be proven to fall in the allowlist, it is not deletable; the default is always
+"keep." **Design consequence (mandatory):** orphan detection (c) is itself dangerous — a bug in
+"has no referencing row" deletes live data — so orphan collection must be proven by a red spec in
+which a referenced artifact is NOT collected, paired with a positive control where a genuinely
+orphaned one is (C10F-17).
 
 ## Proposed capability surface
 
-Descriptive target for the implementer — this PRD does not implement it, and the exact internal
-module layout is the implementer's call as long as every criterion below is met.
+Descriptive target for the implementer — this PRD does not implement it. Several elements below are
+**mandatory structural/testability requirements**, because the verifier's mechanical checks depend
+on them existing in exactly this shape.
 
-- **CLI:** `od storage gc plan [--json]` (always dry-run; the *only* way to see what's eligible),
-  `od storage gc apply --plan <planId> --confirm [--json]` (executes exactly the named plan's
-  candidate set, re-validating each candidate's eligibility, root-containment, and
-  non-active-namespace status immediately before deleting it — closing T6), and `od storage report
-  [--json]` (standalone size/inventory read, a sibling of `gc`, not nested under it — no plan side
-  effects). There is no single flag that flips a plan call into a delete call; `apply` is a
-  structurally distinct subcommand requiring a plan reference, per C10F-6/C10F-7.
-- **HTTP:** `GET /api/storage/gc-plan` (mirrors `od storage gc plan`), `POST
-  /api/storage/gc-apply` (body `{ planId: string, confirm: true }`, mirrors `od storage gc apply`),
-  and `GET /api/storage/report` (mirrors `od storage report`) — all three under the same handler
-  code the CLI drives, per root `AGENTS.md` → "Capability exposure" ("Both surfaces must call the
-  same `/api/*` endpoints").
-- **Contracts:** DTOs for `GcPlanReport` (per-category candidate list + counts/bytes),
-  `GcApplyReport` (removed/failed lists + before/after totals), and `RetentionConfig` land in
-  `packages/contracts/src/api/storage-gc.ts`, consumed by both the daemon routes and the web UI —
-  never a divergent ad hoc shape on either side (root `AGENTS.md` → "Boundary constraints").
-- **Config:** one `OD_STORAGE_RETENTION_<CATEGORY>_DAYS`-shaped env knob per registry category
-  (naming mirrors `OD_SNAPSHOT_RETENTION_DAYS`), plus a settings-surface UI control mirroring
-  whatever pattern the existing plugin/snapshot config editor uses. Defaults are an **open
-  question** (open question 1) — this PRD does not pick numbers.
-- **UI:** a Settings-area panel (implementer-named, e.g. `apps/web/src/components/StorageRetention*`)
-  showing the current report, per-category retention windows, a "Plan" action, and an "Apply"
-  action gated behind the returned plan.
+- **`OD_STORAGE_TMP_ROOT`** (mandatory testability hook, "Verifier fixture-isolation guarantee").
+  Read once, at daemon-boot time.
+- **CLI:** `od storage gc plan [--json]` (always dry-run), `od storage gc apply --plan <planId>
+  --confirm [--json]` (rejects with non-zero exit + `{ok:false,error:{code,message}}` if
+  `--confirm` is omitted or `--plan` names an unknown plan), `od storage report [--json]` (a
+  sibling of `gc`, not nested under it).
+- **HTTP:** `GET /api/storage/gc-plan`, `POST /api/storage/gc-apply` (body
+  `{ planId: string, confirm: true }`), `GET /api/storage/report` — the **exact three route paths**
+  the verifier checks for.
+- **Registry shape (mandatory, pure data — no function-valued fields):**
+  ```ts
+  export const STORAGE_GC_REGISTRY = [
+    { category: 'tools-dev', tier: 1, retentionEnvVar: 'OD_STORAGE_RETENTION_TOOLS_DEV_DAYS',
+      defaultRetentionDays: 7, justification: 'inactive-namespace' },
+    { category: 'e2e-test-output', tier: 3, retentionEnvVar: 'OD_STORAGE_RETENTION_E2E_TEST_OUTPUT_DAYS',
+      defaultRetentionDays: 3, justification: 'e2e-artifact',
+      pinnedRelativePaths: ['test-results', 'reports/test-results', 'reports/playwright-html-report'] },
+    { category: 'daemon-logs', tier: 2, retentionEnvVar: 'OD_STORAGE_RETENTION_DAEMON_LOGS_DAYS',
+      defaultRetentionDays: 14, justification: 'log-retention' },
+    // regenerable-cache / orphan-checked entries: defaultRetentionDays MUST be null.
+  ] as const;
+  ```
+  `retentionEnvVar` must match `/^OD_STORAGE_RETENTION_[A-Z0-9_]+_DAYS$/`. `defaultRetentionDays`
+  must be the EXACT literal (`7`/`3`/`14`/`null`) the `justification` mandates (C10F-15). Tier-3
+  entries require `pinnedRelativePaths` ⊆ `e2e/scripts/playwright.ts`'s own real clean-target list
+  (C10F-16).
+- **Response schemas (mandatory fields; extra fields fine):**
+  ```ts
+  // GET /api/storage/gc-plan, od storage gc plan --json
+  { ok: true, planId: string,
+    retentionWindows: { [category: string]: { days: number, source: 'default' | 'override' } },
+    candidates: Array<{ path: string, category: string, namespace?: string, sizeBytes: number, ageDays: number }>,
+    totals: { count: number, bytes: number } }
+  // POST /api/storage/gc-apply (success), od storage gc apply --confirm --json
+  { ok: true, planId: string,
+    removed: Array<{ path: string, category: string, sizeBytes: number }>,
+    skipped: Array<{ path: string, category: string, reason: string }>,
+    totals: { removedCount: number, removedBytes: number } }
+  // Rejection: non-2xx / non-zero exit
+  { ok: false, error: { code: string, message: string } }
+  // GET /api/storage/report, od storage report --json
+  { ok: true, byCategory: Array<{ category: string, count: number, bytes: number }>,
+    totals: { count: number, bytes: number } }
+  ```
+- **Separable plan/apply exports (mandatory, exact names):** `planStorageRetention` and
+  `applyStorageRetention` — so `planStorageRetention`'s transitive call graph can be proven to
+  contain no filesystem-delete primitive without disentangling CLI dispatch internals.
+- **Contracts:** DTOs land in `packages/contracts/src/api/storage-gc.ts`, re-exported from
+  `packages/contracts/src/index.ts`.
+- **UI:** `apps/web/src/components/StorageRetention*.tsx` — new `SettingsSection` union member,
+  sidebar nav entry, typed i18n keys, "Plan"/"Apply" actions, real `fetch()` calls whose URL
+  argument is the exact string for each of the three routes.
 
 ## Success criteria
 
-All criteria inherit `VERIFICATION-CONTRACT.md` §3 (red-before-green, no mocked transport for the
-real filesystem/process boundary, no counting criteria, negative checks paired with positive
-controls, no severity downgrades, human-judgment items declared not disguised). Verified by
-`scripts/waves/verify-w10f.ts`. Every criterion is a **mechanical** check — none is `human:`.
+All criteria inherit `VERIFICATION-CONTRACT.md` §3. Verified by `scripts/waves/verify-w10f.ts`.
+Every criterion is **mechanical** — none is `human:`.
 
 ---
 
-### C10F-1 — Target registry is a finite, named allowlist, never a generic walk
+### C10F-1 — Target registry is a finite, pure-data allowlist, never a generic walk
 
-**Statement.** The GC's set of deletable candidates is produced by iterating a small, explicit,
-in-repo enumeration of `{category, rootBuilder, retentionConfigKey, eligibilityRule,
-justification}` entries. There is no code path that recursively enumerates an entire allowed root
-(e.g. `RUNTIME_DATA_DIR`) and treats "found + old" as sufficient for eligibility. Every Tier 2
-entry's `justification` is one of the two forms Scope requires; an entry with neither is rejected
-at the registry-definition level, not silently included. Closes **T5, T8**.
+**Statement.** The GC's candidate set is produced by iterating the mandated pure-data registry (no
+spreads/`__proto__`/accessors/methods/computed keys anywhere in the literal). A directory not named
+in the registry is never a candidate, **regardless of age** — proven at runtime. Closes **T5, T8**.
 
-**Satisfiability.** A legitimate implementation defines the registry as literal, statically
-readable data (an array/object literal, not a value computed from a runtime directory listing),
-each entry independently unit-testable, with Tier 1 entries never requiring a justification field
-(pre-approved by this PRD) and every Tier 2 entry carrying one. The verifier's AST scan (see
-Verification) finds this shape directly in the production module's source.
+**Satisfiability.** Literal, statically readable data with every entry carrying
+`category`/`tier`/`retentionEnvVar`/`defaultRetentionDays`/`justification`; eligibility logic
+elsewhere consumes this data at runtime.
 
-**Decoy.** An implementation that walks `RUNTIME_DATA_DIR` with `fs.readdir`/`fs.stat` and applies
-an age filter to whatever it finds — even if it also has root-confinement and symlink checks
-layered on top — fails this criterion, because a positive control seeds a fresh, unlisted directory
-under `RUNTIME_DATA_DIR` with an old mtime (simulating a future daemon feature this wave's author
-never enumerated) and the walker-shaped implementation reports it as an eligible candidate; the
-registry-shaped implementation correctly excludes it (not in the allowlist = not a candidate,
-regardless of age).
+**Decoy.** A generic walker with an age filter fails the runtime half: a decoy fixture under an
+**unlisted** category, aged 5000 days, is correctly excluded by a registry-shaped implementation
+and wrongly included by a walker-shaped one.
 
-**Verification.** TypeScript-compiler-API scan of the production module (`ts.createSourceFile` +
-`ts.forEachChild`, never regex) for (a) the registry's declaration shape and (b) the absence of any
-`fs.readdir`/`fs.readdirSync`/`fs.opendir` call whose result feeds the eligibility/deletion path
-without first being filtered through a registry-derived root. Cross-checked at runtime: seed a
-fixture `RUNTIME_DATA_DIR` with one file in an unlisted subdirectory, aged past every configured
-window, and confirm `gc plan` does not list it.
+**Verification.** AST scan for the pure-data shape and per-entry field validity. Runtime:
+`gc plan --json` against a fixture under an unlisted category, aged 5000 days — never a candidate.
 
 ---
 
 ### C10F-2 — Root confinement: real containment, not string prefix
 
-**Statement.** Before any path is treated as a delete candidate, it is checked against the union of
-allowed roots using resolved (not merely joined) paths — `path.relative`-based containment at
-minimum, extended per C10F-3 with `fs.realpathSync` resolution. A candidate that resolves outside
-every allowed root is refused, not merely deprioritized. Closes **T1**.
+**Statement.** Checked against the union of allowed roots using resolved containment
+(`path.relative`-based), never `startsWith`. Closes **T1**.
 
-**Satisfiability.** A legitimate implementation reuses (or matches the semantics of)
-`apps/daemon/src/daemon-paths.ts`'s `isPathWithin` — `path.relative(base, target)` not starting
-with `..` and not absolute — evaluated against **every** allowed root, refusing when none matches.
+**Satisfiability.** Matches `isPathWithin`'s semantics, evaluated against every allowed root.
 
-**Decoy.** An implementation using `candidatePath.startsWith(allowedRoot)` passes every "obviously
-inside" test case but fails the red spec: a fixture allowed root `<tmp>/.tmp/tools-dev/foo` and a
-sibling `<tmp>/.tmp/tools-dev/foo-not-really` (a real, unrelated directory whose name happens to
-share the prefix) — the decoy's `startsWith` check wrongly admits the sibling as "inside," and the
-red spec proves the production path either wrongly includes it (fail) or correctly excludes it
-(pass, if using real relative-path containment).
+**Decoy.** `candidatePath.startsWith(allowedRoot)` fails at the **source level**: a fixture source
+root `.tmp/tools-dev/<ns>` vs. an unrelated sibling `.tmp/tools-devEVIL/<ns>` sharing only the
+string prefix.
 
-**Verification.** Red spec constructs the prefix-collision fixture above and a genuinely
-out-of-root path (e.g. a fixture standing in for `$HOME`), invokes `od storage gc plan --json`
-against them, and asserts neither appears as a candidate. Positive control in the same run: a
-real in-registry, past-window file in a genuinely-contained path *does* appear.
+**Verification.** Red spec seeds the source-level collision fixture plus a genuine in-scope file,
+asserts by **exact path equality** against `candidates[].path`: the collision sibling never
+appears; the real file's exact absolute path does.
 
 ---
 
 ### C10F-3 — Symlink escape refusal
 
-**Statement.** A symlink located inside an allowed root, whose resolved target lies outside every
-allowed root (or inside `PROJECTS_DIR`/a `metadata.baseDir`), is never followed for deletion
-purposes — neither is its target deleted, nor is content reached through it enumerated as a
-candidate. Closes **T2**.
+**Statement.** A symlink inside an allowed root whose target is an external **directory** is never
+followed for enumeration or deletion. Closes **T2**.
 
-**Satisfiability.** The containment check in C10F-2 additionally resolves the candidate with
-`fs.realpathSync` (or equivalent) before the containment test, so a symlink's *target* — not its
-literal path — is what gets checked. A symlink itself, if it lives inside an allowed root and its
-target is also safely contained, may be removed as the symlink entry; its target is never touched
-through it.
+**Satisfiability.** lstat's directory entries; does not recurse through a symlink whose realpath
+resolves outside every allowed root.
 
-**Decoy.** An implementation that checks containment on the literal (un-resolved) path passes every
-non-symlink test but fails the red spec: a symlink at `<tmp>/.tmp/tools-dev/expired-ns/escape` →
-`<external-fixture>/real-user-file.txt` (outside every allowed root). The decoy sees
-`.tmp/tools-dev/expired-ns/escape` as literally inside the allowed root and deletes through it;
-`real-user-file.txt` in the external fixture disappears. The red spec's oracle is exactly that file
-surviving.
+**Decoy.** A symlink-to-a-**file** test proves nothing (`unlink` never dereferences). The real
+vulnerability is a symlink to a directory, followed during recursion.
 
-**Verification.** Red spec creates the symlink fixture above under an otherwise-eligible (aged,
-inactive-namespace) directory, runs `gc plan` then `gc apply --confirm`, and asserts (a) the
-external target file still exists with unchanged content/hash, and (b) — positive control — a real
-non-symlinked expired file in the same directory *is* removed by the same apply call.
+**Verification.** Symlink (`dir` type) inside an eligible namespace → external fixture directory
+with an aged file, plus a real in-scope expired file. Asserts: nothing under the external directory
+ever appears in `candidates[].path`; its content hash is unchanged post-apply; the real file **is**
+removed; `apply` reports `ok: true`.
 
 ---
 
-### C10F-4 — Active-namespace refusal
+### C10F-4 — Active-namespace refusal, across every Tier-1 category
 
-**Statement.** A `.tmp/<source>/<namespace>` runtime root is never planned or applied against while
-a live OS process carries a matching sidecar stamp for that `{source, namespace}` pair. Closes
-**T3**.
+**Statement.** Never planned/applied while a live process carries a matching sidecar stamp —
+proven for every Tier-1 category the registry declares. Closes **T3**.
 
-**Satisfiability.** The eligibility check for Tier 1 categories calls the production stamp-matching
-primitives directly — `packages/platform/src/process.ts`'s process enumeration +
-`matchesStampedProcess`/`readProcessStampFromCommand` against `packages/sidecar-proto`'s
-`SIDECAR_STAMP_FIELDS`/contract — never a bespoke `ps`-output regex (root `AGENTS.md` forbids
-hand-built stamp scanning). A namespace with a matching live process is excluded from the plan
-outright, not merely warned about.
+**Satisfiability.** Calls the production stamp-matching primitives directly, for every Tier-1
+category uniformly.
 
-**Decoy.** An implementation that infers "active" from the namespace directory's own mtime (e.g.
-"a lock file was touched in the last hour") rather than an actual live-process check fails the red
-spec: a namespace directory aged past its retention window but with a genuinely live process still
-holding it (started, mtime never touched again because the process only opened the file once at
-startup) is wrongly planned/deleted by the mtime-heuristic decoy.
+**Decoy.** An mtime heuristic fails a namespace whose only write was at startup. A decoy
+special-casing one category fails the multi-category sweep.
 
-**Verification.** Red spec spawns a real, short-lived child process carrying valid `--od-stamp-*`
-flags for a fixture `{source, namespace}` (a static, non-interpolated launch script — no dynamic
-code generation), points a fixture `.tmp/<source>/<namespace>` runtime root at that pair aged past
-every retention window, runs `gc plan`, and asserts the namespace is excluded while the process is
-alive; kills the process, waits for exit, re-runs `gc plan`, and asserts — positive control — the
-same namespace now appears as a candidate.
+**Verification.** Per registry-declared Tier-1 category: real short-lived stamped process; excluded
+while alive (exact-path match); included once inactive (exact-path match).
 
 ---
 
 ### C10F-5 — Imported-folder `baseDir` is untouchable
 
-**Statement.** No GC code path enumerates, stats, or deletes anything under a project's
-`metadata.baseDir` (an imported-folder project's external workspace), at any age, under any
-registry category. Closes **T4**.
+**Statement.** Never enumerated/stated/deleted, at any age, under any category — proven while a
+genuine Tier-2 item **is** collected in the same run. Closes **T4**.
 
-**Satisfiability.** A legitimate implementation either (a) never enumerates `PROJECTS_DIR` or
-project metadata at all — consistent with Scope's "PROJECTS_DIR is out of scope entirely," which
-is the simplest way to satisfy this — or, if any future registry entry ever needs project-adjacent
-enumeration, (b) explicitly excludes any path for which `apps/daemon/src/projects.ts`'s
-`hasExternalProjectRoot`/`resolveProjectDir` identifies an external root, before that path is ever
-considered.
+**Satisfiability.** Never enumerates `PROJECTS_DIR`/project metadata, or explicitly excludes any
+`hasExternalProjectRoot` path before considering it.
 
-**Decoy.** An implementation that filters on a hardcoded substring check (e.g. "skip paths
-containing `PROJECTS_DIR`") rather than the real metadata-driven external-root detection fails the
-red spec's second fixture: an imported project whose `metadata.baseDir` happens to resolve to a
-path that does **not** textually contain `PROJECTS_DIR` (any external directory) but whose stale
-content a naive age-based scan would otherwise reach if the implementation scans project metadata
-at all.
+**Decoy.** A hardcoded `PROJECTS_DIR`-substring filter fails a `baseDir` that doesn't textually
+contain it. A GC that collects nothing (global no-op) fails the missing positive control.
 
-**Verification.** Red spec creates a real imported-folder project via the daemon's own project
-creation API with `metadata.baseDir` pointing at a fixture directory, ages every file in it past
-every retention window, runs `gc plan` and `gc apply --confirm`, and asserts every file under
-`baseDir` is untouched (existence + content hash unchanged) and none appear in the plan's candidate
-list at all — not merely "present but marked ineligible." Positive control: a real managed
-project's *non-`PROJECTS_DIR`* stale registry-category content in the same run (e.g. an orphaned
-Tier-2 cache entry) **is** collected, proving the refusal is `baseDir`-specific, not a global no-op.
+**Verification.** Real imported-folder project via `POST /api/import/folder`, plus a genuine
+orphaned Tier-2 fixture in the same run. Asserts: no candidate path equals/is prefixed by anything
+under `baseDir`; the Tier-2 control **is** removed (exact path in `apply`'s `removed[]`); `baseDir`
+content's hash is byte-identical before/after; `apply` reports `ok: true`.
 
 ---
 
 ### C10F-6 — Dry-run is the default and the only read path
 
-**Statement.** `od storage gc plan` / `GET /api/storage/gc-plan` never mutates the filesystem,
-regardless of candidate count. There is no invocation shape of the plan surface that deletes
-anything. Closes part of **T6**.
+**Statement.** `plan` never mutates the filesystem; CLI exits `0` with schema-valid JSON;
+`planStorageRetention`'s own transitive call graph contains no filesystem-delete primitive. Closes
+part of **T6**.
 
-**Satisfiability.** `plan` is implemented as a pure read: registry iteration + eligibility checks +
-size accounting, with no `fs.rm`/`fs.unlink` call reachable from its code path at all (not "guarded
-by a flag that defaults false" — structurally absent).
+**Satisfiability.** Pure read; no `fs.rm`/`unlink`/`rmdir` anywhere in `planStorageRetention`'s own
+closure.
 
-**Decoy.** An implementation where `plan` and `apply` share one function gated by a boolean
-parameter defaulting to `false` fails this criterion's stricter form (see C10F-7) even if the
-default is safe today, because a decoy fixture calls the shared function with the boolean
-explicitly (but incorrectly, e.g. via a stray `true` default reintroduced in a later edit) and nothing
-in the type/control-flow shape prevents it — the AST check requires structurally separate plan/apply
-entry points, not a shared function with a default-off flag.
+**Decoy.** A shared `planAndMaybeApply(mutate)` function fails the exact-export-name requirement —
+there is no `planStorageRetention` for the reachability BFS to root at.
 
-**Verification.** Full recursive file listing + content hash of every fixture root, before and
-after `gc plan --json` against a tree with several eligible candidates; asserts the multiset of
-{path, hash} pairs is byte-identical (occurrence-count comparison, not a Set — a moved/renamed
-file must be visible as a real diff, not silently absorbed). AST scan of the production module
-confirms `plan`'s call graph (transitive local-import BFS) never reaches a filesystem-mutating call.
+**Verification.** Multiset of two fixture namespaces before/after `plan --json`; exit `0`,
+schema-valid JSON, both trees byte-identical. AST reachability BFS from
+`export function planStorageRetention` confirms zero delete-primitive calls.
 
 ---
 
-### C10F-7 — Apply is a distinct, plan-bound, re-validated action
+### C10F-7 — Apply is a distinct, plan-bound, re-validated, confirm-gated action
 
-**Statement.** `od storage gc apply` requires an explicit `--confirm` flag **and** a `planId`
-referencing a specific prior `plan` call's candidate set. At execution time, apply re-validates
-every candidate against C10F-2/C10F-3/C10F-4/C10F-5 immediately before deleting it — a candidate
-that was eligible when planned but is no longer (e.g. its namespace became active, or the file
-disappeared) is skipped and reported, never force-deleted. The realized deletion set is exactly the
-plan's candidate set minus anything that failed re-validation — never a superset. Closes **T6, T7**.
+**Statement.** Missing `--confirm` rejected; unknown `planId` rejected; realized `removed[]`
+compared **exactly** (multiset) against the plan minus whatever became ineligible; a
+re-validated-ineligible candidate carries a non-empty `reason`. Closes **T6, T7**.
 
-**Satisfiability.** `apply` looks up the stored plan by `planId`, iterates its exact candidate list
-(not a fresh registry scan), re-runs the four safety checks per candidate, deletes only survivors,
-and records every skip with a reason. `plan` and `apply` are separate CLI subcommands / HTTP
-routes, so no single flag flip converts one into the other.
+**Satisfiability.** Rejects both negative cases outright; iterates the plan's exact list; re-runs
+safety checks per candidate; records every skip with a reason.
 
-**Decoy.** An implementation that re-scans the registry from scratch at apply time (ignoring
-`planId`) rather than re-validating the plan's own candidate list fails the red spec: between plan
-and apply, a new file appears in the same category that would also be eligible under a fresh scan
-but was never in the original plan — the decoy deletes it anyway (a set expansion the operator
-never saw or approved); the correct implementation's realized set is bounded by the plan.
+**Decoy.** Re-scanning the registry at apply time (ignoring `planId`) lets a post-plan surprise file
+get swept in — the multiset comparison catches it exactly.
 
-**Verification.** Red spec: call `plan`, capture its candidate set and `planId`; before calling
-`apply`, (a) make one previously-eligible candidate ineligible (start a stamped process in its
-namespace) and (b) introduce one *new* eligible-looking file not in the original plan; call `apply
---plan <planId> --confirm`; assert the realized deletion multiset equals `plan's candidates minus
-(a)`, that (a) survives with a recorded skip reason, and that the new file from (b) is untouched
-(not in the realized set, proving apply didn't silently re-scan).
+**Verification.** Two negative controls first (no `--confirm`; unknown `planId`), then: plan; make
+one candidate's namespace active and add a new post-plan file; apply. Assert exact multiset equality
+of `removed[]` vs. plan-minus-ineligible; the ineligible file survives with a non-empty skip reason;
+the surprise file is untouched and absent from `removed[]`.
 
 ---
 
-### C10F-8 — Retention windows are configurable, named, independently effective, and stated
+### C10F-8 — Retention windows: boot-time, independently effective, and stated
 
-**Statement.** Each registry category has its own named, overridable retention-window
-configuration value (`OD_STORAGE_RETENTION_<CATEGORY>_DAYS`-shaped). Changing one category's
-window changes only that category's eligibility, provably. A zero, negative, or malformed value is
-rejected at config-read time (fails closed to "nothing in this category is eligible" plus a
-reported config error), never silently coerced to "everything is eligible now." **The *effective*
-window value actually in force for each category — whatever resolved it, default or override — is
-echoed verbatim in every `plan`/`report` response**, so "configurable" cannot regress into a value
-that is only auditable by re-deriving it from an env var an operator has to already trust was read
-correctly. Closes **T8**.
+**Statement.** Read at daemon-boot time (a thin HTTP-client CLI cannot retroactively change an
+already-running daemon's own environment). Changing one category's window changes only that
+category, holding others fixed. `0`/negative rejected as config errors. Resolved value echoed
+**exactly** as `retentionWindows[category].days`. Closes **T8**.
 
-**Satisfiability.** Config is read once per invocation through a validated parser (integer,
-positive, explicit min/max sanity bounds) with a named default per category (defaults themselves
-are Open question 1 — not fixed by this PRD), the retention comparison is a plain age-vs-window
-check per category, independently overridable via distinct env vars, and the same resolved value
-the eligibility check used is attached to the response payload under that category's key — not
-recomputed a second time for display (which could silently diverge from what was actually applied).
+**Satisfiability.** Boot-time validated parser per category; the same resolved value used for
+eligibility is attached to the response.
 
-**Decoy.** A single global `OD_STORAGE_RETENTION_DAYS` knob applied uniformly to every category
-fails the red/green pair: the test sets a wide window for category A and a narrow window for
-category B, and the decoy — having only one knob — cannot make an identical-age fixture survive in
-A while being collected in B, which the red spec requires. Separately, an implementation that
-reads the env var correctly for eligibility but hardcodes a documentation-default string in the
-response body (rather than the value it actually resolved and used) fails the "stated" half
-specifically: the red spec sets a non-default override and asserts the echoed value in the
-response equals the override, not the shipped default.
+**Decoy.** Placing the override on a CLI subprocess's env after the daemon already booted has no
+effect on a thin-HTTP-client CLI. `JSON.stringify(...).includes('365')` accepts a coincidental
+substring match.
 
-**Verification.** For each registry category, seed an identically-aged fixture file; run `gc plan`
-under a wide window (survives) and again under a narrow window (collected) for that category only,
-holding every other category's window fixed; assert the other categories' eligibility is
-unaffected by the changed knob, **and** that the response's echoed effective-window value for each
-category equals the value that run actually set (never the default, once overridden). Separately:
-set a `0` and a `-5` window value and assert `gc plan` reports a config validation error for that
-category (not a plan containing everything in it).
+**Verification.** Four dedicated daemon boots (never the shared one), override set BEFORE boot:
+wide (`365`, survives), narrow (`1`, collected), `0`/`-5` (both rejected). Exact field comparison;
+a second, untouched category held fixed across wide/narrow.
 
 ---
 
 ### C10F-9 — Size/inventory report, before and after, re-derived at runtime
 
-**Statement.** Every `plan`/`apply`/`report` call returns a per-category and total byte count +
-file count computed from real `fs.stat` calls over the actual current filesystem state at call
-time — never cached, hardcoded, or derived purely from the plan's stale numbers. `apply`'s
-after-totals reconcile exactly with before-totals minus the realized deletion set. Closes **T9**.
+**Statement.** Computed from real `fs.stat` at call time; compared **exactly** against an
+independently-computed ground truth. Closes **T9**.
 
-**Satisfiability.** `report`/`plan` walk each registry category's actual root (bounded by the
-registry, not a generic walk — consistent with C10F-1) and `fs.stat` every entry found there at
-call time; `apply` calls the same accounting function again after deleting, and the two numbers are
-diffed programmatically, not asserted independently.
+**Satisfiability.** Walks each category's actual root and `fs.stat`s at call time; re-derives
+post-apply, never arithmetic-subtracts the plan's prediction.
 
-**Decoy.** An implementation that computes the "after" report by subtracting the plan's *predicted*
-bytes from the "before" report, rather than re-stating the filesystem after apply, fails the red
-spec: a candidate file grows between plan and apply (simulating concurrent write activity) — the
-decoy's arithmetic-subtraction after-report is wrong (based on the stale predicted size), while a
-real re-stat after-report is correct.
+**Decoy.** Arithmetic subtraction fails when a candidate's size changes between plan and apply.
 
-**Verification.** Seed a fixture tree, capture `report` before, run `plan` then `apply --confirm`
-with one candidate file's size deliberately changed between plan and apply (still eligible, just
-bigger/smaller), capture `report` after; assert after-totals equal an independently-computed
-ground truth (verifier's own `fs.stat` walk of the same fixture tree post-apply), not the
-plan-predicted arithmetic.
+**Verification.** A file whose size changes between plan and apply, plus a never-eligible survivor.
+Before/after report; changed file gone (ground truth); after-totals differ from before; after-totals
+consistent with the verifier's own independent post-apply stat walk.
 
 ---
 
-### C10F-10 — UI/CLI parity over one shared `/api/storage/*` contract
+### C10F-10 — UI/CLI parity over the three EXACT `/api/storage/*` routes
 
-**Statement.** `od storage gc plan`, `od storage gc apply`, `od storage report`, and the web
-Settings-area panel all drive `GET /api/storage/gc-plan`, `POST /api/storage/gc-apply`, `GET
-/api/storage/report` respectively — the same
-handler code, the same `packages/contracts/src/api/storage-gc.ts` DTOs — per root `AGENTS.md` →
-"Capability exposure." A `scripts/waves/capability-manifest.json` row exists for this capability
-with `parityApplicable: true` and is consistent with the live `SUBCOMMAND_MAP` in `cli.ts`, so
-`pnpm guard`'s existing capability-manifest/CLI-parity check (`scripts/guard.ts`, "Capability
-manifest / CLI parity") covers it going forward.
+**Statement.** CLI, HTTP, and UI all drive the same three exact routes and DTOs. Manifest row
+`parityApplicable: true` with an exact-set `httpPath`.
 
-**Satisfiability.** `cli.ts`'s `SUBCOMMAND_MAP` registers a `storage` key resolving (directly or
-via one hop of local imports) to a handler that issues the same HTTP requests the web panel issues
-against the daemon's own `/api/storage/*` routes — both surfaces are thin clients over one HTTP
-implementation.
+**Satisfiability.** `SUBCOMMAND_MAP.storage`'s handler and the UI panel both issue real requests
+against the three exact paths.
 
-**Decoy.** A CLI implementation that calls internal daemon functions directly (bypassing HTTP
-entirely) while the web UI goes through `/api/*` fails the reachability check in C10F-11 applied to
-this criterion's own binding requirement: the CLI's call graph never reaches the route handler
-through the `/api/storage/*` HTTP layer, so the "same contract, both surfaces" claim cannot be
-mechanically confirmed the way `od backup`/`od restore` are confirmed to operate on the same
-`RUNTIME_DATA_DIR` resolution the HTTP layer uses.
+**Decoy.** A manifest `httpPath` that is merely a prefix passes a naive check but fails exact-set
+membership. A UI component mentioning a path only in a comment fails the AST scan (comments are
+never visited).
 
-**Verification.** `capability-manifest.json` row present and valid per `scripts/guard.ts`'s
-existing shape checks; TS-compiler-API trace from `SUBCOMMAND_MAP.storage` to its handler
-(transitive local-import BFS, mirroring `verify-w0.ts`'s own `resolveCliHandlerModule` +
-`backupCallReachableFrom` pattern) confirms the handler issues requests against the exact
-`/api/storage/gc-plan|gc-apply|report` paths the daemon routes file registers.
+**Verification.** Manifest row validity. **Runtime proof:** the shared daemon's real
+`http.Server`'s `'request'` events are captured to a log for the whole C10F-2..C10F-9 run (attached
+from outside, no production-code change); the log must contain a real `GET .../gc-plan`, `POST
+.../gc-apply`, `GET .../report`. AST scan of every `StorageRetention*.tsx` for exact-path string
+literals in real call-expression position.
 
 ---
 
-### C10F-11 — Every red spec binds to the production GC path
+### C10F-11 — Every red spec binds to the production GC path, strictly scoped
 
-**Statement.** Every red spec required by C10F-2 through C10F-9 imports and exercises the real
-production module reachable from both `od storage gc …` (via `SUBCOMMAND_MAP`) and `POST/GET
-/api/storage/*` (via the daemon's route registration) — never a same-shaped module nothing calls.
+**Statement.** Every red spec imports a module inside `storage`'s **own** reachable set (never a
+server.ts-wide union) **and references** the binding, or drives the real CLI/HTTP surface via a
+real AST call-site.
 
-**Satisfiability.** Red spec test files import the storage module by its real path (or invoke it
-exclusively through the real `od` CLI binary / real HTTP requests against a daemon booted from this
-tree — "real transport," per `VERIFICATION-CONTRACT.md` §3 R2), and the verifier's static BFS from
-both real entry points (CLI `SUBCOMMAND_MAP` handler, HTTP route registration in `server.ts`)
-reaches the same module the test imports.
+**Satisfiability.** Imports the storage-gc module by its real path, or drives it exclusively via
+real CLI/HTTP.
 
-**Decoy.** A second, unwired module implementing identical GC logic — e.g. `apps/daemon/src/storage-gc/legacy-gc.ts`,
-imported only by the test files and by nothing reachable from `cli.ts` or `server.ts` — passes
-every other criterion's fixture-level assertions (the logic is correct) but fails this one: the
-verifier's transitive-import BFS from the two real entry points never reaches `legacy-gc.ts`, so every
-red spec that imports it directly is flagged as unbound, and the wave fails even though the tests
-themselves are green.
+**Decoy.** An unwired lookalike module (`storage-gc/legacy-gc.ts`) fails the strictly-scoped BFS.
+An import that's never referenced fails the imported-but-unused check.
 
-**Verification.** For each red spec file, TS-compiler-API-derived import graph from that file's own
-`import` specifiers; separately, transitive local-import BFS from `SUBCOMMAND_MAP`'s `storage`
-handler and from `server.ts`'s route registration call. A spec passes this check only if the module
-it imports (or, for HTTP/CLI-driven specs, the module the real surface's BFS reaches) is the same
-module both BFS traversals reach. A spec driving only real HTTP/CLI (no direct import) passes by
-construction, since it can only observe the production path.
+**Verification.** Per spec file: resolve relative imports; require at least one inside
+`storageReachable` AND actually referenced, or a real AST call-site for one of the three exact
+paths.
 
 ---
 
 ### C10F-12 — Gates
 
-**Statement.** `pnpm guard` and `pnpm typecheck` both exit `0` on the current tree. A standing
-hygiene requirement, not a "new behavior exists yet" check — it legitimately passes both before and
-after implementation, unlike every other `C10F-*` criterion above.
+**Statement.** `pnpm guard` and `pnpm typecheck` both exit `0`.
 
-**Satisfiability.** A legitimate implementation adds no lint/type errors, and (per the
-`capability-manifest.json`/`SUBCOMMAND_MAP` parity check `scripts/guard.ts` already enforces
-program-wide — see "Ground facts") registering a `storage` `SUBCOMMAND_MAP` key without the
-matching manifest row fails `pnpm guard` immediately, closing the same gap C10F-10 checks
-positively.
+**Satisfiability.** No lint/type errors; a `storage` `SUBCOMMAND_MAP` key without the manifest row
+fails guard immediately.
 
-**Decoy.** An implementation that ships a working GC engine but skips the manifest row, or
-introduces a stray `any`/unused import, fails this criterion even though C10F-1 through C10F-9
-might all pass — a real implementation cannot selectively satisfy the behavioral criteria while
-leaving the repo's own standing hygiene gates red.
+**Decoy.** A working engine that skips the manifest row fails this criterion even if C10F-1..9 pass.
 
-**Verification.** `pnpm guard` and `pnpm typecheck` are run for real, on the current tree, exit
-codes checked exactly.
+**Verification.** Both commands run for real; exit codes checked exactly.
 
 ---
 
 ### C10F-13 — Adversarial review of the implementation is on record, non-spoofable
 
-**Statement.** `docs/security/storage-gc-implementation-review.json` exists:
-`{reviewer, model, reviewedCommit, verdict}`. Mirrors `verify-w9-ingest.ts`'s C9-10 design exactly,
-for the same structural reason: an in-repo file committed in commit X cannot contain X's own SHA,
-so the record names a **strict ancestor of `HEAD`** that carries the complete implementation, never
-`HEAD` itself.
+**Statement.** `docs/security/storage-gc-implementation-review.json`:
+`{reviewer, model, reviewedCommit, verdict}`. `reviewedCommit` a strict ancestor of `HEAD`.
+`reviewer` matches git's `%an <%ae>` shape exactly and is exact-distinct from every author across
+`baseCommit..reviewedCommit`. `model` non-placeholder. Diff over the **full owned/lease surface**
+between `reviewedCommit` and `HEAD` empty. `verdict === 'APPROVE'`.
 
-**Satisfiability.** Commit the whole implementation first as some real commit P; a reviewer
-distinct from every author in `baseCommit..P` reviews P; the review record naming `reviewedCommit:
-P` is committed afterward, even as `HEAD` itself, adding only that one file — P's SHA is already
-stable by construction, so there is no chicken-and-egg problem.
+**Satisfiability.** Commit the whole implementation as P; a distinct reviewer reviews P; the record
+naming `reviewedCommit: P` is committed afterward.
 
-**Decoy.** A review record naming `reviewedCommit: HEAD` (the record's own commit) is structurally
-impossible to trust — at authoring time HEAD's own SHA does not exist yet — and is rejected outright
-by the strict-ancestor check. A same-author "review" (reviewer string colliding with a commit author
-in `baseCommit..reviewedCommit`) is rejected by the distinctness check. A review naming an old
-commit while the owned implementation paths kept changing afterward (so the review no longer covers
-the final state) is rejected by the empty-owned-diff check.
+**Decoy.** `reviewedCommit: HEAD` rejected by the strict-ancestor check. Substring matching let an
+**empty reviewer string** trivially "not match" (round 1) — exact-distinctness fixes this. A partial
+owned-path list let load-bearing surfaces drift post-review (round 1) — the full list below fixes it.
 
-**Verification.** `reviewedCommit` resolves to a real commit object and is a strict ancestor of
-`HEAD` (`git merge-base --is-ancestor`, and `reviewedCommit !== HEAD`); `git diff --name-only
-reviewedCommit HEAD` over the owned implementation/evidence paths
-(`apps/daemon/src/storage-gc/**`, `apps/daemon/src/routes/storage-gc.ts`, `apps/daemon/tests/
-storage-gc-*.test.ts`, `packages/contracts/src/api/storage-gc.ts`,
-`docs/security/daemon-threat-model.md`) is empty; `reviewer` is distinct from every commit author
-across `baseCommit..reviewedCommit` (`git log --format='%an <%ae>'`); `verdict === "APPROVE"`.
+**Verification.** Strict-ancestor + `git diff --name-only reviewedCommit HEAD -- <full owned-path
+list>` empty (`apps/daemon/src/storage-gc/**`, `apps/daemon/src/routes/storage-gc.ts`,
+`apps/daemon/src/cli.ts`, `apps/daemon/src/server.ts`, `apps/daemon/tests/**`,
+`packages/contracts/src/api/storage-gc.ts`, `packages/contracts/src/index.ts`,
+`apps/web/src/components/SettingsDialog.tsx`, `apps/web/src/i18n/types.ts`,
+`apps/web/src/i18n/locales/en.ts`, `scripts/waves/capability-manifest.json`,
+`docs/security/daemon-threat-model.md`, `docs/security/storage-gc-implementation-review.json`,
+`docs/plans/waves/DECISIONS.md`); `reviewer` matches `/^[^<>]+ <[^<>@]+@[^<>]+>$/` and is
+exact-absent from `git log --format='%an <%ae>' baseCommit..reviewedCommit`; `model` non-empty,
+≥2 chars, not a placeholder; `verdict === 'APPROVE'`.
 
 ---
 
-### GATE-INTEGRITY, LEASE, HEAD-DRIFT
+### C10F-14 — Freeze-blocking founder decisions are recorded
 
-Standard infra checks, mirroring `verify-w0.ts`/`verify-w9-ingest.ts`:
+**Statement.** Founder Rulings 1, 2, and 4 [sic — questions 1, 2, 4] must exist as real,
+non-trivial entries in `docs/plans/waves/DECISIONS.md` before this criterion can pass. This wave's
+author never writes to `DECISIONS.md`; the gate stays red until the orchestrator lands the records.
 
-- **GATE-INTEGRITY** — sha256 of `scripts/waves/verify-w10f.ts` (and, for this wave, this PRD file
-  too — both are frozen artifacts per the house rule below) checked against an
-  orchestrator-held `~/.claude/goal-state/mishmash-w10f-storage/approved-gate.sha256`. Advisory
-  (pass, noted) when that file doesn't exist yet (pre-approval); blocking (hash must match) once it
-  does. Defense-in-depth; the primary control is the orchestrator running an approved out-of-repo
-  copy, matching `verify-w0.ts`'s documented model.
-- **LEASE** — `git diff --name-only <baseCommit>...HEAD` must be a subset of
-  `leases.json@baseCommit`'s `W10f` entry, read via `git show <baseCommit>:docs/plans/waves/leases.json`
-  (never the working tree — a wave cannot widen its own lease by editing the file it's being
-  checked against). **Fails cleanly, by name, pre-freeze**, because no `W10f` entry exists in
-  `leases.json` yet — this is the expected, correct state until the orchestrator adds the entry
-  after this PRD freezes.
-- **HEAD-DRIFT** — `git rev-parse HEAD` re-resolved at the end of the run must equal the value
-  resolved at the start.
+**Satisfiability.** Three entries, each introduced by a bolded marker `**W10F-FOUNDER-1**`,
+`**W10F-FOUNDER-2**`, `**W10F-FOUNDER-4**`, followed by a real ruling before the next
+blank-line/heading/marker boundary.
+
+**Decoy.** This PRD's own prose stating the rulings (above) is NOT a substitute — only
+`DECISIONS.md` counts. A near-empty or copy-pasted-question "ruling" (under 20 characters) fails
+the non-trivial-content check.
+
+**Verification.** Read-only parse of `DECISIONS.md` for each marker; extract text to the next
+boundary; require ≥20 characters after trimming. All three required.
+
+---
+
+### C10F-15 — Retention defaults match Founder Ruling 1, exactly, as configuration not literals
+
+**Statement.** The registry's `defaultRetentionDays` per `justification` matches Ruling 1 exactly
+(`inactive-namespace` → 7, `log-retention` → 14, `e2e-artifact` → 3, `regenerable-cache` /
+`orphan-checked` → `null`, i.e. no default, not collectable without an explicit override). With no
+env override set, the daemon's own reported `retentionWindows[category]` reflects these exact
+values with `source: 'default'`; a category with no default never yields a candidate until an
+operator sets one explicitly.
+
+**Satisfiability.** Defaults are read from the same registry the eligibility logic consumes — one
+source of truth, never duplicated as separate literals in the GC and in a doc.
+
+**Decoy.** An implementation whose GC hardcodes `7`/`14`/`3` inline while the registry's own
+`defaultRetentionDays` field says something else (or is absent) fails the structural half even if
+runtime behavior happens to match today — the two are graded independently so they cannot silently
+diverge later. An implementation that gives `regenerable-cache`/`orphan-checked` categories a
+non-null default fails Ruling 1's "nothing else has a default" clause directly.
+
+**Verification.** Structural: registry `defaultRetentionDays` per entry matches the Ruling-1 table
+above by `justification`. Runtime: dedicated daemon boot, **no env overrides at all**; for an
+`inactive-namespace` category, `retentionWindows[cat] = {days: 7, source: 'default'}` exactly; for
+`log-retention`, `14`; for `e2e-artifact`, `3`. For a `regenerable-cache`/`orphan-checked` category:
+an aged fixture under it never appears as a candidate with no override set (positive control:
+setting `<category>`'s env var explicitly makes an identically-aged fixture collectable).
+
+---
+
+### C10F-16 — e2e test-output scope is pinned to the existing generated-only allowlist (Founder Ruling 2)
+
+**Statement.** Tier-3 registry entries' `pinnedRelativePaths` are a subset of
+`e2e/scripts/playwright.ts`'s own real `cleanArtifacts()` target list — never a new, separately
+invented "is this generated" heuristic. Content outside the pinned set, even under an
+e2e-adjacent directory, is never eligible regardless of age.
+
+**Satisfiability.** The registry's Tier-3 `pinnedRelativePaths` values are drawn directly from that
+existing, already-audited list.
+
+**Decoy.** A registry entry claiming a Tier-3 path NOT in `e2e/scripts/playwright.ts`'s real target
+list (i.e. a self-invented "this also looks generated" guess) fails the cross-reference structurally
+— caught before any runtime probe even runs. An implementation that generalizes past the pinned set
+(e.g. sweeps an entire `e2e/ui/` subtree by pattern rather than the named files) fails the runtime
+negative control below.
+
+**Verification.** Structural: AST-extract the real string-literal path segments passed to
+`path.join(...)` inside `cleanArtifacts()`; every Tier-3 registry `pinnedRelativePaths` entry must
+be an exact member of that set. Runtime: a fixture aged past 3 days under a pinned path IS
+collected; an otherwise-identical fixture aged the same amount under an unpinned, e2e-adjacent path
+(simulating user-authored content the implementation must not generalize to) is NEVER collected.
+
+---
+
+### C10F-17 — Orphan detection is proven safe (Founder Ruling 3's mandatory design consequence)
+
+**Statement.** `orphan-checked` collection requires a red spec proving, in one paired test: a
+referenced artifact (a real row exists pointing at it) is never collected; a genuinely orphaned one
+(no referencing row) is collected. Closes **T11**.
+
+**Satisfiability.** `apps/daemon/tests/storage-gc-orphan-detection.test.ts` exists, binds to
+production per C10F-11's rules, and contains two distinctly-titled test cases whose titles name
+"referenced" and "orphan" respectively.
+
+**Decoy.** A test asserting only the orphaned-collected half (no referenced-survives control) passes
+a naive "orphan detection exists" check while leaving T11 wide open — this criterion requires both,
+by name, structurally.
+
+**Verification.** File existence + C10F-11-style import/reachability binding. AST scan for at least
+two `test(...)`/`it(...)` call sites whose first-argument string literal contains, case-insensitive,
+"referenced" (for the survives case) and "orphan" (for the collected case) respectively — a real
+AST string-literal match, never a text/comment scan. This is a structural existence-and-binding
+proof, not a full fixture the verifier constructs itself (the real DB reference mechanism is an
+implementation detail this PRD does not prescribe); **C10F-13's adversarial-review record is the
+second, human-in-the-loop layer that must independently judge the genuineness of both fixtures**
+before `verdict: APPROVE` is legitimate.
+
+---
+
+### FIXTURE-ISOLATION, GATE-INTEGRITY, LEASE, HEAD-DRIFT
+
+Meta/infra checks — about the gate's own integrity and safety, never the product:
+
+- **FIXTURE-ISOLATION** — see "Verifier fixture-isolation guarantee." Structural self-scan + runtime
+  no-leak proof. Mechanical closure of round-1 finding 1.
+- **GATE-INTEGRITY** — sha256 of the verifier and this PRD checked against an orchestrator-held
+  `approved-gate.sha256`. Advisory pre-approval; blocking once it exists.
+- **LEASE** — diff subset of `leases.json@baseCommit`'s `W10f` entry. Fails cleanly pre-freeze (no
+  entry exists yet).
+- **HEAD-DRIFT** — HEAD unchanged during the run.
 
 ## Proposed lease
 
-PRD text only — **`leases.json` is not edited by this wave's expansion**. The orchestrator adds a
-`W10f` entry to `leases.json` after this document and its verifier are frozen and approved; the
-globs below are the proposal for that entry.
+PRD text only — `leases.json` is not edited by this wave's expansion.
 
 **Allow (future implementation):**
 
-- `apps/daemon/src/storage-gc/**` — new module (registry, plan, apply, report, CLI handlers).
-  **Deliberately not `apps/daemon/src/storage/**`** — that directory already exists and holds the
-  unrelated Phase-5 `ProjectStorage`/S3 adapter (`aws-sigv4.ts`, `project-storage.ts`, `daemon-db.ts`,
-  `db-inspect.ts`); reusing it would both collide with an existing lease-worthy module and blur two
-  unrelated concerns under one glob.
+- `apps/daemon/src/storage-gc/**` — new module. **Deliberately not `apps/daemon/src/storage/**`**
+  (existing, unrelated Phase-5 S3 adapter).
 - `apps/daemon/src/routes/storage-gc.ts` — new HTTP route file.
-- `apps/daemon/tests/storage-gc-*.test.ts` — red specs.
-- `packages/contracts/src/api/storage-gc.ts` — new contract DTOs (new file; does not touch other
-  contract files).
-- `apps/web/src/components/StorageRetention*` — new Settings-area panel (prefix glob for
-  not-yet-named files, mirroring the convention `W4`'s lease used for `DesignsTab*`/`RecentProjectsStrip*`).
-- `apps/daemon/src/cli.ts` — to register the `storage` key in `SUBCOMMAND_MAP`. **Shared,
-  contested file** — by the time this wave executes (gates only on W0, so it may run well before
-  or after W1/W2/W4's bursts land), confirm no concurrent W-series writer currently holds it; if a
-  same-burst conflict emerges, resolve via the established amend-on-proof pattern (one file, on
-  proof of necessity), not a standing pre-claim.
-- `apps/daemon/src/server.ts` — to register the new routes. Same shared-file caveat as `cli.ts`
-  above; W1 and W4 have both held this file at various points in the program's execution order.
-- `scripts/waves/capability-manifest.json` — one new row for the `storage` capability, per C10F-10
-  (same pattern W1's C1-8 and W4's C4-12 required).
-- `docs/security/daemon-threat-model.md` — append-only, a new `## Wave 10f` section bounded to the
-  next `## ` heading (mirroring W9's C9-7 convention); must not edit any other wave's section.
-  Shared with W0 (already landed) and W9-ingest; temporally serialized, never concurrent.
+- `apps/daemon/tests/storage-gc-*.test.ts` — red specs, including
+  `storage-gc-orphan-detection.test.ts` (C10F-17).
+- `packages/contracts/src/api/storage-gc.ts` — new contract DTOs.
+- `packages/contracts/src/index.ts` — narrow addition only: one new re-export line.
+- `apps/web/src/components/StorageRetention*` — new Settings panel (prefix glob, mirrors W4's
+  `DesignsTab*`/`RecentProjectsStrip*` convention).
+- `apps/web/src/components/SettingsDialog.tsx` — narrow addition only: one `SettingsSection` union
+  member, one nav button, one render branch. Shared/contested; confirm no concurrent writer;
+  amend-on-proof if a same-burst conflict emerges.
+- `apps/web/src/i18n/types.ts`, `apps/web/src/i18n/locales/en.ts` — narrow addition only: the new
+  typed keys the panel needs. Shared; amend-on-proof if contested.
+- `apps/daemon/src/cli.ts` — register the `storage` key. Shared/contested; amend-on-proof.
+- `apps/daemon/src/server.ts` — register the new routes. Same caveat.
+- `scripts/waves/capability-manifest.json` — one new row.
+- `docs/security/daemon-threat-model.md` — append-only, new `## Wave 10f` section.
 - `docs/security/storage-gc-implementation-review.json` — the C10F-13 review record.
-- `docs/plans/waves/DECISIONS.md` — for recording founder rulings on the open questions below,
-  mirroring W9-ingest's lease rationale (attribution/scope decisions belong in a founder-authorized
-  record, never an implementation-authored assertion).
+- `docs/plans/waves/DECISIONS.md` — for recording the three founder rulings (C10F-14) and any
+  further decisions from the advisory open questions.
 
 **Deny (explicit, house rule):**
 
-- `docs/plans/waves/W10f-storage.md` — this PRD. Frozen; the implementing agent may not edit its
-  own acceptance criteria after seeing its own implementation. This is the specific failure mode
-  the expansion gate exists to prevent (`W5-W11-gated.md` lines 10–13).
-- `scripts/waves/verify-w10f.ts` — this verifier. Same reasoning; gate integrity is bound by the
-  orchestrator-held approved copy + `approved-gate.sha256`, not by trusting the implementer not to
-  edit it.
-- `docs/plans/waves/leases.json` — mechanical, orchestrator-owned; never implementer-edited.
-- `docs/plans/waves/VERIFICATION-CONTRACT.md`, `docs/plans/waves/GLOBAL-GOAL.md` — frozen program
-  contract documents.
-- `apps/daemon/src/projects.ts`, `apps/daemon/src/daemon-paths.ts` — this wave **cites and reuses**
-  `hasExternalProjectRoot`/`resolveProjectDir`/`isPathWithin`; it does not modify them. A proven
-  need to change either is an amend-on-proof request, not a standing grant, given how
-  security-sensitive both files already are.
-- Every other wave's exclusively-owned files (`apps/daemon/src/backup/**`,
-  `apps/daemon/src/routes/library.ts`, `apps/web/src/components/EntryShell.tsx`, etc.) — implicit
-  via the allowlist-only enforcement model (`VERIFICATION-CONTRACT.md` §3 R9), listed here only
-  for the highest-collision-risk items.
+- `docs/plans/waves/W10f-storage.md` — this PRD. Frozen.
+- `scripts/waves/verify-w10f.ts` — this verifier. Frozen.
+- `docs/plans/waves/leases.json` — mechanical, orchestrator-owned.
+- `docs/plans/waves/VERIFICATION-CONTRACT.md`, `docs/plans/waves/GLOBAL-GOAL.md` — frozen contract
+  documents.
+- `apps/daemon/src/projects.ts`, `apps/daemon/src/daemon-paths.ts` — cited/reused, not modified.
+  Amend-on-proof.
+- Every other wave's exclusively-owned files — implicit via the allowlist-only enforcement model.
 
 ## Open founder questions
 
-Enumerated, not resolved. Each needs a `docs/plans/waves/DECISIONS.md` entry before or during
-implementation; none blocks freezing this PRD or its verifier.
+**1, 2, and 4 are now RULED** (see "Founder rulings" above) — the gate stays mechanically bound to
+the real `DECISIONS.md` records landing (C10F-14), not to this PRD's restatement of them. **3, 5,
+6, 7 remain advisory** — this PRD states its working assumption for each and does not block
+freezing on them.
 
-1. **Default retention windows per category.** This PRD deliberately does not pick numbers. The
-   skeleton's "30 GB" figure is unverified (Scope, "Why this wave exists"). The implementer should
-   measure real `.tmp`/`.od` growth on a representative dev machine and propose defaults per
-   category for founder sign-off, rather than this PRD guessing.
-2. **Does this wave's GC cover `e2e/ui/{reports,test-results,.od-data}` at all**, or does
-   `e2e/scripts/playwright.ts clean` remain the sole owner of that tree (this PRD's default, per
-   Scope)? The skeleton named e2e artifacts explicitly; this PRD's allowed-root constraint
-   (inherited from `AGENTS.md`'s daemon data directory contract) structurally excludes them unless
-   the founder wants a distinct, separately-chartered surface for that tree.
-3. **Should GC ever run on a timer inside the daemon process** (like the existing snapshot GC's
-   `setInterval`), or does it stay a strictly operator/automation-invoked action (plan, then apply)
-   for v1, with scheduling deferred? This PRD defaults to the latter (Scope).
-4. **Which `RUNTIME_DATA_DIR`-derived categories, if any, belong in the Tier 2 registry for v1?**
-   This PRD requires each Tier 2 entry to carry a provable-orphan-or-pure-cache justification
-   (Scope) but does not enumerate the categories itself — that requires investigation this
-   expansion pass did not do (e.g. confirming whether `CRITIQUE_ARTIFACTS_DIR` entries are ever
-   referenced by a live SQLite row, which this PRD does not know). The implementer proposes
-   specific categories with their justification; the founder (or an adversarial reviewer, per this
-   program's review process) confirms each before it ships.
-5. **Resumability/idempotency contract for a failed or interrupted `apply`.** Is "some deleted,
-   report says exactly which, a fresh `plan`+`apply` cycle is always safe to re-run" sufficient
-   (this PRD's assumption, embedded in C10F-7's re-validation requirement), or does the founder
-   want a stronger transactional/resumable guarantee?
-6. **Durable audit log of apply runs** (what was deleted, when, under which plan) — should one
-   exist, and if so, where does it live without becoming its own unbounded-growth vector this GC
-   would then need to cover? Not addressed by this PRD.
-7. **Size-based trigger in addition to age-based retention** — should the report surface a
-   "you are over N GB, consider running apply" signal (UI/CLI advisory only, never automatic), or
-   is pure per-category age-based eligibility sufficient for v1? This PRD assumes the latter.
+3. **[Advisory] Should GC ever run on a timer inside the daemon process**, or stay strictly
+   operator/automation-invoked for v1? This PRD assumes the latter (Scope).
+5. **[Advisory] Resumability/idempotency contract for a failed or interrupted `apply`.** This PRD
+   assumes "some deleted, report says exactly which, a fresh plan+apply cycle is always safe to
+   re-run" is sufficient (embedded in C10F-7's re-validation requirement).
+6. **[Advisory] Durable audit log of apply runs** — should one exist, and where does it live
+   without becoming its own unbounded-growth vector? Not addressed by this PRD.
+7. **[Advisory] Size-based trigger in addition to age-based retention** — an advisory-only "you are
+   over N GB" signal? This PRD assumes pure per-category age-based eligibility suffices for v1.
 
 ## How the verifier runs
 
@@ -726,53 +702,27 @@ pnpm exec tsx scripts/waves/verify-w10f.ts
 ```
 
 Writes a commit-bound proof manifest to
-`~/.claude/goal-state/mishmash-w10f-storage/proof/manifest.json` (per
-`VERIFICATION-CONTRACT.md` §2) and prints a per-criterion scoreboard. Exits non-zero if any
-criterion fails, the tree is dirty, or the manifest fails to write.
+`~/.claude/goal-state/mishmash-w10f-storage/proof/manifest.json` and prints a per-criterion
+scoreboard. Exits non-zero if any criterion fails, the tree is dirty, or the manifest fails to
+write.
 
-## Verified baseline (this run, pre-implementation)
+## Verified baseline (this run, pre-implementation, post round-2 fix)
 
-Captured directly from a real run of `scripts/waves/verify-w10f.ts` against this branch, immediately
-after writing this PRD and the verifier, with no implementation present — real stdout, not a
-prediction:
+Every `C10F-*` and `FOUNDER`/`FIXTURE-ISOLATION`/infra check runs clean-red: dynamic criteria fail
+by name ("product surface missing"), C10F-14/15/16 (structural halves) fail by name pending the
+implementation and the landed `DECISIONS.md` records, `FIXTURE-ISOLATION`/`GATE-INTEGRITY`/
+`HEAD-DRIFT` pass, `LEASE` fails by name (no `W10f` entry yet). The run never touches ports
+7456/51012 (confirmed via `lsof` before/after — unchanged) and leaves no orphaned processes.
 
-```
-verify-w10f: 3/16 criteria pass (treeDirty=true)
-  [FAIL] C10F-1 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
-  [FAIL] C10F-2 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
-  [FAIL] C10F-3 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
-  [FAIL] C10F-4 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
-  [FAIL] C10F-5 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
-  [FAIL] C10F-6 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
-  [FAIL] C10F-7 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
-  [FAIL] C10F-8 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
-  [FAIL] C10F-9 (product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP)
-  [FAIL] C10F-10 (no capability-manifest.json row with capability === "storage")
-  [FAIL] C10F-11 (no apps/daemon/tests/storage-gc-*.test.ts files found)
-  [PASS] C10F-12
-  [FAIL] C10F-13 (docs/security/storage-gc-implementation-review.json does not exist yet -- expected pre-implementation state)
-  [PASS] GATE-INTEGRITY
-  [FAIL] LEASE (no "W10f" entry in leases.json@8e788d123557d2369c9aa43401da3412cd43a391 -- expected until the orchestrator adds one after this PRD/verifier freeze)
-  [PASS] HEAD-DRIFT
-  ⚠ tree is dirty: advisory only, never a wave pass
-MANIFEST_SHA256=ce1ccb9654ac05cb24f9a10763f32727b1a298dda4687f46a468bfac84dd98a1
-```
+## Round-1 findings → closures
 
-`echo $?` after this run: `1`. Every `C10F-*` criterion fails **by name**, with a specific, honest
-reason (`product surface missing: ...`), never a crash, hang, timeout, or unhandled exception — the
-verifier never attempts to boot its shared fixture daemon at all in this state (`storageEntry` is
-`null`, so `bootSharedDaemon()` is skipped entirely; grep the run for any contact with a daemon and
-there is none). `C10F-12` (gates) passes legitimately, since it is a standing hygiene check, not a
-"new behavior" check — `pnpm guard`/`pnpm typecheck` are already green on the current tree.
-`GATE-INTEGRITY` passes advisory (no `approved-gate.sha256` pinned yet). `LEASE` fails by name for
-the expected reason (no `W10f` entry in `leases.json@baseCommit` yet — this PRD proposes globs; it
-does not add the entry). `HEAD-DRIFT` passes (nothing else touched `HEAD` mid-run). `treeDirty` is
-`true` in this capture because this PRD and the verifier are themselves new, uncommitted files at
-capture time — expected until they land as a commit.
-
-Separately, `startServer({ port: 0, host: '127.0.0.1', returnServer: true })` (the exact primitive
-`bootIsolatedDaemonSubprocess` uses) was sanity-checked standalone in an isolated fixture
-`OD_DATA_DIR`: it boots on an OS-assigned ephemeral port (observed: `65312` in one run — never
-7456/51012), answers a real `GET /api/projects` with `200`, and `shutdown()` cleanly stops it —
-confirming the shared-daemon mechanism this verifier's dynamic criteria depend on actually works,
-independent of whether `storage-gc` exists yet to exercise it end-to-end.
+| # | Severity | Finding (condensed) | Closure |
+|---|---|---|---|
+| 1 | CRITICAL | Fixtures built under the real checkout `.tmp/tools-dev/`; apply could delete real data | `OD_STORAGE_TMP_ROOT` (brace) + `assertPlanConfinedToTempRoot` before every apply (belt) + `FIXTURE-ISOLATION` structural+runtime proof |
+| 2 | HIGH | C10F-1 accepted unsafe literals and banned all `readdir`; C10F-2 never injected the collision into the real path; C10F-3's symlink-to-file test proved nothing | Pure-data registry validator; runtime decoy-directory proof replaces the readdir ban; C10F-2 moved to source-level collision with exact-path JSON assertions; C10F-3 rebuilt around a symlink-to-DIRECTORY |
+| 3 | HIGH | C10F-4 one category, substring match; C10F-5 no positive control, no apply-response check | C10F-4 sweeps every Tier-1 category with exact-path JSON; C10F-5 adds a genuine positive control and checks `apply`'s parsed response |
+| 4 | HIGH | C10F-6 ignored exit/JSON validity, one namespace, no real reachability proof; C10F-7 missing negative controls, no exact multiset, no skip-reason check; daemon teardown unproven | C10F-6 checks exit+schema+multi-namespace+real reachability BFS; C10F-7 adds both negative controls + exact multiset diff + skip-reason check; teardown uses `@open-design/platform`'s real process-tree utilities |
+| 5 | HIGH | C10F-8 set env on the CLI subprocess after the daemon already booted; one category; substring match | C10F-8 boots four dedicated daemons with the override set at BOOT time; exact field comparison; a second category held fixed |
+| 6 | HIGH | C10F-10 accepted a path prefix and any similarly-named call; C10F-11 unioned the whole server.ts graph and accepted comment-text matches | C10F-10 requires the three exact routes AND real captured HTTP traffic AND an AST-exact UI call-site scan; C10F-11 scopes reachability strictly and adds an imported-but-unused check |
+| 7 | HIGH | C10F-13 `model` unvalidated; `reviewer` substring-matched (empty string always "matched"); owned-paths list incomplete | `model` validated non-placeholder; `reviewer` exact-format + exact-distinctness; owned-paths expanded to the full lease surface |
+| 8 | HIGH | Lease missing contracts-barrel/SettingsDialog/i18n grants; founder questions 1/2/4 left open | Lease expanded; C10F-14 added, mechanically binding the gate to real `DECISIONS.md` records; questions 1/2/4 now ruled (Founder rulings) and operationalized as C10F-15/16/17 |
