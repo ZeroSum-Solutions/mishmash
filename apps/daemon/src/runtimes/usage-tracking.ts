@@ -336,18 +336,18 @@ export function projectUsageSummary(
   return {
     projectId,
     currency: 'USD',
-    // C1-7: a project with NO runs at all has unambiguously spent $0 -- a
-    // confident zero, not the same "unavailable" null C1-9 means for a
-    // project that HAS runs but none of them priced. Conflating the two
-    // made a real "before any run" baseline read back as null, which a
-    // genuine HTTP baseline observation can never tell apart from
-    // "unpriced" (the very thing C1-9 requires never rendering as $0.00).
-    totalCostUsd:
-      runs.length === 0
-        ? 0
-        : priced.length > 0
-          ? priced.reduce((sum, r) => sum + (r.costUsd ?? 0), 0)
-          : null,
+    // C1-7: always the real sum of whatever IS priced -- 0 when nothing is
+    // (no runs at all, or runs that exist but priced.length is 0 either
+    // way), never a null placeholder standing in for "no data." A null
+    // total is indistinguishable, to a real HTTP "before any run" baseline
+    // read, from "this project has unpriced runs" -- collapsing a genuine
+    // $0 observation into the same signal as "unknown." `pricingVersion`
+    // is the one, sole "is this confident/complete" signal now (C1-9);
+    // every consumer that used to gate on `totalCostUsd === null` to avoid
+    // rendering a bare fake $0.00 must gate on `pricingVersion ===
+    // 'unavailable'` instead (see EntryShell.tsx's formatUsageTotal and
+    // cli.ts's runUsage).
+    totalCostUsd: priced.reduce((sum, r) => sum + (r.costUsd ?? 0), 0),
     pricingVersion,
     runCount: runs.length,
     pricedRunCount: priced.length,
