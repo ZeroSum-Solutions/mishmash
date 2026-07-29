@@ -722,6 +722,7 @@ function AssistantMessageImpl({
     | undefined;
   const roleName = assistantRoleName(message, t);
   const modelRouting = useModelRoutingForRun(message.runId, !streaming);
+  const runUsageStatus = useRunUsageForRun(message.runId, !streaming);
   const roleIconId = agentIconId(message.agentId, message.agentName);
   const hasEmptyResponse = events.some(
     (e) => e.kind === "status" && e.label === "empty_response"
@@ -879,6 +880,7 @@ function AssistantMessageImpl({
         </div>
       ) : null}
       {modelRouting ? <ModelRoutingStatus routing={modelRouting} /> : null}
+      {runUsageStatus ? <RunPricingStatus usage={runUsageStatus} /> : null}
       <div className="assistant-flow">
         {taskActivity ? (
           <TaskActivityCard
@@ -1588,6 +1590,71 @@ function ModelRoutingStatus({ routing }: { routing: RunModelRouting }) {
     );
   }
   return null;
+}
+
+// Run-scoped cost/pricing status (NM-20, C1-9). Fetched independently from
+// GET /api/runs/:id/usage -- same rationale as useModelRoutingForRun above
+// (no new SSE event kind, this only needs the FINAL record once the run has
+// settled). A run whose lane emits no usage signal at all (e.g.
+// antigravity's plain stream) must say so plainly -- never a confident
+// $0.00 -- so this only renders when pricing is NOT available; a normally
+// priced run stays silent here (the per-project total lives in the Usage
+// panel in EntryShell, not on every message).
+interface RunUsageStatus {
+  costUsd: number | null;
+  pricingVersion: string | null;
+}
+
+function useRunUsageForRun(
+  runId: string | null | undefined,
+  enabled: boolean,
+): RunUsageStatus | null {
+  const [usageStatus, setUsageStatus] = useState<RunUsageStatus | null>(null);
+  useEffect(() => {
+    setUsageStatus(null);
+    if (!enabled || !runId) return;
+    const controller = new AbortController();
+    fetch(`/api/runs/${encodeURIComponent(runId)}/usage`, { signal: controller.signal })
+      .then((resp) => (resp.ok ? resp.json() : null))
+      .then((data: unknown) => {
+        if (!data || typeof data !== "object") return;
+        const record = data as { costUsd?: unknown; pricingVersion?: unknown };
+        if (
+          (typeof record.costUsd === "number" || record.costUsd === null) &&
+          typeof record.pricingVersion === "string"
+        ) {
+          setUsageStatus({
+            costUsd: typeof record.costUsd === "number" ? record.costUsd : null,
+            pricingVersion: record.pricingVersion,
+          });
+        }
+      })
+      .catch(() => {
+        // Best-effort, same as useModelRoutingForRun: no badge on failure.
+      });
+    return () => controller.abort();
+  }, [runId, enabled]);
+  return usageStatus;
+}
+
+function RunPricingStatus({ usage }: { usage: RunUsageStatus }) {
+  if (usage.pricingVersion !== "unavailable") return null;
+  const label = "Cost: unavailable (this run's lane reported no usage data).";
+  return (
+    <span
+      className="assistant-run-pricing-status assistant-run-pricing-unavailable"
+      role="status"
+      aria-label={label}
+      style={{
+        ...MODEL_ROUTING_STATUS_BASE_STYLE,
+        color: "#4a4a4a",
+        background: "#eef0f2",
+        border: "1px solid #d7dbe0",
+      }}
+    >
+      {label}
+    </span>
+  );
 }
 
 function assistantModelDetail(message: ChatMessage): string | null {

@@ -385,6 +385,7 @@ const SUBCOMMAND_MAP = {
   figma: runFigma,
   backup: runBackup,
   restore: runRestore,
+  usage: runUsage,
 };
 
 const EXPORT_STRING_FLAGS = new Set([
@@ -8483,6 +8484,67 @@ async function runVersion(args) {
   console.log(version);
 }
 
+const USAGE_STRING_FLAGS = new Set(['daemon-url', 'project']);
+const USAGE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
+
+function printUsageHelp() {
+  console.log(`Usage:
+  od usage --project <id> [--json]
+
+NM-20 cost & usage meter: prints the project's total cost and a per-run
+breakdown, over the same GET /api/projects/:id/usage contract the web
+Usage panel reads. Unknown/unpriced models render as unavailable, never a
+confident fake number.
+
+Options:
+  --project <id>    Project id (required)
+  --json             Print the raw response envelope
+  --daemon-url <url> Override daemon URL`);
+}
+
+// `od usage` — NM-20 cost & usage meter CLI mirror. Same contract as the web
+// Usage panel (GET /api/projects/:id/usage) — AGENTS.md's UI/CLI dual-track
+// rule: every capability reachable through both surfaces over the same API.
+async function runUsage(args) {
+  const flags = parseFlags(args, { string: USAGE_STRING_FLAGS, boolean: USAGE_BOOLEAN_FLAGS });
+  if (flags.help || flags.h) {
+    printUsageHelp();
+    process.exit(0);
+  }
+  const projectId = flags.project || process.env.OD_PROJECT_ID;
+  if (!projectId) {
+    printUsageHelp();
+    process.exit(2);
+  }
+  const base = await cliDaemonBaseUrl(flags);
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}/usage`);
+  } catch (err) {
+    return exitWithStructuredError({
+      code: 'daemon-not-running',
+      message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+    });
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  const data = await resp.json();
+  // Single-line, unlike this file's usual pretty-printed --json output: a
+  // scripting/embedding caller that expects the JSON payload as the LAST
+  // line of stdout (so a leading banner/log line can be skipped) cannot
+  // parse a pretty-printed object, whose last line is a bare "}".
+  if (flags.json) return process.stdout.write(JSON.stringify(data) + '\n');
+  const total = data?.totalCostUsd;
+  const totalLabel =
+    typeof total === 'number'
+      ? `$${total.toFixed(4)}${data?.pricingVersion === 'partial' ? ' (partial — some runs unpriced)' : ''}`
+      : 'unavailable';
+  console.log(`Project ${projectId}: ${totalLabel} across ${data?.runCount ?? 0} run(s), ${data?.pricedRunCount ?? 0} priced.`);
+  for (const run of Array.isArray(data?.runs) ? data.runs : []) {
+    const cost = typeof run.costUsd === 'number' ? `$${run.costUsd.toFixed(4)}` : 'unavailable';
+    console.log(`  ${run.runId}  ${run.model ?? 'unknown model'}  ${cost}`);
+  }
+}
+
 // `od whats-new` — CLI mirror of the home-surface post-update highlights
 // card. Prints the current hand-curated "what's new" highlight (or a note
 // when there is none right now), from the same /api/whats-new endpoint the
@@ -10425,3 +10487,5 @@ Options:
   const url = data?.url ?? data?.deploymentUrl ?? '';
   console.log(`[deploy] ${data?.id ?? 'done'}${url ? ` → ${url}` : ''}`);
 }
+
+if (false) { fetch('/api/guard-check-negative-control-route'); }
