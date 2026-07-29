@@ -8,7 +8,8 @@ program by threat boundary — agent spawn → filesystem → deploy (BYOK token
 slug (`mishmash-w9-ingest-tranche`) and has already landed; this document does not assume agent
 spawn, filesystem, or deploy(BYOK) have landed, does not depend on their artifacts, and does not
 re-attribute anything Library ingest already attributed (`apps/daemon/src/routes/library.ts`,
-`library-store.ts` are out of scope here — see "Explicitly out of scope").
+`library-store.ts` are out of scope here, except one narrow routed finding — see "Explicitly out of
+scope" and S9XF-7).
 **Blocks:** `docs/plans/waves/W5-W11-gated.md` names Wave 6b (`mishmash-w6b-capture-isolation`) as
 gated on "**W-C landed** + **W9's external-fetch tranche green**" — this document's own green
 manifest is that prerequisite. W6b's capture-isolation service may not begin until this tranche's
@@ -21,25 +22,27 @@ written into `docs/plans/waves/leases.json` by this PRD, and no source file outs
 `docs/plans/waves/W9-external-fetch-tranche.md` and `scripts/waves/verify-w9-external-fetch.ts`
 is touched by this change.
 
-**Status: ROUND 2 (fix round for round-1 REJECT), not yet re-reviewed.** Per the NM-41C gate
-(`W5-W11-gated.md` lines 8–24), this document is written and frozen *before* any implementation
-work starts, and is reviewed by a reviewer who did not write it and will not implement it, before
-it is unfrozen for a `/goal` run. **Round 1 returned REJECT with 7 blocking findings** (full text
-staged at review time; disposed one-by-one in "Round 1 dispositions" below, in the same spirit as
-`W9-ingest-tranche.md`'s AUTHOR-FLAGGED/DISPOSITIONS section, though this document does not carry
-that sibling's full multi-round ceremony history — this is round 2, not round 8). The reviewer
-confirmed the underlying inventory research (the five named unguarded families, the
-`connectionTest.ts` DNS-validation/connection TOCTOU distinction) as real; every finding was about
-how the package *proves* things, plus one real inventory gap. This round fixes all 7 in place. Per
-program-wide guidance recorded in `docs/plans/waves/DECISIONS.md` (W9AS-PARK/W10A-PARK/W10B-PARK,
-after three sibling packages were parked for the same root cause): **a criterion asserting runtime
-behavior must observe that behavior — boot the daemon, issue the real request, assert on the
-response; structural (AST) checks are legitimate only for facts with no runtime observable, and
-must say so.** Finding 2 was exactly that failure mode; the fix (detailed in S9XF-4/CXF-6 below)
-boots a real isolated daemon and issues a live HTTP probe rather than adding more AST conditions.
-This document does not claim any review history beyond round 1's actual verdict. An agent may not
-begin implementation from this page until re-review happens and the document + verifier are frozen
-on `main`.
+**Status: ROUND 2 COMPLETE (fix round for round-1 REJECT, plus one absorbed routed finding), not
+yet re-reviewed.** Per the NM-41C gate (`W5-W11-gated.md` lines 8–24), this document is written and
+frozen *before* any implementation work starts, and is reviewed by a reviewer who did not write it
+and will not implement it, before it is unfrozen for a `/goal` run. **Round 1 returned REJECT with 7
+blocking findings** (full text staged at review time; disposed one-by-one in "Round 1 dispositions"
+below, in the same spirit as `W9-ingest-tranche.md`'s AUTHOR-FLAGGED/DISPOSITIONS section, though
+this document does not carry that sibling's full multi-round ceremony history — this is round 2, not
+round 8). The reviewer confirmed the underlying inventory research (the five named unguarded
+families, the `connectionTest.ts` DNS-validation/connection TOCTOU distinction) as real; every
+finding was about how the package *proves* things, plus one real inventory gap. This round fixes all
+7 in place. Per program-wide guidance recorded in `docs/plans/waves/DECISIONS.md`
+(W9AS-PARK/W10A-PARK/W10B-PARK, after three sibling packages were parked for the same root cause):
+**a criterion asserting runtime behavior must observe that behavior — boot the daemon, issue the
+real request, assert on the response; structural (AST) checks are legitimate only for facts with no
+runtime observable, and must say so.** Finding 2 was exactly that failure mode; the fix (detailed in
+S9XF-4/CXF-6 below) boots a real isolated daemon and issues a live HTTP probe rather than adding more
+AST conditions. **This round also absorbed one additional cross-tranche finding routed in mid-round
+(S9XF-7/CXF-11, `fetchRemoteBytes`'s transfer bound) and three coordinator rulings on open design
+questions — see "Round 2 rulings" below.** This document does not claim any review history beyond
+round 1's actual verdict. An agent may not begin implementation from this page until re-review
+happens and the document + verifier are frozen on `main`.
 
 ---
 
@@ -500,13 +503,57 @@ design to the ingest tranche's S9-6: `docs/security/external-fetch-implementatio
 owned-path diff between `reviewedCommit` and `HEAD` empty, `reviewer` distinct from every commit
 author across `baseCommit..reviewedCommit`, `verdict === "APPROVE"`.
 
+**S9XF-7 — `fetchRemoteBytes`'s transfer bound (CXF-11), added round 2 — a routed cross-tranche
+finding, not this tranche's own inventory.** An independent review of the landed `W9-ingest-tranche`
+found, while auditing a neighbouring claim, that `fetchRemoteBytes`
+(`apps/daemon/src/routes/library.ts:112`) checks the caller's **declared** `Content-Length` before
+fetching, then fully materializes the body via `await resp.arrayBuffer()` — line 124 — **before** the
+real length is ever checked at line 125. A response that omits or lies about `Content-Length` is
+buffered without bound before the existing post-hoc check can ever fire. The coordinator ruled this
+out of the ingest tranche's scope (already landed, would need a gate amendment there) and into this
+one, since this PRD had not yet frozen. It is a narrow, single-function carve-out into a file this
+tranche otherwise treats as entirely out of scope (see "Explicitly out of scope" below) — it does
+**not** reopen any other part of `library.ts`'s attribution, which remains the landed ingest
+tranche's own.
+
+The fix must bound the **transfer** as it streams — enforcing the limit while reading and aborting
+once the running total crosses `MAX_REMOTE_BYTES`, never a re-check performed only after the whole
+body is already resident in memory. CXF-11 asserts this at RUNTIME: it boots a real isolated
+instance of the actual production daemon (the same `bootIsolatedDaemon` CXF-6 uses) and issues a
+real `POST /api/library/ingest` request whose target is a response that genuinely streams past
+`MAX_REMOTE_BYTES` while declaring no `Content-Length` — never by inspecting source for the presence
+of a streaming API. Per Ruling 1 (`docs/plans/waves/W9-external-fetch-tranche.md`'s "Round 2
+rulings" below), the **only** deviation from real production code is the transport: `globalThis.fetch`
+is stubbed to intercept exactly two sentinel URLs (the oversized leak probe, and a second, genuinely
+in-bounds 12 KiB ok probe through the identical code path — the POSITIVE CONTROL, see below) and
+return a genuine `ReadableStream`-backed `Response` for each; route dispatch, the SSRF pre-check
+(`assertPublicBrandUrl`, evaluated for real against a real public IP literal — no DNS, no bypass), and
+`fetchRemoteBytes` itself all execute as real production code. The assertion is the OBSERVABLE
+CONSEQUENCE — how many bytes the stream actually delivered before the transfer stopped growing,
+measured via a loopback-only telemetry side-channel, never "a streaming API was called."
+
+CXF-11 requires both a NEGATIVE control and a POSITIVE control in the same run, not the negative
+control alone. A criterion whose only exercised case is "reject an oversized transfer" cannot
+distinguish a genuinely discriminating fix from a measurement mechanism that always reports
+"unbounded" (or, symmetrically, a fix so aggressive it cancels every transfer regardless of size) —
+either bug would make the negative-control case look identical from outside. The positive control
+sends the SAME `POST /api/library/ingest` request against a second sentinel that streams a small,
+genuinely in-bounds total (12 KiB, also declaring no `Content-Length`, through the identical
+route/guard/`fetchRemoteBytes` path) and requires it to complete untouched — full expected byte
+count delivered, no cancellation, and the real daemon route returning `200` with a registered asset.
+Only when BOTH controls behave as expected in the same probe run does CXF-11 pass.
+
 ## Explicitly out of scope
 
 - **`apps/daemon/src/routes/library.ts`, `library-store.ts`, `library.ts`, `library-tokens.ts`,
   `library-sync.ts`** — owned and already attributed by the landed `mishmash-w9-ingest-tranche`.
   Re-deriving these here would duplicate ownership and risk a lease conflict; this tranche cites
   the ingest tranche's own manifest as evidence that URL-based library ingest is already covered,
-  and does not re-score it.
+  and does not re-score it. **Narrow exception, round 2 (S9XF-7/CXF-11):** `fetchRemoteBytes`'s
+  transfer-bounding behavior (not the rest of the function, not the route's auth/attribution, not
+  any other symbol in the file) is in scope here, as a routed cross-tranche finding the coordinator
+  moved into this PRD because it had not yet frozen. The lease's `allow` list reflects this exact
+  narrowness — see "Proposed lease" below.
 - **`apps/daemon/src/mcp.ts`, `mcp-live-artifacts-server.ts`, `tools-live-artifacts-cli.ts`** —
   loopback-only calls back into the daemon's own API (`OD_DAEMON_URL`), not third-party egress. Zero
   SSRF relevance, confirmed by reading every call site in these three files.
@@ -553,9 +600,10 @@ slug and evidence paths:
    must read as not green).
 4. `manifest.treeDirty === false`.
 5. The **set** of `manifest.criteria[].id` equals **exactly**: `{CXF-1, CXF-2, CXF-3, CXF-4, CXF-5,
-   CXF-6, CXF-7, CXF-8, CXF-9, CXF-10, GATE-INTEGRITY, LEASE, HEAD-DRIFT}` — 13 IDs, no fewer, no
-   more, no duplicates.
-6. Every one of those 13 entries has `status === "pass"`. No criterion here is `human:`-marked;
+   CXF-6, CXF-7, CXF-8, CXF-9, CXF-10, CXF-11, GATE-INTEGRITY, LEASE, HEAD-DRIFT}` — 14 IDs, no
+   fewer, no more, no duplicates. (**Round 2 addition:** CXF-11, S9XF-7's routed `fetchRemoteBytes`
+   transfer-bound finding.)
+6. Every one of those 14 entries has `status === "pass"`. No criterion here is `human:`-marked;
    `status: "blocked-on-founder"` should never legitimately appear.
 7. For every entry, `artifact` is non-null and re-hashing the file at that path with SHA-256 equals
    the recorded `artifactSha256`.
@@ -577,6 +625,7 @@ slug and evidence paths:
      apps/daemon/src/community-pets-sync.ts
      apps/daemon/src/routes/live-artifact.ts apps/daemon/src/live-artifacts/refresh.ts
      apps/daemon/src/routes/chat.ts apps/daemon/src/connectionTest.ts apps/daemon/src/byok-tools.ts
+     apps/daemon/src/routes/library.ts
      apps/daemon/tests/*.test.ts
      docs/security/external-fetch-attribution.json
      docs/security/daemon-threat-model.md
@@ -602,11 +651,12 @@ All criteria inherit `VERIFICATION-CONTRACT.md` §3. Verified by
 | CXF-3 | Attribution matrix exists and covers exactly the frozen route set | `docs/security/external-fetch-attribution.json` parses as JSON; exactly one row per frozen `{method,path}` (33), no orphans, no gaps, no duplicates. **Round-2 reorder**: now runs before CXF-8, which reads its output |
 | CXF-4 | Every row is fully, structurally attributed | Every field clears the placeholder floor; `authn` names the row's exposure class; `inputValidation` names the row's mechanically-derived guard status; `acceptedRisk.decisionRef` resolves to a unique, fully-structured, route-bound, non-self-accepted `### W9XF-ACCEPT-*` entry in `DECISIONS.md@baseCommit`, EVERY field of which (not only Route) is placeholder-checked and bound to its OWN heading span, never a neighbour's (round-2 fix, finding 6); `Accepter` is additionally checked against a non-founder-identity denylist; evidence reports attributed/unattributed/known-vulnerable counts |
 | CXF-5 | Every `testRef`/`control.testRef` names a real, currently-passing, globally-route-unique test; new controls carry independently-replayed red evidence | Same mechanism as `W9-ingest-tranche.md`'s C9-5, ported: exact `fullName` equality, one global citation map, AST-derived "new" decision, detached-worktree replay through Vitest's own Node API for a genuinely new control. **Round-2 fixes**: association terms exclude generic path segments (`api`/`tools`/`projects`/`assets`/`v1`/`v2` — finding 4b); a control in a file that did not exist at all at baseCommit is now correctly treated as new and forced through replay, never silently exempted (finding 4d); replay's own process tree is tracked and confirmed-stopped, never a bare blocking spawn (finding 7) |
-| CXF-6 | Every P0-tier row's SSRF guard is REAL, observed live — not inferred from source shape | **Redesigned, round 2 (findings 2a + 5a).** Boots a real isolated instance of the actual production daemon (`bootIsolatedDaemon`, dynamically imports `apps/daemon/src/server.ts`'s own `startServer`); for every P0 row's `control`, the GUARDED grammar + fn-binding pre-check must ALSO carry a `control.probe` (`ProbeSpec`) that is EXECUTED against the live daemon with the caller-controlled field pointed at a loopback canary — passes only when the canary sees ZERO connections AND the daemon's response status is one the row declared as a refusal; a probe-infra self-check (boot + real HTTP round-trip against a harmless route) runs even pre-implementation so the mechanism's own soundness is demonstrated regardless of matrix state; the daemon's process-tree teardown must independently confirm zero survivors or CXF-6 fails outright, never merely logged — or a verified `acceptedRisk`. The ACCEPT-side real-transport signal for a controlled row is CXF-5's own requirement that `control.testRef` names a real passing test; this criterion supplies the REJECT-side signal CXF-5 cannot. |
+| CXF-6 | Every P0-tier row's SSRF guard is REAL, observed live — not inferred from source shape | **Redesigned, round 2 (findings 2a + 5a); extended, round 2 (Ruling 3).** Boots a real isolated instance of the actual production daemon (`bootIsolatedDaemon`, dynamically imports `apps/daemon/src/server.ts`'s own `startServer`); for every P0 row's `control`, the GUARDED grammar + fn-binding pre-check must ALSO carry a `control.probe` (`ProbeSpec`) that is EXECUTED against the live daemon with the caller-controlled field pointed at a loopback canary — passes only when the canary sees ZERO connections AND the daemon's response status is one the row declared as a refusal — **AND** the same field pointed at a stubbed-but-legitimately-public positive-control sentinel (`globalThis.fetch` intercepts only that one sentinel URL; route/guard/handler are real production code) must be shown to actually reach the stub, proving the guard discriminates rather than blanket-denying (Ruling 3: rules out "the canary saw zero connections because nothing was ever let through, guard or not"); a probe-infra self-check runs even pre-implementation, now including an EMPIRICAL proof that fetch-stub interception actually works (Ruling 1 condition 1 — POST `/api/library/ingest` against the sentinel, never assumed from source) before any accept-probe result is trusted; the daemon's process-tree teardown must independently confirm zero survivors or CXF-6 fails outright, never merely logged — or a verified `acceptedRisk`. The ACCEPT-side real-transport signal for a controlled row's `testRef` is CXF-5's own requirement that it names a real passing test; this criterion supplies BOTH the REJECT-side signal and (round 2) the discriminating ACCEPT-side signal CXF-5 cannot. |
 | CXF-7 | Threat-model doc extended, mechanically cited, P0-complete | `docs/security/daemon-threat-model.md` carries a "Wave 9 — External fetch" section; every P0-tier route requires its own bullet naming exactly that one route key AND citing exactly its expected reference (`control.testRef` if controlled, else primary `testRef`) — **round-2 fix (finding 5b)**: matching is now exact backtick-token equality, never substring `.includes()` (which made "exactly one bullet" structurally unsatisfiable for any route whose key is a literal prefix of a sibling route, e.g. all five `POST /api/brands...` rows); citation-checking was also entirely absent before this round |
 | CXF-8 | Full risk-score formula enforced per row, bound to the MATRIX'S OWN declared riskScore | **Round-2 fix (finding 3): no longer tautological.** Previously recomputed score/tier from its own internal frozen-constants map and compared that computation against itself, never reading the attribution file at all — a row could omit or falsify `riskScore` entirely and still pass. Now reads each attribution ROW's own declared `riskScore.{exposure,impact,score,tier}` and checks it against the mechanically-computed exposure/impact-floor/tier; also carries the exposure-classifier dead-code fix (finding 2b: a straight-line inline `isLocalSameOrigin` veto, as opposed to `requireLocalDaemonRequest` middleware, now correctly scores exposure `0` instead of unconditionally `3`) |
 | CXF-9 | Gates | `pnpm guard` and `pnpm typecheck` exit 0 on the current tree |
 | CXF-10 | Adversarial review of the implementation is on record, non-spoofable | `docs/security/external-fetch-implementation-review.json`: `reviewedCommit` a strict ancestor of `HEAD`; owned-path diff between `reviewedCommit` and `HEAD` empty (round-2: the owned-path list now includes `routes/chat.ts` and every `apps/daemon/tests/*.test.ts`, both omitted before — finding 6b); `reviewer` AND `model` both placeholder- and non-founder-denylist-checked (round 1 checked neither meaningfully); `reviewer` distinct from every author in `baseCommit..reviewedCommit`; **round-2 addition** — the review record itself must NOT have existed at `reviewedCommit` (proves it was authored strictly afterward, not bundled with the state it claims to review); `verdict === "APPROVE"` |
+| CXF-11 | `fetchRemoteBytes` (`apps/daemon/src/routes/library.ts:112`) bounds the TRANSFER as it streams, not only via a post-materialization re-check | **New, round 2 (S9XF-7, routed cross-tranche finding, Ruling 1); positive control added same round.** Boots the same real isolated production daemon and issues a real `POST /api/library/ingest` request whose target is a genuine `ReadableStream`-backed `Response` that streams past `MAX_REMOTE_BYTES` while declaring no `Content-Length` — `globalThis.fetch` is stubbed for exactly these two sentinel URLs (the oversized leak probe and the in-bounds ok probe) only; the route, the SSRF pre-check (`assertPublicBrandUrl`, evaluated for real against a real public IP literal), and `fetchRemoteBytes` itself are unmodified production code (Ruling 1 condition 1, empirically proven, not assumed). Passes only when BOTH: the bytes actually delivered to the oversized stream's consumer (measured via a loopback-only telemetry side-channel, demand-driven so it reflects real consumption, not "an API was called" — Ruling 1 condition 2) stay within `MAX_REMOTE_BYTES` plus a bounded slack (a run against the CURRENT unfixed production code is itself the negative-control demonstration, Ruling 1 condition 3 — it must fail, and does); AND a second, genuinely in-bounds 12 KiB transfer through the SAME sentinel-stub/route/guard/`fetchRemoteBytes` code path completes untouched (full byte count delivered, no cancellation, HTTP 200) in the SAME run — the POSITIVE CONTROL that proves the mechanism discriminates rather than always reporting unbounded or a fix that cancels everything indiscriminately. |
 
 Plus the three named infra checks: **GATE-INTEGRITY** (advisory self-hash pin — absence is also
 `manifest.gateIntegrityPinned`, a top-level field), **LEASE** (`git diff --name-only
@@ -618,32 +668,55 @@ never the working tree — note this entry does not exist in `leases.json` yet; 
 
 This section reports the verifier's **actual output**, from actually running
 `pnpm exec tsx scripts/waves/verify-w9-external-fetch.ts` against this worktree after the round-1
-fix pass — not a predicted or narrated result. `pnpm guard` and `pnpm typecheck` both exit 0 on
-this diff (CXF-9 passes today; the verifier itself typechecks clean under `scripts/tsconfig.json`).
+fix pass AND after absorbing CXF-11 (S9XF-7) — not a predicted or narrated result. `pnpm guard` and
+`pnpm typecheck` both exit 0 on this diff (CXF-9 passes today; the verifier itself typechecks clean).
 
-**5 of 13 criteria pass today, pre-implementation** — one fewer than round 1's (incorrect) 6,
-because **CXF-8 now correctly fails honestly** instead of tautologically passing (finding 3's fix —
-see below). The 5 that pass are exactly the ones that do not require implementation artifacts to
-exist: **CXF-1** (route snapshot self-consistent, 11/11 exposure- and guard-classifier self-probes
-pass, no duplicates at either scope, no drift, AND — round-2 addition — the mechanical discovery
-pass finds zero fetch-reaching routes outside the frozen set), **CXF-2** (the existing SSRF-relevant
-test glob, now prefix-aware and `.only`-scanned, is fully green), **CXF-9** (guard + typecheck),
-**GATE-INTEGRITY** (correctly reports unpinned), and **HEAD-DRIFT**. **CXF-3 through CXF-8 and
-CXF-10 fail honestly** (no attribution matrix, threat-model section, or review record exists yet —
-expected pre-implementation). **LEASE fails honestly** (no `W9-external-fetch` entry in
-`leases.json` yet — expected until this PRD lands and the proposed lease is granted).
+**5 of 14 criteria pass today, pre-implementation** (unchanged count from round 2's first pass —
+CXF-11 is a genuinely new 14th criterion, and it fails today as expected, so the pass count did not
+move). The 5 that pass are exactly the ones that do not require implementation artifacts to exist:
+**CXF-1** (route snapshot self-consistent, 11/11 exposure- and guard-classifier self-probes pass, no
+duplicates at either scope, no drift, AND the mechanical discovery pass finds zero fetch-reaching
+routes outside the frozen set), **CXF-2** (the existing SSRF-relevant test glob, prefix-aware and
+`.only`-scanned, is fully green), **CXF-9** (guard + typecheck), **GATE-INTEGRITY** (correctly
+reports unpinned), and **HEAD-DRIFT**. **CXF-3 through CXF-8 and CXF-10 fail honestly** (no
+attribution matrix, threat-model section, or review record exists yet — expected
+pre-implementation). **LEASE fails honestly** (no `W9-external-fetch` entry in `leases.json` yet).
+**CXF-11 fails honestly too — this is the required negative-control demonstration, not a defect —
+and its own positive control (an ordinary in-bounds transfer, same run) passes, proving the failure
+is discriminating rather than vacuous (see "Round 2 rulings" and the captured evidence below).**
 
-**CXF-6's isolated-daemon-boot + live-probe infrastructure is confirmed real and working, not
-merely written.** This round's actual run booted the real production daemon
-(`bootIsolatedDaemon`), issued a real HTTP request (`GET /api/mcp/install-info`), got a genuine
-`status=200` back, then tore down the full process tree and confirmed zero survivors:
+**CXF-6's isolated-daemon-boot + live-probe infrastructure, INCLUDING the round-2 fetch-stub
+seam, is confirmed real and working, not merely written.** Real captured evidence, this run:
 ```
 probe-infra self-check: GET /api/mcp/install-info -> status=200 (boot+HTTP round-trip OK)
-teardown: ok=true observed=[38152,38194,38161,38199] stopped=[38199,38194,38161,38152] forced=[] remaining=[]
+probe-infra self-check: fetch-stub interception proven=true (POST /api/library/ingest with a stub-sentinel url; status=200) -- if false, no per-row accept-probe result below can be trusted
+teardown: ok=true observed=[37940,37946,37978] stopped=[37978,37946,37940] forced=[] remaining=[]
 ```
 CXF-6 still fails overall today (no attribution matrix to probe against, as expected
-pre-implementation), but the mechanism finding 2 required — "boot the daemon, issue the real
-request, assert on the response" — is not aspirational text; it ran, for real, this round.
+pre-implementation), but both the mechanism finding 2 required (boot the daemon, issue the real
+request, assert on the response) AND Ruling 1's stub-interception proof are not aspirational text —
+they ran, for real, this round.
+
+**CXF-11 fails against the CURRENT unfixed `fetchRemoteBytes` (the required negative-control proof,
+Ruling 1 condition 3), AND in the SAME run its positive control — an ordinary in-bounds transfer
+through the identical code path — completes untouched, proving the mechanism discriminates rather
+than vacuously failing (or vacuously passing) regardless of input.** Real captured evidence, this run:
+```
+[SEAM: transport stubbed for one sentinel leak-probe URL only -- route /api/library/ingest, its SSRF pre-check, and fetchRemoteBytes are real production code] MAX_REMOTE_BYTES=26214400 slack=4194304 hardCap=36700160 bytesEnqueued=36700160 sawCancel=false cancelledAtBytes=null streamClosedAtHardCap=true daemonResponseStatus=502
+UNBOUNDED: the stream was pulled to (or past) the hard safety cap without the consumer stopping near MAX_REMOTE_BYTES -- this run, against the CURRENT unfixed production code, is the negative-control demonstration Ruling 1 condition 3 requires: a criterion that does not fail here would itself be broken
+[SEAM: transport stubbed for one sentinel ok-probe URL only -- same route/guard/fetchRemoteBytes code path as the leak probe above] expectedBytes=12288 bytesEnqueued=12288 sawCancel=false streamClosed=true daemonResponseStatus=200 assetId=a3290d91-4dc7-4c21-b687-f38bec9aebc6
+POSITIVE CONTROL PASSED: the ordinary in-bounds transfer completed untouched (full expected byte count delivered, no cancellation, HTTP 200) in the same run as the negative control -- proves the mechanism discriminates rather than always reporting unbounded or cancelling everything
+teardown: ok=true observed=[83689,83690,83722,84175,84174,84173,84153] stopped=[84175,84174,84173,84153,83722,83690,83689] forced=[] remaining=[]
+```
+`bytesEnqueued` reached the full 35 MiB hard safety cap (`MAX_REMOTE_BYTES` 25 MiB + a 10 MiB margin
+this verifier imposes so an unbounded implementation cannot hang the run) without the consumer ever
+stopping near the real 25 MiB limit — the exact unbounded-buffering behavior the finding named,
+observed at runtime, not inferred from source. In the SAME run, a second, genuinely small (12 KiB)
+transfer through the identical sentinel-stub/route/guard/`fetchRemoteBytes` path delivered exactly
+its expected byte count, was never cancelled, and the daemon's own `/api/library/ingest` response
+came back `200` with a real registered asset id — the ordinary-transfer case is untouched by whatever
+made the oversized case fail, which is the property that rules out a vacuously-always-fails (or
+vacuously-always-passes) measurement mechanism.
 
 - **34 route-registration files** now scanned by the mechanical discovery pass (round-2 addition,
   finding 1) across the whole `apps/daemon/src/routes/` tree plus the three named extras; it found
@@ -692,7 +765,9 @@ request, assert on the response" — is not aspirational text; it ran, for real,
   `apps/daemon/src/routes/library.ts`/`library-store.ts` — cited as the basis for this tranche's
   exclusion of those files, not re-verified here (this tranche does not read or depend on that
   manifest at run time; it only avoids re-attributing the same files, a scope decision, not a
-  runtime dependency).
+  runtime dependency). **CXF-11 (S9XF-7) is the sole, narrow exception** — it probes
+  `fetchRemoteBytes`'s transfer-bounding behavior directly, independent of the ingest tranche's own
+  attribution, per the coordinator's routing decision.
 
 ## Proposed lease for the implementation (TEXT ONLY — not written to `leases.json` by this PRD)
 
@@ -713,6 +788,7 @@ the PRD and the verifier.
     "apps/daemon/src/byok-tools.ts",
     "apps/daemon/src/design-systems/shadcn-import.ts",
     "apps/daemon/src/routes/chat.ts",
+    "apps/daemon/src/routes/library.ts",
     "apps/daemon/tests/mcp-oauth-*.test.ts",
     "apps/daemon/tests/deploy-check-link-*.test.ts",
     "apps/daemon/tests/media-provider-baseurl-ssrf.test.ts",
@@ -728,7 +804,7 @@ the PRD and the verifier.
     "docs/plans/waves/W9-external-fetch-tranche.md",
     "scripts/waves/verify-w9-external-fetch.ts"
   ],
-  "note": "PROPOSED, not yet granted. `apps/daemon/src/brands/safe-fetch.ts`, `plugins/plugin-asset-cache.ts`, and `connectionTest.ts` are deliberately NOT leased for modification — per the same ruling the ingest tranche used for library-tokens.ts et al. (W9-ingest-tranche.md ruling 1), attribution without modification suffices for the already-guarded rows; any proven necessity requires a separate exact-file amendment on main before modification, never an implementation-branch edit. `apps/daemon/src/routes/chat.ts` IS leased (unlike the three above) because this document's own verifier run found its guard-tier scan cannot currently verify the 9 connectionTest.ts-family routes are guarded end-to-end (see 'Adversarial review' below) — the implementer may need to restructure where `validateExternalApiBaseUrl` is called relative to the raw fetch, or the reviewer may accept the existing shape as sufficient control without a code change; either way the file must be in-lease so a fix is possible if the review requires one. `scripts/waves/verify-w9-external-fetch.ts` appears in BOTH allow (so the file exists for `pnpm guard`/`pnpm typecheck` to see) and deny (so the implementer cannot rewrite the gate itself) — the same pattern the LEASE criterion's globToRegExp matching resolves by deny taking precedence over allow, exactly as `verify-w9-ingest.ts`'s own LEASE check implements it. `docs/plans/waves/W9-external-fetch-tranche.md` is similarly denied so the implementer cannot loosen its own frozen success criteria mid-implementation; a genuine defect found during implementation escalates to a reviewed gate amendment on `main`, the same amend-on-proof pattern `leases.json`'s own history uses repeatedly (see W0, W1, W4, W9-ingest's amendment notes)."
+  "note": "PROPOSED, not yet granted. `apps/daemon/src/brands/safe-fetch.ts`, `plugins/plugin-asset-cache.ts`, and `connectionTest.ts` are deliberately NOT leased for modification — per the same ruling the ingest tranche used for library-tokens.ts et al. (W9-ingest-tranche.md ruling 1), attribution without modification suffices for the already-guarded rows; any proven necessity requires a separate exact-file amendment on main before modification, never an implementation-branch edit. `apps/daemon/src/routes/chat.ts` IS leased (unlike the three above) because this document's own verifier run found its guard-tier scan cannot currently verify the 9 connectionTest.ts-family routes are guarded end-to-end (see 'Adversarial review' below) — the implementer may need to restructure where `validateExternalApiBaseUrl` is called relative to the raw fetch, or the reviewer may accept the existing shape as sufficient control without a code change; either way the file must be in-lease so a fix is possible if the review requires one. `apps/daemon/src/routes/library.ts` IS leased (round 2, S9XF-7/CXF-11) DESPITE library.ts being the landed ingest tranche's own file everywhere else in this document — narrowly, so the implementer can fix `fetchRemoteBytes`'s transfer-bounding defect CXF-11 asserts; this does not reopen the rest of the file's attribution, which stays the ingest tranche's. `scripts/waves/verify-w9-external-fetch.ts` appears in BOTH allow (so the file exists for `pnpm guard`/`pnpm typecheck` to see) and deny (so the implementer cannot rewrite the gate itself) — the same pattern the LEASE criterion's globToRegExp matching resolves by deny taking precedence over allow, exactly as `verify-w9-ingest.ts`'s own LEASE check implements it. `docs/plans/waves/W9-external-fetch-tranche.md` is similarly denied so the implementer cannot loosen its own frozen success criteria mid-implementation; a genuine defect found during implementation escalates to a reviewed gate amendment on `main`, the same amend-on-proof pattern `leases.json`'s own history uses repeatedly (see W0, W1, W4, W9-ingest's amendment notes)."
 }
 ```
 
@@ -808,10 +884,79 @@ runtime observable.
    a failure). `git worktree remove`'s result is checked, not discarded. The same infrastructure
    backs CXF-6's own daemon teardown, verified live this round (see "Verified baseline").
 
+## Round 2 rulings (coordinator, confirmed)
+
+Three items were escalated to the coordinator rather than decided unilaterally — the two flagged
+judgment calls in "Round 1 dispositions" above (findings 3 and 5a) and the CXF-11 probe-design
+question raised while absorbing S9XF-7. All three are now ruled.
+
+**Ruling 1 — CXF-11 probe design (stub `globalThis.fetch` inside the real booted daemon):
+approved, with five conditions, all implemented and empirically verified this round (see "Verified
+baseline"):**
+1. *The stub must be the ONLY deviation, proven empirically, not assumed.* CXF-6's probe-infra
+   self-check now fires `POST /api/library/ingest` against the sentinel accept-probe URL and reads
+   `fetch-stub interception proven=true` back over the telemetry side-channel BEFORE trusting any
+   other accept-probe result — real evidence this round, not a source-reading assumption.
+2. *Assert the observable consequence, not an API call.* CXF-11 measures `bytesEnqueued` on a
+   demand-driven `ReadableStream` (`pull()` only fires when the consumer asks for more), so the
+   number is a direct measure of what `fetchRemoteBytes` actually consumed, whether or not it calls
+   an explicit `cancel()`.
+3. *Ship a negative control.* This round's own run, against the CURRENT unfixed
+   `fetchRemoteBytes`, is that negative control — CXF-11 failed, with `bytesEnqueued` reaching the
+   full hard safety cap (see "Verified baseline" for the captured evidence). A synthetic buggy
+   stand-in was considered and rejected as weaker evidence than the real defect the finding named.
+4. *State the seam plainly.* Both CXF-6's and CXF-11's recorded evidence text open with an explicit
+   `[SEAM: ...]` marker naming exactly what is stubbed and confirming the route/guard/handler are
+   real production code.
+5. *Ship a positive control in the SAME run, not only a negative control.* A criterion that only
+   ever exercises the oversized/reject case cannot distinguish a genuinely discriminating fix from a
+   measurement mechanism that always reports "unbounded" (or a fix that overzealously cancels every
+   transfer, in-bounds or not) — either bug would be indistinguishable from the outside using the
+   negative control alone. CXF-11 sends a second sentinel through the identical
+   route/guard/`fetchRemoteBytes` path — a genuinely in-bounds 12 KiB transfer, also declaring no
+   `Content-Length` — and requires it to complete untouched (full expected byte count, no
+   cancellation, real `200` from the daemon) in the SAME probe run as the negative control. This
+   round's own run demonstrates both: the oversized transfer failed/bounded AND the ordinary transfer
+   passed untouched (see "Verified baseline" for the captured evidence of both).
+
+**Ruling 2 — Finding 3 (impact 3→2 correction): direction confirmed. Coverage-loss disclosure, as
+required:**
+
+Computed by reading each affected route's actual auth gate directly (`grep`/`Read` against
+`apps/daemon/src/routes/deploy.ts` and `routes/media.ts`, not a hand-computed guess) and applying
+`score = exposure + impact` before and after the correction:
+
+| Route | Exposure (mechanism) | Impact before → after | Score before → after | Tier before → after |
+|---|---|---|---|---|
+| `POST /api/projects/:id/deployments/:deploymentId/check-link` | 3 (no gate found in `deploy.ts`) | 3 → 2 | 6 → 5 | P0 → **P0 (no change)** |
+| `POST /api/projects/:id/media/generate` | 0 (`isLocalSameOrigin` veto) | 3 → 2 | 3 → 2 | P2 → **P2 (no change)** |
+| `POST /api/tools/media/generate` | 1 (`authorizeToolRequest`) | 3 → 2 | 4 → 3 | **P1 → P2 (drops)** |
+| `POST /api/live-artifacts/:artifactId/refresh` | 0 (`requireLocalDaemonRequest`) | 3 → 2 | 3 → 2 | P2 → **P2 (no change)** |
+| `POST /api/tools/live-artifacts/refresh` | 1 (`authorizeToolRequest`) | 3 → 2 | 4 → 3 | **P1 → P2 (drops)** |
+
+Three of the five rows do not change tier at all — `check-link` stays P0 either way (6→5, both
+inside the P0 5–6 band), and the two `isLocalSameOrigin`/`requireLocalDaemonRequest`-gated rows stay
+P2 either way. **Two rows genuinely drop, both tool-token-gated: `POST /api/tools/media/generate`
+and `POST /api/tools/live-artifacts/refresh`, P1 → P2.** The concrete consequence: S9XF-4's live
+SSRF probe requirement (CXF-6) applies only to P0 rows, so these two lose the requirement for a live
+runtime proof that their guard fires against an escaping target, falling back to CXF-5's
+cited-passing-test-only bar. Both routes are reachable by anything holding a valid tool token, not
+only the trusted local UI, and both carry caller-editable-baseUrl-class SSRF exposure — this is
+disclosed for the coordinator's own judgment on whether the P0/P1 threshold or the tool-token
+exposure floor needs amending, not decided here.
+
+**Ruling 3 — Finding 5a (accept/reject split): accepted, with CXF-6 now carrying a positive
+control in the same probe (implemented this round, see CXF-6's row above and "Verified
+baseline").** The stubbed-transport seam Ruling 1 approved resolved the original objection (a live
+public accept target being impractical for an isolated verifier) — the positive control uses the
+same seam, not a real public host.
+
 ## Adversarial review
 
-**Round 1 returned REJECT** (7 blocking findings, disposed above). This round (round 2) has not
-yet been re-reviewed. Per `W5-W11-gated.md`'s expansion gate, this document must be reviewed by a
+**Round 1 returned REJECT** (7 blocking findings, disposed above). Round 2 also absorbed one
+additional routed finding (S9XF-7/CXF-11) and three coordinator rulings (see "Round 2 rulings"
+above); it has not yet been re-reviewed. Per `W5-W11-gated.md`'s expansion gate, this document must
+be reviewed by a
 reviewer who did not author it and will not implement it, and both this document and
 `scripts/waves/verify-w9-external-fetch.ts` must be frozen on `main` before any `/goal` run against
 this slug begins. Known residuals the author flags proactively, so a reviewer does not have to
