@@ -450,26 +450,50 @@ async function teardownDaemon(booted: BootedDaemon | null): Promise<void> {
 // never a database-level stub (VERIFICATION-CONTRACT.md section 3 R2: real
 // transport at the boundary under test).
 // =========================================================================
-const FIXTURE_INDEX_HTML = '<!doctype html><html><body>Fixture Home</body></html>\n';
+// Fixture content mirrors a real static site: index.html links style.css,
+// which carries a :root color custom property -- Instatic's own
+// extractRootColorTokens would pull that out automatically at import time.
+// Nothing in this verifier parses tokens (that is Instatic's job, not
+// MishMash's export's job) -- the fixture just needs to be a realistic
+// small site so the "natural relative paths, no reshaping" assertion below
+// means something.
+const FIXTURE_INDEX_HTML =
+  '<!doctype html><html><head><link rel="stylesheet" href="style.css"></head><body>Fixture Home</body></html>\n';
 const FIXTURE_ABOUT_HTML = '<!doctype html><html><body>Fixture About</body></html>\n';
-const FIXTURE_STYLE_CSS = 'body { color: #111111; }\n';
-const FIXTURE_TOKENS_JSON = `${JSON.stringify({ schema: 'mishmash.design-tokens.v1', color: { brand: '#111111' } }, null, 2)}\n`;
+const FIXTURE_STYLE_CSS = ':root { --color-brand: #111111; }\nbody { color: var(--color-brand); }\n';
 const FIXTURE_MEDIA_BYTES = crypto.randomBytes(256);
 const FIXTURE_SIDECAR_JSON = `${JSON.stringify({ note: 'sidecar -- must never appear in any export path' })}\n`;
 // Negative control (VERIFICATION-CONTRACT.md section 3 R4): a real project
 // file that must be excluded from the export under the SAME rule
-// collectArchiveEntries() already applies to *.artifact.json sidecars, so a
-// "everything gets zipped" implementation fails this and only a real
-// classifier passes it.
+// collectArchiveEntries() already applies to *.artifact.json sidecars --
+// this is MishMash's own pre-existing hygiene rule, re-verified for the new
+// route, not something Instatic's ingestion itself requires (a stray .json
+// sidecar would just classify as Instatic's harmless 'meta' role -- see
+// W10a-instatic-seam.md "Ground facts"). A "zip everything, unfiltered"
+// implementation fails this; only one that reuses the real exclusion rule
+// passes it.
 const FIXTURE_SIDECAR_NAME = 'index.html.artifact.json';
 
+// Expected shape per the REAL Instatic ingestion contract (site-import.md,
+// ingestInput.ts, classifyFiles.ts): a flat, relative-path tree, NOT
+// restructured into pages/tokens/media folders -- see W10a-instatic-seam.md
+// "Ground facts" for the citations that corrected this from an earlier,
+// wrong pages/tokens/media design.
 const EXPECTED_ZIP_ENTRIES: Record<string, Buffer> = {
-  'pages/index.html': Buffer.from(FIXTURE_INDEX_HTML, 'utf8'),
-  'pages/docs/about.html': Buffer.from(FIXTURE_ABOUT_HTML, 'utf8'),
-  'pages/style.css': Buffer.from(FIXTURE_STYLE_CSS, 'utf8'),
-  'media/images/logo.png': FIXTURE_MEDIA_BYTES,
-  'tokens/design-tokens.json': Buffer.from(FIXTURE_TOKENS_JSON, 'utf8'),
+  'index.html': Buffer.from(FIXTURE_INDEX_HTML, 'utf8'),
+  'docs/about.html': Buffer.from(FIXTURE_ABOUT_HTML, 'utf8'),
+  'style.css': Buffer.from(FIXTURE_STYLE_CSS, 'utf8'),
+  'images/logo.png': FIXTURE_MEDIA_BYTES,
 };
+
+// Instatic's own real size guards (src/core/siteImport/ingestInput.ts:39-41
+// in the Instatic checkout) -- the export route's OWN source must cite
+// these same numbers, not invented or absent thresholds. Accepts either a
+// bare decimal or the multiplication form Instatic's own source uses
+// (`1024 * 1024 * 1024`), since an implementer may write either.
+const INSTATIC_MAX_FILES_PATTERN = /10[_,]?000\b/;
+const INSTATIC_MAX_BYTES_PATTERN = /1073741824\b|1024\s*\*\s*1024\s*\*\s*1024\b/;
+const SUPER_IMPORT_ROUTE_REL_PATH = 'apps/daemon/src/routes/project-super-import.ts';
 
 interface FixtureProject {
   id: string;
@@ -491,7 +515,6 @@ async function createFixtureProject(baseUrl: string): Promise<{ fixture: Fixture
     { name: 'index.html', content: FIXTURE_INDEX_HTML },
     { name: 'docs/about.html', content: FIXTURE_ABOUT_HTML },
     { name: 'style.css', content: FIXTURE_STYLE_CSS },
-    { name: 'design-tokens.json', content: FIXTURE_TOKENS_JSON },
     { name: 'images/logo.png', content: FIXTURE_MEDIA_BYTES.toString('base64'), encoding: 'base64' },
     { name: FIXTURE_SIDECAR_NAME, content: FIXTURE_SIDECAR_JSON },
   ];
@@ -509,7 +532,7 @@ async function createFixtureProject(baseUrl: string): Promise<{ fixture: Fixture
       return { fixture: null, detail: `POST /api/projects/${id}/files (${f.name}) -> HTTP ${resp.status}: ${await resp.text().catch(() => '<unreadable>')}` };
     }
   }
-  return { fixture: { id }, detail: 'fixture project created with 6 files (5 real + 1 sidecar negative control)' };
+  return { fixture: { id }, detail: 'fixture project created with 5 files (4 real + 1 sidecar negative control)' };
 }
 
 // =========================================================================
@@ -625,19 +648,38 @@ async function main(): Promise<void> {
         if (label.trim().length < 3) problems.push(`template "${id}" label missing/too short`);
         if (description.trim().length < 20) problems.push(`template "${id}" description missing/too short (placeholder-shaped)`);
         if (!/^https?:\/\//.test(homepage)) problems.push(`template "${id}" homepage missing or not a real URL`);
+        // Evidenced shape (docs/features/mcp-connectors.md in the Instatic
+        // checkout, ~/projects/tools/third-party/instatic, read-only -- see
+        // W10a-instatic-seam.md "Ground facts"): Streamable HTTP, endpoint
+        // suffix /_instatic/mcp, personal-access-token bearer header. Not
+        // MishMash's generic OAuth automation (authMode must be 'none').
         const transport = String(t.transport ?? '');
-        if (transport === 'stdio') {
-          if (typeof t.command !== 'string' || !t.command.trim()) problems.push(`template "${id}" is stdio but has no command`);
-        } else if (transport === 'http' || transport === 'sse') {
-          if (typeof t.url !== 'string' || !/^https?:\/\//.test(t.url)) problems.push(`template "${id}" is ${transport} but has no valid url`);
+        if (transport !== 'http') {
+          problems.push(`template "${id}" transport is "${transport}", expected "http" (Instatic's MCP server is Streamable HTTP per mcp-connectors.md, not stdio)`);
         } else {
-          problems.push(`template "${id}" transport "${transport}" is not one of stdio/http/sse`);
+          const url = typeof t.url === 'string' ? t.url : '';
+          if (!/^https?:\/\//.test(url)) problems.push(`template "${id}" has no valid http(s) url`);
+          if (!url.endsWith('/_instatic/mcp')) problems.push(`template "${id}" url "${url}" does not end with the real Instatic MCP endpoint suffix "/_instatic/mcp" (mcp-connectors.md:20-24)`);
+        }
+        const authMode = String(t.authMode ?? '');
+        if (authMode !== 'none') {
+          problems.push(`template "${id}" authMode is "${authMode}", expected "none" (personal-access-token via header, not MishMash's OAuth automation -- Instatic's hosted-OAuth mode needs public HTTPS and is deliberately out of scope, see W10a-instatic-seam.md Open questions #2)`);
+        }
+        const headerFields = Array.isArray(t.headerFields) ? (t.headerFields as Array<Record<string, unknown>>) : [];
+        const authHeader = headerFields.find((h) => String(h.key ?? '') === 'Authorization');
+        if (!authHeader) {
+          problems.push(`template "${id}" has no headerFields entry with key "Authorization" for the personal access token`);
+        } else {
+          const hint = `${String(authHeader.placeholder ?? '')} ${String(authHeader.label ?? '')}`.toLowerCase();
+          if (!hint.includes('imcp_pat')) {
+            problems.push(`template "${id}" Authorization header field does not name the real token prefix "imcp_pat_..." (mcp-connectors.md:79,85) in its placeholder/label`);
+          }
         }
       }
       record(
         'C10A-1',
         `GET ${booted.url}/api/mcp/servers`,
-        'exactly one structurally-valid, discoverable Instatic MCP_TEMPLATES entry, category=publishing-compatible',
+        'exactly one structurally-valid, discoverable Instatic MCP_TEMPLATES entry: transport=http, url ends with /_instatic/mcp, authMode=none, Authorization header names imcp_pat_...',
         problems.length === 0,
         problems.join('\n') || `found exactly one valid candidate: ${JSON.stringify(candidates[0])}`,
         { detail: problems.length > 0 ? `${problems.length} problem(s)` : undefined },
@@ -648,8 +690,10 @@ async function main(): Promise<void> {
     // C10A-2: Super Import export -- shape, byte fidelity, negative control.
     // -----------------------------------------------------------------
     await checkCriterion('C10A-2', async () => {
+      const assertionText =
+        'index.html, docs/about.html, style.css, images/logo.png present at NATURAL relative paths (no pages/tokens/media prefix), byte-identical to fixture; index.html.artifact.json sidecar excluded; route source cites Instatic\'s real 10_000-file / 1 GB size-guard constants';
       if (!booted || !fixture) {
-        record('C10A-2', 'GET /api/projects/:id/export/super-import', 'zip contains pages/tokens/media + manifest, byte-faithful, sidecar excluded', false, '', {
+        record('C10A-2', 'GET /api/projects/:id/export/super-import', assertionText, false, '', {
           detail: !booted ? `isolated daemon unavailable: ${bootDetail}` : `fixture project unavailable: ${fixtureDetail}`,
         });
         return;
@@ -657,7 +701,7 @@ async function main(): Promise<void> {
       const exportUrl = `${booted.url}/api/projects/${encodeURIComponent(fixture.id)}/export/super-import`;
       const resp = await fetch(exportUrl);
       if (!resp.ok) {
-        record('C10A-2', `GET ${exportUrl}`, 'zip contains pages/tokens/media + manifest, byte-faithful, sidecar excluded', false, `HTTP ${resp.status}`, {
+        record('C10A-2', `GET ${exportUrl}`, assertionText, false, `HTTP ${resp.status}`, {
           detail: 'route not implemented (or errored) -- expected pre-implementation',
         });
         return;
@@ -687,28 +731,42 @@ async function main(): Promise<void> {
       if (sidecarLeak.length > 0) {
         problems.push(`negative control failed -- sidecar leaked into zip: ${sidecarLeak.join(', ')}`);
       }
-      const manifestEntry = zip.files['super-import-manifest.json'];
-      if (!manifestEntry || manifestEntry.dir) {
-        problems.push('missing super-import-manifest.json at zip root');
-      } else {
-        try {
-          const manifestBuf = await manifestEntry.async('nodebuffer');
-          const parsed = JSON.parse(manifestBuf.toString('utf8')) as Record<string, unknown>;
-          if (parsed.schema !== 'mishmash.super-import-manifest.v1') problems.push(`manifest schema mismatch: ${String(parsed.schema)}`);
-          if (parsed.pageCount !== 2) problems.push(`manifest pageCount expected 2, got ${JSON.stringify(parsed.pageCount)}`);
-          if (parsed.mediaCount !== 1) problems.push(`manifest mediaCount expected 1, got ${JSON.stringify(parsed.mediaCount)}`);
-          if (parsed.hasTokens !== true) problems.push(`manifest hasTokens expected true, got ${JSON.stringify(parsed.hasTokens)}`);
-          if (parsed.entryPage !== 'index.html') problems.push(`manifest entryPage expected "index.html", got ${JSON.stringify(parsed.entryPage)}`);
-        } catch (err) {
-          problems.push(`manifest did not parse as JSON: ${String(err)}`);
+      // No pages/tokens/media prefix should exist anywhere -- the real
+      // Instatic contract (site-import.md, ingestInput.ts, classifyFiles.ts;
+      // see W10a-instatic-seam.md "Ground facts") wants a flat, natural-path
+      // tree. A "reshaped" implementation (the earlier, wrong design this
+      // wave started from) fails this negative check even if its content is
+      // otherwise byte-correct.
+      const reshapedPaths = allNames.filter((n) => /^(pages|tokens|media)\//.test(n));
+      if (reshapedPaths.length > 0) {
+        problems.push(`export reshapes the tree into pages/tokens/media folders, which Instatic's real ingestion does not want: ${reshapedPaths.join(', ')}`);
+      }
+      // Source-level check: the route's own implementation must cite
+      // Instatic's REAL size-guard numbers (ingestInput.ts:39-41 in the
+      // Instatic checkout), not invented or absent thresholds. This does not
+      // runtime-exercise the rejection path itself (see
+      // W10a-instatic-seam.md "Open questions" #5).
+      const routeAbsPath = path.join(repoRoot, SUPER_IMPORT_ROUTE_REL_PATH);
+      let routeSource = '';
+      try {
+        routeSource = fs.readFileSync(routeAbsPath, 'utf8');
+      } catch {
+        problems.push(`could not read ${SUPER_IMPORT_ROUTE_REL_PATH} to check for Instatic's real size-guard constants`);
+      }
+      if (routeSource) {
+        if (!INSTATIC_MAX_FILES_PATTERN.test(routeSource)) {
+          problems.push(`${SUPER_IMPORT_ROUTE_REL_PATH} does not cite Instatic's real DEFAULT_MAX_FILES (10_000, ingestInput.ts:40)`);
+        }
+        if (!INSTATIC_MAX_BYTES_PATTERN.test(routeSource)) {
+          problems.push(`${SUPER_IMPORT_ROUTE_REL_PATH} does not cite Instatic's real DEFAULT_MAX_BYTES (1024*1024*1024 / 1073741824, ingestInput.ts:39)`);
         }
       }
       record(
         'C10A-2',
         `GET ${exportUrl}`,
-        'pages/{index.html,docs/about.html,style.css}, media/images/logo.png, tokens/design-tokens.json all byte-identical to fixture; root manifest well-formed with exact counts; index.html.artifact.json sidecar excluded',
+        assertionText,
         problems.length === 0,
-        problems.join('\n') || `all ${Object.keys(EXPECTED_ZIP_ENTRIES).length} expected entries present and byte-faithful; sidecar correctly excluded; manifest well-formed (${allNames.length} total zip entries)`,
+        problems.join('\n') || `all ${Object.keys(EXPECTED_ZIP_ENTRIES).length} expected entries present and byte-faithful at natural paths; sidecar correctly excluded; size-guard constants cited (${allNames.length} total zip entries)`,
         { detail: problems.length > 0 ? `${problems.length} problem(s)` : undefined },
       );
     });

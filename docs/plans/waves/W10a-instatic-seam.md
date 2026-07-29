@@ -43,6 +43,13 @@ Confirmed independently in this tree: `grep -rli "instatic"` across `*.ts`/`*.ts
 (excluding `node_modules`) returns **zero hits outside `docs/plans/`** — the register's "zero repo
 references today" claim holds at this branch's `baseCommit`.
 
+**Correction (this revision):** the "static zip → pages/tokens/media" phrase quoted above is an
+executive-summary gloss from the assessment, not a read of Instatic's own docs — the assessment
+itself only claims Instatic was "cloned and evaluated," not that its Super Import wire format was
+inspected. This revision reads the actual Instatic checkout (read-only, at
+`~/projects/tools/third-party/instatic`) and corrects S10A-1/S10A-2 below to match; see **Ground
+facts** for the citations and **Open questions** items 1–2 for what remains genuinely open.
+
 ## Ground facts (verified directly in this tree)
 
 - **MCP client registration is a data problem, not a new subsystem.** `apps/daemon/src/mcp-
@@ -87,15 +94,63 @@ references today" claim holds at this branch's `baseCommit`.
   (`cli.ts:6043` usage string, `case 'archive'` at `cli.ts:6200`), which does nothing more than
   `fetch()` the same HTTP route and save the response — proving CLI/HTTP parity for a zip export is
   a thin, already-proven pattern here, not new machinery.
-- **This repo's own claim about Instatic's Super Import format is a three-word gloss, not a
-  fetched schema.** The only description available anywhere in this repo is "static zip →
-  pages/tokens/media" (`NM-REGISTER.md`, `GLOBAL-GOAL.md`, the completion assessment). No Instatic
-  source is present in this environment to confirm the exact contract Instatic's own parser
-  expects — the register itself resolved the *seam*, not Instatic's *wire format*. This PRD treats
-  that gloss as the target shape and defines a precise, mechanically-checkable interpretation of it
-  below (**S10A-2**), grounded in `projectFileMap()`'s existing classifier. Whether Instatic's real
-  parser needs something more specific is flagged as an **open question**, not silently assumed
-  (see **Open questions**).
+- **Instatic's real Super Import contract, read from source (`~/projects/tools/third-party/
+  instatic`, read-only).** Per `docs/features/site-import.md`: "Super Import" is `src/core/
+  siteImport/` — the module's own barrel doc-comment points there (`src/core/siteImport/index.ts:9`,
+  `@see docs/features/site-import.md`). It is triggered whenever a dropped ZIP is **not** an
+  Instatic-native "site-transfer" archive (`.instatic/site-bundle.json` as first entry — a
+  *different* feature, `docs/features/site-transfer.md`, MishMash does not need to produce):
+  "A single ZIP is classified before analysis: an Instatic transfer archive has
+  `.instatic/site-bundle.json` as its first stored entry and routes to the CMS bundle review path;
+  **any other ZIP is treated as a static-site import** and normalized through `ingestInput` to
+  `FileMap`" (`site-import.md:302`). **There is no `pages/`/`tokens/`/`media/` folder convention and
+  no manifest file Instatic reads** — the earlier gloss-based design below was wrong on this point.
+  The real contract, per `src/core/siteImport/ingestInput.ts` and `classifyFiles.ts`:
+  - Input is a flat, relative-path tree (loose files, a folder, or a `.zip` — `ingestInput.ts:47-51`
+    `IngestInput` union); at most ONE shared top-level wrapper folder is auto-detected and stripped
+    if every path shares it (`detectSharedTopLevel`/`stripTopLevelFolder`, `ingestInput.ts:107-132`)
+    — no wrapper at all is equally fine.
+  - Every file is classified by extension, MIME as fallback: `html`/`htm`→**html** (pages),
+    `css`→**css**, `js`/`mjs`/`cjs`→**js**, `png`/`jpg`/`jpeg`/`webp`/`avif`/`svg`/`gif`/`ico`→
+    **image**, `woff`/`woff2`/`ttf`/`otf`/`eot`→**font**, **`txt`/`md`/`json`→`meta`** ("informational
+    — not imported"), everything else→**binary** ("uploaded as raw media assets")
+    (`classifyFiles.ts:9-16,25-54`).
+  - **Design tokens are never read from a file.** Color/font tokens are auto-extracted from CSS
+    custom properties on `:root`/`html`/`body` selectors inside the site's own linked/`@import`ed
+    CSS (`extractRootColorTokens`/`extractRootFontTokens`; `site-import.md`'s "Color tokens"/"Font
+    tokens" table rows). A `design-tokens.json` file would classify as `meta` and be **silently
+    ignored**, not parsed — the original S10A-2 design below assumed the opposite and was wrong.
+  - Pages: every `.html` file becomes a page; slug derives from its relative path
+    (`documentation/index.html` → `documentation`; root `index.html` → homepage slug `index`) —
+    `site-import.md`'s "Pages" table row.
+  - Hidden paths (dot-prefixed, `__MACOSX`, `Thumbs.db`) are silently dropped; a path containing
+    `..`, a leading `/`, or a Windows drive letter throws `PathTraversalError`
+    (`ingestInput.ts:75-97`).
+  - **Real, cited size guards** (`ingestInput.ts:39-41`): `DEFAULT_MAX_BYTES = 1024*1024*1024`
+    (1 GB compressed) → `OversizeImportError`; `DEFAULT_MAX_FILES = 10_000` → `TooManyFilesError`;
+    `DEFAULT_MAX_ZIP_UNCOMPRESSED = 5*1024*1024*1024` (5 GB uncompressed, zip-bomb guard) →
+    `ZipBombError`.
+
+  This supersedes S10A-2's folder-restructuring design; see the corrected version below.
+- **Instatic ships a real MCP server — confirmed, not assumed.** `CLAUDE.md` (Instatic repo) states
+  directly: "**MCP server:** Instatic exposes its CMS tools to external MCP clients (Claude Code,
+  Codex, remote agents) at `/_instatic/mcp`, authenticated by per-connector bearer tokens." Full wire
+  contract, `docs/features/mcp-connectors.md`: transport is **Streamable HTTP** (the doc's own
+  architecture diagram: `"MCP client │ Streamable HTTP + OAuth/PAT bearer"`), endpoint always
+  `https://<your-host>/_instatic/mcp` (lines 20-24), two auth modes — hosted OAuth (S256 PKCE,
+  requires a public HTTPS deployment: "Hosted clients... cannot reach `localhost`, a private LAN
+  address, or an HTTP-only deployment") and **personal access token**, the mode the doc itself
+  demonstrates for a CLI-shaped client:
+  ```sh
+  claude mcp add instatic --transport http http://localhost:3000/_instatic/mcp \
+    --header "Authorization: Bearer imcp_pat_…"
+  ```
+  (`docs/features/mcp-connectors.md:81-86`, "Claude Code example"). This is the evidence S10A-1
+  pins below: `transport: 'http'`, endpoint suffix `/_instatic/mcp`, a required `Authorization`
+  header carrying an `imcp_pat_…` token — not MishMash's generic OAuth automation, since hosted
+  OAuth assumes public HTTPS MishMash cannot assume for a local companion service, and confirming
+  wire-compatibility with Instatic's *specific* RFC 9728 + dynamic-registration flow is exactly the
+  kind of deeper-coupling evidence this wave's founder pin excludes (see **Open questions**).
 - **`pnpm guard` already enforces CLI\<->route parity generically.** `scripts/guard.ts` reads
   `scripts/waves/capability-manifest.json` (54.9 KB, already exists — W0/W1/W4 have landed in this
   tree) and asserts every `SUBCOMMAND_MAP` capability in `cli.ts` has exactly one manifest row, and
@@ -120,36 +175,48 @@ references today" claim holds at this branch's `baseCommit`.
 **S10A-1 — Register Instatic as a selectable MCP client template.** Exactly one new entry in
 `MCP_TEMPLATES` (`apps/daemon/src/mcp-config.ts`), category `publishing`, structurally valid under
 the same rules every existing template already satisfies (id matches `SERVER_ID_PATTERN`
-`^[a-z0-9][a-z0-9_-]{0,63}$`; a transport-appropriate field set — `command`/`args` for `stdio`, or
-`url` for `http`/`sse`; non-placeholder `label`/`description`/`homepage`). **The exact transport,
-command, or URL is deliberately not pinned here** — this repo has no verified record of Instatic's
-actual MCP invocation (stdio launch command vs. a local HTTP endpoint the user starts separately),
-and asserting one would be inventing a fact this document cannot check. The implementer confirms
-the real invocation against Instatic's own install docs at build time; C10A-1 verifies *shape and
-discoverability*, not a specific hardcoded command. Selecting the template must never write to a
-user's live `mcp-config.json` on its own — it only ever pre-fills a form the user saves explicitly
-(already true structurally, per **Ground facts**; C10A-5 checks nothing new violates it).
+`^[a-z0-9][a-z0-9_-]{0,63}$`; non-placeholder `label`/`description`/`homepage`). Per the evidence in
+**Ground facts**: `transport: 'http'`; `url` defaulting to `http://localhost:3000/_instatic/mcp`
+(Instatic's own documented local example — self-hosted, so unlike every other current `http`
+template this field is a *starting point* the user edits to their real deployment host, not a fixed
+hosted-service endpoint; this is a genuinely new template shape for this catalog, not a copy of an
+existing row); `authMode: 'none'` **explicitly set** (the personal-access-token path is a
+manually-pasted header, not MishMash's `mcp-oauth.ts` OAuth automation — see **Open questions** item
+2 for why hosted OAuth is deliberately not attempted); and a required `headerFields` entry
+`{key: 'Authorization', ...}` whose placeholder names the real `imcp_pat_…` token prefix, mirroring
+the exact pattern the existing `nanobanana` template already uses for a manually-pinned bearer
+token. C10A-1 checks this shape mechanically — including that `url` ends with the real
+`/_instatic/mcp` suffix and the header placeholder names the real token prefix, not just "some url"
+and "some header." Selecting the template must never write to a user's live `mcp-config.json` on
+its own — it only ever pre-fills a form the user saves explicitly (already true structurally, per
+**Ground facts**; C10A-5 checks nothing new violates it).
 
-**S10A-2 — Super Import–shaped static export.** A new route, **`GET /api/projects/:id/export/
-super-import`**, produces `application/zip` (same auth/param/Content-Disposition conventions as the
-existing `/api/projects/:id/archive`) containing, for the *entire* project tree (dotfiles and
-`*.artifact.json` sidecars excluded, matching `collectArchiveEntries`'s existing rule):
+**S10A-2 — Super Import–compatible static export.** Per the real contract in **Ground facts**,
+Instatic's Super Import needs nothing more than a flat, relative-path static-site zip inside its own
+size guards — which is structurally what `GET /api/projects/:id/archive` (`buildProjectArchive`)
+already produces today. **No `pages/`/`tokens/`/`media/` restructuring** — the evidence shows
+reshaping would be actively wrong, since Instatic classifies purely by extension at whatever path a
+file sits. A new, dedicated, discoverable route, **`GET /api/projects/:id/export/super-import`**, is
+still added — not to reshape the zip, but to:
 
-- `pages/<relative-path>` — every file `projectFileMap()` already classifies as `htmlFiles`,
-  `cssFiles`, or `jsFiles` (the exact same three regexes, reused verbatim, not reinvented), with
-  relative directory structure preserved so intra-page relative references keep resolving.
-- `media/<relative-path>` — every file `projectFileMap()` already classifies as `assetFiles`
-  (everything not html/css/js), relative structure preserved.
-- `tokens/design-tokens.json` — copied verbatim if the project tree contains a `design-tokens.json`
-  file (the same filename `apps/daemon/src/design-systems/import.ts:166` already writes for an
-  applied design system); if none exists, `tokens/NO_TOKENS.txt` is written instead — the directory
-  is never silently absent (`VERIFICATION-CONTRACT.md` §3 R5: an unenforced/absent guarantee must
-  be stated, not hidden).
-- `super-import-manifest.json` at the zip root, schema `mishmash.super-import-manifest.v1`, fields
-  `{schema, projectId, projectLabel, generatedAt, pageCount, mediaCount, hasTokens, entryPage}`,
-  where `pageCount` counts only true `.html`/`.htm` files (not every file physically under `pages/
-  `), `mediaCount` counts files under `media/`, and `entryPage` reuses `projectFileMap()`'s existing
-  `entryFile` resolution (prefers `index.html`, falls back to the first HTML file).
+- Give the seam an intentional, discoverable name distinct from the generic "Download as .zip"
+  action (C10A-4 checks this is reachable).
+- **Proactively enforce Instatic's own documented ingestion guards before the round trip.** If the
+  project's file count would exceed `ingestInput.ts`'s `DEFAULT_MAX_FILES = 10_000`, or the
+  archive's compressed size would exceed `DEFAULT_MAX_BYTES = 1024*1024*1024` (1 GB), the route
+  returns a 4xx explaining why instead of generating a zip Instatic would reject outright — a real
+  behavior difference from the base `/archive` route, which has no such guard today. C10A-2 checks
+  the route's own source cites Instatic's real constants (`10_000`, `1073741824`), not invented or
+  absent thresholds; the oversize *rejection path itself* is not runtime-exercised by the verifier
+  (generating 10,001 real fixture files over HTTP is disproportionate to this wave) — see **Open
+  questions** item 5.
+
+Content shape: identical to `/api/projects/:id/archive` — every project file at its natural relative
+path (dotfiles and `*.artifact.json` sidecars excluded, matching `collectArchiveEntries`'s existing
+rule), no injected `pages/`/`tokens/`/`media/` prefix. MishMash's own injected
+`DESIGN-HANDOFF.md`/`DESIGN-MANIFEST.json` sidecars (`projects.ts:39-40` — see **Ground facts**) are
+harmless here: both classify as Instatic's `meta` role ("informational — not imported"), never as a
+stray page or asset, so nothing needs to strip them for this route specifically.
 
 **S10A-3 — Capability-exposure parity (repo-standing rule, not new to this wave).** Per `AGENTS.md`
 "Capability exposure (UI/CLI dual-track)", the new export is a genuinely new capability and needs
@@ -172,18 +239,26 @@ this wave's job, and this PRD does not design extension points for any of them:
 - Auto-connecting, auto-enabling, or defaulting the Instatic template into any user's live server
   list. Template selection stays an explicit, user-driven save, unchanged from every other of the
   25 existing templates.
-- A round-trip test against a real running Instatic instance or its actual Super Import parser.
-  No Instatic checkout exists in this environment to test against; this is flagged as an open
-  question for follow-up evidence, not something this wave fabricates a fake pass for.
-- Instatic's Core Framework token engine or QuickJS-WASM plugin sandbox — no coupling to either is
-  designed or implied here.
+- A live round-trip through a *running* Instatic instance's actual admin UI / Site Import wizard.
+  A read-only source checkout exists at `~/projects/tools/third-party/instatic` and was read for
+  the evidence above, but this wave never installs, starts, or drives a running Instatic instance
+  (browser automation against someone else's admin UI is genuine deeper-coupling evidence, not a
+  mechanical verifier's job) — flagged as an open question for follow-up, not fabricated as a pass.
+- Instatic's Core Framework token engine, QuickJS-WASM plugin sandbox, or CMS-native site-transfer
+  bundle format (`docs/features/site-transfer.md` in the Instatic repo — a different feature from
+  Super Import; MishMash does not need to produce an Instatic-native `.instatic/site-bundle.json`
+  transfer archive) — no coupling to any of these is designed or implied here.
+- Instatic's hosted-OAuth MCP mode (`authMode: 'oauth'`) — deliberately not pinned; see **Open
+  questions** item 2.
 - Closing the pre-existing "no CLI for managing external MCP client entries" gap identified above.
   It predates this wave, applies uniformly to all 25 templates, and fixing it is a general MCP-
   client capability change, not an Instatic-specific one.
 - Any new workflow, wizard, onboarding step, or persisted "this project is linked to Instatic"
   state. The export is a one-shot, stateless artifact — no relationship survives past the download.
-- Extending `tokens/` beyond a single `design-tokens.json` copy (no design-system bundling, no
-  brand-kit asset packaging) — that is W5/W6a territory, not this seam.
+- Any `pages/`/`tokens/`/`media/` folder restructuring, a separate tokens manifest file, or any
+  other reshaping of the exported file tree. The evidence in **Ground facts** shows Instatic wants
+  the flat, natural-path tree MishMash already produces — inventing a different shape would be
+  scope creep in the other direction (unrequested product surface), not fidelity to the seam.
 - Any change to `apps/daemon/src/routes/library.ts`, `brands/**`, `design-systems/**` internals, or
   any file this wave does not explicitly lease.
 
@@ -221,8 +296,8 @@ runnable now via `pnpm exec tsx scripts/waves/verify-w10a.ts`.
 
 | ID | Criterion | Verification |
 |---|---|---|
-| C10A-1 | Instatic MCP template registered and live-discoverable | Isolated daemon boot (port 0, fresh `mkdtemp OD_DATA_DIR`); `GET /api/mcp/servers`; exactly one `templates[]` entry whose `id`/`label`/`description` identify it as Instatic (case-insensitive `instatic` match); entry structurally valid (`SERVER_ID_PATTERN`, valid `category` ∈ the real `McpTemplateCategory` union, transport-appropriate required fields present and non-placeholder, `homepage` present) |
-| C10A-2 | Super Import export is correctly shaped and content-faithful | Real HTTP `GET /api/projects/:id/export/super-import` against a fixture project (created via real `POST /api/projects` + `POST /api/projects/:id/files`, never a DB-level stub); response unzipped via the daemon's own already-installed `jszip`; `pages/index.html`, `pages/docs/about.html`, `pages/style.css` present byte-identical (sha256) to the fixture; `media/images/logo.png` present byte-identical; `tokens/design-tokens.json` present byte-identical; `super-import-manifest.json` present, parses, `schema` exact, `pageCount===2`, `mediaCount===1`, `hasTokens===true`, `entryPage==="index.html"`; **negative control**: a fixture `index.html.artifact.json` sidecar is absent from every path in the zip |
+| C10A-1 | Instatic MCP template registered, real-transport shape | Isolated daemon boot (port 0, fresh `mkdtemp OD_DATA_DIR`); `GET /api/mcp/servers`; exactly one `templates[]` entry identifiable as Instatic; `transport==='http'`; `url` ends with the real `/_instatic/mcp` suffix (`mcp-connectors.md:20-24`); `authMode==='none'` (explicit, not OAuth); a `headerFields` entry with `key==='Authorization'` whose `placeholder`/`label` names `imcp_pat` case-insensitively (`mcp-connectors.md:79,85` — proves the real token format was used, not a placeholder); plus the structural checks every template must pass (`SERVER_ID_PATTERN`, valid `category`, non-placeholder `label`/`description`/`homepage`) |
+| C10A-2 | Super Import export matches Instatic's real ingestion contract | Real HTTP `GET /api/projects/:id/export/super-import` against a fixture project (created via real `POST /api/projects` + `POST /api/projects/:id/files`, never a DB-level stub); response unzipped via the daemon's own already-installed `jszip`; entries present at their **natural relative paths** — `index.html`, `docs/about.html`, `style.css`, `images/logo.png` — byte-identical (sha256) to the fixture, **no** `pages/`/`media/`/`tokens/` prefix; every entry's extension maps to Instatic's real `classifyFiles.ts:9-16,25-54` role table (html/css/js/image/font/meta/binary, cited exactly, not reinvented); **negative control**: a fixture `index.html.artifact.json` sidecar is absent from every path in the zip (MishMash's own pre-existing hygiene rule, re-verified for the new route, not an Instatic requirement); the route's own source contains the literal Instatic size-guard constants `10_000` and `1073741824` (`ingestInput.ts:39-41`), evidencing the guard uses Instatic's real numbers |
 | C10A-3 | CLI parity, real subprocess | `od project export-super-import <fixtureId> --daemon-url <isolated-url> --out <tmp> --json`, spawned as a real child process (never an in-process function call) with `OD_DAEMON_URL` also set to the isolated daemon and never falling through to `127.0.0.1:7456`; exit 0; saved file sha256-identical to C10A-2's HTTP response body |
 | C10A-4 | Super Import UI entry point wired | Source scan of `apps/web/src/**/*.ts(x)`: the literal route substring `/export/super-import` appears outside a comment line, within 3 lines of a recognizable call-site pattern (`fetch(`, `.get(`, or a named API-helper call) — existence-of-wiring only, not visual/aesthetic review (that stays a human PR-screenshot check per the repo's own PR template, not a mechanical criterion here) |
 | C10A-5 | No deeper coupling (founder-pin scope fence) | Over `git diff --name-only <baseCommit>...HEAD` intersected with this wave's own lease `allow` globs (excluding `scripts/waves/**` and `docs/**`, which are verifier/PRD scaffolding, not shipped product surface): zero occurrences of an outbound-call primitive (`fetch(`, `axios`, `http.request(`, `https.request(`, `XMLHttpRequest`) naming a non-loopback host; zero writes to a live `mcp-config.json` `servers` array originating from template-selection code outside the existing, unchanged user-save path. Legitimately vacuous (0 files, 0 violations) pre-implementation — see **Verified baseline** |
@@ -236,31 +311,44 @@ orchestrator-approved hash exists yet), **LEASE** (`git diff --name-only <baseCo
 added**, the same self-resolving gap `W9-ingest-tranche.md`'s ruling 3 recorded for its own PRD
 file), **HEAD-DRIFT** (HEAD must not move mid-run).
 
-## Verified baseline (this run, pre-implementation)
+## Verified baseline (this run, pre-implementation, post evidence-grounding revision)
 
 Captured by actually running `pnpm exec tsx scripts/waves/verify-w10a.ts` against this branch
-before any product code exists — see the run tail in the handoff message for the live output. All
-six substantive criteria and LEASE are expected to, and do, report `fail` (no template exists, no
-route exists, no CLI case exists, no UI call site exists — C10A-5 alone reports a **legitimate,
-disclosed pass**, since zero leased product files are yet touched so zero violations exist to find;
-this is not a loophole, it is the expected pre-implementation shape of a pure negative control, and
-C10A-1..C10A-4 independently carry the burden of proving the features exist). `pnpm guard`/`pnpm
-typecheck` (C10A-6) are expected to pass today since this PRD and its verifier are the only new
-files and both are within repo conventions.
+before any product code exists — see the run tail in the handoff message for the live output.
+`4/9` pass: C10A-1..C10A-4 and LEASE report `fail` honestly (no template exists, no route exists,
+no CLI case exists, no UI call site exists, no lease row landed yet), while C10A-5, C10A-6,
+GATE-INTEGRITY, and HEAD-DRIFT report `pass`. C10A-5's pass is a **legitimate, disclosed vacuous
+pass** (zero leased product files touched yet, so zero violations exist to find) — not a loophole;
+C10A-1..C10A-4 independently carry the burden of proving the features exist. `pnpm guard`/`pnpm
+typecheck` (C10A-6) pass today since this PRD and its verifier are the only new files and both are
+within repo conventions — this run's own C10A-6 evidence is a real, full-repo `pnpm guard` + `pnpm
+typecheck` pass, not merely assumed. This baseline was re-captured after the evidence-grounding
+revision (real Instatic ingestion contract + real MCP transport, replacing the earlier
+best-defensible guesses) — the criteria fail for the same underlying reason (nothing implemented
+yet) but now assert the *correct* target shape.
 
 ## Open questions for adversarial review
 
-1. **Instatic's real Super Import wire format is unverified from this repo.** S10A-2's
-   `pages/tokens/media` interpretation is this document's best-defensible reading of a three-word
-   gloss (`NM-REGISTER.md`), built by reusing `projectFileMap()`'s existing classifier rather than
-   inventing a new one — but nothing here confirms it against Instatic's actual parser. Should
-   landing this wave require fetching/reading Instatic's own Super Import source first (a research
-   step, not implementation), or is the gloss-level contract an acceptable target for this seam,
-   with fidelity verification deferred to a founder-visible manual check post-landing?
-2. **Transport for the MCP template (S10A-1) is deliberately left unpinned.** Is a structural-only
-   C10A-1 (valid shape, discoverable, identifiably Instatic) sufficient for "registered," or does
-   the founder want the exact stdio/http invocation nailed down as a hard criterion before this
-   lands — which would require sourcing Instatic's actual MCP entry point first?
+1. **RESOLVED — Instatic's real Super Import wire format.** Confirmed by direct read of
+   `~/projects/tools/third-party/instatic` (`docs/features/site-import.md`, `src/core/siteImport/
+   ingestInput.ts`, `classifyFiles.ts` — see **Ground facts**). S10A-2 is corrected accordingly: no
+   `pages/tokens/media` folders, no manifest file, tokens auto-extracted from CSS by Instatic itself.
+   **Residual:** this wave verifies the *contract* (extension classification, size guards, path
+   safety) mechanically; it does not drive a live round-trip through a *running* Instatic instance's
+   actual import wizard — that needs a live install and browser automation against someone else's
+   admin UI, which is genuine additional evidence beyond a mechanical verifier's reach and is out of
+   scope per the founder's "deeper coupling needs separate evidence" pin.
+2. **RESOLVED — outcome (a): Instatic ships a real MCP server.** Confirmed by `CLAUDE.md` +
+   `docs/features/mcp-connectors.md` in the Instatic repo (see **Ground facts**). S10A-1 is pinned to
+   `transport: 'http'`, endpoint suffix `/_instatic/mcp`, personal-access-token header auth.
+   **New residual, replacing the old one:** Instatic's hosted-OAuth mode (`authMode: 'oauth'`,
+   MishMash's existing generic MCP OAuth automation in `mcp-oauth.ts`) is deliberately **not**
+   pinned or attempted here. It requires a public HTTPS Instatic deployment (the doc's own words:
+   hosted clients "cannot reach `localhost`... or an HTTP-only deployment"), which doesn't fit a
+   local companion service, and confirming MishMash's generic OAuth client is wire-compatible with
+   Instatic's *specific* RFC 9728 + dynamic-client-registration flow is itself deeper-coupling
+   evidence this wave does not gather. If the founder wants OAuth-mode registration too, that is a
+   founder-scoped follow-up, not a silent addition here.
 3. **`registry.ts` collision risk.** The proposed lease denies `apps/web/src/providers/registry.ts`
    and routes the UI touchpoint through `DesignFilesPanel.tsx` instead, to dodge the W2/W3/W4
    hotspot `VERIFICATION-CONTRACT.md` §4.1 already had to resolve once. If the real implementation
@@ -274,3 +362,11 @@ files and both are within repo conventions.
    scoping, mirroring `archive`), that changes C10A-3's exact-identity assertion into a looser
    contract and should be decided before freeze, not discovered as a false-negative during
    implementation.
+5. **C10A-2's size-guard check is source-level, not runtime-exercised.** The verifier confirms the
+   route's source literally contains Instatic's real guard constants (`10_000`, `1073741824`) but
+   does not generate a real >10,000-file or >1 GB fixture and confirm the route actually rejects it
+   over HTTP — doing so would mean the verifier itself creates and uploads a disproportionate amount
+   of fixture data for a small wave. If a reviewer considers the rejection *behavior* (not just the
+   presence of the right numbers) load-bearing, this needs either a cheaper synthetic test seam
+   (e.g. an injectable/overridable limit for tests) or an explicit founder-accepted gap — not
+   something this PRD should silently leave to the implementer's discretion.
