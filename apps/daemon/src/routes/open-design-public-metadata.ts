@@ -5,10 +5,7 @@ import type {
   OpenDesignGithubRepoResponse,
 } from '@open-design/contracts';
 import type { RouteDeps } from '../server-context.js';
-import {
-  OPEN_DESIGN_DISCORD_INVITE_URL,
-  type OpenDesignPublicMetadataService,
-} from '../services/open-design-public-metadata.js';
+import type { OpenDesignPublicMetadataService } from '../services/open-design-public-metadata.js';
 
 export interface RegisterOpenDesignPublicMetadataRoutesDeps extends RouteDeps<'http'> {
   openDesignPublicMetadata: OpenDesignPublicMetadataService;
@@ -28,7 +25,7 @@ export function registerOpenDesignPublicMetadataRoutes(
     try {
       const stats = await openDesignPublicMetadata.readGithubRepoStats();
       const payload: OpenDesignGithubRepoResponse = {
-        repo: 'nexu-io/open-design',
+        repo: 'wiggdevin/mishmash',
         stargazers_count: stats.stargazersCount,
         fetchedAt: stats.fetchedAt,
         stale: stats.stale,
@@ -43,7 +40,7 @@ export function registerOpenDesignPublicMetadataRoutes(
     try {
       const release = await openDesignPublicMetadata.readLatestReleaseInfo();
       const payload: OpenDesignGithubLatestReleaseResponse = {
-        repo: 'nexu-io/open-design',
+        repo: 'wiggdevin/mishmash',
         tag_name: release.tagName,
         html_url: release.htmlUrl,
         fetchedAt: release.fetchedAt,
@@ -59,8 +56,11 @@ export function registerOpenDesignPublicMetadataRoutes(
     try {
       const presence = await openDesignPublicMetadata.readDiscordPresence();
       const payload: OpenDesignDiscordPresenceResponse = {
-        inviteCode: 'mHAjSMV6gz',
-        inviteUrl: OPEN_DESIGN_DISCORD_INVITE_URL,
+        // No public community Discord exists for this private, internal
+        // fork (docs/FORK-PIN.md) -- empty strings signal "not configured"
+        // rather than re-serving the upstream project's invite.
+        inviteCode: '',
+        inviteUrl: '',
         onlineCount: presence.onlineCount,
         memberCount: presence.memberCount,
         fetchedAt: presence.fetchedAt,
