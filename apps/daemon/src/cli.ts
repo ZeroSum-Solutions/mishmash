@@ -6650,6 +6650,16 @@ async function streamRunEvents(base, runId) {
       try { parsed = JSON.parse(dataRaw); } catch { parsed = dataRaw; }
       process.stdout.write(JSON.stringify({ event, data: parsed }) + '\n');
       if (event === 'end') {
+        // C1-10: the 'end' event's own data carries the run's terminal
+        // status (see runs.ts's `emit(run, 'end', {..., status, ...})`).
+        // `od run watch`/`od run continue --follow` used to always return
+        // (implicit exit 0) the moment this event arrived, regardless of
+        // whether the run actually succeeded -- so a caller scripting
+        // around the exit code could never tell a failed run from a
+        // successful one without separately parsing stdout.
+        if (parsed && typeof parsed === 'object' && parsed.status === 'failed') {
+          process.exitCode = 1;
+        }
         return;
       }
     }
