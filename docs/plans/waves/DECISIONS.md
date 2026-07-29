@@ -359,3 +359,51 @@ strong-sounding one.
   1 blocked-on-founder / 0 fail, which is the maximum honest score this gate can report.
 - Precedent: this acceptance resolves a founder judgment call, not a failing criterion. It is not
   a waiver, and it does not license landing any wave whose gate reports a hard failure.
+
+### W10B-PARK
+- Decision: parked (package not frozen; wave not implemented)
+- Decider: Fable 5 orchestrator under gate authority delegated by Devin Wiggins (founder) on 2026-07-28
+- Date: 2026-07-29
+- Rounds: 4 independent reviews, 4 non-APPROVE verdicts
+- Rationale: Round 4 was pre-declared final, and it came back REJECT with three
+  probe-demonstrated bypasses, each type-clean: (1) the verifier serialized the template entry
+  as a root value while `mcp-routes.ts` serializes it nested inside `{ servers, templates }`, so a
+  `toJSON(key)` returning the frozen value for the root key and hostile values for the array index
+  passed every check while the route served the hostile data; (2) each criterion imported a fresh
+  module and serialized ONCE, so a stateful getter returning the frozen URL on first read and a
+  hostile one thereafter passed, while the daemon holds one imported instance and serves the
+  divergence on any later request; (3) the runtime import materialized committed text at a
+  predictable temp path, so `import.meta.url.includes('verify-w10b-runtime-')` distinguished the
+  verifier from production. The reviewer also established that the deep structural scan removed in
+  round 4 was NOT redundant — it would have caught bypass (1).
+- Why park rather than authorize a fifth round: the failures are not a list of holes to patch,
+  they are one architectural verdict. This package tries to prove the runtime behavior of a data
+  literal that lives in the same file as arbitrary code, and each round the adversary simply moves
+  to the next layer the check does not observe. Sibling waves that assert against a REAL booted
+  daemon's HTTP response (W10c, W10f) do not have this problem, because they observe the served
+  bytes rather than a reconstruction of them. A fifth patch round on this foundation would be a
+  fourth guess at where the next divergence hides.
+- Correction to the round-4 instruction, recorded so the mistake is not repeated: the delegate's
+  ruling ("close the class by asserting at runtime") was directionally right but under-specified.
+  Asserting at runtime is insufficient unless the assertion also happens IN THE PRODUCTION
+  SERIALIZATION CONTEXT, is REPEATED (first read is not the only read), and observes the module at
+  its REAL path. Any future package making a runtime-truth claim must satisfy all three.
+- Disposition: NM-25 (register the VoiceBox MCP) is not cancelled. If it is picked up later it gets
+  a fresh package built on the booted-daemon HTTP-response pattern, not a fifth revision of this one.
+
+### W10A-PARK
+- Decision: parked (package not frozen; wave not implemented)
+- Decider: Fable 5 orchestrator under gate authority delegated by Devin Wiggins (founder) on 2026-07-28
+- Date: 2026-07-29
+- Rounds: 3 independent reviews, 3 non-APPROVE verdicts
+- Rationale: Same root cause as W10B, found independently — the package attempts to prove runtime
+  behavior by freezing source literals, so every closed hole exposes an adjacent one (round 3
+  reproduced the identical `__proto__`/`toJSON` divergence). Two further defects were substantive
+  rather than mechanical: a safety finding that the CLI fallback path was never proven to avoid the
+  protected default-namespace daemon on port 7456, and a PRD defect instructing implementers to
+  import `sendApiError` from `@open-design/contracts`, which exports only the error types — code
+  written to the frozen text would not typecheck.
+- Salvage: the review found one REAL product bug, which was rehomed rather than parked with the
+  wave — editing a saved MCP client's URL silently reset its authMode to OAuth. That is fixed
+  separately on `fix/mcp-client-authmode-preserved` with a red spec that fails on the unfixed code.
+- Disposition: NM-24's seam pin stands. A future package must observe served behavior, per W10B-PARK.
