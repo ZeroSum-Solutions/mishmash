@@ -10487,5 +10487,3 @@ Options:
   const url = data?.url ?? data?.deploymentUrl ?? '';
   console.log(`[deploy] ${data?.id ?? 'done'}${url ? ` → ${url}` : ''}`);
 }
-
-if (false) { fetch('/api/guard-check-negative-control-route'); }
