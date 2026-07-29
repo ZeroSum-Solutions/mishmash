@@ -4298,6 +4298,13 @@ export async function startServer({
     // is optional and only set when the chat body actually carried it.
     const telemetryPrompt = telemetryPromptFromRunRequest(message, currentPrompt);
     if (typeof telemetryPrompt === 'string') run.userPrompt = telemetryPrompt;
+    // `modelRequested` is the routing-truth `requested` field (NM-13a) --
+    // the raw value the caller sent, verbatim, even when it never resolves
+    // to anything valid. `run.model` is set again below, after resolution,
+    // to the RESOLVED model (what actually got launched) so telemetry
+    // reflects execution, not the raw ask (C1-5); this early assignment is
+    // only a placeholder for a run that fails before resolution runs.
+    run.modelRequested = typeof model === 'string' ? model : null;
     if (typeof model === 'string' && model) run.model = model;
     if (typeof reasoning === 'string' && reasoning) run.reasoning = reasoning;
     if (typeof skillId === 'string' && skillId) run.skillId = skillId;
@@ -4955,6 +4962,12 @@ export async function startServer({
         // the probe failure and applies the identical fallback.
       }
     }
+    // Routing truth (NM-13a): `run.model` now records what the daemon is
+    // actually about to launch (RESOLVED), not the raw request captured
+    // above -- `safeModel` is null when resolution deliberately deferred to
+    // the CLI's own default, which `buildModelRouting` readers backfill from
+    // whatever the CLI later echoes.
+    run.model = safeModel;
     const agentResumeCtx =
       agentSupportsSessionResume && run.conversationId
         ? resolveAgentResumeContext(db, {
@@ -7167,6 +7180,20 @@ export async function startServer({
           resumed: agentResumeCtx.isResuming,
         });
         publishNativeSessionRecoveryMetadata();
+      }
+      // Routing truth (NM-13a) `reported`: some lanes echo the model that
+      // actually executed on their own init/status event (Claude's
+      // `system`/`init`, cursor-agent's `system`/`init`, the generic
+      // json-event-stream gemini `init` handler). Codex's `thread.started`
+      // and Antigravity's plain stream never carry `.model` at all -- that
+      // is a genuine evidence ceiling (NM-13c), not a bug, so `reported`
+      // legitimately stays unset for those lanes.
+      if (
+        ev?.type === 'status' &&
+        typeof ev.model === 'string' &&
+        ev.model.trim().length > 0
+      ) {
+        run.modelReported = ev.model.trim();
       }
       lastAgentEventPhase = summarizeAgentEventForInactivity(ev);
       noteAgentActivity();

@@ -23,14 +23,23 @@ export function normalizeAgentModelChoice(
 ): AgentModelChoice | null {
   const configuredModel =
     typeof choice?.model === 'string' && choice.model ? choice.model : null;
-  if (agent?.id !== 'amr' || !configuredModel) return null;
-  if (configuredModel === 'default') return null;
+  if (!configuredModel || configuredModel === 'default') return null;
 
-  const matchingModel = agent.models?.find((model) => model.id === configuredModel) ?? null;
-  if (!matchingModel && (agent.models?.length ?? 0) === 0) {
-    return null;
-  }
-  if (matchingModel && matchingModel.enabled !== false) return null;
+  const models = agent?.models ?? [];
+  const matchingModel = models.find((model) => model.id === configuredModel) ?? null;
+
+  // A model id the catalog has never listed might be a legitimately typed
+  // custom model -- most agents accept a free-form id via the "Custom (fill
+  // below)" input, so an unknown id must never be silently rewritten. AMR is
+  // the one lane whose CLI rejects free-form ids outright (ACP
+  // session/set_model), so for AMR specifically an id absent from its own
+  // live catalog is presumed stale and still gets corrected.
+  const isUnknownAmrModel = !matchingModel && agent?.id === 'amr' && models.length > 0;
+  // A model id the catalog DOES know about but has explicitly disabled
+  // applies to every agent, not just AMR -- a disabled/locked model must
+  // never sit selected in the UI, whichever agent it belongs to (C1-2).
+  const isKnownButDisabled = matchingModel?.enabled === false;
+  if (!isUnknownAmrModel && !isKnownButDisabled) return null;
 
   const fallbackModel = defaultAgentModelId(agent);
   if (!fallbackModel || fallbackModel === configuredModel) return null;
