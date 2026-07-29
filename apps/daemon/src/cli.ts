@@ -554,7 +554,13 @@ if (first && SUBCOMMAND_MAP[first]) {
   // silently dropped. process.exitCode lets Node exit naturally once the
   // event loop drains, same pattern already used at the `tools
   // live-artifacts`/`tools connectors` dispatch below.
-  process.exitCode = 0;
+  // C1-10: a subcommand handler (e.g. `od run watch`/`od run continue
+  // --follow`'s streamRunEvents) may already have set process.exitCode to
+  // reflect its own outcome -- a failed run's nonzero exit, set well before
+  // control returns here. Unconditionally overwriting it to 0 silently
+  // discarded that signal on every invocation, regardless of what the
+  // handler decided. Default to 0 only when nothing set it already.
+  if (process.exitCode === undefined) process.exitCode = 0;
 } else if (argv[0] === 'tools' && argv[1] === 'live-artifacts') {
   runLiveArtifactsToolCli(argv.slice(2))
     .then(({ exitCode }) => {
