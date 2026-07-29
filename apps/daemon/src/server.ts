@@ -1456,10 +1456,22 @@ export function composeChatUserRequestForAgent(
   // `RuntimeAgentDef.resumesSessionViaCli`.
   const skip = options.skipTranscript === true;
   const bodySource = skip ? currentPrompt : message;
+  // C1-7: a caller that never sends a distinct `currentPrompt` field at all
+  // (e.g. a bare `POST /api/runs` body carrying only `message` -- the `od`
+  // CLI, `od run continue`, and other non-web-client callers all send this
+  // shape) has `bodySource === undefined` here whenever `skip` is true, so
+  // the real user text living in `message` was silently discarded in favor
+  // of the placeholder below on every resumed turn from such a caller. Only
+  // fall back to `message` when `currentPrompt` was never a string at all --
+  // an explicit empty string is the real web client's own "nothing else
+  // typed this turn" signal and must still fall through to the placeholder,
+  // not resend the full rendered transcript `skipTranscript` exists to avoid.
   const body =
     typeof bodySource === 'string' && bodySource.trim()
       ? bodySource
-      : '(No extra typed instruction.)';
+      : typeof bodySource !== 'string' && typeof message === 'string' && message.trim()
+        ? message
+        : '(No extra typed instruction.)';
   const transition = formAnswerTransitionForCurrentPrompt(currentPrompt);
   if (!transition) return body;
   if (skip) {
