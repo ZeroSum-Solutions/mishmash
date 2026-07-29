@@ -167,7 +167,7 @@
       "authn": "No route-level authorization gate; relies on the global /api origin middleware (a zero-config, pairing-code-adjacent surface for this file).",
       "authz": "Three-way branch: extension-shaped Origin + its own bound library token (\"clipper\"), OR isLocalSameOrigin loopback (\"manual-upload\"), OR reject -- see docs/security/daemon-threat-model.md [C0-5]/[C0-6].",
       "inputValidation": "sourceKind==='manual-upload' bytes are checked against LIBRARY_UPLOAD_MAX_BYTES and an explicit MIME allowlist; a URL body is routed through the SSRF-guarded fetchRemoteBytes.",
-      "sizeRateLimit": "ENFORCED kind=byte-volume scope=token-hash limit=5000000 windowMs=none overflow=reject-413 (CLIPPER_INGEST_MAX_BYTES, routes/library.ts) -- closes the clipper/token caller class's previously-uncapped dataUrl/text payload gap.",
+      "sizeRateLimit": "ENFORCED kind=byte-volume scope=token-hash limit=5000000 windowMs=none overflow=reject-413 (CLIPPER_INGEST_MAX_BYTES, routes/library.ts) -- bounds the clipper/token caller class's TOTAL persisted bytes per request (primary bytes/text plus any figmaCapture, elementHtml, and metadata sidecars), closing both the original uncapped-payload gap and the sidecar-bypass variant.",
       "testRef": "POST /api/library/ingest — capability token identity binding (C0-5/C0-6) (C0-5/reject) rejects an unpaired extension origin with no token",
       "riskScore": {
         "exposure": 3,
