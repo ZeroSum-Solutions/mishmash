@@ -462,13 +462,13 @@ globalThis.fetch = async (input, init) => {
     // response here would short-circuit them into their error branch before
     // ever reaching that code -- silently making the C2-6 content check
     // vacuous. A believable upstream success is what actually exercises it.
-    if (/^\/repos\/[^/]+\/[^/]+$/.test(new URL(url).pathname) && host === 'api.github.com') {
+    if (/^\\/repos\\/[^/]+\\/[^/]+$/.test(new URL(url).pathname) && host === 'api.github.com') {
       return new Response(JSON.stringify({ stargazers_count: 1 }), { status: 200 });
     }
-    if (/\/releases\/latest$/.test(new URL(url).pathname) && host === 'api.github.com') {
+    if (/\\/releases\\/latest$/.test(new URL(url).pathname) && host === 'api.github.com') {
       return new Response(JSON.stringify({ tag_name: 'w2-verifier-fake-tag', html_url: 'https://example.invalid/w2-verifier-fake-release' }), { status: 200 });
     }
-    if (host === 'discord.com' && /\/invites\//.test(new URL(url).pathname)) {
+    if (host === 'discord.com' && /\\/invites\\//.test(new URL(url).pathname)) {
       return new Response(
         JSON.stringify({ approximate_presence_count: 1, approximate_member_count: 2, profile: { online_count: 1, member_count: 2 } }),
         { status: 200 },
