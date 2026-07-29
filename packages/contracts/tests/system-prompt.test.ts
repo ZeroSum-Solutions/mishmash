@@ -36,7 +36,7 @@ describe('DISCOVERY_AND_PHILOSOPHY (contracts copy) — TodoWrite plan item coun
     const prompt = composeSystemPrompt({ sessionMode: 'chat' });
 
     expect(prompt).toContain('# Ask mode — bare conversation');
-    expect(prompt).toContain('https://github.com/wiggdevin/mishmash');
+    expect(prompt).toContain('MishMash is a local-first, agent-native design studio');
     expect(prompt).toContain('Do not emit a default discovery `<question-form>`');
     // Ask mode is deliberately light: neither the ~3k-token discovery layer nor
     // the full designer charter is composed in. That omission IS the feature —
