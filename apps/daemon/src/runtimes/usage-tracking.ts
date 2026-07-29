@@ -336,8 +336,18 @@ export function projectUsageSummary(
   return {
     projectId,
     currency: 'USD',
+    // C1-7: a project with NO runs at all has unambiguously spent $0 -- a
+    // confident zero, not the same "unavailable" null C1-9 means for a
+    // project that HAS runs but none of them priced. Conflating the two
+    // made a real "before any run" baseline read back as null, which a
+    // genuine HTTP baseline observation can never tell apart from
+    // "unpriced" (the very thing C1-9 requires never rendering as $0.00).
     totalCostUsd:
-      priced.length > 0 ? priced.reduce((sum, r) => sum + (r.costUsd ?? 0), 0) : null,
+      runs.length === 0
+        ? 0
+        : priced.length > 0
+          ? priced.reduce((sum, r) => sum + (r.costUsd ?? 0), 0)
+          : null,
     pricingVersion,
     runCount: runs.length,
     pricedRunCount: priced.length,
