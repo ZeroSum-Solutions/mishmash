@@ -1443,6 +1443,47 @@ async function computedAxNodeForSelector(
   }
 }
 
+// GATE AMENDMENT (feat/w1-routing-truth-v2, orchestrator-authorized,
+// narrowly scoped to C1-2/C1-11's false-fail race): AssistantMessage.tsx
+// renders the `[data-assistant-message-id]` container immediately, but
+// `useModelRoutingForRun` (AssistantMessage.tsx:~1501-1532) starts at
+// `null` and only populates the routing badge after a `useEffect`-fired
+// `fetch('/api/runs/:id')` resolves -- a strictly later round trip. Both
+// C1-2's DOM snapshot and `findNamedDescendantAx` (used three times by
+// C1-11) previously read the DOM/AX-tree the instant the container
+// appeared, racing that fetch and intermittently failing a correct product
+// (measured ~25% false-fail under load; the product's own unit test,
+// apps/web/tests/components/AssistantMessage.model-routing.test.tsx:63-90,
+// asserts this identical scenario correctly via `await waitFor(...)`).
+// `waitForContainerText` below polls the container's rendered text for the
+// needle(s) that are about to be asserted on, bounded by `timeoutMs`. On
+// timeout it simply returns -- the caller's pre-existing synchronous
+// read/assertions run completely unchanged, so a genuine absence (the text
+// was never going to render) still fails exactly as it did before this
+// wait existed. This is strictly additive: no assertion, matcher, or
+// selector below is touched.
+async function waitForContainerText(
+  page: PlaywrightPage,
+  containerSelector: string,
+  needles: string[],
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const ok = await page.evaluate((arg: unknown) => {
+      const { sel, needs } = arg as { sel: string; needs: string[] };
+      const doc = (globalThis as unknown as { document: any }).document;
+      const el = doc.querySelector(sel);
+      if (!el) return false;
+      const text = el.innerText || '';
+      return needs.every((n) => text.includes(n));
+    }, { sel: containerSelector, needs: needles });
+    if (ok) return;
+    if (Date.now() >= deadline) return;
+    await page.waitForTimeout(150);
+  }
+}
+
 // ROUND 2 ADDITION (finding 1 / Sol round-2 F1): `computedAxNodeForSelector`
 // only reports the accessible name of ONE named node (the message
 // container), which real substitution UI has no reason to name directly --
@@ -1459,6 +1500,12 @@ async function findNamedDescendantAx(
   containerSelector: string,
   needle: string,
 ): Promise<{ role: string | null; name: string | null; ignored: boolean } | null> {
+  // GATE AMENDMENT: bounded wait for the async routing text to actually
+  // render before doing the real (synchronous) AX-tree read below -- see
+  // `waitForContainerText`'s docblock for the full mechanism/rationale. On
+  // timeout this falls straight through to the unchanged read/walk that
+  // follows.
+  await waitForContainerText(page, containerSelector, [needle], 8_000);
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('DOM.enable');
   await cdp.send('Accessibility.enable');
@@ -1735,6 +1782,19 @@ await checkCriterion('C1-2', 'apps/web/src/components/agentModelSelection.ts dir
       if (!found) {
         problems.push(`no [data-assistant-message-id="${run.assistantMessageId}"] node rendered in the conversation view within 15s -- substitution UI surface not present yet`);
       } else {
+        // GATE AMENDMENT: bounded wait for the async routing badge
+        // (useModelRoutingForRun, AssistantMessage.tsx:~1501-1532) to
+        // actually render both model strings before taking the
+        // synchronous DOM snapshot below -- see `waitForContainerText`'s
+        // docblock for the full mechanism/rationale. On timeout this falls
+        // straight through to the unchanged snapshot/assertions that
+        // follow, so a genuine absence still fails exactly as before.
+        await waitForContainerText(
+          page,
+          messageSelector,
+          executedModel ? [requestedInvalid, executedModel] : [requestedInvalid],
+          8_000,
+        );
         // NOTE: this callback runs inside the browser (Playwright serializes
         // it), not in this file's own Node/ES2022-lib type-checking context
         // -- deliberately typed via `any`/`globalThis` rather than
