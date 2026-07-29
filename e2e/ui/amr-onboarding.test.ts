@@ -554,7 +554,7 @@ test('[P0] onboarding newsletter email is optional and blank email can finish se
     initialLoggedIn: true,
   });
   let newsletterCalls = 0;
-  await page.route('https://open-design.ai/subscribe', async (route) => {
+  await page.route(E2E_NEWSLETTER_SUBSCRIBE_URL, async (route) => {
     newsletterCalls += 1;
     await route.fulfill({ json: { ok: true } });
   });
@@ -580,7 +580,7 @@ test('[P0] onboarding newsletter malformed email does not block finishing setup'
     initialLoggedIn: true,
   });
   let newsletterCalls = 0;
-  await page.route('https://open-design.ai/subscribe', async (route) => {
+  await page.route(E2E_NEWSLETTER_SUBSCRIBE_URL, async (route) => {
     newsletterCalls += 1;
     await route.fulfill({ json: { ok: true } });
   });
