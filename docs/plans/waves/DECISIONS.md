@@ -235,3 +235,108 @@ Probe target frozen in a2eb154cc: needle "rings" (unique in file), phrase "red r
 **Conditions.** One scoped implementation-fidelity confirmation by the round reviewer (code +
 baseline match the ratified design; no design re-litigation), then re-pin and rerun. This ruling,
 like all escalation rulings, is founder-vetoable.
+
+## 2026-07-28 — Founder delegation of gate authority (in-session, verbatim)
+
+> "i need you to have fable 5 act as the humand for all human gates for this project. i give
+> explisit permission for fable 5 to anwser and gating questions, make calls any other
+> desisions to unblcok and progress the application build or carry out goals. please apply
+> and have it unfreeze any thing that is gating."
+
+Scope and limits, recorded so any later auditor can see exactly who decided what. The
+delegation covers **wave-program gates**: answering blocked-on-founder criteria, authorizing
+or declining further review rounds, ruling on product questions a wave cannot resolve
+itself, and unfreezing wave-level blocks. It does **not** extend to the operator's standing
+machine-safety rules, which are not wave gates and remain in force unchanged: the protected
+default-namespace daemons (ports 7456/51012) stay untouched, git history is never rewritten,
+destructive-git and credential opt-in tokens are never self-applied, and no wave may be
+declared done without its gate going green on its own terms. Every ruling made under this
+delegation is recorded here and remains founder-vetoable.
+
+### W9AS-ACCEPT-shared-local-namespace
+- Accepter: Devin Wiggins (founder), delegated 2026-07-28 to the Fable 5 orchestrator
+- Date: 2026-07-28
+- Rationale: MishMash is a local-first, single-user product whose daemon binds loopback only. Run IDs are therefore a shared local namespace: any process already running as the user can reach the daemon and act on any run ID. This is accepted rather than mitigated, because per-caller ownership scoping would add an authentication substrate the product does not otherwise have, to defend against an attacker who — having already achieved local code execution as the user — could read the data directly anyway. The threat model must state this explicitly and name "arbitrary local processes" as in-scope-but-accepted, so the acceptance is visible rather than implied by silence.
+
+### W10C-CAPABILITY-DECISION
+- Decision: exempt
+- Decider: Fable 5 orchestrator under gate authority delegated by Devin Wiggins (founder) on 2026-07-28
+- Date: 2026-07-28
+- Rationale: The design toolbox is a recommendation surface layered over primitives that are already reachable through the `od` CLI; applying a toolbox action composes existing capabilities rather than introducing a new one. AGENTS.md's UI/CLI dual-track rule binds user-facing capabilities, and inventing a new `od toolbox apply` endpoint solely to satisfy a parity checkbox would be scope creep against the wave's stated purpose, which is proving the toolbox resolves REAL skill IDs. W10c's parity obligation therefore stays scoped to the skills surface the toolbox actually consumes.
+
+### W10F-RETENTION-WINDOWS
+- Decision: defaults set
+- Decider: Fable 5 orchestrator under gate authority delegated by Devin Wiggins (founder) on 2026-07-28
+- Date: 2026-07-28
+- Windows: repo-root `.tmp/<source>/<namespace>/` runtime files for INACTIVE namespaces = 7 days; test/e2e artifacts (`test-results/**`, `playwright-report/**`, traces, videos) = 3 days; daemon-owned logs under the resolved data root = 14 days.
+- Rationale: Deliberately generous, because the failure mode of a window that is too short is destroyed user work while the failure mode of one that is too long is disk usage — an asymmetry that should always resolve toward keeping data. A category with no stated window here is NOT collectable; absence of a rule is never permission. These values must be read from configuration by the implementation, and a criterion must assert the configured values equal the stated ones so documentation and behavior cannot drift apart.
+
+### W10F-E2E-ARTIFACT-SCOPE
+- Decision: in scope, narrowly
+- Decider: Fable 5 orchestrator under gate authority delegated by Devin Wiggins (founder) on 2026-07-28
+- Date: 2026-07-28
+- Rationale: Generated test artifacts are collectable only under the repository's own test-output paths (`.tmp/**`, `test-results/**`, `playwright-report/**`) and only past the 3-day window. Anything a user could plausibly have authored or moved into those directories is out of scope. Where an implementation cannot distinguish generated output from user-placed content within a directory, that directory is out of scope entirely and the PRD must say so rather than guess.
+
+### W10F-OD-DELETABLE-CATEGORIES
+- Decision: explicit allowlist only
+- Decider: Fable 5 orchestrator under gate authority delegated by Devin Wiggins (founder) on 2026-07-28
+- Date: 2026-07-28
+- Deletable (allowlist, exhaustive): (a) log files past their window; (b) caches provably regenerable from a durable source; (c) orphaned staging/temp artifacts with no referencing row in the database.
+- Never deletable (named so the boundary is auditable): projects and project files; artifacts referenced by any project; the SQLite database and its journals; app configuration; MCP config and tokens; connector credentials; memory; automation state; plugin state; agent runtime homes; and anything under an imported-folder project's `metadata.baseDir`.
+- Rationale: A denylist fails open — a category nobody thought of becomes deletable by default. An allowlist fails closed, which is the only acceptable default for a garbage collector operating on a user's working data. Orphan collection is the dangerous member of the allowlist, since a defect in "has no referencing row" deletes live data; it therefore requires a red spec proving a REFERENCED artifact is not collected, paired with the positive control that a genuinely orphaned one is.
+
+### W10E-MEMORY-SCOPE
+- Decision: scope to Library embeddings; no managed RAG
+- Decider: Fable 5 orchestrator under gate authority delegated by Devin Wiggins (founder) on 2026-07-28
+- Date: 2026-07-28
+- Rationale: The existing markdown two-loop chat memory works and is understood; replacing it would risk a functioning surface for no user-visible gain. NM-21 is therefore scoped to the Library-embeddings use case only. The managed-RAG question (Gemini File Search vs Vertex AI RAG Engine) resolves to NEITHER: both would move a local-first product's private reference library into a hosted index, which contradicts the product's central promise. Revisit only if the founder later wants hosted retrieval as an explicit, opt-in product feature.
+
+## 2026-07-28 — Wave rulings under delegated gate authority
+
+**W1 (routing truth) — C1-12 structural block: REBUILD, do not waive.** The gate reached 16/17
+with C1-12 unpassable: it requires both founder decision records to STRICTLY predate the first
+implementation commit within `baseCommit..HEAD`, and the W1 branch recorded them at index 14
+while implementation began at index 10. The implementing agent concluded no forward path
+existed short of history rewriting. That conclusion was wrong, and the orchestrator verified
+the walk directly: the check reads each commit's TREE (`readFileAtCommit`), not its diff, so
+landing both decision records on main and cutting a fresh branch from that main makes them
+present in every in-range commit — `decisionCompleteAt` becomes 0 and the criterion passes
+honestly. Those records are landed in this same change. W1 is therefore replayed onto a new
+branch rather than waived. Rationale for choosing the harder path: W1 is the FIRST wave to
+land, and a waiver at wave one would establish that "the gate is the arbiter" is negotiable
+for every wave after it. The replay costs agent time, not correctness. Fallback, pre-declared:
+if the replayed branch cannot reach 17/17 for reasons unrelated to commit ordering, W1 lands at
+16/17 with this record and the reviewer-verified impossibility analysis attached.
+
+**W10a (Instatic seam) — PARK after three rejects.** Rounds 1, 2 and 3 all rejected, and the
+root cause is architectural rather than a list of missed residuals: the verifier tries to prove
+RUNTIME behavior by freezing SOURCE literals, which is unsound by construction, so each round
+closes the named holes and the next finds new ones (`__proto__`/inherited `toJSON`,
+`Object.assign`/`defineProperty`/`setPrototypeOf` mutations, imports that exist but are never
+called, dead branches satisfying a node-walk constant). The wave gates nothing downstream, so
+the honest move is to stop paying for a strategy that does not converge. Round 3 also surfaced
+a safety defect (the CLI-fallback path is not proven to avoid a request to the protected daemon)
+and a PRD defect (frozen text instructs importing `sendApiError` from `@open-design/contracts`,
+which exports only the error types — following it literally fails typecheck). Both are recorded
+here so a future revival starts from truth. **The confirmed product bug this arc found survives
+the parking**: `McpClientSection.tsx:108-117` silently flips an explicitly configured no-auth MCP
+client to OAuth when its URL is edited. It is rehomed as a standalone bug-follow-up per
+AGENTS.md's documented workflow (red spec first), not left to die with the wave.
+
+**W10b (VoiceBox registration) — ROUND 4 AUTHORIZED, one closure.** All three round-3 closures
+were confirmed genuine; the reject came from an adjacent vector in the same class. Rather than
+patching `__proto__` alone and inviting a fifth round, the authorized round must close the CLASS:
+assert the frozen values at RUNTIME against the real serialized response (the production route
+serializes the templates through `res.json`), keeping the AST checks only as a fast structural
+pre-filter. Behavior is what the wave actually promises; source shape was only ever a proxy.
+
+**W9 agent-spawn tranche — ROUND 4 AUTHORIZED, scoped to five.** This is the program's
+highest-risk route boundary (arbitrary process launch) and its coverage/ground-truth half is now
+solid, which makes finishing it worth one more round. Ruling on the embedded design question —
+no purely-local verifier can cryptographically prove a founder signature, and pretending
+otherwise would be theater: the accepted-risk record must be required to exist at `baseCommit`
+(i.e. landed on main through the orchestrator's docs lane, which a wave-branch implementer
+cannot reach), the verifier must parse and bind its `Accepted risk` and `Route` fields rather
+than only its heading, and the PRD must state plainly that this proves "landed on main through
+the review lane", NOT "cryptographically signed by the founder". An honest weak control beats a
+strong-sounding one.
