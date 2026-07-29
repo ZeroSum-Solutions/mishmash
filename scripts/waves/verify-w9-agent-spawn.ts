@@ -545,15 +545,22 @@ interface CollectResult {
 interface FunctionBodyLookup {
   body: TsNode | null;
   count: number;
+  /** residual (round 4, finding 1 -- false-red): the registrar's own second
+   * parameter identifier name (e.g. `ctx` or `daemon.ts`'s `deps`), resolved
+   * dynamically instead of the classifier assuming a hardcoded 'ctx'. */
+  ctxParamName: string | null;
 }
 function findFunctionBody(sourceFile: TypeScriptModule.SourceFile, fnName: string): FunctionBodyLookup {
   const matches: TsNode[] = [];
+  let ctxParamName: string | null = null;
   for (const stmt of sourceFile.statements) {
     if (ts.isFunctionDeclaration(stmt) && stmt.name?.text === fnName && stmt.body) {
       matches.push(stmt.body);
+      const secondParam = stmt.parameters[1];
+      ctxParamName = secondParam && ts.isIdentifier(secondParam.name) ? secondParam.name.text : null;
     }
   }
-  return { body: matches[0] ?? null, count: matches.length };
+  return { body: matches[0] ?? null, count: matches.length, ctxParamName: matches.length === 1 ? ctxParamName : null };
 }
 
 function collectScopedRouteRegistrations(
@@ -646,27 +653,113 @@ function consequentUnconditionallyExits(stmt: TsNode): boolean {
 function calleeIsBareIdentifier(expr: TsNode, name: string): boolean {
   return ts.isIdentifier(expr) && expr.text === name;
 }
-function isCtxSubObjectAccess(expr: TsNode, expectedSubObject: string): boolean {
+/** residual (round 4, finding 1 -- false-red): the ctx identifier is now
+ * resolved from the registrar's OWN second parameter name, never a
+ * hardcoded 'ctx' literal. `registerDaemonRoutes` names its second param
+ * `deps` (real code: `apps/daemon/src/routes/daemon.ts:28`); every other
+ * owned registrar names it `ctx`. Hardcoding 'ctx' misclassified
+ * `daemon.ts`'s already-guarded oauth-launch route as exposure 3. */
+function isCtxSubObjectAccess(expr: TsNode, ctxParamName: string | null, expectedSubObject: string): boolean {
   return (
+    ctxParamName !== null &&
     ts.isPropertyAccessExpression(expr) &&
     ts.isIdentifier(expr.expression) &&
-    expr.expression.text === 'ctx' &&
+    expr.expression.text === ctxParamName &&
     ts.isIdentifier(expr.name) &&
     expr.name.text === expectedSubObject
   );
 }
-/** Positive-proof + broadened-shadow check (residual 2a/2b). Scans the
- * registrar function's own TOP-LEVEL statements, in order, for: (a) a real
- * destructure binding of `name` from `ctx.<expectedSubObject>` -- sets
- * `bound=true`; (b) ANY later plain-identifier redeclaration
- * (const/let/var), later assignment expression (`name = ...`), or later
- * top-level function declaration named `name` -- each un-sets `bound` again
- * (a fresh genuine ctx-destructure re-affirms it). Only statements strictly
- * before `beforeNode` are considered. Returns true only if a genuine binding
- * exists and nothing after it (but still before use) shadows it. */
-function isGenuinelyBoundFromCtx(fnBody: TsNode, name: string, expectedSubObject: string, beforeNode: TsNode): boolean {
+/** residual (round 4, finding 1 -- false-red, two-hop destructure): resolves
+ * a genuine TWO-HOP first-hop local alias for `<ctxParamName>.<subObjectName>`
+ * -- `daemon.ts`'s own real shape is `const { http } = deps;` (hop 1) then
+ * `const { requireLocalDaemonRequest } = http;` (hop 2), never a single-step
+ * `ctx.http` property access. Scans only TOP-LEVEL statements of `fnBody`
+ * strictly before `beforeNode`, same position discipline as the single-hop
+ * check. A rename (`{ subObjectName: alias } = ctxParamName`) is honored
+ * only when the SOURCE property literally equals `subObjectName` -- the same
+ * anti-rename discipline the guard identifier itself gets, one hop earlier
+ * -- and the resulting alias is itself tracked for later shadowing before
+ * being trusted. */
+function resolveSubObjectAlias(fnBody: TsNode, ctxParamName: string | null, subObjectName: string, beforeNode: TsNode): string | null {
+  if (!ctxParamName || !ts.isBlock(fnBody)) return null;
+  let aliasName: string | null = null;
+  for (const stmt of fnBody.statements) {
+    if (stmt.getStart() >= beforeNode.getStart()) break;
+    if (aliasName && ts.isFunctionDeclaration(stmt) && stmt.name?.text === aliasName) {
+      aliasName = null;
+      continue;
+    }
+    if (ts.isVariableStatement(stmt)) {
+      for (const decl of stmt.declarationList.declarations) {
+        if (aliasName && ts.isIdentifier(decl.name) && decl.name.text === aliasName) {
+          aliasName = null; // plain rebind of the alias shadows it
+        }
+        if (ts.isObjectBindingPattern(decl.name) && decl.initializer && ts.isIdentifier(decl.initializer) && decl.initializer.text === ctxParamName) {
+          for (const el of decl.name.elements) {
+            if (!ts.isBindingElement(el) || !ts.isIdentifier(el.name)) continue;
+            const sourceProp = el.propertyName ? (ts.isIdentifier(el.propertyName) ? el.propertyName.text : null) : el.name.text;
+            if (sourceProp === subObjectName) aliasName = el.name.text;
+          }
+        }
+      }
+      continue;
+    }
+    if (aliasName && ts.isExpressionStatement(stmt) && ts.isBinaryExpression(stmt.expression) && stmt.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+      if (ts.isIdentifier(stmt.expression.left) && stmt.expression.left.text === aliasName) {
+        aliasName = null;
+      }
+    }
+  }
+  return aliasName;
+}
+/** residual (round 4, finding 1 -- false-green, nested reassignment): true
+ * when ANY assignment expression anywhere in `fnBody` -- at ANY nesting
+ * depth, not only top-level statements: an `if` block, a callback, a
+ * sibling route handler's own body -- targets `name`, at/after
+ * `notBeforePos` and strictly before `beforePos`. A closure variable
+ * reassigned from inside a NESTED block still shadows every later reference
+ * to it (JS closures capture by reference); round 3's shadow scan only
+ * walked `fnBody.statements` at the top level and missed this entirely. */
+function hasReassignmentAnywhere(fnBody: TsNode, name: string, notBeforePos: number, beforePos: number): boolean {
+  let found = false;
+  const visit = (node: TsNode): void => {
+    if (found || node.getStart() >= beforePos) return;
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(node.left) &&
+      node.left.text === name &&
+      node.getStart() >= notBeforePos
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(fnBody, visit);
+  return found;
+}
+/** Positive-proof + broadened-shadow check (residual 2a/2b, round 3;
+ * generalized ctx-identity + anti-rename + nested-reassignment closure,
+ * round 4 finding 1). Scans the registrar function's own TOP-LEVEL
+ * statements, in order, for: (a) a real destructure binding of `name` from
+ * `<ctxParamName>.<expectedSubObject>` (single-hop) or a genuine two-hop
+ * alias of it (`resolveSubObjectAlias`) -- sets `bound=true` ONLY when the
+ * binding element's own SOURCE property (not merely its local binding name)
+ * equals `name`, closing the `{ other: name } = ctx.auth` rename bypass;
+ * (b) ANY later plain-identifier redeclaration (const/let/var) or later
+ * top-level function declaration named `name` -- un-sets `bound` again (a
+ * fresh genuine ctx-destructure re-affirms it). Only statements strictly
+ * before `beforeNode` are considered for the binding search itself. Once a
+ * genuine top-level binding is found, a SEPARATE full-tree scan
+ * (`hasReassignmentAnywhere`) additionally un-sets `bound` if anything,
+ * anywhere in the function body (any nesting depth), reassigns `name`
+ * before `beforeNode`. Returns true only if a genuine binding exists and
+ * nothing before the use point -- at the top level OR nested -- shadows it. */
+function isGenuinelyBoundFromCtx(fnBody: TsNode, name: string, ctxParamName: string | null, expectedSubObject: string, beforeNode: TsNode): boolean {
   if (!ts.isBlock(fnBody)) return false;
   let bound = false;
+  let boundAtPos = -1;
   for (const stmt of fnBody.statements) {
     if (stmt.getStart() >= beforeNode.getStart()) break;
     if (ts.isFunctionDeclaration(stmt) && stmt.name?.text === name) {
@@ -683,8 +776,23 @@ function isGenuinelyBoundFromCtx(fnBody: TsNode, name: string, expectedSubObject
             if (!ts.isBindingElement(el)) continue;
             const bindingName = el.name;
             if (!ts.isIdentifier(bindingName) || bindingName.text !== name) continue;
-            if (decl.initializer && isCtxSubObjectAccess(decl.initializer, expectedSubObject)) {
+            // residual (round 4, finding 1 -- false-green, rename bypass):
+            // the SOURCE property (propertyName when renamed, else the
+            // shorthand binding name itself) must ALSO equal `name` --
+            // `{ optionalToolGrantFromRequest: authorizeToolRequest } =
+            // ctx.auth` no longer masquerades as a genuine binding.
+            const sourceProp = el.propertyName ? (ts.isIdentifier(el.propertyName) ? el.propertyName.text : null) : name;
+            if (sourceProp !== name) {
+              bound = false;
+              continue;
+            }
+            const genuineSource =
+              decl.initializer !== undefined &&
+              (isCtxSubObjectAccess(decl.initializer, ctxParamName, expectedSubObject) ||
+                (ts.isIdentifier(decl.initializer) && decl.initializer.text === resolveSubObjectAlias(fnBody, ctxParamName, expectedSubObject, stmt)));
+            if (genuineSource) {
               bound = true;
+              boundAtPos = stmt.getStart();
             } else {
               bound = false;
             }
@@ -695,9 +803,12 @@ function isGenuinelyBoundFromCtx(fnBody: TsNode, name: string, expectedSubObject
     }
     if (ts.isExpressionStatement(stmt) && ts.isBinaryExpression(stmt.expression) && stmt.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
       if (ts.isIdentifier(stmt.expression.left) && stmt.expression.left.text === name) {
-        bound = false; // a later assignment to the same name shadows the genuine binding
+        bound = false; // a later top-level assignment to the same name shadows the genuine binding
       }
     }
+  }
+  if (bound && hasReassignmentAnywhere(fnBody, name, boundAtPos, beforeNode.getStart())) {
+    bound = false; // residual (round 4, finding 1b): nested-block reassignment anywhere in the tree
   }
   return bound;
 }
@@ -706,7 +817,7 @@ function isGenuinelyBoundFromCtx(fnBody: TsNode, name: string, expectedSubObject
  * immediately followed by an unconditional-exit `if (!grant)`, bare
  * identifier, genuinely ctx.auth-bound. Position-anchored: must be
  * statements[0]/[1] of the handler's own body. */
-function hasDirectAuthorizeToolRequestGuard(reg: RouteRegistration, fnBody: TsNode): boolean {
+function hasDirectAuthorizeToolRequestGuard(reg: RouteRegistration, fnBody: TsNode, ctxParamName: string | null): boolean {
   const handler = reg.finalHandler;
   if (!handler) return false;
   if (!ts.isArrowFunction(handler) && !ts.isFunctionExpression(handler)) return false;
@@ -721,7 +832,7 @@ function hasDirectAuthorizeToolRequestGuard(reg: RouteRegistration, fnBody: TsNo
   if (!ts.isIdentifier(decl.name) || decl.name.text !== 'grant') return false;
   if (!decl.initializer || !ts.isCallExpression(decl.initializer)) return false;
   if (!calleeIsBareIdentifier(decl.initializer.expression, 'authorizeToolRequest')) return false;
-  if (!isGenuinelyBoundFromCtx(fnBody, 'authorizeToolRequest', 'auth', handler)) return false;
+  if (!isGenuinelyBoundFromCtx(fnBody, 'authorizeToolRequest', ctxParamName, 'auth', handler)) return false;
   if (!ts.isIfStatement(second)) return false;
   if (!isNegationOfIdentifier(second.expression, 'grant')) return false;
   if (!second.thenStatement) return false;
@@ -729,16 +840,16 @@ function hasDirectAuthorizeToolRequestGuard(reg: RouteRegistration, fnBody: TsNo
 }
 /** Exposure 2(a): `requireLocalDaemonRequest` as a literal, genuinely
  * ctx.http-bound bare-identifier middleware argument. */
-function hasRequireLocalDaemonRequestMiddleware(reg: RouteRegistration, fnBody: TsNode): boolean {
+function hasRequireLocalDaemonRequestMiddleware(reg: RouteRegistration, fnBody: TsNode, ctxParamName: string | null): boolean {
   return reg.middlewareArgs.some((arg) => {
     if (!ts.isIdentifier(arg) || arg.text !== 'requireLocalDaemonRequest') return false;
-    return isGenuinelyBoundFromCtx(fnBody, 'requireLocalDaemonRequest', 'http', arg);
+    return isGenuinelyBoundFromCtx(fnBody, 'requireLocalDaemonRequest', ctxParamName, 'http', arg);
   });
 }
 /** Exposure 2(b): the handler's first direct top-level statement is
  * `if (!isLocalSameOrigin(req, ...)) { <unconditional exit> }`, genuinely
  * ctx.http-bound. */
-function hasDirectIsLocalSameOriginGuard(reg: RouteRegistration, fnBody: TsNode): boolean {
+function hasDirectIsLocalSameOriginGuard(reg: RouteRegistration, fnBody: TsNode, ctxParamName: string | null): boolean {
   const handler = reg.finalHandler;
   if (!handler) return false;
   if (!ts.isArrowFunction(handler) && !ts.isFunctionExpression(handler)) return false;
@@ -749,14 +860,14 @@ function hasDirectIsLocalSameOriginGuard(reg: RouteRegistration, fnBody: TsNode)
   if (!ts.isPrefixUnaryExpression(cond) || cond.operator !== ts.SyntaxKind.ExclamationToken) return false;
   if (!ts.isCallExpression(cond.operand)) return false;
   if (!calleeIsBareIdentifier(cond.operand.expression, 'isLocalSameOrigin')) return false;
-  if (!isGenuinelyBoundFromCtx(fnBody, 'isLocalSameOrigin', 'http', handler)) return false;
+  if (!isGenuinelyBoundFromCtx(fnBody, 'isLocalSameOrigin', ctxParamName, 'http', handler)) return false;
   if (!first.thenStatement) return false;
   return consequentUnconditionallyExits(first.thenStatement);
 }
 
-function classifyExposure(reg: RouteRegistration, fnBody: TsNode): number {
-  if (hasDirectAuthorizeToolRequestGuard(reg, fnBody)) return 0;
-  if (hasRequireLocalDaemonRequestMiddleware(reg, fnBody) || hasDirectIsLocalSameOriginGuard(reg, fnBody)) return 2;
+function classifyExposure(reg: RouteRegistration, fnBody: TsNode, ctxParamName: string | null): number {
+  if (hasDirectAuthorizeToolRequestGuard(reg, fnBody, ctxParamName)) return 0;
+  if (hasRequireLocalDaemonRequestMiddleware(reg, fnBody, ctxParamName) || hasDirectIsLocalSameOriginGuard(reg, fnBody, ctxParamName)) return 2;
   return 3;
 }
 
@@ -879,7 +990,7 @@ function probeFixture(name: string, source: string, expected: number): SelfProbe
     const sourceFile = ts.createSourceFile(`self-probe:${name}`, source, ts.ScriptTarget.Latest, true);
     const lookup = findFunctionBody(sourceFile, 'registerRunRoutes');
     if (lookup.count !== 1 || !lookup.body) return { name, ok: false, detail: `could not locate exactly 1 registerRunRoutes body (found ${lookup.count})` };
-    const actual = classifyExposure(reg, lookup.body);
+    const actual = classifyExposure(reg, lookup.body, lookup.ctxParamName);
     return actual === expected
       ? { name, ok: true, detail: `exposure=${actual} (expected ${expected})` }
       : { name, ok: false, detail: `exposure=${actual}, expected ${expected}` };
@@ -1015,6 +1126,38 @@ function runExposureSelfProbes(): SelfProbeOutcome[] {
       'computed-path-template-with-substitution',
       wrap(`  const base = '/api';\n  app.post('/api/runs', async (req, res) => { res.json({ ok: true }); });\n  app.post(\`\${base}/runs2\`, async (req, res) => { res.json({ ok: true }); });`),
     ),
+    // round 4, finding 1 (false-red): daemon.ts's OWN real shape -- second
+    // param named `deps`, requireLocalDaemonRequest reached via a TWO-HOP
+    // destructure (`const { http } = deps; const { requireLocalDaemonRequest }
+    // = http;`), not a single-step `ctx.http` access. Round 3's classifier
+    // hardcoded the literal 'ctx' and could never bind this -- the real
+    // oauth-launch route (which already carries this exact middleware
+    // literally) was misclassified as exposure 3, not 2.
+    probeFixture(
+      'real-daemon-ts-shape-deps-param-two-hop-http-destructure',
+      `function registerRunRoutes(app, deps) {\n  const { http } = deps;\n  const { requireLocalDaemonRequest } = http;\n  app.post('/api/runs', requireLocalDaemonRequest, async (req, res) => {\n    res.json({ ok: true });\n  });\n}`,
+      2,
+    ),
+    // round 4, finding 1 (false-green): a RENAMED destructure aliases some
+    // OTHER ctx.auth property to the local name `authorizeToolRequest` --
+    // the source property being pulled off ctx.auth is
+    // `optionalToolGrantFromRequest`, not `authorizeToolRequest`. Round 3's
+    // binding check only compared the LOCAL binding name, never the source
+    // property, and would have wrongly accepted this as a genuine binding.
+    probeFixture(
+      'renamed-destructure-source-property-mismatch-not-genuine',
+      `function registerRunRoutes(app, ctx) {\n  const { optionalToolGrantFromRequest: authorizeToolRequest } = ctx.auth;\n  app.post('/api/runs', async (req, res) => {\n    const grant = authorizeToolRequest(req);\n    if (!grant) {\n      return res.status(401).json({ error: 'unauthorized' });\n    }\n    res.json({ ok: true });\n  });\n}`,
+      3,
+    ),
+    // round 4, finding 1 (false-green): a genuine ctx.auth binding, then
+    // reassigned inside a NESTED block (not a top-level statement) before
+    // the guard's use. Round 3's shadow scan only walked fnBody.statements
+    // at the top level and missed this class entirely.
+    probeFixture(
+      'genuine-binding-reassigned-inside-nested-block',
+      `function registerRunRoutes(app, ctx) {\n  let { authorizeToolRequest } = ctx.auth;\n  if (true) {\n    authorizeToolRequest = () => true;\n  }\n  app.post('/api/runs', async (req, res) => {\n    const grant = authorizeToolRequest(req);\n    if (!grant) {\n      return res.status(401).json({ error: 'unauthorized' });\n    }\n    res.json({ ok: true });\n  });\n}`,
+      3,
+    ),
   ];
 }
 
@@ -1055,7 +1198,14 @@ await new Promise(() => {});
 `;
   const scriptPath = path.join(proofDir, `.boot-daemon.${process.pid}.${crypto.randomBytes(3).toString('hex')}.mjs`);
   fs.writeFileSync(scriptPath, bootScript);
-  const child = spawn('pnpm', ['exec', 'tsx', scriptPath], { cwd: worktreeDir, stdio: ['ignore', 'pipe', 'pipe'] });
+  // residual (round 4, finding 5): `detached: true` (POSIX) makes `child` the
+  // LEADER of its own new process group (child.pid === that group's PGID).
+  // The tracked PID is `pnpm`, but the process that actually owns the
+  // daemon's listening socket is `tsx` -- a DESCENDANT `pnpm exec` spawns,
+  // sharing this same process group by default. Teardown below signals the
+  // whole GROUP, never just the tracked wrapper PID, so a hung/unresponsive
+  // `pnpm` can never leave that descendant (and the daemon it owns) orphaned.
+  const child = spawn('pnpm', ['exec', 'tsx', scriptPath], { cwd: worktreeDir, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
   let buffered = '';
   const parsed = await new Promise<{ routeInventory: { method: string; path: string }[]; address: unknown } | null>((resolve) => {
     const timeout = setTimeout(() => resolve(null), 60_000);
@@ -1077,22 +1227,44 @@ await new Promise(() => {});
     });
   });
   let torndown = false;
+  // residual (round 4, finding 5): signal the whole PROCESS GROUP
+  // (`-child.pid`), not just the tracked `pnpm` wrapper PID -- reaches the
+  // `tsx` descendant that actually owns the daemon's listener. Falls back to
+  // the tracked PID alone if group signaling isn't available (e.g. the
+  // group is already gone, or a non-POSIX platform).
+  const signalGroup = (signal: NodeJS.Signals): void => {
+    try {
+      process.kill(-(child.pid as number), signal);
+    } catch {
+      try {
+        child.kill(signal);
+      } catch {
+        /* already gone */
+      }
+    }
+  };
   const teardown = async (): Promise<void> => {
     if (torndown) return;
     torndown = true;
-    await new Promise<void>((resolve) => {
-      if (child.exitCode !== null) return resolve();
-      const t = setTimeout(() => {
-        try {
-          child.kill('SIGKILL');
-        } catch {
-          /* already gone */
-        }
-        resolve();
-      }, 5_000);
-      child.kill('SIGTERM');
+    await new Promise<void>((resolve, reject) => {
+      if (child.exitCode !== null || child.signalCode !== null) return resolve();
+      // residual (round 4, finding 5): the old code SIGKILLed the tracked
+      // PID on timeout and resolved IMMEDIATELY, without waiting for or
+      // checking that the descendant actually died -- if `started.shutdown()`
+      // hangs, the daemon-owning descendant could survive orphaned. This now
+      // waits for the process group's REAL exit event after SIGKILL (which
+      // is unblockable and near-instant once delivered); if the group still
+      // hasn't exited 3s after SIGKILL, teardown fails LOUD (fail-closed,
+      // matching this file's protected-port posture) instead of silently
+      // declaring cleanup successful.
+      const hardFailTimeout = setTimeout(() => {
+        reject(new Error('boot daemon teardown: process group did not exit within 3s of SIGKILL -- the daemon-owning descendant may be orphaned holding a live listener'));
+      }, 8_000);
+      const sigkillTimeout = setTimeout(() => signalGroup('SIGKILL'), 5_000);
+      signalGroup('SIGTERM');
       child.on('exit', () => {
-        clearTimeout(t);
+        clearTimeout(sigkillTimeout);
+        clearTimeout(hardFailTimeout);
         resolve();
       });
     });
@@ -1249,12 +1421,55 @@ function hasDistinctSignalPair(candidates: readonly { fullName: string }[]): boo
   if (positives.length === 0 || negatives.length === 0) return false;
   return positives.some((p) => negatives.some((n) => n.fullName !== p.fullName));
 }
+/** residual (round 4, finding 2 -- duplicate-title decoys): resolves the
+ * `testDeclarationsByFile` key (relative to `apps/daemon`, e.g.
+ * `tests/agent-spawn-runs.test.ts`) that corresponds to `owningFile` (the
+ * vitest-reported, typically-absolute `passedAssertionsByFile` key) by path
+ * suffix -- the two maps are keyed in different path formats and were never
+ * bridged before, which is what let a same- OR cross-file decoy declaration
+ * with a matching title substitute its body for the real cited test's. */
+function findOwningRelPath(testDeclarationsByFile: ReadonlyMap<string, unknown>, owningFile: string | undefined): string | null {
+  if (!owningFile) return null;
+  const normalized = owningFile.replace(/\\/g, '/');
+  return [...testDeclarationsByFile.keys()].find((rel) => normalized.endsWith(`/${rel}`)) ?? null;
+}
+/** residual (round 4, finding 2 -- tautology): the asserted expression
+ * itself must BE a `.status` member/element access (after unwrapping
+ * trivial parens/`await`), not merely CONTAIN one anywhere in its subtree.
+ * Round 3's `containsStatusAccess` walked the entire `expect(...)` argument
+ * looking for a `.status` access ANYWHERE nested -- so a comma expression
+ * like `expect((response.status, 429)).toBe(429)` satisfied it (the
+ * subtree contains `response.status`), even though the value actually
+ * passed to `expect()` is the literal `429`, always equal to itself
+ * regardless of the real response status. */
+function isStatusAccessExpression(expr: TsNode): boolean {
+  let e = expr;
+  for (;;) {
+    if (ts.isParenthesizedExpression(e)) {
+      e = e.expression;
+      continue;
+    }
+    if (ts.isAwaitExpression(e)) {
+      e = e.expression;
+      continue;
+    }
+    break;
+  }
+  if (ts.isPropertyAccessExpression(e) && ts.isIdentifier(e.name) && e.name.text === 'status') return true;
+  if (ts.isElementAccessExpression(e) && e.argumentExpression && ts.isStringLiteralLike(e.argumentExpression) && e.argumentExpression.text === 'status') return true;
+  return false;
+}
 /** residual 4a: real AST check for expect(<expr>.status).toBe(<code>)-shaped
  * assertions -- comments and string literals containing the code as text no
  * longer satisfy this. Re-parses the test body's own captured source as a
  * standalone fragment (a top-level arrow/function expression statement, or
- * its own statement list, both parse fine on their own). */
-function bodyAssertsStatusCodeAst(bodyText: string, code: number): boolean {
+ * its own statement list, both parse fine on their own). Round 4 finding 2:
+ * factored to take a code PREDICATE rather than a single exact code, so the
+ * under-limit body can require "any 2xx" (the PRD's own "whatever 2xx
+ * status the route returns on acceptance") without a second copy of the
+ * walk, and the tautology fix (`isStatusAccessExpression`, above) applies
+ * identically to both. */
+function bodyAssertsStatusMatchingAst(bodyText: string, codeMatches: (code: number) => boolean): boolean {
   let sourceFile: TypeScriptModule.SourceFile;
   try {
     sourceFile = ts.createSourceFile('assertion-probe.ts', bodyText, ts.ScriptTarget.Latest, true);
@@ -1262,19 +1477,6 @@ function bodyAssertsStatusCodeAst(bodyText: string, code: number): boolean {
     return false;
   }
   let found = false;
-  const containsStatusAccess = (node: TsNode): boolean => {
-    let hit = false;
-    const walk = (n: TsNode) => {
-      if (hit) return;
-      if (ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.name) && n.name.text === 'status') {
-        hit = true;
-        return;
-      }
-      ts.forEachChild(n, walk);
-    };
-    walk(node);
-    return hit;
-  };
   const ASSERT_METHODS = new Set(['toBe', 'toEqual', 'toStrictEqual']);
   const visit = (node: TsNode) => {
     if (found) return;
@@ -1286,10 +1488,10 @@ function bodyAssertsStatusCodeAst(bodyText: string, code: number): boolean {
     ) {
       const receiver = node.expression.expression;
       const arg0 = node.arguments[0];
-      const codeMatches = arg0 && ts.isNumericLiteral(arg0) && Number(arg0.text) === code;
-      if (codeMatches && ts.isCallExpression(receiver) && calleeIsBareIdentifier(receiver.expression, 'expect')) {
+      const codeOk = arg0 && ts.isNumericLiteral(arg0) && codeMatches(Number(arg0.text));
+      if (codeOk && ts.isCallExpression(receiver) && calleeIsBareIdentifier(receiver.expression, 'expect')) {
         const expectArg = receiver.arguments[0];
-        if (expectArg && containsStatusAccess(expectArg)) {
+        if (expectArg && isStatusAccessExpression(expectArg)) {
           found = true;
           return;
         }
@@ -1300,6 +1502,16 @@ function bodyAssertsStatusCodeAst(bodyText: string, code: number): boolean {
   visit(sourceFile);
   return found;
 }
+function bodyAssertsStatusCodeAst(bodyText: string, code: number): boolean {
+  return bodyAssertsStatusMatchingAst(bodyText, (c) => c === code);
+}
+/** residual (round 4, finding 2b): the under-limit body must carry a real
+ * AST status-code assertion for "whatever 2xx status the route returns on
+ * acceptance" (PRD S9S-4/C9S-4 text) -- not hardcoded to literally 200 or
+ * 202, which round 3 quietly narrowed the PRD's own stated requirement to. */
+function bodyAssertsAny2xxStatusCodeAst(bodyText: string): boolean {
+  return bodyAssertsStatusMatchingAst(bodyText, (c) => Number.isInteger(c) && c >= 200 && c <= 299);
+}
 
 // -------------------------------------------------------------------------
 // Test declaration extraction (AST) -- titles AND body source text.
@@ -1307,6 +1519,32 @@ function bodyAssertsStatusCodeAst(bodyText: string, code: number): boolean {
 interface TestDeclaration {
   title: string;
   bodyText: string;
+  /** residual (round 4, finding 3 -- comments-only corpus false green): the
+   * body's real tokens (identifiers, string/numeric literals, punctuation),
+   * reconstructed via the TS scanner with comments and whitespace-as-trivia
+   * dropped. Corpus-hint matching scans THIS, never raw `bodyText` -- a
+   * comment cannot contribute a corpus-case hit. */
+  codeText: string;
+}
+/** residual (round 4, finding 3): comment-stripped token reconstruction --
+ * `ts.createScanner(..., skipTrivia=true, ...)` skips whitespace AND
+ * comments when advancing between tokens, so concatenating each token's own
+ * text drops every comment while preserving real code (including string
+ * literal CONTENTS, which are legitimate match surface, e.g. a title or an
+ * assertion message). */
+function stripCommentsForKeywordScan(sourceText: string): string {
+  let out = '';
+  try {
+    const scanner = ts.createScanner(ts.ScriptTarget.Latest, /* skipTrivia */ true, ts.LanguageVariant.Standard, sourceText);
+    let tok = scanner.scan();
+    while (tok !== ts.SyntaxKind.EndOfFileToken) {
+      out += `${scanner.getTokenText()} `;
+      tok = scanner.scan();
+    }
+  } catch {
+    return '';
+  }
+  return out;
 }
 function extractTestDeclarations(sourceText: string, label: string): TestDeclaration[] {
   const out: TestDeclaration[] = [];
@@ -1328,7 +1566,7 @@ function extractTestDeclarations(sourceText: string, label: string): TestDeclara
       const second = node.arguments[1];
       if (first && (ts.isStringLiteral(first) || ts.isNoSubstitutionTemplateLiteral(first))) {
         const bodyText = second ? second.getFullText(sourceFile) : '';
-        out.push({ title: first.text, bodyText });
+        out.push({ title: first.text, bodyText, codeText: bodyText ? stripCommentsForKeywordScan(bodyText) : '' });
       }
     }
     ts.forEachChild(node, visit);
@@ -1656,6 +1894,12 @@ function runAgentSpawnSuite(worktreeDir: string, testFiles: string[]): { suite: 
 interface AcceptedRiskBlock {
   slug: string;
   route: string;
+  /** residual (round 4, finding 4 -- C9S-8 founder-ruling redesign): the
+   * block's own `- Accepted risk:` / `- Accepted-risk:` bullet (both
+   * spellings honored -- the PRD's round-3 text used a space, the founder's
+   * round-4 ruling text used a hyphen). Round 3 never parsed this field at
+   * all. */
+  acceptedRisk: string;
   accepter: string;
   date: string;
   rationale: string;
@@ -1673,10 +1917,11 @@ function parseAcceptedRiskBlocks(decisionsText: string): { blocks: Map<string, A
     const end = nextMatch ? nextMatch.index ?? decisionsText.length : decisionsText.length;
     const body = decisionsText.slice(start, end);
     const route = /-\s*Route:\s*`([^`]+)`/i.exec(body)?.[1]?.trim() ?? '';
+    const acceptedRisk = /-\s*Accepted[\s-]+risk:\s*(.+)/i.exec(body)?.[1]?.trim() ?? '';
     const accepter = /-\s*Accepter:\s*(.+)/i.exec(body)?.[1]?.trim() ?? '';
     const date = /-\s*Date:\s*(\S+)/i.exec(body)?.[1]?.trim() ?? '';
     const rationale = /-\s*Rationale:\s*(.+)/i.exec(body)?.[1]?.trim() ?? '';
-    const block: AcceptedRiskBlock = { slug, route, accepter, date, rationale };
+    const block: AcceptedRiskBlock = { slug, route, acceptedRisk, accepter, date, rationale };
     const existing = blocks.get(slug) ?? [];
     existing.push(block);
     blocks.set(slug, existing);
@@ -1868,7 +2113,7 @@ async function main(): Promise<void> {
       const lookup = findFunctionBody(sourceFile, fState.file.fnName);
       if (lookup.count !== 1 || !lookup.body) continue;
       for (const reg of fState.headCollect.registrations) {
-        headExposureByKey.set(`${reg.method} ${reg.routePath}`, classifyExposure(reg, lookup.body));
+        headExposureByKey.set(`${reg.method} ${reg.routePath}`, classifyExposure(reg, lookup.body, lookup.ctxParamName));
       }
     } catch {
       /* leave unset; downstream checks report missing entries */
@@ -2233,13 +2478,29 @@ async function main(): Promise<void> {
         problems.push(`${key}: same-file suite missing a bound under-limit-accepted (${underMatches.length}) and/or over-limit-rejected (${overMatches.length}) assertion for limit=${parsed.limit} overflow=${overflowStatus}`);
         continue;
       }
-      // residual 4b: BOTH bodies checked, not only the over-limit one.
-      const underDecl = allTestDeclarations.find((d) => d.title === underMatches[0]!.title);
-      const overDecl = allTestDeclarations.find((d) => d.title === overMatches[0]!.title);
-      const underOk = underDecl ? bodyAssertsStatusCodeAst(underDecl.bodyText, 200) || bodyAssertsStatusCodeAst(underDecl.bodyText, 202) : false;
+      // residual (round 4, finding 2 -- duplicate-title decoys): body lookup
+      // is now scoped to the SAME FILE that produced the passing assertion
+      // (never a global cross-file title search over allTestDeclarations),
+      // and >1 same-title declaration within that file is an ambiguous hard
+      // fail rather than `.find()` silently taking the first -- a decoy
+      // sharing the real test's exact title can no longer substitute its
+      // body for the real one's.
+      const owningRel = findOwningRelPath(testDeclarationsByFile, owningFile);
+      const owningDecls = owningRel ? testDeclarationsByFile.get(owningRel) ?? [] : [];
+      const underTitleDecls = owningDecls.filter((d) => d.title === underMatches[0]!.title);
+      const overTitleDecls = owningDecls.filter((d) => d.title === overMatches[0]!.title);
+      if (!owningRel) problems.push(`${key}: could not resolve owning test file for testRef "${testRef}" among discovered agent-spawn test files`);
+      if (underTitleDecls.length > 1) problems.push(`${key}: under-limit assertion title "${underMatches[0]!.title}" is ambiguous -- ${underTitleDecls.length} declarations share it in ${owningRel}`);
+      if (overTitleDecls.length > 1) problems.push(`${key}: over-limit assertion title "${overMatches[0]!.title}" is ambiguous -- ${overTitleDecls.length} declarations share it in ${owningRel}`);
+      const underDecl = underTitleDecls.length === 1 ? underTitleDecls[0] : null;
+      const overDecl = overTitleDecls.length === 1 ? overTitleDecls[0] : null;
+      // residual (round 4, finding 2b): under-limit body now requires ANY
+      // 2xx status (the PRD's own "whatever 2xx status the route returns on
+      // acceptance"), not hardcoded to literally 200 or 202.
+      const underOk = underDecl ? bodyAssertsAny2xxStatusCodeAst(underDecl.bodyText) : false;
       const overOk = overDecl ? bodyAssertsStatusCodeAst(overDecl.bodyText, overflowStatus) : false;
-      if (!underOk) problems.push(`${key}: under-limit assertion "${underMatches[0]!.title}" body does not contain a real AST status-code assertion for 200/202`);
-      if (!overOk) problems.push(`${key}: over-limit assertion "${overMatches[0]!.title}" body does not contain a real AST status-code assertion for ${overflowStatus}`);
+      if (!underOk && underTitleDecls.length <= 1) problems.push(`${key}: under-limit assertion "${underMatches[0]!.title}" body does not contain a real AST status-code assertion for any 2xx status`);
+      if (!overOk && overTitleDecls.length <= 1) problems.push(`${key}: over-limit assertion "${overMatches[0]!.title}" body does not contain a real AST status-code assertion for ${overflowStatus}`);
     }
     record('C9S-4', "parse each matrix-derived P0 row's sizeRateLimit against the ENFORCED grammar; verify a limit+overflow-bound paired under/over-limit passing assertion AND real AST status-code assertions on BOTH bodies", 'every matrix-derived P0-tier row resolves size/rate-limit via a real, bound, currently-passing, body-verified control', problems.length === 0 && checked === p0RouteKeysFromMatrix.size, `P0 rows checked (matrix-derived): ${checked}/${p0RouteKeysFromMatrix.size} (${[...p0RouteKeysFromMatrix].join(', ')})\n${problems.join('\n') || 'no problems'}`);
   });
@@ -2276,8 +2537,14 @@ async function main(): Promise<void> {
       /(capability|scope|binding).*(agent|model|prompt|tool.?bundle)/i,
     ];
     const satisfyingDecls = new Set<TestDeclaration>();
+    // residual (round 4, finding 3 -- comments-only corpus false green):
+    // matched against `d.codeText` (comments stripped via the TS scanner),
+    // never raw `d.bodyText` -- round 3's fix only required >1 distinct
+    // declaration to contribute, which two no-op tests whose COMMENTS split
+    // the eight keywords across them still satisfied without exercising any
+    // corpus behavior.
     const missingCases = CORPUS_CASE_HINTS.filter((re) => {
-      const hit = allTestDeclarations.find((d) => re.test(d.title) || re.test(d.bodyText));
+      const hit = allTestDeclarations.find((d) => re.test(d.title) || re.test(d.codeText));
       if (hit) satisfyingDecls.add(hit);
       return !hit;
     });
@@ -2406,28 +2673,66 @@ async function main(): Promise<void> {
     record('C9S-7', `read ${reviewPath} (out-of-repo, orchestrator-owned, W7 disposition-record trust model)`, 'reviewedCommit is a real 40-hex commit (HEAD or a real ancestor) whose owned-path diff to HEAD is empty; reviewer distinct from every author; jobId non-empty; verdict is APPROVE', problems.length === 0, problems.join('\n') || `reviewer=${reviewer} model=${String(review.model)} reviewedCommit=${reviewedCommit} jobId=${jobId} verdict=${String(review.verdict)}`);
   });
 
-  // C9S-8: REDESIGNED per founder ruling 2026-07-28 (residual 7). Checks
-  // ONLY the founder-signed accepted-risk record -- the real-control
-  // alternative is removed (would contradict the ruling). Ordinary
-  // pass/fail; the blocked-on-founder mechanism is deleted entirely.
+  // C9S-8: REDESIGNED per founder ruling 2026-07-28 (residual 7, round 3),
+  // FURTHER REDESIGNED per founder ruling 2026-07-28 (round 4, finding 4).
+  //
+  // NO OVERCLAIMING (binding founder ruling, round 4): no purely-local
+  // verifier can cryptographically prove a human founder signed anything.
+  // This criterion does NOT claim that. What it DOES mechanically prove:
+  // the accepted-risk record was read from DECISIONS.md AT baseCommit (the
+  // merge-base with origin/main) -- i.e. it already landed on main through
+  // the orchestrator's own docs-PR lane (reviewed and squash-merged there),
+  // a lane a wave-branch implementer cannot reach by committing on their own
+  // branch, since baseCommit is fixed before that branch starts and this
+  // tranche never edits DECISIONS.md itself. The Accepter/anti-self-accept/
+  // denylist checks are a separate, narrower claim: the recorded accepter
+  // string is not an obviously non-founder identity and does not match any
+  // commit author on this branch. Passing proves the record's PROVENANCE
+  // (landed via the review lane) and its INTERNAL/referential consistency
+  // (Route names a real frozen route, Accepted risk names the actual risk,
+  // not self-attributed) -- never a cryptographically verified signature.
   await checkCriterion('C9S-8', () => {
     const NON_FOUNDER_DENYLIST = new Set(['orchestrator', 'implementer', 'verifier', 'claude', 'codex', 'sol', 'grok', 'ai', 'agent']);
     const namespaceBlocks = acceptedRiskBlocks.get('shared-local-namespace') ?? [];
     if (namespaceBlocks.length !== 1) {
-      record('C9S-8', 'read DECISIONS.md@baseCommit for ### W9AS-ACCEPT-shared-local-namespace', 'a single founder-signed accepted-risk record exists, per founder decision 2026-07-28 (run-ID single-user shared-local namespace accepted)', false, '', {
-        detail: `found ${namespaceBlocks.length} matching block(s) in DECISIONS.md@baseCommit (need exactly 1) -- expected to self-resolve once the orchestrator lands the founder-signed entry at freeze-landing; this tranche never edits DECISIONS.md itself`,
+      record('C9S-8', 'read DECISIONS.md@baseCommit for ### W9AS-ACCEPT-shared-local-namespace', "a single accepted-risk record landed on main (readable at baseCommit through the orchestrator's docs-PR review lane) -- NOT a claim that a founder signature was cryptographically verified", false, '', {
+        detail: `found ${namespaceBlocks.length} matching block(s) in DECISIONS.md@baseCommit (need exactly 1) -- expected to self-resolve once the orchestrator lands the record via the docs lane; this tranche never edits DECISIONS.md itself`,
       });
       return;
     }
     const block = namespaceBlocks[0]!;
     const problems: string[] = [];
+    // residual (round 4, finding 4): Route and Accepted risk are now parsed
+    // AND bound, not merely present under the block's heading (round 3
+    // parsed Route but never checked it in C9S-8; Accepted risk was never
+    // even parsed). parseAcceptedRiskBlocks's own Route regex already
+    // captures the text BETWEEN the first backtick pair (its own capture
+    // group strips the surrounding backticks), so `block.route` is already
+    // a plain, dequoted route string here -- it is compared directly
+    // against FROZEN_ROUTE_KEYS, not re-scanned for backtick tokens.
+    if (!block.route || isPlaceholderText(block.route)) {
+      problems.push('Route missing or placeholder-shaped');
+    } else if (!FROZEN_ROUTE_KEYS.has(block.route.trim())) {
+      problems.push(`Route "${block.route}" is not one of this tranche's 20 frozen route keys`);
+    }
+    if (!block.acceptedRisk || isPlaceholderText(block.acceptedRisk)) {
+      problems.push('Accepted risk missing or placeholder-shaped');
+    } else if (!/shared[\s-]*local[\s-]*namespace/i.test(block.acceptedRisk)) {
+      problems.push(`Accepted risk "${block.acceptedRisk}" does not name the shared-local-namespace risk this record accepts`);
+    }
     if (!block.accepter || isPlaceholderText(block.accepter)) problems.push('Accepter missing or placeholder-shaped');
     else if (NON_FOUNDER_DENYLIST.has(block.accepter.trim().toLowerCase())) problems.push(`Accepter "${block.accepter}" matches a known non-founder identity`);
     if (!block.date) problems.push('Date missing');
     if (!block.rationale || isPlaceholderText(block.rationale)) problems.push('Rationale missing or placeholder-shaped');
     const authorsInRange = commitAuthorsBetween(baseCommit, headSha);
     if (block.accepter && authorsInRange.has(block.accepter.trim().toLowerCase())) problems.push(`Accepter "${block.accepter}" matches a commit author between baseCommit and HEAD -- cannot self-accept`);
-    record('C9S-8', 'read DECISIONS.md@baseCommit for ### W9AS-ACCEPT-shared-local-namespace; Accepter/Date/Rationale + anti-self-accept + non-founder-identity denylist checks', 'the founder-signed accepted-risk record exists and is structurally sound', problems.length === 0, problems.join('\n') || `accepter=${block.accepter}, date=${block.date}, rationale=${block.rationale}`);
+    record(
+      'C9S-8',
+      'read DECISIONS.md@baseCommit for ### W9AS-ACCEPT-shared-local-namespace; parse+bind Route/Accepted-risk/Accepter/Date/Rationale + anti-self-accept + non-founder-identity denylist checks',
+      "the accepted-risk record landed on main through the docs-PR review lane (baseCommit-pinned) and is structurally + referentially sound -- this proves PROVENANCE and internal consistency, NOT that a founder signature was cryptographically verified",
+      problems.length === 0,
+      problems.join('\n') || `route=${block.route}, acceptedRisk=${block.acceptedRisk}, accepter=${block.accepter}, date=${block.date}, rationale=${block.rationale}`,
+    );
   });
 
   await checkCriterion('GATE-INTEGRITY', () => {
