@@ -1,4 +1,4 @@
-import { expect, test } from '@/playwright/suite';
+import { E2E_NEWSLETTER_SUBSCRIBE_URL, expect, test } from '@/playwright/suite';
 import type { Locator, Page } from '@playwright/test';
 
 import {
@@ -606,7 +606,7 @@ test('[P0] onboarding newsletter submits a valid email only when setup finishes'
     initialLoggedIn: true,
   });
   const newsletterBodies: Array<Record<string, unknown>> = [];
-  await page.route('https://open-design.ai/subscribe', async (route) => {
+  await page.route(E2E_NEWSLETTER_SUBSCRIBE_URL, async (route) => {
     newsletterBodies.push(route.request().postDataJSON() as Record<string, unknown>);
     await route.fulfill({ json: { ok: true } });
   });
@@ -635,7 +635,7 @@ test('[P0] onboarding newsletter submit failure does not block finishing setup',
     initialLoggedIn: true,
   });
   let newsletterCalls = 0;
-  await page.route('https://open-design.ai/subscribe', async (route) => {
+  await page.route(E2E_NEWSLETTER_SUBSCRIBE_URL, async (route) => {
     newsletterCalls += 1;
     await route.fulfill({
       status: 500,
