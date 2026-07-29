@@ -407,3 +407,38 @@ strong-sounding one.
   wave — editing a saved MCP client's URL silently reset its authMode to OAuth. That is fixed
   separately on `fix/mcp-client-authmode-preserved` with a red spec that fails on the unfixed code.
 - Disposition: NM-24's seam pin stands. A future package must observe served behavior, per W10B-PARK.
+
+### W9AS-PARK
+- Decision: parked (package not frozen; tranche not implemented)
+- Decider: Fable 5 orchestrator under gate authority delegated by Devin Wiggins (founder) on 2026-07-28
+- Date: 2026-07-29
+- Rounds: 4 independent reviews, 4 non-APPROVE verdicts
+- Rationale: Round 4 was pre-declared final and returned REJECT with four executable bypasses.
+  Three were re-breaks of findings the author had reported closed: C9S-1 still reads false-green
+  when a genuine outer guard binding is shadowed by a nested redeclaration (the reassignment scan
+  walks the whole tree but redeclaration handling stayed top-level-only); C9S-4 accepts any member
+  named `status` without binding its receiver to the request under test, so an unused lookalike
+  object satisfies it; C9S-5 still scans string-literal tokens, so two no-op tests carrying inert
+  strings split across the eight keywords satisfy the corpus gate without exercising a single case.
+- The safety finding, and why it decides this: C9S-8's accepted-risk mechanism is sound and passes
+  honestly against the record landed through the docs lane. But the teardown fix does NOT hold. The
+  author reported that teardown waits for the process group's real exit and fails closed; the
+  reviewer reproduced the opposite with a process-group probe — teardown treats the tracked group
+  leader's `exit` event as proof the whole group is gone, cancels the pending SIGKILL and resolves,
+  while a SIGTERM-handling descendant in the same group stays alive. That is the orphaned-process
+  failure this program's machine-safety rules exist to prevent, it survived the round that claimed
+  to fix it, and the PRD's claim to the contrary is false as written.
+- Program pattern (third instance): W10a, W10b and W9as have now all been parked after repeated
+  rejects, and they share one root cause — each tries to establish RUNTIME truth by inspecting
+  SOURCE STRUCTURE (AST shape, literal freezing, token presence). Every round closes the named hole
+  and the next round finds the adjacent one, because the space of source shapes that produce a given
+  runtime behavior is unbounded. The two packages NOT failing this way (W10c, W10f) assert against a
+  real booted daemon's observable output. BINDING for future packages: a criterion asserting runtime
+  behavior must observe that behavior — boot the daemon, issue the real request, assert the response.
+  Structural checks are legitimate only for facts with no runtime observable, and must say so.
+- Carry-forward (safety, applies to every package that boots a daemon): teardown must signal the
+  process GROUP and then CONFIRM no survivors before resolving. A leader's `exit` event is not proof
+  the group exited.
+- Disposition: NM-22 agent-spawn route hardening is NOT cancelled — the surface is real and the
+  threat model work in this PRD is reusable. A future package re-expands it on the runtime-observation
+  pattern above, and inherits C9S-8's accepted-risk mechanism, which is the one part that held up.
