@@ -25,23 +25,41 @@
 // docs/plans/waves/W9-external-fetch-tranche.md ("Ground facts" / "Scope").
 // The NEW logic specific to this tranche is the outbound-fetch guard-tier
 // classifier (KNOWN_SAFE_WRAPPERS / KNOWN_VALIDATING_GUARDS, per-file fetch
-// profile, ROUTE_TARGET_FILES) and the GUARDED declaration grammar. Both are
-// first-draft mechanisms that have not been through adversarial review --
-// see W9-external-fetch-tranche.md's "Adversarial review" residuals section.
+// profile, ROUTE_TARGET_FILES) and the GUARDED declaration grammar.
+//
+// ROUND 1 (REJECT, 7 blocking findings) fixed every finding in place; see
+// docs/plans/waves/W9-external-fetch-tranche.md's "Round 1 dispositions" for
+// the finding-by-finding record. The most structurally significant change:
+// CXF-6's per-P0-row guard verification now BOOTS A REAL ISOLATED DAEMON and
+// issues a live HTTP request that would escape to a loopback canary target
+// if unguarded, asserting the canary sees zero connections -- per the
+// program-wide binding rule recorded in DECISIONS.md (W9AS-PARK/W10A-PARK/
+// W10B-PARK): "a criterion asserting runtime behavior must observe that
+// behavior... structural checks are legitimate only for facts with no
+// runtime observable." The isolated-daemon-boot and process-tree-confirmed
+// teardown machinery below is PORTED from scripts/waves/verify-w10f.ts
+// (`bootIsolatedDaemonSubprocess`/`stopIsolatedDaemonSubprocessTree`), the
+// proven pattern the same DECISIONS.md record names as sound, using this
+// repository's own `@open-design/platform` process-tree primitives rather
+// than hand-rolled signal handling.
 //
 // PORTABILITY: repoRoot comes from `process.cwd()`/`--repo`, never
 // `import.meta.url`. Isolation: every daemon/worktree this verifier creates
 // is isolated (port 0, fresh mkdtemp data dirs, detached temp worktrees) and
-// torn down by its own exact handle. This verifier never touches a
-// default-namespace daemon and never issues a `git fetch`/`git push` -- git
+// torn down by its own exact handle, confirmed via a full process-tree walk
+// (never a single tracked PID). This verifier never touches a
+// default-namespace daemon (ports 7456/51012 are hard-refused by
+// assertSafeLoopbackUrl) and never issues a `git fetch`/`git push` -- git
 // context is resolved from local refs only.
 
 import { spawn, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import http from 'node:http';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type TypeScriptModule from 'typescript';
 import type { Node as TsNode } from 'typescript';
 
@@ -465,6 +483,16 @@ function isNegationOfIdentifier(expr: TsNode, varName: string): boolean {
     expr.operand.text === varName
   );
 }
+/** `!calleeName(...)` -- negation of a direct call, e.g. `!isLocalSameOrigin(req, port)`. Round-1 fix (finding 2b): this case did not exist at all -- classifyRouteExposure had no positive grammar for a route whose OWN straight-line prefix is an inline isLocalSameOrigin veto (as opposed to requireLocalDaemonRequest middleware), so real exposure-0 handlers like `POST /api/projects/:id/media/generate` (routes/media.ts:619) were misclassified as exposure 3. */
+function isNegationOfCall(expr: TsNode, calleeName: string): boolean {
+  return (
+    ts.isPrefixUnaryExpression(expr) &&
+    expr.operator === ts.SyntaxKind.ExclamationToken &&
+    ts.isCallExpression(expr.operand) &&
+    ts.isIdentifier(expr.operand.expression) &&
+    expr.operand.expression.text === calleeName
+  );
+}
 function isFalsyOkPropertyCheck(expr: TsNode, varName: string): boolean {
   const isCheckOkAccess = (n: TsNode): boolean =>
     ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === varName && n.name.text === 'ok';
@@ -591,7 +619,27 @@ function isLocalSameOriginReachable(root: TsNode): boolean {
   walk(root);
   return found;
 }
-/** Straight-line prefix check: 0/1/2/3 per S9XF-2. Same semantics as verify-w9-ingest.ts's classifyExposure. */
+/** `const s0 = if (!isLocalSameOrigin(req, ...)) { <unconditional exit> }` as a DIRECT straight-line prefix statement -- the route's own inline loopback veto, distinct from `requireLocalDaemonRequest` middleware (checked separately, before body inspection) and from the bearer-guard's veto walk (which looks for a REACHABLE, not necessarily straight-line, isLocalSameOrigin as an ALTERNATIVE bypass -- the opposite polarity). Round-1 fix (finding 2b). */
+function matchLocalSameOriginGuard(statements: readonly TsNode[], startIdx: number): boolean {
+  const s0 = statements[startIdx];
+  if (!s0 || !ts.isIfStatement(s0)) return false;
+  if (!isNegationOfCall(s0.expression, 'isLocalSameOrigin')) return false;
+  return consequentUnconditionallyExits(s0.thenStatement);
+}
+/** Straight-line prefix check: 0/1/2/3 per S9XF-2. Same semantics as verify-w9-ingest.ts's classifyExposure.
+ * ROUND-1 FIX (finding 2b): two real bugs closed here, both confirmed against real handlers by
+ * the reviewer, not merely theorized. (1) There was no positive grammar at all for a route whose
+ * own straight-line prefix directly vetoes on `isLocalSameOrigin` (as opposed to going through
+ * `requireLocalDaemonRequest` middleware) -- `POST /api/projects/:id/media/generate`
+ * (routes/media.ts:619) and `POST /api/xai/search` (routes/xai.ts:253) both open with exactly
+ * this shape and were misclassified as exposure 3. `matchLocalSameOriginGuard` above closes it.
+ * (2) The final fallback literally read `isLocalSameOriginReachable(body) ? 3 : 3` -- both
+ * branches returned the same value, so the call was dead code and every route falling through to
+ * this line scored exposure 3 unconditionally, right or wrong, with no way for the reachability
+ * check to ever change the outcome. Replaced with an unconditional `return 3` (the correct,
+ * simplified behavior once matchLocalSameOriginGuard owns the one case that reachability check
+ * was trying, incompletely, to catch) -- not a new AST condition layered on top of a gameable
+ * check, but the removal of dead, self-contradicting code the previous draft never exercised. */
 function classifyRouteExposure(handler: TsNode): number {
   if (!ts.isArrowFunction(handler) && !ts.isFunctionExpression(handler)) return 3;
   const body = handler.body;
@@ -601,10 +649,11 @@ function classifyRouteExposure(handler: TsNode): number {
   let idx = 0;
   if (stmts[0] && isCorsPrelude(stmts[0], paramNames)) idx = 1;
   if (matchToolTokenGuard(stmts, idx)) return 1;
+  if (matchLocalSameOriginGuard(stmts, idx)) return 0;
   if (matchBearerGuard(stmts, idx)) {
     return isLocalSameOriginReachable(body) ? 3 : 2;
   }
-  return isLocalSameOriginReachable(body) ? 3 : 3;
+  return 3;
 }
 /** `requireLocalDaemonRequest` as a literal middleware argument -> exposure 0, checked before body inspection. */
 function hasRequireLocalDaemonRequestMiddleware(args: readonly TsNode[]): boolean {
@@ -864,6 +913,15 @@ const FROZEN_REGISTRATION_TARGETS: Array<{ file: string; fn: string }> = [
   { file: 'apps/daemon/src/routes/static-resource.ts', fn: 'registerStaticResourceRoutes' },
   { file: 'apps/daemon/src/routes/live-artifact.ts', fn: 'registerLiveArtifactRoutes' },
   { file: 'apps/daemon/src/routes/chat.ts', fn: 'registerChatRoutes' },
+  // Round-1 fix (finding 1): apps/daemon/src/routes/xai.ts's registerXaiRoutes
+  // was entirely absent from this list. `POST /api/xai/search` fetches
+  // `${provider.baseUrl}/responses` (persisted, caller-editable config, same
+  // shape as elevenlabs-voices.ts) with the stored bearer credential attached
+  // -- confirmed by direct reading (routes/xai.ts:253-320), not merely by
+  // the reviewer's citation. This one miss is why S9XF-1 below now ALSO runs
+  // a mechanical whole-tree discovery pass rather than only self-consistency
+  // against this hand-curated list -- see discoverAllRouteRegistrationFiles.
+  { file: 'apps/daemon/src/routes/xai.ts', fn: 'registerXaiRoutes' },
 ];
 
 // Frozen route -> target-file(s) mapping whose aggregate FileFetchProfile
@@ -913,15 +971,37 @@ const ROUTE_TARGET_FILES: Record<string, string[]> = {
   'POST /api/proxy/ollama/stream': ['apps/daemon/src/connectionTest.ts'],
   'POST /api/proxy/senseaudio/stream': ['apps/daemon/src/connectionTest.ts'],
   'POST /api/proxy/aihubmix/stream': ['apps/daemon/src/connectionTest.ts'],
+  // Round-1 addition (finding 1): the fetch is in the SAME file as the route.
+  'POST /api/xai/search': ['apps/daemon/src/routes/xai.ts'],
+  // Round-1 addition, found by CXF-1's own new discovery pass (finding 1's
+  // fix working as intended): `completeXAIAuth` -> `exchangeCodeForToken`
+  // fetches `consumed.tokenEndpoint`, which traces to the hardcoded
+  // `XAI_OAUTH_TOKEN_ENDPOINT` constant (apps/daemon/src/integrations/
+  // xai-oauth.ts:101) set at the START of the OAuth flow, never caller
+  // input at completion time -- confirmed by direct reading, impact 0.
+  'POST /api/xai/oauth/complete': ['apps/daemon/src/routes/xai.ts', 'apps/daemon/src/integrations/xai-oauth.ts'],
 };
 
 // Frozen, reviewer-owned caller-influence (impact) floors, per S9XF-2. Keys
 // MUST equal ROUTE_TARGET_FILES' keys exactly (checked, CXF-1).
+//
+// ROUND-1 FIX (finding 3): check-link and both media/generate routes were
+// frozen at impact 3 while S9XF-2's own stated rule defines impact 2 as "the
+// host comes from a persisted, caller-editable configuration field" -- which
+// is exactly what each of these is (a stored deployment/custom-domain record
+// for check-link; `credentials.baseUrl` set via a separate `PUT
+// /api/media/config` call for media/generate), the same shape already scored
+// 2 for elevenlabs/voices and the connectionTest.ts family. Corrected to 2 so
+// the frozen table stops contradicting its own rule. Same correction applied
+// to both live-artifacts/refresh rows below: the refresh URL is set on the
+// artifact by an earlier, separate create call and only referenced by ID in
+// the refresh request, which is the impact-2 shape, not impact-3's "supplied
+// directly in the same request."
 const FROZEN_CALLER_INFLUENCE_FLOORS: Record<string, number> = {
   'POST /api/mcp/oauth/start': 3,
-  'POST /api/projects/:id/deployments/:deploymentId/check-link': 3,
-  'POST /api/projects/:id/media/generate': 3,
-  'POST /api/tools/media/generate': 3,
+  'POST /api/projects/:id/deployments/:deploymentId/check-link': 2,
+  'POST /api/projects/:id/media/generate': 2,
+  'POST /api/tools/media/generate': 2,
   'GET /api/media/providers/elevenlabs/voices': 2,
   'GET /api/media/providers/aihubmix/models': 0,
   'POST /api/design-systems/import/github': 1,
@@ -938,8 +1018,8 @@ const FROZEN_CALLER_INFLUENCE_FLOORS: Record<string, number> = {
   'POST /api/connectors/:connectorId/connect': 0,
   'POST /api/research/search': 2,
   'POST /api/codex-pets/sync': 0,
-  'POST /api/live-artifacts/:artifactId/refresh': 3,
-  'POST /api/tools/live-artifacts/refresh': 3,
+  'POST /api/live-artifacts/:artifactId/refresh': 2,
+  'POST /api/tools/live-artifacts/refresh': 2,
   'POST /api/provider/models': 2,
   'POST /api/test/connection': 2,
   'POST /api/proxy/anthropic/stream': 2,
@@ -949,12 +1029,224 @@ const FROZEN_CALLER_INFLUENCE_FLOORS: Record<string, number> = {
   'POST /api/proxy/ollama/stream': 2,
   'POST /api/proxy/senseaudio/stream': 2,
   'POST /api/proxy/aihubmix/stream': 2,
+  'POST /api/xai/search': 2,
+  'POST /api/xai/oauth/complete': 0,
 };
 const FROZEN_ROUTE_KEYS = new Set(Object.keys(FROZEN_CALLER_INFLUENCE_FLOORS));
 function tierFor(score: number): 'P0' | 'P1' | 'P2' {
   if (score >= 5) return 'P0';
   if (score === 4) return 'P1';
   return 'P2';
+}
+
+// =========================================================================
+// ROUND-1 addition (finding 1): mechanical whole-tree discovery. The prior
+// draft's CXF-1 only checked whether the FROZEN_CALLER_INFLUENCE_FLOORS keys
+// still existed in source -- self-consistency, never discovery. That is
+// exactly how `POST /api/xai/search` (routes/xai.ts:253) escaped: it was
+// never typed into the curated tables, and nothing would ever have noticed.
+// This walks EVERY route-registration file under the daemon (glob, not a
+// hand-typed list -- a new file is picked up automatically), extracts EVERY
+// `app.METHOD('literal', ...)` call in the file (not scoped to one named
+// function -- routes/deploy.ts alone defines two registration functions),
+// and decides fetch-reachability with a bounded, generic algorithm that does
+// NOT consult ROUTE_TARGET_FILES or any other hand-curated per-route table:
+// (a) a same-file call-graph BFS from the handler through named
+// function/const-arrow declarations in the SAME file, and (b) exactly one
+// generic import hop -- for each relative import the file itself declares,
+// if the handler's reachable call names include an imported binding AND
+// that imported binding's own file shows any fetch reachability via the
+// existing scanFileFetchProfile aggregate, the route counts as reaching
+// fetch. Any route this discovers that is NOT in FROZEN_ROUTE_KEYS is a hard
+// CXF-1 failure naming the exact route -- the frozen table can no longer
+// silently drop a route the author forgot to type in.
+// =========================================================================
+const ROUTE_REGISTRATION_FILE_ROOTS = [
+  'apps/daemon/src/routes',
+  'apps/daemon/src/mcp-routes.ts',
+  'apps/daemon/src/brand-routes.ts',
+  'apps/daemon/src/connectors/routes.ts',
+];
+// Files entirely excluded from discovery, each with a stated reason -- NOT a
+// blanket escape hatch; every entry names why. `library.ts` is owned and
+// already attributed end-to-end by the LANDED mishmash-w9-ingest-tranche
+// (see this PRD's "Explicitly out of scope"); re-discovering its routes here
+// would duplicate ownership across two tranches' frozen sets for the same
+// file.
+const DISCOVERY_EXCLUDED_FILES = new Set(['apps/daemon/src/routes/library.ts']);
+function discoverAllRouteRegistrationFiles(rootDir: string): string[] {
+  const out: string[] = [];
+  const walkDir = (dirRel: string): void => {
+    const dirAbs = path.join(rootDir, dirRel);
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dirAbs, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const entryRel = path.posix.join(dirRel, entry.name);
+      if (entry.isDirectory()) {
+        walkDir(entryRel);
+        continue;
+      }
+      if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts') && !DISCOVERY_EXCLUDED_FILES.has(entryRel)) out.push(entryRel);
+    }
+  };
+  for (const rootRel of ROUTE_REGISTRATION_FILE_ROOTS) {
+    const rootAbs = path.join(rootDir, rootRel);
+    if (!fs.existsSync(rootAbs)) continue;
+    if (fs.statSync(rootAbs).isDirectory()) {
+      walkDir(rootRel);
+    } else if (rootRel.endsWith('.ts') && !rootRel.endsWith('.test.ts') && !DISCOVERY_EXCLUDED_FILES.has(rootRel)) {
+      out.push(rootRel);
+    }
+  }
+  return [...new Set(out)].sort();
+}
+// Individual ROUTE-level discovery exclusions, each independently
+// investigated and justified -- the discovery BFS's cross-file "one import
+// hop, worst-case target-file aggregate" design (a deliberate, disclosed
+// simplification, not full call-graph precision) can over-attribute fetch
+// reachability when a route calls an imported helper from a file that ALSO
+// happens to export some unrelated function containing a real fetch call.
+// Both entries below were read directly, end to end, and neither reaches an
+// outbound fetch in their own actual code path.
+const DISCOVERY_FALSE_POSITIVE_ROUTES: Record<string, string> = {
+  'GET /api/projects/:id/design-system-package-audit':
+    'calls auditDesignSystemPackage(projectRoot), a local filesystem audit -- no outbound fetch in its reachable code; the cross-file aggregate over-attributes from an unrelated export in the same imported module.',
+  'POST /api/projects/:id/files':
+    'a local multipart/JSON file-upload handler (multer + fs.promises.readFile) -- no outbound fetch in its reachable code; same cross-file over-attribution as above.',
+};
+/** Named function declarations AND `const x = (..) => {}`/`function(){}` expressions at any depth, keyed by name -- the same-file call graph's node set. */
+function buildIntraFileFunctionMap(sourceFile: TsNode): Map<string, TsNode> {
+  const map = new Map<string, TsNode>();
+  const walk = (node: TsNode): void => {
+    if (ts.isFunctionDeclaration(node) && node.name && node.body) {
+      map.set(node.name.text, node.body);
+    } else if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      if (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer)) {
+        map.set(node.name.text, node.initializer);
+      }
+    }
+    ts.forEachChild(node, walk);
+  };
+  ts.forEachChild(sourceFile, walk);
+  return map;
+}
+interface ImportEdge {
+  importedNames: string[];
+  targetFileRel: string | null;
+}
+/** Every RELATIVE import in the file (node_modules/workspace-package imports are not traced -- this tranche's guard/wrapper vocabulary lives in first-party relative-imported daemon source, never a package). `.js` specifiers resolve to `.ts` source per this codebase's ESM output convention (confirmed against real imports throughout apps/daemon/src). */
+function collectRelativeImports(sourceFile: TsNode, ownFileRel: string, rootDir: string): ImportEdge[] {
+  const edges: ImportEdge[] = [];
+  const stmts = (sourceFile as unknown as { statements: readonly TsNode[] }).statements;
+  for (const stmt of stmts) {
+    if (!ts.isImportDeclaration(stmt) || !ts.isStringLiteral(stmt.moduleSpecifier)) continue;
+    const spec = stmt.moduleSpecifier.text;
+    if (!spec.startsWith('.')) continue;
+    const importedNames: string[] = [];
+    const clause = stmt.importClause;
+    if (clause?.name) importedNames.push(clause.name.text);
+    if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+      for (const el of clause.namedBindings.elements) importedNames.push(el.name.text);
+    }
+    if (importedNames.length === 0) continue;
+    const ownDirAbs = path.dirname(path.join(rootDir, ownFileRel));
+    let resolvedAbs = path.normalize(path.join(ownDirAbs, spec));
+    if (resolvedAbs.endsWith('.js')) resolvedAbs = `${resolvedAbs.slice(0, -3)}.ts`;
+    else if (!resolvedAbs.endsWith('.ts')) resolvedAbs = `${resolvedAbs}.ts`;
+    const exists = fs.existsSync(resolvedAbs);
+    edges.push({ importedNames, targetFileRel: exists ? path.relative(rootDir, resolvedAbs) : null });
+  }
+  return edges;
+}
+/** Bounded BFS from a route handler: same-file named-function calls, plus exactly one generic import hop per collectRelativeImports edge. `fileProfileCache` is shared across routes/files in one discovery run so each imported file's own scanFileFetchProfile only runs once. */
+function discoverRouteReachesFetch(
+  startNode: TsNode,
+  functionMap: ReadonlyMap<string, TsNode>,
+  importEdges: readonly ImportEdge[],
+  rootDir: string,
+  fileProfileCache: Map<string, FileFetchProfile>,
+): boolean {
+  const visited = new Set<TsNode>();
+  const queue: TsNode[] = [startNode];
+  let hops = 0;
+  while (queue.length > 0 && hops < 200) {
+    const node = queue.shift();
+    hops += 1;
+    if (!node || visited.has(node)) continue;
+    visited.add(node);
+    if (containsRawFetchCall(node)) return true;
+    const calledNames = collectReachableCallNames(node);
+    for (const wrapper of KNOWN_SAFE_WRAPPERS) {
+      if (calledNames.has(wrapper)) return true;
+    }
+    for (const name of calledNames) {
+      const sameFileTarget = functionMap.get(name);
+      if (sameFileTarget) {
+        queue.push(sameFileTarget);
+        continue;
+      }
+      for (const edge of importEdges) {
+        if (!edge.targetFileRel || !edge.importedNames.includes(name)) continue;
+        let profile = fileProfileCache.get(edge.targetFileRel);
+        if (!profile) {
+          const abs = path.join(rootDir, edge.targetFileRel);
+          if (!fs.existsSync(abs)) continue;
+          profile = scanFileFetchProfile(fs.readFileSync(abs, 'utf8'), edge.targetFileRel, `${edge.targetFileRel}@discovery`);
+          fileProfileCache.set(edge.targetFileRel, profile);
+        }
+        if (profile.worstGuardTier !== null) return true;
+      }
+    }
+  }
+  return false;
+}
+interface DiscoveredRoute {
+  key: string;
+  file: string;
+}
+/** The mechanical discovery entry point. Runs against the live HEAD filesystem (fs.readdirSync/readFileSync, consistent with how this verifier's other HEAD-side checks already read the tree) -- not baseCommit, since discovery must run identically well against an in-progress implementation branch's own worktree, which is exactly when a new, not-yet-frozen route would appear. */
+function discoverFetchReachingRoutes(rootDir: string): DiscoveredRoute[] {
+  const files = discoverAllRouteRegistrationFiles(rootDir);
+  const fileProfileCache = new Map<string, FileFetchProfile>();
+  const found: DiscoveredRoute[] = [];
+  const METHODS = new Set(['get', 'post', 'put', 'delete', 'options', 'patch']);
+  for (const relPath of files) {
+    const abs = path.join(rootDir, relPath);
+    let text: string;
+    try {
+      text = fs.readFileSync(abs, 'utf8');
+    } catch {
+      continue;
+    }
+    const sourceFile = ts.createSourceFile(`${relPath}@discovery`, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const functionMap = buildIntraFileFunctionMap(sourceFile);
+    const importEdges = collectRelativeImports(sourceFile, relPath, rootDir);
+    const walk = (node: TsNode): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        ts.isIdentifier(node.expression.expression) &&
+        node.expression.expression.text === 'app' &&
+        METHODS.has(node.expression.name.text)
+      ) {
+        const method = node.expression.name.text.toUpperCase();
+        const pathArg = node.arguments[0];
+        const handler = node.arguments[node.arguments.length - 1];
+        if (pathArg && (ts.isStringLiteral(pathArg) || ts.isNoSubstitutionTemplateLiteral(pathArg)) && handler) {
+          if (discoverRouteReachesFetch(handler, functionMap, importEdges, rootDir, fileProfileCache)) {
+            found.push({ key: `${method} ${pathArg.text}`, file: relPath });
+          }
+        }
+      }
+      ts.forEachChild(node, walk);
+    };
+    ts.forEachChild(sourceFile, walk);
+  }
+  return found;
 }
 
 // =========================================================================
@@ -975,6 +1267,31 @@ const EXPOSURE_PROBES: SelfProbe[] = [
     source: `app.post('/x', async (req, res) => {
       const grant = authorizeToolRequest(req, res, 'x:y');
       if (!grant) return;
+      doWork();
+    });`,
+  },
+  {
+    // Round-1 self-probe (finding 2b): the real shape of routes/media.ts:619
+    // and routes/xai.ts:253 -- a straight-line inline isLocalSameOrigin veto,
+    // not requireLocalDaemonRequest middleware.
+    name: 'real-inline-local-same-origin-veto-shape',
+    kind: 'exposure',
+    expected: 0,
+    source: `app.post('/x', async (req, res) => {
+      if (!isLocalSameOrigin(req, getResolvedPort())) {
+        return res.status(403).json({ error: 'cross-origin request rejected' });
+      }
+      doWork();
+    });`,
+  },
+  {
+    name: 'inline-local-same-origin-veto-in-dead-branch',
+    kind: 'exposure',
+    expected: 3,
+    source: `app.post('/x', async (req, res) => {
+      if (false) {
+        if (!isLocalSameOrigin(req, getResolvedPort())) { return res.status(403).end(); }
+      }
       doWork();
     });`,
   },
@@ -1095,12 +1412,74 @@ function isPlaceholderText(raw: unknown): boolean {
   if (uniqueChars <= 2) return true;
   return false;
 }
+// Known non-founder identity strings a self-accepting implementer might type
+// as `Accepter:` -- same denylist shape as the W9-agent-spawn reference
+// implementation's C9S-8 (the one mechanism that round's reviewer found
+// sound; ported here, not re-derived from scratch).
+const NON_FOUNDER_DENYLIST = new Set(['orchestrator', 'implementer', 'verifier', 'claude', 'codex', 'sol', 'grok', 'ai', 'agent']);
+interface AcceptedRiskBlock {
+  heading: string;
+  route: string;
+  acceptedRisk: string;
+  accepter: string;
+  date: string;
+  rationale: string;
+}
+// ROUND-1 FIX (finding 6a): the prior implementation located a block with
+// `decisionsText.indexOf(\`### ${ref}\`)` and then SLICED TO THE END OF THE
+// FILE, never to the next heading -- if this block's own body omitted a
+// field (or the author simply wrote the fields in a different order across
+// two adjacent blocks), the field regexes would happily match a LATER
+// block's own field first, letting one accepted-risk record borrow another
+// record's Route/Accepter/Rationale text. This finds every heading's exact
+// span (matchAll + the NEXT match's index as the boundary, matching the
+// verify-w9-agent-spawn.ts reference implementation's `parseAcceptedRiskBlocks`
+// exactly) so a field can never leak across a heading boundary. A duplicate
+// heading anywhere in the file makes every block under that heading name
+// unresolvable (the caller must reject count!==1), not merely ambiguous at
+// the second occurrence.
+function parseAcceptedRiskBlocks(decisionsText: string): Map<string, AcceptedRiskBlock[]> {
+  const blocks = new Map<string, AcceptedRiskBlock[]>();
+  const headingRe = /^### (W9XF-ACCEPT-[A-Za-z0-9-]+)\s*$/gim;
+  const matches = [...decisionsText.matchAll(headingRe)];
+  for (let i = 0; i < matches.length; i++) {
+    const match = matches[i];
+    if (!match) continue;
+    const heading = match[1] ?? '';
+    const start = (match.index ?? 0) + match[0].length;
+    const nextMatch = matches[i + 1];
+    const end = nextMatch ? (nextMatch.index ?? decisionsText.length) : decisionsText.length;
+    const body = decisionsText.slice(start, end);
+    const route = /^- Route:\s*`([^`]+)`/m.exec(body)?.[1]?.trim() ?? '';
+    const acceptedRisk = /^- Accepted[\s-]+risk:\s*(.+)$/im.exec(body)?.[1]?.trim() ?? '';
+    const accepter = /^- Accepter:\s*(.+)$/m.exec(body)?.[1]?.trim() ?? '';
+    const date = /^- Date:\s*(\d{4}-\d{2}-\d{2})/m.exec(body)?.[1]?.trim() ?? '';
+    const rationale = /^- Rationale:\s*(.+)$/m.exec(body)?.[1]?.trim() ?? '';
+    const block: AcceptedRiskBlock = { heading, route, acceptedRisk, accepter, date, rationale };
+    const existing = blocks.get(heading) ?? [];
+    existing.push(block);
+    blocks.set(heading, existing);
+  }
+  return blocks;
+}
+// ROUND-1 FIX (finding 4b): every route's path starts with `/api/`, and the
+// old `length>1 && !/^[a-z]{1,2}$/` filter let "api" (3 chars) through as an
+// "association term" for every single row -- any passing test whose name
+// merely contained the substring "api" anywhere satisfied the association
+// check for ANY route. This stoplist excludes segments that are structural
+// path scaffolding, not identifying content, across this tranche's actual
+// frozen routes (`api`, `tools`, `projects`, `assets`, `v1`, `v2`).
+const GENERIC_PATH_SEGMENTS = new Set(['api', 'tools', 'projects', 'assets', 'v1', 'v2']);
+/** Every backtick-delimited token in a piece of prose, used for EXACT route-key/testRef citation matching in CXF-7 -- never substring `.includes()`, which a prefix-shaped route key like `POST /api/brands` defeats against its own nested `POST /api/brands/:id/...` siblings. */
+function extractBacktickTokens(text: string): string[] {
+  return [...text.matchAll(/`([^`]+)`/g)].map((m) => m[1]!);
+}
 function routeAssociationTerms(routeKey: string): string[] {
   const pathPart = routeKey.split(' ')[1] ?? routeKey;
   return pathPart
     .split('/')
     .map((seg) => seg.replace(/[:{}]/g, ''))
-    .filter((seg) => seg.length > 1 && !/^[a-z]{1,2}$/.test(seg));
+    .filter((seg) => seg.length > 1 && !/^[a-z]{1,2}$/.test(seg) && !GENERIC_PATH_SEGMENTS.has(seg.toLowerCase()));
 }
 function exposureKeywordOk(authn: string, exposure: number): boolean {
   const lower = authn.toLowerCase();
@@ -1164,7 +1543,17 @@ function extractStaticTestTitlesFromSource(sourceText: string, label: string): S
 // =========================================================================
 // Test suite execution (CXF-2) -- frozen glob, real vitest JSON reporter.
 // =========================================================================
-const SSRF_TEST_FILE_GLOB_PREFIXES = [
+// ROUND-1 FIX (finding 4a): the PRD's proposed lease (see
+// docs/plans/waves/W9-external-fetch-tranche.md, "Proposed lease") allows
+// the implementer to ADD new test files matching `mcp-oauth-*.test.ts`,
+// `deploy-check-link-*.test.ts`, `external-fetch-*.test.ts`, and several
+// exact new filenames -- but discovery previously matched only the 11
+// pre-existing EXACT filenames, so none of those new files could ever be
+// discovered, run, or cited: the endpoint-test lane was unsatisfiable as
+// leased. Discovery now matches BOTH the legacy exact names AND the leased
+// prefix patterns, kept in sync with the PRD's lease text by hand (both
+// files are frozen together once this round lands).
+const SSRF_TEST_FILE_EXACT_NAMES = [
   'aihubmix-asset-ssrf',
   'marketplace-install-ssrf',
   'brand-safe-fetch',
@@ -1176,13 +1565,41 @@ const SSRF_TEST_FILE_GLOB_PREFIXES = [
   'byok-tools',
   'connectors-routes',
   'connectors-service',
+  'media-provider-baseurl-ssrf',
+  'elevenlabs-voices-ssrf',
+  'byok-proxy-baseurl-ssrf',
+  'design-systems-import-ssrf',
 ];
+const SSRF_TEST_FILE_PREFIXES = ['mcp-oauth-', 'deploy-check-link-', 'external-fetch-'];
+/** ROUND-1 FIX (finding 4c): `.only(` is not a distinct vitest reporter status
+ * (a file containing it just reports its OTHER tests as normal passes, with
+ * the excluded ones simply absent from output), so it was invisible to the
+ * old "hasSkipOrOnlyOrTodo" check despite the name -- a single `.only` could
+ * silently exclude every other assertion in a file from a real run while the
+ * suite still reported green. Source-scanned directly, comment-blind would
+ * require a full AST pass; a literal token scan is intentionally used here
+ * (cheap, and a `.only(` token appearing only inside a comment or string is
+ * an extraordinarily unlikely false positive for a security-test file, and
+ * fails safe -- i.e. toward MORE scrutiny, not less). */
+function sourceHasOnlyMarker(absPath: string): boolean {
+  let text: string;
+  try {
+    text = fs.readFileSync(absPath, 'utf8');
+  } catch {
+    return false;
+  }
+  return /\b(it|test|describe)\.only\s*\(/.test(text);
+}
 function discoverSsrfTestFiles(): string[] {
   const testsDir = path.join(repoRoot, 'apps/daemon/tests');
   if (!fs.existsSync(testsDir)) return [];
   return fs
     .readdirSync(testsDir)
-    .filter((f) => f.endsWith('.test.ts') && SSRF_TEST_FILE_GLOB_PREFIXES.some((p) => f === `${p}.test.ts`))
+    .filter((f) => {
+      if (!f.endsWith('.test.ts')) return false;
+      const stem = f.slice(0, -'.test.ts'.length);
+      return SSRF_TEST_FILE_EXACT_NAMES.includes(stem) || SSRF_TEST_FILE_PREFIXES.some((p) => stem.startsWith(p));
+    })
     .map((f) => path.join('apps/daemon/tests', f))
     .sort();
 }
@@ -1220,13 +1637,316 @@ function runSsrfSuite(testFiles: string[], attempt: number): { ok: boolean; resu
   } catch {
     return { ok: false, results: [], raw };
   }
+  // ROUND-1 FIX (finding 4c): `.only(` source-scanned across the INPUT file
+  // list directly (not derived from the reporter, which never surfaces it --
+  // see sourceHasOnlyMarker's docblock).
+  const anyOnlyMarker = testFiles.some((f) => sourceHasOnlyMarker(path.join(repoRoot, f)));
   const results: FileTestResult[] = parsed.testResults.map((tr) => ({
     file: tr.name,
     assertions: tr.assertionResults.map((a) => ({ fullName: a.fullName, state: a.status })),
-    hasSkipOrOnlyOrTodo: tr.assertionResults.some((a) => a.status === 'pending' || a.status === 'todo'),
+    hasSkipOrOnlyOrTodo: tr.assertionResults.some((a) => a.status === 'pending' || a.status === 'todo') || anyOnlyMarker,
   }));
   const allPassed = results.every((f) => f.assertions.every((a) => a.state === 'passed') && !f.hasSkipOrOnlyOrTodo);
-  return { ok: allPassed && r.status === 0, results, raw };
+  return { ok: allPassed && r.status === 0 && !anyOnlyMarker, results, raw };
+}
+
+// =========================================================================
+// ROUND-1 addition (findings 2a + 7): process-tree management, PORTED from
+// scripts/waves/verify-w10f.ts (which DECISIONS.md's W9AS-PARK/W10A-PARK/
+// W10B-PARK record names as the proven sound pattern), using this
+// repository's own `@open-design/platform` process-tree primitives instead
+// of hand-rolled process-group signaling. `stopProcesses` internally does
+// SIGTERM-then-SIGKILL escalation with a poll-until-exit confirmation; the
+// caller's job is only to hand it every PID that was EVER part of the tree.
+// =========================================================================
+interface PlatformProcessSnapshot {
+  pid: number;
+  ppid: number;
+  command: string;
+}
+interface PlatformStopResult {
+  stoppedPids: number[];
+  remainingPids: number[];
+  forcedPids: number[];
+}
+interface PlatformProcessApi {
+  listProcessSnapshots: () => Promise<PlatformProcessSnapshot[]>;
+  collectProcessTreePids: (processes: PlatformProcessSnapshot[], rootPids: Array<number | null | undefined>) => number[];
+  stopProcesses: (pids: Array<number | null | undefined>) => Promise<PlatformStopResult>;
+}
+let platformCache: PlatformProcessApi | null = null;
+async function loadPlatform(): Promise<PlatformProcessApi> {
+  if (platformCache) return platformCache;
+  const distPath = path.join(repoRoot, 'packages/platform/dist/index.mjs');
+  if (!fs.existsSync(distPath)) throw new Error(`packages/platform is not built (missing ${distPath}) -- run pnpm install`);
+  const mod = (await import(pathToFileURL(distPath).href)) as PlatformProcessApi;
+  platformCache = { listProcessSnapshots: mod.listProcessSnapshots, collectProcessTreePids: mod.collectProcessTreePids, stopProcesses: mod.stopProcesses };
+  return platformCache;
+}
+/** Refuses any URL that is not `127.0.0.1`, and hard-refuses the two protected default-namespace daemon ports (finding 2's binding safety requirement) -- this is the "validate origin" half of "every probe fetch must set redirect to manual and validate origin and status so a redirect cannot reach a forbidden port." */
+function assertSafeLoopbackUrl(urlString: string): URL {
+  const url = new URL(urlString);
+  if (url.hostname !== '127.0.0.1') throw new Error(`refusing non-loopback URL: ${urlString}`);
+  const port = Number(url.port);
+  if (port === 7456 || port === 51012) throw new Error(`refusing to use reserved daemon port ${port} (url=${urlString})`);
+  return url;
+}
+/** A spawned process's PID plus every descendant PID observed at ANY point while it ran (not merely a single snapshot taken after the fact, which would miss a grandchild that outlives an already-reaped intermediate parent). Polls every 150ms until the process exits or `timeoutMs` elapses. */
+async function spawnWithProcessTreeTracking(
+  cmd: string,
+  args: string[],
+  opts: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number },
+): Promise<{ status: number | null; stdout: string; stderr: string; timedOut: boolean; observedPids: Set<number> }> {
+  const platform = await loadPlatform();
+  const proc = spawn(cmd, args, { cwd: opts.cwd, env: opts.env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const observedPids = new Set<number>();
+  if (proc.pid != null) observedPids.add(proc.pid);
+  let stdout = '';
+  let stderr = '';
+  proc.stdout?.on('data', (c: Buffer) => {
+    stdout += c.toString('utf8');
+  });
+  proc.stderr?.on('data', (c: Buffer) => {
+    stderr += c.toString('utf8');
+  });
+  let timedOut = false;
+  const startedAt = Date.now();
+  const exitPromise = new Promise<number | null>((resolve) => {
+    proc.once('exit', (code) => resolve(code));
+    proc.once('error', () => resolve(null));
+  });
+  let exited = false;
+  void exitPromise.then(() => {
+    exited = true;
+  });
+  while (!exited && Date.now() - startedAt < opts.timeoutMs) {
+    if (proc.pid != null) {
+      const snapshots = await platform.listProcessSnapshots();
+      for (const pid of platform.collectProcessTreePids(snapshots, [proc.pid])) observedPids.add(pid);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  if (!exited) {
+    timedOut = true;
+    if (proc.pid != null) {
+      try {
+        process.kill(proc.pid, 'SIGTERM');
+      } catch {
+        /* already gone */
+      }
+    }
+  }
+  const status = await exitPromise;
+  // Final snapshot after exit/kill -- catches anything spawned in the last window before exit.
+  if (proc.pid != null) {
+    const snapshots = await platform.listProcessSnapshots();
+    for (const pid of platform.collectProcessTreePids(snapshots, [proc.pid])) observedPids.add(pid);
+  }
+  return { status, stdout, stderr, timedOut, observedPids };
+}
+/** Stops every PID in `observedPids`, waits for confirmation, and returns ok:true ONLY when the platform's own stop result reports zero remaining. A failed or partial teardown must never be silently treated as success. */
+async function confirmProcessTreeStopped(observedPids: ReadonlySet<number>): Promise<{ ok: boolean; detail: string }> {
+  const platform = await loadPlatform();
+  const result = await platform.stopProcesses([...observedPids]);
+  return {
+    ok: result.remainingPids.length === 0,
+    detail: `observed=${JSON.stringify([...observedPids])} stopped=${JSON.stringify(result.stoppedPids)} forced=${JSON.stringify(result.forcedPids)} remaining=${JSON.stringify(result.remainingPids)}`,
+  };
+}
+
+// =========================================================================
+// ROUND-1 addition (finding 2a): isolated daemon boot + loopback canary +
+// live HTTP probe. This is the mechanism that lets CXF-6 OBSERVE a P0 row's
+// guard actually firing, rather than inferring it from source shape. PORTED
+// from verify-w10f.ts's bootIsolatedDaemonSubprocess/bootIsolatedDaemon.
+// =========================================================================
+function buildIsolatedDaemonRunnerScript(serverTsUrl: string): string {
+  return [
+    'const { startServer } = await import(process.env.W9XF_SERVER_URL);',
+    'const started = await startServer({ port: 0, host: "127.0.0.1", returnServer: true });',
+    'process.stdout.write(JSON.stringify({ ready: true, url: started.url, routeInventory: started.routeInventory ?? null }) + "\\n");',
+    'process.on("SIGTERM", async () => { try { await started.shutdown?.(); } finally { process.exit(0); } });',
+  ].join('\n');
+}
+interface IsolatedDaemonHandle {
+  baseUrl: string;
+  dataDir: string;
+  routeInventory: unknown;
+  observedPids: Set<number>;
+  proc: ReturnType<typeof spawn>;
+}
+/** Spawns the real production daemon (dynamically imports apps/daemon/src/server.ts's own startServer -- never a reimplementation) in a fresh, isolated OD_DATA_DIR on an OS-assigned port. Never touches 7456/51012 by construction (port:0). Caller MUST eventually call stopIsolatedDaemon on the returned handle. */
+async function bootIsolatedDaemon(): Promise<IsolatedDaemonHandle> {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'w9xf-daemon-data-'));
+  const runnerPath = path.join(os.tmpdir(), `w9xf-daemon-runner-${process.pid}-${Date.now()}.mjs`);
+  const serverTsUrl = pathToFileURL(path.join(repoRoot, 'apps/daemon/src/server.ts')).href;
+  fs.writeFileSync(runnerPath, buildIsolatedDaemonRunnerScript(serverTsUrl));
+  const platform = await loadPlatform();
+  const proc = spawn('pnpm', ['exec', 'tsx', runnerPath], {
+    cwd: repoRoot,
+    env: { ...process.env, OD_DATA_DIR: dataDir, W9XF_SERVER_URL: serverTsUrl },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const observedPids = new Set<number>();
+  if (proc.pid != null) observedPids.add(proc.pid);
+  const trackTimer = setInterval(() => {
+    void (async () => {
+      if (proc.pid == null) return;
+      const snapshots = await platform.listProcessSnapshots();
+      for (const pid of platform.collectProcessTreePids(snapshots, [proc.pid])) observedPids.add(pid);
+    })();
+  }, 200);
+  try {
+    const ready = await new Promise<{ url: string; routeInventory: unknown }>((resolve, reject) => {
+      let buffered = '';
+      const timeout = setTimeout(() => reject(new Error('isolated daemon did not report ready within 30s')), 30_000);
+      proc.stdout?.on('data', (chunk: Buffer) => {
+        buffered += chunk.toString('utf8');
+        const line = buffered.split('\n').find((l) => l.trim().startsWith('{'));
+        if (line) {
+          try {
+            const parsed = JSON.parse(line.trim()) as { ready?: boolean; url?: string; routeInventory?: unknown };
+            if (parsed.ready && typeof parsed.url === 'string') {
+              clearTimeout(timeout);
+              resolve({ url: parsed.url, routeInventory: parsed.routeInventory ?? null });
+            }
+          } catch {
+            /* keep buffering */
+          }
+        }
+      });
+      proc.once('exit', (code) => {
+        clearTimeout(timeout);
+        reject(new Error(`isolated daemon exited early (code=${code}) before reporting ready`));
+      });
+      proc.once('error', (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
+    });
+    assertSafeLoopbackUrl(ready.url);
+    return { baseUrl: ready.url, dataDir, routeInventory: ready.routeInventory, observedPids, proc };
+  } catch (err) {
+    clearInterval(trackTimer);
+    await confirmProcessTreeStopped(observedPids).catch(() => {});
+    try {
+      fs.rmSync(runnerPath, { force: true });
+    } catch {
+      /* best effort */
+    }
+    try {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+      /* best effort */
+    }
+    throw err;
+  } finally {
+    clearInterval(trackTimer);
+  }
+}
+/** Stops the daemon's FULL process tree and confirms zero survivors before removing its data dir. A partial teardown returns ok:false and does NOT remove the data dir (evidence preserved for investigation) -- per the binding safety rule, a failed teardown must fail the run, never be silently swallowed. */
+async function stopIsolatedDaemon(handle: IsolatedDaemonHandle): Promise<{ ok: boolean; detail: string }> {
+  if (handle.proc.pid != null) {
+    try {
+      process.kill(handle.proc.pid, 'SIGTERM');
+    } catch {
+      /* already gone */
+    }
+  }
+  const platform = await loadPlatform();
+  const snapshots = await platform.listProcessSnapshots();
+  if (handle.proc.pid != null) {
+    for (const pid of platform.collectProcessTreePids(snapshots, [handle.proc.pid])) handle.observedPids.add(pid);
+  }
+  const stopResult = await confirmProcessTreeStopped(handle.observedPids);
+  if (stopResult.ok) {
+    try {
+      fs.rmSync(handle.dataDir, { recursive: true, force: true });
+    } catch {
+      /* best effort, does not affect the teardown verdict */
+    }
+  }
+  return stopResult;
+}
+interface CanaryServer {
+  url: string;
+  hitCount: () => number;
+  reset: () => void;
+  close: () => Promise<void>;
+}
+/** A loopback-only HTTP listener the probe points a route's caller-controlled URL/baseUrl field at. If the daemon actually attempts the outbound fetch (guard did not fire), this receives the request; if the guard fired, it receives nothing. This is the "assert it is refused" observable -- not merely a response status code, which a route could return by coincidence. */
+async function startCanaryServer(): Promise<CanaryServer> {
+  let hits = 0;
+  const server = http.createServer((_req, res) => {
+    hits += 1;
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('w9xf-canary');
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => resolve());
+  });
+  const address = server.address();
+  const port = address && typeof address === 'object' ? address.port : 0;
+  if (port === 0 || port === 7456 || port === 51012) {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    throw new Error(`canary server bound to an unsafe port (${port})`);
+  }
+  return {
+    url: `http://127.0.0.1:${port}/w9xf-canary`,
+    hitCount: () => hits,
+    reset: () => {
+      hits = 0;
+    },
+    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+  };
+}
+interface ProbeSpec {
+  method: string;
+  path: string;
+  headers?: Record<string, string>;
+  bodyTemplate?: unknown;
+  rejectStatusIn: number[];
+}
+function isProbeSpec(value: unknown): value is ProbeSpec {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.method === 'string' &&
+    typeof v.path === 'string' &&
+    v.path.startsWith('/') &&
+    Array.isArray(v.rejectStatusIn) &&
+    v.rejectStatusIn.length > 0 &&
+    v.rejectStatusIn.every((s) => typeof s === 'number')
+  );
+}
+const PROBE_TARGET_PLACEHOLDER = '__W9XF_PROBE_TARGET__';
+/** Executes one live SSRF probe: substitutes the canary URL into the declared body template wherever the placeholder appears, sends the REAL HTTP request to the isolated daemon with `redirect: 'manual'` (a 3xx from the daemon is never silently followed -- the "validate ... status so a redirect cannot reach a forbidden port" half of the binding safety rule), and asserts BOTH that the canary saw zero connections AND that the daemon's own response status is one the row declared as a refusal. Either one alone is insufficient: a coincidental error status without a canary check could pass for the wrong reason (R4, VERIFICATION-CONTRACT.md §3) and a canary check without a status check could pass on a request that never reached the intended code path at all. */
+async function executeSsrfProbe(daemon: IsolatedDaemonHandle, canary: CanaryServer, spec: ProbeSpec): Promise<{ ok: boolean; detail: string }> {
+  canary.reset();
+  const url = assertSafeLoopbackUrl(new URL(spec.path, daemon.baseUrl).toString());
+  const bodyText = spec.bodyTemplate !== undefined ? JSON.stringify(spec.bodyTemplate).split(PROBE_TARGET_PLACEHOLDER).join(canary.url) : undefined;
+  let resp: Response;
+  try {
+    resp = await fetch(url, {
+      method: spec.method,
+      headers: { 'content-type': 'application/json', ...(spec.headers ?? {}) },
+      redirect: 'manual',
+      ...(bodyText !== undefined ? { body: bodyText } : {}),
+    });
+  } catch (err) {
+    return { ok: false, detail: `probe fetch threw: ${String(err)}` };
+  }
+  // Drain the body so the connection can close cleanly without holding the daemon open.
+  try {
+    await resp.arrayBuffer();
+  } catch {
+    /* best effort */
+  }
+  const canaryHits = canary.hitCount();
+  const statusOk = spec.rejectStatusIn.includes(resp.status);
+  const ok = canaryHits === 0 && statusOk;
+  return { ok, detail: `status=${resp.status} canaryHits=${canaryHits} rejectStatusIn=${JSON.stringify(spec.rejectStatusIn)} url=${url.toString()}` };
 }
 
 // =========================================================================
@@ -1314,16 +2034,33 @@ interface ReplayOutcome {
   ok: boolean;
   detail: string;
 }
-function replayRedEvidence(parentSha: string, containingFileRel: string, targetFullName: string, controlFullName: string): ReplayOutcome {
+// ROUND-1 FIX (finding 7): the replay runner used to be launched via the
+// blocking `sh()` helper (plain spawnSync, no process-tree tracking) --
+// vitest's own Node API can spawn worker processes/threads beneath it, and a
+// timeout-triggered kill only ever signaled the ONE tracked PID, exactly the
+// orphaned-descendant failure mode the program-wide DECISIONS.md ruling
+// named (a SIGTERM-handling descendant surviving its parent's own exit). The
+// runner is now launched via spawnWithProcessTreeTracking (which polls the
+// FULL descendant tree while the process runs, not a single snapshot taken
+// after the fact) and torn down via confirmProcessTreeStopped, which
+// requires zero remaining PIDs -- a partial teardown now returns ok:false
+// and PRESERVES tmpBase (never deletes evidence out from under a failure)
+// instead of silently succeeding. The `git worktree remove` result is now
+// checked, not discarded.
+async function replayRedEvidence(parentSha: string, containingFileRel: string, targetFullName: string, controlFullName: string): Promise<ReplayOutcome> {
   const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-w9xf-replay-'));
   const worktreeDir = path.join(tmpBase, 'wt');
+  const addR = sh('git', ['worktree', 'add', '--detach', worktreeDir, parentSha]);
+  if (addR.status !== 0) return { ok: false, detail: `git worktree add failed: ${addR.stderr}` };
+  let outcome: ReplayOutcome;
+  let teardownOk = true;
+  let teardownDetail = '';
   try {
-    const addR = sh('git', ['worktree', 'add', '--detach', worktreeDir, parentSha]);
-    if (addR.status !== 0) return { ok: false, detail: `git worktree add failed: ${addR.stderr}` };
-    try {
-      sh('mise', ['trust'], { cwd: worktreeDir, timeoutMs: 60_000 });
-      const install = sh('pnpm', ['install', '--offline', '--frozen-lockfile'], { cwd: worktreeDir, timeoutMs: 5 * 60_000 });
-      if (install.status !== 0) return { ok: false, detail: `frozen offline install failed: ${install.stderr.slice(0, 2000)}` };
+    sh('mise', ['trust'], { cwd: worktreeDir, timeoutMs: 60_000 });
+    const install = sh('pnpm', ['install', '--offline', '--frozen-lockfile'], { cwd: worktreeDir, timeoutMs: 5 * 60_000 });
+    if (install.status !== 0) {
+      outcome = { ok: false, detail: `frozen offline install failed: ${install.stderr.slice(0, 2000)}` };
+    } else {
       const headFileAbs = path.join(repoRoot, containingFileRel);
       const worktreeFileAbs = path.join(worktreeDir, containingFileRel);
       fs.mkdirSync(path.dirname(worktreeFileAbs), { recursive: true });
@@ -1333,36 +2070,59 @@ function replayRedEvidence(parentSha: string, containingFileRel: string, targetF
       const runnerScript = buildReplayRunnerScript(marker, worktreeFileAbs, daemonRoot);
       const runnerPath = path.join(tmpBase, 'runner.mjs');
       fs.writeFileSync(runnerPath, runnerScript);
-      const run = sh('node', [runnerPath], { cwd: daemonRoot, timeoutMs: 3 * 60_000 });
-      const startTag = `REPLAY_${marker}_START`;
-      const endTag = `REPLAY_${marker}_END`;
-      const startIdx = run.stdout.indexOf(startTag);
-      const endIdx = run.stdout.indexOf(endTag);
-      const occurrences = run.stdout.split(startTag).length - 1;
-      if (occurrences !== 1 || startIdx === -1 || endIdx === -1 || endIdx < startIdx) {
-        return { ok: false, detail: `marker did not appear exactly once (occurrences=${occurrences})` };
+      const run = await spawnWithProcessTreeTracking('node', [runnerPath], { cwd: daemonRoot, env: process.env, timeoutMs: 3 * 60_000 });
+      const stopResult = await confirmProcessTreeStopped(run.observedPids);
+      teardownOk = stopResult.ok;
+      teardownDetail = stopResult.detail;
+      if (run.timedOut) {
+        outcome = { ok: false, detail: `replay process timed out (3min) -- observedPids=${JSON.stringify([...run.observedPids])}` };
+      } else {
+        const startTag = `REPLAY_${marker}_START`;
+        const endTag = `REPLAY_${marker}_END`;
+        const startIdx = run.stdout.indexOf(startTag);
+        const endIdx = run.stdout.indexOf(endTag);
+        const occurrences = run.stdout.split(startTag).length - 1;
+        if (occurrences !== 1 || startIdx === -1 || endIdx === -1 || endIdx < startIdx) {
+          outcome = { ok: false, detail: `marker did not appear exactly once (occurrences=${occurrences})` };
+        } else {
+          const jsonLine = run.stdout.slice(startIdx + startTag.length, endIdx).trim();
+          try {
+            const forest = JSON.parse(jsonLine) as SerializedReplayForest;
+            if (run.status === 0) {
+              outcome = { ok: false, detail: 'replay process exited 0 -- no red evidence' };
+            } else {
+              const consistency = evaluateTaskForestConsistency(forest, targetFullName, controlFullName);
+              outcome = consistency.ok
+                ? { ok: true, detail: `replay consistent, parentSha=${parentSha}, exit=${String(run.status)}` }
+                : { ok: false, detail: consistency.reason };
+            }
+          } catch {
+            outcome = { ok: false, detail: 'could not parse serialized replay forest' };
+          }
+        }
       }
-      const jsonLine = run.stdout.slice(startIdx + startTag.length, endIdx).trim();
-      let forest: SerializedReplayForest;
-      try {
-        forest = JSON.parse(jsonLine) as SerializedReplayForest;
-      } catch {
-        return { ok: false, detail: 'could not parse serialized replay forest' };
-      }
-      if (run.status === 0) return { ok: false, detail: 'replay process exited 0 -- no red evidence' };
-      const consistency = evaluateTaskForestConsistency(forest, targetFullName, controlFullName);
-      if (!consistency.ok) return { ok: false, detail: consistency.reason };
-      return { ok: true, detail: `replay consistent, parentSha=${parentSha}, exit=${run.status}` };
-    } finally {
-      sh('git', ['worktree', 'remove', '--force', worktreeDir]);
     }
-  } finally {
+  } catch (err) {
+    outcome = { ok: false, detail: `replay threw: ${String(err)}` };
+  }
+  const worktreeRemove = sh('git', ['worktree', 'remove', '--force', worktreeDir]);
+  const worktreeRemoveOk = worktreeRemove.status === 0;
+  // A failed/partial process teardown OR a failed worktree removal fails the
+  // replay outright, regardless of what the test-forest evidence said --
+  // per the binding safety rule, this is never downgraded to advisory.
+  const finalOk = outcome.ok && teardownOk && worktreeRemoveOk;
+  const finalDetail = `${outcome.detail} | teardown: ok=${teardownOk} ${teardownDetail} | worktreeRemove: ok=${worktreeRemoveOk} ${worktreeRemoveOk ? '' : worktreeRemove.stderr}`;
+  if (finalOk) {
+    // Only remove the temp worktree root once teardown and worktree removal
+    // are BOTH confirmed -- a failure preserves tmpBase for investigation
+    // instead of deleting the evidence.
     try {
       fs.rmSync(tmpBase, { recursive: true, force: true });
     } catch {
-      /* best effort */
+      /* best effort; does not change the already-failing verdict */
     }
   }
+  return { ok: finalOk, detail: finalDetail };
 }
 function parseRedTranscript(content: string): { parentSha: string; test: string; controlTest: string } | null {
   const parentM = /^PARENT_SHA:\s*(\S+)/m.exec(content);
@@ -1403,6 +2163,12 @@ async function main(): Promise<void> {
     // pattern is real but irrelevant to THIS tranche (DELETE performs no outbound
     // fetch), so it must not fail CXF-1 -- only a duplicate among the 31 SSRF-
     // relevant frozen routes is a hard fail.
+    //
+    // ROUND-1 FIX (finding 1): the prior `dupCheck.get(key) !== target.file`
+    // condition only flagged a duplicate when TWO DIFFERENT files registered
+    // the same key -- a route registered twice inside the SAME file (e.g. a
+    // copy-paste duplicate `app.post` call) was silently invisible. Now flags
+    // on any second occurrence, same file or not.
     const dupCheck = new Map<string, string>();
     let dupError: string | null = null;
     for (const target of FROZEN_REGISTRATION_TARGETS) {
@@ -1412,7 +2178,7 @@ async function main(): Promise<void> {
       for (const reg of regs) {
         const key = `${reg.method} ${reg.path}`;
         if (!FROZEN_ROUTE_KEYS.has(key)) continue;
-        if (dupCheck.has(key) && dupCheck.get(key) !== target.file) {
+        if (dupCheck.has(key)) {
           dupError = `duplicate registration ${key} in ${dupCheck.get(key)} and ${target.file}`;
         }
         dupCheck.set(key, target.file);
@@ -1449,12 +2215,22 @@ async function main(): Promise<void> {
       for (const reg of regs) {
         const key = `${reg.method} ${reg.path}`;
         if (!FROZEN_ROUTE_KEYS.has(key)) continue;
-        if (headDupCheck.has(key) && headDupCheck.get(key) !== target.file) {
+        if (headDupCheck.has(key)) {
           headDupError = `duplicate registration ${key} in ${headDupCheck.get(key)} and ${target.file}`;
         }
         headDupCheck.set(key, target.file);
       }
     }
+
+    // ROUND-1 addition (finding 1): mechanical discovery, independent of the
+    // curated tables. Any fetch-reaching route discoverFetchReachingRoutes
+    // finds that is not already in FROZEN_ROUTE_KEYS is a hard fail naming
+    // the exact route -- this is what would have caught `POST
+    // /api/xai/search` before a reviewer had to.
+    const discovered = discoverFetchReachingRoutes(repoRoot);
+    const discoveredNotFrozen = discovered.filter((d) => !FROZEN_ROUTE_KEYS.has(d.key) && !(d.key in DISCOVERY_FALSE_POSITIVE_ROUTES));
+    const excludedFalsePositives = discovered.filter((d) => !FROZEN_ROUTE_KEYS.has(d.key) && d.key in DISCOVERY_FALSE_POSITIVE_ROUTES);
+    const undiscoveredButFrozen = [...FROZEN_ROUTE_KEYS].filter((k) => !discovered.some((d) => d.key === k));
 
     const ok =
       failedProbes.length === 0 &&
@@ -1462,12 +2238,13 @@ async function main(): Promise<void> {
       headDupError === null &&
       missingFromBase.length === 0 &&
       extraInBase.length === 0 &&
-      missingAtHead.length === 0;
+      missingAtHead.length === 0 &&
+      discoveredNotFrozen.length === 0;
 
     record(
       'CXF-1',
-      `AST scan of ${FROZEN_REGISTRATION_TARGETS.length} frozen registration functions at baseCommit=${baseCommit} and HEAD`,
-      'frozen route set self-consistent with FROZEN_CALLER_INFLUENCE_FLOORS; no duplicates at baseCommit or HEAD; no drift between baseCommit and HEAD; all self-probes pass',
+      `AST scan of ${FROZEN_REGISTRATION_TARGETS.length} frozen registration functions at baseCommit=${baseCommit} and HEAD, PLUS a mechanical whole-tree discovery pass over every route-registration file under apps/daemon/src/routes/ + mcp-routes.ts + brand-routes.ts + connectors/routes.ts`,
+      'frozen route set self-consistent with FROZEN_CALLER_INFLUENCE_FLOORS; no duplicates at baseCommit or HEAD; no drift between baseCommit and HEAD; all self-probes pass; discovery finds no fetch-reaching route outside the frozen set',
       ok,
       [
         `self-probes: ${selfProbeOutcomes.length - failedProbes.length}/${selfProbeOutcomes.length} pass`,
@@ -1478,8 +2255,18 @@ async function main(): Promise<void> {
         headDupError ? `DUP@head: ${headDupError}` : 'no duplicates at HEAD',
         missingFromBase.length ? `MISSING@base: ${missingFromBase.join(', ')}` : 'all frozen routes found at baseCommit',
         missingAtHead.length ? `MISSING@head (drift): ${missingAtHead.join(', ')}` : 'all frozen routes still present at HEAD',
+        `discovery scanned ${discoverAllRouteRegistrationFiles(repoRoot).length} route-registration files, found ${discovered.length} fetch-reaching routes`,
+        discoveredNotFrozen.length
+          ? `DISCOVERED-NOT-FROZEN (hard fail): ${discoveredNotFrozen.map((d) => `${d.key} (${d.file})`).join(', ')}`
+          : 'every discovered fetch-reaching route is in the frozen set',
+        excludedFalsePositives.length
+          ? `excluded as investigated false positives (DISCOVERY_FALSE_POSITIVE_ROUTES, does not fail CXF-1): ${excludedFalsePositives.map((d) => `${d.key} -- ${DISCOVERY_FALSE_POSITIVE_ROUTES[d.key]}`).join('; ')}`
+          : 'no false-positive exclusions were needed this run',
+        undiscoveredButFrozen.length
+          ? `informational -- frozen routes discovery's bounded BFS/1-hop-import algorithm did not independently re-derive (does not fail CXF-1; these rely on reachability this tranche's research established by other means, e.g. a helper called indirectly through more than one import hop): ${undiscoveredButFrozen.join(', ')}`
+          : 'discovery independently re-derived every frozen route too',
       ].join('\n'),
-      { detail: ok ? undefined : 'see evidence for the specific self-consistency/drift/duplicate failure' },
+      { detail: ok ? undefined : 'see evidence for the specific self-consistency/drift/duplicate/discovery failure' },
     );
   });
 
@@ -1506,7 +2293,49 @@ async function main(): Promise<void> {
     );
   });
 
-  // Per-route mechanical guard-tier + risk score, computed once, reused by CXF-3..CXF-8.
+  // ROUND-1 REORDER (finding 3): CXF-3 (parse the attribution matrix) now
+  // runs BEFORE the routeVerdicts computation and CXF-8, which need to read
+  // the matrix's own declared riskScore per row -- CXF-8 used to run first,
+  // before `attribution` existed for this pass, which is part of why it
+  // never read it.
+  let attribution: Array<Record<string, unknown>> | null = null;
+  await checkCriterion('CXF-3', () => {
+    const abs = path.join(repoRoot, attribJsonRel);
+    if (!fs.existsSync(abs)) {
+      record('CXF-3', '', `${attribJsonRel} exists and parses; exactly one row per frozen route`, false, 'file does not exist', {
+        detail: 'expected pre-implementation: no attribution matrix yet',
+      });
+      return;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(fs.readFileSync(abs, 'utf8'));
+    } catch (err) {
+      record('CXF-3', '', '', false, '', { detail: `JSON parse failed: ${String(err)}` });
+      return;
+    }
+    if (!Array.isArray(parsed)) {
+      record('CXF-3', '', '', false, '', { detail: 'attribution file is not a JSON array' });
+      return;
+    }
+    attribution = parsed as Array<Record<string, unknown>>;
+    const keys = attribution.map((r) => `${String(r.method)} ${String(r.path)}`);
+    const keySet = new Set(keys);
+    const dupes = keys.filter((k, i) => keys.indexOf(k) !== i);
+    const orphans = keys.filter((k) => !FROZEN_ROUTE_KEYS.has(k));
+    const gaps = [...FROZEN_ROUTE_KEYS].filter((k) => !keySet.has(k));
+    const ok = dupes.length === 0 && orphans.length === 0 && gaps.length === 0 && keys.length === FROZEN_ROUTE_KEYS.size;
+    record(
+      'CXF-3',
+      '',
+      `attribution matrix covers exactly the ${FROZEN_ROUTE_KEYS.size} frozen routes, no orphans/gaps/duplicates`,
+      ok,
+      `rows=${keys.length} frozen=${FROZEN_ROUTE_KEYS.size}\ndupes=${dupes.join(',')}\norphans=${orphans.join(',')}\ngaps=${gaps.join(',')}`,
+      { detail: ok ? undefined : 'row-set mismatch' },
+    );
+  });
+
+  // Per-route mechanical guard-tier + risk score, computed once, reused by CXF-4..CXF-8.
   interface RouteVerdict {
     routeKey: string;
     exposure: number;
@@ -1542,55 +2371,58 @@ async function main(): Promise<void> {
     routeVerdicts.set(key, { routeKey: key, exposure, impactFloor, score, tier: tierFor(score), guardTier, mechanism, targetFiles });
   }
 
+  // ROUND-1 FIX (finding 3): CXF-8 used to recompute score/tier from its OWN
+  // internal routeVerdicts map and compare that computation against ITSELF
+  // (`v.score === v.exposure + v.impactFloor`, both derived from the exact
+  // same frozen constants) -- a tautology that could never fail regardless
+  // of what the attribution matrix actually claimed, so a row could omit or
+  // falsify its own `riskScore` entirely and CXF-8 would still report green.
+  // It now reads each attribution ROW's own declared `riskScore` object and
+  // checks it against the mechanically-computed verdict -- the matrix's
+  // claim is what is being graded, not this file's internal bookkeeping.
   await checkCriterion('CXF-8', () => {
-    const lines: string[] = [];
-    let ok = true;
-    for (const [key, v] of routeVerdicts) {
-      const expectedScore = v.exposure + v.impactFloor;
-      const expectedTier = tierFor(expectedScore);
-      const rowOk = v.score === expectedScore && v.tier === expectedTier && v.impactFloor >= (FROZEN_CALLER_INFLUENCE_FLOORS[key] ?? 0);
-      if (!rowOk) ok = false;
-      lines.push(`${key}: exposure=${v.exposure} impact=${v.impactFloor} score=${v.score} tier=${v.tier} guardTier=${v.guardTier} [${rowOk ? 'OK' : 'MISMATCH'}]`);
-    }
-    record('CXF-8', '', 'exposure+impact=score, tier=tierFor(score), impact>=floor for every frozen route', ok, lines.join('\n'), {
-      detail: ok ? undefined : 'one or more rows failed the formula check',
-    });
-  });
-
-  let attribution: Array<Record<string, unknown>> | null = null;
-  await checkCriterion('CXF-3', () => {
-    const abs = path.join(repoRoot, attribJsonRel);
-    if (!fs.existsSync(abs)) {
-      record('CXF-3', '', `${attribJsonRel} exists and parses; exactly one row per frozen route`, false, 'file does not exist', {
-        detail: 'expected pre-implementation: no attribution matrix yet',
+    if (!attribution) {
+      record('CXF-8', '', "every attribution row's own declared riskScore matches the mechanically-computed exposure/impact/score/tier", false, 'no attribution matrix (see CXF-3)', {
+        detail: 'depends on CXF-3',
       });
       return;
     }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(fs.readFileSync(abs, 'utf8'));
-    } catch (err) {
-      record('CXF-3', '', '', false, '', { detail: `JSON parse failed: ${String(err)}` });
-      return;
+    const lines: string[] = [];
+    let ok = true;
+    for (const row of attribution) {
+      const key = `${String(row.method)} ${String(row.path)}`;
+      const verdict = routeVerdicts.get(key);
+      if (!verdict) {
+        lines.push(`${key}: not a frozen route (see CXF-3)`);
+        ok = false;
+        continue;
+      }
+      const riskScore = row.riskScore as { exposure?: unknown; impact?: unknown; score?: unknown; tier?: unknown } | undefined;
+      if (!riskScore || typeof riskScore !== 'object') {
+        lines.push(`${key}: row has no riskScore object [MISMATCH]`);
+        ok = false;
+        continue;
+      }
+      const { exposure, impact, score, tier } = riskScore;
+      const rowOk =
+        exposure === verdict.exposure &&
+        typeof impact === 'number' &&
+        impact >= (FROZEN_CALLER_INFLUENCE_FLOORS[key] ?? 0) &&
+        score === (exposure as number) + (impact as number) &&
+        tier === tierFor(score as number) &&
+        tier === verdict.tier;
+      if (!rowOk) ok = false;
+      lines.push(
+        `${key}: row.riskScore={exposure=${String(exposure)} impact=${String(impact)} score=${String(score)} tier=${String(tier)}} mechanical={exposure=${verdict.exposure} impactFloor=${verdict.impactFloor} tier=${verdict.tier}} [${rowOk ? 'OK' : 'MISMATCH'}]`,
+      );
     }
-    if (!Array.isArray(parsed)) {
-      record('CXF-3', '', '', false, '', { detail: 'attribution file is not a JSON array' });
-      return;
-    }
-    attribution = parsed as Array<Record<string, unknown>>;
-    const keys = attribution.map((r) => `${String(r.method)} ${String(r.path)}`);
-    const keySet = new Set(keys);
-    const dupes = keys.filter((k, i) => keys.indexOf(k) !== i);
-    const orphans = keys.filter((k) => !FROZEN_ROUTE_KEYS.has(k));
-    const gaps = [...FROZEN_ROUTE_KEYS].filter((k) => !keySet.has(k));
-    const ok = dupes.length === 0 && orphans.length === 0 && gaps.length === 0 && keys.length === FROZEN_ROUTE_KEYS.size;
     record(
-      'CXF-3',
+      'CXF-8',
       '',
-      'attribution matrix covers exactly the 30 frozen routes, no orphans/gaps/duplicates',
+      "every attribution row's own declared riskScore.exposure matches the mechanically-derived exposure exactly, riskScore.impact meets its frozen floor, riskScore.score/tier are formula-consistent with the row's own declared values AND match the mechanically-computed tier",
       ok,
-      `rows=${keys.length} frozen=${FROZEN_ROUTE_KEYS.size}\ndupes=${dupes.join(',')}\norphans=${orphans.join(',')}\ngaps=${gaps.join(',')}`,
-      { detail: ok ? undefined : 'row-set mismatch' },
+      lines.join('\n'),
+      { detail: ok ? undefined : 'one or more rows’ declared riskScore failed to match the mechanical verdict' },
     );
   });
 
@@ -1603,9 +2435,7 @@ async function main(): Promise<void> {
       return;
     }
     const decisionsText = fileExistsAtCommit(baseCommit, decisionsRel) ? readFileAtCommit(baseCommit, decisionsRel) : '';
-    const acceptHeadings = [...decisionsText.matchAll(/^### (W9XF-ACCEPT-[A-Za-z0-9-]+)\s*$/gm)].map((m) => m[1]!);
-    const headingCounts = new Map<string, number>();
-    for (const h of acceptHeadings) headingCounts.set(h, (headingCounts.get(h) ?? 0) + 1);
+    const acceptedRiskBlocks = parseAcceptedRiskBlocks(decisionsText);
     const commitAuthors = commitAuthorsBetween(baseCommit, headSha);
 
     let attributed = 0;
@@ -1639,29 +2469,54 @@ async function main(): Promise<void> {
       }
       if (acceptedRisk && typeof acceptedRisk.decisionRef === 'string') {
         const ref = acceptedRisk.decisionRef;
-        const count = headingCounts.get(ref) ?? 0;
-        if (count !== 1) {
-          problems.push(`${key}: acceptedRisk.decisionRef "${ref}" is not a unique heading in DECISIONS.md@baseCommit (count=${count})`);
+        const matchingBlocks = acceptedRiskBlocks.get(ref) ?? [];
+        if (matchingBlocks.length !== 1) {
+          problems.push(`${key}: acceptedRisk.decisionRef "${ref}" is not a unique heading in DECISIONS.md@baseCommit (count=${matchingBlocks.length})`);
           unattributed += 1;
           continue;
         }
-        const block = decisionsText.slice(decisionsText.indexOf(`### ${ref}`));
-        const routeM = /^- Route:\s*`(.+)`/m.exec(block);
-        const accepterM = /^- Accepter:\s*(.+)$/m.exec(block);
-        const dateM = /^- Date:\s*(\d{4}-\d{2}-\d{2})/m.exec(block);
-        const rationaleM = /^- Rationale:\s*(.+)$/m.exec(block);
-        const riskM = /^- Accepted risk:\s*(.+)$/m.exec(block);
-        if (!routeM || !accepterM || !dateM || !rationaleM || !riskM) {
-          problems.push(`${key}: acceptedRisk block "${ref}" missing a required field`);
+        const block = matchingBlocks[0]!;
+        // ROUND-1 FIX (finding 6a): every field is now placeholder-checked,
+        // not merely "present" (a bare space or single character used to
+        // pass `!accepterM` truthiness). The block is also bound to ITS OWN
+        // heading span (parseAcceptedRiskBlocks), so these fields can no
+        // longer be borrowed from a neighbouring block.
+        if (!block.route) {
+          problems.push(`${key}: acceptedRisk block "${ref}" missing Route field`);
           unattributed += 1;
           continue;
         }
-        if (routeM[1] !== key) {
-          problems.push(`${key}: acceptedRisk block "${ref}" Route field "${routeM[1]}" does not match row key`);
+        if (isPlaceholderText(block.accepter)) {
+          problems.push(`${key}: acceptedRisk block "${ref}" Accepter is missing or placeholder-shaped`);
           unattributed += 1;
           continue;
         }
-        if (commitAuthors.has((accepterM[1] ?? '').trim().toLowerCase())) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(block.date)) {
+          problems.push(`${key}: acceptedRisk block "${ref}" Date is missing or malformed`);
+          unattributed += 1;
+          continue;
+        }
+        if (isPlaceholderText(block.rationale)) {
+          problems.push(`${key}: acceptedRisk block "${ref}" Rationale is missing or placeholder-shaped`);
+          unattributed += 1;
+          continue;
+        }
+        if (isPlaceholderText(block.acceptedRisk)) {
+          problems.push(`${key}: acceptedRisk block "${ref}" Accepted risk is missing or placeholder-shaped`);
+          unattributed += 1;
+          continue;
+        }
+        if (block.route !== key) {
+          problems.push(`${key}: acceptedRisk block "${ref}" Route field "${block.route}" does not match row key`);
+          unattributed += 1;
+          continue;
+        }
+        if (NON_FOUNDER_DENYLIST.has(block.accepter.trim().toLowerCase())) {
+          problems.push(`${key}: acceptedRisk block "${ref}" Accepter "${block.accepter}" matches a known non-founder identity`);
+          unattributed += 1;
+          continue;
+        }
+        if (commitAuthors.has(block.accepter.trim().toLowerCase())) {
           problems.push(`${key}: acceptedRisk Accepter matches a commit author in baseCommit..HEAD (self-accepted)`);
           unattributed += 1;
           continue;
@@ -1733,32 +2588,46 @@ async function main(): Promise<void> {
       if (control?.testRef) {
         if (!passingFullNames.has(control.testRef)) problems.push(`${key}: control.testRef "${control.testRef}" not found passing`);
         // "new" decision -- AST-derived title check at baseCommit across the containing file.
+        // ROUND-1 FIX (finding 4d): the whole new-ness/replay check used to be
+        // gated on `fileExistsAtCommit(baseCommit, containingFile)` -- for a
+        // GENUINELY NEW test file (the exact case S9XF-3's replay requirement
+        // exists for), that condition is false, so the entire block was
+        // skipped and a brand-new file's tests were silently accepted with
+        // zero red-evidence requirement -- the precise opposite of what "new
+        // controls carry replayed red evidence" promises. The file-exists
+        // check now only decides what `baseTitles` contains (empty set for a
+        // file absent at baseCommit, correctly making every title in it
+        // "new"); it never gates whether the check runs at all.
         const containingFile = suiteRun.results.find((f) => f.assertions.some((a) => a.fullName === control.testRef))?.file;
-        if (containingFile && fileExistsAtCommit(baseCommit, containingFile)) {
-          const baseTitles = extractStaticTestTitlesFromSource(readFileAtCommit(baseCommit, containingFile), `${containingFile}@base`);
+        if (containingFile) {
+          const baseTitles = fileExistsAtCommit(baseCommit, containingFile)
+            ? extractStaticTestTitlesFromSource(readFileAtCommit(baseCommit, containingFile), `${containingFile}@base`)
+            : new Set<string>();
           const leafTitle = control.testRef.split(' > ').pop() ?? control.testRef;
           const isNew = !baseTitles.has(leafTitle);
           if (isNew) {
             const redArtifactPath = path.join(repoRoot, 'docs/security/external-fetch-red', `${slugify(control.testRef)}.txt`);
             if (!fs.existsSync(redArtifactPath)) {
-              problems.push(`${key}: control.testRef "${control.testRef}" is new (no baseCommit title match) but has no red transcript at ${redArtifactPath}`);
+              problems.push(`${key}: control.testRef "${control.testRef}" is new (no baseCommit title match, or containing file did not exist at baseCommit) but has no red transcript at ${redArtifactPath}`);
             } else {
               const transcript = parseRedTranscript(fs.readFileSync(redArtifactPath, 'utf8'));
               if (!transcript) {
                 problems.push(`${key}: red transcript for "${control.testRef}" is malformed`);
               } else {
-                const introduction = containingFile ? findIntroductionCommit(containingFile, leafTitle) : null;
+                const introduction = findIntroductionCommit(containingFile, leafTitle);
                 if (!introduction) {
                   problems.push(`${key}: could not independently determine introduction commit for "${leafTitle}"`);
                 } else if (transcript.parentSha !== introduction.firstParent) {
                   problems.push(`${key}: transcript PARENT_SHA does not equal introduction commit's first parent`);
                 } else {
-                  const replay = replayRedEvidence(transcript.parentSha, containingFile, control.testRef, transcript.controlTest);
+                  const replay = await replayRedEvidence(transcript.parentSha, containingFile, control.testRef, transcript.controlTest);
                   if (!replay.ok) problems.push(`${key}: replay failed for "${control.testRef}": ${replay.detail}`);
                 }
               }
             }
           }
+        } else {
+          problems.push(`${key}: control.testRef "${control.testRef}" passed but its containing file could not be identified from the suite run`);
         }
       }
     }
@@ -1773,47 +2642,134 @@ async function main(): Promise<void> {
     );
   });
 
-  await checkCriterion('CXF-6', () => {
-    if (!attribution) {
-      record('CXF-6', '', 'every P0 row has a real, mechanically-matched GUARDED control or accepted risk', false, 'no attribution matrix', {
-        detail: 'depends on CXF-3',
-      });
-      return;
+  // ROUND-1 REDESIGN (findings 2a + 5a): per the program-wide binding rule
+  // (DECISIONS.md, W9AS-PARK: "a criterion asserting runtime behavior must
+  // observe that behavior -- boot the daemon, issue the real request, assert
+  // the response"), CXF-6 no longer treats the GUARDED grammar string plus a
+  // function-name match as sufficient evidence that a P0 row's guard
+  // actually fires. It now BOOTS a real, isolated instance of the actual
+  // production daemon (bootIsolatedDaemon -- the same apps/daemon/src/
+  // server.ts startServer(), never a reimplementation) and, for every P0 row
+  // that claims a `control`, issues the REAL HTTP request the row's own
+  // declared `control.probe` describes, with the caller-controlled URL/
+  // baseUrl field pointed at a loopback canary listener, and asserts BOTH
+  // that the canary received zero connections (the guard never attempted the
+  // outbound fetch) and that the daemon's response status is one the row
+  // declared as a refusal. `control.probe` is a REQUIRED structural
+  // declaration for a P0 `control` row -- "how do I invoke this route" has
+  // no proof mechanism besides declaring it (the same principle testRef file
+  // paths already rest on) -- but the PROBE'S OUTCOME is never trusted from
+  // the declaration; only from actually running it. Pairing: the ACCEPT-side
+  // real-transport signal for a controlled row is CXF-5's own requirement
+  // that `control.testRef` names a real, currently-passing test (proving the
+  // guard's happy path is exercised for real, not just its rejection path);
+  // this criterion supplies the REJECT-side signal that CXF-5 cannot (CXF-5
+  // only proves a named test passes, never that a live, currently-unguarded
+  // route actually refuses an escaping request). The GUARDED grammar + fn
+  // binding from the prior draft are RETAINED as a cheap, still-useful
+  // pre-check (a probe should never be run against a declaration that
+  // doesn't even name the mechanically-found guard), but no longer treated
+  // as sufficient on their own.
+  await checkCriterion('CXF-6', async () => {
+    let daemon: IsolatedDaemonHandle | null = null;
+    let canary: CanaryServer | null = null;
+    const infraNotes: string[] = [];
+    try {
+      daemon = await bootIsolatedDaemon();
+      canary = await startCanaryServer();
+      // Probe-infra self-check: runs even with no attribution matrix, so the
+      // boot/probe/teardown pipeline's own soundness is demonstrated
+      // regardless of implementation state -- a harmless, always-available
+      // route (no auth, no side effect) confirms boot + real HTTP round-trip
+      // work before any row-specific probe is trusted.
+      const selfCheckUrl = assertSafeLoopbackUrl(new URL('/api/mcp/install-info', daemon.baseUrl).toString());
+      const selfCheckResp = await fetch(selfCheckUrl, { redirect: 'manual' });
+      infraNotes.push(`probe-infra self-check: GET /api/mcp/install-info -> status=${selfCheckResp.status} (boot+HTTP round-trip OK)`);
+      try {
+        await selfCheckResp.arrayBuffer();
+      } catch {
+        /* best effort */
+      }
+
+      let ok: boolean;
+      let evidenceBody: string;
+      let failDetail: string | undefined;
+      if (!attribution) {
+        ok = false;
+        evidenceBody = infraNotes.join('\n');
+        failDetail = 'no attribution matrix (see CXF-3) -- probe infra itself is sound (see evidence), nothing to probe yet';
+      } else {
+        const p0Keys = [...routeVerdicts.values()].filter((v) => v.tier === 'P0').map((v) => v.routeKey);
+        const problems: string[] = [];
+        for (const key of p0Keys) {
+          const row = attribution.find((r) => `${String(r.method)} ${String(r.path)}` === key);
+          const verdict = routeVerdicts.get(key)!;
+          if (!row) {
+            problems.push(`${key}: P0 route missing from attribution matrix entirely`);
+            continue;
+          }
+          const control = row.control as { mechanism?: string; testRef?: string; probe?: unknown } | undefined;
+          const acceptedRisk = row.acceptedRisk as { decisionRef?: string } | undefined;
+          if (acceptedRisk) continue; // resolved via accepted risk, already validated by CXF-4
+          if (!control?.mechanism) {
+            problems.push(`${key}: P0 row has neither control nor acceptedRisk`);
+            continue;
+          }
+          const parsed = parseGuardedDeclaration(control.mechanism);
+          if (!parsed) {
+            problems.push(`${key}: control.mechanism does not match the GUARDED grammar exactly: "${control.mechanism}"`);
+            continue;
+          }
+          if (parsed.fn !== verdict.mechanism) {
+            problems.push(`${key}: declared fn="${parsed.fn}" does not match the mechanically-found mechanism "${verdict.mechanism}"`);
+            continue;
+          }
+          if (!isProbeSpec(control.probe)) {
+            problems.push(`${key}: control.probe is missing or not a valid ProbeSpec ({method, path, rejectStatusIn: number[]} required) -- a P0 control cannot be accepted on the GUARDED declaration alone, per the runtime-observation rule`);
+            continue;
+          }
+          const probeResult = await executeSsrfProbe(daemon, canary, control.probe);
+          if (!probeResult.ok) {
+            problems.push(`${key}: live SSRF probe FAILED (guard did not observably fire): ${probeResult.detail}`);
+          } else {
+            infraNotes.push(`${key}: live probe passed (${probeResult.detail})`);
+          }
+        }
+        ok = problems.length === 0;
+        evidenceBody = `P0 routes: ${p0Keys.length}\n${infraNotes.join('\n')}\n${problems.join('\n') || 'no problems found'}`;
+        failDetail = ok ? undefined : `${problems.length} problem(s)`;
+      }
+
+      // ROUND-1 FIX (finding 7, applied here too): teardown is confirmed
+      // BEFORE record() is called, and factored into `ok` -- a failed or
+      // partial teardown fails CXF-6 outright, it is never merely logged
+      // after the fact once a passing verdict has already been recorded.
+      let teardownOk = true;
+      let teardownDetail = '';
+      if (canary) await canary.close().catch(() => {});
+      if (daemon) {
+        const stopResult = await stopIsolatedDaemon(daemon);
+        teardownOk = stopResult.ok;
+        teardownDetail = stopResult.detail;
+      }
+      const finalOk = ok && teardownOk;
+      record(
+        'CXF-6',
+        '',
+        "every P0-tier row's GUARDED declaration is bound to the mechanically-found guard function AND its own declared control.probe is executed live against a real isolated daemon, refusing an escaping target with zero canary hits -- or a verified accepted risk; the isolated daemon's own process-tree teardown must also confirm zero survivors",
+        finalOk,
+        `${evidenceBody}\nteardown: ok=${teardownOk} ${teardownDetail}`,
+        { detail: finalOk ? undefined : (failDetail ?? `isolated daemon teardown failed: ${teardownDetail}`) },
+      );
+    } catch (err) {
+      let teardownDetail = 'not attempted (crashed before reaching teardown)';
+      if (canary) await canary.close().catch(() => {});
+      if (daemon) {
+        const stopResult = await stopIsolatedDaemon(daemon).catch((e: unknown) => ({ ok: false, detail: `stop itself threw: ${String(e)}` }));
+        teardownDetail = `ok=${stopResult.ok} ${stopResult.detail}`;
+      }
+      record('CXF-6', '', '', false, `${infraNotes.join('\n')}\nteardown: ${teardownDetail}`, { detail: `CXF-6 crashed: ${String(err)}` });
     }
-    const p0Keys = [...routeVerdicts.values()].filter((v) => v.tier === 'P0').map((v) => v.routeKey);
-    const problems: string[] = [];
-    for (const key of p0Keys) {
-      const row = attribution.find((r) => `${String(r.method)} ${String(r.path)}` === key);
-      const verdict = routeVerdicts.get(key)!;
-      if (!row) {
-        problems.push(`${key}: P0 route missing from attribution matrix entirely`);
-        continue;
-      }
-      const control = row.control as { mechanism?: string; testRef?: string } | undefined;
-      const acceptedRisk = row.acceptedRisk as { decisionRef?: string } | undefined;
-      if (acceptedRisk) continue; // resolved via accepted risk, already validated by CXF-4
-      if (!control?.mechanism) {
-        problems.push(`${key}: P0 row has neither control nor acceptedRisk`);
-        continue;
-      }
-      const parsed = parseGuardedDeclaration(control.mechanism);
-      if (!parsed) {
-        problems.push(`${key}: control.mechanism does not match the GUARDED grammar exactly: "${control.mechanism}"`);
-        continue;
-      }
-      if (parsed.fn !== verdict.mechanism) {
-        problems.push(`${key}: declared fn="${parsed.fn}" does not match the mechanically-found mechanism "${verdict.mechanism}"`);
-      }
-    }
-    const ok = problems.length === 0;
-    record(
-      'CXF-6',
-      '',
-      'every P0-tier row resolves its guard via the anchored GUARDED grammar, bound to the mechanically-found guard function, or a verified accepted risk',
-      ok,
-      `P0 routes: ${p0Keys.length}\n${problems.join('\n') || 'no problems found'}`,
-      { detail: ok ? undefined : `${problems.length} problem(s)` },
-    );
   });
 
   await checkCriterion('CXF-7', () => {
@@ -1833,16 +2789,44 @@ async function main(): Promise<void> {
     const p0Keys = [...routeVerdicts.values()].filter((v) => v.tier === 'P0').map((v) => v.routeKey);
     const problems: string[] = [];
     for (const key of p0Keys) {
-      const matching = bullets.filter((b) => b.includes(key));
+      // ROUND-1 FIX (finding 5b): exact backtick-token equality, never
+      // substring `.includes()` -- `POST /api/brands` is a literal PREFIX of
+      // every nested `POST /api/brands/:id/...` route key, so the old
+      // substring check made "exactly one matching bullet" structurally
+      // impossible to satisfy the moment more than one brand-family bullet
+      // existed (this tranche freezes five). Bullets must quote the route
+      // key in backticks, exactly, like every other exact-citation mechanism
+      // in this file.
+      const matching = bullets.filter((b) => extractBacktickTokens(b).includes(key));
       if (matching.length !== 1) {
-        problems.push(`P0 route ${key}: expected exactly 1 dedicated bullet naming it, found ${matching.length}`);
+        problems.push(`P0 route ${key}: expected exactly 1 dedicated bullet naming it as an exact backtick-quoted token, found ${matching.length}`);
         continue;
       }
-      const otherP0Named = p0Keys.filter((k) => k !== key && matching[0]!.includes(k));
+      const bulletTokens = extractBacktickTokens(matching[0]!);
+      const otherP0Named = p0Keys.filter((k) => k !== key && bulletTokens.includes(k));
       if (otherP0Named.length > 0) problems.push(`P0 route ${key}'s bullet also names other P0 routes: ${otherP0Named.join(',')}`);
+      // ROUND-1 addition (finding 5b): the prior draft never checked
+      // citations at all -- only that the route key's substring appeared
+      // somewhere in a bullet's prose. S9XF-3/CXF-7 require the bullet to
+      // cite exactly the row's expected reference (control.testRef when
+      // controlled, else the primary testRef).
+      const row = attribution?.find((r) => `${String(r.method)} ${String(r.path)}` === key);
+      if (!row) {
+        problems.push(`P0 route ${key}: no attribution row found to determine its expected citation`);
+        continue;
+      }
+      const rowControl = row.control as { testRef?: string } | undefined;
+      const expectedRef = typeof rowControl?.testRef === 'string' ? rowControl.testRef : typeof row.testRef === 'string' ? row.testRef : null;
+      if (!expectedRef) {
+        problems.push(`P0 route ${key}: attribution row has no testRef/control.testRef to cite`);
+        continue;
+      }
+      if (!bulletTokens.includes(expectedRef)) {
+        problems.push(`P0 route ${key}'s bullet does not cite its expected reference "${expectedRef}" as an exact backtick-quoted token`);
+      }
     }
     const ok = problems.length === 0;
-    record('CXF-7', '', 'each P0-tier route has exactly one dedicated, exact-match bullet', ok, problems.join('\n') || 'no problems found', {
+    record('CXF-7', '', 'each P0-tier route has exactly one dedicated, exact-match bullet citing its expected reference exactly', ok, problems.join('\n') || 'no problems found', {
       detail: ok ? undefined : `${problems.length} problem(s)`,
     });
   });
@@ -1876,12 +2860,27 @@ async function main(): Promise<void> {
       record('CXF-10', '', '', false, '', { detail: `JSON parse failed: ${String(err)}` });
       return;
     }
-    const { reviewer, reviewedCommit, verdict } = parsed;
+    const { reviewer, model, reviewedCommit, verdict } = parsed;
     const problems: string[] = [];
+    // ROUND-1 FIX (finding 6b): `reviewer` used to be checked only for
+    // truthiness (`!reviewer`), which a single space or one-character string
+    // satisfies -- `model` was destructured but never checked at all. Both
+    // now go through the same placeholder floor every other structured field
+    // in this file uses, plus the same non-founder-identity denylist accepted
+    // risk uses (a self-review recorded as `"reviewer":"reviewer"` no longer
+    // passes).
+    if (isPlaceholderText(reviewer)) problems.push('reviewer field missing or placeholder-shaped');
+    else if (NON_FOUNDER_DENYLIST.has((reviewer ?? '').trim().toLowerCase())) problems.push(`reviewer "${reviewer}" matches a known non-reviewer identity`);
+    if (isPlaceholderText(model)) problems.push('model field missing or placeholder-shaped');
     if (!reviewedCommit || !resolveCommit(reviewedCommit)) problems.push('reviewedCommit does not resolve to a real commit');
     else if (!isAncestor(reviewedCommit, headSha) || reviewedCommit === headSha) problems.push('reviewedCommit is not a strict ancestor of HEAD');
     if (verdict !== 'APPROVE') problems.push(`verdict is "${verdict}", expected "APPROVE"`);
     if (reviewedCommit && resolveCommit(reviewedCommit)) {
+      // ROUND-1 FIX (finding 6b): the owned-path list omitted
+      // routes/chat.ts (the ninth connectionTest.ts-family route family's
+      // own source, leased this round) and every test file, so a change to
+      // either after the claimed review point would not be detected. The
+      // glob pathspec matches this file's own "Definition of green" §9 list.
       const OWNED_PATHS = [
         'apps/daemon/src/mcp-oauth.ts',
         'apps/daemon/src/deploy.ts',
@@ -1889,6 +2888,8 @@ async function main(): Promise<void> {
         'apps/daemon/src/integrations/elevenlabs-voices.ts',
         'apps/daemon/src/byok-tools.ts',
         'apps/daemon/src/design-systems/shadcn-import.ts',
+        'apps/daemon/src/routes/chat.ts',
+        'apps/daemon/tests/*.test.ts',
         attribJsonRel,
         threatModelRel,
       ];
@@ -1896,10 +2897,21 @@ async function main(): Promise<void> {
       if (diff.stdout.trim().length > 0) problems.push(`owned-path diff between reviewedCommit and HEAD is non-empty: ${diff.stdout.trim()}`);
       const authors = commitAuthorsBetween(baseCommit, reviewedCommit);
       if (reviewer && authors.has(reviewer.trim().toLowerCase())) problems.push('reviewer matches a commit author in baseCommit..reviewedCommit');
-      if (!reviewer) problems.push('reviewer field missing');
+      // ROUND-1 addition (finding 6b): "the review record itself" was an
+      // omitted check -- nothing previously proved the review record was
+      // authored STRICTLY AFTER the commit it claims to review, so an
+      // implementer could commit the implementation AND a self-authored,
+      // internally-consistent review record together in one shot, timed so
+      // `reviewedCommit` simply points at that same commit's own parent (or
+      // any earlier ancestor) with an owned-path diff that happens to be
+      // empty by construction. Requiring the review-record file to be ABSENT
+      // at reviewedCommit proves the record was genuinely added afterward.
+      if (fileExistsAtCommit(reviewedCommit, reviewJsonRel)) {
+        problems.push('the review record already existed AT reviewedCommit -- it must be introduced strictly after, in a separate later commit, never bundled with the state it claims to review');
+      }
     }
     const ok = problems.length === 0;
-    record('CXF-10', '', 'reviewedCommit strict ancestor of HEAD, owned-path diff empty, reviewer distinct, verdict APPROVE', ok, problems.join('\n') || 'no problems found', {
+    record('CXF-10', '', 'reviewedCommit strict ancestor of HEAD, owned-path diff empty, reviewer+model non-placeholder and non-denylisted, review record absent at reviewedCommit, verdict APPROVE', ok, problems.join('\n') || 'no problems found', {
       detail: ok ? undefined : `${problems.length} problem(s)`,
     });
   });
