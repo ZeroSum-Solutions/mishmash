@@ -273,9 +273,20 @@ function sha256File(absPath: string): string {
   return sha256Bytes(fs.readFileSync(absPath));
 }
 
+// Round-3 ruling 3: a third terminal status, distinct from both `pass` and
+// `fail`. `Array.prototype.every()` on an empty array is `true` by JS
+// semantics, not by evidence -- pre-implementation, zero daemons ever boot
+// (storageEntry is null), so a naive `allDaemonTeardownResults.every(r =>
+// r.ok)` reports a vacuous pass for a teardown mechanism that never ran.
+// `not-exercised` names that state honestly instead of conflating it with a
+// real, evidenced pass -- mirrors this program's existing precedent for an
+// honest non-pass terminal state (W1's C1-12 `blocked-on-founder`, which can
+// never read `pass`). `not-exercised` blocks the overall gate exactly like
+// `fail` does (see the final exit-code computation) -- it is reported
+// separately for honesty, never treated as equivalent to a proven pass.
 interface CriterionResult {
   id: string; command: string; assertion: string; artifact: string | null; artifactSha256: string | null;
-  exitCode: number; status: 'pass' | 'fail'; durationMs: number; detail?: string | undefined;
+  exitCode: number; status: 'pass' | 'fail' | 'not-exercised'; durationMs: number; detail?: string | undefined;
 }
 function artifactFor(id: string, content: string): { artifact: string | null; artifactSha256: string | null } {
   const primary = path.join(proofDir, `${id}.txt`);
@@ -297,14 +308,18 @@ function artifactFor(id: string, content: string): { artifact: string | null; ar
 }
 
 const results: CriterionResult[] = [];
-function record(id: string, command: string, assertion: string, ok: boolean, evidence: string, opts: { detail?: string | undefined; durationMs?: number; exitCode?: number } = {}): void {
+// `ok` accepts the literal `'not-exercised'` alongside `boolean` -- a
+// verifier-integrity failure (artifact write failure) always forces `fail`
+// regardless, since that is never a "we never tried" situation.
+function record(id: string, command: string, assertion: string, ok: boolean | 'not-exercised', evidence: string, opts: { detail?: string | undefined; durationMs?: number; exitCode?: number } = {}): void {
   try {
-    const { artifact, artifactSha256 } = artifactFor(id, `# ${id}\n# assertion: ${assertion}\n# verdict: ${ok ? 'pass' : 'fail'}\n${opts.detail ? `# detail: ${opts.detail}\n` : ''}\n${evidence}\n`);
-    const effectiveOk = ok && artifact !== null;
+    const artifactWriteOkPreCheck = artifactFor(id, `# ${id}\n# assertion: ${assertion}\n# verdict: ${ok === 'not-exercised' ? 'not-exercised' : ok ? 'pass' : 'fail'}\n${opts.detail ? `# detail: ${opts.detail}\n` : ''}\n${evidence}\n`);
+    const { artifact, artifactSha256 } = artifactWriteOkPreCheck;
+    const status: CriterionResult['status'] = artifact === null ? 'fail' : ok === 'not-exercised' ? 'not-exercised' : ok ? 'pass' : 'fail';
     results.push({
       id, command, assertion, artifact, artifactSha256,
-      exitCode: opts.exitCode ?? (effectiveOk ? 0 : 1),
-      status: effectiveOk ? 'pass' : 'fail',
+      exitCode: opts.exitCode ?? (status === 'pass' ? 0 : 1),
+      status,
       durationMs: opts.durationMs ?? 0,
       detail: artifact === null ? `${opts.detail ? `${opts.detail}; ` : ''}artifact write failed -- forced fail` : opts.detail,
     });
@@ -880,6 +895,11 @@ function parseReportResponse(value: unknown): { ok: true; report: ReportResponse
 // Aggregated across the whole run.
 const allObservedPlanCandidatePaths: string[] = [];
 const allPlanConfinementViolations: string[] = [];
+// Round-3 ruling 3: counts CALLS to recordObservedPlan (i.e. successfully
+// parsed plan responses), never candidate paths -- a legitimately empty
+// fixture tree produces a real, exercised plan call with zero candidates,
+// and that must count as "exercised," not be confused with "never called."
+let observedPlanCount = 0;
 function isPathConfinedTo(p: string, root: string): boolean {
   const rel = path.relative(root, p);
   return rel === '' ? true : !rel.startsWith('..') && !path.isAbsolute(rel);
@@ -890,6 +910,7 @@ function isPathConfinedTo(p: string, root: string): boolean {
 // its Tier-2 temp data dir -- both verifier-owned fixture roots, never the
 // real checkout.
 function recordObservedPlan(plan: PlanResponse, tempRoot: string, dataDir: string): void {
+  observedPlanCount += 1;
   for (const c of plan.candidates) allObservedPlanCandidatePaths.push(c.path);
   const violations = plan.candidates.map((c) => c.path).filter((p) => !isPathConfinedTo(p, tempRoot) && !isPathConfinedTo(p, dataDir));
   allPlanConfinementViolations.push(...violations);
@@ -915,10 +936,27 @@ async function fetchLoopbackOnly(urlString: string, init: RequestInit = {}): Pro
   return fetch(url, { ...init, redirect: 'manual' });
 }
 
+// Round-3 ruling 2: `NO-DESTRUCTIVE-INVOCATION`'s AST self-scan (below) is a
+// regression GUARD, not a proof -- it recognizes the two literal idioms this
+// file actually uses today and would not catch a deliberately obfuscated
+// future bypass (string concatenation, a renamed wrapper, variable
+// indirection). This type closes that residual for real: `SafeStorageCliArg`
+// is a closed literal-string union that does not include `'apply'` or
+// `'--confirm'` at all, so passing either to `runStorageCli` is a TypeScript
+// compile error, not a runtime scan finding -- caught by `pnpm typecheck`,
+// which C10F-12 already runs on every invocation (`tsc -p
+// scripts/tsconfig.json --noEmit`, included via the root `typecheck` script,
+// covers this file). Concatenation/indirection cannot silently satisfy this
+// type: a computed `string` value is never assignable to a closed literal
+// union without an explicit, visible, auditable unsafe cast. The AST scan
+// stays as defense in depth -- it costs nothing and catches the same class
+// one layer earlier, before typecheck even runs.
+type SafeStorageCliArg = 'gc' | 'plan' | 'report' | '--json';
+
 // `daemonUrl` and `tempRoot` are REQUIRED, never optional/defaulted.
 // `OD_SIDECAR_IPC_PATH` is cleared so IPC discovery cannot bypass the
 // explicit `OD_DAEMON_URL`.
-function runStorageCli(daemonUrl: string, tempRoot: string, args: string[], env: NodeJS.ProcessEnv = {}): { skipped: true; reason: string } | { skipped: false; status: number; stdout: string } {
+function runStorageCli(daemonUrl: string, tempRoot: string, args: readonly SafeStorageCliArg[], env: NodeJS.ProcessEnv = {}): { skipped: true; reason: string } | { skipped: false; status: number; stdout: string } {
   if (!storageEntry) {
     return { skipped: true, reason: `'storage' is not a key in apps/daemon/src/cli.ts's SUBCOMMAND_MAP -- refusing to invoke the CLI at all, because an unrecognized first token falls through to runDaemonCliStartup() (starts a real daemon)` };
   }
@@ -2063,16 +2101,53 @@ async function main(): Promise<void> {
   // have confirmed zero survivors, and every observed plan to have stayed
   // confined to its own fixture roots -- round-2 finding 7).
   // -----------------------------------------------------------------
-  await checkCriterion('FIXTURE-ISOLATION', 'structural self-scan of this file + real-checkout no-leak proof + plan-confinement proof + all-teardowns-confirmed proof', 'the real checkout\'s .tmp/tools-dev/ is referenced from exactly one, provably read-only function in this file; none of its pre-existing namespaces ever appeared in any plan this run observed; every observed plan\'s candidates stayed confined to their own fixture roots; every daemon teardown this run performed confirmed zero survivors', () => {
+  // Round-3 ruling 3: the runtime conjuncts below (plan confinement, daemon
+  // teardown) are only meaningful once something actually ran. Pre-
+  // implementation, storageEntry is null, so requireSharedDaemon() (and
+  // every dedicated-daemon boot gated on storageEntry) never calls
+  // bootIsolatedDaemon() at all -- zero plans observed, zero daemons booted.
+  // `allDaemonTeardownResults.every(r => r.ok)` on an EMPTY array is `true`
+  // by JS semantics, not by evidence: reporting that as a real `pass` would
+  // claim the process-group teardown mechanism was proven safe this run,
+  // when it never ran at all. This block distinguishes four real outcomes:
+  // an actual structural defect (always fails, since the self-scan runs
+  // regardless of implementation state); an actual leak/confinement/
+  // teardown FAILURE (only possible once something was exercised, so these
+  // branches cannot false-fail on a not-yet-implemented wave); an honest
+  // `not-exercised` when the structural check is clean but the runtime
+  // conjuncts never ran; and a real `pass` only when everything checked AND
+  // everything that needed to run, ran, cleanly.
+  await checkCriterion('FIXTURE-ISOLATION', 'structural self-scan of this file + real-checkout no-leak proof + plan-confinement proof + all-teardowns-confirmed proof', 'the real checkout\'s .tmp/tools-dev/ is referenced from exactly one, provably read-only function in this file; none of its pre-existing namespaces ever appeared in any plan this run observed; every observed plan\'s candidates stayed confined to their own fixture roots; every daemon teardown this run performed confirmed zero survivors; reports not-exercised (never pass) if no plan was ever observed or no daemon was ever booted this run', () => {
     const structural = selfCheckFixtureIsolation();
     const leaked = realCheckoutNamespacesBeforeRun.filter((ns) =>
       allObservedPlanCandidatePaths.some((p) => p === ns.fullPath || p.startsWith(`${ns.fullPath}${path.sep}`)));
     const confinementOk = allPlanConfinementViolations.length === 0;
     const teardownAllOk = allDaemonTeardownResults.every((r) => r.ok);
-    const ok = structural.ok && leaked.length === 0 && confinementOk && teardownAllOk;
-    record('FIXTURE-ISOLATION', '', '', ok,
-      `structural: ${structural.detail}\nrealCheckoutNamespacesBeforeRun=${JSON.stringify(realCheckoutNamespacesBeforeRun)}\nobservedPlanCandidateCount=${allObservedPlanCandidatePaths.length}\nleaked=${JSON.stringify(leaked)}\nplanConfinementViolations=${JSON.stringify(allPlanConfinementViolations)}\ndaemonTeardownResults=${JSON.stringify(allDaemonTeardownResults)}`,
-      { detail: ok ? undefined : 'either the real-checkout .tmp/tools-dev/ reference is no longer confined to the one sanctioned read-only function, a pre-existing real namespace leaked into an observed plan, a plan candidate escaped its own fixture roots, or a daemon teardown this run performed did not confirm zero survivors' });
+    const confinementExercised = observedPlanCount > 0;
+    const teardownExercised = allDaemonTeardownResults.length > 0;
+    const evidence = `structural: ${structural.detail}\nrealCheckoutNamespacesBeforeRun=${JSON.stringify(realCheckoutNamespacesBeforeRun)}\nobservedPlanCount=${observedPlanCount} observedPlanCandidateCount=${allObservedPlanCandidatePaths.length}\nleaked=${JSON.stringify(leaked)}\nplanConfinementViolations=${JSON.stringify(allPlanConfinementViolations)}\ndaemonTeardownResults=${JSON.stringify(allDaemonTeardownResults)}\nconfinementExercised=${confinementExercised} teardownExercised=${teardownExercised}`;
+
+    if (!structural.ok) {
+      record('FIXTURE-ISOLATION', '', '', false, evidence, { detail: 'the real-checkout .tmp/tools-dev/ reference is no longer confined to the one sanctioned read-only function' });
+      return;
+    }
+    if (leaked.length > 0) {
+      record('FIXTURE-ISOLATION', '', '', false, evidence, { detail: 'a pre-existing real checkout namespace leaked into an observed plan' });
+      return;
+    }
+    if (!confinementOk) {
+      record('FIXTURE-ISOLATION', '', '', false, evidence, { detail: 'a plan candidate escaped its own fixture roots' });
+      return;
+    }
+    if (!teardownAllOk) {
+      record('FIXTURE-ISOLATION', '', '', false, evidence, { detail: 'a daemon teardown this run performed did not confirm zero survivors' });
+      return;
+    }
+    if (!confinementExercised || !teardownExercised) {
+      record('FIXTURE-ISOLATION', '', '', 'not-exercised', evidence, { detail: `structural self-scan passed and no violation was observed, but the runtime conjuncts never ran this run: confinementExercised=${confinementExercised} teardownExercised=${teardownExercised} -- expected pre-implementation (storageEntry is null, so no daemon ever boots); this is not a proof of safety, only an absence of a contrary finding` });
+      return;
+    }
+    record('FIXTURE-ISOLATION', '', '', true, evidence);
   });
 
   // =======================================================================
@@ -2171,12 +2246,19 @@ async function main(): Promise<void> {
     try { manifestSha256 = sha256File(manifestPath); fs.writeFileSync(path.join(proofDir, 'manifest.sha256.txt'), `${manifestSha256}\n`); } catch { manifestSha256 = 'unavailable'; }
   }
 
-  const failures = results.filter((r) => r.status === 'fail');
-  console.log(`\nverify-w10f: ${results.length - failures.length}/${results.length} criteria pass (treeDirty=${treeDirty})`);
+  // Round-3 ruling 3: `not-exercised` is reported distinctly from `fail`
+  // (it is not a defect finding) but blocks the gate exactly like `fail`
+  // does -- a criterion that never ran cannot certify anything, and treating
+  // it as equivalent to a proven pass would be the same vacuous-evidence
+  // problem this ruling exists to close.
+  const passing = results.filter((r) => r.status === 'pass');
+  const notExercised = results.filter((r) => r.status === 'not-exercised');
+  const failing = results.filter((r) => r.status === 'fail');
+  console.log(`\nverify-w10f: ${passing.length}/${results.length} criteria pass, ${notExercised.length} not-exercised, ${failing.length} fail (treeDirty=${treeDirty})`);
   for (const r of results) console.log(`  [${r.status.toUpperCase()}] ${r.id}${r.detail ? ` (${r.detail})` : ''}`);
   if (treeDirty) console.log('  ⚠ tree is dirty: advisory only');
   console.log(`MANIFEST_SHA256=${manifestSha256}`);
-  process.exit(failures.length === 0 && !treeDirty && manifestWritten ? 0 : 1);
+  process.exit(failing.length === 0 && notExercised.length === 0 && !treeDirty && manifestWritten ? 0 : 1);
 }
 
 main().catch((err) => {
