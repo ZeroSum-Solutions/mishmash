@@ -8,15 +8,20 @@ independently of W1/W3/W4/W6a/W8).
 committed in-tree copy is a baseline input after freeze, not what landing runs.**
 **Write lease:** proposed below — **not yet applied to `docs/plans/waves/leases.json`**; this PRD
 does not edit that file per its authoring mandate.
-**Status: DRAFT, round 2 pending.** Round 1 adversarial review (GPT-5.6 Sol) returned **REJECT**
-with 8 findings, 3 rulings, and one carry-forward hardening requirement; all are disposed in
-**Adversarial review** below, with the fixed criterion/verifier line cited for each. Fix-round cap
-is 2 before founder escalation (`VERIFICATION-CONTRACT.md` §6) — this is fix round 1. Written under
-the NM-41C expansion gate (`W5-W11-gated.md` lines 8–24): frozen only after an independent reviewer
-who will not implement it returns a machine-readable `APPROVE`. No implementation work may start
-from this text before that review lands. This document is an **expansion**, not an implementation —
-zero product code accompanies it; every criterion below currently fails, honestly, by design (see
-**Verified baseline**).
+**Status: DRAFT, round 3 delivered, confirmation review pending.** Round 1 adversarial review
+(GPT-5.6 Sol) returned **REJECT** with 8 findings, 3 rulings, and one carry-forward hardening
+requirement. Round 2 (same reviewer) re-reviewed the round-1 fixes and returned **REJECT** again:
+of the 8 findings, #2 was **FIXED**, #3/#7/#8 were **FIXED-WITH-DEFECT**, and #1/#4/#5/#6 were **NOT
+FIXED** — plus four **open-question rulings** (stickiness, contract shape, `registry.ts`, fixture
+scale). Founder authorized round 3 (2026-07-28) scoped strictly to the round-2 residuals, explicitly
+as the **final** fix round: one confirmation review follows delivery, then freeze or park — there is
+no round 4. All round-1 AND round-2 findings are disposed in **Adversarial review** below, with the
+fixed criterion/verifier line cited for each. Written under the NM-41C expansion gate
+(`W5-W11-gated.md` lines 8–24): frozen only after an independent reviewer who will not implement it
+returns a machine-readable `APPROVE`. No implementation work may start from this text before that
+review lands. This document is an **expansion**, not an implementation — zero product code
+accompanies it; every criterion below currently fails, honestly, by design (see **Verified
+baseline**).
 
 ---
 
@@ -131,13 +136,50 @@ and fixed further defects in the resulting criteria — see **Ground facts** for
   patterns coexist for different scenarios in this codebase today. S10A-3 follows the
   `downloadProjectArchive` precedent exactly: a new exported helper in `runtime/exports.ts` owns the
   `fetch`, `DesignFilesPanel.tsx` owns only the labeled click wiring that calls it.
-- **`AGENTS.md`'s capability-exposure rule is explicit about a required contract file**
-  (`AGENTS.md`, "Capability exposure (UI/CLI dual-track)"): "Adding a new capability is a
-  three-step closure: HTTP endpoint in `apps/daemon/src/*-routes.ts` (with a contract type in
-  `packages/contracts/src/api/`), UI surface in `apps/web/src/`, and `od <capability>` subcommand
-  … registered through `SUBCOMMAND_MAP`. Land all three in the same PR." Round 1 finding #3: the
-  original lease proposal omitted the contract path entirely — fixed below (S10A-2/S10A-3, proposed
-  lease).
+- **`AGENTS.md`'s capability-exposure rule requires a contract type for the new HTTP endpoint — but
+  not necessarily a NEW contract file.** (`AGENTS.md`, "Capability exposure (UI/CLI dual-track)"):
+  "Adding a new capability is a three-step closure: HTTP endpoint in `apps/daemon/src/*-routes.ts`
+  (with a contract type in `packages/contracts/src/api/`), UI surface in `apps/web/src/`, and
+  `od <capability>` subcommand … registered through `SUBCOMMAND_MAP`. Land all three in the same
+  PR." Round 1 finding #3 first tried to satisfy this with a **new, bespoke** file
+  (`packages/contracts/src/api/project-super-import.ts`, a hand-rolled
+  `SuperImportExportErrorResponse` shape) — round 2's open-question ruling on contract shape
+  rejected that: "reject the bespoke envelope. The repository already has `ApiErrorResponse`,
+  `ApiErrorCode`, `details`, and `sendApiError`. Reuse that envelope, adding properly leased domain
+  codes/details only if necessary." Direct research (this round) into whether new codes are
+  actually *necessary* found they are not:
+  - `packages/contracts/src/errors.ts` already declares a closed `API_ERROR_CODES` union that
+    includes `PAYLOAD_TOO_LARGE` and `CONFLICT` among its members, plus `ApiError { code, message,
+    details? }` / `ApiErrorResponse { error: ApiError }` — exactly the two rejection shapes this
+    route needs (a size-guard rejection and the poison-file conflict), with `details` already
+    available to carry which guard/limit/actual value fired.
+  - `apps/daemon/src/http/api-errors.ts` already exports the real send helper every other route
+    uses: `sendApiError(res, status, code, message, init)`, which `.status(status).json({error:
+    {code, message, ...init}})`s — no new response-building code is needed either.
+  - `apps/daemon/src/http/response.ts`'s `ERROR_STATUS_BY_CODE` map already pins
+    `PAYLOAD_TOO_LARGE → 413` and `CONFLICT → 409`, matching this route's two rejection cases
+    exactly.
+  - Real, existing precedent for this exact reuse pattern: `apps/daemon/src/import-export-
+    routes.ts:1255`, `apps/daemon/src/routes/project/index.ts:3935`, and `apps/daemon/src/routes/
+    library.ts:468` all call `sendApiError` with codes from this same closed union — this wave's
+    route is not inventing a new pattern, it is following the majority-existing one.
+  - Both `ApiErrorCode` and `ApiErrorResponse` are **already fully public**: `packages/contracts/
+    src/index.ts:2` reads `export * from './errors.js';`, so `import { sendApiError } from
+    '@open-design/contracts'`-shaped access already works with zero new barrel line, zero new
+    `package.json` `exports` subpath, and zero new `esbuild.config.mjs` entry point. (Direct
+    inspection this round: `packages/contracts/package.json`'s `exports` map only lists individual
+    subpaths for 8 of the ~40 files under `src/api/`; `esbuild.config.mjs`'s `entryPoints` matches
+    those same 8. Every other api file — including `errors.ts`, already-barrel-exported — needs no
+    subpath or bundler entry at all, only the barrel re-export it already has.)
+  - **Net effect: this wave needs zero new files under `packages/contracts/`, and therefore zero
+    changes to `packages/contracts/src/index.ts`, `package.json`, or `esbuild.config.mjs` either.**
+    Round 2 finding #3's defect — "the contract cannot be consumed through the supported package
+    surface without also exporting it from `src/index.ts` or adding a package subpath; neither is
+    leased" — is closed by removing the thing that needed exporting, not by leasing more files.
+    S10A-2's route handler imports `sendApiError`/`ApiErrorCode` from `@open-design/contracts`
+    (already public) and calls it with `'PAYLOAD_TOO_LARGE'` (for either size guard, distinguished
+    via `details.limit`/`details.actual`) or `'CONFLICT'` (for the poison-file case). C10A-2 asserts
+    the real response envelope shape and exact codes at runtime (see **Success criteria**).
 - **i18n keys are typed and English-only, with an established naming convention right next to
   where this action belongs.** `apps/web/src/i18n/types.ts:3284-3285` declares
   `'designFiles.downloadProject': string;` / `'designFiles.downloadProjectFailed': string;`;
@@ -227,29 +269,81 @@ and fixed further defects in the resulting criteria — see **Ground facts** for
   and hope; it **parses and validates** every booted daemon's reported URL (`http:` scheme, exact
   `127.0.0.1` host, a valid nonzero port, explicitly excluding 7456 and 51012) before issuing any
   request or CLI spawn, and treats a validation failure exactly like a boot failure — fail closed,
-  never a silent fallback to the default port.
+  never a silent fallback to the default port. Round 2 finding #7's residual: every subsequent probe
+  `fetch` used the runtime default (`redirect: 'follow'`), so a validated loopback route could still
+  redirect a request to a protected port or an external host mid-flight, and "the spawned CLI is
+  likewise trusted to honor its URL flags rather than falling back" was unproven. **Fixed:** every
+  probe fetch in the verifier now sets `redirect: 'manual'` and hard-fails on any redirect-shaped
+  response (see C10A-1..C10A-3's shared isolation note). The CLI-fallback half is deliberately
+  **not** independently re-provoked with new detection machinery: doing so would require either
+  disabling `7456`'s reachability check (unacceptable — that daemon is absolutely protected) or
+  intentionally trying to make the CLI fall through to it, which risks actually reaching a
+  protected daemon if the fallback bug were real. Instead, C10A-3's existing byte-identical-to-
+  fixture requirement already transitively proves the CLI honored `--daemon-url`/`OD_DAEMON_URL`:
+  the isolated daemon's fixture project id is freshly random per run and exists on no other daemon,
+  so a CLI that silently fell back to `7456` (or any other daemon) would 404 or return unrelated
+  content instead of byte-matching the HTTP baseline — C10A-3 would fail, not pass, under that
+  failure mode. This reasoning is deliberately documented here rather than hidden, per round 2's
+  "no unrelated failures admitted as pass" pressure.
 
 ## Scope
 
 **S10A-1 — Register Instatic as a selectable MCP client template, with a working PAT-mode row
-model.** Exactly one new entry in `MCP_TEMPLATES` (`apps/daemon/src/mcp-config.ts`), category
-`publishing`, structurally valid under the same rules every existing template already satisfies (id
+model bound to the production component.** Exactly one new entry in `MCP_TEMPLATES` (`apps/daemon/
+src/mcp-config.ts`), category `publishing` **exactly** (not merely "a valid category" — round 2
+finding #8's fresh-pressure blocker: "It also does not enforce the PRD's exact `publishing`
+category"), structurally valid under the same rules every existing template already satisfies (id
 matches `SERVER_ID_PATTERN` `^[a-z0-9][a-z0-9_-]{0,63}$`; non-placeholder `label`/`description`/
-`homepage`; **no `SpreadAssignment` in the object literal** — a runtime spread could override
-`id`/`url`/`authMode` even when the literal's own properties look frozen, carry-forward hardening
-from a sibling wave's round-1 review). Per the evidence in **Ground facts**: `transport: 'http'`;
-`url` defaulting to `http://localhost:3000/_instatic/mcp` (Instatic's own documented local example —
+`homepage`). **Deep-spread ban at all depths, scoped to the actual `MCP_TEMPLATES` array element,
+with a satellite-mutation check** (round 2 finding #6: "the spread ban checks only the first
+matching object's direct properties, not nested spreads, `Object.assign`, satellite mutation, or a
+decoy object with the same ID" — carry-forward hardening from round 1 confirmed still incomplete):
+the Instatic entry must be located as its own **array element** of the real `MCP_TEMPLATES`
+declaration (not merely "any object literal anywhere in the file with a matching id" — closes the
+decoy-object evasion); that element must be a **direct object literal**, not a call-wrapped
+construction (`Object.assign(...)`, a factory function, etc. — a call-wrapped element is rejected
+outright as non-frozen shape); its entire object subtree, at any depth (e.g. inside a nested
+`headerFields` array entry), must contain **zero** `SpreadAssignment`/`SpreadElement` nodes — a
+runtime spread anywhere in the subtree could override `id`/`url`/`authMode` even when the top-level
+properties look frozen; and the whole file is separately scanned for any assignment expression
+whose left-hand side mentions `MCP_TEMPLATES` (a satellite mutation executed elsewhere in the
+module, after the array declaration, that could rewrite the frozen-looking literal at runtime).
+Per the evidence in **Ground facts**: `transport: 'http'`; `url` defaulting to
+`http://localhost:3000/_instatic/mcp` **exactly** (Instatic's own documented local example —
 self-hosted, so unlike every other current `http` template this field is a *starting point* the
-user edits to their real deployment host); `authMode: 'none'` **explicitly set**; a required
-`headerFields` entry `{key: 'Authorization', ...}` whose placeholder/label matches the **exact**
-evidenced shape `/bearer\s+imcp_pat_/i` (not merely the bare substring `imcp_pat`).
+user edits to their real deployment host — round 2 finding #8 flagged this default was not
+enforced exactly either); `authMode: 'none'` **explicitly set**; a required `headerFields` entry
+`{key: 'Authorization', ...}` whose placeholder/label matches the **exact** evidenced shape
+`/bearer\s+imcp_pat_/i` (not merely the bare substring `imcp_pat`).
 
 **New required file: `apps/web/src/state/mcpTemplateRow.ts`** — a pure module (no React/DOM/CSS
 imports) exporting at minimum `rowFromTemplate` and `authModeAfterUrlChange`, extracted from
 `McpClientSection.tsx`'s existing local functions of the same names (`inferMcpAuthMode` and
 `effectiveMcpAuthMode` move too, since `authModeAfterUrlChange` depends on the first).
-`McpClientSection.tsx` imports these instead of defining them locally. **Behavioral contract (what
-C10A-1 tests, black-box — the mechanism is the implementer's choice):**
+`McpClientSection.tsx` **must import these from the module and must no longer declare its own
+same-named local functions** — round 2's open-question ruling on stickiness was explicit: "freeze
+behavior, not `_authModeExplicit` or another private mechanism. Requiring the exact
+`mcpTemplateRow.ts` extraction is over-prescriptive; if retained, the verifier must prove the
+production component imports and uses it," and finding #6 independently confirmed the gap this
+closes: "C10A-1 exercises a new module without proving `McpClientSection.tsx` imports or uses it
+… an unused passing module alongside the unchanged buggy component goes green."
+
+**Design choice (round 3, answering the ruling's "pick one"): retain the module (Option A), not
+drop it for direct production-component testing (Option B).** Reasoning: `McpClientSection.tsx` is
+**out of this wave's write lease under every other criterion except this one narrow import-swap**
+(the lease explicitly scopes it to swapping in the module's functions, not general edits — see
+**Proposed lease row**'s note), so a verifier that tested the buggy behavior directly against the
+component's current, unfixed internals would either have to (a) statically re-implement/duplicate
+the fix logic inside the verifier itself to know what "correct" looks like, which is far more
+fragile and implementation-shaped than testing an explicit contract, or (b) require the component
+itself to be more broadly re-writable, widening the lease beyond the founder-pinned seam. Retaining
+the pure module keeps the **behavioral contract** (points 1–3 below) as the frozen, tested surface
+— satisfying the ruling's "freeze behavior, not private mechanism" — while the **new** binding
+check (below) closes the exact "unused passing module" gap the ruling anticipated, without
+widening scope. The illustrative `_authModeExplicit` mechanism mentioned below remains exactly
+that — illustrative, not mandated; the verifier never inspects it.
+
+**Behavioral contract (what C10A-1 tests, black-box — the mechanism is the implementer's choice):**
 1. `rowFromTemplate(instaticTemplate, new Set())` produces a row whose `authMode === 'none'`.
 2. Calling `authModeAfterUrlChange(row, '<any non-loopback URL>')` on that row's own return value
    (not a hand-picked subset of its fields) **still returns `'none'`** — editing the url to a real,
@@ -262,6 +356,13 @@ C10A-1 tests, black-box — the mechanism is the implementer's choice):**
    seed empty, matching every other template's existing behavior — a regression guard, not a new
    rule).
 
+**New production-binding check (round 3, closes round 2 finding #6's residual):** C10A-1 additionally
+parses `McpClientSection.tsx` at HEAD and asserts (a) it imports both `rowFromTemplate` and
+`authModeAfterUrlChange` from a `state/mcpTemplateRow` module specifier, and (b) it no longer
+declares its own local function of either name — an unused-but-passing module sitting beside an
+unchanged, still-buggy component now fails this check even though the module-level behavioral
+contract (points 1–3) independently passes.
+
 Selecting the template must never write to a user's live `mcp-config.json` on its own — it only
 ever pre-fills a form the user saves explicitly (C10A-5 checks nothing new violates it).
 
@@ -272,41 +373,56 @@ already produces today. **No `pages/`/`tokens/`/`media/` restructuring.** A new,
 discoverable route, **`GET /api/projects/:id/export/super-import`**, is added to:
 
 - Give the seam an intentional, discoverable name distinct from "Download as .zip."
-- **Reject a project containing a file at the exact path `.instatic/site-bundle.json`** with a 4xx,
-  rather than silently including it — that path would make Instatic treat the whole zip as its
-  different native CMS-transfer archive format, per `site-import.md:302` (round 1 finding #5).
+- **Reject a project containing a file at the exact path `.instatic/site-bundle.json`** with
+  **exactly HTTP 409**, `error.code === 'CONFLICT'` (the reused envelope — see below), rather than
+  silently including it — that path would make Instatic treat the whole zip as its different native
+  CMS-transfer archive format, per `site-import.md:302` (round 1 finding #5). Round 2 finding #5: a
+  route that crashed with a 500 for ANY reason previously satisfied "rejected"; that is no longer
+  sufficient — the exact status and code must match, or the criterion fails (`VERIFICATION-CONTRACT`
+  R4).
 - **Proactively enforce Instatic's own documented ingestion guards before the round trip**, via an
   **injectable override contract this PRD pins exactly** so the rejection path is testable without
   a 10,001-file fixture: the route reads `process.env.SUPER_IMPORT_MAX_FILES_OVERRIDE` and
   `process.env.SUPER_IMPORT_MAX_BYTES_OVERRIDE`; each, if set to a valid positive integer string, is
   the limit for that guard; otherwise the route falls back to Instatic's real defaults, bound to a
   **named** constant (`10_000` / `1024*1024*1024` respectively, `ingestInput.ts:39-41`) — never a
-  bare number floating in the file with no assignment context. Exceeding either limit returns a 4xx.
-  A response body shape for this belongs in the new contract file below (`SuperImportExportErrorResponse`).
+  bare number floating in the file with no assignment context, comment, or dead branch (round 2
+  finding #5: "the supposedly comment/dead-code-safe default check is still a raw regex over
+  source, so a comment or unused assignment passes" — the verifier's check is now a genuine AST
+  `NumericLiteral`/multiplication-chain scan, which a comment can never satisfy because a comment
+  has no AST node at all). Exceeding either limit returns **exactly HTTP 413**, `error.code ===
+  'PAYLOAD_TOO_LARGE'`, with `details` distinguishing which guard fired (`kind: 'files' | 'bytes'`,
+  `limit`, `actual`). **A fixture at or below the active override limit, on the same override
+  daemon, must SUCCEED** (200 + a valid, loadable zip) — round 2's open-question ruling on fixture
+  scale: "`2/100` is sufficient and cheap. The missing requirement is same-daemon at/below-limit
+  positive controls plus exact 4xx/code assertions, not larger fixtures" — this positive control is
+  what actually distinguishes correct guard discrimination from a daemon that is simply broken or
+  always-rejecting under the override env vars.
 - Response content shape: identical to `/api/projects/:id/archive` — every project file at its
   natural relative path (dotfiles and `*.artifact.json` sidecars excluded, matching
   `collectArchiveEntries`'s existing rule). MishMash's own injected `DESIGN-HANDOFF.md`/
   `DESIGN-MANIFEST.json` sidecars (`apps/web/src/runtime/exports.ts:27-28`) are harmless here: both
   classify as Instatic's `meta` role, never a stray page or asset.
 
-**New required file: `packages/contracts/src/api/project-super-import.ts`** — per `AGENTS.md`'s
-three-step-closure rule, the shared contract type for this endpoint. At minimum:
-```ts
-export type SuperImportExportErrorCode =
-  | 'FILE_COUNT_LIMIT_EXCEEDED'
-  | 'BYTE_SIZE_LIMIT_EXCEEDED'
-  | 'INSTATIC_TRANSFER_ARCHIVE_CONFLICT';
-
-export interface SuperImportExportErrorResponse {
-  error: { code: SuperImportExportErrorCode; message: string; limit?: number; actual?: number };
-}
-```
-The daemon route and the web UI's error handling both import this type — never a divergent
+**No new contract file.** Round 1 finding #3 originally required a new
+`packages/contracts/src/api/project-super-import.ts` with a bespoke `SuperImportExportErrorResponse`
+shape; round 2 found this both under-leased (finding #3: not exported from `packages/contracts/src/
+index.ts`, no package subpath, no esbuild entry, so "the contract cannot be consumed through the
+supported package surface") and, per its own open-question ruling, wrong in kind ("reject the
+bespoke envelope … reuse [`ApiErrorResponse`]"). **This wave now reuses the existing, already-fully-
+public `ApiErrorResponse`/`ApiErrorCode`/`sendApiError` envelope** (`packages/contracts/src/
+errors.ts`, `apps/daemon/src/http/api-errors.ts`) with its existing `PAYLOAD_TOO_LARGE` and
+`CONFLICT` codes — see **Ground facts** for the full citation trail (including three real existing
+call sites using this exact reuse pattern) and for why this closes round 2 finding #3 by *removing*
+the thing that needed a new export path, rather than by leasing more files under
+`packages/contracts/`. The daemon route and the web UI's error handling both import
+`ApiErrorCode`/`ApiErrorResponse`/`sendApiError` from `@open-design/contracts` — never a divergent
 locally-declared shape on either side (`AGENTS.md` Boundary constraints: "update contracts before
-wiring divergent web/daemon request or response shapes"). **No bespoke verifier check enforces this
-file's existence directly** — `pnpm typecheck` (C10A-6) already fails closed the moment any web code
-imports it and it does not exist, which it must, to render the 4xx error message; see **Ground
-facts** for why this is real enforcement, not a gap.
+wiring divergent web/daemon request or response shapes"; there is nothing to update here, the
+shared shape already exists). C10A-2 asserts the real response envelope and exact codes at runtime,
+closing round 2 finding #3's "the verifier contains no contract/i18n existence or consumption
+check" for the contract half (the i18n half is closed structurally by C10A-6/typecheck, unchanged
+from round 1 — see **Ground facts**).
 
 **S10A-3 — Capability-exposure parity (repo-standing rule, not new to this wave).** Per `AGENTS.md`
 "Capability exposure (UI/CLI dual-track)," the new export is a genuinely new capability and needs
@@ -319,10 +435,16 @@ all three surfaces landed together:
 - UI: a new exported helper in **`apps/web/src/runtime/exports.ts`** (matching the
   `downloadProjectArchive` precedent exactly — see **Ground facts**), and a labeled click handler in
   **`apps/web/src/components/DesignFilesPanel.tsx`** that imports and calls it. C10A-4 checks this
-  binding structurally (AST: the click handler's own body calls the imported identifier; that
-  identifier resolves to an exported function in `runtime/exports.ts`; that function's own body
-  contains a `fetch(...)` call naming the `/export/super-import` route; the owning JSX element's
-  attributes/children mention "Instatic" or "Super Import").
+  binding structurally (AST: the click handler's own **reachably-called** body — dead/never-invoked
+  nested function declarations are excluded, only the entry body, IIFEs, and callback arguments
+  actually passed to another call are walked, round 2 finding #4 — calls the imported identifier,
+  which may be a default, namespace, or named import, round 2 finding #4; that identifier resolves
+  to an exported function in `runtime/exports.ts`; that function's own reachable body contains a
+  `fetch(...)` call whose **first (URL) argument specifically** — not the call's headers or any
+  other argument, round 2 finding #4 — names the `/export/super-import` route; the owning JSX
+  element **including its children** (round 2 finding #4: the prior check inspected only the
+  opening tag and so missed the repository's natural `<button onClick={...}><span>{t(...)}</span>
+  </button>` child-span pattern) has attributes or text mentioning "Instatic" or "Super Import").
 - New i18n keys `designFiles.exportSuperImport` / `designFiles.exportSuperImportFailed` in
   `apps/web/src/i18n/types.ts` and `apps/web/src/i18n/locales/en.ts`, sibling to the existing
   `designFiles.downloadProject` / `downloadProjectFailed` pair (`types.ts:3284-3285`,
@@ -390,7 +512,8 @@ wave's job, and this PRD does not design extension points for any of them:
   any file this wave does not explicitly lease.
 - Generating a 10,001-file or >1 GB real fixture to runtime-prove the size-guard rejection path at
   Instatic's actual default thresholds — the injectable-override contract (S10A-2) proves the same
-  code path fires correctly at a cheap, deterministic scale; see **Adversarial review** finding #5.
+  code path fires correctly at a cheap, deterministic scale; see **Adversarial review** round-1
+  finding #5 and round-2's fixture-scale ruling (both disposed in **Adversarial review**).
 
 ## Proposed lease row (text only — `leases.json` is not edited by this PRD)
 
@@ -408,7 +531,6 @@ wave's job, and this PRD does not design extension points for any of them:
     "apps/web/src/state/mcpTemplateRow.ts",
     "apps/web/src/i18n/types.ts",
     "apps/web/src/i18n/locales/en.ts",
-    "packages/contracts/src/api/project-super-import.ts",
     "apps/daemon/tests/project-super-import-*.test.ts",
     "apps/daemon/tests/mcp-templates-instatic.test.ts",
     "apps/web/tests/mcpTemplateRow-*.test.ts",
@@ -416,13 +538,14 @@ wave's job, and this PRD does not design extension points for any of them:
   ],
   "deny": [
     "apps/web/src/providers/registry.ts",
+    "packages/contracts/**",
     "scripts/waves/verify-w10a.ts",
     "docs/plans/waves/W10a-instatic-seam.md",
     "docs/plans/waves/leases.json",
     "docs/plans/waves/DECISIONS.md",
     "docs/security/**"
   ],
-  "note": "Round-1 fix: scripts/waves/verify-w10a.ts and this PRD are REMOVED from allow and explicitly denied -- the house rule is that a wave's own PRD/verifier are baseline inputs after freeze, never implementation-lease files (see the PRD's 'Implementation ceremony' section for what landing actually runs). apps/daemon/src/routes/project-super-import.ts is a NEW dedicated route file (house pattern: one module per route concern, matching routes/library.ts, routes/covers*.ts). registry.ts stays denied -- ruling confirmed DesignFilesPanel.tsx already performs a direct archive-shaped fetch (handleBatchDownload) and the REUSABLE full-project downloader precedent (downloadProjectArchive) lives in runtime/exports.ts, not registry.ts; this wave's new export helper follows that exact precedent. McpClientSection.tsx is leased narrowly for the import-swap onto the new mcpTemplateRow.ts module (its own local rowFromTemplate/authModeAfterUrlChange/inferMcpAuthMode/effectiveMcpAuthMode functions move out, the component imports them). packages/contracts/src/api/project-super-import.ts and the two i18n files were missing from the original proposal (round-1 finding #3) -- added per AGENTS.md's three-step-closure rule. server.ts is leased narrowly for the one new route-registration call site only."
+  "note": "Round-1 fix: scripts/waves/verify-w10a.ts and this PRD are REMOVED from allow and explicitly denied -- the house rule is that a wave's own PRD/verifier are baseline inputs after freeze, never implementation-lease files (see the PRD's 'Implementation ceremony' section for what landing actually runs). apps/daemon/src/routes/project-super-import.ts is a NEW dedicated route file (house pattern: one module per route concern, matching routes/library.ts, routes/covers*.ts). registry.ts stays denied -- ruling confirmed DesignFilesPanel.tsx already performs a direct archive-shaped fetch (handleBatchDownload) and the REUSABLE full-project downloader precedent (downloadProjectArchive) lives in runtime/exports.ts, not registry.ts; this wave's new export helper follows that exact precedent. McpClientSection.tsx is leased narrowly for the import-swap onto the new mcpTemplateRow.ts module (its own local rowFromTemplate/authModeAfterUrlChange/inferMcpAuthMode/effectiveMcpAuthMode functions move out, the component imports them). Round-3 fix: packages/contracts/src/api/project-super-import.ts is REMOVED from allow -- round 2's open-question ruling on contract shape rejected the bespoke envelope this file would have held ('reuse [ApiErrorResponse] ... adding properly leased domain codes/details only if necessary'), and direct research found new codes are not necessary (packages/contracts/src/errors.ts's existing PAYLOAD_TOO_LARGE/CONFLICT codes suffice). packages/contracts/** is now explicitly DENIED, not merely absent from allow: this wave adds zero new files there and needs zero changes to src/index.ts, package.json, or esbuild.config.mjs (see the PRD's Ground facts contract-file citation trail) -- an explicit deny closes round 2 finding #3's 'cannot be consumed through the supported package surface' gap by removing the need for any export-path change, and blocks a future implementation from quietly reopening it by adding a bespoke contract file after all. The two i18n files remain leased per AGENTS.md's three-step-closure rule. server.ts is leased narrowly for the one new route-registration call site only."
 }
 ```
 
@@ -434,12 +557,12 @@ requires the orchestrator-custody copy per "Implementation ceremony," never this
 
 | ID | Criterion | Verification |
 |---|---|---|
-| C10A-1 | Instatic MCP template registered, real-transport shape, spread-safe, URL-edit-sticky | Isolated daemon boot, URL validated (protected-port check, see C10A-*'s shared isolation note below) before any request; `GET /api/mcp/servers`; exactly one `templates[]` entry identifiable as Instatic; `transport==='http'`; `url` ends `/_instatic/mcp`; `authMode==='none'`; `headerFields` entry `key==='Authorization'` whose placeholder/label matches `/bearer\s+imcp_pat_/i` exactly (not the bare substring); source-level AST check that the template's own object literal in `mcp-config.ts` contains **zero** `SpreadAssignment` nodes; **functional** check that dynamically imports `apps/web/src/state/mcpTemplateRow.ts` and calls its real `rowFromTemplate`/`authModeAfterUrlChange` — asserts `authMode==='none'` immediately after template selection AND stays `'none'` after simulating a URL edit to a non-loopback host, and that no header text leaks the placeholder token verbatim |
-| C10A-2 | Super Import export matches Instatic's real ingestion contract, provably, at runtime | Real HTTP `GET /api/projects/:id/export/super-import` against a fixture project covering **every** `classifyFiles.ts` role (html, css, js, font, image, ordinary meta/json, binary) at natural relative paths, byte-identical (sha256) to fixture, no `pages/`/`tokens`/`media/` prefix; `index.html.artifact.json` sidecar absent (negative control); a **separate** fixture project containing a file at the exact path `.instatic/site-bundle.json` is rejected with a 4xx (not silently exported); **two additional isolated daemon boots**, each with one size guard overridden via `SUPER_IMPORT_MAX_FILES_OVERRIDE=2` / `SUPER_IMPORT_MAX_BYTES_OVERRIDE=100`, each fed a tiny fixture that exceeds only that guard, each asserting a real HTTP 4xx — never source-text-only; source-level check that the route's default fallbacks are bound to named `MAX_FILES`/`MAX_BYTES`-shaped assignments equal to Instatic's real `10_000`/`1073741824` (not merely present in a comment or dead branch), and that both override env var names are referenced |
-| C10A-3 | CLI parity, real subprocess, no `--root` | `od project export-super-import <fixtureId> --daemon-url <validated-isolated-url> --out <tmp> --json`, real child process, `OD_DAEMON_URL` also set, never falling through to `127.0.0.1:7456`; exit 0; saved file sha256-identical to C10A-2's HTTP response body for the same fixture |
-| C10A-4 | Super Import UI entry point — structural AST binding, comment-safe, decoy-safe | Parses `DesignFilesPanel.tsx`; finds an `onClick`/`onSelect`/`onPress` JSX attribute whose resolved handler body (inline arrow or a same-file named function/const it points to) calls an identifier imported from a `runtime/exports` module specifier; resolves that identifier to an **exported** function in `runtime/exports.ts` and requires a `fetch(...)` call inside *that function's own body* naming `/export/super-import`; requires the owning JSX element's attributes/children to mention "Instatic" or "Super Import." All matching is via TypeScript AST node text (`getText()`), which excludes comments/trivia by construction — no line-proximity heuristic, no naive `//`-split |
-| C10A-5 | No deeper coupling (founder-pin scope fence) — AST added-call/added-import diff | For every changed product `.ts`/`.tsx` file (excluding `scripts/waves/**`, `docs/**`), parses BOTH `git show <baseCommit>:<file>` and the HEAD version, diffs the **set of call/new-expression node texts** (added = present at HEAD, absent at base) and **import module specifiers** (added the same way); classifies each added call by AST shape (identifier/property-access name, not raw text) against `fetch`/`axios`/`http(s).request`/`net.connect`/`net.createConnection`/`undici.request`/`undici.fetch`/`new WebSocket`/`writeMcpConfig`/any `child_process` exec-family call whose arguments mention curl/wget/nc; flags any newly-added import of `axios`/`undici`/`net`/`child_process`/`ws`/`got`/`node-fetch`/`superagent`/`ky`/etc. `writeMcpConfig` and non-fetch primitives are unconditionally forbidden when newly added; a newly-added `fetch(...)` is allowed **only** in `apps/web/src/runtime/exports.ts` or `apps/daemon/src/cli.ts`, and only when its own argument text names `/export/super-import` and never names `instatic` directly |
-| C10A-6 | Gates | `pnpm guard` and `pnpm typecheck` both exit 0 on the current tree — this also mechanically forces `capability-manifest.json`'s `project` row to list the new route, and fails closed if `packages/contracts/src/api/project-super-import.ts` or either i18n key is missing while imported/referenced |
+| C10A-1 | Instatic MCP template registered, real-transport shape, deep-spread-safe, satellite-mutation-safe, production-bound, URL-edit-sticky, count re-derived | Isolated daemon boot, URL validated (protected-port check, see shared isolation note below) before any request; `GET /api/mcp/servers`; exactly one `templates[]` entry identifiable as Instatic; `category==='publishing'` exactly; `transport==='http'`; `url==='http://localhost:3000/_instatic/mcp'` exactly; `authMode==='none'`; `headerFields` entry `key==='Authorization'` whose placeholder/label matches `/bearer\s+imcp_pat_/i` exactly; **AST-located as its own `MCP_TEMPLATES` array element** (not any object literal anywhere), rejected outright if that element is call-wrapped (`Object.assign(...)`/factory) rather than a direct object literal, recursively scanned for **zero** `SpreadAssignment`/`SpreadElement` nodes at any depth, plus a whole-file scan for any assignment expression mutating `MCP_TEMPLATES` post-declaration (satellite mutation); **runtime count re-derivation**: AST-diffs the `MCP_TEMPLATES` id set at `baseCommit` against the live HTTP id set at HEAD, asserting every base id survives and exactly one new id was added, matching the Instatic candidate (never a hardcoded number); **functional** check that dynamically imports `apps/web/src/state/mcpTemplateRow.ts` and calls its real `rowFromTemplate`/`authModeAfterUrlChange` — asserts `authMode==='none'` immediately after template selection AND stays `'none'` after simulating a URL edit to a non-loopback host, and that no header text leaks the placeholder token verbatim; **production-binding check**: parses `McpClientSection.tsx` and asserts it imports both functions from `state/mcpTemplateRow` and no longer declares its own same-named local functions |
+| C10A-2 | Super Import export matches Instatic's real ingestion contract, provably, at runtime, with exact-status/code rejection and positive controls | Real HTTP `GET /api/projects/:id/export/super-import` against a fixture project covering **every** `classifyFiles.ts` role (html, css, js, font, image, ordinary meta/json, binary) at natural relative paths, byte-identical (sha256) to fixture, no `pages/`/`tokens`/`media/` prefix; `index.html.artifact.json` sidecar absent (negative control); a **separate** fixture project containing a file at the exact path `.instatic/site-bundle.json` is rejected with **exactly HTTP 409** and `error.code === 'CONFLICT'` (parsed from the real, reused `ApiErrorResponse` body — a 500 or any other status/code fails the criterion, never counts as "rejected"); **two additional isolated daemon boots**, each with one size guard overridden via `SUPER_IMPORT_MAX_FILES_OVERRIDE=2` / `SUPER_IMPORT_MAX_BYTES_OVERRIDE=100`: an over-limit fixture on each asserts **exactly HTTP 413** and `error.code === 'PAYLOAD_TOO_LARGE'`; an **at/below-limit fixture on the same daemon must additionally SUCCEED** (200 + a valid, loadable zip) — the positive control that distinguishes correct guard discrimination from a broken/always-rejecting override daemon; source-level check that the route's default fallbacks contain a genuine **AST `NumericLiteral`** (or `1024*1024*1024`-shaped multiplication chain) equal to Instatic's real `10_000`/`1073741824` — immune to a comment or dead assignment, which have no AST node — and that both override env var names are referenced |
+| C10A-3 | CLI parity, real subprocess, no `--root` | `od project export-super-import <fixtureId> --daemon-url <validated-isolated-url> --out <tmp> --json`, real child process, `OD_DAEMON_URL` also set, never falling through to `127.0.0.1:7456`; exit 0; saved file sha256-identical to C10A-2's HTTP response body for the same fixture. This byte-identity-against-a-random-fixture-id requirement is also the criterion's transitive proof the CLI honored its explicit daemon-url flags rather than any fallback — see **Ground facts**' CLI-subprocess bullet for why this is deliberately not independently re-probed with new detection machinery |
+| C10A-4 | Super Import UI entry point — structural AST binding, comment-safe, decoy-safe, dead-code-safe, URL-argument-scoped | Parses `DesignFilesPanel.tsx`; finds an `onClick`/`onSelect`/`onPress` JSX attribute whose resolved handler body (inline arrow or a same-file named function/const it points to) **reachably** calls an identifier imported (named, default, or namespace) from a `runtime/exports` module specifier — a nested function declaration that is never invoked and never passed as a callback argument is excluded from the walk, so a dead decoy hiding the real call no longer passes; resolves that identifier to an **exported** function in `runtime/exports.ts` and requires a reachable `fetch(...)` call whose **first argument** (the URL, not headers or any other argument) names `/export/super-import`; requires the owning JSX element **including its children** (not just its opening tag) to have attributes or text mentioning "Instatic" or "Super Import." All matching is via TypeScript AST node text (`getText()`), which excludes comments/trivia by construction — no line-proximity heuristic, no naive `//`-split |
+| C10A-5 | No deeper coupling (founder-pin scope fence) — AST added-OCCURRENCE (multiset) diff, alias-resolved, redirect-safe | For every changed product `.ts`/`.tsx` file (excluding `scripts/waves/**`, `docs/**`), parses BOTH `git show <baseCommit>:<file>` and the HEAD version, re-prints every call/new-expression and import declaration through the TypeScript AST printer for a formatting-insensitive canonical form (a multi-line reflow of an unchanged call prints identically to its single-line original; a genuinely different call, including one differing only in a string-literal argument, prints differently), then diffs **occurrence counts** (multiset, not a Set) of that canonical text between base and head — so a call newly duplicated or moved is visible as an added occurrence, while pure reformatting never registers as one; classifies each added occurrence by AST shape (identifier/property-access name, resolved through an **import-alias map** covering default/namespace/named-with-rename bindings, not raw text) against `fetch`/`axios`/`http(s).request`/`net.connect`/`net.createConnection`/`undici.request`/`undici.fetch`/`new WebSocket`/`writeMcpConfig`(including any alias)/any `child_process` exec-family call whose arguments mention curl/wget/nc/**dynamic `import(...)`/`require(...)`** (unconditionally forbidden when newly added — no leased file needs either); flags any newly-added import occurrence of `axios`/`undici`/`net`/`node:net`/`http`/`node:http`/`https`/`node:https`/`child_process`/`ws`/`got`/`node-fetch`/`superagent`/`ky`/etc.; a newly-added `fetch(...)` occurrence is allowed **only** in `apps/web/src/runtime/exports.ts` or `apps/daemon/src/cli.ts`, and only when its own first-argument text names `/export/super-import` and never names `instatic` directly. **Disclosed residual limitation** (not solved, not hidden): arbitrary local-variable aliasing of a raw egress primitive (e.g. `const f = fetch; f(...)`, indirection through a locally-defined wrapper function) is out of proportion for this wave's verifier and is not detected — see **Adversarial review** round 3 disposition and the closing note below the table |
+| C10A-6 | Gates | `pnpm guard` and `pnpm typecheck` both exit 0 on the current tree — this also mechanically forces `capability-manifest.json`'s `project` row to list the new route, and fails closed if either i18n key is missing while imported/referenced. No `packages/contracts` gate is needed for this criterion: this wave adds no new file there (see **Ground facts**) |
 
 Plus the three named infra checks (house pattern, `verify-w9-ingest.ts` precedent):
 **GATE-INTEGRITY** (self-hash pin; see **Implementation ceremony** — `false` is legal for advisory
@@ -448,34 +571,66 @@ dry-runs only, never for a landing decision), **LEASE** (`git diff --name-only <
 **expected to fail honestly until this PRD lands on `main` and the lease row above is actually
 added**), **HEAD-DRIFT** (HEAD must not move mid-run).
 
-**Shared isolation note (round 1 finding #7, applies to every criterion above that touches a
-daemon):** every daemon URL this verifier uses — the main fixture daemon plus the two size-guard
-override daemons — is parsed and validated (`http:` scheme, exact `127.0.0.1` host, a valid nonzero
-port, explicitly excluding 7456 and 51012) immediately after boot, before any request or CLI spawn
-is issued against it. A validation failure is treated exactly like a boot failure: the daemon is
-killed immediately and every criterion depending on it fails closed with the validation reason
-recorded, never a silent fallback to a default port.
+**Shared isolation note (round 1 finding #7 + round 2 finding #7, applies to every criterion above
+that touches a daemon):** every daemon URL this verifier uses — the main fixture daemon plus the two
+size-guard override daemons — is parsed and validated (`http:` scheme, exact `127.0.0.1` host, a
+valid nonzero port, explicitly excluding 7456 and 51012) immediately after boot, before any request
+or CLI spawn is issued against it. A validation failure is treated exactly like a boot failure: the
+daemon is killed immediately and every criterion depending on it fails closed with the validation
+reason recorded, never a silent fallback to a default port. **Round 3 addition (round 2 finding #7's
+residual):** every subsequent probe `fetch` the verifier issues against any daemon sets
+`redirect: 'manual'` and hard-fails on any redirect-shaped response (a 3xx with a `Location` header,
+or an opaque redirect) — a validated loopback route can no longer silently steer a request to a
+protected port or an external host mid-flight. The CLI-subprocess half of this same finding is
+closed by C10A-3's transitive byte-identity proof, documented in **Ground facts**' CLI-subprocess
+bullet, deliberately without new fallback-provocation machinery (touching the actual fallback path
+would risk reaching a protected daemon if the bug were real).
 
-## Verified baseline (this run, pre-implementation, post round-1 fixes)
+## Verified baseline (this run, pre-implementation, post round-3 fixes)
 
 Captured by actually running `pnpm exec tsx scripts/waves/verify-w10a.ts` against this branch
 before any product code exists (an authoring-time dry run — `gateIntegrityPinned: false` is expected
-and legal here per **Implementation ceremony**; this run is never landing evidence). `4/9` pass:
-C10A-1 (2 problems: no Instatic template found; `mcpTemplateRow.ts` does not exist), C10A-2 (2
-problems: export route 400s; route file does not exist to check its size-guard constants), C10A-3
-(HTTP baseline unavailable), C10A-4 (2 problems: `DesignFilesPanel.tsx` imports nothing from
-`runtime/exports`; no handler calls such an import), and LEASE (no lease row landed yet) all report
-`fail` honestly. C10A-5, C10A-6, GATE-INTEGRITY, and HEAD-DRIFT report `pass`. C10A-5's pass is a
-**legitimate, disclosed vacuous pass** (zero product `.ts`/`.tsx` files touched yet, so the added-
-call/added-import diff finds nothing to classify) — not a loophole; C10A-1..C10A-4 independently
-carry the burden of proving the features exist. Within C10A-2, the poison-file and both size-guard
-sub-checks currently report no violation **only because the blanket route-not-found 4xx already
-satisfies "was rejected"** for every sub-check — this is the same honest pre-implementation shape as
-C10A-5, not evidence those specific behaviors work; the criterion's overall verdict is still `fail`
-via the primary content check. `pnpm guard`/`pnpm typecheck` (C10A-6) pass today since this PRD and
-its verifier are the only new files and both are within repo conventions — this run's own C10A-6
-evidence is a real, full-repo pass, not merely assumed. Manifest carries all 9 required criterion
-IDs exactly.
+and legal here per **Implementation ceremony**; this run is never landing evidence).
+`pnpm exec tsc -p scripts/tsconfig.json --noEmit` passes clean. `4/9` pass, exit code 1, confirmed
+via direct (non-teed) redirection:
+
+- **C10A-1 — fail, 4 problems**, each now a real, specific reason rather than the round-1/2 shape:
+  no `MCP_TEMPLATES` entry identifiable as Instatic; the runtime count re-derivation independently
+  reports 0 newly-added ids vs `baseCommit` (expected exactly 1) and a HEAD count of 39, not
+  `baseCommit`'s 39 + 1 — proving the re-derivation genuinely runs, not merely a hardcoded "39" in a
+  comment (closing round 2 finding #8's "its only `39` is a comment"); `apps/web/src/state/
+  mcpTemplateRow.ts` does not exist.
+- **C10A-2 — fail, 7 problems**: the export route itself 400s (not yet implemented); the poison-file
+  probe gets HTTP 400 where the criterion now demands **exactly** 409 (proving the exact-status
+  assertion is live, not a blanket `!ok` check); both size-guard over-limit probes get HTTP 400
+  where exactly 413 is required; **both new at/below-limit positive controls independently fail**
+  (HTTP 400 instead of a 2xx zip) — proving those controls actually execute and are not vacuously
+  satisfied; the route file does not exist to check its size-guard AST numeric literals.
+- **C10A-3 — fail**: HTTP baseline unavailable (400) — cannot assess CLI parity before the route
+  exists.
+- **C10A-4 — fail, 2 problems**: `DesignFilesPanel.tsx` imports nothing (named, default, or
+  namespace) from a `runtime/exports` module specifier; no `onClick`/`onSelect`/`onPress` handler
+  reachably calls such an import.
+- **LEASE — fail**: no `"W10a-instatic"` entry in `leases.json@baseCommit` — expected until this PRD
+  lands on `main`.
+- **C10A-5, C10A-6, GATE-INTEGRITY, HEAD-DRIFT — pass.** C10A-5's pass is a **legitimate, disclosed
+  vacuous pass** (zero product `.ts`/`.tsx` files touched yet, so the added-occurrence multiset diff
+  finds nothing to classify) — not a loophole; C10A-1..C10A-4 independently carry the burden of
+  proving the features exist. `pnpm guard`/`pnpm typecheck` (C10A-6) pass today since this PRD and
+  its verifier are the only new files and both are within repo conventions — this run's own C10A-6
+  evidence is a real, full-repo pass, not merely assumed.
+
+Beyond the end-to-end run, this round's AST-logic changes (multiset diff via the TypeScript printer,
+import-alias resolution, `findEnclosingJsxElement`'s full-element fix, dead-nested-decoy exclusion,
+AST `NumericLiteral` detection, deep-spread detection, satellite-mutation detection, `Object.assign`-
+wrapped-element rejection) were additionally exercised against 14 hand-built synthetic fixtures in a
+standalone scratch harness (not part of either deliverable file, discarded after use) before this
+baseline run — every one passed, including the specific case round 2's literal probe cited (a
+multi-line-reflowed call must diff to zero added occurrences against its single-line original; a
+call whose only difference is a distinct string-literal argument must still be detected as newly
+added). Manifest carries all 9 required criterion IDs exactly; no leftover boot-script process or
+`OD_DATA_DIR` temp directory after teardown; ports 7456/51012 (pids 16481/16729) confirmed listening
+and untouched, both before and after every run in this round.
 
 ## Adversarial review
 
@@ -562,26 +717,142 @@ replacing every prior line-based `.split('//')` heuristic (C10A-4's original des
 `getText()`-based matching throughout, which never treats template-literal interpolation content as
 a comment because the parser itself draws that boundary, not a string scan.
 
-## Open questions for adversarial review (round 2)
+**Round 2 — GPT-5.6 Sol (Codex) — REJECT.** Re-reviewed the round-1 fixes against
+`c8c8ca4a4b9cc851993455d92becad34b3ab20a9` (parent `cec9c45c7c5c4cf6b16ca08fa3662da39f8f2efc`),
+confirmed the Instatic citations, `pnpm typecheck`/direct `tsc`/direct `guard.ts` invocation, and
+worktree/`leases.json` integrity, but explicitly did not run the verifier or contact either
+protected daemon port. Verdict quoted verbatim: "the freeze gate remains bypassable and
+repository-inconsistent, principally because C10A-2 accepts 500s as rejection, C10A-4/C10A-5 admit
+decoys and indirect egress, production MCP stickiness is unbound, and the required contract lacks a
+leased public export path." Per-finding fidelity rulings and this round's disposition:
 
-1. **`mcpTemplateRow.ts`'s exact stickiness mechanism is illustrative, not mandated.** S10A-1
-   suggests one shape (`_authModeExplicit` stamped by `rowFromTemplate`) but the verifier only
-   tests black-box input/output behavior. Is a behavioral contract sufficient here, or does round 2
-   want the mechanism itself pinned (e.g. to guarantee it also fixes the same latent bug for any
-   *future* template with an explicit `authMode` and a url the user is expected to edit)?
-2. **The contract file's exact shape (`SuperImportExportErrorResponse`) is this document's design
-   choice, not derived from an existing sibling contract file for a binary-response route** — no
-   other route in this repo returns a raw zip stream *and* a typed JSON error body, so there was no
-   existing pattern to mirror exactly. Is the minimal three-error-code shape sufficient, or should
-   round 2 require additional fields (e.g. a machine-readable list of offending paths for the
-   poison-file case)?
-3. **`registry.ts` collision risk (carried from round 1, unresolved by the ruling, which only
-   confirmed the denial is correct — not that no future collision is possible).** If a later wave's
-   own work legitimately needs to touch `runtime/exports.ts` or `DesignFilesPanel.tsx` concurrently
-   with this one, that needs an explicit lease amendment and burst-ordering decision before it
-   lands, not a silent widen.
-4. **C10A-2's size-guard rejection tests use `3 files / 16 bytes each` and `1 file / >400 bytes`
-   against overrides of `2` and `100` respectively** — arbitrary-but-small numbers chosen only to be
-   cheap and to isolate one guard from the other. If round 2 wants a specific minimum fixture
-   scale (e.g. to also prove the guard fires correctly near a boundary, not just "some large-enough
-   number"), that should be pinned explicitly rather than left to this document's arbitrary choice.
+1. **Finding 1 — NOT FIXED.** "C10A-5 now uses ASTs, but its `Set<string>` comparison is not an
+   occurrence diff: adding a second identical forbidden call or moving an existing call is
+   invisible, while formatting-only changes create a false 'addition.' … Dynamic
+   `import('node:net')`, `require('node:https')`, aliased primitives, local wrappers, and
+   template-built specifiers evade `ImportDeclaration` collection and callee-name classification."
+   **Fixed:** the Set replaced with an **occurrence-count (multiset) diff** over TypeScript-printer
+   canonical text (`canonicalNodeText`, `verify-w10a.ts:432`; `occurrenceCounts`/
+   `addedOccurrenceCounts`, `:561`/`:572`) — formatting-insensitive by construction (verified: a
+   multi-line reflow of an unchanged call prints identical canonical text to its single-line
+   original) while still treating a duplicated/moved call as a genuine new occurrence, and still
+   distinguishing two calls whose only difference is a string-literal argument. Dynamic
+   `import(...)` is detected via the public AST shape (a `CallExpression` whose callee has kind
+   `ImportKeyword` — `ts.isImportCall` exists at runtime but is not part of the public
+   `typescript.d.ts` surface, confirmed by direct inspection) and `require(...)` by identifier name,
+   both unconditionally forbidden when newly added (`classifyForbiddenCallNode`, `:496`). An
+   **import-alias map** (`buildImportAliasMap`, `:450`) resolves default/namespace/named-with-rename
+   bindings so an aliased `writeMcpConfig` import, or an aliased `node:http`/`node:https` import, is
+   still caught; `node:http`/`http`/`node:https`/`https`/`node:net`/`net` joined
+   `SUSPICIOUS_IMPORT_MODULES` (`:483`) since no leased file in this wave needs raw Node HTTP/net
+   primitives. **Disclosed, not solved:** arbitrary local-variable aliasing of a raw primitive
+   (`const f = fetch; f(...)`) or an indirection through a locally-defined wrapper function remains
+   undetected — documented openly in the C10A-5 criteria-table row and here rather than claimed as
+   closed.
+2. **Finding 2 — FIXED (round 2 confirmed, unchanged this round).** No round-3 action needed —
+   **Implementation ceremony** and the lease `deny` list are unchanged from round 1.
+3. **Finding 3 — FIXED-WITH-DEFECT → FIXED differently.** "The contract cannot be consumed through
+   the supported package surface without also exporting it from `packages/contracts/src/index.ts`
+   or adding a package subpath; neither … is leased. … typecheck does not force a missing file to
+   exist … The verifier contains no contract/i18n existence or consumption check." **Fixed by
+   removal, not by leasing more files:** the bespoke `packages/contracts/src/api/project-super-
+   import.ts` this finding's export-path gap was about no longer exists in this design at all (see
+   round 2's own contract-shape ruling, disposed below) — S10A-2 now reuses the already-fully-public
+   `ApiErrorResponse`/`ApiErrorCode` (barrel-exported, `packages/contracts/src/index.ts:2`), so there
+   is no new export path to leave unleased. `packages/contracts/**` is now explicitly **denied**
+   (**Proposed lease row**), foreclosing a future implementation from quietly reopening the gap by
+   adding a bespoke file after all. C10A-2 now asserts the real response envelope and exact
+   `error.code` at runtime (`assertApiErrorCode`, `verify-w10a.ts:1905`), closing "the verifier
+   contains no contract … consumption check" directly — the i18n half was never in question (C10A-6/
+   typecheck fails closed on it, unchanged since round 1).
+4. **Finding 4 — NOT FIXED.** "`findEnclosingJsxElement` returns the opening element, so it does not
+   traverse ordinary button children such as `<span>{t('designFiles.exportSuperImport')}</span>`…
+   Aliased/default imports are not correctly resolved. … both handler and export scans descend into
+   unused nested functions, and the route needle may occur anywhere in `fetch(...)`, not necessarily
+   its URL argument. … Dead decoys and `fetch(realRemoteUrl, {headers:{x:'/export/super-
+   import'}})` pass." **Fixed:** `findEnclosingJsxElement` (`verify-w10a.ts:736`) now returns the
+   full `JsxElement` (opening tag's parent when it is a `JsxElement`, including children) instead of
+   the bare opening element — verified live against exactly the cited `<button onClick={...}>
+   <span>{t(...)}</span></button>` shape. `collectRuntimeExportsImports` now captures default and
+   namespace bindings alongside named imports. `isReachableNestedFunction` (`:783`) excludes any
+   nested function declaration that is neither an IIFE nor a callback argument actually passed to
+   another call from both the handler-body walk and the exported-function-body walk, so a dead
+   decoy no longer counts. `findFetchUrlArgContaining` (`:821`) inspects only the call's **first
+   argument** for the route needle, so a route string hidden in a `headers` object (or any other
+   non-URL argument) no longer passes.
+5. **Finding 5 — NOT FIXED.** "Every rejection check merely tests `response.ok`; HTTP 500 and other
+   non-4xx failures pass as successful rejection. … neither override daemon gets a below-limit
+   success control. … the supposedly comment/dead-code-safe default check is still a raw regex over
+   source, so a comment or unused assignment passes. This violates `VERIFICATION-CONTRACT` R4."
+   **Fixed:** every rejection check now asserts the **exact** status (409 for the poison file, 413
+   for both size guards — `verify-w10a.ts:1411`/`:1424`) and parses the body to assert the exact
+   `error.code` (`CONFLICT`/`PAYLOAD_TOO_LARGE`) via `assertApiErrorCode` (`:1905`) — a 500 or any
+   other status/code now fails the criterion outright. Both override daemons now additionally get an
+   **at/below-limit fixture that must SUCCEED** (200 + a loadable zip), per round 2's own
+   fixture-scale ruling (disposed below). The default-constant check is now a genuine **AST
+   `NumericLiteral`/multiplication-chain scan** (`astContainsNumericLiteral`, `:664`) — a comment can
+   never contain a `NumericLiteral` AST node, closing the regex gap structurally rather than by a
+   smarter regex.
+6. **Finding 6 — NOT FIXED.** "C10A-1 exercises a new module without proving `McpClientSection.tsx`
+   imports or uses it; an unused passing module alongside the unchanged buggy component goes green.
+   The spread ban checks only the first matching object's direct properties, not nested spreads,
+   `Object.assign`, satellite mutation, or a decoy object with the same ID." **Fixed:** a new
+   production-binding check (`verify-w10a.ts:1317`) parses `McpClientSection.tsx` and asserts it
+   imports both `rowFromTemplate` and `authModeAfterUrlChange` from `state/mcpTemplateRow`
+   (`fileImportsFrom`, `:871`) and no longer declares its own same-named locals
+   (`fileDeclaresLocalFunction`, `:889`). The spread ban is rebuilt end to end: the Instatic entry is
+   located as its own `MCP_TEMPLATES` array element (`findMcpTemplatesArrayElements`, `:597`;
+   `findTemplateElementById`, `:617` — rejects a call-wrapped element such as `Object.assign(...)`
+   outright as `wrappedInCall`), its whole subtree is recursively scanned for a spread at any depth
+   (`objectLiteralHasSpreadDeep`, `:584`), and the whole file is separately scanned for a satellite
+   mutation assigning into `MCP_TEMPLATES` post-declaration (`findMcpTemplatesSatelliteMutations`,
+   `:646`).
+7. **Finding 7 — FIXED-WITH-DEFECT.** "All subsequent `fetch` calls use default redirect-following,
+   so a validated loopback route can redirect to either protected port or an external host. The
+   spawned CLI is likewise trusted to honor its URL flags rather than falling back." **Fixed (fetch
+   half):** every probe fetch now goes through `probeFetch` (`verify-w10a.ts:944`), which sets
+   `redirect: 'manual'` and throws `RedirectRefusedError` (`:940`) on any redirect-shaped response.
+   **Documented, not independently re-probed (CLI half):** see **Ground facts**' CLI-subprocess
+   bullet — C10A-3's byte-identity-against-a-random-fixture-id requirement is the transitive proof
+   used instead of new fallback-provocation machinery, to avoid deliberately trying to reach the
+   protected daemon.
+8. **Finding 8 — FIXED-WITH-DEFECT.** "Independent AST counting confirms exactly 39 current
+   templates … All textual '25' claims are gone. However, the PRD says the verifier re-derives the
+   count at runtime; it does not — its only `39` is a comment. It also never proves exactly one new
+   template was added rather than deleting/replacing existing entries." **Fixed:** C10A-1 now
+   AST-parses `mcp-config.ts` at `baseCommit`, extracts its `MCP_TEMPLATES` id set, and diffs it
+   against the live HTTP id set at HEAD (`verify-w10a.ts:1283`), asserting every base id survives
+   and exactly one new id was added matching the Instatic candidate — the **Verified baseline**
+   section's actual pre-implementation run independently confirms this re-derivation executes (it
+   reports "0 newly-added ids" and "39 is not 39+1," not a silently-passing hardcoded check). The
+   PRD's own restated `39` in **Ground facts** is now explicitly labeled "re-derived programmatically
+   … not trusting either number," not the sole source of truth.
+
+**Open-question rulings (round 2, applied verbatim):**
+- **Stickiness:** "freeze behavior, not `_authModeExplicit` or another private mechanism. Requiring
+  the exact `mcpTemplateRow.ts` extraction is over-prescriptive; if retained, the verifier must
+  prove the production component imports and uses it." **Disposition:** retained the module (Option
+  A) with the new production-binding check — see S10A-1's "Design choice" paragraph for the
+  explicit A-vs-B reasoning this ruling required.
+- **Contract shape:** "reject the bespoke envelope. The repository already has `ApiErrorResponse`,
+  `ApiErrorCode`, `details`, and `sendApiError`. Reuse that envelope, adding properly leased domain
+  codes/details only if necessary." **Disposition:** reused verbatim; researched whether new codes
+  were necessary and found they are not (`PAYLOAD_TOO_LARGE`/`CONFLICT` already fit both cases) — see
+  **Ground facts**' contract-file citation trail.
+- **`registry.ts`:** "keep denied. Future collision is handled by explicit lease amendment and
+  serialization; it is not grounds for a speculative widen." **Disposition:** unchanged, no action
+  needed — the former open question #3 asking round 2 to weigh in on this is resolved by this
+  ruling and is not re-asked.
+- **Fixture scale:** "`2/100` is sufficient and cheap. The missing requirement is same-daemon
+  at/below-limit positive controls plus exact 4xx/code assertions, not larger fixtures."
+  **Disposition:** `2`/`100` unchanged; added the positive controls and exact assertions — see
+  finding 5's disposition above. The former open question #4 asking round 2 to weigh in on fixture
+  scale is resolved by this ruling and is not re-asked.
+
+**Round 3 close-out note.** Founder-authorized round 3 (2026-07-28) is scoped strictly to these
+eight findings and four rulings, and is explicitly the **final** fix round — the coordinator's own
+framing: "one confirmation review after delivery, then freeze or park." Accordingly this document
+does not pose a fresh "open questions for round 4" list; the one disclosed, intentionally-unsolved
+residual (C10A-5's arbitrary local-variable-aliasing gap, finding 1's disposition above) is carried
+forward as a documented limitation for the confirmation reviewer to weigh, not a question awaiting a
+further fix round.
