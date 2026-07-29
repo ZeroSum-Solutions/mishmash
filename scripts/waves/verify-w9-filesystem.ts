@@ -1017,6 +1017,7 @@ function classifyExposure(middlewareArgs: readonly TsNode[], handler: TsNode): 0
 // SECTION: route universe discovery + registration collection.
 // -----------------------------------------------------------------------
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'delete', 'options', 'patch']);
+const REGISTER_ROUTES_NAME_RE = /^register\w*Routes$/;
 function resolveRelativeImportToSrcFile(fromFileAbs: string, spec: string): string | null {
   if (!spec.startsWith('.')) return null;
   let resolved = path.resolve(path.dirname(fromFileAbs), spec);
@@ -1027,19 +1028,91 @@ function resolveRelativeImportToSrcFile(fromFileAbs: string, spec: string): stri
   if (fs.existsSync(idx)) return idx;
   return null;
 }
-function discoverRouteFileUniverse(serverSourceFile: TsSourceFile, serverPath: string): Set<string> {
-  const files = new Set<string>();
-  for (const stmt of serverSourceFile.statements) {
+/** Every relative named import in a file, mapped identifier -> resolved
+ * source file. Shared base for both the register*Routes-only universe walk
+ * below and the non-Routes-named "helper registrar" recognizer further
+ * down -- both are the same "which local identifier points at which file"
+ * question, filtered differently. */
+function collectRelativeNamedImports(sourceFile: TsSourceFile, fromFileAbs: string): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const stmt of sourceFile.statements) {
     if (!ts.isImportDeclaration(stmt) || !ts.isStringLiteral(stmt.moduleSpecifier)) continue;
     const clause = stmt.importClause;
     if (!clause || !clause.namedBindings || !ts.isNamedImports(clause.namedBindings)) continue;
-    const resolvedFile = resolveRelativeImportToSrcFile(serverPath, stmt.moduleSpecifier.text);
+    const resolvedFile = resolveRelativeImportToSrcFile(fromFileAbs, stmt.moduleSpecifier.text);
     if (!resolvedFile) continue;
     for (const el of clause.namedBindings.elements) {
-      if (/^register\w*Routes$/.test(el.name.text)) files.add(resolvedFile);
+      map.set(el.name.text, resolvedFile);
     }
   }
-  return files;
+  return map;
+}
+/** register*Routes-named identifiers CALLED inside a register*Routes
+ * function body, that are themselves relative-imported in the SAME file --
+ * e.g. routes/project/index.ts's registerProjectRoutes calling
+ * registerProjectConversationRoutes(...), imported from ./conversations.ts
+ * (which in turn calls registerProjectCommentRoutes(...) from ./comments.ts
+ * -- two real hops, both confirmed by reading the source directly, not
+ * hypothetical). `server.ts` never imports either file, so the old
+ * one-hop-from-server.ts-only walk never visited them. */
+function calledRegisterRoutesImports(body: TsNode, importMap: Map<string, string>): Set<string> {
+  const found = new Set<string>();
+  const visit = (node: TsNode): void => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && REGISTER_ROUTES_NAME_RE.test(node.expression.text)) {
+      const resolvedFile = importMap.get(node.expression.text);
+      if (resolvedFile) found.add(resolvedFile);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return found;
+}
+/** Route-file universe, discovered TRANSITIVELY: seed from server.ts's own
+ * register*Routes imports (as before), then for every register*Routes
+ * function body found in a discovered file, follow any FURTHER
+ * register*Routes-named call resolved via that file's own relative
+ * imports, repeating until no new files appear. A worklist with a visited
+ * set, so a cycle (none exist today) can never loop forever.
+ *
+ * `library.ts` is a TERMINAL node in this walk, never expanded: it is
+ * called with `registerBackupRoutes(...)` internally (confirmed by reading
+ * the source), and the live-daemon drift comparison in checkC9F1
+ * deliberately excludes `/api/backup`/`/api/restore` from the LIVE side as
+ * "registered via registerBackupRoutes(...) called from INSIDE the
+ * excluded library.ts". Recursing into library.ts's own body would
+ * re-discover `apps/daemon/src/backup/routes.ts` as an independent route
+ * file and put its two registrations back in the STATIC candidate set,
+ * producing a NEW baseCommit=1/live=0 drift entry that fixing item 1 must
+ * not introduce -- the sibling tranche's file boundary stays a hard stop
+ * for this walk exactly as it already is for the flat per-file loop below. */
+function discoverRouteFileUniverse(
+  program: TypeScriptModule.Program,
+  serverSourceFile: TsSourceFile,
+  serverPath: string,
+  root: string,
+): Set<string> {
+  const libraryRoutesAbs = path.join(root, LIBRARY_ROUTES_RELPATH);
+  const visited = new Set<string>();
+  const worklist: string[] = [];
+  for (const [name, file] of collectRelativeNamedImports(serverSourceFile, serverPath)) {
+    if (REGISTER_ROUTES_NAME_RE.test(name)) worklist.push(file);
+  }
+  while (worklist.length > 0) {
+    const file = worklist.pop()!;
+    if (visited.has(file)) continue;
+    visited.add(file);
+    if (file === libraryRoutesAbs) continue;
+    const sourceFile = program.getSourceFile(file);
+    if (!sourceFile) continue;
+    const importMap = collectRelativeNamedImports(sourceFile, file);
+    if (importMap.size === 0) continue;
+    for (const { body } of findRegisterFunctionBodies(sourceFile)) {
+      for (const resolvedFile of calledRegisterRoutesImports(body, importMap)) {
+        if (!visited.has(resolvedFile)) worklist.push(resolvedFile);
+      }
+    }
+  }
+  return visited;
 }
 interface RegisterFnBody {
   name: string;
@@ -1080,7 +1153,66 @@ interface AppCall {
   middlewareArgs: TsNode[];
   handler: TsNode;
 }
-function collectAppCalls(scopeRoot: TsNode): AppCall[] {
+/** Resolves a path argument that is not a literal but IS a named-const
+ * string bound elsewhere -- possibly imported cross-file OR cross-package
+ * (both real: `DIAGNOSTICS_EXPORT_PATH` from `@open-design/diagnostics`,
+ * `ATTRIBUTION_CLAIM_PATH` from `@open-design/contracts`, confirmed by
+ * reading both call sites and their packages' built `.d.ts` directly).
+ * TypeScript preserves a `const`'s literal type through both same-file and
+ * cross-package declaration-emit boundaries (`export declare const X =
+ * "literal";`), so reading the TYPE at the identifier's use site -- rather
+ * than re-deriving it from a same-file AST initializer -- resolves
+ * same-file, cross-file, and cross-package consts uniformly. */
+function resolveStaticPathLiteral(pathArg: TsNode, checker: TypeScriptModule.TypeChecker): string | null {
+  if (ts.isStringLiteral(pathArg)) return pathArg.text;
+  if (!ts.isIdentifier(pathArg)) return null;
+  const type = checker.getTypeAtLocation(pathArg);
+  return type.isStringLiteral() ? type.value : null;
+}
+function findEnclosingFunctionLike(
+  node: TsNode,
+): TypeScriptModule.FunctionExpression | TypeScriptModule.ArrowFunction | TypeScriptModule.FunctionDeclaration | null {
+  let cur: TsNode | undefined = node.parent;
+  while (cur) {
+    if (ts.isArrowFunction(cur) || ts.isFunctionExpression(cur) || ts.isFunctionDeclaration(cur)) return cur;
+    cur = cur.parent;
+  }
+  return null;
+}
+/** When a path argument is an Identifier bound to a PARAMETER of the
+ * immediately-enclosing function rather than a module-level const, the
+ * literal path values live at THAT function's OWN call sites instead --
+ * confirmed by reading routes/chat.ts directly: a local `const
+ * registerByokToolChatProxy = (routePath, opts) => { app.post(routePath,
+ * ...) }`, defined once inside `registerChatRoutes` and invoked twice with
+ * literal paths (`/api/proxy/senseaudio/stream`, `/api/proxy/aihubmix/
+ * stream`). Resolves by finding the enclosing function's own const-binding
+ * name, then every call to that name within the SAME scanned scope,
+ * substituting the literal argument at the matching parameter position. */
+function resolveClosureParameterPathLiterals(pathArg: TypeScriptModule.Identifier, scopeRoot: TsNode): string[] {
+  const enclosing = findEnclosingFunctionLike(pathArg);
+  if (!enclosing) return [];
+  const paramIndex = enclosing.parameters.findIndex((p) => ts.isIdentifier(p.name) && p.name.text === pathArg.text);
+  if (paramIndex === -1) return [];
+  let boundName: string | null = null;
+  if (ts.isVariableDeclaration(enclosing.parent) && ts.isIdentifier(enclosing.parent.name)) {
+    boundName = enclosing.parent.name.text;
+  } else if (ts.isFunctionDeclaration(enclosing) && enclosing.name) {
+    boundName = enclosing.name.text;
+  }
+  if (!boundName) return [];
+  const literals: string[] = [];
+  const visit = (node: TsNode): void => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === boundName) {
+      const arg = node.arguments[paramIndex];
+      if (arg && ts.isStringLiteral(arg)) literals.push(arg.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(scopeRoot);
+  return literals;
+}
+function collectAppCalls(scopeRoot: TsNode, checker: TypeScriptModule.TypeChecker): AppCall[] {
   const out: AppCall[] = [];
   const visit = (node: TsNode): void => {
     if (
@@ -1091,12 +1223,122 @@ function collectAppCalls(scopeRoot: TsNode): AppCall[] {
       HTTP_METHODS.has(node.expression.name.text)
     ) {
       const [pathArg, ...rest] = node.arguments;
-      if (pathArg && ts.isStringLiteral(pathArg) && rest.length > 0) {
+      if (pathArg && rest.length > 0) {
+        const method = node.expression.name.text.toUpperCase();
+        const middlewareArgs = rest.slice(0, -1);
+        const handler = rest[rest.length - 1]!;
+        const literal = resolveStaticPathLiteral(pathArg, checker);
+        if (literal !== null) {
+          out.push({ method, routePath: literal, middlewareArgs, handler });
+        } else if (ts.isIdentifier(pathArg)) {
+          for (const routePath of resolveClosureParameterPathLiterals(pathArg, scopeRoot)) {
+            out.push({ method, routePath, middlewareArgs, handler });
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(scopeRoot);
+  return out;
+}
+interface JsonRouteSpecInfo {
+  method: string;
+  routePath: string;
+  handleExpr: TsNode;
+}
+/** Resolves a `mountJsonRoute(app, SPEC, ...)` call's SPEC argument back to
+ * the `defineJsonRoute({ method, path, handle, ... })` call that produced
+ * it (directly inline, or -- the real shape -- through a module-level
+ * `const` binding resolved via the checker, which also follows re-exports
+ * transparently). Extracts the `method`/`path` string literals and the
+ * `handle` expression. */
+function resolveJsonRouteSpec(specExpr: TsNode, checker: TypeScriptModule.TypeChecker): JsonRouteSpecInfo | null {
+  let initializer: TsNode | null = ts.isCallExpression(specExpr) ? specExpr : null;
+  if (!initializer && ts.isIdentifier(specExpr)) {
+    let symbol = checker.getSymbolAtLocation(specExpr);
+    if (symbol && symbol.flags & ts.SymbolFlags.Alias) {
+      try {
+        symbol = checker.getAliasedSymbol(symbol);
+      } catch {
+        /* keep original */
+      }
+    }
+    const decl = symbol?.declarations?.find(
+      (d): d is TypeScriptModule.VariableDeclaration => ts.isVariableDeclaration(d) && !!d.initializer,
+    );
+    initializer = decl?.initializer ?? null;
+  }
+  if (!initializer || !ts.isCallExpression(initializer)) return null;
+  if (!ts.isIdentifier(initializer.expression) || initializer.expression.text !== 'defineJsonRoute') return null;
+  const specObj = initializer.arguments[0];
+  if (!specObj || !ts.isObjectLiteralExpression(specObj)) return null;
+  let method: string | null = null;
+  let routePath: string | null = null;
+  let handleExpr: TsNode | null = null;
+  for (const prop of specObj.properties) {
+    if (!ts.isPropertyAssignment(prop) || !ts.isIdentifier(prop.name)) continue;
+    if (prop.name.text === 'method' && ts.isStringLiteral(prop.initializer)) method = prop.initializer.text;
+    if (prop.name.text === 'path' && ts.isStringLiteral(prop.initializer)) routePath = prop.initializer.text;
+    if (prop.name.text === 'handle') handleExpr = prop.initializer;
+  }
+  if (!method || !routePath || !handleExpr || !HTTP_METHODS.has(method)) return null;
+  return { method: method.toUpperCase(), routePath, handleExpr };
+}
+/** Resolves a bare identifier reference to the actual function node it
+ * names, so `reachable()`/`classifyExposure()` walk real code instead of
+ * an identifier leaf with no call-expression descendants. Needed for
+ * `defineJsonRoute({ handle: someNamedFn })`, where the handler is
+ * referenced by name rather than defined inline. */
+function resolveNamedFunctionNode(expr: TsNode, checker: TypeScriptModule.TypeChecker): TsNode {
+  if (ts.isArrowFunction(expr) || ts.isFunctionExpression(expr) || ts.isFunctionDeclaration(expr)) return expr;
+  if (!ts.isIdentifier(expr)) return expr;
+  let symbol = checker.getSymbolAtLocation(expr);
+  if (!symbol) return expr;
+  if (symbol.flags & ts.SymbolFlags.Alias) {
+    try {
+      symbol = checker.getAliasedSymbol(symbol);
+    } catch {
+      /* keep original */
+    }
+  }
+  for (const decl of symbol.declarations ?? []) {
+    if (ts.isFunctionDeclaration(decl)) return decl;
+    if (ts.isVariableDeclaration(decl) && decl.initializer && (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))) {
+      return decl.initializer;
+    }
+  }
+  return expr;
+}
+/** Recognizes the declarative `defineJsonRoute`/`mountJsonRoute`
+ * route-registration shape (`apps/daemon/src/http/adapter.ts`) as an
+ * alternative to the literal `app.<method>(pathLiteral, ...)` call the rest
+ * of this scan matches -- confirmed by reading routes/active-context.ts
+ * directly (`mountJsonRoute(app, postActiveRoute, ...)` where
+ * `postActiveRoute = defineJsonRoute({ method: 'post', path: '/api/active',
+ * ... })`). The actual `app[spec.method](spec.path, ...)` Express call
+ * lives inside `mountJsonRoute`'s OWN body with a COMPUTED method/path, so
+ * it can never be discovered by scanning that body -- the literal values
+ * only exist at each route's own `defineJsonRoute({...})` call, resolved
+ * back through `mountJsonRoute`'s spec argument here instead. */
+function collectMountJsonRouteCalls(scopeRoot: TsNode, checker: TypeScriptModule.TypeChecker): AppCall[] {
+  const out: AppCall[] = [];
+  const visit = (node: TsNode): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'mountJsonRoute' &&
+      node.arguments.length >= 2 &&
+      ts.isIdentifier(node.arguments[0]!) &&
+      node.arguments[0]!.text === 'app'
+    ) {
+      const spec = resolveJsonRouteSpec(node.arguments[1]!, checker);
+      if (spec) {
         out.push({
-          method: node.expression.name.text.toUpperCase(),
-          routePath: pathArg.text,
-          middlewareArgs: rest.slice(0, -1),
-          handler: rest[rest.length - 1]!,
+          method: spec.method,
+          routePath: spec.routePath,
+          middlewareArgs: [],
+          handler: resolveNamedFunctionNode(spec.handleExpr, checker),
         });
       }
     }
@@ -1107,7 +1349,7 @@ function collectAppCalls(scopeRoot: TsNode): AppCall[] {
 }
 /** app.<method>(...) calls at the top level of server.ts, NOT inside any
  * register*Routes-named function -- the 6 bootstrap routes. */
-function collectBootstrapAppCalls(sourceFile: TsSourceFile): AppCall[] {
+function collectBootstrapAppCalls(sourceFile: TsSourceFile, checker: TypeScriptModule.TypeChecker): AppCall[] {
   const insideRegisterFn = new Set<TsNode>();
   for (const { body } of findRegisterFunctionBodies(sourceFile)) insideRegisterFn.add(body);
   const out: AppCall[] = [];
@@ -1122,19 +1364,106 @@ function collectBootstrapAppCalls(sourceFile: TsSourceFile): AppCall[] {
       HTTP_METHODS.has(node.expression.name.text)
     ) {
       const [pathArg, ...rest] = node.arguments;
-      if (pathArg && ts.isStringLiteral(pathArg) && rest.length > 0) {
-        out.push({
-          method: node.expression.name.text.toUpperCase(),
-          routePath: pathArg.text,
-          middlewareArgs: rest.slice(0, -1),
-          handler: rest[rest.length - 1]!,
-        });
+      if (pathArg && rest.length > 0) {
+        const literal = resolveStaticPathLiteral(pathArg, checker);
+        if (literal !== null) {
+          out.push({
+            method: node.expression.name.text.toUpperCase(),
+            routePath: literal,
+            middlewareArgs: rest.slice(0, -1),
+            handler: rest[rest.length - 1]!,
+          });
+        }
       }
     }
     ts.forEachChild(node, (child) => visit(child, nowExcluded));
   };
   visit(sourceFile, false);
   return out;
+}
+/** A route-registration helper called directly from server.ts's own
+ * bootstrap code that does NOT match the register*Routes naming convention
+ * (so the transitive walk above never visits it), whose own body -- in a
+ * DIFFERENT file -- performs its own literal app.<method>() registrations.
+ * Confirmed by reading both sides directly:
+ * `registerStaticSpaFallback(app, STATIC_DIR)` in server.ts's own bootstrap
+ * sequence -> `apps/daemon/src/static-spa.ts`'s own `app.get('/*splat',
+ * ...)`. Recognized structurally, not by name: an in-repo,
+ * relative-imported function called from server.ts's bootstrap scope
+ * (never inside a register*Routes body -- those already get scanned via
+ * the recursive walk) with the literal identifier `app` as one of its own
+ * arguments -- the same "the callee actually holds the Express app" signal
+ * register*Routes functions themselves rely on throughout this file. */
+function collectBootstrapHelperRegistrarCalls(
+  serverSourceFile: TsSourceFile,
+  program: TypeScriptModule.Program,
+  root: string,
+  serverPath: string,
+  checker: TypeScriptModule.TypeChecker,
+): Array<{ call: AppCall; relFile: string; fnName: string }> {
+  const importMap = collectRelativeNamedImports(serverSourceFile, serverPath);
+  const routeFileSet = new Set(
+    [...importMap.entries()].filter(([name]) => REGISTER_ROUTES_NAME_RE.test(name)).map(([, file]) => file),
+  );
+  const insideRegisterFn = new Set<TsNode>();
+  for (const { body } of findRegisterFunctionBodies(serverSourceFile)) insideRegisterFn.add(body);
+
+  const out: Array<{ call: AppCall; relFile: string; fnName: string }> = [];
+  const seenHelpers = new Set<string>();
+  const visit = (node: TsNode, inExcluded: boolean): void => {
+    const nowExcluded = inExcluded || insideRegisterFn.has(node);
+    if (
+      !nowExcluded &&
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      importMap.has(node.expression.text) &&
+      !REGISTER_ROUTES_NAME_RE.test(node.expression.text) &&
+      node.arguments.some((a) => ts.isIdentifier(a) && a.text === 'app')
+    ) {
+      const fnName = node.expression.text;
+      const resolvedFile = importMap.get(fnName)!;
+      const dedupeKey = `${resolvedFile}::${fnName}`;
+      if (!routeFileSet.has(resolvedFile) && !seenHelpers.has(dedupeKey)) {
+        seenHelpers.add(dedupeKey);
+        const helperSourceFile = program.getSourceFile(resolvedFile);
+        const fnBody = helperSourceFile ? findNamedFunctionBody(helperSourceFile, fnName) : null;
+        if (fnBody) {
+          const relFile = path.relative(root, resolvedFile).split(path.sep).join('/');
+          for (const call of collectAppCalls(fnBody, checker)) out.push({ call, relFile, fnName });
+        }
+      }
+    }
+    ts.forEachChild(node, (child) => visit(child, nowExcluded));
+  };
+  visit(serverSourceFile, false);
+  return out;
+}
+function findNamedFunctionBody(sourceFile: TsSourceFile, name: string): TsNode | null {
+  let found: TsNode | null = null;
+  const visit = (node: TsNode): void => {
+    if (found) return;
+    if (ts.isFunctionDeclaration(node) && node.name?.text === name && node.body) {
+      found = node.body;
+      return;
+    }
+    if (ts.isVariableStatement(node)) {
+      for (const decl of node.declarationList.declarations) {
+        if (
+          ts.isIdentifier(decl.name) &&
+          decl.name.text === name &&
+          decl.initializer &&
+          (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer)) &&
+          decl.initializer.body
+        ) {
+          found = decl.initializer.body;
+          return;
+        }
+      }
+    }
+    if (!found) ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
 }
 
 const LIBRARY_ROUTES_RELPATH = 'apps/daemon/src/routes/library.ts';
@@ -1205,8 +1534,9 @@ function scanUniverse(root: string): UniverseScanResult {
   const serverSourceFile = program.getSourceFile(serverPath);
   if (!serverSourceFile) throw new Error(`server.ts not present in program built from ${root}`);
   const classifier = new FsReachabilityClassifier(program, serverPath);
+  const checker = program.getTypeChecker();
 
-  const routeFiles = discoverRouteFileUniverse(serverSourceFile, serverPath);
+  const routeFiles = discoverRouteFileUniverse(program, serverSourceFile, serverPath, root);
   const rows: RouteRow[] = [];
   const seen = new Map<string, number>();
   const handlersByKey = new Map<string, TsNode[]>();
@@ -1240,13 +1570,21 @@ function scanUniverse(root: string): UniverseScanResult {
     for (const { name, body, ctxParamName } of findRegisterFunctionBodies(sourceFile)) {
       fnCount++;
       classifier.setCurrentRegisterFn(name, ctxParamName, body);
-      for (const call of collectAppCalls(body)) rows.push(classifyOne(call, relFile, name));
+      for (const call of collectAppCalls(body, checker)) rows.push(classifyOne(call, relFile, name));
+      for (const call of collectMountJsonRouteCalls(body, checker)) rows.push(classifyOne(call, relFile, name));
     }
   }
   // bootstrap routes: no ctx param.
   classifier.setCurrentRegisterFn('__bootstrap__', null, serverSourceFile);
-  for (const call of collectBootstrapAppCalls(serverSourceFile)) {
+  for (const call of collectBootstrapAppCalls(serverSourceFile, checker)) {
     rows.push(classifyOne(call, SERVER_RELPATH, '__bootstrap__'));
+  }
+  // Non-Routes-named helper registrars invoked directly from server.ts's
+  // bootstrap code (e.g. registerStaticSpaFallback -> static-spa.ts's own
+  // literal app.get('/*splat', ...)) -- see collectBootstrapHelperRegistrarCalls.
+  for (const { call, relFile, fnName } of collectBootstrapHelperRegistrarCalls(serverSourceFile, program, root, serverPath, checker)) {
+    classifier.setCurrentRegisterFn(fnName, null, serverSourceFile);
+    rows.push(classifyOne(call, relFile, fnName));
   }
 
   // A duplicate {method,path} group is a genuine hazard (hard fail) only
