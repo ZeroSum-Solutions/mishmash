@@ -11,8 +11,9 @@ and the existing `~/.claude/goal-state/` directory naming (`mishmash-w0-substrat
 **Verifier:** `scripts/waves/verify-w10b.ts` — run `pnpm exec tsx scripts/waves/verify-w10b.ts`.
 **Write lease:** no `"W10b"` key exists yet in `docs/plans/waves/leases.json` — this document does
 not add one (`leases.json` is HARD DENY for the expansion-authoring step that produced this PRD).
-§7 gives the exact proposed entry, verbatim, for the orchestrator to add before implementation
-starts; the verifier's `LEASE` check fails closed until that lands, by design (see §8).
+The "Proposed write lease" section below gives the exact entry, verbatim, for the orchestrator to
+add before implementation starts; the verifier's lease check inside C10B-3 fails closed until that
+lands, by design (see "Verified baseline" below).
 
 This document is an **expansion**, not an implementation. Per the NM-41C gate
 (`W5-W11-gated.md` lines 8–24), it is written and frozen *before* any implementation work starts,
@@ -83,8 +84,8 @@ exists to make "register and stop" checkable by a machine, not to re-open the bi
    - A stdio fallback also ships (`voicebox-mcp`), but its documented command is a **hardcoded
      macOS packaged-app path** (`/Applications/Voicebox.app/Contents/MacOS/voicebox-mcp`) — unlike
      every `command`-based template already in `MCP_TEMPLATES`, which invoke `npx`/`uvx` against a
-     published package name and work on any platform with that runtime installed. §5 scopes this
-     out explicitly.
+     published package name and work on any platform with that runtime installed. The "Explicitly
+     out of scope" section below scopes this out explicitly.
    - `X-Voicebox-Client-Id` selects a **per-client voice binding**. VoiceBox's own resolution
      order (explicit `profile` arg → this header → a global default) means the header is optional
      for a tool call to succeed at all — it is not required for "registered."
@@ -168,7 +169,7 @@ apply — nothing here is marked `human:`).
 |---|---|
 | **C10B-1** | `apps/daemon/src/mcp-config.ts` at HEAD defines, inside the `MCP_TEMPLATES` array literal, exactly one object whose `id` property is the string `'voicebox'`, with non-empty `label` and `homepage` string properties. |
 | **C10B-2** | That object's `transport` is exactly `'http'`; its `url`, parsed as a URL, has protocol `http:`, hostname `127.0.0.1`, port `17493`, and pathname `/mcp`; its `category` is exactly `'utilities'`; its `authMode` is either absent or exactly `'none'` (never `'oauth'` — the endpoint is loopback, matching `inferMcpAuthModeForUrl`'s own loopback rule in the same file). |
-| **C10B-3** | No extra surface: `git diff --name-only <baseCommit>...HEAD` is a subset of the proposed `"W10b"` lease (§7) — read mechanically from `docs/plans/waves/leases.json`, never hand-approved. Independently and more precisely for the one product file in that lease: every `MCP_TEMPLATES` object present at `baseCommit`, keyed by its `id`, is still present at HEAD with **byte-identical** source text — the change adds the one `voicebox` object and changes nothing else in the array (no reordering, no incidental edits to a neighboring template). |
+| **C10B-3** | No extra surface: `git diff --name-only <baseCommit>...HEAD` is a subset of the proposed `"W10b"` lease (see "Proposed write lease" below) — read mechanically from `docs/plans/waves/leases.json`, never hand-approved. Independently and more precisely for the one product file in that lease: every `MCP_TEMPLATES` object present at `baseCommit`, keyed by its `id`, is still present at HEAD with **byte-identical** source text — the change adds the one `voicebox` object and changes nothing else in the array (no reordering, no incidental edits to a neighboring template). |
 | **C10B-4** | No voiceover-workflow scope creep: the `id: 'voicebox'` object literal's own source text (i.e. the template's declared fields — `description`, `example`, etc. — not any accompanying comment) matches none of, case-insensitive: `voiceover`, `storyboard`, `timeline`, a `merge` within 20 characters of `video`\|`project`, a `script` within 20 characters of `track`, `elevenlabs`, `fishaudio`, or `senseaudio`. Scoped to the object literal itself (not the whole diff) so a citation comment explaining the ruling — which necessarily discusses the thing that was refused — can never trip this check; that citation is C10B-5's job, not C10B-4's. The registered template may describe what VoiceBox's tools do; it may not describe or imply a design-workflow voiceover pipeline. |
 | **C10B-5** | Documentation record: at least one comment line *added* to `apps/daemon/src/mcp-config.ts` between `baseCommit` and HEAD contains the literal substring `NM-25`, so the entry is self-explaining without needing this PRD open. |
 
@@ -185,8 +186,10 @@ two different failure modes, not one restated twice.
 No criterion asserts VoiceBox's server is reachable, spawns any process, or opens a network
 socket — see "Explicitly out of scope." No criterion asserts `pnpm guard`/`pnpm typecheck` pass on
 their own; per `VERIFICATION-CONTRACT.md`'s own opening finding, a green gate is necessary but
-never sufficient by itself, so it is not listed as one of the five (the verifier still must pass
-repo typecheck itself, as delivery hygiene on the verifier's own source — see §8).
+never sufficient by itself, so it is not listed as one of the five. (The verifier's own source must
+still pass repo typecheck, as delivery hygiene on this PRD's authoring step — confirmed via
+`pnpm exec tsc -p scripts/tsconfig.json --noEmit` during authoring; that is a requirement on this
+file, not a wave-completion criterion.)
 
 ## Definition of "green"
 
@@ -222,11 +225,11 @@ any `allow`/`deny` list for W-C, W0, W7, W1, W2, W4, W9-ingest, or W3 (checked d
 Ran `pnpm exec tsx scripts/waves/verify-w10b.ts` on branch `feat/w10b-voicebox-registration`
 immediately after writing the verifier, before any implementation exists. Expected and confirmed:
 RED, nonzero exit — C10B-1 and C10B-2 fail because no `voicebox` template exists yet; C10B-3's
-`LEASE` sub-check fails closed because `leases.json` has no `"W10b"` key yet (§7 is not yet
-landed); C10B-4 and C10B-5 report against an empty diff. This is the intended fail-closed state,
-not a bug — see the run tail in the authoring session's report. Once implementation lands and §7's
-lease entry is added to `leases.json`, re-running the same command with no other changes is the
-sole gate.
+lease sub-check fails closed because `leases.json` has no `"W10b"` key yet (the "Proposed write
+lease" entry above is not yet landed); C10B-4 and C10B-5 report against an empty diff. This is the
+intended fail-closed state, not a bug — see the run tail in the authoring session's report. Once
+implementation lands and the proposed lease entry is added to `leases.json`, re-running the same
+command with no other changes is the sole gate.
 
 ## Open questions for adversarial review
 
@@ -241,4 +244,5 @@ sole gate.
 3. **`leases.json` has no `"W10b"` key yet.** Structural consequence of the HARD DENY on that file
    for this authoring step — the same shape `mishmash-w9-ingest-tranche`'s own verifier documented
    for *its* PRD file during *its* authoring branch. C10B-3 will read fail-closed until the
-   orchestrator lands §7's entry; that is the intended sequencing, not a defect in this PRD.
+   orchestrator lands the "Proposed write lease" entry above; that is the intended sequencing, not
+   a defect in this PRD.
