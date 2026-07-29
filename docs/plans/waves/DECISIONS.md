@@ -254,6 +254,8 @@ declared done without its gate going green on its own terms. Every ruling made u
 delegation is recorded here and remains founder-vetoable.
 
 ### W9AS-ACCEPT-shared-local-namespace
+- Route: `POST /api/runs/:id/cancel` (named as the representative route; this acceptance covers every run-id- and terminal-session-scoped route in the W9 agent-spawn tranche, including `GET /api/runs/:id/events`, `GET /api/runs/:id/agui`, `GET /api/runs/:id/result-package`, `POST /api/projects/:id/terminals/:tid/kill`, and `DELETE /api/projects/:id/terminals/:tid`)
+- Accepted risk: run IDs and terminal session IDs live in a shared local namespace, so any local process already running as the user can reach the loopback daemon and act on any run or session it did not create — there is no per-caller ownership scoping on these routes
 - Accepter: Devin Wiggins (founder), delegated 2026-07-28 to the Fable 5 orchestrator
 - Date: 2026-07-28
 - Rationale: MishMash is a local-first, single-user product whose daemon binds loopback only. Run IDs are therefore a shared local namespace: any process already running as the user can reach the daemon and act on any run ID. This is accepted rather than mitigated, because per-caller ownership scoping would add an authentication substrate the product does not otherwise have, to defend against an attacker who — having already achieved local code execution as the user — could read the data directly anyway. The threat model must state this explicitly and name "arbitrary local processes" as in-scope-but-accepted, so the acceptance is visible rather than implied by silence.
@@ -340,3 +342,143 @@ cannot reach), the verifier must parse and bind its `Accepted risk` and `Route` 
 than only its heading, and the PRD must state plainly that this proves "landed on main through
 the review lane", NOT "cryptographically signed by the founder". An honest weak control beats a
 strong-sounding one.
+
+### W1-C1-12-DECISION-ACCEPTANCE
+- Decision: accepted
+- Decider: Fable 5 orchestrator under gate authority delegated by Devin Wiggins (founder) on 2026-07-28
+- Date: 2026-07-29
+- Records: `docs/decisions/gemini-lane.md`, `docs/decisions/deepseek-path-hygiene.md`
+- Rationale: C1-12 terminates at `blocked-on-founder` by construction — the verifier can prove
+  that both NM-14 and NM-37C decision records exist at their leased paths, are structurally
+  complete, and strictly predate the wave's first implementation commit, but it can never
+  machine-verify that the decisions themselves are *right*. That last step is the founder's, and
+  it is taken here: both records were read in full and are accepted as correct. The Gemini lane
+  record states the routing consequence and its fallback; the DeepSeek path-hygiene record states
+  the constraint and why the alternative was rejected. Neither is a placeholder, and neither
+  defers a question it was written to answer. W1 is therefore clear to land at 16 pass /
+  1 blocked-on-founder / 0 fail, which is the maximum honest score this gate can report.
+- Precedent: this acceptance resolves a founder judgment call, not a failing criterion. It is not
+  a waiver, and it does not license landing any wave whose gate reports a hard failure.
+
+### W10B-PARK
+- Decision: parked (package not frozen; wave not implemented)
+- Decider: Fable 5 orchestrator under gate authority delegated by Devin Wiggins (founder) on 2026-07-28
+- Date: 2026-07-29
+- Rounds: 4 independent reviews, 4 non-APPROVE verdicts
+- Rationale: Round 4 was pre-declared final, and it came back REJECT with three
+  probe-demonstrated bypasses, each type-clean: (1) the verifier serialized the template entry
+  as a root value while `mcp-routes.ts` serializes it nested inside `{ servers, templates }`, so a
+  `toJSON(key)` returning the frozen value for the root key and hostile values for the array index
+  passed every check while the route served the hostile data; (2) each criterion imported a fresh
+  module and serialized ONCE, so a stateful getter returning the frozen URL on first read and a
+  hostile one thereafter passed, while the daemon holds one imported instance and serves the
+  divergence on any later request; (3) the runtime import materialized committed text at a
+  predictable temp path, so `import.meta.url.includes('verify-w10b-runtime-')` distinguished the
+  verifier from production. The reviewer also established that the deep structural scan removed in
+  round 4 was NOT redundant — it would have caught bypass (1).
+- Why park rather than authorize a fifth round: the failures are not a list of holes to patch,
+  they are one architectural verdict. This package tries to prove the runtime behavior of a data
+  literal that lives in the same file as arbitrary code, and each round the adversary simply moves
+  to the next layer the check does not observe. Sibling waves that assert against a REAL booted
+  daemon's HTTP response (W10c, W10f) do not have this problem, because they observe the served
+  bytes rather than a reconstruction of them. A fifth patch round on this foundation would be a
+  fourth guess at where the next divergence hides.
+- Correction to the round-4 instruction, recorded so the mistake is not repeated: the delegate's
+  ruling ("close the class by asserting at runtime") was directionally right but under-specified.
+  Asserting at runtime is insufficient unless the assertion also happens IN THE PRODUCTION
+  SERIALIZATION CONTEXT, is REPEATED (first read is not the only read), and observes the module at
+  its REAL path. Any future package making a runtime-truth claim must satisfy all three.
+- Disposition: NM-25 (register the VoiceBox MCP) is not cancelled. If it is picked up later it gets
+  a fresh package built on the booted-daemon HTTP-response pattern, not a fifth revision of this one.
+
+### W10A-PARK
+- Decision: parked (package not frozen; wave not implemented)
+- Decider: Fable 5 orchestrator under gate authority delegated by Devin Wiggins (founder) on 2026-07-28
+- Date: 2026-07-29
+- Rounds: 3 independent reviews, 3 non-APPROVE verdicts
+- Rationale: Same root cause as W10B, found independently — the package attempts to prove runtime
+  behavior by freezing source literals, so every closed hole exposes an adjacent one (round 3
+  reproduced the identical `__proto__`/`toJSON` divergence). Two further defects were substantive
+  rather than mechanical: a safety finding that the CLI fallback path was never proven to avoid the
+  protected default-namespace daemon on port 7456, and a PRD defect instructing implementers to
+  import `sendApiError` from `@open-design/contracts`, which exports only the error types — code
+  written to the frozen text would not typecheck.
+- Salvage: the review found one REAL product bug, which was rehomed rather than parked with the
+  wave — editing a saved MCP client's URL silently reset its authMode to OAuth. That is fixed
+  separately on `fix/mcp-client-authmode-preserved` with a red spec that fails on the unfixed code.
+- Disposition: NM-24's seam pin stands. A future package must observe served behavior, per W10B-PARK.
+
+### W9AS-PARK
+- Decision: parked (package not frozen; tranche not implemented)
+- Decider: Fable 5 orchestrator under gate authority delegated by Devin Wiggins (founder) on 2026-07-28
+- Date: 2026-07-29
+- Rounds: 4 independent reviews, 4 non-APPROVE verdicts
+- Rationale: Round 4 was pre-declared final and returned REJECT with four executable bypasses.
+  Three were re-breaks of findings the author had reported closed: C9S-1 still reads false-green
+  when a genuine outer guard binding is shadowed by a nested redeclaration (the reassignment scan
+  walks the whole tree but redeclaration handling stayed top-level-only); C9S-4 accepts any member
+  named `status` without binding its receiver to the request under test, so an unused lookalike
+  object satisfies it; C9S-5 still scans string-literal tokens, so two no-op tests carrying inert
+  strings split across the eight keywords satisfy the corpus gate without exercising a single case.
+- The safety finding, and why it decides this: C9S-8's accepted-risk mechanism is sound and passes
+  honestly against the record landed through the docs lane. But the teardown fix does NOT hold. The
+  author reported that teardown waits for the process group's real exit and fails closed; the
+  reviewer reproduced the opposite with a process-group probe — teardown treats the tracked group
+  leader's `exit` event as proof the whole group is gone, cancels the pending SIGKILL and resolves,
+  while a SIGTERM-handling descendant in the same group stays alive. That is the orphaned-process
+  failure this program's machine-safety rules exist to prevent, it survived the round that claimed
+  to fix it, and the PRD's claim to the contrary is false as written.
+- Program pattern (third instance): W10a, W10b and W9as have now all been parked after repeated
+  rejects, and they share one root cause — each tries to establish RUNTIME truth by inspecting
+  SOURCE STRUCTURE (AST shape, literal freezing, token presence). Every round closes the named hole
+  and the next round finds the adjacent one, because the space of source shapes that produce a given
+  runtime behavior is unbounded. The two packages NOT failing this way (W10c, W10f) assert against a
+  real booted daemon's observable output. BINDING for future packages: a criterion asserting runtime
+  behavior must observe that behavior — boot the daemon, issue the real request, assert the response.
+  Structural checks are legitimate only for facts with no runtime observable, and must say so.
+- Carry-forward (safety, applies to every package that boots a daemon): teardown must signal the
+  process GROUP and then CONFIRM no survivors before resolving. A leader's `exit` event is not proof
+  the group exited.
+- Disposition: NM-22 agent-spawn route hardening is NOT cancelled — the surface is real and the
+  threat model work in this PRD is reusable. A future package re-expands it on the runtime-observation
+  pattern above, and inherits C9S-8's accepted-risk mechanism, which is the one part that held up.
+
+### W10C-PARK
+- Decision: parked (package not frozen; wave not implemented)
+- Decider: Fable 5 orchestrator under gate authority delegated by Devin Wiggins (founder) on 2026-07-28
+- Date: 2026-07-29
+- Rounds: 3 independent reviews, 3 non-APPROVE verdicts
+- Rationale: Round 3 was pre-declared final and returned REJECT with five HIGH findings. Three of
+  them (C10C-2, C10C-3, C10C-4) are the SAME defect surviving a third round: the criteria meant to
+  prove the repository carries real delegated tests bound to production remain structural, and
+  structural binding keeps admitting decorative artifacts. `countCallsToExactIdentifier` counts
+  `obj._unused()` as a call to an imported binding named `_unused`; `SKILL_ID_ALIASES` is satisfied
+  by a property-name occurrence; the compiler-API check ties `createSourceFile` to `forEachChild`
+  rather than to reading the real toolbox source. C10C-1's live-value inspection is genuinely
+  runtime but incomplete — it never inspects array numeric-property descriptors and loses symbol
+  keys through `getOwnPropertyNames`/`keys`, so a probe adding an accessor at index 0 and a symbol
+  own key returned zero problems.
+- The deciding finding is teardown, for the third wave running: a missing or unparseable stop report
+  with no captured PID returns SUCCESS regardless of exit status; a reported `partial` becomes
+  success after escalation; only selected PIDs are polled rather than group survival; and the
+  temporary data directory is removed unconditionally even when confirmation fails. Production
+  `tools-dev` explicitly emits `status: "partial"` when `remainingPids` survive, so this is not
+  hypothetical.
+- What was sound and is worth reusing: the reinstated C10C-8 works and disclaims honestly — it
+  produces pass / blocked-on-founder / fail for present / deleted / malformed records and claims
+  review-lane provenance rather than verified authority. The reviewer/decider whitespace checks,
+  manual-redirect probes with origin and status validation, the DENY list, and the GATE-INTEGRITY
+  pattern are all sound. The author's self-caught `ScriptKind.TS` parser bug was confirmed to have
+  affected only the round-3 NextStepActions check, invalidating no earlier pass.
+- The insight for whoever re-expands this: the verifier's own runtime oracle DOES supply real
+  behavioral truth — the reviewer said so explicitly. What keeps failing is the surrounding attempt
+  to ALSO prove, structurally, that the repo contains particular tests wired to particular imports.
+  That is an unbounded source-shape claim and it has now lost three times. A future package should
+  either drop the delegated-artifact criteria and let the runtime oracle carry the proof, or bind
+  them by executing the delegated tests and observing their effects — never by counting identifiers.
+- Evidence gap noted for the record: the reviewer could not execute the verifier (tsx IPC `listen
+  EPERM` in its sandbox), and the manifest the author cited for 6/11 records `treeDirty: true`, so
+  no clean HEAD-bound run was independently confirmed. The five findings are static and stand
+  regardless, but the pass count was not verified.
+- Disposition: NM-19 toolbox reliability is NOT cancelled. The 17-phantom-skill-ID problem is real
+  and unaddressed; a future package re-expands it on the runtime-observation pattern.

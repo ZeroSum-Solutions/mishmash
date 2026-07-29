@@ -6,6 +6,14 @@ import { expect, test as base } from '@playwright/test';
 import { createToolsDevSuite, e2eWorkspaceRoot } from '../tools-dev/runtime.ts';
 import type { ToolsDevSuite } from '../tools-dev/types.ts';
 
+// Test-controlled newsletter subscribe target. Passed to the web app as
+// NEXT_PUBLIC_NEWSLETTER_URL so newsletter-signup specs mock a URL this
+// harness owns instead of depending on EntryShell's hardcoded production
+// default (which a wave branch removes). `.test` is a reserved TLD (RFC
+// 2606) that never resolves for real; Playwright's route interception fires
+// before any real network/DNS lookup regardless.
+export const E2E_NEWSLETTER_SUBSCRIBE_URL = 'https://e2e-newsletter.mishmash.test/subscribe';
+
 type PlaywrightToolsDevSuite = ToolsDevSuite & {
   markFailed: () => void;
 };
@@ -32,7 +40,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       let useError: unknown = null;
       let stopError: unknown = null;
       try {
-        await toolsDev.startWeb();
+        await toolsDev.startWeb({ NEXT_PUBLIC_NEWSLETTER_URL: E2E_NEWSLETTER_SUBSCRIBE_URL });
         const warmupResponse = await fetch(toolsDev.url.web('/'));
         if (!warmupResponse.ok) {
           throw new Error(

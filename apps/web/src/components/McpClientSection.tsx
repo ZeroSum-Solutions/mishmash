@@ -105,10 +105,21 @@ function effectiveMcpAuthMode(
   return row.authMode ?? inferMcpAuthMode(row.url);
 }
 
+// Invariant: editing the URL of an already-saved server must never change
+// its authMode, even when the current value happens to equal what the URL
+// would infer -- that coincidence is indistinguishable from a deliberate
+// choice once the row has round-tripped through a save. A still-drafting
+// row (`_isNew`, never saved) is the only case where authMode is allowed to
+// keep tracking the URL's inferred default as the user fills the form in,
+// and only until they explicitly diverge from that default via the
+// "OAuth mode" select.
 function authModeAfterUrlChange(
-  row: Pick<McpServerConfig, 'url' | 'authMode'>,
+  row: Pick<DraftRow, 'url' | 'authMode' | '_isNew'>,
   nextUrl: string,
 ): NonNullable<McpServerConfig['authMode']> {
+  if (!row._isNew) {
+    return row.authMode ?? inferMcpAuthMode(nextUrl);
+  }
   const previousInferred = inferMcpAuthMode(row.url);
   if (!row.authMode || row.authMode === previousInferred) {
     return inferMcpAuthMode(nextUrl);
