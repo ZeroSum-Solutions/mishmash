@@ -394,10 +394,11 @@ function subcommandMapHasKey(cliPath: string, key: string): boolean {
 // C10F-1: registry-shaped literal search across a reachable-file set. Looks
 // for a top-level (possibly exported) `const <nameHint> = [ {...}, {...} ]`
 // whose element object literals contain no spread anywhere (item 2).
-function findRegistryLiteral(reachable: Set<string>, nameHint: RegExp): { found: boolean; file: string | null; elementCount: number; hasSpread: boolean } {
+interface RegistryLiteralScan { found: boolean; file: string | null; elementCount: number; hasSpread: boolean; categories: string[] }
+function findRegistryLiteral(reachable: Set<string>, nameHint: RegExp): RegistryLiteralScan {
   for (const file of reachable) {
     const { sourceFile } = parseTs(file);
-    let result: { found: boolean; file: string | null; elementCount: number; hasSpread: boolean } | null = null;
+    let result: RegistryLiteralScan | null = null;
     walk(sourceFile, (node) => {
       if (result) return;
       if (
@@ -411,13 +412,22 @@ function findRegistryLiteral(reachable: Set<string>, nameHint: RegExp): { found:
         const objectElements = elements.filter((el): el is TypeScriptModule.ObjectLiteralExpression => ts.isObjectLiteralExpression(el));
         if (objectElements.length === elements.length && elements.length > 0) {
           const hasSpread = elements.some((el) => containsSpread(el));
-          result = { found: true, file, elementCount: elements.length, hasSpread };
+          // Re-derive the actual declared category strings from the repo's
+          // own source (defect catalog item 8 in spirit) -- never assumed
+          // or hardcoded, so a downstream check (C10F-8's env-var-name
+          // derivation) reflects whatever the implementation actually named
+          // its categories, not a guess this file made in advance.
+          const categories = objectElements
+            .map((el) => el.properties.find((p) => ts.isPropertyAssignment(p) && ((ts.isIdentifier(p.name) && p.name.text === 'category') || (ts.isStringLiteral(p.name) && p.name.text === 'category'))))
+            .map((prop) => (prop && ts.isPropertyAssignment(prop) && ts.isStringLiteral(prop.initializer) ? prop.initializer.text : null))
+            .filter((c): c is string => c !== null);
+          result = { found: true, file, elementCount: elements.length, hasSpread, categories };
         }
       }
     });
     if (result) return result;
   }
-  return { found: false, file: null, elementCount: 0, hasSpread: false };
+  return { found: false, file: null, elementCount: 0, hasSpread: false, categories: [] };
 }
 // C10F-1: absence of a raw, unfiltered directory-listing call anywhere in
 // the reachable set. A real implementation may still call readdir/opendir
@@ -448,14 +458,6 @@ let fixtureSeq = 0;
 function nextFixtureName(label: string): string {
   fixtureSeq += 1;
   return `w10f-verify-${runId}-${fixtureSeq}-${label}`;
-}
-async function withFixtureDataDir<T>(fn: (dataDir: string) => Promise<T> | T): Promise<T> {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'w10f-data-'));
-  try {
-    return await fn(dataDir);
-  } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true });
-  }
 }
 // Real repo-relative `.tmp/<source>/<namespace>` fixture -- this is the
 // actual path family a real implementation resolves against (per
@@ -542,14 +544,17 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-// Isolated, single-purpose HTTP-daemon-in-a-child-process, used ONLY by
-// C10F-5 (needs a real project row created through the real
-// POST /api/import/folder route). Spawned as a separate process (not an
-// in-process dynamic import from THIS script) because Node's ESM module
-// cache would otherwise pin server.ts's module-scope RUNTIME_DATA_DIR to
-// whichever OD_DATA_DIR this process first imported it with. Bound to
-// port 0 (OS-assigned ephemeral port) -- never 7456/51012 -- and torn down
-// by this exact child's PID.
+// Isolated HTTP-daemon-in-a-child-process. Booted exactly ONCE per run (see
+// `bootSharedDaemon`/`SharedDaemon` below) and reused across every dynamic
+// criterion (C10F-2 through C10F-9), not re-booted per criterion -- C10F-5
+// specifically needs it for a real project row created through the real
+// POST /api/import/folder route, but every other dynamic criterion reaches
+// it too, via `od storage ...` with `OD_DAEMON_URL` explicitly pointed at
+// it. Spawned as a separate process (not an in-process dynamic import from
+// THIS script) because Node's ESM module cache would otherwise pin
+// server.ts's module-scope RUNTIME_DATA_DIR to whichever OD_DATA_DIR this
+// process first imported it with. Bound to port 0 (OS-assigned ephemeral
+// port) -- never 7456/51012 -- and torn down by this exact child's PID.
 function bootIsolatedDaemonSubprocess(dataDir: string): { proc: ReturnType<typeof spawn>; readyPromise: Promise<{ baseUrl: string }> } {
   const runnerPath = path.join(os.tmpdir(), `w10f-daemon-runner-${runId}-${fixtureSeq}.mjs`);
   const serverUrl = pathToFileURL(serverTsPath).href;
@@ -699,6 +704,33 @@ async function main(): Promise<void> {
   }
 
   // -----------------------------------------------------------------
+  // ONE shared isolated daemon for every dynamic criterion below. Booted
+  // ONLY when `storage` is actually registered (pre-implementation this is
+  // always false, so this cost is never paid on a clean-red run). Every
+  // `runStorageCli()` call in every C10F-2..C10F-9 criterion below is
+  // handed this daemon's own resolved `baseUrl` explicitly -- see "THE
+  // OD_DAEMON_URL HAZARD" for why that is not optional.
+  // -----------------------------------------------------------------
+  let sharedDaemon: SharedDaemon | null = null;
+  if (storageEntry) {
+    try {
+      sharedDaemon = await bootSharedDaemon();
+    } catch (err) {
+      // A boot failure here must not crash the run -- every dynamic
+      // criterion below independently checks `sharedDaemon` and records an
+      // honest, named failure rather than assuming it succeeded.
+      console.error(`verify-w10f: shared daemon boot failed (dynamic criteria will fail honestly): ${String(err)}`);
+    }
+  }
+  function requireSharedDaemon(id: string): SharedDaemon | null {
+    if (!sharedDaemon) {
+      record(id, '', '', false, '', { detail: sharedDaemon === null && storageEntry ? 'the shared verifier-owned daemon failed to boot -- see console output for the boot error' : "product surface missing: 'storage' not registered in apps/daemon/src/cli.ts SUBCOMMAND_MAP" });
+      return null;
+    }
+    return sharedDaemon;
+  }
+
+  // -----------------------------------------------------------------
   // C10F-1 -- registry is a finite, named allowlist, never a generic walk
   // -----------------------------------------------------------------
   await checkCriterion('C10F-1', 'AST scan of the storage module reachable from SUBCOMMAND_MAP.storage', 'a named, spread-free array-literal registry exists in the reachable set, and no raw fs.readdir/opendir call appears anywhere in it', () => {
@@ -710,7 +742,7 @@ async function main(): Promise<void> {
     const rawWalkCalls = countRawDirectoryListingCalls(storageReachable);
     const ok = registry.found && !registry.hasSpread && rawWalkCalls === 0;
     record('C10F-1', '', '', ok,
-      `registry found: ${registry.found} (file=${registry.file ?? 'n/a'}, elements=${registry.elementCount}, hasSpread=${registry.hasSpread})\nraw readdir/opendir call count across reachable set: ${rawWalkCalls}\nreachable files: ${[...storageReachable].join(', ')}`,
+      `registry found: ${registry.found} (file=${registry.file ?? 'n/a'}, elements=${registry.elementCount}, hasSpread=${registry.hasSpread}, categories=${JSON.stringify(registry.categories)})\nraw readdir/opendir call count across reachable set: ${rawWalkCalls}\nreachable files: ${[...storageReachable].join(', ')}`,
       { detail: ok ? undefined : 'no spread-free named array-literal registry found, or a raw directory-listing call is present' });
   });
 
@@ -718,8 +750,8 @@ async function main(): Promise<void> {
   // C10F-2 -- root confinement: real containment, not string prefix
   // -----------------------------------------------------------------
   await checkCriterion('C10F-2', 'od storage gc plan --json against a prefix-collision fixture and a genuinely external path', 'neither the prefix-collision sibling nor the external path appear as candidates; a real in-scope expired file does', async () => {
-    const invocation = runStorageCli(['gc', 'plan', '--json']);
-    if (invocation.skipped) { record('C10F-2', '', '', false, '', { detail: `product surface missing: ${invocation.reason}` }); return; }
+    const daemon = requireSharedDaemon('C10F-2');
+    if (!daemon) return;
     await withFixtureTmpNamespace('tools-dev', async (nsDir) => {
       const collisionSiblingDir = `${nsDir}-not-really`;
       fs.mkdirSync(collisionSiblingDir, { recursive: true });
@@ -728,7 +760,7 @@ async function main(): Promise<void> {
       writeFixtureFileWithAge(path.join(externalDir, 'old.txt'), 'external', 400);
       writeFixtureFileWithAge(path.join(nsDir, 'in-scope.txt'), 'in-scope', 400);
       try {
-        const r = runStorageCli(['gc', 'plan', '--json']);
+        const r = runStorageCli(daemon.baseUrl, ['gc', 'plan', '--json']);
         const parsed = r.skipped === false ? parseLastJsonLine(r.stdout) : { ok: false as const, error: 'skipped' };
         const stdoutText = r.skipped === false ? r.stdout : '';
         const mentionsCollisionSibling = stdoutText.includes(collisionSiblingDir);
@@ -749,8 +781,8 @@ async function main(): Promise<void> {
   // C10F-3 -- symlink escape refusal
   // -----------------------------------------------------------------
   await checkCriterion('C10F-3', 'od storage gc plan/apply against a symlink escaping the allowed root', 'the symlink target outside every allowed root survives apply; a real in-scope file in the same directory is removed', async () => {
-    const invocation = runStorageCli(['gc', 'plan', '--json']);
-    if (invocation.skipped) { record('C10F-3', '', '', false, '', { detail: `product surface missing: ${invocation.reason}` }); return; }
+    const daemon = requireSharedDaemon('C10F-3');
+    if (!daemon) return;
     await withFixtureTmpNamespace('tools-dev', async (nsDir) => {
       const externalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'w10f-symlink-target-'));
       const externalFile = path.join(externalDir, 'real-user-file.txt');
@@ -762,11 +794,11 @@ async function main(): Promise<void> {
       writeFixtureFileWithAge(realExpired, 'expired', 400);
       fs.utimesSync(linkPath, new Date(Date.now() - 400 * 86_400_000), new Date(Date.now() - 400 * 86_400_000));
       try {
-        const plan = runStorageCli(['gc', 'plan', '--json']);
+        const plan = runStorageCli(daemon.baseUrl, ['gc', 'plan', '--json']);
         const planParsed = plan.skipped === false ? parseLastJsonLine(plan.stdout) : { ok: false as const, error: 'skipped' };
         const planId = plan.skipped === false && planParsed.ok && isRecord(planParsed.value) && typeof planParsed.value.planId === 'string' ? planParsed.value.planId : null;
         if (!planId) { record('C10F-3', '', '', false, '', { detail: 'plan did not return a planId -- cannot exercise apply' }); return; }
-        runStorageCli(['gc', 'apply', '--plan', planId, '--confirm', '--json']);
+        runStorageCli(daemon.baseUrl, ['gc', 'apply', '--plan', planId, '--confirm', '--json']);
         const afterHash = fs.existsSync(externalFile) ? sha256File(externalFile) : null;
         const externalSurvived = afterHash === beforeHash;
         const realExpiredRemoved = !fs.existsSync(realExpired);
@@ -784,11 +816,11 @@ async function main(): Promise<void> {
   // C10F-4 -- active-namespace refusal (live sidecar stamp)
   // -----------------------------------------------------------------
   await checkCriterion('C10F-4', 'od storage gc plan against a namespace with a live stamped process vs. the same namespace after the process exits', 'the active namespace is excluded from the plan; once inactive, the identical namespace IS included', async () => {
-    const invocation = runStorageCli(['gc', 'plan', '--json']);
-    if (invocation.skipped) { record('C10F-4', '', '', false, '', { detail: `product surface missing: ${invocation.reason}` }); return; }
+    const daemon = requireSharedDaemon('C10F-4');
+    if (!daemon) return;
     let sidecarProto: { SIDECAR_STAMP_FLAGS: Record<string, string> };
     try {
-      sidecarProto = createRequire(path.join(repoRoot, 'package.json'))('@open-design/sidecar-proto');
+      sidecarProto = await loadSidecarProto();
     } catch (err) {
       record('C10F-4', '', '', false, '', { detail: `could not load @open-design/sidecar-proto for real stamp flags: ${String(err)}` });
       return;
@@ -806,12 +838,12 @@ async function main(): Promise<void> {
       const liveProc = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000);', ...stampArgs], { stdio: 'ignore' });
       try {
         await new Promise((resolve) => setTimeout(resolve, 300));
-        const planWhileActive = runStorageCli(['gc', 'plan', '--json']);
+        const planWhileActive = runStorageCli(daemon.baseUrl, ['gc', 'plan', '--json']);
         const activeStdout = planWhileActive.skipped === false ? planWhileActive.stdout : '';
         const activeMentionsNamespace = activeStdout.includes(namespace);
         if (liveProc.pid != null) { liveProc.kill('SIGKILL'); }
         await new Promise((resolve) => setTimeout(resolve, 300));
-        const planAfterExit = runStorageCli(['gc', 'plan', '--json']);
+        const planAfterExit = runStorageCli(daemon.baseUrl, ['gc', 'plan', '--json']);
         const afterStdout = planAfterExit.skipped === false ? planAfterExit.stdout : '';
         const afterMentionsNamespace = afterStdout.includes(namespace);
         const ok = !activeMentionsNamespace && afterMentionsNamespace;
@@ -828,61 +860,53 @@ async function main(): Promise<void> {
   // C10F-5 -- imported-folder baseDir is untouchable
   // -----------------------------------------------------------------
   await checkCriterion('C10F-5', 'a real imported-folder project created via POST /api/import/folder, then od storage gc apply', 'every file under metadata.baseDir survives untouched and is never listed as a candidate; a managed project\'s stale non-PROJECTS_DIR content IS collected', async () => {
-    const invocation = runStorageCli(['gc', 'plan', '--json']);
-    if (invocation.skipped) { record('C10F-5', '', '', false, '', { detail: `product surface missing: ${invocation.reason}` }); return; }
-    if (!fs.existsSync(serverTsPath)) { record('C10F-5', '', '', false, '', { detail: 'apps/daemon/src/server.ts not found' }); return; }
-    await withFixtureDataDir(async (dataDir) => {
-      const importedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'w10f-imported-'));
-      writeFixtureFileWithAge(path.join(importedDir, 'precious.txt'), 'do-not-delete', 400);
-      let daemonProc: ReturnType<typeof spawn> | null = null;
-      try {
-        const { proc, readyPromise } = bootIsolatedDaemonSubprocess(dataDir);
-        daemonProc = proc;
-        const { baseUrl } = await readyPromise;
-        const importRes = await fetchLoopbackOnly(`${baseUrl}/api/import/folder`, {
-          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ baseDir: importedDir }),
-        });
-        if (importRes.status < 200 || importRes.status >= 300) {
-          record('C10F-5', '', '', false, '', { detail: `POST /api/import/folder returned ${importRes.status} -- could not create the fixture imported project` });
-          return;
-        }
-        const planRes = await fetchLoopbackOnly(`${baseUrl}/api/storage/gc-plan`);
-        const planBody = planRes.status >= 200 && planRes.status < 300 ? await planRes.text() : '';
-        const mentionsImportedDir = planBody.includes(importedDir);
-        const beforeHash = sha256File(path.join(importedDir, 'precious.txt'));
-        if (planRes.status >= 200 && planRes.status < 300 && isRecord(JSON.parse(planBody || '{}')) ) {
-          const planIdMatch = JSON.parse(planBody) as { planId?: string };
-          if (planIdMatch.planId) {
-            await fetchLoopbackOnly(`${baseUrl}/api/storage/gc-apply`, {
-              method: 'POST', headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ planId: planIdMatch.planId, confirm: true }),
-            });
-          }
-        }
-        const afterHash = fs.existsSync(path.join(importedDir, 'precious.txt')) ? sha256File(path.join(importedDir, 'precious.txt')) : null;
-        const untouched = afterHash === beforeHash;
-        const ok = planRes.status >= 200 && planRes.status < 300 && !mentionsImportedDir && untouched;
-        record('C10F-5', '', '', ok,
-          `plan status=${planRes.status} mentionsImportedDir=${mentionsImportedDir}\nprecious.txt untouched=${untouched} (before=${beforeHash} after=${afterHash})`,
-          { detail: ok ? undefined : 'baseDir content was listed as a candidate, altered/removed, or the plan/report endpoint is missing' });
-      } finally {
-        if (daemonProc) await stopIsolatedDaemonSubprocess(daemonProc);
-        fs.rmSync(importedDir, { recursive: true, force: true });
+    const daemon = requireSharedDaemon('C10F-5');
+    if (!daemon) return;
+    const importedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'w10f-imported-'));
+    writeFixtureFileWithAge(path.join(importedDir, 'precious.txt'), 'do-not-delete', 400);
+    try {
+      const importRes = await fetchLoopbackOnly(`${daemon.baseUrl}/api/import/folder`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ baseDir: importedDir }),
+      });
+      if (importRes.status < 200 || importRes.status >= 300) {
+        record('C10F-5', '', '', false, '', { detail: `POST /api/import/folder returned ${importRes.status} -- could not create the fixture imported project` });
+        return;
       }
-    });
+      const planRes = await fetchLoopbackOnly(`${daemon.baseUrl}/api/storage/gc-plan`);
+      const planBody = planRes.status >= 200 && planRes.status < 300 ? await planRes.text() : '';
+      const mentionsImportedDir = planBody.includes(importedDir);
+      const beforeHash = sha256File(path.join(importedDir, 'precious.txt'));
+      if (planRes.status >= 200 && planRes.status < 300 && isRecord(JSON.parse(planBody || '{}'))) {
+        const planIdMatch = JSON.parse(planBody) as { planId?: string };
+        if (planIdMatch.planId) {
+          await fetchLoopbackOnly(`${daemon.baseUrl}/api/storage/gc-apply`, {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ planId: planIdMatch.planId, confirm: true }),
+          });
+        }
+      }
+      const afterHash = fs.existsSync(path.join(importedDir, 'precious.txt')) ? sha256File(path.join(importedDir, 'precious.txt')) : null;
+      const untouched = afterHash === beforeHash;
+      const ok = planRes.status >= 200 && planRes.status < 300 && !mentionsImportedDir && untouched;
+      record('C10F-5', '', '', ok,
+        `plan status=${planRes.status} mentionsImportedDir=${mentionsImportedDir}\nprecious.txt untouched=${untouched} (before=${beforeHash} after=${afterHash})`,
+        { detail: ok ? undefined : 'baseDir content was listed as a candidate, altered/removed, or the plan/report endpoint is missing' });
+    } finally {
+      fs.rmSync(importedDir, { recursive: true, force: true });
+    }
   });
 
   // -----------------------------------------------------------------
   // C10F-6 -- dry-run is the default and the only read path
   // -----------------------------------------------------------------
   await checkCriterion('C10F-6', 'full fixture-tree multiset before/after od storage gc plan', 'the fixture tree is byte-identical before and after plan, regardless of candidate count', async () => {
-    const invocation = runStorageCli(['gc', 'plan', '--json']);
-    if (invocation.skipped) { record('C10F-6', '', '', false, '', { detail: `product surface missing: ${invocation.reason}` }); return; }
+    const daemon = requireSharedDaemon('C10F-6');
+    if (!daemon) return;
     await withFixtureTmpNamespace('tools-dev', async (nsDir) => {
       writeFixtureFileWithAge(path.join(nsDir, 'a.txt'), 'a', 400);
       writeFixtureFileWithAge(path.join(nsDir, 'sub', 'b.txt'), 'b', 400);
       const before = statTreeMultiset(nsDir);
-      runStorageCli(['gc', 'plan', '--json']);
+      runStorageCli(daemon.baseUrl, ['gc', 'plan', '--json']);
       const after = statTreeMultiset(nsDir);
       const diff = multisetDiff(before, after);
       record('C10F-6', '', '', diff.equal,
@@ -895,11 +919,11 @@ async function main(): Promise<void> {
   // C10F-7 -- apply is distinct, plan-bound, re-validated
   // -----------------------------------------------------------------
   await checkCriterion('C10F-7', 'plan, mutate eligibility between plan and apply, then apply the original plan', 'realized deletions equal the plan\'s candidates minus the item that became ineligible; a new post-plan file is never swept in', async () => {
-    const invocation = runStorageCli(['gc', 'plan', '--json']);
-    if (invocation.skipped) { record('C10F-7', '', '', false, '', { detail: `product surface missing: ${invocation.reason}` }); return; }
+    const daemon = requireSharedDaemon('C10F-7');
+    if (!daemon) return;
     let sidecarProto: { SIDECAR_STAMP_FLAGS: Record<string, string> };
     try {
-      sidecarProto = createRequire(path.join(repoRoot, 'package.json'))('@open-design/sidecar-proto');
+      sidecarProto = await loadSidecarProto();
     } catch (err) {
       record('C10F-7', '', '', false, '', { detail: `could not load @open-design/sidecar-proto: ${String(err)}` });
       return;
@@ -908,7 +932,7 @@ async function main(): Promise<void> {
       await withFixtureTmpNamespace('tools-dev', async (deletableNsDir) => {
         writeFixtureFileWithAge(path.join(survivorNsDir, 'stamp-me.txt'), 'x', 400);
         writeFixtureFileWithAge(path.join(deletableNsDir, 'expired.txt'), 'x', 400);
-        const plan = runStorageCli(['gc', 'plan', '--json']);
+        const plan = runStorageCli(daemon.baseUrl, ['gc', 'plan', '--json']);
         const planParsed = plan.skipped === false ? parseLastJsonLine(plan.stdout) : { ok: false as const, error: 'skipped' };
         const planId = plan.skipped === false && planParsed.ok && isRecord(planParsed.value) && typeof planParsed.value.planId === 'string' ? planParsed.value.planId : null;
         if (!planId) { record('C10F-7', '', '', false, '', { detail: 'plan did not return a planId' }); return; }
@@ -922,7 +946,7 @@ async function main(): Promise<void> {
         writeFixtureFileWithAge(path.join(surpriseNsDir, 'surprise.txt'), 'x', 400);
         try {
           await new Promise((resolve) => setTimeout(resolve, 300));
-          runStorageCli(['gc', 'apply', '--plan', planId, '--confirm', '--json']);
+          runStorageCli(daemon.baseUrl, ['gc', 'apply', '--plan', planId, '--confirm', '--json']);
           const survivorRemoved = !fs.existsSync(path.join(survivorNsDir, 'stamp-me.txt'));
           const deletableRemoved = !fs.existsSync(path.join(deletableNsDir, 'expired.txt'));
           const surpriseRemoved = !fs.existsSync(path.join(surpriseNsDir, 'surprise.txt'));
@@ -946,16 +970,24 @@ async function main(): Promise<void> {
   // correct).
   // -----------------------------------------------------------------
   await checkCriterion('C10F-8', 'identical-age fixture under a wide vs. narrow per-category retention window, with the response-echoed effective window checked against the actual override', 'the fixture survives under a wide window and is collected under a narrow one for its own category only; the echoed window value equals whatever was actually set, never a hardcoded default', async () => {
-    const invocation = runStorageCli(['gc', 'plan', '--json']);
-    if (invocation.skipped) { record('C10F-8', '', '', false, '', { detail: `product surface missing: ${invocation.reason}` }); return; }
+    const daemon = requireSharedDaemon('C10F-8');
+    if (!daemon) return;
+    // Env var name is re-derived from the registry's own declared category
+    // strings (never assumed) -- falls back to the PRD's Tier-1 'tools-dev'
+    // convention, transparently noted in evidence, only when the AST scan
+    // could not find a matching declared category.
+    const registry = findRegistryLiteral(storageReachable, /registry|target/i);
+    const toolsDevCategory = registry.categories.find((c) => c === 'tools-dev') ?? 'tools-dev';
+    const usedFallbackCategory = !registry.categories.includes('tools-dev');
+    const envVarName = `OD_STORAGE_RETENTION_${toolsDevCategory.toUpperCase().replace(/-/g, '_')}_DAYS`;
     await withFixtureTmpNamespace('tools-dev', async (nsDir) => {
       writeFixtureFileWithAge(path.join(nsDir, 'aged.txt'), 'x', 10);
       const overrideWideDays = '365';
-      const wide = runStorageCli(['gc', 'plan', '--json'], { OD_STORAGE_RETENTION_TOOLS_DEV_DAYS: overrideWideDays });
+      const wide = runStorageCli(daemon.baseUrl, ['gc', 'plan', '--json'], { [envVarName]: overrideWideDays });
       const wideStdout = wide.skipped === false ? wide.stdout : '';
       const survivesWide = !wideStdout.includes(nsDir) && !wideStdout.includes('aged.txt');
       const overrideNarrowDays = '1';
-      const narrow = runStorageCli(['gc', 'plan', '--json'], { OD_STORAGE_RETENTION_TOOLS_DEV_DAYS: overrideNarrowDays });
+      const narrow = runStorageCli(daemon.baseUrl, ['gc', 'plan', '--json'], { [envVarName]: overrideNarrowDays });
       const narrowStdout = narrow.skipped === false ? narrow.stdout : '';
       const collectedNarrow = narrowStdout.includes(nsDir) || narrowStdout.includes('aged.txt');
       // "Stated" half: the wide-window response must echo the override
@@ -968,13 +1000,13 @@ async function main(): Promise<void> {
       const echoedWideMatches = wideParsed.ok && JSON.stringify(wideParsed.value).includes(overrideWideDays);
       const echoedNarrowMatches = narrowParsed.ok && JSON.stringify(narrowParsed.value).includes(overrideNarrowDays);
       const echoedValueDiffersBetweenRuns = echoedWideMatches && echoedNarrowMatches;
-      const zeroWindow = runStorageCli(['gc', 'plan', '--json'], { OD_STORAGE_RETENTION_TOOLS_DEV_DAYS: '0' });
+      const zeroWindow = runStorageCli(daemon.baseUrl, ['gc', 'plan', '--json'], { [envVarName]: '0' });
       const zeroWindowIsConfigError = zeroWindow.skipped === false && zeroWindow.status !== 0;
-      const negativeWindow = runStorageCli(['gc', 'plan', '--json'], { OD_STORAGE_RETENTION_TOOLS_DEV_DAYS: '-5' });
+      const negativeWindow = runStorageCli(daemon.baseUrl, ['gc', 'plan', '--json'], { [envVarName]: '-5' });
       const negativeWindowIsConfigError = negativeWindow.skipped === false && negativeWindow.status !== 0;
       const ok = survivesWide && collectedNarrow && echoedValueDiffersBetweenRuns && zeroWindowIsConfigError && negativeWindowIsConfigError;
       record('C10F-8', '', '', ok,
-        `survivesWide=${survivesWide} collectedNarrow=${collectedNarrow}\nechoedWideMatches=${echoedWideMatches} echoedNarrowMatches=${echoedNarrowMatches}\nzeroWindowRejected=${zeroWindowIsConfigError} negativeWindowRejected=${negativeWindowIsConfigError}`,
+        `envVarName=${envVarName} (usedFallbackCategory=${usedFallbackCategory}, declaredCategories=${JSON.stringify(registry.categories)})\nsurvivesWide=${survivesWide} collectedNarrow=${collectedNarrow}\nechoedWideMatches=${echoedWideMatches} echoedNarrowMatches=${echoedNarrowMatches}\nzeroWindowRejected=${zeroWindowIsConfigError} negativeWindowRejected=${negativeWindowIsConfigError}`,
         { detail: ok ? undefined : 'retention window did not independently govern eligibility, its resolved value was not echoed verbatim in the response, or an invalid (0/-5) window was silently accepted instead of rejected as a config error' });
     });
   });
@@ -983,21 +1015,21 @@ async function main(): Promise<void> {
   // C10F-9 -- size/inventory report, before and after, re-derived at runtime
   // -----------------------------------------------------------------
   await checkCriterion('C10F-9', 'report before/after an apply run, against an independently-computed ground truth', 'after-totals equal a fresh fs.stat walk of the same fixture tree post-apply, not plan-predicted arithmetic', async () => {
-    const invocation = runStorageCli(['gc', 'plan', '--json']);
-    if (invocation.skipped) { record('C10F-9', '', '', false, '', { detail: `product surface missing: ${invocation.reason}` }); return; }
+    const daemon = requireSharedDaemon('C10F-9');
+    if (!daemon) return;
     await withFixtureTmpNamespace('tools-dev', async (nsDir) => {
       const target = path.join(nsDir, 'growable.txt');
       writeFixtureFileWithAge(target, 'x'.repeat(100), 400);
-      const before = runStorageCli(['report', '--json']);
-      const plan = runStorageCli(['gc', 'plan', '--json']);
+      const before = runStorageCli(daemon.baseUrl, ['report', '--json']);
+      const plan = runStorageCli(daemon.baseUrl, ['gc', 'plan', '--json']);
       const planParsed = plan.skipped === false ? parseLastJsonLine(plan.stdout) : { ok: false as const, error: 'skipped' };
       const planId = plan.skipped === false && planParsed.ok && isRecord(planParsed.value) && typeof planParsed.value.planId === 'string' ? planParsed.value.planId : null;
       if (!planId) { record('C10F-9', '', '', false, '', { detail: 'plan did not return a planId' }); return; }
       // Simulate concurrent write activity between plan and apply.
       fs.writeFileSync(target, 'x'.repeat(9999));
       const afterFixtureSize = fs.existsSync(target) ? fs.statSync(target).size : 0;
-      runStorageCli(['gc', 'apply', '--plan', planId, '--confirm', '--json']);
-      const after = runStorageCli(['report', '--json']);
+      runStorageCli(daemon.baseUrl, ['gc', 'apply', '--plan', planId, '--confirm', '--json']);
+      const after = runStorageCli(daemon.baseUrl, ['report', '--json']);
       const beforeOk = before.skipped === false && parseLastJsonLine(before.stdout).ok;
       const afterOk = after.skipped === false && parseLastJsonLine(after.stdout).ok;
       const groundTruthRemoved = !fs.existsSync(target);
@@ -1073,6 +1105,65 @@ async function main(): Promise<void> {
     record('C10F-11', '', '', ok,
       `spec files checked: ${specFiles.length}\nunbound: ${unbound.join('\n') || 'none'}`,
       { detail: ok ? undefined : 'one or more red specs import a module unreachable from the real CLI/HTTP entry points -- a lookalike-module false-green' });
+  });
+
+  // The shared daemon has no further use once the dynamic criteria above
+  // have run -- torn down by its own exact child PID before the (cheap,
+  // static) remaining checks, never left running into the gates/review
+  // section below.
+  if (sharedDaemon) {
+    await sharedDaemon.stop();
+    sharedDaemon = null;
+  }
+
+  // -----------------------------------------------------------------
+  // C10F-12 -- gates. A standing hygiene requirement, not "new behavior
+  // exists yet" -- runs, and is expected to pass, both pre- and
+  // post-implementation.
+  // -----------------------------------------------------------------
+  await checkCriterion('C10F-12', 'pnpm guard && pnpm typecheck', 'both exit 0 on the current tree', () => {
+    const guard = sh('pnpm', ['guard'], { timeoutMs: 20 * 60_000 });
+    const typecheck = sh('pnpm', ['typecheck'], { timeoutMs: 20 * 60_000 });
+    const ok = guard.status === 0 && typecheck.status === 0;
+    record('C10F-12', '', '', ok,
+      `guard exit=${guard.status}\ntypecheck exit=${typecheck.status}\n\nguard tail:\n${guard.stdout.slice(-4000)}\n\ntypecheck tail:\n${typecheck.stdout.slice(-4000)}`,
+      { detail: ok ? undefined : `guardExit=${guard.status} typecheckExit=${typecheck.status}` });
+  });
+
+  // -----------------------------------------------------------------
+  // C10F-13 -- adversarial review of the implementation is on record and
+  // non-spoofable. Mirrors verify-w9-ingest.ts's C9-10 design exactly: an
+  // in-repo file committed in commit X cannot contain X's own sha, so the
+  // record names a STRICT ANCESTOR of HEAD that carries the complete
+  // implementation, never HEAD itself.
+  // -----------------------------------------------------------------
+  await checkCriterion('C10F-13', 'docs/security/storage-gc-implementation-review.json', 'reviewedCommit strict ancestor of HEAD; owned-path diff reviewedCommit..HEAD empty; reviewer distinct from every author in baseCommit..reviewedCommit; verdict APPROVE', () => {
+    const reviewRel = 'docs/security/storage-gc-implementation-review.json';
+    const reviewAbs = path.join(repoRoot, reviewRel);
+    if (!fs.existsSync(reviewAbs)) {
+      record('C10F-13', '', '', false, '', { detail: `${reviewRel} does not exist yet -- expected pre-implementation state` });
+      return;
+    }
+    let review: { reviewer?: string; model?: string; reviewedCommit?: string; verdict?: string };
+    try {
+      review = JSON.parse(fs.readFileSync(reviewAbs, 'utf8'));
+    } catch (err) {
+      record('C10F-13', '', '', false, '', { detail: `review record failed to parse: ${String(err)}` });
+      return;
+    }
+    const reviewedCommit = review.reviewedCommit ?? '';
+    const isRealCommit = /^[0-9a-f]{40}$/.test(reviewedCommit) && sh('git', ['cat-file', '-e', `${reviewedCommit}^{commit}`]).status === 0;
+    const isAncestor = isRealCommit && sh('git', ['merge-base', '--is-ancestor', reviewedCommit, headSha]).status === 0;
+    const isStrict = isAncestor && reviewedCommit !== headSha;
+    const ownedPaths = ['apps/daemon/src/storage-gc', 'apps/daemon/src/routes/storage-gc.ts', 'apps/daemon/tests', 'packages/contracts/src/api/storage-gc.ts', 'docs/security/daemon-threat-model.md'];
+    const ownedDiff = isStrict ? sh('git', ['diff', '--name-only', reviewedCommit, headSha, '--', ...ownedPaths]) : { status: 1, stdout: '' };
+    const ownedDiffEmpty = isStrict && ownedDiff.status === 0 && ownedDiff.stdout.trim().length === 0;
+    const authorsInRange = isStrict ? sh('git', ['log', '--format=%an <%ae>', `${baseCommit}..${reviewedCommit}`]).stdout.trim().split('\n').filter(Boolean) : [];
+    const reviewerDistinct = isStrict && typeof review.reviewer === 'string' && review.reviewer.length > 0 && !authorsInRange.some((a) => a.includes(String(review.reviewer)));
+    const ok = isStrict && ownedDiffEmpty && reviewerDistinct && review.verdict === 'APPROVE';
+    record('C10F-13', '', '', ok,
+      `reviewedCommit=${reviewedCommit} isRealCommit=${isRealCommit} isStrict=${isStrict}\nownedDiffEmpty=${ownedDiffEmpty} (diff: ${ownedDiff.stdout.trim().slice(0, 500)})\nreviewerDistinct=${reviewerDistinct} reviewer=${review.reviewer}\nauthorsInRange=${JSON.stringify(authorsInRange)}\nverdict=${review.verdict}`,
+      { detail: ok ? undefined : 'review record failed one or more structural checks (not a strict ancestor, owned-path drift since review, reviewer not distinct from implementation authors, or verdict !== APPROVE)' });
   });
 
   // =======================================================================
