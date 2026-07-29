@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  AMR_CONSOLE_URL,
-  amrRechargeUrlForProfile,
-  resolveRunFailureUi,
-} from '../../src/runtime/amr-guidance';
+import { amrRechargeUrlForProfile, resolveRunFailureUi } from '../../src/runtime/amr-guidance';
 
 describe('amrRechargeUrlForProfile', () => {
   // R2 (Sol post-pin review #1): the production console previously lived on
@@ -15,7 +11,10 @@ describe('amrRechargeUrlForProfile', () => {
   it('disables the retired open-design.ai wallet link for prod/unknown profiles', () => {
     expect(amrRechargeUrlForProfile('prod')).toBe('#');
     expect(amrRechargeUrlForProfile(' unknown ')).toBe('#');
-    expect(amrRechargeUrlForProfile('prod')).toBe(AMR_CONSOLE_URL);
+    // An empty/blank profile is not the same input shape as an unrecognized
+    // one (' unknown ' above) -- both must independently fall through to the
+    // same disabled anchor rather than the check only exercising one shape.
+    expect(amrRechargeUrlForProfile('')).toBe('#');
   });
 
   it('leaves the non-retired test/local wallet origins untouched', () => {

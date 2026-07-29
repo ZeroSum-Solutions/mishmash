@@ -10,11 +10,20 @@ const sha256 = (buf: Buffer) => createHash('sha256').update(buf).digest('hex');
 
 const homeHeroSource = read('../../src/components/HomeHero.tsx');
 const entryNavRailSource = read('../../src/components/EntryNavRail.tsx');
-const layoutSource = read('../../app/layout.tsx');
 const logoSvg = read('../../public/logo.svg');
 const brandIconSvg = read('../../public/brand-icon.svg');
-const appIconPng = readBinary('../../public/app-icon.png');
-const logoPng = readBinary('../../public/logo.png');
+
+// PNG-path (app-icon.png / logo.png) and layout.tsx reads are deliberately
+// NOT hoisted to module scope like the reads above: a module-scope throw
+// (e.g. a missing file when this spec is run against an older tree during a
+// red-before/green-after check) would abort the whole file before any `it()`
+// runs, producing an opaque collection-time crash instead of a clearly
+// attributable per-assertion failure. Reading lazily inside each `it()`
+// keeps these three tests independent of one another and of the file-level
+// checks above.
+const readAppIconPng = () => readBinary('../../public/app-icon.png');
+const readLogoPng = () => readBinary('../../public/logo.png');
+const readLayoutSource = () => read('../../app/layout.tsx');
 
 // The pre-fork Open Design cursor-glyph PNGs this fork replaced. Pinned so a
 // regression back to the retired raster assets fails even though the bytes
@@ -67,17 +76,29 @@ describe('Home logo assets', () => {
   // hash, proving the raster replacement actually happened and guarding
   // against silently reverting to it later.
   it('ships the current (non-retired) brand PNGs for favicon and apple-touch-icon', () => {
+    const appIconPng = readAppIconPng();
+    const logoPng = readLogoPng();
     expect(appIconPng.length).toBeGreaterThan(0);
     expect(logoPng.length).toBeGreaterThan(0);
 
     const appIconHash = sha256(appIconPng);
     const logoHash = sha256(logoPng);
 
-    expect(appIconHash).not.toBe(RETIRED_APP_ICON_PNG_SHA256);
-    expect(logoHash).not.toBe(RETIRED_LOGO_PNG_SHA256);
+    expect(
+      appIconHash,
+      `apps/web/public/app-icon.png sha256 hash ${appIconHash} must not equal the retired ` +
+        `Open Design PNG's sha256 hash ${RETIRED_APP_ICON_PNG_SHA256} -- the favicon/apple-touch-icon raster asset must be the current MishMash glyph`,
+    ).not.toBe(RETIRED_APP_ICON_PNG_SHA256);
+    expect(
+      logoHash,
+      `apps/web/public/logo.png sha256 hash ${logoHash} must not equal the retired ` +
+        `Open Design PNG's sha256 hash ${RETIRED_LOGO_PNG_SHA256} -- the logo raster asset must be the current MishMash glyph`,
+    ).not.toBe(RETIRED_LOGO_PNG_SHA256);
   });
 
   it('keeps the PNG raster dimensions consistent with their original export sizes', () => {
+    const appIconPng = readAppIconPng();
+    const logoPng = readLogoPng();
     // PNG signature is 8 bytes; the IHDR chunk immediately follows with a
     // 4-byte length, 4-byte "IHDR" type, then big-endian width/height
     // uint32s at offsets 16 and 20 (https://www.w3.org/TR/png/#11IHDR).
@@ -94,6 +115,7 @@ describe('Home logo assets', () => {
   });
 
   it('wires app-icon.png as both the favicon and the apple-touch-icon', () => {
+    const layoutSource = readLayoutSource();
     expect(layoutSource).toContain("icon: '/app-icon.png'");
     expect(layoutSource).toContain("apple: '/app-icon.png'");
   });

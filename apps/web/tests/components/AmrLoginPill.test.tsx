@@ -317,9 +317,15 @@ describe('AmrLoginPill', () => {
     fireEvent.click(link);
 
     // The click handler still stamps attribution onto the (now-inert) URL,
-    // but the base URL is the disabled anchor, not a live host.
-    expect(link.getAttribute('href')).toContain('#');
+    // but the base URL is the disabled anchor, not a live host -- assert the
+    // `#` is the leading character (the anchor itself), not merely present
+    // somewhere in the string.
+    expect(link.getAttribute('href')).toMatch(/^#/);
     expect(link.getAttribute('href')).not.toContain('open-design.ai');
+    // Attribution is still stamped onto the fragment query -- useful if the
+    // console link is ever re-enabled -- it just never reaches a live host.
+    expect(link.getAttribute('href')).toContain('od_entry_source=settings_amr_console');
+    expect(link.getAttribute('href')).toContain('od_device_id=od-install-abc');
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/integrations/vela/analytics-entry',
