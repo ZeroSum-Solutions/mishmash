@@ -36,7 +36,7 @@ export const PLUGIN_POPULARITY_META: PluginPopularityMeta = {
   windowDays: 28,
   weights: { users: 0.6, runs: 0.4 },
   minUsers: 20,
-  count: 127,
+  count: 34,
 };
 
 // Plugin id -> blended popularity score in [0, 1], most-popular first.
