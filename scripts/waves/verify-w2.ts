@@ -1416,6 +1416,10 @@ async function checkC2_4(): Promise<void> {
               }
               evidenceLines.push(`red-at-parent replay env: mise trust exit=${trust.status}, node_modules linked=[${linkedDeps.join(', ')}]`);
               const redJsonPath = path.join(proofDir, 'C2-4-red-at-parent.json');
+              // Sol post-pin F1: clear any stale report first -- an early pnpm
+              // failure must yield "no report" (replay could not execute), never
+              // a parse of a previous run's PNG-shaped red.
+              fs.rmSync(redJsonPath, { force: true });
               const redRun = sh(
                 'pnpm',
                 ['exec', 'vitest', 'run', '-c', 'vitest.config.ts', '--reporter=json', `--outputFile=${redJsonPath}`, testRelPath.replace('apps/web/', '')],
