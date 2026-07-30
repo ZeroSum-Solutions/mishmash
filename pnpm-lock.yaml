@@ -277,6 +277,9 @@ importers:
       '@open-design/contracts':
         specifier: workspace:*
         version: link:../packages/contracts
+      '@open-design/plugin-runtime':
+        specifier: workspace:*
+        version: link:../packages/plugin-runtime
       '@open-design/release':
         specifier: workspace:*
         version: link:../packages/release
