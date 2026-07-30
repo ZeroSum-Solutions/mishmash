@@ -373,6 +373,66 @@ this authorized fix round — again touching only the verifier and this document
   production readiness, independent of whether the verifier's own group-emptiness polling continues
   to catch the race in practice.
 
+### Update (round-2 adversarial review fixes: F3 live-runtime pinning closed, F4 self-visibility
+control closed, F2 sweep completed)
+
+A CONFIRM-round reviewer independently reconstructed the round-1 F1 fix and found it clean (138
+workspace source files, zero first-party `dist` files, in a 1,296-file program) but REJECTed on two
+new findings plus a residual sweep, all fixed in this second authorized round:
+
+- **F3 (HIGH) — live-daemon side still executed mutable dist, closed.** F1 made the BASE
+  (static-scan) side of the drift comparison commit-bound, but the LIVE side — `bootIsolatedDaemon`
+  booting `apps/daemon/src/server.ts` for real via `tsx` — still resolved its runtime `import`s of
+  first-party `@open-design/*` packages through ordinary Node module resolution into each package's
+  own gitignored `dist` bundle, unpinned. **Fix (rebuild, not hash-pin):** before the live daemon
+  boots, the verifier now force-rebuilds every first-party workspace package `apps/daemon` depends on
+  via `pnpm --filter "@open-design/daemon^..." run build` — the exact house idiom
+  `apps/daemon`'s own `typecheck` script already uses for two of these same packages, generalized to
+  pnpm's own computed dependency closure (10 packages today) rather than a hardcoded list, memoized
+  once per verifier process. Rebuild was chosen over hash-pin-and-fail because it measured ~3.5s wall
+  clock for all 10 packages against this tree — fast enough that the F1 fix note's own "too slow"
+  escape hatch for a weaker check does not apply — and because forcing a fresh build makes the live
+  boot unconditionally commit-bound every run (self-healing against any prior dist state) rather than
+  merely detecting staleness and refusing to proceed, which would fail the verifier on ordinary
+  un-rebuilt dev staleness that carries no security meaning. See `ensureWorkspaceDepsRebuiltFromHead`
+  in the verifier for the full mechanism and rationale.
+- **F4 (MED) — process-table scan accepted exit-zero-empty/malformed `ps` output as a genuinely
+  empty group, closed.** `processGroupSurvivors` parsed `ps -Ao pid=,pgid=,comm=` output and returned
+  zero matching rows as "no survivors" without checking whether the SCAN ITSELF was trustworthy —
+  `ps` exiting 0 with nothing (or garbage) was indistinguishable from `ps` exiting 0 having genuinely
+  found no member of the target group. **Fix: a self-visibility control.** The scan now also checks,
+  in the SAME enumeration, whether this verifier's own process (`process.pid` — definitely alive, it
+  is running the check) appears anywhere in the output; if not, or if any row fails to parse, the scan
+  is classified `ok: false` and `killGroupFailClosed` treats that as a RUN FAILURE, never as an empty
+  group. This logic (`classifyProcessTableScan`) is pure and separated from the actual `ps` call so it
+  can be exercised with synthetic input — `PROCESS_TABLE_SELF_PROBES` covers six cases (two normal
+  well-formed scans, exit-zero-empty, exit-zero-well-formed-but-self-missing, exit-zero-malformed-rows,
+  and nonzero-exit) and gates every `killGroupFailClosed` call via `runProcessTableSelfProbes()`,
+  mirroring the classifier's own `SELF_PROBES`/`runSelfProbes` discipline. **Validated end-to-end
+  before being wired in**, not just unit-level: a real spawned sentinel process plus a PATH-shimmed
+  fake `ps` returning exit-0-empty and exit-0-malformed output were both correctly rejected as
+  untrustworthy (`ok: false`, "SCAN UNTRUSTWORTHY... never treated as an empty group") while the same
+  harness against the real `ps` correctly confirmed teardown (`ok: true`) — real cleanup was
+  independently reconfirmed via `isPidAlive` in every case regardless of what the simulated scan
+  claimed. Every teardown detail line now leads with the self-probe evidence (`process-table
+  self-probes N/M pass; ...`), visible directly in `C9F-1`/`C9F-8`'s recorded evidence on every run.
+- **F2 residuals — full sweep completed, not spot-fixed.** The CONFIRM round found two remaining
+  stale references the round-1 fix missed (a leftover "184 unresolved" count in "Explicitly out of
+  scope," and open founder question 2 still calling the superseded 33-file derivation authoritative).
+  This round grepped the whole document for every count/derivation reference tied to the discovery
+  algorithm and reconciled each: "Risk-ranking rule" and "Deviation from the ingest tranche's impact
+  model" both said "125 rows" (now 136); "Ownership matrix" said "currently 125" (now 136); open
+  founder question 2's 33-vs-35 framing is marked resolved rather than merely renumbered (the parent
+  wave's count and this tranche's own re-derivation now agree exactly, so there is no remaining
+  discrepancy to spot-check); open founder question 3 said "125 rows vs. 23" (now 136 vs. 23); and
+  "Frozen route snapshot + drift detection" — which described the base-side derivation as `git show`
+  text parsing and the live-side filter as "route-file universe plus the 6 bootstrap routes," both
+  stale relative to the actual detached-worktree/TypeChecker mechanism and the five-mechanism
+  discovery algorithm — is rewritten to match the real mechanism, including the F1/F3 commit-binding
+  properties. `library.ts`'s own "23 registrations" figure (unaffected by any discovery-algorithm
+  change, since it is a terminal/excluded node) and the ingest tranche's own "23 routes" are left as
+  written — neither is a candidate for reconciliation.
+
 ## Inclusion rule (mechanical, re-runnable)
 
 Stated precisely so a future run reproduces the same set without human judgment at classification
@@ -498,7 +558,7 @@ verdict in a run where it cannot classify its own known fixtures correctly.
 ## Risk-ranking rule (mechanical, re-runnable)
 
 Mirrors the ingest tranche's `exposure(0–3) + impact(0–3)` shape, adapted to this tranche's actual
-gate vocabulary and to its scale (125 rows, too many to hand-review individually the way the
+gate vocabulary and to its scale (136 rows, too many to hand-review individually the way the
 23-route ingest tranche's reviewer-frozen floor table did — so impact here is **mechanically
 derived from the reachable primitive class**, not a hand-authored table; see "Deviation from the
 ingest tranche's impact model" below).
@@ -561,7 +621,7 @@ mechanically-computed floor instead of a reviewer-frozen one.
 ### Deviation from the ingest tranche's impact model (stated, not hidden)
 
 The ingest tranche hand-reviewed all 23 routes and froze a reviewer-owned impact floor per row —
-tractable at that scale. This tranche's confirmed in-scope set is 125 rows; hand-reviewing each one
+tractable at that scale. This tranche's confirmed in-scope set is 136 rows; hand-reviewing each one
 for this pre-implementation PRD would either (a) not happen at the fidelity the ingest ceremony
 achieved, producing floors that look authoritative but are not, or (b) consume the entire expansion
 budget on floor-authoring instead of criteria/verifier machinery. Given that choice, this document
@@ -573,17 +633,34 @@ the way ingest did for its full set, before this tranche is treated as complete?
 
 ## Frozen route snapshot + drift detection
 
-Mirrors the ingest tranche's S9-1 mechanism exactly:
+Mirrors the ingest tranche's S9-1 mechanism, adapted to how this tranche's verifier actually derives
+each side of the comparison (not `git show`-based text parsing — that description was itself a stale
+holdover from an earlier design and is corrected here as part of the same sweep that fixed "Ground
+facts" and "Inclusion rule"):
 
-- The snapshot is derived by parsing `git show <baseCommit>:apps/daemon/src/server.ts` and
-  `git show <baseCommit>:<each route file>` — never the working tree — through the same AST scan
-  described above.
+- The BASE side is derived from a real, detached `git worktree add --detach <worktreeDir> <baseCommit>`
+  checkout (never the working tree, never `git show` text parsing), scanned via the TypeScript
+  compiler API through the exact same AST walk described in "Inclusion rule" above — all five
+  discovery mechanisms, not just literal `app.<method>()` calls. Cross-package named-const path
+  literals (mechanism (b)) resolve from that package's own git-tracked `src/*.ts` **inside the
+  worktree under scan**, via a `paths` compiler-option override, never through `node_modules`'
+  gitignored `dist/*.d.ts` — this is what makes the base side commit-bound (F1 fix, round-1 review;
+  see `buildDaemonProgram`'s doc comment in the verifier for the full mechanism).
 - That baseCommit-derived set is compared against a **live daemon boot's own `routeInventory`**
-  (`startServer({ port: 0, returnServer: true, ... })`, imported from `apps/daemon/src/server.ts`,
-  in an isolated `mkdtemp`-created `OD_DATA_DIR`, torn down via the returned `shutdown()` and the
+  (`startServer({ port: 0, returnServer: true, ... })`, imported from `apps/daemon/src/server.ts` in
+  the CURRENT checkout — not the detached worktree, since this side represents live runtime behavior
+  — in an isolated `mkdtemp`-created `OD_DATA_DIR`, torn down via the returned `shutdown()` and the
   exact child PID — **never** binding port 7456 or 51012), filtered to the same route-file universe
-  plus the 6 bootstrap routes. A registration present in one but not the other is drift and fails
-  `C9F-1`.
+  (all five discovery mechanisms; there is no separate "6 bootstrap routes" carve-out — bootstrap-scope
+  registrations are just one of the five mechanisms' outputs, folded into the same set). A registration
+  present in one but not the other is drift and fails `C9F-1`. Before this boot, the verifier forces a
+  fresh rebuild of every first-party `@open-design/*` workspace package `apps/daemon` depends on
+  (`pnpm --filter "@open-design/daemon^..." run build`) so the live daemon's own runtime `import`s of
+  those packages — which resolve through ordinary Node module resolution to each package's `dist`
+  bundle — are guaranteed freshly derived from tracked source rather than possibly-stale or mutated
+  build output (F3 fix, round-2 review; see `ensureWorkspaceDepsRebuiltFromHead`'s doc comment in the
+  verifier). Together, F1 and F3 mean neither side of this comparison depends on an unpinned mutable
+  artifact.
 - Any duplicate `{method, path}` — at `baseCommit`, at `HEAD`, or in the live inventory — is a hard
   fail in its own right (see "Inclusion rule" step 4).
 - **HEAD-DRIFT** (a named infra check, not `C9F-1` itself): `git rev-parse HEAD` is captured once at
@@ -594,7 +671,7 @@ Mirrors the ingest tranche's S9-1 mechanism exactly:
 
 Companion machine-readable file (produced by the future implementation, not by this PRD):
 `docs/security/filesystem-tranche-attribution.json`. One row per **confirmed in-scope (`fs-hit`)**
-route — currently 125 (see "Ground facts"; the verifier re-derives the exact expected count every
+route — currently 136 (see "Ground facts"; the verifier re-derives the exact expected count every
 run, never a hardcoded literal) — no orphans, no gaps, no duplicates. Each row carries the six
 required fields from `VERIFICATION-CONTRACT.md` §6:
 
@@ -930,7 +1007,7 @@ what is attributed, what the mechanical rule proves, and that the remainder (`un
   edited here.
 - The other four rolling W9 tranches (agent spawn, deploy/BYOK, external fetch, imports/long tail) —
   they stay in rolling W9 per `W5-W11-gated.md`.
-- The **184 UNRESOLVED registrations** from this run's classification. They are visible, counted,
+- The **189 UNRESOLVED registrations** from this run's classification. They are visible, counted,
   and re-derived every run, but this document does not fold them into this tranche's matrix (see
   "Open founder questions").
 - AI enrichment, embeddings, semantic search, bookmark import (W5) — untouched, no route in this
@@ -970,14 +1047,18 @@ follow-up.
    `server.ts` deps object literal, depth ≤ 10) is real but not complete — a founder call on whether
    deeper resolution (e.g. full `this`-dispatch tracing) is worth commissioning before this tranche
    freezes as done.
-2. **The 33-vs-35 route-file-count discrepancy** against `W5-W11-gated.md`'s stated total. This
-   document's own mechanical re-derivation (33 files via `register*Routes` imports from `server.ts`)
-   is authoritative for *this tranche's* scope per `GLOBAL-GOAL.md` rule 6, but the parent wave's
-   aggregate total should be spot-checked against the *union* of all six W9 tranches' own
-   re-derivations once they all exist, rather than trusted as originally stated.
+2. **The 33-vs-35 route-file-count discrepancy — RESOLVED, no longer an open question.** As
+   originally posed this asked whether the parent wave's aggregate total should be trusted over this
+   tranche's own re-derivation. That framing was itself an artifact of the single-hop
+   (non-transitive) discovery bug fixed in "Update (authorized verifier-fix round, discovery gap
+   closed)": this tranche's own mechanical re-derivation now finds **35 route files**, matching
+   `W5-W11-gated.md`'s stated total exactly (see "Ground facts" and "Inclusion rule"). There is no
+   remaining discrepancy to spot-check once the other five rolling W9 tranches land — this document's
+   own count was undercounting due to a bug, not measuring a genuinely different scope, and both
+   figures already agree.
 3. **Mechanical-vs-reviewer-frozen impact model.** This tranche uses a mechanically-derived impact
    class (read/write/upload primitive tier) instead of the ingest tranche's reviewer-hand-frozen
-   floor table, because of scale (125 rows vs. 23). Should the P0/P1 tier specifically (the rows that
+   floor table, because of scale (136 rows vs. 23). Should the P0/P1 tier specifically (the rows that
    matter most) get a follow-up hand review pass, freezing floors the way ingest did, before this
    tranche is declared complete — or is the mechanical class plus the checked escalation path
    sufficient for this tranche's own risk appetite?
