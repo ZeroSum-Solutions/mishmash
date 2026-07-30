@@ -888,7 +888,7 @@ export const en: Dict = {
   'recentProjects.title': 'Recent projects',
   'recentProjects.viewAll': 'View all',
   'recentProjects.empty': 'No projects yet — type a prompt to start one.',
-  'pluginsHome.title': 'Community',
+  'pluginsHome.title': 'Workflows and Assets',
   'home.workflowsAndAssetsTitle': 'Workflows and Assets',
   'pluginsHome.subtitle': 'Ready-to-use MishMash workflows bundled with this runtime. Pick one to load a starter prompt, or browse the registry for more.',
   'pluginsHome.browseRegistry': 'Browse registry',

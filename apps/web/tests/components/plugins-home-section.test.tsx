@@ -231,11 +231,11 @@ describe('PluginsHomeSection (community gallery)', () => {
 });
 
 describe('PluginsHomeSection (category bar)', () => {
-  it('frames the home shelf as community and can jump to registry', () => {
+  it('frames the home shelf as Workflows and Assets and can jump to registry', () => {
     const onBrowseRegistry = vi.fn();
     renderSection(sample, { onBrowseRegistry });
 
-    expect(screen.getByText('Community')).toBeTruthy();
+    expect(screen.getByText('Workflows and Assets')).toBeTruthy();
     fireEvent.click(screen.getByTestId('plugins-home-browse-registry'));
     expect(onBrowseRegistry).toHaveBeenCalledTimes(1);
   });
