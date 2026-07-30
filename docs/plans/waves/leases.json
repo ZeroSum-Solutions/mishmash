@@ -76,6 +76,7 @@
         "apps/daemon/src/routes/open-design-public-metadata.ts",
         "scripts/check-brand-surfaces*.ts",
         "scripts/waves/verify-w2.ts",
+        "tools/pack/tests/**",
         "apps/daemon/src/connectionTest.ts",
         "apps/daemon/src/routes/chat.ts",
         "apps/daemon/src/media/index.ts",
