@@ -1,4 +1,4 @@
-PARENT_SHA: 9a2cab57f6289bdf417ae5847d8eee46b3266305
+PARENT_SHA: 8c1b6225b54a0ff8471c765c76e772058600cd7d
 COMMAND: vitest run -c vitest.config.ts tests/library-loopback-gate-events.test.ts
 TEST: GET library events rejects a non-loopback origin
 CONTROL_TEST: GET library events accepts a loopback request
