@@ -2086,23 +2086,147 @@ function isPidAlive(pid: number): boolean {
     return code !== 'ESRCH'; // ESRCH = no such process; anything else (e.g. EPERM) means it still exists
   }
 }
-/** Scans the REAL system process table (never trusts a single leader's
- * `exit` event as proof the whole group is gone) for any process still
- * reporting the given process-group id. */
-function processGroupSurvivors(pgid: number): string[] {
-  const r = sh('ps', ['-Ao', 'pid=,pgid=,comm='], { timeoutMs: 15_000 });
-  if (r.status !== 0) return [`ps scan itself failed (exit=${r.status}) -- treated as unconfirmed, not as proof of a clean exit`];
+interface ProcessTableScanResult {
+  /** True only when the scan itself is TRUSTWORTHY (exit 0, this verifier's
+   * own known-alive pid is visible somewhere in the output, every row
+   * parsed) -- never merely "found zero matching rows." `survivors` is only
+   * meaningful when this is true. */
+  ok: boolean;
+  survivors: string[];
+  detail: string;
+}
+/** Pure, deterministic classification over a `ps -Ao pid=,pgid=,comm=`-shaped
+ * invocation's raw exit status + stdout -- separated from the actual `ps`
+ * call below so its trustworthiness logic can be exercised with SYNTHETIC
+ * input (`PROCESS_TABLE_SELF_PROBES`), the same self-probe discipline this
+ * file already applies to the inclusion/exposure classifier (`SELF_PROBES` /
+ * `runSelfProbes`).
+ *
+ * F4 fix (round-2 review, MED): the old version of this scan treated
+ * exit-zero-but-EMPTY output, and exit-zero output whose rows fail to parse,
+ * as a genuinely empty group -- `ps` returning nothing (or garbage) with a
+ * 0 exit code is NOT proof the group is empty, it is proof the SCAN ITSELF
+ * is broken, and the two must never be conflated. The required mechanism is
+ * a SELF-VISIBILITY CONTROL: this verifier's own process (`selfPid`,
+ * definitely alive -- it is running this very check) must appear SOMEWHERE
+ * in the same enumeration. If it does not, or if any row fails to parse,
+ * enumeration itself is untrustworthy and this returns `ok: false` --
+ * callers must treat that as a RUN FAILURE, never as "confirmed empty."
+ * Validated end-to-end against a real spawned sentinel process plus a
+ * PATH-shimmed fake `ps` returning exit-0-empty and exit-0-malformed output
+ * before this was wired in: both were correctly rejected as untrustworthy,
+ * never reported as an empty group. */
+function classifyProcessTableScan(status: number, stdout: string, selfPid: number, targetPgid: number): ProcessTableScanResult {
+  if (status !== 0) {
+    return { ok: false, survivors: [], detail: `ps scan itself failed (exit=${status}) -- treated as unconfirmed, not as proof of a clean exit` };
+  }
   const survivors: string[] = [];
-  for (const line of r.stdout.split('\n')) {
+  const malformed: string[] = [];
+  let sawSelf = false;
+  let rowCount = 0;
+  for (const line of stdout.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed) continue;
+    rowCount++;
     const parts = trimmed.split(/\s+/);
     const rowPid = Number(parts[0]);
     const rowPgid = Number(parts[1]);
-    if (!Number.isFinite(rowPid) || !Number.isFinite(rowPgid)) continue;
-    if (rowPgid === pgid) survivors.push(`pid=${rowPid} pgid=${rowPgid} comm=${parts.slice(2).join(' ')}`);
+    if (parts.length < 3 || !Number.isFinite(rowPid) || !Number.isFinite(rowPgid)) {
+      malformed.push(trimmed.slice(0, 160));
+      continue;
+    }
+    if (rowPid === selfPid) sawSelf = true;
+    if (rowPgid === targetPgid) survivors.push(`pid=${rowPid} pgid=${rowPgid} comm=${parts.slice(2).join(' ')}`);
   }
-  return survivors;
+  if (malformed.length > 0) {
+    return {
+      ok: false,
+      survivors: [],
+      detail: `ps output contained ${malformed.length} unparseable row(s) out of ${rowCount} -- enumeration integrity not confirmed, treated as a scan failure, never as proof of an empty group: ${malformed.slice(0, 3).join(' | ')}`,
+    };
+  }
+  if (!sawSelf) {
+    return {
+      ok: false,
+      survivors: [],
+      detail: `ps output (exit=0, ${rowCount} row(s)) never included this verifier's own pid=${selfPid} -- a process KNOWN to be alive right now -- so enumeration itself is broken (self-visibility control failed), treated as a scan failure, never as proof of an empty group`,
+    };
+  }
+  return { ok: true, survivors, detail: `ps scan trustworthy: self pid=${selfPid} visible among ${rowCount} row(s), 0 malformed` };
+}
+/** Synthetic-input self-probes for `classifyProcessTableScan`, run once per
+ * verifier process (memoized) and gating `killGroupFailClosed` below -- a
+ * teardown scan is never trusted for a real verdict in a run where the
+ * classification logic behind it cannot classify its own known fixtures
+ * correctly, mirroring `runSelfProbes`'s gate on `checkC9F1`. */
+const PROCESS_TABLE_SELF_PROBES: Array<{ name: string; status: number; stdout: string; expectOk: boolean; expectSurvivorCount?: number }> = [
+  {
+    name: 'well-formed output, self visible, no target-pgid match',
+    status: 0,
+    stdout: '    1     1 launchd\n 4242   999 node\n  555   555 sh\n',
+    expectOk: true,
+    expectSurvivorCount: 0,
+  },
+  {
+    name: 'well-formed output, self visible, target-pgid HAS a survivor',
+    status: 0,
+    stdout: '    1     1 launchd\n 4242   999 node\n 6001   777 hermes-agent\n',
+    expectOk: true,
+    expectSurvivorCount: 1,
+  },
+  {
+    name: 'F4: exit-zero but EMPTY output (enumeration silently produced nothing)',
+    status: 0,
+    stdout: '',
+    expectOk: false,
+  },
+  {
+    name: 'F4: exit-zero, well-formed OTHER rows, but self pid missing entirely',
+    status: 0,
+    stdout: '    1     1 launchd\n  555   555 sh\n',
+    expectOk: false,
+  },
+  {
+    name: 'F4: exit-zero, garbage/malformed rows',
+    status: 0,
+    stdout: 'not-a-pid not-a-pgid garbage\n 4242   999 node\n',
+    expectOk: false,
+  },
+  {
+    name: 'nonzero exit (ps itself failed)',
+    status: 1,
+    stdout: '',
+    expectOk: false,
+  },
+];
+let processTableSelfProbeResult: { pass: boolean; report: string[]; passCount: number; total: number } | null = null;
+function runProcessTableSelfProbes(): { pass: boolean; report: string[]; passCount: number; total: number } {
+  if (processTableSelfProbeResult) return processTableSelfProbeResult;
+  const SELF_PID = 4242;
+  const TARGET_PGID = 777;
+  const report: string[] = [];
+  let passCount = 0;
+  for (const c of PROCESS_TABLE_SELF_PROBES) {
+    const result = classifyProcessTableScan(c.status, c.stdout, SELF_PID, TARGET_PGID);
+    const okMatches = result.ok === c.expectOk;
+    const survivorMatches = c.expectSurvivorCount === undefined || (result.ok && result.survivors.length === c.expectSurvivorCount);
+    if (okMatches && survivorMatches) {
+      passCount++;
+      report.push(`PASS ${c.name}: ok=${result.ok} survivors=${result.survivors.length}`);
+    } else {
+      report.push(`FAIL ${c.name}: expected ok=${c.expectOk}${c.expectSurvivorCount !== undefined ? ` survivors=${c.expectSurvivorCount}` : ''}, got ok=${result.ok} survivors=${result.survivors.length} detail=${result.detail}`);
+    }
+  }
+  processTableSelfProbeResult = { pass: passCount === PROCESS_TABLE_SELF_PROBES.length, report, passCount, total: PROCESS_TABLE_SELF_PROBES.length };
+  return processTableSelfProbeResult;
+}
+/** Scans the REAL system process table (never trusts a single leader's
+ * `exit` event as proof the whole group is gone) for any process still
+ * reporting the given process-group id, via the self-visibility-checked
+ * classifier above. */
+function processGroupSurvivors(pgid: number): ProcessTableScanResult {
+  const r = sh('ps', ['-Ao', 'pid=,pgid=,comm='], { timeoutMs: 15_000 });
+  return classifyProcessTableScan(r.status, r.stdout, process.pid, pgid);
 }
 async function waitForCondition(check: () => boolean, timeoutMs: number, intervalMs = 200): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
@@ -2135,42 +2259,123 @@ async function waitForCondition(check: () => boolean, timeoutMs: number, interva
  * broader/fuzzy match), still kills by exact PID only, still fails closed on
  * any unconfirmed or partial result. */
 async function killGroupFailClosed(pid: number): Promise<{ ok: boolean; detail: string }> {
+  // Gate on the process-table-scan self-probes FIRST (F4 fix, round-2
+  // review): a survivor scan is never trusted for a real teardown verdict in
+  // a run where the classification logic behind it cannot classify its own
+  // known-broken fixtures correctly. Memoized -- runs once per verifier
+  // process, not once per teardown call.
+  const selfProbes = runProcessTableSelfProbes();
+  const selfProbeSummary = `process-table self-probes ${selfProbes.passCount}/${selfProbes.total} pass`;
+  if (!selfProbes.pass) {
+    return {
+      ok: false,
+      detail: `${selfProbeSummary} -- refusing to trust any survivor scan this run: ${selfProbes.report.filter((l) => l.startsWith('FAIL')).join(' | ')}`,
+    };
+  }
   try {
     process.kill(-pid, 'SIGTERM');
   } catch (err) {
     // ESRCH here means the group is already gone -- proceed to the
     // confirmation scan rather than assuming success from the throw alone.
     if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
-      return { ok: false, detail: `SIGTERM to group -${pid} failed: ${String(err)}` };
+      return { ok: false, detail: `${selfProbeSummary}; SIGTERM to group -${pid} failed: ${String(err)}` };
     }
   }
-  const emptyAfterTerm = await waitForCondition(() => processGroupSurvivors(pid).length === 0, 8_000);
+  const emptyAfterTerm = await waitForCondition(() => {
+    const scan = processGroupSurvivors(pid);
+    return scan.ok && scan.survivors.length === 0;
+  }, 8_000);
   if (!emptyAfterTerm) {
     try {
       process.kill(-pid, 'SIGKILL');
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
-        return { ok: false, detail: `SIGKILL to group -${pid} failed: ${String(err)}` };
+        return { ok: false, detail: `${selfProbeSummary}; SIGKILL to group -${pid} failed: ${String(err)}` };
       }
     }
-    const emptyAfterKill = await waitForCondition(() => processGroupSurvivors(pid).length === 0, 5_000);
+    const emptyAfterKill = await waitForCondition(() => {
+      const scan = processGroupSurvivors(pid);
+      return scan.ok && scan.survivors.length === 0;
+    }, 5_000);
     if (!emptyAfterKill) {
-      const survivors = processGroupSurvivors(pid);
-      return { ok: false, detail: `process group -${pid} still has survivors after SIGTERM+SIGKILL -- teardown NOT confirmed: ${survivors.join('; ')}` };
+      const scan = processGroupSurvivors(pid);
+      if (!scan.ok) {
+        return { ok: false, detail: `${selfProbeSummary}; SCAN UNTRUSTWORTHY after SIGTERM+SIGKILL -- teardown NOT confirmed, never treated as an empty group: ${scan.detail}` };
+      }
+      return { ok: false, detail: `${selfProbeSummary}; process group -${pid} still has survivors after SIGTERM+SIGKILL -- teardown NOT confirmed: ${scan.survivors.join('; ')}` };
     }
   }
   // waitForCondition's own successful exit already re-scanned and found the
-  // group empty, but re-derive the survivor list one more time explicitly
-  // rather than trusting a boolean alone -- never trust a resolved check as
-  // proof on its own, the same posture the rest of this teardown path takes.
-  const survivors = processGroupSurvivors(pid);
-  if (survivors.length > 0) {
-    return { ok: false, detail: `process group -${pid} has survivors after kill+wait: ${survivors.join('; ')}` };
+  // group empty, but re-derive the scan one more time explicitly rather than
+  // trusting a boolean alone -- never trust a resolved check as proof on its
+  // own, the same posture the rest of this teardown path takes.
+  const finalScan = processGroupSurvivors(pid);
+  if (!finalScan.ok) {
+    return { ok: false, detail: `${selfProbeSummary}; FINAL SCAN UNTRUSTWORTHY -- teardown NOT confirmed, never treated as an empty group: ${finalScan.detail}` };
   }
-  return { ok: true, detail: `process group -${pid} confirmed empty (group-wide ps scan found nothing)` };
+  if (finalScan.survivors.length > 0) {
+    return { ok: false, detail: `${selfProbeSummary}; process group -${pid} has survivors after kill+wait: ${finalScan.survivors.join('; ')}` };
+  }
+  return { ok: true, detail: `${selfProbeSummary}; process group -${pid} confirmed empty (${finalScan.detail})` };
+}
+
+/** F3 fix (round-2 review, HIGH): the LIVE side of the base-vs-live drift
+ * comparison boots `apps/daemon/src/server.ts` for real via `tsx`, whose
+ * runtime `import`s of first-party `@open-design/*` workspace packages
+ * resolve through ordinary Node module resolution -- `node_modules` ->
+ * each package's `package.json` "exports"/"main" -> its own gitignored
+ * `dist/*.mjs` bundle. The F1 fix made the BASE (static-scan) side
+ * commit-bound (reads tracked `packages/<pkg>/src/*.ts` directly, never
+ * `dist`), but left the LIVE side unpinned: someone could mutate a
+ * dist bundle post-build with `git status` clean, and the live daemon would
+ * actually execute that mutated code with no rebuild or hash check to catch
+ * it -- trading the original shared-dist gap for a new
+ * source-scan-vs-mutable-runtime divergence.
+ *
+ * Fix: rebuild, not hash-pin. Before the live daemon boots, force a fresh
+ * `pnpm --filter "@open-design/daemon^..." run build` -- the exact
+ * house idiom `apps/daemon`'s own `typecheck` script already uses for its
+ * two most-typecheck-relevant deps (`@open-design/contracts` and
+ * `@open-design/registry-protocol`), generalized here to the FULL dependency
+ * closure pnpm itself computes from `apps/daemon/package.json` (currently 10
+ * packages: agui-adapter, contracts, diagnostics, launcher-proto, platform,
+ * plugin-runtime, registry-protocol, release, sidecar, sidecar-proto) so
+ * this never has to be manually kept in sync with which packages are named
+ * in a specific finding. Chosen over hash-pin-and-fail because a full
+ * rebuild is fast in practice (~3.5s wall clock for all 10, measured
+ * directly against this tree) -- the F1 fix note's own "too slow" escape
+ * hatch for a weaker byte-identity check does not apply -- and because
+ * REBUILDING makes the live boot unconditionally commit-bound every run
+ * (self-healing against ANY prior dist state, stale or tampered) rather than
+ * merely detecting a mismatch against dist and refusing to proceed, which
+ * would make the verifier brittle against ordinary un-rebuilt dev staleness
+ * that carries no security meaning at all. Building from the CURRENT
+ * checkout's on-disk `packages/<pkg>/src` (not a detached worktree) is correct
+ * here specifically because the live daemon boot ALREADY executes the
+ * current checkout's own `apps/daemon/src/server.ts`, never a frozen
+ * baseCommit copy -- consistent, not a new asymmetry -- and this verifier's
+ * own `treeDirty` check is what proves "current checkout" and "HEAD" agree
+ * for any run whose manifest is meant to be trusted. Memoized so the two
+ * `bootIsolatedDaemon()` call sites (`checkC9F1`, `checkC9F8`) rebuild once
+ * per verifier process, not twice. A failed rebuild throws, which every
+ * caller already treats as a hard criterion failure. */
+let workspaceDepsRebuiltFromHead: Promise<void> | null = null;
+function ensureWorkspaceDepsRebuiltFromHead(): Promise<void> {
+  if (!workspaceDepsRebuiltFromHead) {
+    workspaceDepsRebuiltFromHead = (async () => {
+      const r = sh('pnpm', ['--filter', '@open-design/daemon^...', 'run', 'build'], { timeoutMs: 5 * 60_000 });
+      if (r.status !== 0) {
+        throw new Error(
+          `rebuilding apps/daemon's first-party workspace dependencies from the current checkout failed (exit=${r.status}) -- refusing to boot a live daemon against possibly-stale/untrusted dist: ${(r.stderr || r.stdout).slice(-2000)}`,
+        );
+      }
+    })();
+  }
+  return workspaceDepsRebuiltFromHead;
 }
 
 async function bootIsolatedDaemon(): Promise<LiveDaemon> {
+  await ensureWorkspaceDepsRebuiltFromHead();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'w9fs-daemon-data-'));
   const serverTsPath = path.join(repoRoot, 'apps/daemon/src/server.ts');
   const marker = crypto.randomBytes(16).toString('hex');
