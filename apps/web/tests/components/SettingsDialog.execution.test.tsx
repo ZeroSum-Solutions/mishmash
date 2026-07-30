@@ -4039,9 +4039,9 @@ describe('SettingsDialog connectors interactions', () => {
 
 describe('SettingsDialog MCP server interactions', () => {
   const installInfo = {
-    command: '/Applications/Open Design.app/Contents/Resources/open-design/bin/node',
+    command: '/Applications/MishMash.app/Contents/Resources/open-design/bin/node',
     args: [
-      '/Applications/Open Design.app/Contents/Resources/app/node_modules/@open-design/daemon/dist/cli.js',
+      '/Applications/MishMash.app/Contents/Resources/app/node_modules/@open-design/daemon/dist/cli.js',
       'mcp',
       '--daemon-url',
       'http://127.0.0.1:51706',
@@ -5156,13 +5156,13 @@ describe('SettingsDialog about interactions', () => {
     });
     const downloaded = updateStatus({
       artifact: {
-        name: 'Open Design Beta.dmg',
+        name: 'MishMash Beta.dmg',
         platformKey: 'macAppleSilicon',
         type: 'dmg',
-        url: 'https://fixture.test/Open Design Beta.dmg',
+        url: 'https://fixture.test/MishMash Beta.dmg',
       },
       availableVersion: '1.2.3-beta.4',
-      downloadPath: '/tmp/open-design-updater/Open Design Beta.dmg',
+      downloadPath: '/tmp/open-design-updater/MishMash Beta.dmg',
       state: 'downloaded',
     });
     const download = vi.fn(async () => downloaded);

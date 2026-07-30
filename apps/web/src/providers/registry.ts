@@ -941,10 +941,17 @@ export async function openExternalUrl(url: string): Promise<boolean> {
   return false;
 }
 
+// First-party marketing domains eligible for attribution bridging. Empty:
+// this fork is a private, internal build with no public marketing site of
+// its own (see docs/FORK-PIN.md) -- the retired `open-design.ai` family is
+// upstream's, not ours, and listing it here would silently bridge outbound
+// navigation through the daemon toward that old-brand host.
+const FIRST_PARTY_BRIDGE_HOSTNAMES: readonly string[] = [];
+
 async function bridgeFirstPartyUrl(url: string): Promise<string | null> {
   try {
     const target = new URL(url);
-    if (!['open-design.ai', 'www.open-design.ai', 'staging.open-design.ai'].includes(target.hostname)) return null;
+    if (!FIRST_PARTY_BRIDGE_HOSTNAMES.includes(target.hostname)) return null;
     const resp = await fetch('/api/attribution/bridge-url', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

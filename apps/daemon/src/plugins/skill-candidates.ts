@@ -331,7 +331,7 @@ function deriveCandidateDescription(ref: SkillPluginCandidateSourceRef): string 
 
 function synthesizeSkill(candidate: SkillPluginCandidate): string {
   const source = candidate.sourceRefs.find((ref) => ref.content)?.content?.trim();
-  if (source) return `${source}\n\n## Provenance\n\nFormalized by Open Design from candidate ${candidate.id}.\n`;
+  if (source) return `${source}\n\n## Provenance\n\nFormalized by MishMash from candidate ${candidate.id}.\n`;
   return [
     `# ${candidate.title}`,
     '',
@@ -339,7 +339,7 @@ function synthesizeSkill(candidate: SkillPluginCandidate): string {
     '',
     '## When to use',
     '',
-    'Use this skill when the workflow described by the source material should be repeated inside Open Design.',
+    'Use this skill when the workflow described by the source material should be repeated inside MishMash.',
     '',
     '## Workflow',
     '',
@@ -349,14 +349,14 @@ function synthesizeSkill(candidate: SkillPluginCandidate): string {
     '',
     '## Provenance',
     '',
-    `Formalized by Open Design from candidate ${candidate.id}.`,
+    `Formalized by MishMash from candidate ${candidate.id}.`,
     '',
   ].join('\n');
 }
 
 function buildManifest(slug: string, candidate: SkillPluginCandidate) {
   return {
-    $schema: 'https://open-design.ai/schemas/plugin.v1.json',
+    $schema: 'https://schemas.mishmash.invalid/plugin.v1.json',
     specVersion: OPEN_DESIGN_PLUGIN_SPEC_VERSION,
     name: slug,
     title: candidate.title,

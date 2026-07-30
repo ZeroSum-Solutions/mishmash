@@ -698,7 +698,7 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       try {
         const runtimeRoot = fs.realpathSync.native(RUNTIME_DATA_DIR_CANONICAL);
         if (sourceRoot === runtimeRoot || sourceRoot.startsWith(`${runtimeRoot}${path.sep}`)) {
-          return sendApiError(res, 400, 'BAD_REQUEST', 'cannot import Open Design runtime data');
+          return sendApiError(res, 400, 'BAD_REQUEST', 'cannot import MishMash runtime data');
         }
       } catch {
         // The runtime data directory may not exist yet in first-run tests.

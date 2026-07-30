@@ -8,8 +8,8 @@ All copy is keyword-tuned for discoverability (ASO) without keyword stuffing.
 - **Version:** 0.2.0 (MV3)
 - **Package:** the `clipper/` directory (no build step — zip it as-is)
 - **Homepage:** https://example.com
-- **Source:** https://github.com/nexu-io/open-design (folder `clipper/`)
-- **Support / issues:** https://github.com/nexu-io/open-design/issues
+- **Source:** https://github.com/wiggdevin/mishmash (folder `clipper/`)
+- **Support / issues:** https://github.com/wiggdevin/mishmash/issues
 - **Assets:** see `assets/` in this folder and the "Asset manifest" section below
 
 ---
@@ -92,7 +92,7 @@ Built for designers, researchers, and builders who collect references all day: d
 
 MishMash is the local-first, open-source alternative to Claude Design and a Figma alternative for the agent era. The Web Clipper is how the web gets into it.
 
-Open source: https://github.com/nexu-io/open-design
+Forked from the open-source Open Design project: https://github.com/wiggdevin/mishmash
 ```
 
 ### Category
@@ -175,7 +175,7 @@ The **same MV3 package** publishes to Edge unchanged.
 
 Firefox needs the gecko settings already added to `manifest.json`:
 ```json
-"browser_specific_settings": { "gecko": { "id": "web-clipper@open-design.ai", "strict_min_version": "121.0" } }
+"browser_specific_settings": { "gecko": { "id": "web-clipper@mishmash.invalid", "strict_min_version": "121.0" } }
 ```
 And the dual background key (already in `manifest.json`) — Firefox uses
 `background.scripts`, Chrome/Edge use `background.service_worker`:
@@ -237,7 +237,7 @@ MishMash Web Clipper 把你在网上看到的任何内容一键剪藏进 MishMas
 • 默认高保真，可在「高级」中关闭内联图片以加快速度、减小体积。
 • 实时素材库：剪藏即刻出现，带「Clipper」来源标记与原页面回链。
 
-开源：https://github.com/nexu-io/open-design
+开源分支自 Open Design：https://github.com/wiggdevin/mishmash
 ```
 - **搜索词:** `网页剪藏`, `剪藏`, `截图`, `保存网页`, `figma`, `素材库`, `mishmash`
 

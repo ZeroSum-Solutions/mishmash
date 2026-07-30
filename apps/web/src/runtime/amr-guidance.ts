@@ -4,11 +4,15 @@
 // its own module so ChatPane / ProjectView / AssistantMessage can import it
 // without a circular dependency.
 
-// AMR model-gateway console wallet (account, balance, recharge).
-// `source=open_design` tags the landing page_view so vela analytics can
-// attribute the visit to Open Design (per-product revenue/traffic attribution).
-export const AMR_CONSOLE_URL =
-  'https://open-design.ai/amr/wallet?source=open_design';
+// AMR model-gateway console wallet (account, balance, recharge). The
+// production console previously lived on the retired open-design.ai domain;
+// that host is not this fork's (docs/FORK-PIN.md), so the production link is
+// disabled rather than repointed at an invented replacement egress
+// destination. `#` renders as an inert same-page anchor everywhere this is
+// consumed as an href (AmrLoginPill, AmrBalanceDialog, SettingsDialog,
+// ChatPane) and attributedAmrUrl's non-URL fallback branch appends
+// attribution params as a harmless fragment query rather than throwing.
+export const AMR_CONSOLE_URL = '#';
 export const AMR_RECHARGE_URL = AMR_CONSOLE_URL;
 
 const AMR_CONSOLE_URL_BY_PROFILE: Record<string, string> = {
@@ -301,7 +305,7 @@ const AGENT_AGNOSTIC_DETAIL_FAILURE_UI: Record<string, RunFailureUi> = {
   // The bundled agent binary needs a CPU instruction set (AVX2) this device
   // doesn't have, so it crashes on launch — retrying reproduces the crash and
   // switching hosted models doesn't help (the runtime binary is the problem).
-  // The fix is updating Open Design to a build that bundles a compatible
+  // The fix is updating MishMash to a build that bundles a compatible
   // (baseline) runtime, so show guidance copy without a dead Retry button.
   cpu_unsupported: {
     primaryAction: 'none',
@@ -346,7 +350,7 @@ export function resolveRunFailureUi(
         primaryAction: 'authorize',
         // PRD「需要登录」type — shared title with the non-AMR sign-in case.
         titleKey: 'chat.runError.title.signInRequired',
-        // "Open Design 智能体尚未登录，前往登录即可正常使用" — single CTA, no
+        // "MishMash 智能体尚未登录，前往登录即可正常使用" — single CTA, no
         // AMR promotion (the agent already IS AMR). The authorize action reuses
         // the inline AmrLoginPill (sign-in + auto-retry on success).
         messageKey: 'chat.runError.signInMessage.amr',
@@ -429,8 +433,8 @@ export function resolveRunFailureUi(
     };
   }
   // Non-AMR sign-in required (any non-amr, non-antigravity agent — those two are
-  // handled above). The agent's login lives in the user's own terminal, so Open
-  // Design can't sign in for them: surface a "{agent} 尚未登录，请本地检查登录状态"
+  // handled above). The agent's login lives in the user's own terminal, so
+  // MishMash can't sign in for them: surface a "{agent} 尚未登录，请本地检查登录状态"
   // message, offer Retry as the primary action (re-run after they log in
   // locally), and promote AMR as the steadier alternative via the switch card.
   if (code === 'AGENT_AUTH_REQUIRED' || code === 'UNAUTHORIZED') {

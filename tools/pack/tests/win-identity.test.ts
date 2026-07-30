@@ -14,29 +14,29 @@ const execFileAsync = promisify(execFile);
 describe("resolveWinInstallIdentity", () => {
   it("keeps the default namespace on the canonical Windows display name", () => {
     expect(resolveWinInstallIdentity({ namespace: "default" })).toMatchObject({
-      displayName: "Open Design",
-      shortcutName: "Open Design.lnk",
-      uninstallerName: "Uninstall Open Design.exe",
+      displayName: "MishMash",
+      shortcutName: "MishMash.lnk",
+      uninstallerName: "Uninstall MishMash.exe",
     });
   });
 
   it("uses the canonical Windows display name for stable release namespaces", () => {
     expect(resolveWinInstallIdentity({ namespace: "release-stable-win" })).toMatchObject({
-      appPathsKey: "Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\Open Design.exe",
-      displayName: "Open Design",
-      registryKey: "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Open Design-release-stable-win",
-      shortcutName: "Open Design.lnk",
-      uninstallerName: "Uninstall Open Design.exe",
+      appPathsKey: "Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\MishMash.exe",
+      displayName: "MishMash",
+      registryKey: "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\MishMash-release-stable-win",
+      shortcutName: "MishMash.lnk",
+      uninstallerName: "Uninstall MishMash.exe",
     });
   });
 
   it("uses first-class beta display identity for beta release namespaces", () => {
     expect(resolveWinInstallIdentity({ namespace: "release-beta-win" })).toMatchObject({
-      appPathsKey: "Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\Open Design Beta.exe",
-      displayName: "Open Design Beta",
-      registryKey: "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Open Design-release-beta-win",
-      shortcutName: "Open Design Beta.lnk",
-      uninstallerName: "Uninstall Open Design Beta.exe",
+      appPathsKey: "Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\MishMash Beta.exe",
+      displayName: "MishMash Beta",
+      registryKey: "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\MishMash-release-beta-win",
+      shortcutName: "MishMash Beta.lnk",
+      uninstallerName: "Uninstall MishMash Beta.exe",
     });
   });
 
@@ -44,7 +44,7 @@ describe("resolveWinInstallIdentity", () => {
     expect(resolveWinInstallIdentity({ namespace: "beta-local-flow" })).toMatchObject({
       appPathsKey: "Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\Open Design beta-local-flow.exe",
       displayName: "Open Design beta-local-flow",
-      registryKey: "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Open Design-beta-local-flow",
+      registryKey: "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\MishMash-beta-local-flow",
       shortcutName: "Open Design beta-local-flow.lnk",
       uninstallerName: "Uninstall Open Design beta-local-flow.exe",
     });
@@ -52,11 +52,11 @@ describe("resolveWinInstallIdentity", () => {
 
   it("uses first-class preview display identity for preview release namespaces", () => {
     expect(resolveWinInstallIdentity({ namespace: "release-preview-win" })).toMatchObject({
-      appPathsKey: "Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\Open Design Preview.exe",
-      displayName: "Open Design Preview",
-      registryKey: "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Open Design-release-preview-win",
-      shortcutName: "Open Design Preview.lnk",
-      uninstallerName: "Uninstall Open Design Preview.exe",
+      appPathsKey: "Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\MishMash Preview.exe",
+      displayName: "MishMash Preview",
+      registryKey: "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\MishMash-release-preview-win",
+      shortcutName: "MishMash Preview.lnk",
+      uninstallerName: "Uninstall MishMash Preview.exe",
     });
   });
 
@@ -65,15 +65,15 @@ describe("resolveWinInstallIdentity", () => {
       appVersion: "0.8.0-prerelease.2",
       namespace: "release-stable-win",
     })).toMatchObject({
-      appPathsKey: "Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\Open Design Prerelease.exe",
-      displayName: "Open Design Prerelease",
-      registryKey: "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Open Design-release-stable-win",
-      shortcutName: "Open Design Prerelease.lnk",
-      uninstallerName: "Uninstall Open Design Prerelease.exe",
+      appPathsKey: "Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\MishMash Prerelease.exe",
+      displayName: "MishMash Prerelease",
+      registryKey: "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\MishMash-release-stable-win",
+      shortcutName: "MishMash Prerelease.lnk",
+      uninstallerName: "Uninstall MishMash Prerelease.exe",
     });
     expect(resolveWinInstallIdentity({ namespace: "release-prerelease-win" })).toMatchObject({
-      displayName: "Open Design Prerelease",
-      shortcutName: "Open Design Prerelease.lnk",
+      displayName: "MishMash Prerelease",
+      shortcutName: "MishMash Prerelease.lnk",
     });
   });
 

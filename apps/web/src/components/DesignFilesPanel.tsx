@@ -184,8 +184,6 @@ const USEFUL_TIPS: ReadonlyArray<{ key: keyof Dict; url?: string }> = [
   { key: 'designFiles.usefulInfoTip14' },
   { key: 'designFiles.usefulInfoTip15' },
   { key: 'designFiles.usefulInfoTip5' },
-  { key: 'designFiles.usefulInfoTip6', url: 'https://discord.gg/mHAjSMV6gz' },
-  { key: 'designFiles.usefulInfoTip7', url: 'https://github.com/nexu-io/open-design' },
   {
     key: 'designFiles.usefulInfoTip20',
     url: 'https://www.xiaohongshu.com/user/profile/691effad000000003002978f',

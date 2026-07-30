@@ -32,7 +32,7 @@ function downloadedStatus(overrides: Partial<OpenDesignHostUpdaterStatusSnapshot
   return {
     ...idleStatus(),
     availableVersion: '1.2.3-beta.4',
-    downloadPath: '/tmp/open-design-updater/Open Design Beta.dmg',
+    downloadPath: '/tmp/open-design-updater/MishMash Beta.dmg',
     state: 'downloaded',
     ...overrides,
   };
@@ -400,7 +400,7 @@ describe('UpdaterPopup', () => {
         installResult: {
           dryRun: true,
           openedAt: '2026-05-19T00:00:00.000Z',
-          path: '/tmp/open-design-updater/Open Design Beta.dmg',
+          path: '/tmp/open-design-updater/MishMash Beta.dmg',
         },
       });
       resolveInstall(status);
@@ -420,7 +420,7 @@ describe('UpdaterPopup', () => {
       installResult: {
         dryRun: true,
         openedAt: '2026-05-19T00:00:00.000Z',
-        path: '/tmp/open-design-updater/Open Design Beta.dmg',
+        path: '/tmp/open-design-updater/MishMash Beta.dmg',
       },
     }));
     const quit = vi.fn(async () => ({ ok: true as const }));

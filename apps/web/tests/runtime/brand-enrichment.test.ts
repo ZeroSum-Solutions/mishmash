@@ -48,7 +48,7 @@ describe('brand enrichment runtime helpers', () => {
         importedFrom: 'brand-extraction',
       },
       designSystemId: 'user:open-design-6',
-      designSystemTitle: 'Open Design',
+      designSystemTitle: 'Acme Design',
       projectFiles: [
         {
           name: 'system/variables.css',
@@ -66,7 +66,7 @@ describe('brand enrichment runtime helpers', () => {
     });
 
     expect(prompt).toContain('Current programmatic extraction context:');
-    expect(prompt).toContain('Existing registered design system: Open Design (user:open-design-6)');
+    expect(prompt).toContain('Existing registered design system: Acme Design (user:open-design-6)');
     expect(prompt).toContain('Source to re-check: https://open-design.ai/');
     expect(prompt).toContain('system/variables.css');
     expect(prompt).toContain('fonts/Inter.woff2');

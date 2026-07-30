@@ -396,7 +396,7 @@ interface ProjectPagePreset {
 }
 type PagePresetPreviewAvailability = Record<ProjectPagePresetId, 'ok' | 'missing'>;
 
-// Open Design ships English-only; the zh-CN/zh-TW preset title/description
+// MishMash ships English-only; the zh-CN/zh-TW preset title/description
 // translations were removed in the de-bloat pass, so this always resolves to
 // the English source now. Kept as a function (rather than inlining `en`
 // directly at each call site) so the ~70 preset entries below don't need to

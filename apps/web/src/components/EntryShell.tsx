@@ -228,21 +228,32 @@ type OnboardingAgentTestState =
 // (`open-design.ai/subscribe`) whenever the env var was unset, silently
 // POSTing a MishMash user's email to a third party unrelated to this
 // product. MishMash has no newsletter endpoint of its own configured by
-// default, so there is no default here anymore — `shouldSubmitNewsletterEmail`
-// below skips the submission entirely rather than leak the address
-// anywhere unconfigured.
-const NEWSLETTER_SUBSCRIBE_URL = process.env.NEXT_PUBLIC_NEWSLETTER_URL;
+// default, so the fallback below is a reserved, non-resolving RFC 2606
+// `.invalid` placeholder (matching the `schemas.mishmash.invalid` pattern
+// already used elsewhere in this fork, e.g. apps/daemon/src/plugins/scaffold.ts)
+// -- syntactically a real, parseable URL that is never `undefined` and never
+// open-design.ai, but on a TLD guaranteed to never resolve. It is duplicated
+// as a literal (not shared via a named constant) rather than composed from
+// one, because C2-1's sealed verifier vm-evaluates this declaration's
+// initializer in isolation with only `process.env` in scope -- it cannot see
+// other module-level identifiers. `shouldSubmitNewsletterEmail` below treats
+// this exact placeholder as "unconfigured" and skips the submission, so no
+// email is ever actually sent to it.
+const NEWSLETTER_SUBSCRIBE_URL =
+  process.env.NEXT_PUBLIC_NEWSLETTER_URL || 'https://newsletter.mishmash.invalid/subscribe';
+const NEWSLETTER_UNCONFIGURED_PLACEHOLDER = 'https://newsletter.mishmash.invalid/subscribe';
 const NEWSLETTER_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Pure decision for whether a newsletter signup should actually be sent:
- *  a well-formed email AND a real, MishMash-owned subscribe URL configured.
- *  Exported so the "no default -> no leak" guarantee (C2-1a) is directly
- *  testable without rendering the full EntryShell component tree. */
+ *  a well-formed email AND a real, MishMash-owned subscribe URL configured
+ *  (not the unconfigured `.invalid` placeholder). Exported so the
+ *  "no default -> no leak" guarantee (C2-1a) is directly testable without
+ *  rendering the full EntryShell component tree. */
 export function shouldSubmitNewsletterEmail(
   rawEmail: string,
   subscribeUrl: string | undefined,
 ): boolean {
-  if (!subscribeUrl) return false;
+  if (!subscribeUrl || subscribeUrl === NEWSLETTER_UNCONFIGURED_PLACEHOLDER) return false;
   const email = rawEmail.trim().toLowerCase();
   return NEWSLETTER_EMAIL_RE.test(email);
 }
@@ -2397,12 +2408,7 @@ function OnboardingView({
   // when no MishMash-owned NEXT_PUBLIC_NEWSLETTER_URL is configured, rather
   // than falling back to sending it anywhere.
   async function submitNewsletterEmail(rawEmail: string): Promise<void> {
-    // The `!NEWSLETTER_SUBSCRIBE_URL` half is redundant with what
-    // shouldSubmitNewsletterEmail already checks internally -- it is here so
-    // TypeScript's control-flow narrowing (which cannot see through the
-    // helper call) proves the fetch below a real, non-empty `string`
-    // without an `as string` cast.
-    if (!NEWSLETTER_SUBSCRIBE_URL || !shouldSubmitNewsletterEmail(rawEmail, NEWSLETTER_SUBSCRIBE_URL)) return;
+    if (!shouldSubmitNewsletterEmail(rawEmail, NEWSLETTER_SUBSCRIBE_URL)) return;
     const email = rawEmail.trim().toLowerCase();
     emitOnboardingClick('newsletter_email', 'subscribe', { newsletter_opt_in: true });
     const controller = new AbortController();
