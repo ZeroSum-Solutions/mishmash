@@ -36,18 +36,31 @@
 // program-wide binding rule recorded in DECISIONS.md (W9AS-PARK/W10A-PARK/
 // W10B-PARK): "a criterion asserting runtime behavior must observe that
 // behavior... structural checks are legitimate only for facts with no
-// runtime observable." The isolated-daemon-boot and process-tree-confirmed
-// teardown machinery below is PORTED from scripts/waves/verify-w10f.ts
-// (`bootIsolatedDaemonSubprocess`/`stopIsolatedDaemonSubprocessTree`), the
-// proven pattern the same DECISIONS.md record names as sound, using this
-// repository's own `@open-design/platform` process-tree primitives rather
-// than hand-rolled signal handling.
+// runtime observable."
+//
+// CONFIRM-ROUND FIX 2 (CR-3/CR-4, see docs/plans/waves/
+// W9-external-fetch-tranche.md's "Confirm-round dispositions"): the
+// isolated-daemon-boot and teardown machinery below no longer imports
+// `packages/platform/dist/index.mjs`. That path is gitignored (`.gitignore`
+// `dist/`) and untracked -- an evidence chain resting on it is not bound to
+// any reviewed commit, and `@open-design/platform`'s own `stopProcesses`
+// signals individual PIDs, never a process GROUP, while its
+// `listProcessSnapshots` deliberately converts an enumeration failure into
+// an EMPTY array (fail-OPEN). This verifier now manages every subprocess it
+// spawns itself, self-contained, matching
+// scripts/waves/verify-w9-filesystem.ts's `killGroupFailClosed` semantics
+// (that file's own docblock has the full rationale): spawn `detached: true`
+// so the child leads its OWN process group (pgid === its own pid on POSIX),
+// signal the WHOLE GROUP (`-pgid`) on teardown, escalate SIGTERM -> SIGKILL
+// on GROUP EMPTINESS confirmed via a fresh `ps` scan (never leader-liveness
+// alone), and treat a failed `ps` enumeration as UNCONFIRMED -- fails the
+// run, never silently reads as "nothing survived".
 //
 // PORTABILITY: repoRoot comes from `process.cwd()`/`--repo`, never
 // `import.meta.url`. Isolation: every daemon/worktree this verifier creates
 // is isolated (port 0, fresh mkdtemp data dirs, detached temp worktrees) and
-// torn down by its own exact handle, confirmed via a full process-tree walk
-// (never a single tracked PID). This verifier never touches a
+// torn down by its own exact process-group handle, confirmed via a group-
+// wide `ps` scan (never a single tracked PID). This verifier never touches a
 // default-namespace daemon (ports 7456/51012 are hard-refused by
 // assertSafeLoopbackUrl) and never issues a `git fetch`/`git push` -- git
 // context is resolved from local refs only.
@@ -1658,37 +1671,108 @@ function runSsrfSuite(testFiles: string[], attempt: number): { ok: boolean; resu
 }
 
 // =========================================================================
-// ROUND-1 addition (findings 2a + 7): process-tree management, PORTED from
-// scripts/waves/verify-w10f.ts (which DECISIONS.md's W9AS-PARK/W10A-PARK/
-// W10B-PARK record names as the proven sound pattern), using this
-// repository's own `@open-design/platform` process-tree primitives instead
-// of hand-rolled process-group signaling. `stopProcesses` internally does
-// SIGTERM-then-SIGKILL escalation with a poll-until-exit confirmation; the
-// caller's job is only to hand it every PID that was EVER part of the tree.
+// CONFIRM-ROUND FIX 2 (CR-3/CR-4): self-contained process-GROUP management.
+// Replaces the round-1 `@open-design/platform`-backed process-tree tracking
+// (findings 2a + 7), which the confirm round found imports an untracked,
+// gitignored build artifact (`packages/platform/dist/index.mjs` -- not
+// commit-bound evidence) AND signals individual PIDs rather than a process
+// group (`@open-design/platform/src/process.ts`'s own `stopProcesses` calls
+// `process.kill(pid, signal)` per PID, never `process.kill(-pgid, signal)`),
+// AND fails OPEN on enumeration failure (`listProcessSnapshots` deliberately
+// returns `[]` on any error -- see that file's own docblock -- which lets a
+// silently-broken `ps` read as "no survivors").
+//
+// This program's own confirm-round review named
+// scripts/waves/verify-w9-filesystem.ts's `killGroupFailClosed` as the
+// reference implementation to match; the functions below port that same
+// semantics (verbatim in spirit, adapted to this file's naming): spawn
+// `detached: true` so every daemon/replay-runner child leads its OWN
+// process group (pgid === its own pid on POSIX, so any descendant it spawns
+// at ANY point -- including a fire-and-forget probe the daemon itself
+// starts -- inherits that same group without needing to be individually
+// tracked); signal the WHOLE GROUP; escalate SIGTERM -> SIGKILL on GROUP
+// EMPTINESS confirmed via a fresh `ps` scan, never leader-liveness alone;
+// and treat a `ps` scan failure as an UNCONFIRMED, non-empty survivor list
+// -- fails the run, never silently "no survivors". No import of
+// `packages/platform` (`dist` or `src`) remains anywhere in this file: per
+// the confirm round's own instruction, this is a verifier-side wrap/replace,
+// not a change to product code, so `packages/platform/src/process.ts`'s
+// fail-open enumeration and per-PID signaling are UNCHANGED -- the
+// requirement that they become group-aware and fail-closed is recorded as a
+// PRODUCT-side implementation criterion in the PRD's "Confirm-round
+// dispositions" section instead of made here.
 // =========================================================================
-interface PlatformProcessSnapshot {
-  pid: number;
-  ppid: number;
-  command: string;
+/** Scans the REAL system process table (never trusts a leader's own `exit`
+ * event, or a resolved-without-verification promise, as proof the whole
+ * group is gone) for any process still reporting the given process-group
+ * id. A failed `ps` invocation returns a ONE-ELEMENT sentinel array (never
+ * `[]`) so every caller's `.length === 0` check treats a broken scan as
+ * "still has survivors" -- fail CLOSED, matching
+ * verify-w9-filesystem.ts's `processGroupSurvivors` exactly. */
+function processGroupSurvivors(pgid: number): string[] {
+  const r = sh('ps', ['-Ao', 'pid=,pgid=,comm='], { timeoutMs: 15_000 });
+  if (r.status !== 0) {
+    return [`ps scan itself failed (exit=${r.status}, stderr=${r.stderr.slice(0, 300)}) -- treated as UNCONFIRMED, never as proof of a clean exit`];
+  }
+  const survivors: string[] = [];
+  for (const line of r.stdout.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const parts = trimmed.split(/\s+/);
+    const rowPid = Number(parts[0]);
+    const rowPgid = Number(parts[1]);
+    if (!Number.isFinite(rowPid) || !Number.isFinite(rowPgid)) continue;
+    if (rowPgid === pgid) survivors.push(`pid=${rowPid} pgid=${rowPgid} comm=${parts.slice(2).join(' ')}`);
+  }
+  return survivors;
 }
-interface PlatformStopResult {
-  stoppedPids: number[];
-  remainingPids: number[];
-  forcedPids: number[];
+async function waitForGroupCondition(check: () => boolean, timeoutMs: number, intervalMs = 200): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (check()) return true;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  return check();
 }
-interface PlatformProcessApi {
-  listProcessSnapshots: () => Promise<PlatformProcessSnapshot[]>;
-  collectProcessTreePids: (processes: PlatformProcessSnapshot[], rootPids: Array<number | null | undefined>) => number[];
-  stopProcesses: (pids: Array<number | null | undefined>) => Promise<PlatformStopResult>;
-}
-let platformCache: PlatformProcessApi | null = null;
-async function loadPlatform(): Promise<PlatformProcessApi> {
-  if (platformCache) return platformCache;
-  const distPath = path.join(repoRoot, 'packages/platform/dist/index.mjs');
-  if (!fs.existsSync(distPath)) throw new Error(`packages/platform is not built (missing ${distPath}) -- run pnpm install`);
-  const mod = (await import(pathToFileURL(distPath).href)) as PlatformProcessApi;
-  platformCache = { listProcessSnapshots: mod.listProcessSnapshots, collectProcessTreePids: mod.collectProcessTreePids, stopProcesses: mod.stopProcesses };
-  return platformCache;
+/** Signals the WHOLE process group (never an individually-tracked PID
+ * list), escalates SIGTERM -> SIGKILL on GROUP EMPTINESS (re-scanned via
+ * the real system process table, never inferred from a single leader's
+ * `exit` event), and fails closed: a `ps` enumeration failure is
+ * UNCONFIRMED, not "empty"/"nothing survived". Matches
+ * scripts/waves/verify-w9-filesystem.ts's `killGroupFailClosed`. */
+async function killGroupFailClosed(pgid: number): Promise<{ ok: boolean; detail: string }> {
+  try {
+    process.kill(-pgid, 'SIGTERM');
+  } catch (err) {
+    // ESRCH here means the group is already gone -- proceed to the
+    // confirmation scan rather than assuming success from the throw alone.
+    if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
+      return { ok: false, detail: `SIGTERM to group -${pgid} failed: ${String(err)}` };
+    }
+  }
+  const emptyAfterTerm = await waitForGroupCondition(() => processGroupSurvivors(pgid).length === 0, 8_000);
+  if (!emptyAfterTerm) {
+    try {
+      process.kill(-pgid, 'SIGKILL');
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
+        return { ok: false, detail: `SIGKILL to group -${pgid} failed: ${String(err)}` };
+      }
+    }
+    const emptyAfterKill = await waitForGroupCondition(() => processGroupSurvivors(pgid).length === 0, 5_000);
+    if (!emptyAfterKill) {
+      const survivors = processGroupSurvivors(pgid);
+      return { ok: false, detail: `process group -${pgid} still has survivors after SIGTERM+SIGKILL -- teardown NOT confirmed: ${survivors.join('; ')}` };
+    }
+  }
+  // waitForGroupCondition's own successful exit already re-scanned and found
+  // the group empty, but re-derive the survivor list one more time
+  // explicitly rather than trusting a boolean alone.
+  const survivors = processGroupSurvivors(pgid);
+  if (survivors.length > 0) {
+    return { ok: false, detail: `process group -${pgid} has survivors after kill+wait: ${survivors.join('; ')}` };
+  }
+  return { ok: true, detail: `process group -${pgid} confirmed empty (group-wide ps scan found nothing)` };
 }
 /** Refuses any URL that is not `127.0.0.1`, and hard-refuses the two protected default-namespace daemon ports (finding 2's binding safety requirement) -- this is the "validate origin" half of "every probe fetch must set redirect to manual and validate origin and status so a redirect cannot reach a forbidden port." */
 function assertSafeLoopbackUrl(urlString: string): URL {
@@ -1698,16 +1782,22 @@ function assertSafeLoopbackUrl(urlString: string): URL {
   if (port === 7456 || port === 51012) throw new Error(`refusing to use reserved daemon port ${port} (url=${urlString})`);
   return url;
 }
-/** A spawned process's PID plus every descendant PID observed at ANY point while it ran (not merely a single snapshot taken after the fact, which would miss a grandchild that outlives an already-reaped intermediate parent). Polls every 150ms until the process exits or `timeoutMs` elapses. */
-async function spawnWithProcessTreeTracking(
+/** Spawns `cmd` DETACHED (its own process group, pgid === its own pid on
+ * POSIX) so `killGroupFailClosed(pgid)` can tear down it and every
+ * descendant it EVER spawns -- including one spawned after this function
+ * has already stopped polling -- with a single group-wide signal, never a
+ * per-PID snapshot walk that can miss a straggler. Resolves once the
+ * process exits or `timeoutMs` elapses (timing out sends SIGTERM to the
+ * group as a best-effort nudge; the caller must still call
+ * `killGroupFailClosed` itself to get a confirmed teardown verdict). */
+async function spawnDetachedGroupTracked(
   cmd: string,
   args: string[],
   opts: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number },
-): Promise<{ status: number | null; stdout: string; stderr: string; timedOut: boolean; observedPids: Set<number> }> {
-  const platform = await loadPlatform();
-  const proc = spawn(cmd, args, { cwd: opts.cwd, env: opts.env, stdio: ['ignore', 'pipe', 'pipe'] });
-  const observedPids = new Set<number>();
-  if (proc.pid != null) observedPids.add(proc.pid);
+): Promise<{ status: number | null; stdout: string; stderr: string; timedOut: boolean; pgid: number }> {
+  const proc = spawn(cmd, args, { cwd: opts.cwd, env: opts.env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+  if (proc.pid == null) throw new Error(`failed to spawn ${cmd} ${args.join(' ')} (no pid)`);
+  const pgid = proc.pid;
   let stdout = '';
   let stderr = '';
   proc.stdout?.on('data', (c: Buffer) => {
@@ -1727,38 +1817,18 @@ async function spawnWithProcessTreeTracking(
     exited = true;
   });
   while (!exited && Date.now() - startedAt < opts.timeoutMs) {
-    if (proc.pid != null) {
-      const snapshots = await platform.listProcessSnapshots();
-      for (const pid of platform.collectProcessTreePids(snapshots, [proc.pid])) observedPids.add(pid);
-    }
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
   if (!exited) {
     timedOut = true;
-    if (proc.pid != null) {
-      try {
-        process.kill(proc.pid, 'SIGTERM');
-      } catch {
-        /* already gone */
-      }
+    try {
+      process.kill(-pgid, 'SIGTERM');
+    } catch {
+      /* already gone */
     }
   }
   const status = await exitPromise;
-  // Final snapshot after exit/kill -- catches anything spawned in the last window before exit.
-  if (proc.pid != null) {
-    const snapshots = await platform.listProcessSnapshots();
-    for (const pid of platform.collectProcessTreePids(snapshots, [proc.pid])) observedPids.add(pid);
-  }
-  return { status, stdout, stderr, timedOut, observedPids };
-}
-/** Stops every PID in `observedPids`, waits for confirmation, and returns ok:true ONLY when the platform's own stop result reports zero remaining. A failed or partial teardown must never be silently treated as success. */
-async function confirmProcessTreeStopped(observedPids: ReadonlySet<number>): Promise<{ ok: boolean; detail: string }> {
-  const platform = await loadPlatform();
-  const result = await platform.stopProcesses([...observedPids]);
-  return {
-    ok: result.remainingPids.length === 0,
-    detail: `observed=${JSON.stringify([...observedPids])} stopped=${JSON.stringify(result.stoppedPids)} forced=${JSON.stringify(result.forcedPids)} remaining=${JSON.stringify(result.remainingPids)}`,
-  };
+  return { status, stdout, stderr, timedOut, pgid };
 }
 
 /** Mechanically extracts the production MAX_REMOTE_BYTES constant from
@@ -1812,17 +1882,22 @@ function w9xfAcceptProbeUrl(key: string): string {
 // before importing server.ts. The stub is the ONLY deviation from real
 // production code -- route dispatch, the SSRF guard's own pre-checks
 // (assertPublicBrandUrl, createValidatingLookup), and fetchRemoteBytes all
-// run for real. It intercepts exactly three sentinel URLs (a leak-probe
-// target for CXF-11's negative-control transfer-bound measurement, an
+// run for real. It intercepts exactly two EXACT sentinel URLs (a leak-probe
+// target for CXF-11's negative-control transfer-bound measurement, and an
 // ok-probe target for CXF-11's OWN positive control -- an ordinary in-bounds
-// transfer that must complete normally in the same run -- and an
-// accept-probe target for CXF-6's positive control) and passes every other
-// URL straight through to the real fetch unmodified -- so every EXISTING
-// reject-path probe (which targets the loopback canary, a different address
-// entirely) is completely
-// unaffected by this change. Per Ruling 1 condition 1, interception is
-// EMPIRICALLY PROVEN at the start of CXF-6 (see the stub-interception
-// self-check below), never merely assumed from reading this source.
+// transfer that must complete normally in the same run) PLUS every URL
+// under one PREFIX (the accept-probe family, keyed per-caller -- CXF-6's own
+// positive control AND the boot-self-check both use this same prefix, per
+// key) -- CR-5 (confirm round): this is deliberately broader than "two
+// sentinel URLs", not a narrower claim; see docs/plans/waves/
+// W9-external-fetch-tranche.md's "Confirm-round dispositions". Every other
+// URL passes straight through to the real fetch unmodified -- so every
+// EXISTING reject-path probe (which targets the loopback canary, a
+// different address entirely) is completely unaffected by this change.
+// Per Ruling 1 condition 1, interception is EMPIRICALLY PROVEN at the start
+// of BOTH CXF-6 and CXF-11 (CR-2, confirm round: each in its OWN booted
+// daemon, via the shared `proveStubInterception` helper), never merely
+// assumed from reading this source.
 // =========================================================================
 function buildIsolatedDaemonRunnerScript(serverTsUrl: string, maxRemoteBytes: number): string {
   const hardCap = maxRemoteBytes + 10 * 1024 * 1024;
@@ -1902,30 +1977,23 @@ interface IsolatedDaemonHandle {
   telemetryUrl: string;
   dataDir: string;
   routeInventory: unknown;
-  observedPids: Set<number>;
+  pgid: number;
   proc: ReturnType<typeof spawn>;
 }
-/** Spawns the real production daemon (dynamically imports apps/daemon/src/server.ts's own startServer -- never a reimplementation) in a fresh, isolated OD_DATA_DIR on an OS-assigned port. Never touches 7456/51012 by construction (port:0). Caller MUST eventually call stopIsolatedDaemon on the returned handle. */
+/** Spawns the real production daemon (dynamically imports apps/daemon/src/server.ts's own startServer -- never a reimplementation) DETACHED, in its own process group, in a fresh, isolated OD_DATA_DIR on an OS-assigned port. Never touches 7456/51012 by construction (port:0). Caller MUST eventually call stopIsolatedDaemon on the returned handle. */
 async function bootIsolatedDaemon(): Promise<IsolatedDaemonHandle> {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'w9xf-daemon-data-'));
   const runnerPath = path.join(os.tmpdir(), `w9xf-daemon-runner-${process.pid}-${Date.now()}.mjs`);
   const serverTsUrl = pathToFileURL(path.join(repoRoot, 'apps/daemon/src/server.ts')).href;
   fs.writeFileSync(runnerPath, buildIsolatedDaemonRunnerScript(serverTsUrl, extractMaxRemoteBytesConstant()));
-  const platform = await loadPlatform();
   const proc = spawn('pnpm', ['exec', 'tsx', runnerPath], {
     cwd: repoRoot,
     env: { ...process.env, OD_DATA_DIR: dataDir, W9XF_SERVER_URL: serverTsUrl },
     stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true, // own process group: pgid === proc.pid on POSIX -- catches ANY descendant
   });
-  const observedPids = new Set<number>();
-  if (proc.pid != null) observedPids.add(proc.pid);
-  const trackTimer = setInterval(() => {
-    void (async () => {
-      if (proc.pid == null) return;
-      const snapshots = await platform.listProcessSnapshots();
-      for (const pid of platform.collectProcessTreePids(snapshots, [proc.pid])) observedPids.add(pid);
-    })();
-  }, 200);
+  if (proc.pid == null) throw new Error('isolated daemon runner failed to spawn (no pid)');
+  const pgid = proc.pid;
   try {
     const ready = await new Promise<{ url: string; routeInventory: unknown; telemetryUrl: string }>((resolve, reject) => {
       let buffered = '';
@@ -1956,10 +2024,9 @@ async function bootIsolatedDaemon(): Promise<IsolatedDaemonHandle> {
     });
     assertSafeLoopbackUrl(ready.url);
     assertSafeLoopbackUrl(ready.telemetryUrl);
-    return { baseUrl: ready.url, telemetryUrl: ready.telemetryUrl, dataDir, routeInventory: ready.routeInventory, observedPids, proc };
+    return { baseUrl: ready.url, telemetryUrl: ready.telemetryUrl, dataDir, routeInventory: ready.routeInventory, pgid, proc };
   } catch (err) {
-    clearInterval(trackTimer);
-    await confirmProcessTreeStopped(observedPids).catch(() => {});
+    await killGroupFailClosed(pgid).catch(() => ({ ok: false, detail: 'killGroupFailClosed itself threw' }));
     try {
       fs.rmSync(runnerPath, { force: true });
     } catch {
@@ -1971,25 +2038,11 @@ async function bootIsolatedDaemon(): Promise<IsolatedDaemonHandle> {
       /* best effort */
     }
     throw err;
-  } finally {
-    clearInterval(trackTimer);
   }
 }
-/** Stops the daemon's FULL process tree and confirms zero survivors before removing its data dir. A partial teardown returns ok:false and does NOT remove the data dir (evidence preserved for investigation) -- per the binding safety rule, a failed teardown must fail the run, never be silently swallowed. */
+/** Stops the daemon's FULL process GROUP and confirms zero survivors (a group-wide `ps` scan, never leader-liveness alone) before removing its data dir. A partial or unconfirmed teardown returns ok:false and does NOT remove the data dir (evidence preserved for investigation) -- per the binding safety rule, a failed teardown must fail the run, never be silently swallowed. */
 async function stopIsolatedDaemon(handle: IsolatedDaemonHandle): Promise<{ ok: boolean; detail: string }> {
-  if (handle.proc.pid != null) {
-    try {
-      process.kill(handle.proc.pid, 'SIGTERM');
-    } catch {
-      /* already gone */
-    }
-  }
-  const platform = await loadPlatform();
-  const snapshots = await platform.listProcessSnapshots();
-  if (handle.proc.pid != null) {
-    for (const pid of platform.collectProcessTreePids(snapshots, [handle.proc.pid])) handle.observedPids.add(pid);
-  }
-  const stopResult = await confirmProcessTreeStopped(handle.observedPids);
+  const stopResult = await killGroupFailClosed(handle.pgid);
   if (stopResult.ok) {
     try {
       fs.rmSync(handle.dataDir, { recursive: true, force: true });
@@ -2143,6 +2196,41 @@ async function executeAcceptControlProbe(daemon: IsolatedDaemonHandle, spec: Pro
 }
 
 // =========================================================================
+// CONFIRM-ROUND FIX 2 (CR-2): shared empirical fetch-stub-interception
+// self-check. Previously this proof (Ruling 1 condition 1) ran ONLY inside
+// CXF-6, in CXF-6's OWN daemon instance -- CXF-11 booted a SEPARATE daemon
+// and never independently proved interception in ITS OWN run, so a broken
+// seam (or a pre-fetch rejection that never reached globalThis.fetch at
+// all) could leave CXF-11 reading all-zero telemetry and still passing on
+// arithmetic alone (the root cause CR-1 also fixes at the arithmetic
+// level). This function is now called once per criterion, in that
+// criterion's own booted daemon, so "the stub actually works" is never
+// inherited from a sibling criterion's boot -- each criterion proves it for
+// itself, in its own run.
+// =========================================================================
+async function proveStubInterception(daemon: IsolatedDaemonHandle): Promise<{ ok: boolean; detail: string }> {
+  await resetTelemetry(daemon);
+  const stubProveUrl = assertSafeLoopbackUrl(new URL('/api/library/ingest', daemon.baseUrl).toString());
+  const stubProveResp = await fetch(stubProveUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    redirect: 'manual',
+    body: JSON.stringify({ url: w9xfAcceptProbeUrl('boot-self-check') }),
+  });
+  try {
+    await stubProveResp.arrayBuffer();
+  } catch {
+    /* best effort */
+  }
+  const stubProveTelemetry = await queryTelemetry(daemon);
+  const proven = (stubProveTelemetry.acceptInvocations['boot-self-check'] ?? 0) >= 1;
+  return {
+    ok: proven,
+    detail: `probe-infra self-check: fetch-stub interception proven=${proven} (POST /api/library/ingest with a stub-sentinel url; status=${stubProveResp.status}) -- if false, no telemetry reading in THIS run can be trusted`,
+  };
+}
+
+// =========================================================================
 // PORTED red-evidence replay (CXF-5/CXF-6's new-control requirement).
 // Generic mechanism: not fetch/route-specific. Adapted paths/globs only.
 // =========================================================================
@@ -2232,14 +2320,14 @@ interface ReplayOutcome {
 // vitest's own Node API can spawn worker processes/threads beneath it, and a
 // timeout-triggered kill only ever signaled the ONE tracked PID, exactly the
 // orphaned-descendant failure mode the program-wide DECISIONS.md ruling
-// named (a SIGTERM-handling descendant surviving its parent's own exit). The
-// runner is now launched via spawnWithProcessTreeTracking (which polls the
-// FULL descendant tree while the process runs, not a single snapshot taken
-// after the fact) and torn down via confirmProcessTreeStopped, which
-// requires zero remaining PIDs -- a partial teardown now returns ok:false
-// and PRESERVES tmpBase (never deletes evidence out from under a failure)
-// instead of silently succeeding. The `git worktree remove` result is now
-// checked, not discarded.
+// named (a SIGTERM-handling descendant surviving its parent's own exit).
+// CONFIRM-ROUND FIX 2 (CR-3/CR-4): the runner is now launched DETACHED via
+// spawnDetachedGroupTracked (own process group) and torn down via
+// killGroupFailClosed (whole-group signal, fail-closed on a broken `ps`
+// scan) -- a partial or unconfirmed teardown returns ok:false and PRESERVES
+// tmpBase (never deletes evidence out from under a failure) instead of
+// silently succeeding. The `git worktree remove` result is checked, not
+// discarded.
 async function replayRedEvidence(parentSha: string, containingFileRel: string, targetFullName: string, controlFullName: string): Promise<ReplayOutcome> {
   const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-w9xf-replay-'));
   const worktreeDir = path.join(tmpBase, 'wt');
@@ -2263,12 +2351,12 @@ async function replayRedEvidence(parentSha: string, containingFileRel: string, t
       const runnerScript = buildReplayRunnerScript(marker, worktreeFileAbs, daemonRoot);
       const runnerPath = path.join(tmpBase, 'runner.mjs');
       fs.writeFileSync(runnerPath, runnerScript);
-      const run = await spawnWithProcessTreeTracking('node', [runnerPath], { cwd: daemonRoot, env: process.env, timeoutMs: 3 * 60_000 });
-      const stopResult = await confirmProcessTreeStopped(run.observedPids);
+      const run = await spawnDetachedGroupTracked('node', [runnerPath], { cwd: daemonRoot, env: process.env, timeoutMs: 3 * 60_000 });
+      const stopResult = await killGroupFailClosed(run.pgid);
       teardownOk = stopResult.ok;
       teardownDetail = stopResult.detail;
       if (run.timedOut) {
-        outcome = { ok: false, detail: `replay process timed out (3min) -- observedPids=${JSON.stringify([...run.observedPids])}` };
+        outcome = { ok: false, detail: `replay process timed out (3min) -- pgid=${run.pgid}` };
       } else {
         const startTag = `REPLAY_${marker}_START`;
         const endTag = `REPLAY_${marker}_END`;
@@ -2890,24 +2978,11 @@ async function main(): Promise<void> {
       // fetchExternalBrandAsset is the one call chain named in the finding,
       // and it needs no attribution matrix to exercise, so this runs
       // unconditionally, before any accept-probe result below is trusted.
-      await resetTelemetry(daemon);
-      const stubProveUrl = assertSafeLoopbackUrl(new URL('/api/library/ingest', daemon.baseUrl).toString());
-      const stubProveResp = await fetch(stubProveUrl, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        redirect: 'manual',
-        body: JSON.stringify({ url: w9xfAcceptProbeUrl('boot-self-check') }),
-      });
-      try {
-        await stubProveResp.arrayBuffer();
-      } catch {
-        /* best effort */
-      }
-      const stubProveTelemetry = await queryTelemetry(daemon);
-      const stubInterceptionProven = (stubProveTelemetry.acceptInvocations['boot-self-check'] ?? 0) >= 1;
-      infraNotes.push(
-        `probe-infra self-check: fetch-stub interception proven=${stubInterceptionProven} (POST /api/library/ingest with a stub-sentinel url; status=${stubProveResp.status}) -- if false, no per-row accept-probe result below can be trusted`,
-      );
+      // CONFIRM-ROUND FIX 2 (CR-2): now the SAME shared helper CXF-11 also
+      // calls in its own daemon run -- see proveStubInterception's docblock.
+      const interception = await proveStubInterception(daemon);
+      const stubInterceptionProven = interception.ok;
+      infraNotes.push(interception.detail);
 
       let ok: boolean;
       let evidenceBody: string;
@@ -3178,84 +3253,138 @@ async function main(): Promise<void> {
   // criterion only PASSES when it can show BOTH discriminating outcomes in
   // one run: the oversized transfer bounded/rejected AND the ordinary
   // transfer completing untouched.
+  //
+  // CONFIRM-ROUND FIX 2 (CR-1 + CR-2): the confirm round found the negative
+  // control's old `bounded` predicate checked only an UPPER byte bound
+  // (`bytesEnqueued <= maxRemoteBytes + slack && bytesEnqueued < hardCap`),
+  // which a PRE-FETCH REJECTION delivering zero bytes, or a broken fix that
+  // silently truncates and still returns 200, would BOTH satisfy -- neither
+  // is the bounded-transfer behavior this criterion exists to prove. Fixed
+  // two ways, together closing the false-green:
+  //   (CR-2) `interception` below now calls the SAME shared
+  //   `proveStubInterception` self-check CXF-6 uses, in CXF-11's OWN
+  //   booted daemon -- never inherited from CXF-6's boot. If unproven, the
+  //   transfer probes are SKIPPED entirely (not just failed): an unproven
+  //   stub would let the ok-probe sentinel URL fall through to the REAL
+  //   `globalThis.fetch`, a live network call this verifier must not make
+  //   as a side effect of a broken seam.
+  //   (CR-1) `bounded` now requires three things jointly, not one ceiling
+  //   check: `flowed` (bytesEnqueued > 0 -- the stream was actually pulled
+  //   by the consumer, so a pre-fetch rejection delivering zero bytes
+  //   cannot pass), `stayedUnderCeiling` (the pre-existing upper-bound
+  //   check), and `terminatedByBound` (leak.sawCancel === true AND the
+  //   daemon's own response status is NOT 200 -- a silent truncation that
+  //   still reports success, "truncated-200", must NOT read as bounded; a
+  //   correct fix that aborts the read via reader.cancel()/AbortController
+  //   once MAX_REMOTE_BYTES is crossed, per the PRD's "must bound the
+  //   transfer as it streams... aborting once the running total crosses
+  //   MAX_REMOTE_BYTES", naturally produces both signals together).
   // =======================================================================
   await checkCriterion('CXF-11', async () => {
     let daemon: IsolatedDaemonHandle | null = null;
     const infraNotes: string[] = [];
     try {
       daemon = await bootIsolatedDaemon();
-      const maxRemoteBytes = extractMaxRemoteBytesConstant();
-      const hardCap = maxRemoteBytes + 10 * 1024 * 1024;
-      const slack = 4 * 1024 * 1024; // tolerance for reasonable chunked-read overshoot before an abort takes effect
-      await resetTelemetry(daemon);
-      const url = assertSafeLoopbackUrl(new URL('/api/library/ingest', daemon.baseUrl).toString());
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        redirect: 'manual',
-        body: JSON.stringify({ url: W9XF_LEAK_PROBE_URL }),
-      });
-      try {
-        await resp.arrayBuffer();
-      } catch {
-        /* best effort -- the daemon's own response body is not what we're measuring */
-      }
-      // Grace period: let any async reader.cancel()/abort still in flight
-      // settle before reading the byte count it produced.
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      const telemetry = await queryTelemetry(daemon);
-      const leak = telemetry.leak;
-      // RULING 1 condition 2: the assertion is the OBSERVABLE CONSEQUENCE
-      // (how many bytes the stream actually delivered before the transfer
-      // stopped growing), never "a streaming API was called". bytesEnqueued
-      // only grows when the CONSUMER pulls more (ReadableStream's pull() is
-      // demand-driven), so it is a direct measure of what fetchRemoteBytes
-      // actually consumed, whether or not it called an explicit cancel().
-      const bounded = leak.bytesEnqueued <= maxRemoteBytes + slack && leak.bytesEnqueued < hardCap;
-      infraNotes.push(
-        `[SEAM: transport stubbed for one sentinel leak-probe URL only -- route /api/library/ingest, its SSRF pre-check, and fetchRemoteBytes are real production code] ` +
-          `MAX_REMOTE_BYTES=${maxRemoteBytes} slack=${slack} hardCap=${hardCap} bytesEnqueued=${leak.bytesEnqueued} sawCancel=${leak.sawCancel} cancelledAtBytes=${leak.cancelledAtBytes} streamClosedAtHardCap=${leak.streamClosed} daemonResponseStatus=${resp.status}`,
-      );
-      infraNotes.push(
-        bounded
-          ? 'bounded: the stream stopped being pulled at/near MAX_REMOTE_BYTES -- transfer-time enforcement, not a post-materialization re-check'
-          : 'UNBOUNDED: the stream was pulled to (or past) the hard safety cap without the consumer stopping near MAX_REMOTE_BYTES -- this run, against the CURRENT unfixed production code, is the negative-control demonstration Ruling 1 condition 3 requires: a criterion that does not fail here would itself be broken',
-      );
 
-      // POSITIVE CONTROL: same call chain, a sentinel that streams a small,
-      // genuinely in-bounds total (12 KiB, well under MAX_REMOTE_BYTES) and
-      // closes on its own. Run in the SAME daemon instance, same probe run,
-      // right after the negative control above.
-      await resetTelemetry(daemon);
-      const okResp = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        redirect: 'manual',
-        body: JSON.stringify({ url: W9XF_OK_PROBE_URL }),
-      });
-      let okBody: unknown;
-      try {
-        okBody = await okResp.json();
-      } catch {
-        /* best effort */
-      }
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      const okTelemetry = await queryTelemetry(daemon);
-      const okLeak = okTelemetry.ok;
-      const okExpectedBytes = 3 * 4096;
-      const positiveControlPassed =
-        okResp.status === 200 && okLeak.streamClosed && !okLeak.sawCancel && okLeak.bytesEnqueued === okExpectedBytes;
-      infraNotes.push(
-        `[SEAM: transport stubbed for one sentinel ok-probe URL only -- same route/guard/fetchRemoteBytes code path as the leak probe above] ` +
-          `expectedBytes=${okExpectedBytes} bytesEnqueued=${okLeak.bytesEnqueued} sawCancel=${okLeak.sawCancel} streamClosed=${okLeak.streamClosed} daemonResponseStatus=${okResp.status} assetId=${okBody && typeof okBody === 'object' && 'asset' in okBody ? String((okBody as { asset?: { id?: unknown } }).asset?.id ?? '') : '(none)'}`,
-      );
-      infraNotes.push(
-        positiveControlPassed
-          ? 'POSITIVE CONTROL PASSED: the ordinary in-bounds transfer completed untouched (full expected byte count delivered, no cancellation, HTTP 200) in the same run as the negative control -- proves the mechanism discriminates rather than always reporting unbounded or cancelling everything'
-          : 'POSITIVE CONTROL FAILED: an ordinary in-bounds transfer did NOT complete normally -- either the measurement mechanism itself is broken, or a fix is overzealously cancelling transfers that were never over the limit',
-      );
+      // CR-2: empirical interception proof, in THIS run's own daemon.
+      const interception = await proveStubInterception(daemon);
+      infraNotes.push(interception.detail);
 
-      const ok = bounded && positiveControlPassed;
+      let flowed = false;
+      let stayedUnderCeiling = false;
+      let terminatedByBound = false;
+      let bounded = false;
+      let positiveControlPassed = false;
+
+      if (!interception.ok) {
+        infraNotes.push(
+          'CXF-11 SKIPPED both transfer-bound probes: fetch-stub interception could not be empirically proven in this run\'s OWN daemon -- treated as inconclusive/fail, never silently passed. Skipping also avoids letting the ok-probe sentinel URL fall through to a REAL live network call.',
+        );
+      } else {
+        const maxRemoteBytes = extractMaxRemoteBytesConstant();
+        const hardCap = maxRemoteBytes + 10 * 1024 * 1024;
+        const slack = 4 * 1024 * 1024; // tolerance for reasonable chunked-read overshoot before an abort takes effect
+        await resetTelemetry(daemon);
+        const url = assertSafeLoopbackUrl(new URL('/api/library/ingest', daemon.baseUrl).toString());
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          redirect: 'manual',
+          body: JSON.stringify({ url: W9XF_LEAK_PROBE_URL }),
+        });
+        try {
+          await resp.arrayBuffer();
+        } catch {
+          /* best effort -- the daemon's own response body is not what we're measuring */
+        }
+        // Grace period: let any async reader.cancel()/abort still in flight
+        // settle before reading the byte count it produced.
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        const telemetry = await queryTelemetry(daemon);
+        const leak = telemetry.leak;
+        // RULING 1 condition 2: the assertion is the OBSERVABLE CONSEQUENCE
+        // (how many bytes the stream actually delivered before the transfer
+        // stopped growing), never "a streaming API was called". bytesEnqueued
+        // only grows when the CONSUMER pulls more (ReadableStream's pull() is
+        // demand-driven), so it is a direct measure of what fetchRemoteBytes
+        // actually consumed, whether or not it called an explicit cancel().
+        flowed = leak.bytesEnqueued > 0;
+        stayedUnderCeiling = leak.bytesEnqueued <= maxRemoteBytes + slack && leak.bytesEnqueued < hardCap;
+        // CR-1: a rejecting status is REQUIRED, not merely one of two
+        // alternative signals -- otherwise a cancel-but-still-200
+        // ("truncated-200") response would read as bounded, which the
+        // confirm round explicitly named as a required-failing outcome.
+        terminatedByBound = leak.sawCancel === true && resp.status !== 200;
+        bounded = flowed && stayedUnderCeiling && terminatedByBound;
+        infraNotes.push(
+          `[SEAM: transport stubbed for one sentinel leak-probe URL only -- route /api/library/ingest, its SSRF pre-check, and fetchRemoteBytes are real production code] ` +
+            `MAX_REMOTE_BYTES=${maxRemoteBytes} slack=${slack} hardCap=${hardCap} bytesEnqueued=${leak.bytesEnqueued} sawCancel=${leak.sawCancel} cancelledAtBytes=${leak.cancelledAtBytes} streamClosedAtHardCap=${leak.streamClosed} daemonResponseStatus=${resp.status} flowed=${flowed} stayedUnderCeiling=${stayedUnderCeiling} terminatedByBound=${terminatedByBound}`,
+        );
+        infraNotes.push(
+          bounded
+            ? 'bounded: the stream actually flowed, stayed at/near MAX_REMOTE_BYTES, AND was terminated by the bound (cancellation observed + a non-200 rejecting status) -- transfer-time enforcement, not a post-materialization re-check, not a zero-delivery rejection, not a silent truncated-200'
+            : !flowed
+              ? 'UNBOUNDED (zero-delivery): bytesEnqueued=0 -- the stream was never actually pulled, so this cannot be trusted as evidence of a bounded transfer (it could equally be a pre-fetch rejection that never touched the stub)'
+              : !stayedUnderCeiling
+                ? 'UNBOUNDED: the stream was pulled to (or past) the hard safety cap without the consumer stopping near MAX_REMOTE_BYTES -- this run, against the CURRENT unfixed production code, is the negative-control demonstration Ruling 1 condition 3 requires: a criterion that does not fail here would itself be broken'
+                : 'UNBOUNDED (not terminated by the bound): bytes stayed under the ceiling but neither cancellation nor a rejecting status was observed (daemonResponseStatus=200 and/or sawCancel=false) -- a silent truncated-200 must not read as bounded',
+        );
+
+        // POSITIVE CONTROL: same call chain, a sentinel that streams a small,
+        // genuinely in-bounds total (12 KiB, well under MAX_REMOTE_BYTES) and
+        // closes on its own. Run in the SAME daemon instance, same probe run,
+        // right after the negative control above.
+        await resetTelemetry(daemon);
+        const okResp = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          redirect: 'manual',
+          body: JSON.stringify({ url: W9XF_OK_PROBE_URL }),
+        });
+        let okBody: unknown;
+        try {
+          okBody = await okResp.json();
+        } catch {
+          /* best effort */
+        }
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        const okTelemetry = await queryTelemetry(daemon);
+        const okLeak = okTelemetry.ok;
+        const okExpectedBytes = 3 * 4096;
+        positiveControlPassed =
+          okResp.status === 200 && okLeak.streamClosed && !okLeak.sawCancel && okLeak.bytesEnqueued === okExpectedBytes;
+        infraNotes.push(
+          `[SEAM: transport stubbed for one sentinel ok-probe URL only -- same route/guard/fetchRemoteBytes code path as the leak probe above] ` +
+            `expectedBytes=${okExpectedBytes} bytesEnqueued=${okLeak.bytesEnqueued} sawCancel=${okLeak.sawCancel} streamClosed=${okLeak.streamClosed} daemonResponseStatus=${okResp.status} assetId=${okBody && typeof okBody === 'object' && 'asset' in okBody ? String((okBody as { asset?: { id?: unknown } }).asset?.id ?? '') : '(none)'}`,
+        );
+        infraNotes.push(
+          positiveControlPassed
+            ? 'POSITIVE CONTROL PASSED: the ordinary in-bounds transfer completed untouched (full expected byte count delivered, no cancellation, HTTP 200) in the same run as the negative control -- proves the mechanism discriminates rather than always reporting unbounded or cancelling everything'
+            : 'POSITIVE CONTROL FAILED: an ordinary in-bounds transfer did NOT complete normally -- either the measurement mechanism itself is broken, or a fix is overzealously cancelling transfers that were never over the limit',
+        );
+      }
+
+      const ok = interception.ok && bounded && positiveControlPassed;
       let teardownOk = true;
       let teardownDetail = '';
       if (daemon) {
@@ -3267,7 +3396,7 @@ async function main(): Promise<void> {
       record(
         'CXF-11',
         '',
-        'fetchRemoteBytes bounds the TRANSFER as it streams (aborts once the running total crosses MAX_REMOTE_BYTES) rather than re-checking length only after resp.arrayBuffer() has already fully materialized the body -- asserted at runtime against a real booted daemon: a negative control (a response streaming past MAX_REMOTE_BYTES with no Content-Length) must be bounded/rejected, AND a positive control (an ordinary in-bounds transfer, same code path) must complete untouched in the same run -- by measuring bytes actually delivered, not by inspecting source for a streaming API call',
+        'fetchRemoteBytes bounds the TRANSFER as it streams (aborts once the running total crosses MAX_REMOTE_BYTES) rather than re-checking length only after resp.arrayBuffer() has already fully materialized the body -- asserted at runtime against a real booted daemon, gated on THIS run\'s own empirical fetch-stub-interception proof: a negative control (a response streaming past MAX_REMOTE_BYTES with no Content-Length) must show the stream actually flowed (bytesEnqueued > 0), stayed at/near the bound, and was terminated by the bound (cancellation observed AND a non-200 rejecting status -- zero-delivery and truncated-200 are both structurally failing outcomes), AND a positive control (an ordinary in-bounds transfer, same code path) must prove full delivery (exact byte count, HTTP 200, no cancellation) in the same run -- by measuring bytes actually delivered, not by inspecting source for a streaming API call',
         finalOk,
         `${infraNotes.join('\n')}\nteardown: ok=${teardownOk} ${teardownDetail}`,
         {
@@ -3275,9 +3404,11 @@ async function main(): Promise<void> {
             ? undefined
             : !teardownOk
               ? `isolated daemon teardown failed: ${teardownDetail}`
-              : !bounded
-                ? 'fetchRemoteBytes buffered past MAX_REMOTE_BYTES + slack before ever checking length'
-                : 'positive control failed -- an ordinary in-bounds transfer did not complete untouched (see evidence)',
+              : !interception.ok
+                ? 'fetch-stub interception could not be empirically proven in this run\'s own daemon -- transfer probes skipped'
+                : !bounded
+                  ? `fetchRemoteBytes did not demonstrate a genuinely bounded transfer (flowed=${flowed} stayedUnderCeiling=${stayedUnderCeiling} terminatedByBound=${terminatedByBound})`
+                  : 'positive control failed -- an ordinary in-bounds transfer did not complete untouched (see evidence)',
         },
       );
     } catch (err) {
