@@ -1385,6 +1385,36 @@ async function checkC2_4(): Promise<void> {
               // reporter and require the failure MESSAGE actually names a
               // PNG-shaped assertion (the icon filename or a hash
               // comparison), not just "the process didn't exit 0."
+              //
+              // Post-pin fix (2026-07-29): the replay worktree is a bare
+              // source checkout -- mise has never trusted its mise.toml at
+              // this tmp path, and node_modules is gitignored -- so the mise
+              // shim refused to resolve `pnpm` and vitest never started. That
+              // yielded exit 243 with ZERO assertionResults, and the
+              // pngShapedFailure test below then reported it as "the red was
+              // not PNG-shaped": an infrastructure failure wearing the costume
+              // of a test-quality verdict, which is strictly worse than a
+              // loud break. So: provision the replay toolchain, and separate
+              // "the replay could not execute" from "the replay ran and its
+              // red was not PNG-shaped."
+              //
+              // node_modules is shared by symlink rather than installed: it is
+              // gitignored infrastructure, not part of the baseCommit SOURCE
+              // this replay exists to exercise (the committed public/*.png
+              // bytes), and the entries resolve correctly through a directory
+              // symlink. Same reasoning as the C2-3 scratch-copy precedent.
+              const trust = sh('mise', ['trust', path.join(worktreeDir, 'mise.toml')], worktreeDir, undefined, 60_000);
+              const linkedDeps: string[] = [];
+              for (const rel of ['node_modules', 'apps/web/node_modules']) {
+                const realDir = abs(rel);
+                const linkPath = path.join(worktreeDir, rel);
+                if (fs.existsSync(realDir) && !fs.existsSync(linkPath)) {
+                  fs.mkdirSync(path.dirname(linkPath), { recursive: true });
+                  fs.symlinkSync(realDir, linkPath, 'dir');
+                  linkedDeps.push(rel);
+                }
+              }
+              evidenceLines.push(`red-at-parent replay env: mise trust exit=${trust.status}, node_modules linked=[${linkedDeps.join(', ')}]`);
               const redJsonPath = path.join(proofDir, 'C2-4-red-at-parent.json');
               const redRun = sh(
                 'pnpm',
@@ -1394,15 +1424,25 @@ async function checkC2_4(): Promise<void> {
                 3 * 60_000,
               );
               let redFailureMessages: string[] = [];
+              let redAssertionCount = 0;
+              let redReportParsed = false;
               try {
-                const redData = JSON.parse(fs.readFileSync(redJsonPath, 'utf8')) as { testResults: Array<{ assertionResults: Array<{ status: string; failureMessages?: string[] }> }> };
-                redFailureMessages = redData.testResults.flatMap((t) => t.assertionResults).filter((a) => a.status === 'failed').flatMap((a) => a.failureMessages ?? []);
+                const redData = JSON.parse(fs.readFileSync(redJsonPath, 'utf8')) as { testResults: Array<{ assertionResults?: Array<{ status: string; failureMessages?: string[] }> }> };
+                redReportParsed = true;
+                const redAssertions = (redData.testResults ?? []).flatMap((t) => t.assertionResults ?? []);
+                redAssertionCount = redAssertions.length;
+                redFailureMessages = redAssertions.filter((a) => a.status === 'failed').flatMap((a) => a.failureMessages ?? []);
               } catch {
-                /* left empty, handled below */
+                /* left unparsed; surfaced via redReportParsed below */
               }
+              // The replay only produced EVIDENCE if it actually ran tests.
+              const replayExecuted = redReportParsed && redAssertionCount > 0;
               const pngShapedFailure = redFailureMessages.some((m) => /\.png/i.test(m) || /sha256|hash/i.test(m));
-              evidenceLines.push(`red-at-parent (baseCommit=${baseCommit.slice(0, 12)}) run exit=${redRun.status}, pngShapedFailure=${pngShapedFailure}, failureMessages=${JSON.stringify(redFailureMessages).slice(0, 500)}`);
-              if (redRun.status === 0) {
+              evidenceLines.push(`red-at-parent (baseCommit=${baseCommit.slice(0, 12)}) run exit=${redRun.status}, replayExecuted=${replayExecuted}, parsedReport=${redReportParsed}, assertionResults=${redAssertionCount}, pngShapedFailure=${pngShapedFailure}, failureMessages=${JSON.stringify(redFailureMessages).slice(0, 500)}`);
+              if (!replayExecuted) {
+                evidenceLines.push(`red-at-parent replay stdout tail: ${String(redRun.stdout ?? '').slice(-400)}`);
+                problems.push(`the red-at-parent REPLAY ITSELF could not execute (exit=${redRun.status}, parsedReport=${redReportParsed}, assertionResults=${redAssertionCount}) -- this is a verifier-infrastructure failure and says NOTHING about the PNG assertion; fix the replay environment (toolchain/dependencies) before reading this criterion either way`);
+              } else if (redRun.status === 0) {
                 problems.push('extended home-logo-assets.test.ts passes even when run against baseCommit\'s public/*.png assets -- it is not distinguishing old bytes from new (no genuine red-before-green)');
               } else if (!pngShapedFailure) {
                 problems.push('home-logo-assets.test.ts fails at baseCommit, but no failure message mentions a .png/sha256/hash assertion -- the red could be an unrelated crash, not proof the PNG check specifically caught the old bytes');
