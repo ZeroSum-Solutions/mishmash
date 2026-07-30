@@ -220,6 +220,29 @@ const baseConfig: AppConfig = {
   agentCliEnv: {},
 };
 
+/**
+ * Clicks the named button and runs `check` in one synchronous pass, retried
+ * via `waitFor` until it succeeds.
+ *
+ * Background hydration effects (design systems, agents, AMR login status,
+ * prompt templates, ...) re-render `App` many times right after mount. Each
+ * re-render is a real DOM commit for the privacy-consent banner's subtree,
+ * so a button reference captured on one render can be detached by the time
+ * a *later* statement clicks it — an `await screen.findByRole(...)` followed
+ * by a separate `fireEvent.click(...)` straddles exactly that gap. Querying
+ * and clicking inside the same `waitFor` callback keeps the pair on one
+ * render: either the click lands on a live, current node and `check` passes,
+ * or the callback throws (button not found yet, or `check` not satisfied
+ * yet) and `waitFor` retries with a fresh query — a stale node can never be
+ * clicked.
+ */
+async function clickButtonAndAssert(name: string, check: () => void): Promise<void> {
+  await waitFor(() => {
+    fireEvent.click(screen.getByRole('button', { name }));
+    check();
+  });
+}
+
 describe('App connectors settings flows', () => {
   beforeEach(() => {
     mockedDaemonIsLive.mockResolvedValue(true);
@@ -300,9 +323,7 @@ describe('App connectors settings flows', () => {
       expect(mockedSyncConfigToDaemon).toHaveBeenCalled();
     });
     mockedSyncConfigToDaemon.mockClear();
-    fireEvent.click(await screen.findByRole('button', { name: 'Share' }));
-
-    await waitFor(() => {
+    await clickButtonAndAssert('Share', () => {
       expect(mockedSyncConfigToDaemon).toHaveBeenCalledWith(
         expect.objectContaining({
           installationId: expect.any(String),
@@ -328,9 +349,7 @@ describe('App connectors settings flows', () => {
       expect(mockedSyncConfigToDaemon).toHaveBeenCalled();
     });
     mockedSyncConfigToDaemon.mockClear();
-    fireEvent.click(await screen.findByRole('button', { name: 'Share' }));
-
-    await waitFor(() => {
+    await clickButtonAndAssert('Share', () => {
       expect(mockedSyncConfigToDaemon).toHaveBeenCalledWith(
         expect.objectContaining({
           installationId: 'inst-existing',
@@ -356,9 +375,7 @@ describe('App connectors settings flows', () => {
       expect(mockedSyncConfigToDaemon).toHaveBeenCalled();
     });
     mockedSyncConfigToDaemon.mockClear();
-    fireEvent.click(await screen.findByRole('button', { name: 'Share' }));
-
-    await waitFor(() => {
+    await clickButtonAndAssert('Share', () => {
       expect(mockedSyncConfigToDaemon).toHaveBeenCalledWith(
         expect.objectContaining({
           installationId: 'inst-existing',
@@ -377,9 +394,7 @@ describe('App connectors settings flows', () => {
       expect(mockedSyncConfigToDaemon).toHaveBeenCalled();
     });
     mockedSyncConfigToDaemon.mockClear();
-    fireEvent.click(await screen.findByRole('button', { name: "Don't share" }));
-
-    await waitFor(() => {
+    await clickButtonAndAssert("Don't share", () => {
       expect(mockedSyncConfigToDaemon).toHaveBeenCalledWith(
         expect.objectContaining({
           installationId: null,
@@ -404,9 +419,7 @@ describe('App connectors settings flows', () => {
       expect(mockedSyncConfigToDaemon).toHaveBeenCalled();
     });
     mockedSyncConfigToDaemon.mockClear();
-    fireEvent.click(await screen.findByRole('button', { name: "Don't share" }));
-
-    await waitFor(() => {
+    await clickButtonAndAssert("Don't share", () => {
       expect(mockedSyncConfigToDaemon).toHaveBeenCalledWith(
         expect.objectContaining({
           installationId: null,
