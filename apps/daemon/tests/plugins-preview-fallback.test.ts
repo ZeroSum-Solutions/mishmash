@@ -1,8 +1,8 @@
 // Plan §6 Phase 2B + spec §11.6 — `/api/plugins/:id/preview`
 // fallback chain.
 //
-// Several bundled plugins (`example-guizang-ppt`, `example-html-ppt`)
-// declare `od.preview.entry: "./index.html"` but ship the actual
+// Several bundled plugins historically declared
+// `od.preview.entry: "./index.html"` but shipped the actual
 // renderable HTML under `assets/example-slides.html`. The preview
 // endpoint must try the declared entry first AND fall back to the
 // plugin's `od.context.assets[]` HTMLs and `assets/*.html` so the

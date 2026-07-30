@@ -66,9 +66,10 @@ const brandSizzleReel = make({
   scenario: 'video',
 });
 
-// Mirrors plugins/_official/examples/audio-jingle.
+// Synthetic audio template shaped like the retired bundled audio-jingle
+// example (removed by the 2026-07-30 gallery curation).
 const audioJingle = make({
-  id: 'example-audio-jingle',
+  id: 'sample-audio-jingle',
   title: 'Audio Jingle',
   tags: ['example', 'first-party', 'audio', 'marketing', 'music', 'jingle'],
   mode: 'audio',
@@ -102,7 +103,7 @@ describe('homeHeroExamplePluginsForChip — audio chip', () => {
 
   it('shows the audio jingle but neither the HyperFrames reel nor the media-generation default', () => {
     const ids = homeHeroExamplePluginsForChip('audio', installed, 'en').map((p) => p.id);
-    expect(ids).toContain('example-audio-jingle');
+    expect(ids).toContain('sample-audio-jingle');
     expect(ids).not.toContain('video-template-hyperframes-brand-sizzle-reel');
     expect(ids).not.toContain('od-media-generation');
   });

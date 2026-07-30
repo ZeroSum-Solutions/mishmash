@@ -349,35 +349,35 @@ describe('HomeHero intent rail', () => {
   });
 
   it('orders curated example presets first for the selected artifact type', () => {
-    const ordinaryDeck = makePlugin('example-ordinary-deck', 'deck', 'Ordinary deck');
-    const capsule = makePlugin(
-      'example-html-ppt-zhangzara-capsule',
-      'deck',
-      'Html Ppt Zhangzara Capsule',
+    const ordinaryPrototype = makePlugin('example-ordinary-prototype', 'prototype', 'Ordinary prototype');
+    const socialCarousel = makePlugin(
+      'example-social-carousel',
+      'prototype',
+      'Social Carousel',
     );
-    const creativeMode = makePlugin(
-      'example-html-ppt-zhangzara-creative-mode',
-      'deck',
-      'Html Ppt Zhangzara Creative Mode',
+    const kanbanBoard = makePlugin(
+      'example-kanban-board',
+      'prototype',
+      'Kanban Board',
     );
     renderHero({
-      activeChipId: 'deck',
-      pluginOptions: [ordinaryDeck, capsule, creativeMode],
+      activeChipId: 'prototype',
+      pluginOptions: [ordinaryPrototype, socialCarousel, kanbanBoard],
     });
 
     const presets = screen.getAllByTestId('home-hero-plugin-preset');
     expect(presets.map((preset) => preset.getAttribute('data-plugin-id'))).toEqual([
-      'example-html-ppt-zhangzara-creative-mode',
-      'example-html-ppt-zhangzara-capsule',
-      'example-ordinary-deck',
+      'example-kanban-board',
+      'example-social-carousel',
+      'example-ordinary-prototype',
     ]);
   });
 
   it('keeps curated presets even when they rely on fallback prompt text', () => {
-    const otakuDance = makePlugin(
-      'image-template-infographic-otaku-dance-choreography-breakdown-gokurakujodo-16-panels',
+    const avatarPortrait = makePlugin(
+      'image-template-profile-avatar-anime-girl-to-cinematic-photo',
       'image',
-      'Infographic - Otaku Dance Choreography Breakdown (Gokuraku Jodo, 16 Panels)',
+      'Profile Avatar - Anime Girl to Cinematic Photo',
       ['image-template'],
       { query: null },
     );
@@ -389,30 +389,13 @@ describe('HomeHero intent rail', () => {
     );
     renderHero({
       activeChipId: 'image',
-      pluginOptions: [ordinaryImage, otakuDance],
+      pluginOptions: [ordinaryImage, avatarPortrait],
     });
 
     const presets = screen.getAllByTestId('home-hero-plugin-preset');
     expect(presets[0]?.getAttribute('data-plugin-id')).toBe(
-      'image-template-infographic-otaku-dance-choreography-breakdown-gokurakujodo-16-panels',
+      'image-template-profile-avatar-anime-girl-to-cinematic-photo',
     );
-  });
-
-  it('keeps Hatch Pet at the end of the image example presets', () => {
-    const hatchPet = makePlugin('example-hatch-pet', 'image', 'Hatch Pet');
-    const imagePoster = makePlugin('image-template-poster', 'image', 'Image Poster');
-    const stoneInfographic = makePlugin('image-template-stone', 'image', 'Stone Infographic');
-    renderHero({
-      activeChipId: 'image',
-      pluginOptions: [hatchPet, imagePoster, stoneInfographic],
-    });
-
-    const presets = screen.getAllByTestId('home-hero-plugin-preset');
-    expect(presets.map((preset) => preset.textContent)).toEqual([
-      expect.stringContaining('Image Poster'),
-      expect.stringContaining('Stone Infographic'),
-      expect.stringContaining('Hatch Pet'),
-    ]);
   });
 
   it('moves live artifact presets out of Image and into Live artifact examples', () => {
