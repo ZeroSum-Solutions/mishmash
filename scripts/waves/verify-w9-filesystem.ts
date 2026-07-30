@@ -2234,36 +2234,48 @@ interface TargetVisibilityResult {
   detail: string;
 }
 /** INVARIANT 1 fix (round-3 founder ruling W9FS-R2, upgrades the round-2
- * self-visibility control): self-visibility alone proves the scan sees the
- * CALLER (this verifier's own pid) -- it says nothing about whether the
- * scan can see the TARGET's session at all. `bootIsolatedDaemon` spawns the
- * daemon `detached: true` (its own session, pgid === its own pid), which is
- * a DIFFERENT session than the caller's. A session-scoped `ps` invocation
- * (or shim) could enumerate only the CALLER's own session -- passing the
+ * self-visibility control), TIGHTENED by the round-4 fidelity confirmation
+ * (DEVIATION 1): self-visibility alone proves the scan sees the CALLER
+ * (this verifier's own pid) -- it says nothing about whether the scan can
+ * see the TARGET's session at all. `bootIsolatedDaemon` spawns the daemon
+ * `detached: true` (its own session, pgid === its own pid), which is a
+ * DIFFERENT session than the caller's. A session-scoped `ps` invocation (or
+ * shim) could enumerate only the CALLER's own session -- passing the
  * self-visibility control every time, since the caller genuinely is visible
  * -- while never showing so much as one row for the daemon's session,
  * regardless of whether the daemon actually has survivors. Every such scan
  * would then read as "self visible, zero target rows" -- exactly the shape
- * `PROCESS_TABLE_SELF_PROBES`' first fixture (below) already accepts as
+ * `PROCESS_TABLE_SELF_PROBES`' first fixture already accepts as
  * trustworthy, because in ISOLATION that shape genuinely is a well-formed,
  * self-consistent scan result; the gap is architectural, not a parsing bug.
  *
  * The fix is a POSITIVE control, evaluated once per teardown BEFORE any
  * kill signal is sent: while the target is independently (kernel-level,
  * `process.kill(pid, 0)`, session/`ps`-agnostic) confirmed alive, the SAME
- * `ps`-based scan mechanism must ALSO show a row for that exact pgid --
- * trivially true for a healthy target, since `detached: true` makes the
- * leader its own pgid. A later "zero target rows" result (post-kill) is
- * trusted as "confirmed empty" ONLY when this same-run, same-mechanism
- * target-visibility check passed; a target that was never shown to be
- * visible in the first place can never be "confirmed" absent later. Proven
- * against a real spawned sentinel plus a PATH-shimmed `ps` that filters out
- * a specific pgid (simulating a session-scoped-blind scan) before being
+ * `ps`-based scan mechanism must ALSO show a row for that exact pgid AND
+ * that row's own `pid` must equal the daemon's LEADER pid specifically --
+ * both conditions, not either alone. The pgid-only version originally
+ * shipped here accepted ANY non-empty pgid-matching survivor as sufficient,
+ * which is too weak: a scan that happens to see some OTHER member of the
+ * group (a stale/rotated pid coincidentally sharing the pgid, or a scan
+ * that enumerates children but is blind to the leader's own row
+ * specifically) would pass this control without ever having proven it can
+ * see the ONE row this whole check is actually about. Requiring the
+ * leader's own `pid` row is trivially satisfiable for a healthy target,
+ * since `detached: true` makes the leader its own pgid (its row is always
+ * `pid === pgid === leaderPid`) -- so this is a strict tightening, not a
+ * narrowing of what a healthy run can pass. A later "zero target rows"
+ * result (post-kill) is trusted as "confirmed empty" ONLY when this
+ * same-run, same-mechanism target-visibility check (both conditions)
+ * passed; a target whose own leader row was never shown to be visible in
+ * the first place can never be "confirmed" absent later. Proven against a
+ * real spawned sentinel plus a PATH-shimmed `ps` that filters out a
+ * specific pgid (simulating a session-scoped-blind scan) before being
  * wired in: the OLD self-visibility-only logic was fooled (`ok: true` even
  * though the target's entire session was invisible to the scan); this
  * control correctly rejects the identical exploit, while a real healthy
  * teardown against real `ps` still confirms normally. */
-function evaluateTargetVisibility(targetAliveAtStart: boolean, preKillScan: ProcessTableScanResult | null): TargetVisibilityResult {
+function evaluateTargetVisibility(targetAliveAtStart: boolean, preKillScan: ProcessTableScanResult | null, leaderPid: number): TargetVisibilityResult {
   if (!targetAliveAtStart) {
     return {
       ok: false,
@@ -2276,39 +2288,66 @@ function evaluateTargetVisibility(targetAliveAtStart: boolean, preKillScan: Proc
       detail: `target-visibility FAILED: process.kill(pid,0) confirms the target is alive, but the ps-based scan for its own pgid found ${!preKillScan || !preKillScan.ok ? `an untrustworthy scan (${preKillScan?.detail ?? 'no scan performed'})` : 'zero rows'} -- the scan mechanism may be blind to this target's session (e.g. a session-scoped ps)`,
     };
   }
+  // pgid-match is necessary but not sufficient: also require the LEADER's
+  // own pid row specifically, not merely some other member of the group.
+  // `survivors` entries are this file's own generated `pid=<N> pgid=<N>
+  // comm=<...>` strings (never external/untrusted text), so extracting the
+  // leading pid via a simple anchored regex is exact and safe.
+  const leaderRowVisible = preKillScan.survivors.some((row) => {
+    const match = /^pid=(\d+)/.exec(row);
+    return match !== null && Number(match[1]) === leaderPid;
+  });
+  if (!leaderRowVisible) {
+    return {
+      ok: false,
+      detail: `target-visibility FAILED: process.kill(pid,0) confirms the target is alive, and the ps-based scan found ${preKillScan.survivors.length} row(s) matching its pgid, but NONE has pid=${leaderPid} (the daemon's own leader pid) -- a pgid-only match is not sufficient; the scan may see other group members while still being blind to the leader's specific row: ${preKillScan.survivors.join('; ')}`,
+    };
+  }
   return {
     ok: true,
-    detail: `target-visibility confirmed: ${preKillScan.survivors.length} row(s) for the target's own pgid seen while it was independently confirmed alive`,
+    detail: `target-visibility confirmed: pid=${leaderPid} (the daemon's own leader pid) is among ${preKillScan.survivors.length} row(s) for its pgid, seen while independently confirmed alive`,
   };
 }
 const TARGET_VISIBILITY_SELF_PROBES: Array<{
   name: string;
   targetAliveAtStart: boolean;
   preKillScan: ProcessTableScanResult | null;
+  leaderPid: number;
   expectOk: boolean;
 }> = [
   {
-    name: 'normal healthy case: target alive, scan sees its own pgid row',
+    name: 'normal healthy case: target alive, scan sees the LEADER\'s own pid+pgid row',
     targetAliveAtStart: true,
     preKillScan: { ok: true, survivors: ['pid=999 pgid=999 node'], detail: 'ok' },
+    leaderPid: 999,
     expectOk: true,
   },
   {
-    name: 'INVARIANT 1 exploit: session-scoped-blind scan -- target alive, self visible, but 0 target rows',
+    name: 'DEVIATION 1 exploit (round-4 fidelity confirmation): pgid rows present but LEADER pid absent -- a session-mate/child shares the pgid, the leader\'s own row is not among them',
+    targetAliveAtStart: true,
+    preKillScan: { ok: true, survivors: ['pid=6001 pgid=999 hermes-agent'], detail: 'ok' },
+    leaderPid: 999,
+    expectOk: false,
+  },
+  {
+    name: 'INVARIANT 1 exploit (round-3): session-scoped-blind scan -- target alive, self visible, but 0 target rows at all',
     targetAliveAtStart: true,
     preKillScan: { ok: true, survivors: [], detail: 'trustworthy: self visible, 0 target rows' },
+    leaderPid: 999,
     expectOk: false,
   },
   {
     name: 'target alive, but the pre-kill scan itself was untrustworthy',
     targetAliveAtStart: true,
     preKillScan: { ok: false, survivors: [], detail: 'malformed rows' },
+    leaderPid: 999,
     expectOk: false,
   },
   {
     name: 'target already not alive at teardown start -- no positive control possible',
     targetAliveAtStart: false,
     preKillScan: null,
+    leaderPid: 999,
     expectOk: false,
   },
 ];
@@ -2318,7 +2357,7 @@ function runTargetVisibilitySelfProbes(): { pass: boolean; report: string[]; pas
   const report: string[] = [];
   let passCount = 0;
   for (const c of TARGET_VISIBILITY_SELF_PROBES) {
-    const result = evaluateTargetVisibility(c.targetAliveAtStart, c.preKillScan);
+    const result = evaluateTargetVisibility(c.targetAliveAtStart, c.preKillScan, c.leaderPid);
     if (result.ok === c.expectOk) {
       passCount++;
       report.push(`PASS ${c.name}: ok=${result.ok}`);
@@ -2381,7 +2420,7 @@ async function killGroupFailClosed(pid: number): Promise<{ ok: boolean; detail: 
   // for the full mechanism and the exploit this closes.
   const targetAliveAtStart = isPidAlive(pid);
   const preKillScan = targetAliveAtStart ? processGroupSurvivors(pid) : null;
-  const targetVisibility = evaluateTargetVisibility(targetAliveAtStart, preKillScan);
+  const targetVisibility = evaluateTargetVisibility(targetAliveAtStart, preKillScan, pid);
   try {
     process.kill(-pid, 'SIGTERM');
   } catch (err) {
