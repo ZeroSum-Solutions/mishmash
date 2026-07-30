@@ -7,11 +7,55 @@
 present in `leases.json`; this section is the PRD-text proposal the orchestrator transcribes after
 this document freezes, mirroring how `W9-ingest`'s lease entry was added after its PRD landed.
 
-**Status: EXPANSION, PRE-IMPLEMENTATION — FIX ROUND 4 (re-expansion).** Per
+**Status: EXPANSION, PRE-IMPLEMENTATION — FIX ROUND 5 (re-expansion arc).** Per
 `docs/plans/waves/W5-W11-gated.md` "The expansion gate", this document and
 `scripts/waves/verify-w10c.ts` are frozen and independently reviewed *before* any implementation
 begins. Writing implementation code from this document, or from the `W5-W11-gated.md` skeleton it
 expands, is a hard reject.
+
+**Round 4 was REJECTED** (non-APPROVE #1 of the fresh post-unpark arc — a separate arc from the
+capped, parked round-1–3 sequence) **on 10 findings (8 HIGH, 2 MEDIUM), with an autonomous fix round
+authorized.** Every finding is closed below; tagged `[R5-F<n>]`. Summary:
+- **Mutation-probe soundness was NOT sound (findings 1+9).** Round 4's probes accepted a crashed
+  suite or empty reporter output as "flipped red" — a pure probe reproduced `accepted=true` against
+  an empty reporter, and neither poison-run exit status, reporter presence, exact failed-test
+  identity, nor assertion failure was ever required. Fixed with `requireAttributableFailure`:
+  assertion-IDENTITY checking — a parseable report, `numTotalTests > 0`, the NAMED test present,
+  `status === "failed"`, and a non-empty `failureMessages[]` — anything short of that is a **PROBE
+  FAILURE**, fail-closed, never accepted as red. Anchoring moved from raw-text occurrence counting to
+  **declaration-scoped AST location**, and restoration is now signal-safe (`process.once('exit'`/
+  `'SIGINT'`/`'SIGTERM'`) plus **byte-identical restore verification on every exit path**, dominating
+  whatever the probe callback itself reported.
+- **C10C-2's marker still was not bound to the `chat-composer-input` read (finding 2), and the
+  reviewer ruled the "no mutation probe here" scope reasoning invalid (ruling b).** One helper proved
+  *some* composer-bound read existed; a separate helper collected variables from *any* text read — a
+  decoy could read `chat-composer-input` into an unused variable and log an unrelated locator seeded
+  with the expected value instead. Fixed by binding the collector to the exact same read the
+  presence check already requires. The reviewer additionally ruled that avoiding a mutation probe on
+  scope grounds was invalid, since poisoning `findDesignToolboxSkill` is already done elsewhere in
+  this file and is already in-lease — C10C-2 now also runs that mutation probe against the real
+  Playwright suite and requires every marker in both consumers to flip to `"__NONE__"`.
+- **The dropped compiler-source-connectivity check regressed, not subsumed (finding 6).** A suite can
+  hardcode today's action ids while genuinely calling `findSkillById` and pass every mutation/title
+  check the round-4 draft ran. Fixed with a **registry-content mutation probe**: appends one
+  synthetic, real-resolving action to `DESIGN_TOOLBOX_ACTIONS`'s own array literal in a transient
+  copy and requires a NEW passing coverage title for it to appear — a hardcoded suite can never
+  produce a title for an id that did not exist when it was authored.
+- **Lesson battery, all now-standard mechanisms with in-tree references (findings 3, 4, 5, 7, 8):**
+  teardown now consumes confirmation on EVERY exit path (a `tools-dev start` that timed out or
+  exited nonzero after partially spawning a process no longer skips confirmation) and requires BOTH a
+  clean self-report AND an independently confirmed empty group, never either alone; target-visibility
+  is now proven via a positive control (ported from `verify-w9-filesystem.ts@0d6bf026f`'s
+  `evaluateTargetVisibility`) captured at boot time, validated live against a real spawned sentinel
+  plus a PATH-shimmed `ps` that fooled the old logic and was correctly rejected by the new; every
+  first-party `packages/*` workspace member is rebuilt from head before any evidence-bearing path
+  trusts their (previously gitignored, unvalidated) `dist` output; the numeric-index classifier now
+  uses the correct ECMAScript array-index test instead of `/^\d+$/`, which wrongly accepted `"01"`.
+- **Phantom/red-spec attribution was incomplete (finding 10).** C10C-3 poisoned only the positive
+  path; C10C-4's own oracle never exercised its phantom id, and neither delegated negative control was
+  mutation-bound. Fixed: both criteria now run a second, independent REVERSE-poison probe requiring
+  the negative control to show an attributable failure, and C10C-4(a)'s oracle gained its own
+  phantom-id negative check mirroring C10C-3(a)'s existing paired shape.
 
 **Round 3 was the pre-declared final round of the capped arc and REJECTED, and `DECISIONS.md`'s
 `W10C-PARK` record parked the package** (3 consecutive non-APPROVE verdicts). This document is
@@ -50,7 +94,14 @@ W9as) established — *never prove RUNTIME truth by inspecting SOURCE STRUCTURE*
   unconfirmed survivor set (never proof of a clean exit), a missing boot pid is a hard failure, and
   the temp data directory is removed only on confirmed teardown.
 
-Every fix below is tagged `[R4-F<n>]`, mirroring rounds 1 and 3's own tagging convention.
+Round-4 fixes are tagged `[R4-F<n>]`; round-5 fixes are tagged `[R5-F<n>]`, mirroring rounds 1/3/4's
+own tagging convention.
+
+**Process note (non-blocking, flagged by the round-4 reviewer):** `DECISIONS.md`'s `W10C-PARK` record
+is not reachable from this branch (it lives on `main`, past this wave's `baseCommit`) — this is an
+accepted out-of-band traceability gap, not a rejection reason, per the reviewer's own assessment. This
+document does not modify `DECISIONS.md` itself; record propagation at landing time is the
+orchestrator's responsibility, per instruction.
 
 **Round-1 review REJECTED the prior draft** on 8 numbered findings: package-relative invocation
 paths that made C10C-2/3/4 impossible for a conforming implementer to satisfy without editing the
@@ -324,6 +375,18 @@ lying without a red test somewhere in the tree.
   `e2e/tests/design-toolbox-phantom-id.test.ts` (§C10C-3) is expected to use this fixture rather
   than hand-rolling daemon lifecycle management; `e2e/ui/**` Playwright specs (§C10C-2) get the
   same isolation for free through `@/playwright/suite`'s worker-scoped tools-dev fixture.
+  **`[R5-F5]` This fixture's own teardown has a confirmed, real weakness, out of scope for this
+  wave.** `e2e/lib/playwright/suite.ts` / `e2e/lib/tools-dev/runtime.ts` accept any parseable,
+  exit-zero `tools-dev stop` JSON without checking for `status: "partial"` or independently
+  confirming group death before removing the runtime root — and production `tools-dev` genuinely
+  emits `status: "partial"` without making the CLI itself exit nonzero (`tools/dev/src/index.ts:707`).
+  This is a real, verified defect in shared e2e infrastructure this wave does not own, lease, or
+  touch (verifier + PRD only, per this round's binding scope) — C10C-2's OWN evidence (the mutation
+  probe and marker cross-checks) does not depend on that fixture's teardown correctness, but its
+  underlying daemon's lifecycle safety is not something this wave's verifier controls or can assert
+  about. Recorded here as a confirmed finding for a future, separately-scoped fix — analogous to how
+  W10a's round-3 review rehomed a confirmed product bug rather than expanding that wave's own scope
+  to fix it.
 - **`[R3-F7]` `docs/plans/waves/DECISIONS.md` carries a real `### W10C-CAPABILITY-DECISION` record,
   landed via the merged `main` tip.** Verified by reading it directly at this wave's `baseCommit`
   (`1fb8ae892d0...`, after merging `origin/main`): `Decision: exempt`, `Decider: Fable 5 orchestrator
@@ -348,14 +411,31 @@ lying without a red test somewhere in the tree.
   `tools/dev/src/index.ts`'s `spawnSidecarRuntime`/`spawnDaemonRuntime` (`child_process.spawn(...,
   { detached: true, ... })`, POSIX `setsid()` under the hood) — this is what makes
   `process.kill(-pid, signal)` a safe, real "signal the whole group" primitive for teardown, not a
-  guess. The pid itself is reported at `DaemonStatusSnapshot.pid` (`packages/sidecar-proto/src/index.ts`,
-  `pid?: number | null`), surfaced both by `tools-dev start daemon --json`'s
-  `<result>.daemon.status.pid` and `tools-dev status daemon --json`'s top-level `.pid`. `tools-dev
-  stop daemon --namespace <ns> --json`'s result shape is `{ daemon: { status:
+  guess. `tools-dev stop daemon --namespace <ns> --json`'s result shape is `{ daemon: { status:
   'stopped'|'not-running'|'partial', stop: { alreadyStopped, forcedPids, matchedPids,
   remainingPids, stoppedPids }, via } }` (`stopApp`/`stoppedByGracefulResult`,
   `tools/dev/src/index.ts:697-730`) — none of this was previously being read by the verifier's own
   `stop` invocation, which additionally never passed `--json` at all.
+- **`[R5-F4]` CORRECTION, discovered live this round: `daemon.pid` (top-level) and
+  `daemon.status.pid` (nested) from `tools-dev start daemon --json` are TWO DIFFERENT PIDS, not the
+  same value surfaced twice as the round-3 ground fact above assumed.** Booting a real isolated
+  daemon and inspecting both fields directly: `daemon.pid=66866` — `ps` shows `ppid=1 pgid=66866`,
+  the actual detached process-GROUP LEADER `spawnDaemonRuntime`'s own `spawned.pid` reports (`tools/
+  dev/src/index.ts:632`) — versus `daemon.status.pid=66867` — `ps` shows `ppid=66866 pgid=66866`, an
+  **inner child** of the leader whose own pgid is *inherited*, not its own pid. `tools-dev status
+  daemon --json` only ever returns the SAME inner shape as `daemon.status` (confirmed live: identical
+  fields, no separate outer pid) — it cannot recover the leader's pid at all. `tools-dev stop`'s own
+  `stop.matchedPids`/`stop.stoppedPids` explicitly track and stop BOTH pids (confirmed live:
+  `[66867, 66866]`), so production code is already aware of this two-pid structure; this verifier
+  previously was not. **This was a LATENT bug in every prior round**: teardown captured
+  `daemon.status.pid` (the inner, non-leader pid) and group-scanned/signaled `process.kill(-thatPid,
+  ...)` — a process-group id that never had any members — making every prior round's "confirmed
+  empty" group scan vacuously true regardless of the real group's actual teardown state. This round's
+  own `[R5-F4]` target-visibility positive control caught it on a real run (target alive, `ps` scan
+  for that pgid found zero rows — correctly refusing to trust a later "empty" reading), which is what
+  surfaced the bug rather than something reasoned about abstractly. Fixed: the verifier now captures
+  `daemon.pid` (falling back to `daemon.status.pid` only if the top-level field is absent, a
+  known-degraded fallback documented at its point of use) for every group-scan/signal purpose.
 - **`[R3-F2]` `apps/daemon/src/skills.ts` exports `SKILL_ID_ALIASES`** (the deprecated-id forward
   table, §2 above) as a named export alongside `listSkills`/`findSkillById` — this wave's PRD always
   intended the daemon suite to import it (§C10C-4), but the verifier never actually checked for that
@@ -524,6 +604,17 @@ index `0` via `Object.defineProperty`, and a symbol own key added to an action o
 a non-empty problem list from both checks; the pre-round-4 verifier returned zero problems against
 the identical probe.
 
+**`[R5-F7]` The numeric-index classifier itself was gameable.** Round 4's own review found the extra
+step above still admits alias mutation: `/^\d+$/` classifies **non-canonical** numeric-looking strings
+such as `"01"` as an array index too, which (a) excludes it from the extra-own-properties check above
+(treating it as a harmless index) while (b) the `0..length-1` descriptor loop never visits it either,
+since bracket-indexing by a real number only ever produces canonical strings ("0", "1", ... never
+"01"). A property installed at exactly that key evaded both checks — a live probe confirmed
+`filteredExtras=[]`/`problems=[]` after `Object.defineProperty(arr, "01", {value:"poison",
+enumerable:true, ...})`. Fixed with `isCanonicalArrayIndexKey` (`String(Number(k)) === k`, the correct
+ECMAScript array-index test), replacing `/^\d+$/` everywhere it was used to filter "harmless numeric"
+keys.
+
 **i18n cross-check (structural, AST-only, `[R1-F5]` hardened):** the verifier parses
 `apps/web/src/i18n/types.ts`, locates the **unique**, top-level `interface Dict { ... }`
 declaration (fails if zero or more than one `Dict` interface exists in the file), and — scanning
@@ -669,14 +760,20 @@ The verifier:
     own per-action iteration variable (the action-row click, whose accessible name is necessarily
     built from the current action and therefore has no fixed string literal to bind to — proven
     instead by referencing the loop variable itself).
-  - **The marker is now traced back to the observed read, not merely present.** The verifier
-    collects every local variable in the loop body whose own initializer subtree contains a
-    `.textContent(`/`.innerText(` call, and requires the marker's `console.log(...)` argument
-    subtree to reference at least one of those variables. A marker computed independently (e.g. by
-    calling the dynamic-imported `findDesignToolboxSkill` binding directly inside the test body) is
-    additionally rejected outright if that binding's own local identifier appears inside the
-    `console.log(...)` argument subtree — closing the finding's literal wording, "calculate markers
-    directly from the imported resolver."
+  - **The marker is now traced back to the SAME observed read the presence check requires, not
+    merely "a" read (`[R5-F2]`).** Round 4's own review found the prior version decoupled: the
+    bound-read-presence check (`countTextContentChainsReferencing`) and the marker-dataflow
+    collector (`collectObservedReadVariableNames`) were two INDEPENDENT facts about the loop body —
+    a decoy could perform the real `chat-composer-input` read into an unused variable (satisfying
+    presence) while separately reading an unrelated locator seeded with the expected value into the
+    variable it actually logs (satisfying "the marker traces to *some* observed read"). The collector
+    is now bound to the exact same `"chat-composer-input"` fragment via the same receiver-walk
+    discipline `countClickChainsReferencing` already uses — both checks now describe the identical
+    read, closing the decoupling. A marker computed independently (e.g. by calling the
+    dynamic-imported `findDesignToolboxSkill` binding directly inside the test body) is additionally
+    rejected outright if that binding's own local identifier appears inside the `console.log(...)`
+    argument subtree — closing the finding's literal wording, "calculate markers directly from the
+    imported resolver."
   This is a bounded dataflow trace scoped to one already-required loop body, not a whole-file
   identifier count — the same distinction that separates C10C-2's fix from the C10C-3/C10C-4 defect
   class DECISIONS.md's `W10C-PARK` record calls out as having failed three rounds running. A fuller
@@ -711,6 +808,19 @@ The verifier:
   cannot fabricate a correct, correctly-id'd marker across 16 actions — let alone 32, across two
   independently-titled, independently-selector-bound loops — without independently discovering the
   same real answers the verifier computes fresh each run.
+- **`[R5-F2]` MUTATION PROBE — behavioral proof, closing the reviewer's ruling that the earlier
+  "no probe here" scope reasoning was invalid.** Poisoning `findDesignToolboxSkill` is already done
+  elsewhere in this file (C10C-3/C10C-4) and is already in this wave's leased surface
+  (`design-toolbox.ts`); it requires touching no legacy `ChatComposer.tsx`/`DesignToolboxPanel` code
+  at all. Once the honest run above is already fully green, the verifier splices `return null;` into
+  `findDesignToolboxSkill`'s own body (declaration-scoped AST anchoring, `[R5-F9]`) and reruns the
+  identical Playwright file. `@/playwright/suite`'s worker-scoped fixture boots a **fresh** isolated
+  daemon+web runtime per run (a cold boot reading the poisoned source from disk, not a hot-reloaded
+  dev server), so the REAL running app — which imports the same poisoned module — must insert
+  nothing for every action. The verifier requires every one of the 32 markers (both consumers, all 16
+  actions) to read exactly `"__NONE__"` under poison; a crashed or incomplete poisoned rerun (wrong
+  spec count) is a PROBE FAILURE, never accepted as evidence. A marker that still reports a real skill
+  name under poison proves that specific consumer/action's binding is decorative, not genuine.
 
 **Satisfiability.** A legitimate implementation writes the two required loops, using the confirmed
 dynamic-import pattern and the confirmed selectors from §2 for both consumers (`chat-plus-trigger` /
@@ -743,7 +853,13 @@ the wrong action's id (e.g. copy-pasted from the first iteration) is caught by t
 validation, which now checks the reported id, not just the value; and a `NextStepActions.tsx` that
 silently drops the real `.filter(...).includes(...)` split in favor of some other partition logic
 (even one that happens to produce the same runtime result today) is caught by the cross-file
-structural check, independent of whether the runtime partition currently agrees.
+structural check, independent of whether the runtime partition currently agrees. **`[R5-F2]`:** the
+exact decoy the round-4 reviewer demonstrated — perform the required `chat-composer-input` read but
+discard it, read an unrelated locator seeded with the expected skill id, log that second variable —
+is now caught structurally (the collector only captures a variable whose OWN initializer is the
+`chat-composer-input`-bound read) AND, even if some other decoupled construction slipped past the
+structural check, is caught by the mutation probe: poisoning the real resolver has no effect on a
+fabricated marker, so it fails to flip to `"__NONE__"`.
 
 ---
 
@@ -767,24 +883,50 @@ the C10C-1-derived catalogue) resolves to a non-null skill against that live lis
 action-shaped object with `preferredSkillIds: ['w10c-red-spec-phantom-skill-id']`,
 `categoryHints: []`, `searchTerms: ['w10c-red-spec-unmatchable-search-term']` resolves to `null`
 against the same live list. This is a real execution of real production code against a real,
-freshly-served registry — independent of any checked-in test file's honesty. **`[R4-F5]` Teardown is
-rebuilt on `killGroupFailClosed`'s exact semantics from `scripts/waves/verify-w9-filesystem.ts`
-(the sibling wave `DECISIONS.md` names as having gotten this right), closing the deciding finding for
-the THIRD wave running (W9as, then W10c round 3):** the verifier captures the daemon's own reported
-pid at boot (`DaemonStatusSnapshot.pid`, §2), calls `tools-dev stop daemon --namespace <ns> --json`
-and logs its report as evidence only — never as proof of anything. The only thing ever trusted is a
-real, group-wide `ps -Ao pid=,pgid=,comm=` scan (`processGroupSurvivors`) against the boot pid, which
-also doubles as the process-group id (§2, `detached: true`). A missing boot pid is a hard failure
-(there is no group id to scan) rather than a silent success; `ps` itself failing is treated as an
-UNCONFIRMED survivor set, never as proof of a clean exit (the empty-array-vacuity guard). If the
-group-wide scan finds anything, teardown escalates to a **process-group** `SIGTERM` then `SIGKILL`,
-re-confirming via the SAME group-wide scan after each — never a leader-only or
-individually-tracked-pid-only check, so an untracked straggler (the exact class `DECISIONS.md`'s
-`W9AS-PARK` record documents a sibling wave being parked over) is caught even when it was never named
-in `stop`'s own `remainingPids`. A `partial` stop or an unconfirmed survivor after full escalation
-fails this criterion outright (`teardownOk` folded into the overall verdict); it is never silently
-ignored, and the temp `OD_DATA_DIR` is removed **only** when teardown is independently confirmed —
-never unconditionally (round-3's fourth teardown finding, closed).
+freshly-served registry — independent of any checked-in test file's honesty. **`[R4-F5]`, hardened
+`[R5-F3/F4/F8]` Teardown, closing the deciding finding for the THIRD and FOURTH round running (W9as,
+W10c round 3, W10c round 4):**
+- **Every exit path consumes confirmation (`[R5-F3]`).** Round 4's `started` guard meant a
+  `tools-dev start` that timed out or exited nonzero AFTER partially spawning a process skipped
+  teardown confirmation entirely and deleted the data dir regardless. The guard is removed —
+  `tools-dev status`/`stop` are asked for every isolated-daemon attempt this verifier makes, whether
+  or not `start` itself reported success.
+- **Confirmation requires BOTH a clean self-report AND an independently confirmed empty group
+  (`[R5-F3]`), never either alone.** `tools-dev stop daemon --namespace <ns> --json`'s own exit
+  code/JSON/`daemon.status` field must be clean (exit 0, parseable, status exactly `"stopped"` or
+  `"not-running"` — never `"partial"` or anything else) — a bad self-report is a hard failure even if
+  a later scan finds the group empty. Escalation (process-group `SIGTERM` then `SIGKILL`) still runs
+  whenever the post-stop scan finds survivors, purely for real process hygiene, but escalation
+  succeeding can never upgrade a bad self-report to "ok".
+- **Target-visibility is now a proven positive control, not merely self-visibility (`[R5-F4]`,
+  ported from `scripts/waves/verify-w9-filesystem.ts@0d6bf026f`'s `evaluateTargetVisibility`).**
+  Round 4's scan only proved it could see the CALLER (this verifier's own pid); it never proved it
+  could see the TARGET's own session at all — a session-scoped `ps` (or an equivalent blind spot)
+  could pass self-visibility every time while showing zero rows for the daemon's session, regardless
+  of survivors, reading as a trustworthy "confirmed empty." The verifier now captures a snapshot
+  immediately after learning the boot pid, BEFORE any stop/kill signal: while the target is
+  independently (`process.kill(pid,0)`) confirmed alive, the SAME group-wide `ps` scan must ALSO show
+  a row for its own pgid. A later "zero survivors" reading is trusted as confirmed-empty ONLY when
+  this snapshot passed. **Validated live, not just synthetically:** a real spawned sentinel process
+  plus a PATH-shimmed `ps` that filters out its pgid (simulating a session-scoped-blind scan) fooled
+  the old self-visibility-only logic (`ok: true` despite the target's entire session being invisible)
+  and was correctly rejected by the new target-visibility-gated logic — confirmed this round with a
+  live sentinel spawn/kill/cleanup cycle, not merely the synthetic self-probe table
+  (`TARGET_VISIBILITY_SELF_PROBES`) that gates every real teardown call going forward.
+- **`ps` itself failing, or its rows failing to parse, is treated as an UNCONFIRMED survivor set,
+  never as proof of a clean exit** (the empty-array-vacuity guard). An untracked straggler (the exact
+  class `DECISIONS.md`'s `W9AS-PARK` record documents a sibling wave being parked over) is caught even
+  when it was never named in `stop`'s own `remainingPids`, because the scan is over the whole group.
+- **Transitive commit-binding (`[R5-F8]`, ported from the same reference commit's INVARIANT 2):**
+  before any isolated daemon boots, every first-party `packages/*` workspace member is rebuilt
+  unconditionally from the current checkout (memoized once per verifier process) — `tools-dev` and the
+  daemon it boots transitively resolve gitignored `dist/` output from `@open-design/platform`,
+  `sidecar`, and `sidecar-proto`, which nothing previously rebuilt or hash-validated, so a stale or
+  hand-edited dist could have driven lifecycle/runtime evidence invisibly to git.
+- A `partial`/failed/unparseable self-report, an unconfirmed group scan, or an untrustworthy
+  target-visibility control fails this criterion outright (`teardownOk` folded into the overall
+  verdict); it is never silently ignored, and the temp `OD_DATA_DIR` is removed **only** when
+  teardown is independently confirmed — never unconditionally.
 
 **(b) A required, structurally-bound delegated artifact:** `e2e/tests/design-toolbox-phantom-id.test.ts`
 (Vitest, exact path — `[R1-F1]`), required shape:
@@ -811,20 +953,36 @@ tests/design-toolbox-phantom-id.test.ts --reporter=json` — package-relative, `
 both pinned titles present and `passed`, zero failed tests overall, and every structural check above
 satisfied.
 
-**`[R4-F2]` (c) Mutation probe — replaces the identifier-count binding check, closing the SAME
-defect surviving its third round (round-3 final finding 2): "`countCallsToExactIdentifier` counts
-`obj._unused()` as a call to an imported binding named `_unused`."** Per `DECISIONS.md`'s
-`W10C-PARK` record, this class does not get patched a fourth time — the identifier-count check is
-removed outright. In its place: once the honest run above already reports the positive-control test
-passing, the verifier backs up `apps/web/src/runtime/design-toolbox.ts`'s real content, locates
-`findDesignToolboxSkill`'s own function-signature text (verified unique in the file before writing —
-refuses to poison an ambiguous target), splices a poison `return null;` immediately after its
-opening brace, reruns the identical delegated file, and requires the positive-control test to flip
-**red**. The file is restored byte-for-byte in a `finally` block regardless of outcome — this never
-produces a committed change; the LEASE/`treeDirty` checks that run afterward would independently
-catch an unrestored file. A decoy that never actually calls the real function (an uncalled/aliased
-import, a same-named local lookalike, a hardcoded return value) stays green under poison, because it
-never depended on the poisoned code path — the exact case identifier counting could not distinguish.
+**`[R4-F2]`, hardened `[R5-F1/F9/F10]` (c) Mutation probes — replace the identifier-count binding
+check outright.** Per `DECISIONS.md`'s `W10C-PARK` record, this class does not get patched a fourth
+time — the identifier-count check is removed. **Two independent probes**, closing round-4 finding 10
+("C10C-3 poisons only the positive path") as well as findings 1/9:
+- **Forward probe (positive control):** once the honest run reports the positive-control test
+  passing, the verifier backs up `apps/web/src/runtime/design-toolbox.ts`'s real content, locates
+  `findDesignToolboxSkill`'s own top-level function declaration via the **TypeScript compiler API**
+  (`[R5-F9]`, replacing round-4's raw-text occurrence count — immune to harmless signature
+  reformatting and to a decoy comment/string containing the function name, both confirmed live),
+  splices `return null;` immediately after its body's opening brace, and reruns the identical
+  delegated file.
+- **Reverse probe (negative control), new this round:** once the honest run reports the
+  negative-control test passing, the verifier instead splices a poison that makes
+  `findDesignToolboxSkill` always return a truthy dummy object, and reruns the identical delegated
+  file — the negative control ("an unresolvable action returns null") must now flip red too.
+- **Both probes require `requireAttributableFailure`, not "not passed" (`[R5-F1]`).** Round 4's own
+  review found the prior check accepted a crashed suite or empty reporter output as "flipped red" (a
+  pure probe reproduced `accepted=true` against an empty reporter; neither exit status, reporter
+  presence, exact failed-test identity, nor assertion evidence was ever required). The verifier now
+  requires: a parseable report, `numTotalTests > 0`, the exact NAMED test present in results,
+  `status === "failed"`, and a non-empty `failureMessages[]` array — anything short of that (a crash,
+  missing output, the test absent entirely) is a **PROBE FAILURE**, fail-closed, and is never accepted
+  as evidence of a red assertion.
+- **Restoration is signal-safe and independently verified (`[R5-F9]`).** `process.once('exit'`/
+  `'SIGINT'`/`'SIGTERM'`, ...) registers a synchronous restore that fires even if the verifier process
+  itself is terminated mid-probe (this cannot help against `SIGKILL`/a native crash — no runtime can
+  run cleanup code after that). Independent of the probe callback's own outcome, the file is re-read
+  and required to be **byte-identical** to the pre-poison original on every exit path this process's
+  own control flow can observe; a mismatch is a hard failure that dominates whatever the probe itself
+  reported.
 
 **Satisfiability.** (a) is satisfied automatically by the verifier's own code once the real
 production functions and a real daemon exist — no implementation action required beyond not
@@ -833,11 +991,13 @@ depend on the implementation at all. (b) is satisfied by a straightforward Vites
 pinned shape, calling the real function (through its own normal, unaliased local binding) against
 real live data fetched from its own booted daemon — the same shape
 `e2e/tests/tools-dev/automations-routines.test.ts` already demonstrates for real HTTP against a real
-daemon. (c) is satisfied automatically by any (b) that genuinely calls the real function, since
-poisoning it and observing the positive-control test go red requires no implementation action beyond
-(b) being real — confirmed live this round: a throwaway probe against the real
-`findDesignToolboxSkill`/`findSkillById` signatures showed the anchor unique, the poisoned function
-returning `null`/`undefined` unconditionally, and the file byte-identical after restore.
+daemon. (c) is satisfied automatically by any (b) that genuinely calls the real function for both its
+positive and negative assertions, since poisoning it and observing the respective control go red
+requires no implementation action beyond (b) being real — confirmed live this round: a throwaway
+probe against the real `findDesignToolboxSkill`/`findSkillById` signatures showed the AST anchor
+locates correctly (including against a harmlessly reformatted signature, and correctly ignoring a
+decoy comment/string containing the function name), the poisoned function returning
+`null`/`undefined`/a truthy dummy as directed, and the file byte-identical after restore.
 
 **Decoy.** `[R1-F3]`: a stub that hand-returns `null`/non-null without calling
 `findDesignToolboxSkill` at all cannot affect (a), which the verifier computes independently of
@@ -845,11 +1005,17 @@ anything in the delegated file — this closes the round-1 finding that the enti
 previously depended on trusting an uncalled import. For (b): a phantom literal hidden in a comment is
 caught by the AST string-literal-node check; a decorative-looking `createSmokeSuite`/`.with.toolsDev`
 mention inside an unrelated string or comment is caught by the AST-bound chained-call check
-(`[R3-F2]`). `[R4-F2]`: an uncalled/aliased import, or a same-named local lookalike absorbing the
-call the way `countCallsToExactIdentifier` previously could not distinguish, is now caught by the
-mutation probe (c) — poisoning the real function has no effect on a decoy's assertions, so the
-positive-control test stays green under poison, which is itself the failure this criterion reports.
-`[R4-F5]`: a `tools-dev stop` that reports `stopped` while a descendant process in the same group
+(`[R3-F2]`). `[R5-F1/F9/F10]`: an uncalled/aliased import, or a same-named local lookalike absorbing
+the call, is now caught by the forward mutation probe regardless of how the delegated file names its
+local binding — poisoning the real function has no effect on a decoy's positive-control assertion, and
+that assertion staying green (or the poison run crashing/producing no evidence) is itself the reported
+failure. A decoy bound only to the positive path and faking its negative control (e.g. a hardcoded
+`null` return without calling the real function) is now caught by the reverse probe, closing the exact
+asymmetry round-4 finding 10 named. A decoy that detects the poison (e.g. by inspecting its own
+imported module's source for a suspicious marker) and deliberately crashes to game the old
+crash-as-red gap gains nothing now: a crash is classified as a PROBE FAILURE, not as evidence of a red
+assertion, so the criterion still fails. `[R5-F5]`: a `tools-dev stop` that reports `stopped` while a
+descendant process in the same group
 survives is caught by the independent group-wide `ps` scan (`processGroupSurvivors`), which never
 trusts the reported status string and scans every process in the group, tracked or not.
 
@@ -859,15 +1025,18 @@ trusts the reported status string and scans every process in the group, tracked 
 
 **Criterion.** Three independent lines of evidence, all required — mirrors C10C-3's structure:
 
-**(a) The verifier's own direct runtime proof:** the verifier dynamically imports
-`apps/daemon/src/skills.ts` (`listSkills`, `findSkillById`) and calls
-`listSkills([repoRoot/skills])` to get the real, live `SkillInfo[]` (no daemon boot needed — this
-claim is specifically about in-process function-call fidelity, matching what the delegated daemon
-test itself must do). Using the C10C-1 Layer-B runtime-verified action list, it calls
+**(a) The verifier's own direct runtime proof, `[R5-F10]` extended with a paired negative control:**
+the verifier dynamically imports `apps/daemon/src/skills.ts` (`listSkills`, `findSkillById`) and
+calls `listSkills([repoRoot/skills])` to get the real, live `SkillInfo[]` (no daemon boot needed —
+this claim is specifically about in-process function-call fidelity, matching what the delegated
+daemon test itself must do). Using the C10C-1 Layer-B runtime-verified action list, it calls
 `findSkillById(liveSkills, id)` for **every** `preferredSkillIds` entry of **every** action and
 requires every one to resolve (`!== undefined`) — matching today's verified zero-phantom baseline.
-This is a direct execution of the real registry-resolution algorithm, not an inference from source
-text.
+**Round 4 finding 10's second half ("C10C-4's own oracle never exercises its phantom ID") is now
+closed:** the oracle additionally calls `findSkillById(liveSkills, PHANTOM_LITERAL)` (the same
+`w10c-daemon-suite-phantom-skill-id` literal (b) uses) and requires it to resolve to `undefined`,
+mirroring C10C-3(a)'s existing paired positive+negative shape exactly. This is a direct execution of
+the real registry-resolution algorithm, not an inference from source text.
 
 **(b) A required, structurally-bound delegated artifact:** `apps/daemon/tests/design-toolbox-skill-refs.test.ts`
 (Vitest, exact path — `[R1-F1]`), required shape:
@@ -897,61 +1066,81 @@ the two pinned pairing titles `passed`, requires every C10C-1-derived action id'
 title `passed` (exact match, not substring — `[R1-F4]`'s "one title containing every action ID"
 decoy no longer has anywhere to hide), and requires zero failed overall.
 
-**`[R4-F3]` (c) Mutation probe — replaces the call-count and connectivity checks, closing the SAME
-defect surviving its third round (round-3 final finding 3): "the compiler-API check only proves
-`createSourceFile` was wired to `forEachChild`, not that real toolbox source was read"** (and
-finding 2's `SKILL_ID_ALIASES`-satisfied-by-bare-occurrence gap, which applies here identically).
-Per `DECISIONS.md`'s `W10C-PARK` record, this class is not patched a fourth time. **Three prior
-structural checks are removed outright, not replaced with a sharper version of the same idea:**
-- The `findSkillById`/`listSkills` call-count checks (`countCallsToExactIdentifier` bound to each
-  import's local identifier).
-- The `SKILL_ID_ALIASES` import + reference-count check. `SKILL_ID_ALIASES` has **no runtime
-  observable today** — §2's ground facts already establish that none of the current
-  `preferredSkillIds` entries need alias resolution ("None of these ten collide with a current
-  `preferredSkillIds` entry, so today's toolbox has zero phantoms by either method"), so mutating
-  `SKILL_ID_ALIASES` would never flip any current assertion red regardless of whether the delegated
-  file references it — the exact self-caught-bug shape ("an unsatisfiability bug, not a strictness
-  one") this round's own C10C-1 fix names elsewhere. (a) already exercises the alias-consultation
-  code path on every single call, unconditionally, since `findSkillById` always calls
-  `resolveSkillId` internally — so removing this check costs no coverage (a) doesn't already provide.
-- The `createSourceFile`/`forEachChild` connectivity check. Its purpose was proving the delegated
-  file re-derives its per-action test set from the live source rather than a hardcoded snapshot —
-  but the pre-existing exact-title coverage check (above) already independently guarantees this: a
-  hardcoded/stale snapshot fails outright the moment C10C-1 derives a NEW id with no matching passing
-  title. The connectivity check was redundant defense-in-depth from the start.
+**`[R4-F3]`, hardened `[R5-F1/F6/F9/F10]` (c) THREE independent mutation probes — replace the
+call-count and connectivity checks outright.** Per `DECISIONS.md`'s `W10C-PARK` record, this class is
+not patched a fourth time. **Structural checks removed, not replaced with a sharper version of the
+same idea:** the `findSkillById`/`listSkills` call-count checks; the `SKILL_ID_ALIASES` import +
+reference-count check (`SKILL_ID_ALIASES` has **no runtime observable today** — none of the current
+`preferredSkillIds` entries need alias resolution, so mutating it would never flip any assertion red
+regardless of whether the delegated file references it, and (a) already exercises the
+alias-consultation code path on every call via `resolveSkillId`); the `createSourceFile`/
+`forEachChild` connectivity check (its purpose — proving live re-derivation, not a hardcoded snapshot
+— is now proven more directly by the registry-content probe below). Import-**presence** checks (does
+the file import this exact export name) are kept — a fact with no runtime observable, unlike a call
+count.
 
-**In their place:** once the honest run above already reports both pinned pairing titles passing,
-the verifier backs up `apps/daemon/src/skills.ts`'s real content, locates `findSkillById`'s own
-function-signature text (verified unique before writing), splices a poison `return undefined;`
-immediately after its opening brace, reruns the identical delegated file, and requires **both** the
-positive-control test **and every per-action coverage test** to flip **red** — proving the entire
-suite, not just one pinned pair, is genuinely bound to the real function. The file is restored
-byte-for-byte in a `finally` block regardless of outcome.
+**In their place:**
+- **(c1) Forward mutation probe (all assertions):** once the honest run reports both pinned pairing
+  titles passing, the verifier backs up `apps/daemon/src/skills.ts`'s real content, locates
+  `findSkillById`'s top-level function declaration via the TypeScript compiler API (`[R5-F9]`,
+  declaration-scoped, not raw-text occurrence counting), splices `return undefined;` immediately
+  after its opening brace, and reruns the identical delegated file. `requireAttributableFailure`
+  (`[R5-F1]`) requires the positive-control test **and every per-action coverage test** to each show
+  an individually attributable failure (parseable report, the named test present, `status ===
+  "failed"`, non-empty `failureMessages`) — not merely "not passed," closing the crash-as-red gap
+  finding 1/9 demonstrated.
+- **(c2) Reverse mutation probe (negative control), new this round — closes finding 10's "its
+  negative delegated test likewise is not mutation-bound":** once the honest run reports the
+  negative-control title passing, the verifier instead splices a poison that makes `findSkillById`
+  always return a truthy dummy object, reruns the delegated file, and requires the negative control
+  to show an attributable failure too.
+- **(c3) Registry-CONTENT mutation probe, new this round — `[R5-F6]`, closes finding 6 ("a suite can
+  hardcode today's IDs while calling findSkillById and pass everything... coverage must be sensitive
+  to the REGISTRY CONTENT, not just the resolver call").** Once (a) is green and at least one live
+  skill exists, the verifier appends ONE synthetic action — modeled on the real first array element's
+  own source text, substituting only `id` (a pinned probe id) and `preferredSkillIds` (a real,
+  currently-resolvable live skill id) — to `DESIGN_TOOLBOX_ACTIONS`'s own array literal in a
+  **transient copy of `design-toolbox.ts`** (AST-located; the array's own last element commonly
+  already carries a trailing comma before `]`, so the splice checks for one before adding another —
+  confirmed live: an earlier version of this exact probe produced a silent sparse-array hole
+  (`[a, b, , c]`) instead of a new element, caught and fixed by the same live validation), reruns
+  `design-toolbox-skill-refs.test.ts`, and requires a **NEW** passing test titled exactly
+  `` `preferredSkillIds for action "w10c-registry-content-probe-action" resolve via findSkillById` ``
+  to appear. A suite that hardcoded today's ids (even while genuinely calling `findSkillById` for all
+  of them) can never produce a title for an id that did not exist when it was written — no amount of
+  correct resolver-binding can substitute for actually re-parsing the live file.
+
+All three probes always restore the mutated file byte-for-byte, signal-safely, with independent
+byte-identical verification on every exit path (`[R5-F9]`, shared machinery with C10C-3).
 
 **Satisfiability.** (a) is satisfied automatically once `apps/daemon/src/skills.ts` and
 `skills/**/SKILL.md` exist as they do today — no implementation action required. (b) is a
 straightforward Vitest file importing real daemon production code by its real exported names and
 text-parsing the web source exactly as `scripts/check-toolbox-skill-refs.test.ts` already
-demonstrates is possible without a cross-app import violation. (c) is satisfied automatically by any
-(b) that genuinely calls `findSkillById` for every assertion, since poisoning it and observing every
-test go red requires no implementation action beyond (b) being real — confirmed live this round: a
-throwaway probe against the real `findSkillById` signature showed the anchor unique, the poisoned
-function returning `undefined` unconditionally, and the file byte-identical after restore.
+demonstrates is possible without a cross-app import violation. (c1)/(c2) are satisfied automatically
+by any (b) that genuinely calls `findSkillById` for every assertion; (c3) is satisfied automatically
+by any (b) that genuinely re-parses `design-toolbox.ts` at run time rather than hardcoding its ids —
+confirmed live this round: a throwaway probe against the real `findSkillById` signature and the real
+`DESIGN_TOOLBOX_ACTIONS` array showed the AST anchors locate correctly, the poisoned function
+returning `undefined`/a truthy dummy as directed, the appended synthetic action resolving via a real
+live skill id, and the file byte-identical after restore in every case.
 
 **Decoy.** `[R1-F4]`: `import { listSkills as findSkillByIdDecoration } from '../src/skills.js'`
-without ever calling it is caught by the exact-original-name import-presence check plus the
-mutation probe (c) — a decoy that imports but never calls the real function stays green under
+without ever calling it is caught by the exact-original-name import-presence check plus the forward
+mutation probe (c1) — a decoy that imports but never calls the real function stays green under
 poison, which is itself the failure this criterion reports. "One title containing every action ID"
 is caught by the pinned exact per-action title format, which cannot describe more than one id. A
-phantom literal hidden in a comment is caught by the AST string-literal-node check. `[R4-F3]`: a test
-file that regex-scans `design-toolbox.ts` instead of using the compiler API, or that hardcodes
-today's known ids instead of extracting them, is caught either by the exact-title coverage check
-(the moment the source set drifts) or by the mutation probe (if it never actually calls the real
-`findSkillById` for some or all of its assertions, exactly those assertions stay green under
-poison — the probe checks EVERY per-action title individually, not just the paired positive control,
-so partial binding is caught too). And regardless of any gap in (b)/(c), (a) — the verifier's own
-direct call against the real registry — independently and correctly reports whether every
-`preferredSkillIds` entry actually resolves, so the criterion cannot pass on a decorative (b) alone.
+phantom literal hidden in a comment is caught by the AST string-literal-node check. `[R5-F6]`: a test
+file that hardcodes today's known ids instead of extracting them from `design-toolbox.ts` live — even
+while genuinely calling `findSkillById` for every hardcoded id, satisfying (c1)/(c2) entirely — is
+caught by the registry-content probe (c3): it can never produce a passing title for an id that did not
+exist when it was authored. `[R5-F10]`: a decoy bound only to the positive path, with a faked or
+unbound negative control, is caught by the reverse probe (c2). A decoy that detects the poison and
+crashes on purpose gains nothing: a crash is a PROBE FAILURE, not accepted red evidence. And
+regardless of any gap in (b)/(c), (a) — the verifier's own direct calls against the real registry,
+now including the phantom negative — independently and correctly report whether every
+`preferredSkillIds` entry actually resolves and the phantom does not, so the criterion cannot pass on
+a decorative (b) alone.
 
 ---
 
@@ -979,10 +1168,12 @@ immediately before the request, fail-closed on any mismatch or 3xx), separately 
 fall back to IPC/tools-dev discovery and reach a *different*, possibly-default-namespace daemon),
 and asserts the two responses' skill `id` **multisets** (occurrence-counted, never
 `Set`-deduplicated) are identical — an added, removed, or duplicated id on either side is visible.
-**`[R4-F5]`** Tears the daemon down using the same shared, fail-closed `withIsolatedDaemon` helper
-C10C-3 uses (§C10C-3's teardown-confirmation description applies verbatim here: captured boot pid,
-`tools-dev stop --json` logged as evidence only, a real group-wide `ps` scan as the only thing ever
-trusted, process-group escalation on survival, `teardownOk` folded into this criterion's own overall
+**`[R4-F5]`, hardened `[R5-F3/F4/F8]`** Tears the daemon down using the same shared, fail-closed
+`withIsolatedDaemon` helper C10C-3 uses (§C10C-3's teardown-confirmation description applies
+verbatim here: confirmation runs on every exit path regardless of `start`'s own result, a clean
+self-report AND an independently confirmed, target-visibility-gated empty group are both required,
+`ps` failure is unconfirmed not proof of a clean exit, process-group escalation on survival,
+first-party `packages/*` rebuilt before boot, `teardownOk` folded into this criterion's own overall
 verdict) — in a `finally` block, regardless of outcome, and never trusting a single reported exit
 status.
 
@@ -1009,13 +1200,21 @@ claimed.
 
 ### C10C-6 — Standard gates green
 
-**Criterion.** `pnpm guard` and `pnpm typecheck` both exit 0 on the current tree.
+**Criterion.** `[R5-F8]` A full first-party `packages/*` workspace rebuild
+(`pnpm --filter './packages/*' run build`) succeeds, then `pnpm guard` and `pnpm typecheck` both exit
+0 on the current (freshly rebuilt) tree. The rebuild is added because `pnpm typecheck` is a second,
+independent evidence path (beyond the isolated-daemon boot in C10C-3(a)/C10C-5) that can resolve
+gitignored `packages/*` `.d.ts` output via downstream packages' own `package.json` "types" fields —
+without the rebuild, this criterion's own evidence could be produced against stale/mutated dist same
+as the daemon-boot path could (ground fact, §2). The rebuild call is memoized process-wide, so it
+runs once regardless of how many criteria need it.
 
 **Satisfiability.** Both are already green on this tree (verified: guard 102/102, typecheck clean
 across every workspace project, including after adding the probe files used to confirm §2's
 dynamic-import and package-relative-path facts, which were removed before this commit) and stay
 green through test-only additions that follow the repo's existing TypeScript-first,
-boundary-respecting conventions documented in §2.
+boundary-respecting conventions documented in §2. The workspace rebuild is a fresh build of already-
+committed source and imposes no implementation requirement of its own.
 
 **Decoy.** N/A in the R4 sense (this is not a rejection criterion) — but note per
 `VERIFICATION-CONTRACT.md` §3 R3, this is not a "counting" criterion: it does not accept a partial
@@ -1232,7 +1431,7 @@ Wave 10 table lists no downstream dependent for `w10c-toolbox`), so there is no 
 of green" consumer analogous to W9-ingest's relationship with W3 — this section exists for internal
 completeness only.
 
-## 8. Verified baseline (this run, pre-implementation, post round-4 re-expansion fixes)
+## 8. Verified baseline (this run, pre-implementation, post round-5 re-expansion fixes)
 
 - `DESIGN_TOOLBOX_ACTIONS`: 16 entries, 31 unique `preferredSkillIds` values, **zero phantoms
   today** by either the old directory-existence method or the real frontmatter-based registry
@@ -1282,30 +1481,47 @@ completeness only.
   every `baseCommit..HEAD` commit author — **C10C-8 is expected to already pass** (confirmed live
   this round: it does).
 
-**Round 4's fixes were confirmed by actually running the verifier against this tree, four times
-total** — twice before committing this round's changes (both runs reported the identical scoreboard
-below, `treeDirty: true`), then twice more after committing (both post-commit runs reported the SAME
-scoreboard with `treeDirty: false`). `pnpm guard`/`pnpm typecheck` were clean in every run
-(`C10C-6` `pass`); the default-namespace daemon (ports 7456/51012, the pre-existing PIDs recorded at
-session start) was confirmed still listening, untouched, before the first run and after every run;
-no `verify-w10c-*`-namespaced process or temp data directory was left behind after any run — the new
-`processGroupSurvivors`-based teardown reported, verbatim, `"independent group-wide ps scan
-confirmed process group -<pid> empty"` for both isolated daemon boots (C10C-3's oracle, C10C-5) in
-every run, zero survivors, zero escalations needed.
+**Round 5's fixes were confirmed by actually running the verifier against this tree, five times
+total.** The first run (post round-5 changes, pre-fix of the pid bug below) genuinely FAILED C10C-3
+and C10C-5 — not a false negative, a real environmental finding: `[R5-F4]`'s new target-visibility
+positive control correctly refused to trust a "zero survivors" reading it could not establish
+visibility for. Investigation traced this to a previously-latent bug this round's own hardening
+surfaced (see the `[R5-F4]` ground fact in §2): the verifier was capturing `daemon.status.pid` (an
+inner child process whose own process-group id is inherited, not its own pid) instead of `daemon.pid`
+(the actual detached process-group leader) for every group-scan/signal purpose — every prior round's
+teardown confirmation had been scanning a process-group id that never had any members, making
+"confirmed empty" vacuously true regardless of real teardown state. Fixed (capture `daemon.pid`,
+falling back to `daemon.status.pid` only if absent), then reconfirmed clean across four further runs:
+two more before committing this round's changes (both reported the identical scoreboard below,
+`treeDirty: true`), then two after committing (both post-commit runs reported the SAME scoreboard
+with `treeDirty: false`). `pnpm guard`/`pnpm typecheck` — now preceded by a full first-party
+`packages/*` rebuild (`[R5-F8]`) — were clean in every run (`C10C-6` `pass`); the default-namespace
+daemon (ports 7456/51012, the pre-existing PIDs recorded at session start) was confirmed still
+listening, untouched, before the first run and after every run; no `verify-w10c-*`-namespaced process
+or temp data directory was left behind after any run — the corrected, target-visibility-gated
+teardown reported, verbatim, `"target-visibility confirmed: N row(s) for the target's own pgid seen
+while it was independently confirmed alive... process group -<pid> confirmed empty"` for both
+isolated daemon boots (C10C-3's oracle, C10C-5) in every one of the four clean runs, zero survivors.
+The post-stop scan genuinely found survivors on first check in multiple runs (a real race between
+`tools-dev stop` returning and the OS finishing reaping its children) and the SIGTERM/wait/re-scan
+escalation path was genuinely exercised and succeeded — not merely present in the code, actually
+taken in normal operation.
 
 It is therefore expected and correct that this verifier's run reports the SAME **mixed** scoreboard
-round 3 reported — the round-4 changes rewrote HOW criteria prove their claims (structural-binding →
-runtime-truth/mutation-probe, teardown → group-wide `ps` scan), not WHETHER they pass pre-implementation,
-so an unchanged scoreboard here is the expected, correct outcome, not a sign nothing changed:
-C10C-1, C10C-5, C10C-6, C10C-8, GATE-INTEGRITY, HEAD-DRIFT `pass`; C10C-2, C10C-3, C10C-4, C10C-7,
-LEASE `fail` — 6/11, with an overall **non-zero exit** (both LEASE and C10C-7 fail for structural
-reasons unrelated to this round: no `"W10c"` lease entry yet, no implementation-review record yet).
-This is what "clean-red" means for this wave: an accurate, evidence-backed, non-crashing report of
-current reality, not a demand that every single criterion returns false, and not a report where any
-currently-green criterion is green merely because the check is too weak to fail on a shaped decoy —
-C10C-1 and C10C-2's partition/structural half in particular are now *harder* to pass on a decoy than
-before this round (completed Layer C, bound click/textContent/marker-dataflow checks), while still
-passing honestly on the real, honest source.
+round 4 reported — round 5's changes rewrote HOW criteria prove their claims (crash-acceptable
+mutation checks → assertion-identity mutation probes, self-visibility-only teardown →
+target-visibility-gated teardown, a latent wrong-pid bug → corrected) and closed real coverage gaps
+(C10C-2's marker-decoupling, C10C-4's registry-content blind spot, both criteria's negative-control
+binding), not WHETHER they pass pre-implementation, so an unchanged scoreboard here is the expected,
+correct outcome, not a sign nothing changed: C10C-1, C10C-5, C10C-6, C10C-8, GATE-INTEGRITY,
+HEAD-DRIFT `pass`; C10C-2, C10C-3, C10C-4, C10C-7, LEASE `fail` — 6/11, with an overall **non-zero
+exit** (both LEASE and C10C-7 fail for structural reasons unrelated to this round: no `"W10c"` lease
+entry yet, no implementation-review record yet). This is what "clean-red" means for this wave: an
+accurate, evidence-backed, non-crashing report of current reality, not a demand that every single
+criterion returns false, and not a report where any currently-green criterion is green merely because
+the check is too weak to fail on a shaped decoy — C10C-1, C10C-2, and C10C-4's structural/mutation
+halves in particular are now *harder* to pass on a decoy than before this round, while still passing
+honestly on the real, honest source.
 
 ## 9. Recorded rulings (formerly "Open founder questions")
 

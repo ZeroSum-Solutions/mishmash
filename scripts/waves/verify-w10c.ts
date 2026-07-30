@@ -272,6 +272,133 @@
 //     categoryHints and searchTerms") -- all three array-valued
 //     DesignToolboxAction fields, not just preferredSkillIds.
 // ===========================================================================
+// FIX ROUND 5 -- round 4 (the first round of the founder-authorized
+// re-expansion arc) REJECTED with 10 findings (8 HIGH, 2 MEDIUM). Every
+// finding is closed below; tagged [R5-F<n>] at its point of use.
+//   F1/F9 (mutation-probe soundness -- NOT SOUND): the round-4 probes
+//     accepted a crashed suite or empty reporter output as "flipped red"
+//     (an empty assertionResults[] trivially satisfies "not passed"; a pure
+//     probe reproduced accepted=true against an empty reporter). Fixed with
+//     requireAttributableFailure: a poison run must produce a PARSEABLE
+//     report, numTotalTests > 0, the NAMED test present, status==="failed",
+//     AND a non-empty failureMessages[] -- anything short of that is a
+//     PROBE FAILURE (fail-closed), never accepted as red. Anchoring moved
+//     from raw-text occurrence counting to DECLARATION-SCOPED AST location
+//     (locateTopLevelFunctionBodyInsertionPoint), immune to harmless
+//     signature reformatting and to a decoy comment/string containing the
+//     function name (both confirmed live). Restoration is now signal-safe
+//     (process.once('exit'/'SIGINT'/'SIGTERM', ...) triggers synchronous
+//     restore) and independently BYTE-IDENTICAL VERIFIED on every exit path
+//     this process's own control flow can observe, dominating whatever the
+//     probe callback itself reported.
+//   F2/ruling-b (C10C-2 marker not bound to chat-composer-input, SCOPE NOT
+//     LEGITIMATE / BINDING NOT SOUND): collectObservedReadVariableNames
+//     previously collected a variable from ANY textContent/innerText read,
+//     independently of the separate bound-presence check
+//     (countTextContentChainsReferencing) -- a decoy could perform the real
+//     chat-composer-input read into an unused variable (satisfying
+//     presence) while logging an UNRELATED locator seeded with the expected
+//     value (satisfying "marker derived from an observed read"). Fixed by
+//     binding the collector to the SAME fragment via the SAME receiver-walk
+//     discipline countClickChainsReferencing already uses, so both checks
+//     describe the identical read. The reviewer separately ruled the prior
+//     "no probe here, would require leasing legacy UI files" reasoning
+//     invalid -- poisoning findDesignToolboxSkill is already done elsewhere
+//     in this file and is already in-lease; C10C-2 now ALSO runs that exact
+//     mutation probe against the real Playwright suite and requires every
+//     marker in both consumers to flip to "__NONE__".
+//   F3/F5 (teardown fail-open on required paths, Playwright-side cleanup):
+//     a `tools-dev start` that timed out or exited nonzero AFTER partially
+//     spawning a process left `started=false`, skipping confirmTeardown
+//     entirely and deleting the data dir. Fixed: the `started` guard is
+//     removed -- confirmTeardown now runs on EVERY exit path, unconditionally.
+//     Separately, confirmTeardown previously ignored `stop`'s own exit/status
+//     entirely (a failed/unparseable/partial self-report could still resolve
+//     "ok" whenever the later scan was empty); confirmTeardown now requires
+//     BOTH a clean self-report (exit 0, parseable, status "stopped" or
+//     "not-running") AND an independently confirmed empty group -- either
+//     one failing fails the whole teardown, even though escalation still
+//     runs for real process hygiene regardless. The Playwright-side cleanup
+//     weakness in e2e/lib/playwright/suite.ts / e2e/lib/tools-dev/runtime.ts
+//     is confirmed real but OUT OF SCOPE for this verifier+PRD-only wave
+//     (shared e2e infra, not owned by W10c's lease) -- documented in the PRD.
+//   F4 (target-visibility unproved and vacuous): an exit-zero `ps` with
+//     empty/malformed output previously returned `[]` (a clean-looking
+//     empty survivor list) rather than being classified as untrustworthy,
+//     and no control ever proved the scan mechanism could see the TARGET's
+//     own session before trusting a later "empty" reading. Ported (adapted)
+//     from scripts/waves/verify-w9-filesystem.ts@0d6bf026f:
+//     classifyProcessTableScan (self-visibility control: this verifier's
+//     own known-alive pid must appear in the enumeration or the scan is
+//     untrustworthy) + evaluateTargetVisibility (a POSITIVE control,
+//     captured at boot time before any signal: while the target is
+//     independently confirmed alive via process.kill(pid,0), the SAME ps
+//     scan must ALSO show a row for its pgid). Validated LIVE, not just via
+//     the synthetic self-probe table: a real spawned sentinel plus a
+//     PATH-shimmed `ps` that filters out its pgid fooled the old
+//     self-visibility-only logic (ok:true despite the target's whole
+//     session being invisible) and was correctly rejected by the new
+//     target-visibility-gated logic.
+//   F6 (dropped compiler-source-connectivity check REGRESSED, not
+//     subsumed): a suite can hardcode today's action ids while genuinely
+//     calling findSkillById and pass every mutation/title check, since
+//     poisoning findSkillById alone cannot prove the coverage SET tracks
+//     live source content. Fixed with a REGISTRY-CONTENT mutation probe
+//     (withRegistryContentMutationProbe): appends one synthetic,
+//     real-resolving action to DESIGN_TOOLBOX_ACTIONS's own array literal
+//     (AST-located, modeled on the real first element's own text) in a
+//     transient copy and requires a NEW passing coverage title for it to
+//     appear -- a hardcoded suite can never produce a title for an id that
+//     did not exist when it was authored. Validated live against the real
+//     production file (correctly resolves the seeded skill id, restores
+//     byte-identical) -- this validation also caught and fixed a real
+//     off-by-one bug in the splice itself: the array's last element already
+//     ends with a trailing comma, so unconditionally prepending another one
+//     produced a SPARSE-ARRAY HOLE (`[a, b, , c]`) instead of a new element;
+//     the splice now checks for an existing trailing comma first.
+//   F7 (C10C-1 Layer C still admits alias mutation via non-canonical
+//     numeric-looking keys): `/^\d+$/` wrongly classified "01" as a numeric
+//     index, excluding it from the extra-own-properties check while the
+//     `0..length-1` descriptor loop (which only ever produces canonical
+//     "0","1",...) never visits it either -- a property installed at
+//     exactly that key evaded both. Fixed with isCanonicalArrayIndexKey
+//     (String(Number(k)) === k), the correct ECMAScript array-index test.
+//   F8 (transitive commit-binding incomplete): `tools-dev` self-checks only
+//     its own bundled source hash, while it and the daemon it boots
+//     transitively resolve gitignored packages/*  `dist/` output (platform,
+//     sidecar, sidecar-proto) with no rebuild/hash validation -- a stale or
+//     hand-edited dist could drive lifecycle/runtime evidence invisibly to
+//     git. Fixed, ported from verify-w9-filesystem.ts@0d6bf026f's INVARIANT
+//     2: ensureFirstPartyPackagesRebuiltFromHead rebuilds every
+//     `packages/*` workspace member unconditionally (not a narrower
+//     per-path dependency closure, which INVARIANT 2's own history shows
+//     silently reopens the gap for a THIRD evidence path later), memoized
+//     once per verifier process, called from both the isolated-daemon boot
+//     path and C10C-6's guard/typecheck check.
+//   Verifier fingerprints (lesson battery): the poison splices' own
+//     identifying comment text ("w10c-verifier-mutation-probe: ...") is
+//     removed entirely (a bare return statement needs no explanatory
+//     comment baked into the poisoned file), and the reverse-poison dummy
+//     value's id string no longer contains "w10c"/"mutation-probe" that a
+//     hostile test could pattern-match on to detect it is being probed
+//     specifically. The shared proof-directory/env-var naming convention
+//     (WAVE_SLUG, PLAYWRIGHT_JSON_OUTPUT_NAME) is left as-is -- it is
+//     program-wide shared infrastructure, not W10c-specific, and the
+//     crash-as-red closure above already closes the exploit path a decoy
+//     could otherwise use such a fingerprint for (detecting "I am being
+//     probed" and crashing on purpose no longer helps it, since a crash is
+//     now a PROBE FAILURE, not an accepted red).
+//   F10 (phantom/red-spec attribution incomplete): C10C-3 previously
+//     poisoned only the positive path; C10C-4's own oracle never exercised
+//     its phantom id at all, and neither delegated negative-control test
+//     was mutation-bound. Fixed: both C10C-3 and C10C-4 now run a SECOND,
+//     independent REVERSE-poison probe (findDesignToolboxSkill/findSkillById
+//     forced to always return a truthy dummy) requiring the NEGATIVE
+//     control test to show an attributable failure; C10C-4(a)'s oracle now
+//     also calls findSkillById with the same phantom literal C10C-4(b) uses
+//     and requires it to resolve to undefined, mirroring C10C-3(a)'s
+//     existing paired positive+negative shape.
+// ===========================================================================
 //
 // Anti-gaming compliance notes (verifier defect catalog):
 //   1. This file writes no generated script/JS content to disk itself -- no
@@ -1036,11 +1163,37 @@ function countClickChainsReferencingIdentifier(node: TypeScriptModule.Node, iden
 // same "make the real request, assert the real response" shape applied to
 // a UI surface (a click is the request, the observed DOM text is the
 // response).
-function collectObservedReadVariableNames(node: TypeScriptModule.Node): Set<string> {
+// [R5-F2] `fragment` is REQUIRED and must match the read's OWN RECEIVER
+// subtree (e.g. `page.getByTestId('chat-composer-input')`), exactly like
+// countTextContentChainsReferencing's binding -- round-4's review found
+// that when this collector accepted a read bound to ANY locator, and the
+// bound-read-presence check (countTextContentChainsReferencing) ran as a
+// SEPARATE, independent fact, a decoy could perform the real
+// chat-composer-input read into an unused variable (satisfying the
+// presence check) while separately reading an UNRELATED locator seeded
+// with the expected value into the variable it actually logs (satisfying
+// the marker-references-an-observed-read check) -- two true facts about
+// the loop body that, taken together, prove nothing about what was
+// actually reported. Binding this collector to the SAME fragment the
+// presence check requires makes the two checks describe the SAME read,
+// closing the decoupling.
+function collectObservedReadVariableNames(node: TypeScriptModule.Node, fragment: string): Set<string> {
   const names = new Set<string>();
   function visit(n: TypeScriptModule.Node): void {
-    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && subtreeHasMethodCall(n.initializer, ['textContent', 'innerText'])) {
-      names.add(n.name.text);
+    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && ['textContent', 'innerText'].includes(n.expression.name.text) && subtreeContainsStringLiteralFragment(n.expression.expression, fragment)) {
+      // Walk up through await/parenthesized wrappers only -- if this exact,
+      // fragment-bound call (or its awaited/parenthesized form) is DIRECTLY
+      // a variable's initializer, that variable is a genuine observed read;
+      // anything else (passed straight to console.log, assigned into an
+      // object property, etc.) is handled by the direct-reference checks
+      // elsewhere and is not claimed here.
+      let cur: TypeScriptModule.Node = n;
+      while (cur.parent && (ts.isAwaitExpression(cur.parent) || ts.isParenthesizedExpression(cur.parent))) {
+        cur = cur.parent;
+      }
+      if (cur.parent && ts.isVariableDeclaration(cur.parent) && ts.isIdentifier(cur.parent.name) && cur.parent.initializer === cur) {
+        names.add(cur.parent.name.text);
+      }
     }
     ts.forEachChild(n, visit);
   }
@@ -1335,6 +1488,23 @@ interface RuntimeShapeCheck {
   ok: boolean;
   problems: string[];
 }
+// [R5-F7] Canonical array-index test, replacing `/^\d+$/`. Per the ECMAScript
+// spec, an "array index" string key must equal `ToString(ToUint32(k))` with
+// no leading zeros (String(Number(k)) === k) and be < 2^32-1 -- `/^\d+$/`
+// wrongly accepts "01" (and any other leading-zero digit string) as
+// numeric, which caused two live bugs: the "extra own properties" filters
+// below EXCLUDED "01" from the extras check (treating it as a harmless
+// index), while the separate `0..length-1` descriptor loop never visits
+// "01" either (bracket-indexing by a NUMBER only ever produces "0","1",...,
+// never "01") -- so a property installed at exactly that key evaded BOTH
+// checks. A direct probe confirmed this: `Object.defineProperty(arr, '01',
+// {value:'poison', enumerable:true, ...})` produced `filteredExtras=[]` and
+// `problems=[]` under the old regex.
+function isCanonicalArrayIndexKey(k: string): boolean {
+  if (k === '' || k === '-0') return false;
+  const n = Number(k);
+  return Number.isInteger(n) && n >= 0 && n < 4294967295 && String(n) === k;
+}
 // [R4-F4] Full runtime inspection of a plain string array (used for
 // preferredSkillIds/categoryHints/searchTerms and for
 // FEATURED_DESIGN_TOOLBOX_ACTION_IDS): Array.prototype identity, zero extra
@@ -1353,7 +1523,7 @@ function inspectStringArrayRuntimeShapeDeep(value: unknown, label: string): Runt
   const problems: string[] = [];
   if (!Array.isArray(value)) return { ok: false, problems: [`${label} runtime export is not an Array instance`] };
   if (Object.getPrototypeOf(value) !== Array.prototype) problems.push(`${label} prototype is not Array.prototype`);
-  const ownNames = Object.getOwnPropertyNames(value).filter((k) => k !== 'length' && !/^\d+$/.test(k));
+  const ownNames = Object.getOwnPropertyNames(value).filter((k) => k !== 'length' && !isCanonicalArrayIndexKey(k));
   if (ownNames.length > 0) problems.push(`${label} has extra own string-keyed properties beyond numeric indices/length: ${ownNames.join(', ')}`);
   const ownSymbols = Object.getOwnPropertySymbols(value);
   if (ownSymbols.length > 0) problems.push(`${label} has ${ownSymbols.length} own SYMBOL-keyed propert${ownSymbols.length === 1 ? 'y' : 'ies'}, which a plain array literal never has`);
@@ -1376,7 +1546,7 @@ function inspectRuntimeActionsShape(value: unknown): RuntimeShapeCheck {
   const problems: string[] = [];
   if (!Array.isArray(value)) return { ok: false, problems: ['DESIGN_TOOLBOX_ACTIONS runtime export is not an Array instance'] };
   if (Object.getPrototypeOf(value) !== Array.prototype) problems.push('DESIGN_TOOLBOX_ACTIONS prototype is not Array.prototype');
-  const arrayOwnKeys = Object.getOwnPropertyNames(value).filter((k) => k !== 'length' && !/^\d+$/.test(k));
+  const arrayOwnKeys = Object.getOwnPropertyNames(value).filter((k) => k !== 'length' && !isCanonicalArrayIndexKey(k));
   if (arrayOwnKeys.length > 0) problems.push(`DESIGN_TOOLBOX_ACTIONS has extra own properties beyond numeric indices/length: ${arrayOwnKeys.join(', ')}`);
   // [R4-F4] Symbol-keyed own properties on the outer array itself, and a
   // per-index descriptor scan proving no element slot is a getter/setter
@@ -1614,11 +1784,13 @@ async function liveSkillsList(): Promise<{ ok: true; skills: unknown[] } | { ok:
 interface VitestAssertionResult {
   fullName: string;
   status: string;
+  failureMessages?: string[]; // [R5] required for assertion-identity checks (finding 1/9/10)
 }
 interface VitestSuiteJson {
+  numTotalTests: number; // [R5] 0 with an empty assertionResults[] is the module-eval-crash signature
   numFailedTests: number;
   numPassedTests: number;
-  testResults: { assertionResults: VitestAssertionResult[] }[];
+  testResults: { assertionResults: VitestAssertionResult[]; status: string; message: string }[];
 }
 function runVitestFile(pkgFilter: string, packageRelativeFile: string, outName: string): { status: number; data: VitestSuiteJson | null; raw: string } {
   const outPath = path.join(proofDir, `${outName}.json`);
@@ -1646,19 +1818,192 @@ function runVitestFile(pkgFilter: string, packageRelativeFile: string, outName: 
 // This never leaves a committed change: the mutation exists only for the
 // duration of one synchronous vitest run, and the LEASE/treeDirty checks
 // that run afterward would themselves catch an unrestored file.
-function withPoisonedFile<T>(absPath: string, anchor: string, poisonSuffix: string, fn: () => T): { ok: true; result: T } | { ok: false; error: string } {
+//
+// [R5-F9] Round-4 review found the raw-text occurrence count did not prove
+// the anchor was a DECLARATION rather than comment/template text, and that
+// harmless signature reformatting would make the frozen verifier
+// false-red. Fixed with DECLARATION-SCOPED anchoring: locates the unique,
+// top-level `function <name>(...) { ... }` declaration via the TypeScript
+// compiler API and splices immediately after its own body's opening brace,
+// using that node's real character offset -- never a text match.
+function locateTopLevelFunctionBodyInsertionPoint(sourceText: string, fileName: string, functionName: string): { ok: true; insertPos: number } | { ok: false; error: string } {
+  const sf = parseTs(fileName, sourceText);
+  const matches: TypeScriptModule.Block[] = [];
+  for (const stmt of sf.statements) {
+    if (ts.isFunctionDeclaration(stmt) && stmt.name?.text === functionName && stmt.body) {
+      matches.push(stmt.body);
+    }
+  }
+  if (matches.length !== 1) {
+    return { ok: false, error: `expected exactly 1 top-level function declaration named "${functionName}" in ${fileName}, found ${matches.length} -- refusing to poison an ambiguous target` };
+  }
+  return { ok: true, insertPos: matches[0]!.getStart(sf) + 1 }; // +1: just past the body's opening '{'
+}
+// [R5-F9] Crash-recovery: registers exit/SIGINT/SIGTERM handlers so a
+// termination of THIS verifier process between poison and restore still
+// restores the file synchronously before the process actually exits (Node
+// runs 'exit' listeners and lets a signal handler run synchronous code
+// before the process dies). This cannot help against SIGKILL or a native
+// crash -- no runtime can run cleanup code after that -- which is why the
+// caller ALSO verifies byte-identical restoration below, independent of
+// whether this function's own try/finally executed cleanly, and treats any
+// mismatch as a hard failure regardless of the probe's own outcome.
+// [R5-F6/F9] Shared low-level primitive: write `computeMutated(original)`'s
+// content, run `fn`, ALWAYS restore, ALWAYS verify byte-identical
+// restoration regardless of outcome. Factored out so every mutation probe
+// in this file (poison-a-function-body, and the registry-content
+// append-an-action probe below) shares the exact same crash-recovery +
+// restore-verification discipline rather than three independent copies of
+// it drifting apart.
+function withMutatedFileContent<T>(absPath: string, computeMutated: (original: string) => { ok: true; content: string } | { ok: false; error: string }, fn: () => T): { ok: true; result: T } | { ok: false; error: string } {
   const original = fs.readFileSync(absPath, 'utf8');
-  const occurrences = original.split(anchor).length - 1;
-  if (occurrences !== 1) {
-    return { ok: false, error: `mutation-probe anchor found ${occurrences} time(s) in ${absPath}, expected exactly 1 -- refusing to poison an ambiguous target` };
-  }
-  fs.writeFileSync(absPath, original.replace(anchor, `${anchor}${poisonSuffix}`));
+  const mutation = computeMutated(original);
+  if (!mutation.ok) return { ok: false, error: mutation.error };
+
+  let restored = false;
+  const safeRestore = (): void => {
+    if (restored) return;
+    try {
+      fs.writeFileSync(absPath, original);
+      restored = true;
+    } catch {
+      /* best effort; the byte-identical verification below is authoritative */
+    }
+  };
+  const onExit = (): void => safeRestore();
+  const onSignal = (): void => {
+    safeRestore();
+    process.exit(1);
+  };
+  fs.writeFileSync(absPath, mutation.content);
+  process.once('exit', onExit);
+  process.once('SIGINT', onSignal);
+  process.once('SIGTERM', onSignal);
+
+  let outcome: { ok: true; result: T } | { ok: false; error: string };
   try {
-    const result = fn();
-    return { ok: true, result };
+    outcome = { ok: true, result: fn() };
+  } catch (err) {
+    outcome = { ok: false, error: `mutation-probe callback threw: ${String((err as Error)?.stack ?? err)}` };
   } finally {
-    fs.writeFileSync(absPath, original);
+    safeRestore();
+    process.removeListener('exit', onExit);
+    process.removeListener('SIGINT', onSignal);
+    process.removeListener('SIGTERM', onSignal);
   }
+
+  // [R5-F9] Byte-identical restore verification DOMINATES: a persistently
+  // mutated production file is a hard failure regardless of what the probe
+  // callback itself reported, on every exit path this function's own
+  // control flow can observe.
+  let postRestore: string;
+  try {
+    postRestore = fs.readFileSync(absPath, 'utf8');
+  } catch (err) {
+    return { ok: false, error: `RESTORE VERIFICATION FAILED for ${absPath}: could not re-read after restore: ${String(err)}` };
+  }
+  if (postRestore !== original) {
+    return { ok: false, error: `RESTORE VERIFICATION FAILED for ${absPath}: content differs from the pre-mutation original after restore -- treated as a hard failure regardless of probe outcome` };
+  }
+  return outcome;
+}
+function withPoisonedFunctionBody<T>(absPath: string, functionName: string, poisonStatement: string, fn: () => T): { ok: true; result: T } | { ok: false; error: string } {
+  return withMutatedFileContent(
+    absPath,
+    (original) => {
+      const target = locateTopLevelFunctionBodyInsertionPoint(original, absPath, functionName);
+      if (!target.ok) return { ok: false, error: target.error };
+      return { ok: true, content: original.slice(0, target.insertPos) + poisonStatement + original.slice(target.insertPos) };
+    },
+    fn,
+  );
+}
+// [R5-F6] Registry-CONTENT mutation probe, closing round-4 finding 6: "a
+// suite can hardcode today's IDs while calling findSkillById and pass
+// everything" -- the round-3 `usesCompilerApiForRealExtraction`
+// connectivity check this was meant to replace only proved createSourceFile
+// fed forEachChild, never that the delegated file's per-action COVERAGE SET
+// actually tracks the live file. Appends one synthetic action (modeled on
+// the real first element's own source text, substituting only `id` and
+// `preferredSkillIds`, so every other field stays a syntactically valid
+// literal without needing to know the IconName enum) to
+// DESIGN_TOOLBOX_ACTIONS's own array literal in a transient copy, and
+// requires a NEW passing test titled for that synthetic id to appear in
+// the rerun -- a suite that hardcoded today's ids can never produce a title
+// for an id that did not exist when it was authored, regardless of how
+// faithfully it calls findSkillById.
+function locateDesignToolboxActionsArrayCloseBracket(sourceText: string, fileName: string): { ok: true; insertPos: number; firstElementText: string } | { ok: false; error: string } {
+  const sf = parseTs(fileName, sourceText);
+  const decls = findTopLevelNamedVariableDeclarations(sf, 'DESIGN_TOOLBOX_ACTIONS');
+  if (decls.length !== 1) return { ok: false, error: `expected exactly 1 DESIGN_TOOLBOX_ACTIONS declaration, found ${decls.length}` };
+  const decl = decls[0]!;
+  if (!decl.initializer || !ts.isArrayLiteralExpression(decl.initializer)) return { ok: false, error: 'DESIGN_TOOLBOX_ACTIONS initializer is not an array literal' };
+  const arr = decl.initializer;
+  if (arr.elements.length === 0) return { ok: false, error: 'DESIGN_TOOLBOX_ACTIONS array is empty -- no element to model the synthetic probe entry on' };
+  const first = arr.elements[0]!;
+  return { ok: true, insertPos: arr.getEnd() - 1, firstElementText: sourceText.slice(first.getStart(sf), first.getEnd()) };
+}
+function withRegistryContentMutationProbe<T>(absPath: string, newActionId: string, resolvableSkillId: string, fn: () => T): { ok: true; result: T } | { ok: false; error: string } {
+  return withMutatedFileContent(
+    absPath,
+    (original) => {
+      const target = locateDesignToolboxActionsArrayCloseBracket(original, absPath);
+      if (!target.ok) return { ok: false, error: target.error };
+      let synthetic = target.firstElementText;
+      synthetic = synthetic.replace(/id\s*:\s*(['"`])(?:(?!\1).)*\1/, `id: ${JSON.stringify(newActionId)}`);
+      synthetic = synthetic.replace(/preferredSkillIds\s*:\s*\[[^\]]*\]/, `preferredSkillIds: [${JSON.stringify(resolvableSkillId)}]`);
+      if (!synthetic.includes(newActionId) || !synthetic.includes(resolvableSkillId)) {
+        return { ok: false, error: 'could not substitute id/preferredSkillIds into the synthetic action element -- refusing to run an unverified mutation' };
+      }
+      // The array's own last element commonly already ends with a trailing
+      // comma before ']' (confirmed in design-toolbox.ts) -- unconditionally
+      // prepending another comma would produce `..., , {synthetic}]`, a
+      // SPARSE-ARRAY HOLE (JS: `[a, b, , c]` leaves index 2 `undefined`),
+      // silently dropping a real action from the array rather than adding
+      // one. Only add a separating comma when one is not already there.
+      const before = original.slice(0, target.insertPos);
+      const needsComma = !/,\s*$/.test(before);
+      return { ok: true, content: before + (needsComma ? ',' : '') + `\n  ${synthetic}` + original.slice(target.insertPos) };
+    },
+    fn,
+  );
+}
+// [R5-F1/F9/F10] Assertion-IDENTITY check for a poison-run's vitest JSON
+// report -- replaces the round-4 "is the named test still reported as
+// passed" boolean, which round-4's own review demonstrated accepts a
+// crashed suite or empty reporter output as "flipped red" (an empty
+// `assertionResults` trivially satisfies "not passed"). A mutation probe's
+// verdict must distinguish PROBE FAILURE (the poison run produced no
+// evidence at all -- crash, unparseable output, zero total tests, or the
+// named test missing from results entirely) from a genuine ATTRIBUTABLE
+// FAILURE (the named test is present, `status === 'failed'`, and carries a
+// non-empty `failureMessages` array). Only the latter counts as "flipped
+// red"; the former is fail-closed exactly like every other unconfirmed
+// state in this file.
+interface AttributableFailureCheck {
+  ok: boolean;
+  detail: string;
+}
+function requireAttributableFailure(run: { status: number; data: VitestSuiteJson | null; raw: string }, expectedTitleSuffix: string): AttributableFailureCheck {
+  if (!run.data) {
+    return { ok: false, detail: `PROBE FAILURE: poison run produced no parseable reporter output (exit=${run.status}) -- a missing/unparseable report is never accepted as evidence of a red assertion` };
+  }
+  if (run.data.numTotalTests === 0) {
+    const crashMessages = run.data.testResults.map((t) => t.message).filter(Boolean).join('; ').slice(0, 500);
+    return { ok: false, detail: `PROBE FAILURE: poison run reported zero total tests (suite likely crashed during collection/module-eval${crashMessages ? `: ${crashMessages}` : ''}) -- a crashed suite is never accepted as evidence of a red assertion` };
+  }
+  const allTests = run.data.testResults.flatMap((t) => t.assertionResults);
+  const match = allTests.find((t) => t.fullName.endsWith(expectedTitleSuffix));
+  if (!match) {
+    return { ok: false, detail: `PROBE FAILURE: no test titled exactly "...${expectedTitleSuffix}" appeared anywhere in the poison run's results -- absence (e.g. a mid-run crash before reaching it) is never accepted as evidence of a red assertion` };
+  }
+  if (match.status !== 'failed') {
+    return { ok: false, detail: `mutation probe FAILED: test "...${expectedTitleSuffix}" reported status="${match.status}" under poison, expected "failed" -- this specific assertion did not flip red` };
+  }
+  if (!match.failureMessages || match.failureMessages.length === 0) {
+    return { ok: false, detail: `PROBE FAILURE: test "...${expectedTitleSuffix}" reported status="failed" but carries no failureMessages -- a failure with no attributable assertion evidence is not accepted` };
+  }
+  return { ok: true, detail: `attributable failure confirmed for "...${expectedTitleSuffix}": ${match.failureMessages[0]?.split('\n')[0]}` };
 }
 interface PwResult {
   status: string;
@@ -1728,145 +2073,309 @@ interface DaemonBootFail {
   detail: string;
   rawEvidence: string;
 }
-// [R4-F5] Reference implementation: killGroupFailClosed in
-// scripts/waves/verify-w9-filesystem.ts (W9-filesystem, the sibling wave
-// DECISIONS.md names as the one that got this right). Ported here with the
-// same semantics, not reinvented: escalate on process-GROUP EMPTINESS
-// (never leader-liveness alone), `ps` enumeration failure is treated as an
-// UNCONFIRMED survivor set (never as proof of a clean exit -- lesson 6, the
-// empty-array-vacuity guard), exact pid/pgid signaling only, fail-closed on
-// any unconfirmed or partial result.
-//
-// This is the third wave in a row DECISIONS.md records losing to this exact
-// defect class (W9AS-PARK, then W10C-PARK's own round-3 deciding finding):
-// "a missing/unparseable stop report with no captured PID returns SUCCESS;
-// a reported `partial` becomes success after escalation; only selected PIDs
-// are polled (not group survival); the temp data directory is deleted even
-// when confirmation fails." All four are closed below -- by construction,
-// not by patching the prior PID-liveness-only version -- and the temp data
-// directory fix lives in withIsolatedDaemon's finally block, not here.
-function processGroupSurvivors(pgid: number): string[] {
-  const r = sh('ps', ['-Ao', 'pid=,pgid=,comm='], { timeoutMs: 15_000 });
-  if (r.status !== 0) {
-    // ps failing is an ENUMERATION FAILURE, not evidence of a clean exit --
-    // a non-empty, synthetic survivor entry means every caller's
-    // `.length === 0` check fails closed rather than vacuously passing on
-    // an empty array it never actually populated.
-    return [`ps scan itself failed (exit=${r.status}) -- treated as unconfirmed, not as proof of a clean exit`];
+// [R5-F4] Reference implementation ported (adapted) from
+// scripts/waves/verify-w9-filesystem.ts@0d6bf026f (`evaluateTargetVisibility`
+// + `classifyProcessTableScan` + their synthetic self-probe batteries), the
+// commit round-4's review cited directly. Round-4's own teardown rewrite
+// only proved self-visibility (this verifier's own pid appears in the `ps`
+// enumeration) -- it never proved the scan mechanism could see the TARGET's
+// session at all. A session-scoped `ps` (or an equivalent blind spot) could
+// pass self-visibility every time while showing zero rows for the daemon's
+// session, regardless of whether it actually has survivors -- reading as a
+// trustworthy "confirmed empty" when it never observed the target once.
+interface ProcessTableScanResult {
+  /** True only when the scan itself is TRUSTWORTHY (exit 0, this verifier's
+   * own known-alive pid is visible somewhere in the output, every row
+   * parsed) -- never merely "found zero matching rows." `survivors` is only
+   * meaningful when this is true. */
+  ok: boolean;
+  survivors: string[];
+  detail: string;
+}
+/** Pure, deterministic classification over a `ps -Ao pid=,pgid=,comm=`-shaped
+ * invocation's raw exit status + stdout, separated from the actual `ps` call
+ * so its trustworthiness logic can be exercised with SYNTHETIC input
+ * (`PROCESS_TABLE_SELF_PROBES`). Exit-zero-but-empty output, and exit-zero
+ * output whose rows fail to parse, are NOT proof the group is empty -- they
+ * are proof the SCAN ITSELF is broken, and the two must never be conflated.
+ * The self-visibility control: this verifier's own process (`selfPid`,
+ * definitely alive) must appear SOMEWHERE in the same enumeration, or
+ * enumeration itself is untrustworthy. */
+function classifyProcessTableScan(status: number, stdout: string, selfPid: number, targetPgid: number): ProcessTableScanResult {
+  if (status !== 0) {
+    return { ok: false, survivors: [], detail: `ps scan itself failed (exit=${status}) -- treated as unconfirmed, not as proof of a clean exit` };
   }
   const survivors: string[] = [];
-  for (const line of r.stdout.split('\n')) {
+  const malformed: string[] = [];
+  let sawSelf = false;
+  let rowCount = 0;
+  for (const line of stdout.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed) continue;
+    rowCount++;
     const parts = trimmed.split(/\s+/);
     const rowPid = Number(parts[0]);
     const rowPgid = Number(parts[1]);
-    if (!Number.isFinite(rowPid) || !Number.isFinite(rowPgid)) continue;
-    if (rowPgid === pgid) survivors.push(`pid=${rowPid} pgid=${rowPgid} comm=${parts.slice(2).join(' ')}`);
+    if (parts.length < 3 || !Number.isFinite(rowPid) || !Number.isFinite(rowPgid)) {
+      malformed.push(trimmed.slice(0, 160));
+      continue;
+    }
+    if (rowPid === selfPid) sawSelf = true;
+    if (rowPgid === targetPgid) survivors.push(`pid=${rowPid} pgid=${rowPgid} comm=${parts.slice(2).join(' ')}`);
   }
-  return survivors;
+  if (malformed.length > 0) {
+    return {
+      ok: false,
+      survivors: [],
+      detail: `ps output contained ${malformed.length} unparseable row(s) out of ${rowCount} -- enumeration integrity not confirmed, treated as a scan failure, never as proof of an empty group: ${malformed.slice(0, 3).join(' | ')}`,
+    };
+  }
+  if (!sawSelf) {
+    return {
+      ok: false,
+      survivors: [],
+      detail: `ps output (exit=0, ${rowCount} row(s)) never included this verifier's own pid=${selfPid} -- a process KNOWN to be alive right now -- so enumeration itself is broken (self-visibility control failed), treated as a scan failure, never as proof of an empty group`,
+    };
+  }
+  return { ok: true, survivors, detail: `ps scan trustworthy: self pid=${selfPid} visible among ${rowCount} row(s), 0 malformed` };
 }
-async function waitForGroupEmpty(pgid: number, timeoutMs: number, intervalMs = 200): Promise<boolean> {
+const PROCESS_TABLE_SELF_PROBES: Array<{ name: string; status: number; stdout: string; expectOk: boolean; expectSurvivorCount?: number }> = [
+  { name: 'well-formed output, self visible, no target-pgid match', status: 0, stdout: '    1     1 launchd\n 4242   999 node\n  555   555 sh\n', expectOk: true, expectSurvivorCount: 0 },
+  { name: 'well-formed output, self visible, target-pgid HAS a survivor', status: 0, stdout: '    1     1 launchd\n 4242   999 node\n 6001   777 hermes-agent\n', expectOk: true, expectSurvivorCount: 1 },
+  { name: 'exit-zero but EMPTY output (enumeration silently produced nothing)', status: 0, stdout: '', expectOk: false },
+  { name: 'exit-zero, well-formed OTHER rows, but self pid missing entirely', status: 0, stdout: '    1     1 launchd\n  555   555 sh\n', expectOk: false },
+  { name: 'exit-zero, garbage/malformed rows', status: 0, stdout: 'not-a-pid not-a-pgid garbage\n 4242   999 node\n', expectOk: false },
+  { name: 'nonzero exit (ps itself failed)', status: 1, stdout: '', expectOk: false },
+];
+let processTableSelfProbeResult: { pass: boolean; report: string[]; passCount: number; total: number } | null = null;
+function runProcessTableSelfProbes(): { pass: boolean; report: string[]; passCount: number; total: number } {
+  if (processTableSelfProbeResult) return processTableSelfProbeResult;
+  const SELF_PID = 4242;
+  const TARGET_PGID = 777;
+  const report: string[] = [];
+  let passCount = 0;
+  for (const c of PROCESS_TABLE_SELF_PROBES) {
+    const result = classifyProcessTableScan(c.status, c.stdout, SELF_PID, TARGET_PGID);
+    const okMatches = result.ok === c.expectOk;
+    const survivorMatches = c.expectSurvivorCount === undefined || (result.ok && result.survivors.length === c.expectSurvivorCount);
+    if (okMatches && survivorMatches) {
+      passCount++;
+      report.push(`PASS ${c.name}: ok=${result.ok} survivors=${result.survivors.length}`);
+    } else {
+      report.push(`FAIL ${c.name}: expected ok=${c.expectOk}${c.expectSurvivorCount !== undefined ? ` survivors=${c.expectSurvivorCount}` : ''}, got ok=${result.ok} survivors=${result.survivors.length} detail=${result.detail}`);
+    }
+  }
+  processTableSelfProbeResult = { pass: passCount === PROCESS_TABLE_SELF_PROBES.length, report, passCount, total: PROCESS_TABLE_SELF_PROBES.length };
+  return processTableSelfProbeResult;
+}
+function processGroupSurvivorsChecked(pgid: number): ProcessTableScanResult {
+  const r = sh('ps', ['-Ao', 'pid=,pgid=,comm='], { timeoutMs: 15_000 });
+  return classifyProcessTableScan(r.status, r.stdout, process.pid, pgid);
+}
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+interface TargetVisibilityResult {
+  ok: boolean;
+  detail: string;
+}
+/** [R5-F4] Positive control: while the target is independently
+ * (kernel-level, `process.kill(pid, 0)`) confirmed alive, the SAME
+ * `ps`-based scan mechanism must ALSO show a row for that exact pgid --
+ * trivially true for a healthy target, since `detached: true` (the sidecar
+ * is spawned this way) makes the leader its own pgid. A later "zero
+ * survivors" result is trusted as "confirmed empty" ONLY when this
+ * positive control passed. Must be evaluated BEFORE any stop/kill signal --
+ * ours or `tools-dev`'s own graceful stop -- is sent, while the target is
+ * still whatever it currently is; `withIsolatedDaemon` captures this
+ * snapshot immediately after learning the boot pid, not at teardown time
+ * (by teardown time `tools-dev stop` may have already, successfully,
+ * killed the target, which would make "was it alive AND visible" trivially
+ * false for the NORMAL HEALTHY case if evaluated fresh at that point). */
+function evaluateTargetVisibility(targetAliveAtStart: boolean, preKillScan: ProcessTableScanResult | null): TargetVisibilityResult {
+  if (!targetAliveAtStart) {
+    return { ok: false, detail: 'target-visibility not established: the target was not independently confirmed alive (process.kill(pid,0)) when this snapshot was captured -- a later "confirmed empty" verdict cannot be trusted without this positive control' };
+  }
+  if (!preKillScan || !preKillScan.ok || preKillScan.survivors.length === 0) {
+    return {
+      ok: false,
+      detail: `target-visibility FAILED: process.kill(pid,0) confirmed the target alive, but the ps-based scan for its own pgid found ${!preKillScan || !preKillScan.ok ? `an untrustworthy scan (${preKillScan?.detail ?? 'no scan performed'})` : 'zero rows'} -- the scan mechanism may be blind to this target's session (e.g. a session-scoped ps, or a shim that filters this pgid -- the "pgid-blind-shim" exploit class)`,
+    };
+  }
+  return { ok: true, detail: `target-visibility confirmed: ${preKillScan.survivors.length} row(s) for the target's own pgid seen while it was independently confirmed alive` };
+}
+const TARGET_VISIBILITY_SELF_PROBES: Array<{ name: string; targetAliveAtStart: boolean; preKillScan: ProcessTableScanResult | null; expectOk: boolean }> = [
+  { name: 'normal healthy case: target alive, scan sees its own pgid row', targetAliveAtStart: true, preKillScan: { ok: true, survivors: ['pid=999 pgid=999 node'], detail: 'ok' }, expectOk: true },
+  { name: 'pgid-blind-shim exploit: target alive, self visible, but 0 target rows', targetAliveAtStart: true, preKillScan: { ok: true, survivors: [], detail: 'trustworthy: self visible, 0 target rows' }, expectOk: false },
+  { name: 'target alive, but the pre-kill scan itself was untrustworthy', targetAliveAtStart: true, preKillScan: { ok: false, survivors: [], detail: 'malformed rows' }, expectOk: false },
+  { name: 'target already not alive when the snapshot was captured -- no positive control possible', targetAliveAtStart: false, preKillScan: null, expectOk: false },
+];
+let targetVisibilitySelfProbeResult: { pass: boolean; report: string[]; passCount: number; total: number } | null = null;
+function runTargetVisibilitySelfProbes(): { pass: boolean; report: string[]; passCount: number; total: number } {
+  if (targetVisibilitySelfProbeResult) return targetVisibilitySelfProbeResult;
+  const report: string[] = [];
+  let passCount = 0;
+  for (const c of TARGET_VISIBILITY_SELF_PROBES) {
+    const result = evaluateTargetVisibility(c.targetAliveAtStart, c.preKillScan);
+    if (result.ok === c.expectOk) {
+      passCount++;
+      report.push(`PASS ${c.name}: ok=${result.ok}`);
+    } else {
+      report.push(`FAIL ${c.name}: expected ok=${c.expectOk}, got ok=${result.ok} detail=${result.detail}`);
+    }
+  }
+  targetVisibilitySelfProbeResult = { pass: passCount === TARGET_VISIBILITY_SELF_PROBES.length, report, passCount, total: TARGET_VISIBILITY_SELF_PROBES.length };
+  return targetVisibilitySelfProbeResult;
+}
+async function waitForGroupEmptyChecked(pgid: number, timeoutMs: number, intervalMs = 200): Promise<ProcessTableScanResult> {
   const deadline = Date.now() + timeoutMs;
+  let last = processGroupSurvivorsChecked(pgid);
   while (Date.now() < deadline) {
-    if (processGroupSurvivors(pgid).length === 0) return true;
+    if (last.ok && last.survivors.length === 0) return last;
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    last = processGroupSurvivorsChecked(pgid);
   }
-  return processGroupSurvivors(pgid).length === 0;
+  return last;
 }
-// [R4-F5] The daemon sidecar `tools-dev` spawns is detached:true (POSIX
-// setsid()), so its reported pid doubles as its own process-group id --
-// `process.kill(-pgid, signal)` therefore reaches every descendant in the
-// group, tracked or not (including a fire-and-forget agent-detection probe
-// spawned after boot -- the exact straggler class W9AS-PARK documents).
-async function killGroupFailClosed(pgid: number): Promise<{ ok: boolean; detail: string }> {
+// [R4-F5, upgraded R5-F4] The daemon sidecar `tools-dev` spawns is
+// detached:true (POSIX setsid()), so its reported pid doubles as its own
+// process-group id. Gated by BOTH self-probe batteries first (a survivor
+// scan is never trusted for a real verdict in a run where the
+// classification logic cannot classify its own known fixtures correctly),
+// then never trusts a "zero survivors" reading unless the CALLER-SUPPLIED
+// `targetVisibility` positive control (captured at boot time, before any
+// signal) already passed.
+async function killGroupFailClosed(pgid: number, targetVisibility: TargetVisibilityResult): Promise<{ ok: boolean; detail: string }> {
+  const selfProbes = runProcessTableSelfProbes();
+  const targetVisibilityProbes = runTargetVisibilitySelfProbes();
+  const selfProbeSummary = `process-table self-probes ${selfProbes.passCount}/${selfProbes.total} pass, target-visibility self-probes ${targetVisibilityProbes.passCount}/${targetVisibilityProbes.total} pass`;
+  if (!selfProbes.pass || !targetVisibilityProbes.pass) {
+    const failures = [...selfProbes.report, ...targetVisibilityProbes.report].filter((l) => l.startsWith('FAIL'));
+    return { ok: false, detail: `${selfProbeSummary} -- refusing to trust any survivor scan this run: ${failures.join(' | ')}` };
+  }
   try {
     process.kill(-pgid, 'SIGTERM');
   } catch (err) {
-    // ESRCH means the group is already gone -- proceed to the confirmation
-    // scan rather than assuming success from the throw alone.
     if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
-      return { ok: false, detail: `SIGTERM to group -${pgid} failed: ${String(err)}` };
+      return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; SIGTERM to group -${pgid} failed: ${String(err)}` };
     }
   }
-  const emptyAfterTerm = await waitForGroupEmpty(pgid, 8_000);
-  if (!emptyAfterTerm) {
+  let scan = await waitForGroupEmptyChecked(pgid, 8_000);
+  if (!(scan.ok && scan.survivors.length === 0)) {
     try {
       process.kill(-pgid, 'SIGKILL');
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
-        return { ok: false, detail: `SIGKILL to group -${pgid} failed: ${String(err)}` };
+        return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; SIGKILL to group -${pgid} failed: ${String(err)}` };
       }
     }
-    const emptyAfterKill = await waitForGroupEmpty(pgid, 5_000);
-    if (!emptyAfterKill) {
-      const survivors = processGroupSurvivors(pgid);
-      return { ok: false, detail: `process group -${pgid} still has survivors after SIGTERM+SIGKILL -- teardown NOT confirmed: ${survivors.join('; ')}` };
-    }
+    scan = await waitForGroupEmptyChecked(pgid, 5_000);
   }
-  // Re-derive the survivor list one more time explicitly rather than
-  // trusting waitForGroupEmpty's boolean alone -- never trust a resolved
-  // check as proof on its own.
-  const survivors = processGroupSurvivors(pgid);
-  if (survivors.length > 0) {
-    return { ok: false, detail: `process group -${pgid} has survivors after kill+wait: ${survivors.join('; ')}` };
+  if (!scan.ok) {
+    return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; SCAN UNTRUSTWORTHY -- teardown NOT confirmed, never treated as an empty group: ${scan.detail}` };
   }
-  return { ok: true, detail: `process group -${pgid} confirmed empty (group-wide ps scan found nothing)` };
+  if (scan.survivors.length > 0) {
+    return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; process group -${pgid} has survivors after kill+wait: ${scan.survivors.join('; ')}` };
+  }
+  if (!targetVisibility.ok) {
+    return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; post-kill scan shows zero survivors, but that result is NOT TRUSTED without a passing target-visibility positive control -- teardown NOT confirmed` };
+  }
+  return { ok: true, detail: `${selfProbeSummary}; ${targetVisibility.detail}; process group -${pgid} confirmed empty (${scan.detail})` };
 }
-// [R4-F5] Fail-closed teardown confirmation. DECISIONS.md's W9AS-PARK AND
-// W10C-PARK records both document the exact bug this replaces: trusting a
-// tracked group leader's reported exit (or a subset of individually-polled
-// PIDs) as proof the whole group is gone, while an untracked descendant in
-// the same process group survives. This NEVER trusts `tools-dev stop`'s own
-// report as proof of anything -- the reported status/remainingPids are
-// logged as evidence only. The only thing this function ever trusts is a
-// real, group-wide `ps` scan (processGroupSurvivors), confirmed empty
-// either immediately or after a process-GROUP SIGTERM/SIGKILL escalation.
-// A missing boot pid can never be confirmed torn down (there is no group id
-// to scan) and is therefore a hard failure, never a silent success.
+// [R5-F8] Transitive commit-binding: `tools-dev`, the daemon it boots, and
+// the CLI all resolve gitignored `packages/*` `dist/` output at runtime
+// (e.g. @open-design/platform, sidecar, sidecar-proto) -- `tools-dev`'s own
+// bundle freshness is self-checked (`assertFreshToolBuildFromMeta`), but
+// nothing previously rebuilt or hash-validated those TRANSITIVE first-party
+// packages, so a stale or hand-edited gitignored dist could drive
+// lifecycle/runtime evidence without appearing in any git diff -- exactly
+// the "no evidence from gitignored/mutable artifacts" rule this program
+// binds every wave to. Fix, ported from verify-w9-filesystem.ts@0d6bf026f's
+// INVARIANT 2 (which widened from a single package's dependency closure to
+// the full workspace after finding a SECOND evidence path -- `pnpm
+// typecheck` -- consumed packages the narrower rebuild missed): rebuild
+// EVERY `packages/*` workspace member unconditionally
+// (`pnpm --filter './packages/*' run build`, all 14 today), memoized to run
+// once per verifier process. Called from both the isolated-daemon boot path
+// and C10C-6's guard/typecheck check -- the union of every evidence path
+// this verifier actually runs, with no per-path tracking to go stale.
+let firstPartyPackagesRebuiltFromHead: Promise<void> | null = null;
+function ensureFirstPartyPackagesRebuiltFromHead(): Promise<void> {
+  if (!firstPartyPackagesRebuiltFromHead) {
+    firstPartyPackagesRebuiltFromHead = (async () => {
+      const r = sh('pnpm', ['--filter', './packages/*', 'run', 'build'], { timeoutMs: 5 * 60_000 });
+      if (r.status !== 0) {
+        throw new Error(
+          `rebuilding every first-party packages/* workspace member from the current checkout failed (exit=${r.status}) -- refusing to trust any evidence path that could consume their gitignored dist output: ${(r.stderr || r.stdout).slice(-2000)}`,
+        );
+      }
+    })();
+  }
+  return firstPartyPackagesRebuiltFromHead;
+}
+// [R5-F3] Fail-closed teardown confirmation, restructured so EVERY exit
+// path -- including a `tools-dev start` that timed out or exited nonzero
+// AFTER partially spawning a process -- consumes it. Requires BOTH,
+// conjunctively: (a) `tools-dev stop`'s OWN self-report is clean (exit 0,
+// parseable JSON, `daemon.status` is exactly "stopped" or "not-running" --
+// never "partial" or anything else: a partial/failed/unparseable
+// self-report is a hard failure regardless of what a later scan finds, per
+// the explicit "partial/failed stop NEVER resolves success" requirement),
+// AND (b) the target-visibility-gated group-wide `ps` scan independently
+// confirms the process group empty. Escalation (SIGTERM/SIGKILL via
+// killGroupFailClosed) still runs whenever the post-stop scan finds
+// survivors, purely for real process hygiene -- but escalation succeeding
+// can never upgrade a bad self-report to "ok".
 interface StopParsedShape {
   daemon?: { status?: string; stop?: { remainingPids?: number[] } };
 }
-async function confirmTeardown(namespace: string, knownPid: number | null): Promise<{ ok: boolean; detail: string }> {
+function parseJsonTail<J>(stdout: string): J | null {
+  const start = stdout.indexOf('{');
+  if (start === -1) return null;
+  try {
+    return JSON.parse(stdout.slice(start)) as J;
+  } catch {
+    return null;
+  }
+}
+async function confirmTeardown(namespace: string, knownPid: number | null, targetVisibility: TargetVisibilityResult): Promise<{ ok: boolean; detail: string }> {
   const stopResult = sh('pnpm', ['tools-dev', 'stop', 'daemon', '--namespace', namespace, '--json'], { timeoutMs: 60_000 });
-  const jsonStart = stopResult.stdout.indexOf('{');
-  let stopParsed: StopParsedShape | null = null;
-  if (jsonStart !== -1) {
-    try {
-      stopParsed = JSON.parse(stopResult.stdout.slice(jsonStart)) as StopParsedShape;
-    } catch {
-      stopParsed = null;
-    }
-  }
+  const stopParsed = parseJsonTail<StopParsedShape>(stopResult.stdout);
   const reportedStatus = stopParsed?.daemon?.status ?? null;
+  const selfReportClean = stopResult.status === 0 && stopParsed !== null && (reportedStatus === 'stopped' || reportedStatus === 'not-running');
 
-  // [R4-F5] A missing or unparseable stop report, OR a stop report with no
-  // boot pid ever captured, is NOT proof of a clean exit -- it is an
-  // unconfirmed state and must fail closed. This closes the round-3 final
-  // finding verbatim: "a missing/unparseable stop report with no captured
-  // PID returns SUCCESS regardless of stop exit/status."
   if (knownPid === null) {
-    return {
-      ok: false,
-      detail: `TEARDOWN UNCONFIRMED: no boot pid was ever captured for namespace "${namespace}", so no process group can be scanned (stop exit=${stopResult.status}, reported status=${reportedStatus ?? 'unparseable'})`,
-    };
+    // Nothing was ever captured as a boot pid. Only a legitimate "nothing
+    // to tear down" case if the self-report independently agrees; a status
+    // that reports something we failed to capture cannot be confirmed.
+    return selfReportClean
+      ? { ok: true, detail: `no boot pid was ever captured for namespace "${namespace}" and tools-dev independently agrees (status="${reportedStatus}") -- nothing to tear down` }
+      : { ok: false, detail: `TEARDOWN UNCONFIRMED: no boot pid was ever captured for namespace "${namespace}", so no process group can be scanned, AND the self-report was not clean (exit=${stopResult.status}, status=${reportedStatus ?? 'unparseable'})` };
   }
 
-  const survivorsNow = processGroupSurvivors(knownPid);
-  if (survivorsNow.length === 0) {
-    return { ok: true, detail: `tools-dev reported status="${reportedStatus}"; independent group-wide ps scan confirmed process group -${knownPid} empty` };
+  const postStopScan = processGroupSurvivorsChecked(knownPid);
+  let groupConfirmedEmpty: boolean;
+  let groupDetail: string;
+  if (postStopScan.ok && postStopScan.survivors.length === 0) {
+    groupConfirmedEmpty = targetVisibility.ok;
+    groupDetail = targetVisibility.ok
+      ? `post-stop group-wide ps scan confirmed process group -${knownPid} empty`
+      : `post-stop scan shows zero survivors but the target-visibility positive control did not pass -- NOT TRUSTED: ${targetVisibility.detail}`;
+  } else {
+    const escalated = await killGroupFailClosed(knownPid, targetVisibility);
+    groupConfirmedEmpty = escalated.ok;
+    groupDetail = `post-stop scan found survivor(s) or was untrustworthy (${postStopScan.detail}); escalation: ${escalated.detail}`;
   }
-  // Escalate: process-GROUP signal + re-confirm via the same group-wide ps
-  // scan, never a leader-only or individually-tracked-PID-only check. This
-  // is reached regardless of what `stop` itself reported -- including a
-  // `status: "partial"` never becoming success on the strength of the
-  // report alone, and regardless of whether the survivor was ever named in
-  // `remainingPids` (an untracked straggler is still caught, because the
-  // scan is over the whole group, not over a candidate-pid list).
-  const escalated = await killGroupFailClosed(knownPid);
+
+  const ok = selfReportClean && groupConfirmedEmpty;
   return {
-    ok: escalated.ok,
-    detail: `tools-dev reported status="${reportedStatus}" but an independent group-wide ps scan found survivor(s) [${survivorsNow.join('; ')}] after its own stop; escalation: ${escalated.detail}`,
+    ok,
+    detail: `tools-dev stop: exit=${stopResult.status} status="${reportedStatus}" selfReportClean=${selfReportClean}; ${groupDetail}`,
   };
 }
 async function withIsolatedDaemon<T>(
@@ -1875,24 +2384,15 @@ async function withIsolatedDaemon<T>(
 ): Promise<{ boot: DaemonBootOk | DaemonBootFail; result: T | null; teardownOk: boolean; teardownDetail: string }> {
   const namespace = `verify-w10c-${label}-${process.pid}-${crypto.randomBytes(4).toString('hex')}`;
   const tempDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-w10c-data-'));
-  let started = false;
   let bootedPid: number | null = null;
-
-  // `pnpm tools-dev ...` (a root npm-style script alias) prints a
-  // "> mishmash@... tools-dev\n> pnpm exec tools-dev ..." banner ahead of
-  // the command's own stdout, so JSON.parse on the raw stdout fails --
-  // slice from the first '{' instead of trusting stdout to be pure JSON.
-  function parseJsonTail<J>(stdout: string): J | null {
-    const start = stdout.indexOf('{');
-    if (start === -1) return null;
-    try {
-      return JSON.parse(stdout.slice(start)) as J;
-    } catch {
-      return null;
-    }
-  }
+  // [R5-F4] Captured immediately after learning the boot pid, BEFORE any
+  // stop/kill signal (ours or tools-dev's own graceful stop) can be sent --
+  // see evaluateTargetVisibility's doc comment for why this must not be
+  // deferred to teardown time.
+  let targetVisibilitySnapshot: TargetVisibilityResult = { ok: false, detail: 'no boot pid was ever captured -- target-visibility positive control never established' };
 
   async function bootAndRun(): Promise<{ boot: DaemonBootOk | DaemonBootFail; result: T | null }> {
+    await ensureFirstPartyPackagesRebuiltFromHead(); // [R5-F8]
     // `start`, not `run`: `tools-dev run` blocks in the foreground until
     // interrupted (confirmed by reading its own CLI registration text,
     // "Start apps and keep this command alive until interrupted"); `start`
@@ -1901,22 +2401,54 @@ async function withIsolatedDaemon<T>(
       timeoutMs: 3 * 60_000,
       env: { ...process.env, OD_DATA_DIR: tempDataDir },
     });
-    if (startResult.status !== 0) {
-      return { boot: { ok: false, detail: `tools-dev start failed with exit ${startResult.status}`, rawEvidence: `${startResult.stdout}\n${startResult.stderr}` }, result: null };
-    }
-    started = true;
-    // [R3-F5] Capture the daemon's own reported pid (DaemonStatusSnapshot.pid,
-    // packages/sidecar-proto/src/index.ts) at boot -- this is what teardown
-    // independently confirms dead, rather than trusting a later report alone.
+    // [R5-F3] Discover a pid REGARDLESS of startResult.status -- a timeout
+    // or nonzero exit does not prove nothing was spawned; a partially-booted
+    // daemon can outlive a failed wrapper CLI invocation.
+    //
+    // [R5-F4, live discovery this round] `daemon.pid` (top-level, from
+    // `spawnDaemonRuntime`'s own `spawned.pid` -- tools/dev/src/index.ts)
+    // and `daemon.status.pid` (nested, the daemon's OWN self-reported pid
+    // via its status/IPC) are TWO DIFFERENT PIDS -- confirmed live this
+    // round: `daemon.pid=66866` (ppid=1, pgid=66866 -- the actual detached
+    // process-group leader `tools-dev` itself spawned) vs
+    // `daemon.status.pid=66867` (ppid=66866, pgid=66866 -- an inner child
+    // whose OWN pgid is INHERITED, not its own pid). This was a LATENT bug
+    // in every prior round: teardown captured `daemon.status.pid` and
+    // group-scanned/signaled `-66867`, a process-group id that never had
+    // any members, making every prior round's "confirmed empty" scan
+    // vacuously true regardless of real teardown state -- exactly the class
+    // of bug the target-visibility positive control (`[R5-F4]`) exists to
+    // catch, and it did: a real run this round correctly reported
+    // target-visibility FAILED (alive but zero rows for that pgid) rather
+    // than silently passing. `tools-dev stop`'s own `stop.matchedPids`
+    // confirms production code itself tracks and stops BOTH pids
+    // (`[66867, 66866]`), so this file now captures the CORRECT one --
+    // `daemon.pid` -- for group-scan/signal purposes.
     let daemonUrl: string | null = null;
-    const startParsed = parseJsonTail<{ daemon?: { status?: { url?: string; pid?: number | null } } }>(startResult.stdout);
+    const startParsed = parseJsonTail<{ daemon?: { pid?: number | null; status?: { url?: string; pid?: number | null } } }>(startResult.stdout);
     daemonUrl = startParsed?.daemon?.status?.url ?? null;
-    bootedPid = startParsed?.daemon?.status?.pid ?? null;
+    bootedPid = startParsed?.daemon?.pid ?? startParsed?.daemon?.status?.pid ?? null;
     if (!daemonUrl || bootedPid === null) {
+      // `tools-dev status daemon --json` only ever returns the INNER
+      // self-reported shape (confirmed live: identical to `daemon.status`
+      // above, no separate outer pid field) -- this fallback path can only
+      // recover the inner pid, which is a known-degraded case: if it
+      // targets a non-leader pid, the target-visibility control above
+      // (re-evaluated below once bootedPid is known) will correctly fail
+      // closed rather than silently misreporting a scan of an empty group
+      // as "confirmed."
       const statusResult = sh('pnpm', ['tools-dev', 'status', 'daemon', '--namespace', namespace, '--json'], { timeoutMs: 30_000 });
       const statusParsed = parseJsonTail<{ url?: string; pid?: number | null }>(statusResult.stdout);
       daemonUrl = daemonUrl ?? statusParsed?.url ?? null;
       bootedPid = bootedPid ?? statusParsed?.pid ?? null;
+    }
+    if (bootedPid !== null) {
+      const aliveNow = isPidAlive(bootedPid);
+      const scanNow = aliveNow ? processGroupSurvivorsChecked(bootedPid) : null;
+      targetVisibilitySnapshot = evaluateTargetVisibility(aliveNow, scanNow);
+    }
+    if (startResult.status !== 0) {
+      return { boot: { ok: false, detail: `tools-dev start failed with exit ${startResult.status}`, rawEvidence: `${startResult.stdout}\n${startResult.stderr}` }, result: null };
     }
     if (!daemonUrl) {
       return { boot: { ok: false, detail: 'could not discover the isolated daemon URL from tools-dev output', rawEvidence: startResult.stdout }, result: null };
@@ -1938,22 +2470,22 @@ async function withIsolatedDaemon<T>(
     result: null,
   };
   let teardownOk = true;
-  let teardownDetail = 'daemon never started -- no teardown needed';
+  let teardownDetail = '';
   try {
     outcome = await bootAndRun();
   } finally {
-    if (started) {
-      const confirmed = await confirmTeardown(namespace, bootedPid);
-      teardownOk = confirmed.ok;
-      teardownDetail = confirmed.detail;
-    }
-    // [R4-F5] closes the round-3 final finding's fourth clause verbatim:
-    // "the temporary data directory is deleted even when confirmation
-    // fails." Only remove it once teardown is independently confirmed --
-    // an unconfirmed teardown leaves the directory in place for post-mortem
-    // inspection instead of destroying potential evidence. This is scratch
-    // verifier state under os.tmpdir(), never user data, so leaving it
-    // behind on failure is not itself a safety concern.
+    // [R5-F3] ALWAYS attempt confirmation -- the `started` flag guard is
+    // removed entirely. `tools-dev status`/`stop` are asked regardless of
+    // what `start` itself reported, so a boot that timed out or exited
+    // nonzero after partially spawning a process is still confirmed
+    // torn-down, never silently skipped.
+    const confirmed = await confirmTeardown(namespace, bootedPid, targetVisibilitySnapshot);
+    teardownOk = confirmed.ok;
+    teardownDetail = confirmed.detail;
+    // Only remove the temp data dir once teardown is independently
+    // confirmed -- an unconfirmed teardown leaves it in place for
+    // post-mortem inspection instead of destroying potential evidence.
+    // Scratch verifier state under os.tmpdir(), never user data.
     if (teardownOk) {
       try {
         fs.rmSync(tempDataDir, { recursive: true, force: true });
@@ -2222,7 +2754,7 @@ async function main(): Promise<void> {
       if (countTextContentChainsReferencing(sidePanelLoop.statement, 'chat-composer-input') < 1) {
         structuralProblems.push('the side-panel test loop has no .textContent(...)/.innerText(...) call whose OWN selector-chain references "chat-composer-input"');
       }
-      const observedVars = collectObservedReadVariableNames(sidePanelLoop.statement);
+      const observedVars = collectObservedReadVariableNames(sidePanelLoop.statement, 'chat-composer-input');
       if (!consoleLogArgumentsReferenceAnyIdentifier(sidePanelLoop.statement, observedVars)) {
         structuralProblems.push('the side-panel test loop\'s marker console.log(...) call does not reference any variable derived from a .textContent()/.innerText() read -- cannot prove the marker reflects what was actually observed');
       }
@@ -2256,7 +2788,7 @@ async function main(): Promise<void> {
       if (countTextContentChainsReferencing(nextStepLoop.statement, 'chat-composer-input') < 1) {
         structuralProblems.push('the next-step test loop has no .textContent(...)/.innerText(...) call whose OWN selector-chain references "chat-composer-input"');
       }
-      const nextStepObservedVars = collectObservedReadVariableNames(nextStepLoop.statement);
+      const nextStepObservedVars = collectObservedReadVariableNames(nextStepLoop.statement, 'chat-composer-input');
       if (!consoleLogArgumentsReferenceAnyIdentifier(nextStepLoop.statement, nextStepObservedVars)) {
         structuralProblems.push('the next-step test loop\'s marker console.log(...) call does not reference any variable derived from a .textContent()/.innerText() read -- cannot prove the marker reflects what was actually observed');
       }
@@ -2327,13 +2859,75 @@ async function main(): Promise<void> {
     const expectedSpecCount = derivedActionIds.length * 2;
     if (run.specs.length !== expectedSpecCount) coverageProblems.push(`spec count ${run.specs.length} != expected ${expectedSpecCount} (2 x derived action count, one per consumer)`);
 
-    const allOk = run.status === 0 && run.specs.length > 0 && structuralProblems.length === 0 && coverageProblems.length === 0;
+    const honestOk = run.status === 0 && run.specs.length > 0 && structuralProblems.length === 0 && coverageProblems.length === 0;
+
+    // [R5-F2, reviewer ruling b] MUTATION PROBE. The round-4 reviewer ruled
+    // the earlier "no probe here -- would require leasing/committing
+    // legacy UI files" reasoning invalid: poisoning findDesignToolboxSkill
+    // is ALREADY done elsewhere in this file (C10C-3/C10C-4), is ALREADY
+    // in-lease (design-toolbox.ts), and requires touching no legacy
+    // ChatComposer.tsx/DesignToolboxPanel code at all -- a behavioral bind
+    // without the scope concern that held C10C-2 back before. Under poison
+    // (always null), the REAL running web+daemon runtime
+    // `@/playwright/suite`'s worker-scoped fixture boots FRESH per run (a
+    // cold boot, not relying on dev-server hot-reload) imports the SAME
+    // poisoned module, so a genuinely click-through-then-read test must
+    // observe the marker "__NONE__" for EVERY action in BOTH consumers.
+    // Only runs once the honest run above is already fully green. Failure
+    // modes are kept attributable per action+consumer, and a
+    // crashed/incomplete poisoned rerun (zero or wrong-count specs) is a
+    // PROBE FAILURE, never silently accepted as evidence.
+    const mutationProbeProblems: string[] = [];
+    if (honestOk) {
+      const designToolboxAbs = path.join(repoRoot, DESIGN_TOOLBOX_SRC_REL);
+      const poisoned = withPoisonedFunctionBody(designToolboxAbs, 'findDesignToolboxSkill', '\n  return null;', () => runPlaywrightFile(E2E_UI_SPEC_PKG_REL, 'C10C-2-playwright-mutation-probe'));
+      if (!poisoned.ok) {
+        mutationProbeProblems.push(`mutation probe could not run: ${poisoned.error}`);
+      } else {
+        const poisonedRun = poisoned.result;
+        if (poisonedRun.specs.length !== expectedSpecCount) {
+          mutationProbeProblems.push(`PROBE FAILURE: poisoned rerun produced ${poisonedRun.specs.length} spec(s) (playwright exit=${poisonedRun.status}), expected ${expectedSpecCount} -- a crashed/incomplete/timed-out rerun is never accepted as evidence of a red assertion`);
+        } else {
+          function checkOneConsumerUnderPoison(titleFor: (id: string) => string, markerRe: RegExp, label: string): void {
+            for (const id of derivedActionIds!) {
+              const expectedTitle = titleFor(id);
+              const spec = poisonedRun.specs.find((s) => s.title === expectedTitle);
+              if (!spec) {
+                mutationProbeProblems.push(`[${label}] mutation probe: PROBE FAILURE -- no spec titled exactly "${expectedTitle}" in the poisoned rerun`);
+                continue;
+              }
+              const lines = pwSpecStdoutLines(spec);
+              let matchedMarker: RegExpExecArray | null = null;
+              for (const l of lines) {
+                const exec = markerRe.exec(l.trim());
+                if (exec && exec[1] === id) {
+                  matchedMarker = exec;
+                  break;
+                }
+              }
+              if (!matchedMarker) {
+                mutationProbeProblems.push(`[${label}] mutation probe: PROBE FAILURE -- no marker reporting id "${id}" in the poisoned rerun's captured stdout (absence is never accepted as evidence of a red assertion)`);
+                continue;
+              }
+              const observedUnderPoison = matchedMarker[2] ?? '';
+              if (observedUnderPoison !== '__NONE__') {
+                mutationProbeProblems.push(`[${label}] mutation probe FAILED: action "${id}" still reported marker "${observedUnderPoison}" (expected "__NONE__") with findDesignToolboxSkill poisoned to always return null -- this consumer's marker is not genuinely bound to the resolver's real output`);
+              }
+            }
+          }
+          checkOneConsumerUnderPoison(sidePanelTitle, sidePanelMarkerRe, 'side-panel');
+          checkOneConsumerUnderPoison(nextStepTitle, nextStepMarkerRe, 'next-step');
+        }
+      }
+    }
+
+    const allOk = honestOk && mutationProbeProblems.length === 0;
     record(
       'C10C-2',
-      `pnpm --filter @open-design/e2e exec playwright test -c playwright.config.ts ${E2E_UI_SPEC_PKG_REL} --reporter=json`,
-      "every C10C-1-derived action id has exactly one passing, exact-titled test in EACH of the two catalogue consumers (DesignToolboxPanel + NextStepActions), the featured/non-featured partition holds exactly AND is structurally proven against NextStepActions.tsx's own real source (its own FEATURED_DESIGN_TOOLBOX_ACTION_IDS import + .filter(...).includes(...) split, plus its own data-testid literals), each surface's test loop binds .click() calls to their own selector-chain (not two independent unbound facts), and both consumers' reported runtime markers -- validated by REPORTED ID, not just extracted value -- equal this verifier's own freshly-computed expected resolution",
+      `pnpm --filter @open-design/e2e exec playwright test -c playwright.config.ts ${E2E_UI_SPEC_PKG_REL} --reporter=json (honest, then with findDesignToolboxSkill poisoned to always return null)`,
+      "every C10C-1-derived action id has exactly one passing, exact-titled test in EACH of the two catalogue consumers (DesignToolboxPanel + NextStepActions), the featured/non-featured partition holds exactly AND is structurally proven against NextStepActions.tsx's own real source, each surface's test loop binds .click()/.textContent() calls to their own selector-chain with the marker traced to the SAME chat-composer-input-bound read (not two independent unbound facts), both consumers' reported runtime markers equal this verifier's own freshly-computed expected resolution, AND a mutation probe proves every marker in both consumers is genuinely, behaviorally bound to findDesignToolboxSkill's real output (poisoning it to always return null flips every marker to \"__NONE__\")",
       allOk,
-      `derived action count: ${derivedActionIds.length} (expected spec count: ${expectedSpecCount})\nplaywright exit: ${run.status}\nspecs found: ${run.specs.length}\n${[...structuralProblems, ...coverageProblems].join('\n')}\n\n${run.raw}`,
+      `derived action count: ${derivedActionIds.length} (expected spec count: ${expectedSpecCount})\nplaywright exit: ${run.status}\nspecs found: ${run.specs.length}\n${[...structuralProblems, ...coverageProblems].join('\n')}\nmutation probe: ${mutationProbeProblems.join('; ') || 'ok (every marker flipped to __NONE__ under poison)'}\n\n${run.raw}`,
     );
   });
 
@@ -2406,38 +3000,44 @@ async function main(): Promise<void> {
     if (!negativePassed) runProblems.push(`no passing test titled exactly "${negativeTitle}"`);
     if ((run.data?.numFailedTests ?? 1) !== 0) runProblems.push(`${run.data?.numFailedTests ?? 'unknown'} failed test(s) in the suite`);
 
-    // [R4-F2] MUTATION PROBE, replacing the identifier-count binding checks
-    // that failed three review rounds running (countCallsToExactIdentifier
-    // counted `obj._unused()` as a call to an imported binding literally
-    // named `_unused` -- an unsound-by-construction structural claim per
-    // DECISIONS.md's W10C-PARK record). Only runs once the honest,
-    // unpoisoned run above already reports the positive-control test
-    // passing (no point poisoning a suite that is not even green). Poisons
-    // findDesignToolboxSkill's REAL production implementation to always
-    // return null, reruns the exact same delegated file, and requires the
-    // positive-control test to flip RED under poison -- proof the file's
-    // assertion is genuinely bound to the real function, not a same-named
-    // decoy or a hardcoded value, closing the exact class of false green
-    // finding 2 demonstrated. The file is always restored byte-for-byte in
-    // a finally block; LEASE/treeDirty below would independently catch an
-    // unrestored file.
+    // [R4-F2, hardened R5] MUTATION PROBE, replacing the identifier-count
+    // binding checks that failed three review rounds running. Only runs
+    // once the honest run already reports the relevant control passing (no
+    // point poisoning a suite that is not even green). Uses
+    // withPoisonedFunctionBody (declaration-scoped AST anchoring, signal-safe
+    // restore, byte-identical verification -- [R5-F9]) and
+    // requireAttributableFailure (assertion-identity: a crashed/empty poison
+    // run is a PROBE FAILURE, never accepted as "flipped red" -- [R5-F1/F9]).
+    // TWO independent probes, closing round-4 finding 10 ("C10C-3 poisons
+    // only the positive path"): forward-poison (always null) must flip the
+    // POSITIVE control red; reverse-poison (always a truthy dummy) must flip
+    // the NEGATIVE control red. A decoy bound to only one direction is now
+    // caught by the other.
     const mutationProbeProblems: string[] = [];
+    const designToolboxAbs = path.join(repoRoot, DESIGN_TOOLBOX_SRC_REL);
     if (positivePassed) {
-      const designToolboxAbs = path.join(repoRoot, DESIGN_TOOLBOX_SRC_REL);
-      const anchor = 'export function findDesignToolboxSkill(\n  action: DesignToolboxAction,\n  skills: SkillSummary[],\n): SkillSummary | null {';
-      const poisoned = withPoisonedFile(designToolboxAbs, anchor, '\n  return null; // w10c-verifier-mutation-probe: forces every genuine caller to observe null', () =>
-        runVitestFile('@open-design/e2e', E2E_PHANTOM_SPEC_PKG_REL, 'C10C-3-vitest-mutation-probe'),
+      const poisoned = withPoisonedFunctionBody(designToolboxAbs, 'findDesignToolboxSkill', '\n  return null;', () =>
+        runVitestFile('@open-design/e2e', E2E_PHANTOM_SPEC_PKG_REL, 'C10C-3-vitest-mutation-probe-forward'),
       );
       if (!poisoned.ok) {
-        mutationProbeProblems.push(`mutation probe could not run: ${poisoned.error}`);
+        mutationProbeProblems.push(`forward mutation probe (always-null) could not run: ${poisoned.error}`);
       } else {
-        const poisonedTests = poisoned.result.data ? poisoned.result.data.testResults.flatMap((t) => t.assertionResults) : [];
-        const positiveStillPassedUnderPoison = poisonedTests.some((t) => t.fullName.endsWith(positiveTitle) && t.status === 'passed');
-        if (positiveStillPassedUnderPoison) {
-          mutationProbeProblems.push(
-            'mutation probe FAILED: poisoning findDesignToolboxSkill to always return null did not flip the positive-control test red -- the delegated file is not genuinely bound to the real production function',
-          );
-        }
+        const attributable = requireAttributableFailure(poisoned.result, positiveTitle);
+        if (!attributable.ok) mutationProbeProblems.push(`forward mutation probe (always-null): ${attributable.detail}`);
+      }
+    }
+    if (negativePassed) {
+      const poisoned = withPoisonedFunctionBody(
+        designToolboxAbs,
+        'findDesignToolboxSkill',
+        '\n  return { id: "zz9f3a2c1e", name: "zz9f3a2c1e" } as unknown as SkillSummary;',
+        () => runVitestFile('@open-design/e2e', E2E_PHANTOM_SPEC_PKG_REL, 'C10C-3-vitest-mutation-probe-reverse'),
+      );
+      if (!poisoned.ok) {
+        mutationProbeProblems.push(`reverse mutation probe (always-truthy) could not run: ${poisoned.error}`);
+      } else {
+        const attributable = requireAttributableFailure(poisoned.result, negativeTitle);
+        if (!attributable.ok) mutationProbeProblems.push(`reverse mutation probe (always-truthy): ${attributable.detail}`);
       }
     }
 
@@ -2445,10 +3045,10 @@ async function main(): Promise<void> {
     const allOk = oracleOk && delegatedOk;
     record(
       'C10C-3',
-      `verifier-internal daemon boot + direct call to findDesignToolboxSkill; pnpm --filter @open-design/e2e exec vitest run ${E2E_PHANTOM_SPEC_PKG_REL} --reporter=json (twice: honest, then with findDesignToolboxSkill poisoned to always return null)`,
-      "the verifier's own oracle proves the phantom-ID/positive-control behavior at runtime AND its isolated daemon's teardown is independently confirmed (never trusted from a single exit report), AND the required delegated artifact exists and passes with the pinned paired titles honestly, AND a mutation probe proves its positive-control assertion is genuinely bound to the real production findDesignToolboxSkill (poisoning it flips that test red)",
+      `verifier-internal daemon boot + direct call to findDesignToolboxSkill; pnpm --filter @open-design/e2e exec vitest run ${E2E_PHANTOM_SPEC_PKG_REL} --reporter=json (three times: honest, then findDesignToolboxSkill poisoned always-null, then poisoned always-truthy)`,
+      "the verifier's own oracle proves the phantom-ID/positive-control behavior at runtime AND its isolated daemon's teardown is independently confirmed (never trusted from a single exit report), AND the required delegated artifact exists and passes with the pinned paired titles honestly, AND two independent mutation probes prove BOTH the positive-control AND the negative-control assertions are genuinely, attributably bound to the real production findDesignToolboxSkill",
       allOk,
-      `oracle ok=${oracleOk}\n${oracleEvidence}\n\ndelegated file structural: ${structuralProblems.join('; ') || 'none'}\ndelegated file run: ${runProblems.join('; ') || 'none'}\nmutation probe: ${mutationProbeProblems.join('; ') || 'ok (positive control flipped red under poison)'}\nvitest exit=${run.status}\n\n${run.raw}`,
+      `oracle ok=${oracleOk}\n${oracleEvidence}\n\ndelegated file structural: ${structuralProblems.join('; ') || 'none'}\ndelegated file run: ${runProblems.join('; ') || 'none'}\nmutation probes: ${mutationProbeProblems.join('; ') || 'ok (both directions produced attributable failures under poison)'}\nvitest exit=${run.status}\n\n${run.raw}`,
     );
   });
 
@@ -2458,9 +3058,13 @@ async function main(): Promise<void> {
   await checkCriterion('C10C-4', async () => {
     const PHANTOM_LITERAL = 'w10c-daemon-suite-phantom-skill-id';
 
-    // (a) Verifier's own direct runtime proof.
+    // (a) Verifier's own direct runtime proof. [R5-F10] extended with a
+    // phantom-id negative check -- round-4 finding 10's second half:
+    // "C10C-4's own oracle never exercises its phantom ID." Mirrors
+    // C10C-3(a)'s paired positive+negative shape exactly.
     let oracleOk = false;
     let oracleEvidence = '';
+    let liveSkillsForProbes: { id: string }[] | null = null;
     if (!derivedActionIds || derivedActionIds.length === 0) {
       oracleEvidence = 'C10C-1 did not produce a derived action-id set; oracle cannot run';
     } else {
@@ -2474,7 +3078,8 @@ async function main(): Promise<void> {
         if (typeof listSkills !== 'function' || typeof findSkillById !== 'function') {
           oracleEvidence = 'listSkills/findSkillById are not callable at runtime';
         } else {
-          const liveSkills = (await (listSkills as (roots: string[]) => Promise<unknown[]>)([path.join(repoRoot, SKILLS_ROOT_REL)])) as unknown[];
+          const liveSkills = (await (listSkills as (roots: string[]) => Promise<unknown[]>)([path.join(repoRoot, SKILLS_ROOT_REL)])) as { id: string }[];
+          liveSkillsForProbes = liveSkills;
           const actionsRuntime = safeExtractRuntimeActions(toolboxMod.mod.DESIGN_TOOLBOX_ACTIONS);
           if (!actionsRuntime.ok) {
             oracleEvidence = 'could not read runtime DESIGN_TOOLBOX_ACTIONS for the mapping check';
@@ -2486,8 +3091,10 @@ async function main(): Promise<void> {
                 if (resolved === undefined) unresolved.push(`${action.id} -> "${skillId}"`);
               }
             }
-            oracleOk = unresolved.length === 0;
-            oracleEvidence = oracleOk ? `all preferredSkillIds entries resolved via findSkillById against ${liveSkills.length} live skills` : `unresolved entries: ${unresolved.join(', ')}`;
+            const phantomResolved = (findSkillById as (skills: unknown[], id: string) => unknown)(liveSkills, PHANTOM_LITERAL);
+            const phantomOk = phantomResolved === undefined;
+            oracleOk = unresolved.length === 0 && phantomOk;
+            oracleEvidence = `positive: ${unresolved.length === 0 ? 'all preferredSkillIds entries resolved' : `unresolved entries: ${unresolved.join(', ')}`} against ${liveSkills.length} live skills; negative: phantom "${PHANTOM_LITERAL}" resolved-to-undefined=${phantomOk} (value=${JSON.stringify(phantomResolved)})`;
           }
         }
       }
@@ -2506,21 +3113,8 @@ async function main(): Promise<void> {
     // structural check (a fact about an import specifier, not a claim about
     // what code executes) -- what round 3 lost on was the CALL-COUNT checks
     // (findSkillByIdCalls/listSkillsCalls) and the SKILL_ID_ALIASES
-    // reference-count check, both removed below in favor of a mutation
-    // probe. The usesCompilerApiForRealExtraction connectivity check is
-    // also removed: the mutation probe (poisoning findSkillById itself)
-    // requires EVERY per-action coverage test to flip red, which already
-    // proves those tests are genuinely bound to the real function
-    // regardless of how their ids were sourced -- and the existing
-    // exact-title coverage check (below) already independently punishes a
-    // hardcoded/stale id snapshot, since a newly-added C10C-1-derived id
-    // with no matching passing title fails that check outright. Two
-    // structural checks were removed because they proved nothing beyond
-    // what the mutation probe and the coverage check already prove more
-    // directly -- not because "structural" is inherently wrong (the import
-    // presence checks below are exactly the class of fact §3 says stays
-    // structural: no runtime observable exists for "does an import
-    // specifier exist").
+    // reference-count count, both removed below in favor of mutation
+    // probes.
     const listSkillsBinding = findNamedImportBinding(sf, 'listSkills', '/skills');
     const findSkillByIdBinding = findNamedImportBinding(sf, 'findSkillById', '/skills');
     const literals = collectAllStringLiteralValues(sf);
@@ -2553,42 +3147,75 @@ async function main(): Promise<void> {
     }
     if ((run.data?.numFailedTests ?? 1) !== 0) coverageProblems.push(`${run.data?.numFailedTests ?? 'unknown'} failed test(s) in the suite`);
 
-    // [R4-F3] MUTATION PROBE, replacing the identifier-count binding checks
-    // (findSkillById/listSkills call counts, SKILL_ID_ALIASES reference
-    // count, createSourceFile-to-forEachChild connectivity) that failed
-    // three review rounds running. Poisons findSkillById's REAL production
-    // implementation to always return undefined and reruns the exact same
-    // delegated file: a genuinely-bound suite must flip BOTH the
-    // positive-control test AND every per-action coverage test red, since
-    // all of them call the same now-poisoned function; a decoy that
-    // fabricates its assertions (a hardcoded snapshot, a local lookalike)
-    // would stay green because it never actually depends on the real
-    // function. Only runs when the honest run above already reports both
-    // pinned titles present, to avoid poisoning a suite that is not even
-    // wired up yet.
+    // [R4-F3, hardened R5] MUTATION PROBES, replacing the identifier-count
+    // binding checks that failed three review rounds running. Uses
+    // requireAttributableFailure -- assertion-identity, fail-closed on any
+    // crash/empty-report [R5-F1]. THREE independent probes:
+    //   (1) forward-poison findSkillById -> undefined: positive control AND
+    //       EVERY per-action coverage test must each show an attributable
+    //       failure.
+    //   (2) reverse-poison findSkillById -> always a truthy dummy: the
+    //       NEGATIVE control must show an attributable failure -- closes
+    //       round-4 finding 10 ("its negative delegated test likewise is
+    //       not mutation-bound").
+    //   (3) REGISTRY-CONTENT probe [R5-F6]: append one synthetic,
+    //       real-resolving action to DESIGN_TOOLBOX_ACTIONS in a transient
+    //       copy and require a NEW passing coverage title for it to appear
+    //       -- closes finding 6 ("a suite can hardcode today's IDs while
+    //       calling findSkillById and pass everything... coverage must be
+    //       sensitive to the REGISTRY CONTENT, not just the resolver call").
+    // Each only runs once its own honest baseline is already green, to
+    // avoid probing a suite that is not even wired up yet.
     const mutationProbeProblems: string[] = [];
-    if (positivePassed && negativePassed) {
-      const skillsAbs = path.join(repoRoot, DAEMON_SKILLS_SRC_REL);
-      const anchor = 'export function findSkillById(skills: unknown, id: unknown): SkillInfo | undefined {';
-      const poisoned = withPoisonedFile(skillsAbs, anchor, '\n  return undefined; // w10c-verifier-mutation-probe: forces every genuine caller to observe undefined', () =>
-        runVitestFile('@open-design/daemon', DAEMON_SUITE_SPEC_PKG_REL, 'C10C-4-vitest-mutation-probe'),
+    const skillsAbs = path.join(repoRoot, DAEMON_SKILLS_SRC_REL);
+    if (positivePassed) {
+      const poisoned = withPoisonedFunctionBody(skillsAbs, 'findSkillById', '\n  return undefined;', () =>
+        runVitestFile('@open-design/daemon', DAEMON_SUITE_SPEC_PKG_REL, 'C10C-4-vitest-mutation-probe-forward'),
       );
       if (!poisoned.ok) {
-        mutationProbeProblems.push(`mutation probe could not run: ${poisoned.error}`);
+        mutationProbeProblems.push(`forward mutation probe (always-undefined) could not run: ${poisoned.error}`);
       } else {
-        const poisonedTests = poisoned.result.data ? poisoned.result.data.testResults.flatMap((t) => t.assertionResults) : [];
-        const positiveStillPassedUnderPoison = poisonedTests.some((t) => t.fullName.endsWith(positiveTitle) && t.status === 'passed');
-        if (positiveStillPassedUnderPoison) {
-          mutationProbeProblems.push('mutation probe FAILED: poisoning findSkillById to always return undefined did not flip the positive-control test red');
-        }
+        const posAttr = requireAttributableFailure(poisoned.result, positiveTitle);
+        if (!posAttr.ok) mutationProbeProblems.push(`forward mutation probe, positive control: ${posAttr.detail}`);
         if (derivedActionIds) {
-          const stillGreenUnderPoison = derivedActionIds.filter((id) => {
-            const expectedTitle = `preferredSkillIds for action "${id}" resolve via findSkillById`;
-            return poisonedTests.some((t) => t.fullName.endsWith(expectedTitle) && t.status === 'passed');
-          });
-          if (stillGreenUnderPoison.length > 0) {
-            mutationProbeProblems.push(`mutation probe FAILED: ${stillGreenUnderPoison.length} per-action coverage test(s) stayed green under poison (not genuinely bound to findSkillById): ${stillGreenUnderPoison.join(', ')}`);
+          for (const id of derivedActionIds) {
+            const attr = requireAttributableFailure(poisoned.result, `preferredSkillIds for action "${id}" resolve via findSkillById`);
+            if (!attr.ok) mutationProbeProblems.push(`forward mutation probe, action "${id}": ${attr.detail}`);
           }
+        }
+      }
+    }
+    if (negativePassed) {
+      const poisoned = withPoisonedFunctionBody(
+        skillsAbs,
+        'findSkillById',
+        '\n  return { id: "zz9f3a2c1e" } as unknown as SkillInfo;',
+        () => runVitestFile('@open-design/daemon', DAEMON_SUITE_SPEC_PKG_REL, 'C10C-4-vitest-mutation-probe-reverse'),
+      );
+      if (!poisoned.ok) {
+        mutationProbeProblems.push(`reverse mutation probe (always-truthy) could not run: ${poisoned.error}`);
+      } else {
+        const negAttr = requireAttributableFailure(poisoned.result, negativeTitle);
+        if (!negAttr.ok) mutationProbeProblems.push(`reverse mutation probe, negative control: ${negAttr.detail}`);
+      }
+    }
+    if (positivePassed && liveSkillsForProbes && liveSkillsForProbes.length > 0) {
+      const REGISTRY_PROBE_ACTION_ID = 'w10c-registry-content-probe-action';
+      const resolvableSkillId = liveSkillsForProbes[0]!.id;
+      const designToolboxAbs = path.join(repoRoot, DESIGN_TOOLBOX_SRC_REL);
+      const mutated = withRegistryContentMutationProbe(designToolboxAbs, REGISTRY_PROBE_ACTION_ID, resolvableSkillId, () =>
+        runVitestFile('@open-design/daemon', DAEMON_SUITE_SPEC_PKG_REL, 'C10C-4-vitest-registry-content-probe'),
+      );
+      if (!mutated.ok) {
+        mutationProbeProblems.push(`registry-content mutation probe could not run: ${mutated.error}`);
+      } else {
+        const expectedTitle = `preferredSkillIds for action "${REGISTRY_PROBE_ACTION_ID}" resolve via findSkillById`;
+        const mutatedTests = mutated.result.data ? mutated.result.data.testResults.flatMap((t) => t.assertionResults) : [];
+        const newTestPassed = mutatedTests.some((t) => t.fullName.endsWith(expectedTitle) && t.status === 'passed');
+        if (!mutated.result.data || mutated.result.data.numTotalTests === 0) {
+          mutationProbeProblems.push('registry-content mutation probe: PROBE FAILURE -- rerun produced no parseable/non-empty reporter output');
+        } else if (!newTestPassed) {
+          mutationProbeProblems.push(`registry-content mutation probe FAILED: no passing test titled exactly "${expectedTitle}" appeared after appending a real, resolvable synthetic action to DESIGN_TOOLBOX_ACTIONS -- the delegated file's coverage set does not track the live file's content (may be hardcoding today's ids)`);
         }
       }
     }
@@ -2597,10 +3224,10 @@ async function main(): Promise<void> {
     const allOk = oracleOk && delegatedOk;
     record(
       'C10C-4',
-      `verifier-internal direct call to findSkillById(listSkills(...)); pnpm --filter @open-design/daemon exec vitest run ${DAEMON_SUITE_SPEC_PKG_REL} --reporter=json (twice: honest, then with findSkillById poisoned to always return undefined)`,
-      "the verifier's own oracle proves every preferredSkillIds entry resolves via the real registry, AND the required delegated daemon-suite artifact imports listSkills/findSkillById by exact export name, passes with per-action + paired coverage honestly, AND a mutation probe proves the positive-control AND every per-action coverage assertion are genuinely bound to the real production findSkillById (poisoning it flips all of them red)",
+      `verifier-internal direct call to findSkillById(listSkills(...)) incl. phantom negative; pnpm --filter @open-design/daemon exec vitest run ${DAEMON_SUITE_SPEC_PKG_REL} --reporter=json (honest, then three independent mutation probes: findSkillById poisoned always-undefined, findSkillById poisoned always-truthy, DESIGN_TOOLBOX_ACTIONS content-mutated with a new resolvable action)`,
+      "the verifier's own oracle proves every preferredSkillIds entry resolves via the real registry AND that its own phantom id resolves to undefined, AND the required delegated daemon-suite artifact imports listSkills/findSkillById by exact export name and passes with per-action + paired coverage honestly, AND three independent mutation probes prove the positive control, every per-action coverage assertion, the negative control, AND the coverage SET's live dependence on the real DESIGN_TOOLBOX_ACTIONS content are all genuinely, attributably bound to production",
       allOk,
-      `oracle ok=${oracleOk}\n${oracleEvidence}\n\ndelegated file structural: ${structuralProblems.join('; ') || 'none'}\ndelegated file coverage: ${coverageProblems.join('; ') || 'none'}\nmutation probe: ${mutationProbeProblems.join('; ') || 'ok (positive control + all per-action tests flipped red under poison)'}\nvitest exit=${run.status}\n\n${run.raw}`,
+      `oracle ok=${oracleOk}\n${oracleEvidence}\n\ndelegated file structural: ${structuralProblems.join('; ') || 'none'}\ndelegated file coverage: ${coverageProblems.join('; ') || 'none'}\nmutation probes: ${mutationProbeProblems.join('; ') || 'ok (all three probes produced attributable/expected results)'}\nvitest exit=${run.status}\n\n${run.raw}`,
     );
   });
 
@@ -2659,15 +3286,27 @@ async function main(): Promise<void> {
   // -----------------------------------------------------------------------
   // C10C-6
   // -----------------------------------------------------------------------
-  await checkCriterion('C10C-6', () => {
-    const guard = sh('pnpm', ['guard'], { timeoutMs: 5 * 60_000 });
-    const typecheck = sh('pnpm', ['typecheck'], { timeoutMs: 10 * 60_000 });
+  await checkCriterion('C10C-6', async () => {
+    // [R5-F8] `pnpm typecheck` is a second, independent evidence path that
+    // can consume packages/*'s gitignored .d.ts output (type declarations
+    // downstream packages resolve via their own package.json "types"
+    // field) -- rebuilt from head first, same memoized call the isolated
+    // daemon boot path uses, so this criterion's own evidence cannot be
+    // produced against stale/mutated dist either.
+    let rebuildError: string | null = null;
+    try {
+      await ensureFirstPartyPackagesRebuiltFromHead();
+    } catch (err) {
+      rebuildError = String((err as Error)?.message ?? err);
+    }
+    const guard = rebuildError ? { status: 1, stdout: '' } : sh('pnpm', ['guard'], { timeoutMs: 5 * 60_000 });
+    const typecheck = rebuildError ? { status: 1, stdout: '', stderr: '' } : sh('pnpm', ['typecheck'], { timeoutMs: 10 * 60_000 });
     record(
       'C10C-6',
-      'pnpm guard && pnpm typecheck',
-      'both exit 0 on the current tree',
-      guard.status === 0 && typecheck.status === 0,
-      `guard exit=${guard.status}\ntypecheck exit=${typecheck.status}\n\n${guard.stdout.slice(-4000)}\n\n${typecheck.stdout.slice(-4000)}\n${typecheck.stderr.slice(-4000)}`,
+      "pnpm --filter './packages/*' run build (first-party workspace rebuild) && pnpm guard && pnpm typecheck",
+      'the first-party packages/* workspace rebuild succeeds, and both guard and typecheck exit 0 on the current (freshly rebuilt) tree',
+      !rebuildError && guard.status === 0 && typecheck.status === 0,
+      `rebuild error: ${rebuildError ?? 'none'}\nguard exit=${guard.status}\ntypecheck exit=${typecheck.status}\n\n${guard.stdout.slice(-4000)}\n\n${typecheck.stdout.slice(-4000)}\n${typecheck.stderr.slice(-4000)}`,
     );
   });
 
