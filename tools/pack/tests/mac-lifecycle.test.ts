@@ -225,7 +225,7 @@ describe("startPackedMacApp", () => {
     try {
       const config = makeConfig(root, { namespace: "release-preview" });
       const paths = resolveMacPaths(config);
-      const executablePath = join(paths.installedAppPath, "Contents", "MacOS", "Open Design Preview");
+      const executablePath = join(paths.installedAppPath, "Contents", "MacOS", "MishMash Preview");
 
       await mkdir(join(paths.installedAppPath, "Contents", "MacOS"), { recursive: true });
       await writeFile(executablePath, "#!/bin/sh\nexit 0\n", "utf8");

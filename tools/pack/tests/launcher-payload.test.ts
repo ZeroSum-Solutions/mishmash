@@ -213,11 +213,11 @@ describe("tools-pack launcher payload archives", () => {
       publicAppBundleName: macIdentity.publicAppBundleName,
       version: "0.9.0-beta.2",
     })).toEqual({
-      appBundleName: "Open Design Beta.app",
+      appBundleName: "MishMash Beta.app",
       channel: "beta",
       entry: {
-        cwd: "payload/Open Design Beta.app",
-        executable: "payload/Open Design Beta.app/Contents/MacOS/Open Design Beta",
+        cwd: "payload/MishMash Beta.app",
+        executable: "payload/MishMash Beta.app/Contents/MacOS/MishMash Beta",
       },
       namespace: "release-beta",
       payloadRoot: "payload",
@@ -259,14 +259,14 @@ describe("tools-pack launcher payload archives", () => {
         entry: { executable: string };
         version: string;
       };
-      expect(manifest.appBundleName).toBe("Open Design Beta.app");
-      expect(manifest.entry.executable).toBe("payload/Open Design Beta.app/Contents/MacOS/Open Design Beta");
+      expect(manifest.appBundleName).toBe("MishMash Beta.app");
+      expect(manifest.entry.executable).toBe("payload/MishMash Beta.app/Contents/MacOS/MishMash Beta");
       expect(manifest.version).toBe("0.9.0-beta.2");
       await expectPathExists(join(extractRoot, manifest.entry.executable));
       await expectPathExists(join(
         extractRoot,
         "payload",
-        "Open Design Beta.app",
+        "MishMash Beta.app",
         "Contents",
         "Resources",
         "open-design-config.json",
