@@ -499,6 +499,56 @@ this wave's final round before park:
   description) is accurate as written, since the LEASE check genuinely does read `leases.json` via
   `git show`, unrelated to C9F-1's own mechanism.
 
+### Update (founder ruling W9FS-R3, terminal micro-round after formal park — literal-fidelity gaps
+only)
+
+The round-3 fidelity confirmation REJECTed on two literal-fidelity gaps in an otherwise-ruled-correct
+implementation (commit-binding and shutdown-teardown were both ruled implemented EXACTLY; the
+round-3 exploit probe and the zero-row fail-closed gate were both independently confirmed still
+correct) — the wave formally parked per the standing stop rule (three consecutive non-APPROVE), and
+founder ruling W9FS-R3 authorized one further terminal micro-round, bounded to exactly these two
+literal-fidelity items:
+
+- **DEVIATION 1 — `evaluateTargetVisibility` accepted a process-group match alone, not the daemon's
+  own leader pid specifically.** INVARIANT 1's own stated invariant was that the daemon's OWN pid row
+  must appear in the pre-kill scan; the shipped implementation instead accepted ANY non-empty
+  pgid-matching survivors array, which is weaker — a scan that sees some OTHER member of the group
+  (a stale/rotated pid coincidentally sharing the pgid, or a scan that enumerates children but is
+  blind to the leader's own row specifically) would pass the control without ever having proven it
+  can see the ONE row the control is actually about. **Fix:** `evaluateTargetVisibility` now takes
+  the daemon's own leader pid as an explicit parameter and requires BOTH conditions — at least one
+  row for the process group (kept, not replaced) AND, among those rows specifically, one whose `pid`
+  equals the leader pid — extracted from each survivor's own `pid=<N> pgid=<N> comm=<...>` string via
+  an anchored regex (this file's own generated format, never external/untrusted text). Trivially
+  satisfiable for a healthy target, since `detached: true` makes the leader its own pgid (its row is
+  always `pid === pgid === leaderPid`) — a strict tightening, not a narrowing of what a healthy run
+  can pass. `TARGET_VISIBILITY_SELF_PROBES` gained a leader-pid field on every case and a new fifth
+  case: pgid rows present via a fabricated non-leader row, but the leader's own pid absent — must
+  fail. Validated with two controlled probes against a real spawned sentinel process: (1) a
+  regression re-run of the round-3 session-scoped-blind exploit (a shim that omits the target's whole
+  pgid) — still correctly rejected; (2) the new leader-pid-absent exploit (a shim that shows a
+  fabricated non-leader row sharing the pgid but filters out the leader's own row) — correctly
+  rejected, citing the exact new failure reason (`NONE has pid=<N> (the leader's own pid)`); a real
+  healthy teardown against real `ps` still confirmed normally in both probes' control case.
+- **DEVIATION 2 — PRD truth, two remaining fidelity gaps.** (a) "Frozen route snapshot + drift
+  detection" still described the pre-INVARIANT-2 daemon-only rebuild filter
+  (`@open-design/daemon^...`) and named the removed helper `ensureWorkspaceDepsRebuiltFromHead` —
+  rewritten to the actual workspace-wide `./packages/*` filter and the current helper name
+  `ensureFirstPartyPackagesRebuiltFromHead`. (b) The C9F-1 success-criteria row's target-visibility
+  clause said the scan must show "the daemon's own pid among its rows," which — before DEVIATION 1's
+  fix — overstated what the code actually checked (a pgid match alone); now that the code enforces
+  both conditions, that clause is literally true, but was reworded regardless for precision: the row
+  now states both the process-group-match AND leader-pid-match conditions explicitly, rather than a
+  single ambiguous phrase that happened to become accurate only after the code caught up to it. The
+  round-2/round-3 addenda's OWN historical references to the daemon-only filter and the pre-rename
+  helper name are left untouched deliberately — they are dated narrative describing what a PRIOR
+  round did at the time, not normative "how it works today" claims, and the surrounding addenda
+  already tell the reader the mechanism was later widened/renamed.
+
+**Nothing else was touched this round**, per the founder ruling's explicit scope: the commit-binding
+(F1/INVARIANT 2) and shutdown-teardown (INVARIANT 3) mechanisms were ruled implemented exactly and
+are unchanged.
+
 ## Inclusion rule (mechanical, re-runnable)
 
 Stated precisely so a future run reproduces the same set without human judgment at classification
@@ -720,13 +770,15 @@ facts" and "Inclusion rule"):
   (all five discovery mechanisms; there is no separate "6 bootstrap routes" carve-out — bootstrap-scope
   registrations are just one of the five mechanisms' outputs, folded into the same set). A registration
   present in one but not the other is drift and fails `C9F-1`. Before this boot, the verifier forces a
-  fresh rebuild of every first-party `@open-design/*` workspace package `apps/daemon` depends on
-  (`pnpm --filter "@open-design/daemon^..." run build`) so the live daemon's own runtime `import`s of
-  those packages — which resolve through ordinary Node module resolution to each package's `dist`
-  bundle — are guaranteed freshly derived from tracked source rather than possibly-stale or mutated
-  build output (F3 fix, round-2 review; see `ensureWorkspaceDepsRebuiltFromHead`'s doc comment in the
-  verifier). Together, F1 and F3 mean neither side of this comparison depends on an unpinned mutable
-  artifact.
+  fresh, workspace-wide rebuild of every first-party `packages/*` member that has its own `build`
+  script (`pnpm --filter "./packages/*" run build`, currently all 14 — a strict superset of
+  `apps/daemon`'s own dependency closure, widened from the daemon-scoped filter the round-2 fix
+  originally shipped, per the round-3 founder ruling's INVARIANT 2/F5) so the live daemon's own
+  runtime `import`s of first-party packages — which resolve through ordinary Node module resolution
+  to each package's `dist` bundle — are guaranteed freshly derived from tracked source rather than
+  possibly-stale or mutated build output (F3 fix, round-2 review, widened round-3; see
+  `ensureFirstPartyPackagesRebuiltFromHead`'s doc comment in the verifier). Together, F1 and this
+  rebuild mean neither side of this comparison depends on an unpinned mutable artifact.
 - Any duplicate `{method, path}` — at `baseCommit`, at `HEAD`, or in the live inventory — is a hard
   fail in its own right (see "Inclusion rule" step 4).
 - **HEAD-DRIFT** (a named infra check, not `C9F-1` itself): `git rev-parse HEAD` is captured once at
@@ -928,7 +980,7 @@ All criteria inherit `VERIFICATION-CONTRACT.md` §3. Verified by `scripts/waves/
 
 | ID | Criterion | Verification |
 |---|---|---|
-| C9F-1 | Route snapshot + three-bucket inclusion classification frozen at `baseCommit`, drift-checked against a live daemon boot, duplicate-checked, partition-checked, classifier self-probed | TypeChecker-based AST scan of a real detached `git worktree` checkout at `baseCommit` (never `git show` text parsing, never the working tree) across all five discovery mechanisms in "Inclusion rule" (literal calls, `defineJsonRoute`/`mountJsonRoute`, named-const resolution — cross-package literals resolved from that package's own tracked `src/*.ts` via a `paths` override, never gitignored `dist`, F1 fix — call-site parameter substitution, structural bootstrap-helper recognition); live `routeInventory` comparison via an isolated, real-child-process daemon boot, preceded by a fresh workspace-wide rebuild of every first-party `packages/*` member so the live side also never resolves unpinned mutable `dist` (F3/INVARIANT 2 fix); process-group teardown confirmed empty via a self-visibility control (the scan must see this verifier's own pid) AND a target-visibility positive control (the scan must show the daemon's own pid among its rows while independently confirmed alive, before a later zero-rows result is trusted, INVARIANT 1 fix); 12/12 inclusion/exposure classifier self-probes pass, plus the process-table-scan and target-visibility self-probes gating teardown confirmation; `fs-hit ∪ unresolved ∪ clean` exactly equals the candidate universe with no overlap |
+| C9F-1 | Route snapshot + three-bucket inclusion classification frozen at `baseCommit`, drift-checked against a live daemon boot, duplicate-checked, partition-checked, classifier self-probed | TypeChecker-based AST scan of a real detached `git worktree` checkout at `baseCommit` (never `git show` text parsing, never the working tree) across all five discovery mechanisms in "Inclusion rule" (literal calls, `defineJsonRoute`/`mountJsonRoute`, named-const resolution — cross-package literals resolved from that package's own tracked `src/*.ts` via a `paths` override, never gitignored `dist`, F1 fix — call-site parameter substitution, structural bootstrap-helper recognition); live `routeInventory` comparison via an isolated, real-child-process daemon boot, preceded by a fresh workspace-wide rebuild of every first-party `packages/*` member so the live side also never resolves unpinned mutable `dist` (F3/INVARIANT 2 fix); process-group teardown confirmed empty via a self-visibility control (the scan must see this verifier's own pid) AND a target-visibility positive control (while the daemon is independently confirmed alive via `process.kill(pid,0)`, the scan must show at least one row for the daemon's own process group AND, among those rows specifically, one whose `pid` equals the daemon's own leader pid — a process-group match alone is not sufficient, this is an AND of both conditions — before a later zero-rows result from the same scan mechanism is trusted, INVARIANT 1 fix, tightened for leader-pid fidelity in the round-4 fidelity confirmation); 12/12 inclusion/exposure classifier self-probes pass, plus the process-table-scan and target-visibility self-probes gating teardown confirmation; `fs-hit ∪ unresolved ∪ clean` exactly equals the candidate universe with no overlap |
 | C9F-2 | Risk-ranking formula (exposure 0/1/3 + mechanical impact 0–3) enforced exactly per confirmed-in-scope row; exposure-classifier self-probed | AST-derived `exposure` matches the middleware-array + straight-line-guard grammar exactly; `impact` matches the reachable-primitive-class rule (or a declared override with a ≥20-char reason and `declaredImpact > mechanicalImpact`); `score`/`tier` formula-exact; the same 12/12 `C9F-1` self-probes (which cover both classifiers) pass |
 | C9F-3 | Attribution matrix exists, covers exactly the confirmed in-scope (`fs-hit`) set, structurally well-formed | `docs/security/filesystem-tranche-attribution.json` parses; exactly one row per `fs-hit` route (mechanically re-derived count, never hardcoded), no orphans/gaps/duplicates; attributed/unattributed/known-vulnerable/unresolved-out-of-tranche counts reported |
 | C9F-4 | Every matrix row fully, structurally attributed | All six required fields clear the floor/denylist/repetition checks; `authn` names the row's own exposure class; `acceptedRisk.decisionRef` resolves to a unique, fully-structured, route-bound, non-self-accepted `### W9F-ACCEPT-*` entry in `DECISIONS.md@baseCommit`; `control`/`acceptedRisk` mutually exclusive and required exactly when `exposure === 3` |
