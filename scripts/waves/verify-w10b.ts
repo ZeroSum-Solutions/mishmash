@@ -7,161 +7,165 @@
 //
 // Run: pnpm exec tsx scripts/waves/verify-w10b.ts [--repo <path>]
 // Exit 0 only when C10B-1 through C10B-5 all pass AND the tree is clean
-// (treeDirty: false) AND the infra checks (LEASE, GATE-INTEGRITY,
-// SCANNER-SELFTEST, HEAD-DRIFT) pass. The commit-bound proof manifest is
-// written to the wave's goal-state proof directory either way, per
-// docs/plans/waves/W10b-voicebox-registration.md's "Definition of green".
+// (treeDirty: false) AND the infra checks (GATE-INTEGRITY, SCANNER-SELFTEST,
+// WIRE-SELFTEST, DAEMON-TEARDOWN, HEAD-DRIFT) pass. The commit-bound proof
+// manifest is written to the wave's goal-state proof directory either way,
+// per docs/plans/waves/W10b-voicebox-registration.md's "Definition of green".
 //
-// ROUND-3 ADVERSARIAL REVIEW (founder-authorized final round, three closures
-// -- see the PRD's "Round 3 adversarial review" section for full detail):
+// ROUND-3 (founder-authorized final round, three closures -- deep spread
+// ban / scanner fix / GATE-INTEGRITY) and ROUND-4 (runtime-import
+// verification, rejected) are recorded in full in the PRD's "Round 3
+// adversarial review", "Round 3 verdict" and "Round 4 fix" sections, and
+// summarized in this file's own git history. This header covers only
+// ROUND 5, which replaces round 4's mechanism wholesale.
 //
-//   1. DEEP SPREAD BAN. Round 2 showed a complete false-green: a type-valid
-//      object literal with the frozen direct properties (id/label/url/...)
-//      followed by `...evilOverride` -- at runtime the spread silently wins
-//      (JS last-write-wins), but `findStringProp`'s first-match walk over
-//      `.properties` returned the frozen-looking literal and never noticed.
-//      `findDeepStructuralAnomalies()` now walks the ENTIRE MCP_TEMPLATES
-//      subtree (every object literal, at every nesting depth, including
-//      inside array-valued fields like a hypothetical `headerFields`) and
-//      fails closed on anything that is not a plain `key: <literal>`
-//      PropertyAssignment: SpreadAssignment (object spread), SpreadElement
-//      (array spread), a computed/non-literal property name, a method/
-//      getter/setter object member, or a duplicate property name within one
-//      object literal. The last three are the same vulnerability class as
-//      the spread (a later property silently overrides an earlier
-//      frozen-looking one at runtime, invisible to a first-match extractor)
-//      and are closed by the same mechanism, not left as an adjacent gap
-//      right next to the one just fixed.
-//   2. SCANNER FIX. Round 2 found that raw `scanner.scan()` calls, without
-//      tracking template-substitution context, misclassified text INSIDE a
-//      template literal's tail as a real comment once a `${...}`
-//      substitution was involved (e.g. `` `${0}// NM-25` ``). Manually
-//      reimplementing the stateful re-scan the TypeScript parser does
-//      internally (`reScanTemplateToken`) is exactly the kind of thing that
-//      is easy to get subtly wrong twice. Instead, `collectComments()` now
-//      trusts the ALREADY-CORRECT parser: it walks the parsed AST to record
-//      the exact `[start,end)` span of every string/template-piece/regex
-//      literal token (the parser resolved template boundaries correctly,
-//      substitutions and all -- that is the one thing a hand-rolled scanner
-//      loop cannot be trusted to redo), then finds `//`/`/* */`-shaped text
-//      in the raw source with a simple regex and discards any match whose
-//      start falls inside one of those literal spans. A comment-like
-//      sequence can only ever be a real comment if it sits OUTSIDE every
-//      literal the parser found. `SCANNER-SELFTEST` below is the
-//      template-heavy fixture proving this against the exact two round-2
-//      false-positive cases, plus positive/negative controls.
-//   3. GATE-INTEGRITY. Round 2: the lease already keeps this file out of the
-//      implementer's diff (see finding 1's round-1 fix), but that is a
-//      single control, not defense in depth, and the review wanted the same
-//      external-immutability shape scripts/waves/verify-w9-ingest.ts already
-//      uses. `GATE-INTEGRITY` below self-hashes the file currently
-//      executing and compares it against an orchestrator-placed
-//      `~/.claude/goal-state/mishmash-w10b-voicebox/approved-gate.sha256` --
-//      present only once the orchestrator pins this exact frozen copy.
-//      Unpinned (the state before that happens, including every run in this
-//      authoring session) passes with `gateIntegrityPinned: false` recorded
-//      in the manifest; pinned, it must match exactly. This is explicitly
-//      defense in depth, not the PRIMARY control -- the primary control
-//      remains C10B-3's lease-subset check, which already keeps this file
-//      out of the implementer's own diff. Per the founder's round-3
-//      instruction, the proposed lease's `deny` list also now names both
-//      this file and the PRD explicitly (see the PRD's "Proposed write
-//      lease"), and C10B-3 mechanically checks that `deny` list too.
+// ROUND-4 REJECT (why round 4's mechanism had to be replaced, not patched):
+// round 4 made C10B-1/2/4 dynamically `import()` a throwaway copy of HEAD's
+// committed apps/daemon/src/mcp-config.ts, materialized into a temp `.mts`
+// file, then round-trip the matched entry through `JSON.stringify`/
+// `JSON.parse` as a ROOT value and compare it to FROZEN. The round-4
+// confirmation review found three independent, type-clean bypasses of that
+// mechanism, all in the same class (a verifier-owned RECONSTRUCTION of what
+// production would serve, rather than an observation of what production
+// actually serves):
+//   (1) SERIALIZATION CONTEXT. `JSON.stringify` calls `toJSON(key)` with the
+//       key the value occupies in its parent -- '' for a root value, but the
+//       stringified array index (e.g. '0') for an element of
+//       `{ servers, templates: MCP_TEMPLATES }`, which is the actual shape
+//       apps/daemon/src/mcp-routes.ts:157's `res.json({ servers: cfg.servers,
+//       templates: MCP_TEMPLATES })` serializes. A `toJSON(key)` that
+//       special-cases on that key returned FROZEN as a root value (key '')
+//       and hostile fields as templates[0] (key '0'), passing every round-4
+//       check while the real route would have served the hostile value.
+//   (2) SINGLE-READ SNAPSHOT. Every criterion imported a FRESH module and
+//       read it ONCE. A stateful getter honest on its first read and hostile
+//       on every later one passed, while the daemon holds one imported
+//       `MCP_TEMPLATES` instance for its whole process lifetime and would
+//       serve the hostile value on every request after the first.
+//   (3) TEMP-PATH MODULE IDENTITY. The throwaway import lived at a
+//       predictable `verify-w10b-runtime-*` temp path; a
+//       `import.meta.url.includes('verify-w10b-runtime-')` probe could
+//       distinguish "being read by the verifier" from "being loaded by
+//       production" and behave differently only for the verifier.
 //
-// ROUND-4 (founder-authorized final round, after round 3 REJECTED -- see the
-// PRD's "Round 3 verdict" and "Round 4 fix" sections for full detail):
+// ROUND-5 FIX (this file, founder-authorized re-expansion round, 2026-07-29):
+// the founder's binding correction to the round-4 instruction (recorded in
+// docs/plans/waves/DECISIONS.md's W10B-PARK entry) is that a runtime-truth
+// claim must ALSO hold (a) in the production serialization CONTEXT, (b) on
+// REPEATED reads, and (c) at the module's REAL path. Round 4 tried to keep
+// reconstructing those three properties one at a time inside a
+// verifier-owned proxy for production (a temp-file import + manual
+// JSON.stringify call) -- exactly the "prove RUNTIME truth by inspecting
+// SOURCE STRUCTURE" failure class DECISIONS.md names as the root cause of
+// every W10-family park (W10a, W10b round 4, W9as), just one layer deeper
+// than the AST-freezing rounds 1-3 tried. There is no bound on how many
+// layers of proxy-vs-real distinction an adversarial reviewer can find in a
+// RECONSTRUCTION; the fix is to stop reconstructing.
 //
-//   RUNTIME-IMPORT VERIFICATION. Round 3's REJECT vector: a `__proto__: {
-//   toJSON: () => (...) }` property assignment is a uniquely-named
-//   PropertyAssignment, so round 3's `findDeepStructuralAnomalies` (an AST
-//   shape scan) accepted it, every direct-property FROZEN comparison matched
-//   (the frozen-looking fields were still present as OWN properties), and
-//   `tsc` was clean -- yet `JSON.stringify` emits different, attacker-
-//   chosen values, because a literal `__proto__: value` property in an
-//   object literal is special-cased by the ECMAScript grammar (Annex
-//   B.3.1) to set the object's [[Prototype]] instead of creating an own
-//   property, and `JSON.stringify` (exactly what Express's `res.json` in
-//   apps/daemon/src/mcp-routes.ts:151 uses to serve `MCP_TEMPLATES`) calls
-//   an INHERITED `toJSON` exactly like an own one. No amount of naming more
-//   forbidden AST shapes closes this class -- the founder's ruling was
-//   explicit: stop patching source-shape denylists and instead prove the
-//   frozen expectations against ACTUAL RUNTIME BEHAVIOR.
+// C10B-1/2/4 now boot the REAL daemon entrypoint (apps/daemon/src/server.ts,
+// completely unmodified) from THIS repository's own working tree, in an
+// isolated namespace (fresh OD_DATA_DIR, ephemeral OS-assigned port, its own
+// detached process group -- see "RUNTIME SAFETY" below), and issue REAL HTTP
+// GET requests to `/api/mcp/servers` -- the exact route
+// apps/daemon/src/mcp-routes.ts:151-157 serves, calling the exact
+// `res.json({ servers: cfg.servers, templates: MCP_TEMPLATES })` that a real
+// browser or `od` CLI invocation would receive. This closes all three
+// round-4 bypasses structurally, not by naming them individually:
+//   (1) is closed because there is no verifier-reconstructed serialization
+//       context anymore -- the response body IS production's real `res.json`
+//       output, with `templates` nested exactly where mcp-routes.ts puts it,
+//       so a `toJSON(key)` keyed on '0' sees the SAME key production's real
+//       serialization would give it, every time.
+//   (2) is closed because the daemon process is booted ONCE and stays alive
+//       for the run: `observeVoiceboxWireEntryRepeated()` issues MULTIPLE
+//       independent HTTP requests against that one long-lived process (three
+//       per criterion, times three criteria using it -- nine total reads
+//       against one module instance), and every one of them is independently
+//       compared to FROZEN. A getter honest only on an early read fails on a
+//       later one.
+//   (3) is closed because there is no temp path for a probe to key off of --
+//       the daemon imports its OWN `./mcp-config.js` from its OWN real
+//       location under apps/daemon/src/, exactly as `pnpm tools-dev` boots
+//       it. `import.meta.url` inside mcp-config.ts, if anything ever read
+//       it, would show this repository's real path, indistinguishable from a
+//       genuine `od` launch.
 //
-//   C10B-1/2/4 now dynamically `import()` a throwaway copy of HEAD's
-//   committed `apps/daemon/src/mcp-config.ts` as a REAL ES module (see
-//   `importRealTemplatesAtHead()`), locate the runtime array element whose
-//   real `.id` property equals `'voicebox'`, and round-trip it through
-//   `JSON.stringify`/`JSON.parse` -- the exact transform `res.json`
-//   performs -- before comparing against `FROZEN`. This closes the ENTIRE
-//   class by construction, not by enumerating more forbidden shapes:
-//   `__proto__`/inherited `toJSON`, an own `toJSON` method, getters/
-//   accessors, a property spread overriding earlier fields (the round-2
-//   vector), `Object.defineProperty`/`Object.setPrototypeOf` mutations
-//   anywhere in the module's top-level code, and a dead-branch conditional
-//   that resolves differently than it appears to a source reader are ALL
-//   observed as whatever they actually evaluate to, because nothing here
-//   inspects source shape for these checks anymore -- only the real,
-//   fully-evaluated, actually-serialized value is. `RUNTIME-SELFTEST`
-//   (new infra check, mirroring `SCANNER-SELFTEST`'s pattern) proves this
-//   against eight synthetic fixtures, including the exact round-3 vector.
+// WIRE-SELFTEST (renamed from round 4's RUNTIME-SELFTEST) proves the
+// OBSERVATION mechanism itself -- fetch, parse, compare -- correctly flags
+// every divergence class (the round-3 __proto__/toJSON vector, an own
+// toJSON method, the round-2 spread-override vector, a getter/accessor, a
+// post-declaration Object.defineProperty/Object.setPrototypeOf mutation, and
+// a dead-branch-lookalike ternary) as a mismatch, and passes a clean entry.
+// It builds each fixture as a REAL in-process JS object (Object.create,
+// Object.defineProperty, a getter, a spread -- the same mechanisms hostile
+// SOURCE would use, applied directly, since JSON.stringify cannot tell the
+// difference between an object built inline and one produced by compiling
+// and importing a module) and serves it through a real `node:http` server's
+// `res.end(JSON.stringify(...))`, nested inside `{ servers, templates }`
+// exactly like production, fetched over a real loopback socket -- never
+// `JSON.stringify()` called in-process on a bare object with no network
+// layer at all (round 4's approach). This is deliberately NOT a claim that
+// the fixture objects are equivalent to compiling hostile source through the
+// real apps/daemon module graph -- that claim is what C10B-1/2/4 make, using
+// the real daemon. WIRE-SELFTEST's only job is proving this file's own
+// fetch+parse+compare pipeline has no blind spot, which is a narrower and
+// fully honest claim; see the PRD's "Round 5 fix" section for why a
+// synthetic in-process HTTP server is sufficient for that narrower claim and
+// does not need Express or the real module graph.
 //
-//   `findDeepStructuralAnomalies()` (the round-3 object-literal-internal
-//   spread/computed-key/duplicate-key/accessor scan) and `hasOwnProp()`
-//   (used only for the old static `headerFields`-absence check) are REMOVED
-//   as redundant: both existed solely to protect a static, first-match
-//   property reader from exactly the class of divergence the runtime check
-//   now observes directly and unconditionally. Keeping them would mean two
-//   sources of truth for the same fact, one of which (the AST scan) is
-//   demonstrably incomplete. `analyzeTemplateArray`'s array-level checks
-//   (every element is a plain object literal, has a literal string `id`, no
-//   duplicate `id` across the array) are KEPT -- they answer a genuinely
-//   different, structural-only question with no runtime equivalent: "which
-//   array slots, identified by source text, correspond to which ids, for
-//   C10B-3's baseCommit-vs-HEAD byte-diffing." That fact is inherently
-//   about a two-commit TEXT comparison, not about what a single commit's
-//   code evaluates to, so it stays an AST/text check by necessity (the
-//   founder's carve-out: "a structural/AST check may remain only for facts
-//   with no runtime observable").
-//
-// Prior rounds (1, 2, and 3) are recorded in the PRD's "Round 1/2/3
-// adversarial review" and "Round 3 verdict" sections; this header covers
-// only what changed in round 4.
-//
-// Scope note: C10B-3 still never imports apps/daemon/src/mcp-config.ts live
-// for its baseCommit-side analysis -- it reads both baseCommit's and HEAD's
-// text via `git show` and parses each with the TypeScript compiler API,
-// matching the pattern in scripts/waves/verify-w9-ingest.ts. Only C10B-1/2/4
-// (and RUNTIME-SELFTEST's synthetic fixtures) perform a real dynamic
-// `import()`, and only of HEAD's content, materialized into a throwaway
-// temp file first (see `importRealTemplatesAtHead()`) -- never a live import
-// of the file at its real repository path, so this stays independent of
-// `apps/daemon`'s own module-resolution/build graph across `--repo`.
+// C10B-3 and C10B-5 are UNCHANGED from round 4 -- they were not implicated
+// in the round-4 reject, and both answer questions with no runtime
+// observable (a two-commit TEXT diff; comment-token provenance), which is
+// exactly the founder's stated carve-out for keeping a structural/AST check:
+// "a structural/AST check may remain only for facts with no runtime
+// observable." GATE-INTEGRITY and SCANNER-SELFTEST are also unchanged.
+// DAEMON-TEARDOWN is new: a named infra check, mirroring GATE-INTEGRITY's
+// "infra check, not a PRD criterion" shape, that must independently confirm
+// the isolated daemon's entire process GROUP is empty before the run can be
+// green -- see "RUNTIME SAFETY" below.
 //
 // PORTABILITY: repoRoot comes from `process.cwd()`/`--repo`, never
 // `import.meta.url`.
 //
-// RUNTIME SAFETY: this verifier spawns no daemon and binds no port. The
-// round-4 dynamic imports load `apps/daemon/src/mcp-config.ts`'s content
-// directly (confirmed this session: it imports only `node:fs/promises`,
-// `node:fs`, `node:crypto`, `node:path`, and performs no filesystem/network
-// I/O or config-directory resolution at module-evaluation time -- every
-// data-directory/port-touching call lives inside a function body, never at
-// top level) -- so importing it is exactly as safe as any other in-process
-// TypeScript parsing this file already does, and never touches a
-// default-namespace daemon (ports 7456/51012) because it never starts one.
-// Git context is resolved from local refs only (no fetch/push). This file
-// never writes generated script content -- only `manifest.json`, plain-text
-// proof artifacts under `proofDir`, and throwaway temp files under the OS
-// temp directory that are deleted immediately after each import -- so there
-// is nothing here for `node --check` to validate.
+// RUNTIME SAFETY (binding constraints of the wave program this run operates
+// under -- default-namespace daemons on ports 7456/51012 must never be
+// touched): the isolated daemon this file boots is a genuine `detached:
+// true` child process with its OWN process group (pgid === its own pid on
+// POSIX), receiving its isolated `OD_DATA_DIR`/`OD_BIND_HOST` ONLY through
+// that child's own `env` object (a fresh shallow copy of `process.env`,
+// never an assignment to this process's own `process.env`), bound to
+// `port: 0` (an OS-assigned ephemeral port, independently re-checked against
+// FORBIDDEN_PORTS = {7456, 51012} after boot -- boot is refused and torn
+// down immediately if the OS ever handed back one of those two exact
+// ports). Teardown (`killGroupFailClosed`, adapted from the reference
+// implementation in scripts/waves/verify-w9-filesystem.ts) signals the WHOLE
+// GROUP by its one known pid (`-pid`, never a broader/fuzzy process match),
+// escalates SIGTERM -> SIGKILL only if the group is not empty after a
+// bounded wait, and independently RE-SCANS the real system process table
+// (`ps`) for any surviving member of that exact group before declaring
+// success -- a resolved `exit` event on the tracked leader is never treated
+// as proof the whole group exited, because daemon startup can itself spawn
+// further children (a fire-and-forget agent-detection probe in
+// apps/daemon/src/server.ts) that inherit the group. `ps` scan failure is
+// treated as an UNCONFIRMED, non-passing teardown, never as evidence of a
+// clean exit. This file never signals or inspects any PID it did not itself
+// spawn -- it has no way to name the default-namespace daemons' actual PIDs
+// (those are specific to one running machine, not a fact this committed
+// script could safely hardcode), so its only mechanism for staying clear of
+// them is process-group exactness plus the FORBIDDEN_PORTS refusal, both of
+// which are unconditional regardless of what else is running. Git context is
+// resolved from local refs only (no fetch/push). WIRE-SELFTEST's synthetic
+// HTTP server is in-process (`node:http`, no subprocess, no process group of
+// its own) and is torn down with a plain `server.close()`.
 
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import http from 'node:http';
 import { createRequire } from 'node:module';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import type TypeScriptModule from 'typescript';
 import type {
   ArrayLiteralExpression,
@@ -178,14 +182,19 @@ function argValue(flag: string): string | undefined {
 
 const WAVE_SLUG = 'mishmash-w10b-voicebox';
 const TEMPLATE_FILE = 'apps/daemon/src/mcp-config.ts';
+const SERVER_FILE = 'apps/daemon/src/server.ts';
+
+// Default-namespace daemon ports (binding safety constraint for this run --
+// see "RUNTIME SAFETY" above). Never dialed, never bound.
+const FORBIDDEN_PORTS = new Set([7456, 51012]);
 
 // -------------------------------------------------------------------------
-// Frozen fields (round-1 finding 4 fix, unchanged in round 3). Copied
-// verbatim from the PRD's "Implementation surface" code block -- kept in
-// exact byte sync with that file by hand, since neither file may depend on
-// the other at runtime (portability; see header). Any wording change to the
-// registered template requires updating BOTH the PRD and this file,
-// together, in one commit.
+// Frozen fields (round-1 finding 4 fix, unchanged since). Copied verbatim
+// from the PRD's "Implementation surface" code block -- kept in exact byte
+// sync with that file by hand, since neither file may depend on the other at
+// runtime (portability; see header). Any wording change to the registered
+// template requires updating BOTH the PRD and this file, together, in one
+// commit.
 // -------------------------------------------------------------------------
 const FROZEN = {
   id: 'voicebox',
@@ -274,6 +283,15 @@ function sha256File(absPath: string): string {
   return sha256Bytes(fs.readFileSync(absPath));
 }
 
+// 'not-exercised' is a genuine third state, distinct from both 'pass' and
+// 'fail': used only by DAEMON-TEARDOWN when the isolated daemon never
+// finished spawning (nothing was left running either way, so nothing was
+// actually torn down -- reporting that as 'pass' would be the same vacuous
+// shape as a `.every()` over an empty array). It counts as `!== 'pass'`
+// everywhere this file checks for green, so it can never silently read as
+// done.
+type CriterionStatus = 'pass' | 'fail' | 'not-exercised';
+
 interface CriterionResult {
   id: string;
   command: string;
@@ -281,7 +299,7 @@ interface CriterionResult {
   artifact: string | null;
   artifactSha256: string | null;
   exitCode: number;
-  status: 'pass' | 'fail';
+  status: CriterionStatus;
   durationMs: number;
   detail?: string | undefined;
 }
@@ -318,24 +336,33 @@ function record(
   assertion: string,
   ok: boolean,
   evidence: string,
-  opts: { detail?: string | undefined; durationMs?: number } = {},
+  opts: { detail?: string | undefined; durationMs?: number; status?: 'not-exercised' } = {},
 ): void {
   try {
+    const wantsNotExercised = opts.status === 'not-exercised';
+    const verdictLabel = wantsNotExercised ? 'not-exercised' : ok ? 'pass' : 'fail';
     const { artifact, artifactSha256 } = artifactFor(
       id,
-      `# ${id}\n# assertion: ${assertion}\n# verdict: ${ok ? 'pass' : 'fail'}\n${
+      `# ${id}\n# assertion: ${assertion}\n# verdict: ${verdictLabel}\n${
         opts.detail ? `# detail: ${opts.detail}\n` : ''
       }\n${evidence}\n`,
     );
-    const effectiveOk = ok && artifact !== null;
+    const artifactWriteFailed = artifact === null;
+    const status: CriterionStatus = artifactWriteFailed
+      ? 'fail'
+      : wantsNotExercised
+        ? 'not-exercised'
+        : ok
+          ? 'pass'
+          : 'fail';
     results.push({
       id,
       command,
       assertion,
       artifact,
       artifactSha256,
-      exitCode: effectiveOk ? 0 : 1,
-      status: effectiveOk ? 'pass' : 'fail',
+      exitCode: status === 'pass' || status === 'not-exercised' ? 0 : 1,
+      status,
       durationMs: opts.durationMs ?? 0,
       detail:
         artifact === null
@@ -469,8 +496,14 @@ function readFileAtCommit(commit: string, relPath: string): string | null {
 
 // ---------------------------------------------------------------------
 // AST analysis over apps/daemon/src/mcp-config.ts's MCP_TEMPLATES array.
-// Read-as-text + TypeScript compiler API -- never a live import of daemon
-// source (see header note).
+// Read-as-text + TypeScript compiler API -- used ONLY by C10B-3 (lease/diff
+// subset check) and C10B-5 (comment provenance), both of which are
+// inherently two-commit TEXT comparisons with no runtime equivalent (the
+// founder's stated carve-out: "a structural/AST check may remain only for
+// facts with no runtime observable" -- see the header's ROUND-5 note). Never
+// used to validate the frozen fields of the voicebox entry itself -- that is
+// C10B-1/2/4's job now, proven against the real booted daemon's real HTTP
+// response (see "RUNTIME OBSERVATION" below).
 // ---------------------------------------------------------------------
 interface TemplateBlock {
   id: string;
@@ -480,20 +513,13 @@ interface TemplateBlock {
 interface ArrayScan {
   file: SourceFile;
   arrayNode: ArrayLiteralExpression;
-  /** Non-empty means the array could NOT be safely reasoned about BY ID
-   * (round-1 finding 3): a spread/call/other non-object-literal element, an
-   * object literal with no plain string-literal `id`, or a duplicate `id`
-   * across the array. This is a purely structural, text-identification fact
-   * -- "which array slots correspond to which ids" -- used ONLY by C10B-3's
-   * baseCommit-vs-HEAD byte-diffing, which has no runtime equivalent (it is
-   * inherently a two-commit TEXT comparison; see the header's round-4 note).
-   * It is deliberately NOT used to validate the frozen fields of the
-   * `voicebox` entry itself -- as of round 4, that is proven at runtime (see
-   * `importRealTemplatesAtHead()` / `serializeAsWireWould()` below), which is
-   * why the round-3 per-object deep-anomaly scan (spread/computed-key/
-   * duplicate-key/accessor INSIDE one object literal) was removed rather
-   * than kept alongside the runtime check as a second source of truth. Every
-   * consumer below must check this is empty before trusting `clean`. */
+  /** Non-empty means the array could NOT be safely reasoned about BY ID: a
+   * spread/call/other non-object-literal element, an object literal with no
+   * plain string-literal `id`, or a duplicate `id` across the array. This is
+   * a purely structural, text-identification fact -- "which array slots
+   * correspond to which ids" -- used ONLY by C10B-3's baseCommit-vs-HEAD
+   * byte-diffing. Every consumer below must check this is empty before
+   * trusting `clean`. */
   problems: string[];
   /** One block per id, populated only when `problems` is empty. */
   clean: Map<string, TemplateBlock> | null;
@@ -547,19 +573,6 @@ function findStringProp(
 function shortText(sourceFile: SourceFile, node: TsNode): string {
   return node.getText(sourceFile).replace(/\s+/g, ' ').slice(0, 100);
 }
-
-// NOTE (round 4): `findDeepStructuralAnomalies()` and `hasOwnProp()` --
-// round 3's per-object-literal spread/computed-key/duplicate-key/accessor
-// scan, and the static `headerFields`-presence check it protected -- were
-// REMOVED here. Both existed only to defend a static, first-match property
-// reader (`findStringProp`, still below, now used solely for `id`) against
-// exactly the class of divergence round 3's REJECT demonstrated it cannot
-// fully enumerate (`__proto__`/inherited `toJSON`). C10B-1/2/4 now prove the
-// frozen fields against the real, imported, fully-evaluated runtime value
-// instead (see `importRealTemplatesAtHead()` / `serializeAsWireWould()` /
-// `compareFrozenFields()` below) -- keeping the AST scan alongside that
-// would be a second, weaker source of truth for the same fact, which the
-// founder's round-4 ruling was explicit should not happen.
 
 function analyzeTemplateArray(sourceText: string, syntheticFileName: string): ArrayScan | null {
   const located = locateTemplateArray(sourceText, syntheticFileName);
@@ -622,115 +635,333 @@ function splitAroundArray(
 }
 
 // ---------------------------------------------------------------------
-// RUNTIME-IMPORT VERIFICATION (round 4 -- see the header's "ROUND-4" note
-// for the full rationale). C10B-1/2/4 no longer trust a static AST read for
-// the frozen fields of the `voicebox` entry; they import the REAL module and
-// observe what it actually evaluates to and actually serializes.
+// RUNTIME OBSERVATION (round 5). C10B-1/2/4 no longer trust any
+// verifier-reconstructed serialization of the voicebox entry -- they boot
+// the REAL apps/daemon/src/server.ts, hit the REAL
+// GET /api/mcp/servers route, and compare the REAL HTTP response body to
+// FROZEN. See the header's ROUND-5 note for the full rationale and how this
+// closes all three round-4 bypasses structurally.
 // ---------------------------------------------------------------------
-interface RuntimeImportResult {
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    return code !== 'ESRCH'; // ESRCH = no such process; anything else (e.g. EPERM) means it still exists
+  }
+}
+
+/** Scans the REAL system process table (never trusts a single leader's
+ * `exit` event as proof the whole group is gone) for any process still
+ * reporting the given process-group id. Adapted from the reference
+ * implementation, scripts/waves/verify-w9-filesystem.ts's
+ * `processGroupSurvivors()`. */
+function processGroupSurvivors(pgid: number): string[] {
+  const r = sh('ps', ['-Ao', 'pid=,pgid=,comm='], { timeoutMs: 15_000 });
+  if (r.status !== 0) {
+    return [`ps scan itself failed (exit=${r.status}) -- treated as unconfirmed, not as proof of a clean exit`];
+  }
+  const survivors: string[] = [];
+  for (const line of r.stdout.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const parts = trimmed.split(/\s+/);
+    const rowPid = Number(parts[0]);
+    const rowPgid = Number(parts[1]);
+    if (!Number.isFinite(rowPid) || !Number.isFinite(rowPgid)) continue;
+    if (rowPgid === pgid) survivors.push(`pid=${rowPid} pgid=${rowPgid} comm=${parts.slice(2).join(' ')}`);
+  }
+  return survivors;
+}
+
+async function waitForCondition(check: () => boolean, timeoutMs: number, intervalMs = 200): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (check()) return true;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  return check();
+}
+
+/** Fail-closed process-GROUP teardown (see "RUNTIME SAFETY" above and the
+ * reference implementation, `killGroupFailClosed` in
+ * scripts/waves/verify-w9-filesystem.ts, which this is adapted from
+ * unchanged in mechanism): escalate on process-group EMPTINESS, never on
+ * leader liveness alone. Kills by exact pid only (`-pid`, the group led by
+ * that exact pid), never a broader/fuzzy match. Any unconfirmed or partial
+ * result is `ok: false`, and every call site below treats that as a FAILURE,
+ * never as evidence to route around. */
+async function killGroupFailClosed(pid: number): Promise<{ ok: boolean; detail: string }> {
+  try {
+    process.kill(-pid, 'SIGTERM');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
+      return { ok: false, detail: `SIGTERM to group -${pid} failed: ${String(err)}` };
+    }
+  }
+  const emptyAfterTerm = await waitForCondition(() => processGroupSurvivors(pid).length === 0, 8_000);
+  if (!emptyAfterTerm) {
+    try {
+      process.kill(-pid, 'SIGKILL');
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
+        return { ok: false, detail: `SIGKILL to group -${pid} failed: ${String(err)}` };
+      }
+    }
+    const emptyAfterKill = await waitForCondition(() => processGroupSurvivors(pid).length === 0, 5_000);
+    if (!emptyAfterKill) {
+      const survivors = processGroupSurvivors(pid);
+      return {
+        ok: false,
+        detail: `process group -${pid} still has survivors after SIGTERM+SIGKILL -- teardown NOT confirmed: ${survivors.join('; ')}`,
+      };
+    }
+  }
+  const survivors = processGroupSurvivors(pid);
+  if (survivors.length > 0) {
+    return { ok: false, detail: `process group -${pid} has survivors after kill+wait: ${survivors.join('; ')}` };
+  }
+  return { ok: true, detail: `process group -${pid} confirmed empty (group-wide ps scan found nothing)` };
+}
+
+interface LiveDaemon {
+  url: string;
+  pid: number;
+  shutdown: () => Promise<{ ok: boolean; detail: string }>;
+}
+
+type BootResult =
+  | { ok: true; daemon: LiveDaemon }
+  | { ok: false; error: string; spawnedPid: number | null; teardownIfSpawned: { ok: boolean; detail: string } | null };
+
+/** Boots the REAL, completely unmodified apps/daemon/src/server.ts from this
+ * repository's own working tree (never a materialized copy -- see the
+ * header's ROUND-5 note on why closing the "temp-path module identity"
+ * bypass means NOT reintroducing a temp-path anywhere), as a genuine
+ * `detached: true` child process with its own process group, an isolated
+ * `OD_DATA_DIR`, and `port: 0` (OS-assigned, independently re-checked
+ * against FORBIDDEN_PORTS). Adapted from the reference implementation,
+ * `bootIsolatedDaemon()` in scripts/waves/verify-w9-filesystem.ts -- same
+ * generated-boot-script mechanism (every dynamic value JSON.stringify'd,
+ * never interpolated raw), same `node --check` validation of the generated
+ * script, same graceful-SIGTERM handling, same process-group teardown. */
+async function bootIsolatedDaemon(): Promise<BootResult> {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'w10b-daemon-data-'));
+  const serverTsPath = path.join(repoRoot, SERVER_FILE);
+  const marker = crypto.randomBytes(16).toString('hex');
+  const bootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'w10b-daemon-boot-'));
+  const bootScriptPath = path.join(bootDir, 'boot.mjs');
+  const bootScript = [
+    `const SERVER_TS_PATH = ${JSON.stringify(serverTsPath)};`,
+    `const MARKER = ${JSON.stringify(marker)};`,
+    'const mod = await import(SERVER_TS_PATH);',
+    'const result = await mod.startServer({ port: 0, host: "127.0.0.1", returnServer: true });',
+    'const address = result.server.address();',
+    'const port = address && typeof address === "object" ? address.port : 0;',
+    'process.stdout.write(MARKER + JSON.stringify({ port }) + MARKER + "\\n");',
+    'let shuttingDown = false;',
+    'async function gracefulExit() {',
+    '  if (shuttingDown) return;',
+    '  shuttingDown = true;',
+    '  try { await result.shutdown(); } catch {}',
+    '  process.exit(0);',
+    '}',
+    'process.on("SIGTERM", gracefulExit);',
+    'process.on("SIGINT", gracefulExit);',
+  ].join('\n');
+  fs.writeFileSync(bootScriptPath, bootScript);
+  const checkResult = sh('node', ['--check', bootScriptPath], { timeoutMs: 15_000 });
+  if (checkResult.status !== 0) {
+    return {
+      ok: false,
+      error: `generated daemon-boot script failed node --check: ${checkResult.stderr.slice(0, 500)}`,
+      spawnedPid: null,
+      teardownIfSpawned: null,
+    };
+  }
+
+  // A fresh env OBJECT for the child only -- this process's own `process.env`
+  // is never assigned to, so nothing spawned later in this same verifier run
+  // can inherit a stray OD_DATA_DIR/OD_BIND_HOST from an isolated daemon
+  // boot.
+  const childEnv: NodeJS.ProcessEnv = { ...process.env, OD_DATA_DIR: dataDir, OD_BIND_HOST: '127.0.0.1' };
+  delete childEnv.OD_API_TOKEN;
+  delete childEnv.OD_WEB_PORT;
+
+  const child = spawn('pnpm', ['exec', 'tsx', bootScriptPath], {
+    cwd: repoRoot,
+    detached: true, // own process group: pgid === child.pid on POSIX
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: childEnv,
+  });
+  if (!child.pid) {
+    return { ok: false, error: 'daemon-boot child process failed to spawn (no pid)', spawnedPid: null, teardownIfSpawned: null };
+  }
+  const childPid = child.pid;
+
+  let stdoutBuf = '';
+  let stderrBuf = '';
+  child.stdout?.on('data', (d: Buffer) => {
+    stdoutBuf += d.toString('utf8');
+  });
+  child.stderr?.on('data', (d: Buffer) => {
+    stderrBuf += d.toString('utf8');
+  });
+  let exited = false;
+  let exitInfo = '';
+  child.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
+    exited = true;
+    exitInfo = `exit code=${code} signal=${signal}`;
+  });
+
+  const readyPayload = await waitForCondition(() => stdoutBuf.split(marker).length - 1 >= 2, 30_000, 100).then(
+    (found) => {
+      if (!found) return null;
+      const occurrences = stdoutBuf.split(marker).length - 1;
+      if (occurrences !== 2) return null; // exactly two, never a first-match trust
+      const re = new RegExp(`${marker}(.*?)${marker}`, 's');
+      const match = re.exec(stdoutBuf);
+      return match ? (match[1] ?? null) : null;
+    },
+  );
+
+  const failBoot = async (reason: string): Promise<BootResult> => {
+    const teardown = await killGroupFailClosed(childPid);
+    try {
+      fs.rmSync(bootDir, { recursive: true, force: true });
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    } catch {
+      /* best-effort cleanup; does not affect the fail-closed teardown verdict */
+    }
+    return { ok: false, error: reason, spawnedPid: childPid, teardownIfSpawned: teardown };
+  };
+
+  if (exited || readyPayload === null) {
+    return failBoot(
+      `daemon boot did not produce a ready marker within timeout (exited=${exited} ${exitInfo}); stdout tail: ${stdoutBuf.slice(-1000)}; stderr tail: ${stderrBuf.slice(-1000)}`,
+    );
+  }
+
+  let parsed: { port: number };
+  try {
+    parsed = JSON.parse(readyPayload);
+  } catch {
+    return failBoot('daemon boot ready marker payload was not valid JSON');
+  }
+  if (!parsed.port || parsed.port === 0) {
+    return failBoot(`isolated daemon boot resolved to an unacceptable port: ${parsed.port}`);
+  }
+  if (FORBIDDEN_PORTS.has(parsed.port)) {
+    return failBoot(
+      `isolated daemon boot resolved to a FORBIDDEN default-namespace port ${parsed.port} -- refused before issuing any request`,
+    );
+  }
+
+  return {
+    ok: true,
+    daemon: {
+      url: `http://127.0.0.1:${parsed.port}`,
+      pid: childPid,
+      shutdown: async () => {
+        const result = await killGroupFailClosed(childPid);
+        try {
+          fs.rmSync(bootDir, { recursive: true, force: true });
+          fs.rmSync(dataDir, { recursive: true, force: true });
+        } catch {
+          /* best-effort cleanup; does not affect the fail-closed teardown verdict */
+        }
+        return result;
+      },
+    },
+  };
+}
+
+// -------------------------------------------------------------------------
+// Fail-closed probe fetch: parse + resolve, refuse non-loopback and refuse
+// FORBIDDEN_PORTS, redirect:'manual'. Adapted from the reference
+// implementation's `safeProbeFetch()`.
+// -------------------------------------------------------------------------
+function isLoopbackHostname(hostname: string): boolean {
+  if (hostname === 'localhost') return true;
+  if (net.isIP(hostname) === 4) return hostname.startsWith('127.');
+  if (net.isIP(hostname) === 6) return hostname === '::1';
+  return false;
+}
+async function safeProbeFetch(rawUrl: string, init: RequestInit = {}): Promise<Response> {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error(`probe fetch refused: unparsable URL ${rawUrl}`);
+  }
+  if (!isLoopbackHostname(parsed.hostname)) {
+    throw new Error(`probe fetch refused: non-loopback host ${parsed.hostname}`);
+  }
+  const port = parsed.port ? Number(parsed.port) : parsed.protocol === 'https:' ? 443 : 80;
+  if (FORBIDDEN_PORTS.has(port)) {
+    throw new Error(`probe fetch refused: forbidden port ${port}`);
+  }
+  return fetch(parsed.toString(), { ...init, redirect: 'manual' });
+}
+
+interface WireFetchResult {
   ok: boolean;
   templates?: unknown[];
   error?: string;
 }
 
-/** Materializes HEAD's committed text for TEMPLATE_FILE into a throwaway
- * `.mts` file (the `.mts` extension forces ESM regardless of any nearby
- * package.json, since the temp directory has none of its own) and
- * dynamically `import()`s it as a REAL module -- the same module
- * apps/daemon/src/mcp-routes.ts imports and re-exports through
- * `res.json({ servers: cfg.servers, templates: MCP_TEMPLATES })`
- * (mcp-routes.ts:151). Confirmed this session: TEMPLATE_FILE's only imports
- * are `node:fs/promises`, `node:fs`, `node:crypto`, and `node:path` -- no
- * workspace-package resolution needed, no I/O or port binding at
- * module-evaluation time -- so this import is safe to perform from a
- * throwaway path outside the real repository layout, and never touches a
- * daemon or a port (see header "RUNTIME SAFETY"). A fresh cache-busted
- * import every call (`?bust=<hrtime>`), matching this file's existing
- * "every criterion independently re-reads/re-scans, never shares state
- * across criteria" principle (see the comment above `main()`'s criteria). */
-async function importRealTemplatesAtHead(): Promise<RuntimeImportResult> {
-  const headText = readFileAtCommit(headSha, TEMPLATE_FILE);
-  if (headText === null) return { ok: false, error: `${TEMPLATE_FILE} does not exist at HEAD` };
-  return importTemplatesModuleFromSource(headText, `HEAD's ${TEMPLATE_FILE}`);
-}
-
-/** Shared by `importRealTemplatesAtHead()` and `RUNTIME-SELFTEST`'s
- * synthetic fixtures -- both need "write this exact source text to a
- * throwaway `.mts` file, import it fresh, hand back its `MCP_TEMPLATES`
- * export" and must go through the identical mechanism for the selftest to
- * actually prove anything about the real path. */
-async function importTemplatesModuleFromSource(
-  sourceText: string,
-  label: string,
-): Promise<RuntimeImportResult> {
-  let tmpDir: string | null = null;
+/** Issues a REAL GET to `/api/mcp/servers` -- the exact route
+ * apps/daemon/src/mcp-routes.ts:151-157 serves -- and parses the REAL
+ * response body a wire client would receive. No JSON.stringify is called by
+ * this file for this path; the bytes are whatever `res.json({ servers,
+ * templates })` actually put on the socket. */
+async function fetchMcpServersWire(daemonUrl: string): Promise<WireFetchResult> {
+  let res: Response;
   try {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-w10b-runtime-'));
-    const tmpFile = path.join(tmpDir, 'mcp-config.mts');
-    fs.writeFileSync(tmpFile, sourceText);
-    const url = `${pathToFileURL(tmpFile).href}?bust=${process.hrtime.bigint()}`;
-    const mod = (await import(url)) as { MCP_TEMPLATES?: unknown };
-    if (!Array.isArray(mod.MCP_TEMPLATES)) {
-      return {
-        ok: false,
-        error: `${label}'s MCP_TEMPLATES export is not an array (got ${typeof mod.MCP_TEMPLATES})`,
-      };
-    }
-    return { ok: true, templates: mod.MCP_TEMPLATES };
+    res = await safeProbeFetch(`${daemonUrl}/api/mcp/servers`, { method: 'GET' });
   } catch (err) {
-    return { ok: false, error: `dynamic import of ${label} failed: ${String((err as Error)?.stack ?? err)}` };
-  } finally {
-    if (tmpDir) {
-      try {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-      } catch {
-        /* best-effort cleanup, never fails the check */
-      }
-    }
+    return { ok: false, error: `fetch failed: ${String((err as Error)?.message ?? err)}` };
   }
+  if (res.status !== 200) {
+    return { ok: false, error: `GET /api/mcp/servers returned status ${res.status}` };
+  }
+  let bodyText: string;
+  try {
+    bodyText = await res.text();
+  } catch (err) {
+    return { ok: false, error: `reading response body failed: ${String(err)}` };
+  }
+  let parsedBody: unknown;
+  try {
+    parsedBody = JSON.parse(bodyText);
+  } catch (err) {
+    return { ok: false, error: `response body was not valid JSON: ${String(err)}` };
+  }
+  if (parsedBody === null || typeof parsedBody !== 'object' || Array.isArray(parsedBody)) {
+    return { ok: false, error: `response body is not a plain object: ${bodyText.slice(0, 200)}` };
+  }
+  const templates = (parsedBody as Record<string, unknown>)['templates'];
+  if (!Array.isArray(templates)) {
+    return { ok: false, error: `response body has no 'templates' array (got ${typeof templates})` };
+  }
+  return { ok: true, templates };
 }
 
-/** Finds every runtime array element whose real `.id` property (ordinary JS
- * property access -- follows the prototype chain exactly like any other
- * reader, including apps/daemon/src/mcp-routes.ts) equals 'voicebox'. */
-function findVoiceboxRuntimeEntries(templates: unknown[]): unknown[] {
+/** Finds every wire-observed array element whose real `.id` property equals
+ * 'voicebox' (ordinary JS property access on the JSON.parse'd response --
+ * follows the prototype chain exactly like any other reader would, though by
+ * this point the value has already round-tripped through the wire once, so
+ * any prototype-based trick production ever had is long gone -- this is
+ * genuinely the value that left the process). */
+function findVoiceboxWireEntries(templates: unknown[]): Record<string, unknown>[] {
   return templates.filter(
-    (t) => t !== null && typeof t === 'object' && (t as Record<string, unknown>)['id'] === 'voicebox',
+    (t): t is Record<string, unknown> => t !== null && typeof t === 'object' && !Array.isArray(t) && (t as Record<string, unknown>)['id'] === 'voicebox',
   );
 }
 
-/** Round-trips `entry` through the exact transformation Express's `res.json`
- * performs: `JSON.stringify`, then whatever a wire client would
- * `JSON.parse` back. This is precisely what makes a `__proto__`/inherited-
- * `toJSON`/accessor/`defineProperty` trick visible -- `JSON.stringify`
- * resolves an inherited `toJSON` exactly like an own one and REPLACES the
- * entire serialized value with its return, discarding whatever the object's
- * own properties looked like to a static reader. */
-function serializeAsWireWould(entry: unknown): { value: Record<string, unknown> | null; problem?: string } {
-  let json: string | undefined;
-  try {
-    json = JSON.stringify(entry);
-  } catch (err) {
-    return { value: null, problem: `JSON.stringify(entry) threw: ${String(err)}` };
-  }
-  if (json === undefined) {
-    return { value: null, problem: 'JSON.stringify(entry) returned undefined -- entry serializes to nothing' };
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch (err) {
-    return { value: null, problem: `JSON.parse(JSON.stringify(entry)) threw: ${String(err)}` };
-  }
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return { value: null, problem: `serialized entry is not a plain object: ${json}` };
-  }
-  return { value: parsed as Record<string, unknown> };
-}
-
-/** Compares the actually-served (wire-serialized) shape of the voicebox
- * entry against FROZEN, restricted to `fields`. Empty return = exact match:
- * every named field is present with a value strictly equal to FROZEN's. */
+/** Compares a wire-observed voicebox entry against FROZEN, restricted to
+ * `fields`. Empty return = exact match. */
 function compareFrozenFields(
   wireShape: Record<string, unknown>,
   fields: readonly (keyof typeof FROZEN)[],
@@ -741,72 +972,191 @@ function compareFrozenFields(
     const expected = FROZEN[field];
     if (actual !== expected) {
       problems.push(
-        `runtime-serialized ${String(field)}=${JSON.stringify(actual)}, want exactly ${JSON.stringify(expected)}`,
+        `wire-observed ${String(field)}=${JSON.stringify(actual)}, want exactly ${JSON.stringify(expected)}`,
       );
     }
   }
   return problems;
 }
 
-/** Used only by `RUNTIME-SELFTEST`: writes a synthetic module `source` to a
- * throwaway file, imports it through the identical mechanism
- * `importRealTemplatesAtHead()` uses, and runs it through the same
- * find/serialize/compare pipeline C10B-1/2/4 use -- so the selftest proves
- * something about the REAL path, not a reimplementation of it. `expectClean`
- * says whether this fixture is supposed to compare byte-for-byte equal to
- * FROZEN (the legitimate-entry control) or supposed to be DETECTED as
- * diverging (every attack-shape fixture) -- either outcome not matching
- * `expectClean` is a selftest failure, including a fixture that was
- * expected to diverge but compared clean (a false green in the mechanism
- * itself, which is exactly what round 4 exists to rule out). */
-async function runOneRuntimeSelftestCase(
-  name: string,
-  source: string,
-  expectClean: boolean,
-): Promise<{ name: string; ok: boolean; detail: string }> {
-  const runtime = await importTemplatesModuleFromSource(source, `RUNTIME-SELFTEST fixture '${name}'`);
-  if (!runtime.ok || !runtime.templates) {
-    return { name, ok: false, detail: `fixture import failed: ${runtime.error ?? 'unknown error'}` };
+interface RepeatedObservation {
+  ok: boolean;
+  error?: string;
+  reads: Record<string, unknown>[];
+}
+
+/** Issues `n` INDEPENDENT real HTTP reads against the same long-lived
+ * `daemonUrl`, each requiring exactly one wire-observed element with
+ * id==='voicebox'. This is what closes round-4 bypass (2) -- a getter or
+ * counter honest only on an early read fails on a later independent one,
+ * because every read here is a fresh network round trip against the SAME
+ * module instance the daemon has held since it booted, never a fresh
+ * import. */
+async function observeVoiceboxWireEntryRepeated(daemonUrl: string, n: number): Promise<RepeatedObservation> {
+  const reads: Record<string, unknown>[] = [];
+  for (let i = 0; i < n; i++) {
+    // eslint-disable-next-line no-await-in-loop -- reads must be sequential,
+    // independent round trips against the daemon's one long-lived module
+    // instance, not concurrent requests racing each other.
+    const wire = await fetchMcpServersWire(daemonUrl);
+    if (!wire.ok || !wire.templates) {
+      return { ok: false, error: `read #${i + 1}: ${wire.error ?? 'unknown fetch error'}`, reads };
+    }
+    const matches = findVoiceboxWireEntries(wire.templates);
+    if (matches.length !== 1) {
+      return {
+        ok: false,
+        error: `read #${i + 1}: expected exactly 1 wire element with id 'voicebox', found ${matches.length}`,
+        reads,
+      };
+    }
+    const entry = matches[0];
+    if (!entry) {
+      return { ok: false, error: `read #${i + 1}: unreachable -- matches.length===1 but element was falsy`, reads };
+    }
+    reads.push(entry);
   }
-  const matches = findVoiceboxRuntimeEntries(runtime.templates);
-  if (matches.length !== 1) {
-    return {
-      name,
-      ok: false,
-      detail: `expected exactly 1 runtime element with id 'voicebox' in the fixture, found ${matches.length}`,
-    };
-  }
-  const wire = serializeAsWireWould(matches[0]);
-  if (!wire.value) {
-    return { name, ok: false, detail: `fixture entry did not serialize to a plain object: ${wire.problem}` };
-  }
-  const actualKeys = Object.keys(wire.value).sort();
-  const frozenKeys = Object.keys(FROZEN).sort();
-  const keySetProblems =
-    actualKeys.join(',') !== frozenKeys.join(',')
-      ? [`key set mismatch: actual=[${actualKeys.join(', ')}] frozen=[${frozenKeys.join(', ')}]`]
-      : [];
-  const fieldProblems = compareFrozenFields(wire.value, frozenKeys as (keyof typeof FROZEN)[]);
-  const allProblems = [...keySetProblems, ...fieldProblems];
-  const isClean = allProblems.length === 0;
-  const matchesExpectation = isClean === expectClean;
-  return {
-    name,
-    ok: matchesExpectation,
-    detail: matchesExpectation
-      ? isClean
-        ? 'correctly detected as clean (matches FROZEN exactly)'
-        : `correctly detected ${allProblems.length} divergence(s) from FROZEN: ${allProblems.join(' | ')}`
-      : isClean
-        ? 'FALSE GREEN -- fixture should have diverged from FROZEN but compared clean'
-        : `expected clean but found divergence(s): ${allProblems.join(' | ')}`,
-  };
+  return { ok: true, reads };
 }
 
 // ---------------------------------------------------------------------
-// Comment collection (round-3 finding 2 fix). See the header note for why
-// this trusts the parser's own literal boundaries instead of hand-rolling a
-// stateful scanner loop.
+// WIRE-SELFTEST fixtures (round 5, replaces round 4's RUNTIME-SELFTEST).
+// See the header's WIRE-SELFTEST note for the full rationale: these fixture
+// objects are built directly, using the same JS mechanisms (Object.create,
+// getters, spreads, post-declaration mutation) hostile SOURCE would use --
+// JSON.stringify cannot tell the difference between an object built inline
+// here and one produced by compiling and importing a module, so building
+// them inline is fully faithful for testing THIS FILE's observation
+// pipeline, without reintroducing any temp-file/module-identity mechanism.
+// ---------------------------------------------------------------------
+const EVIL_FIELDS = {
+  id: 'voicebox',
+  label: 'EVIL',
+  description: 'evil',
+  example: 'evil',
+  homepage: 'https://evil.invalid',
+  transport: 'http',
+  authMode: 'oauth',
+  category: 'utilities',
+  url: 'http://evil.invalid',
+} as const;
+
+type FixtureKind =
+  | 'clean-legitimate-entry'
+  | 'proto-inherited-tojson'
+  | 'own-method-tojson'
+  | 'spread-override'
+  | 'getter-accessor-override'
+  | 'defineProperty-after-declaration'
+  | 'setPrototypeOf-after-declaration'
+  | 'dead-branch-lookalike-ternary';
+
+function buildFixtureEntry(kind: FixtureKind): unknown {
+  switch (kind) {
+    case 'clean-legitimate-entry':
+      return { ...FROZEN };
+    case 'proto-inherited-tojson': {
+      const proto = { toJSON: () => ({ ...EVIL_FIELDS }) };
+      return Object.assign(Object.create(proto), FROZEN);
+    }
+    case 'own-method-tojson':
+      return { ...FROZEN, toJSON: () => ({ ...EVIL_FIELDS }) };
+    case 'spread-override':
+      // Mirrors round 2's exact vector: frozen direct properties, THEN a
+      // later spread that silently wins (JS object literals are
+      // last-write-wins).
+      return { ...FROZEN, ...{ url: EVIL_FIELDS.url, authMode: EVIL_FIELDS.authMode } };
+    case 'getter-accessor-override': {
+      const { url: _unused, ...rest } = FROZEN;
+      return Object.defineProperty({ ...rest }, 'url', {
+        get: () => EVIL_FIELDS.url,
+        enumerable: true,
+        configurable: true,
+      });
+    }
+    case 'defineProperty-after-declaration': {
+      const obj: Record<string, unknown> = { ...FROZEN };
+      Object.defineProperty(obj, 'url', { value: EVIL_FIELDS.url, enumerable: true, configurable: true });
+      return obj;
+    }
+    case 'setPrototypeOf-after-declaration': {
+      const obj: Record<string, unknown> = { ...FROZEN };
+      Object.setPrototypeOf(obj, { toJSON: () => ({ ...EVIL_FIELDS }) });
+      return obj;
+    }
+    case 'dead-branch-lookalike-ternary': {
+      const ALWAYS_EVIL = 1 === 1;
+      const { url: _unused, ...rest } = FROZEN;
+      return { ...rest, url: ALWAYS_EVIL ? EVIL_FIELDS.url : FROZEN.url };
+    }
+  }
+}
+
+/** Serves `entry` nested inside `{ servers: [], templates: [entry] }` --
+ * matching production's exact shape at apps/daemon/src/mcp-routes.ts:157 --
+ * from a genuine in-process `node:http` server, then fetches it TWICE over a
+ * real loopback socket through the exact same `fetchMcpServersWire()` /
+ * `findVoiceboxWireEntries()` / `compareFrozenFields()` pipeline C10B-1/2/4
+ * use. In-process (no subprocess, no process group) because the fixtures
+ * never claim to BE production -- see the header's WIRE-SELFTEST note. */
+async function runOneWireSelftestCase(
+  name: string,
+  kind: FixtureKind,
+  expectClean: boolean,
+): Promise<{ name: string; ok: boolean; detail: string }> {
+  const entry = buildFixtureEntry(kind);
+  const server = http.createServer((_req, res) => {
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ servers: [], templates: [entry] }));
+  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', () => resolve());
+    });
+    const address = server.address();
+    const port = address && typeof address === 'object' ? address.port : 0;
+    if (!port) return { name, ok: false, detail: 'selftest http server did not resolve a port' };
+    if (FORBIDDEN_PORTS.has(port)) {
+      return { name, ok: false, detail: `selftest http server bound to a forbidden port ${port}` };
+    }
+    const url = `http://127.0.0.1:${port}`;
+    const observation = await observeVoiceboxWireEntryRepeated(url, 2);
+    if (!observation.ok) {
+      return { name, ok: false, detail: `fixture fetch failed: ${observation.error}` };
+    }
+    const frozenKeys = Object.keys(FROZEN).sort();
+    const perReadProblems = observation.reads.map((read) => {
+      const actualKeys = Object.keys(read).sort();
+      const keySetProblems =
+        actualKeys.join(',') !== frozenKeys.join(',')
+          ? [`key set mismatch: actual=[${actualKeys.join(', ')}] frozen=[${frozenKeys.join(', ')}]`]
+          : [];
+      return [...keySetProblems, ...compareFrozenFields(read, frozenKeys as (keyof typeof FROZEN)[])];
+    });
+    const allProblems = perReadProblems.flat();
+    const isClean = allProblems.length === 0;
+    const matchesExpectation = isClean === expectClean;
+    return {
+      name,
+      ok: matchesExpectation,
+      detail: matchesExpectation
+        ? isClean
+          ? 'correctly detected as clean across both wire reads (matches FROZEN exactly)'
+          : `correctly detected divergence(s) from FROZEN over the wire: ${allProblems.join(' | ')}`
+        : isClean
+          ? 'FALSE GREEN -- fixture should have diverged from FROZEN over the wire but compared clean'
+          : `expected clean but found wire divergence(s): ${allProblems.join(' | ')}`,
+    };
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+}
+
+// ---------------------------------------------------------------------
+// Comment collection (round-3 finding 2 fix, unchanged since). Trusts the
+// parser's own literal boundaries instead of hand-rolling a stateful scanner
+// loop -- see SCANNER-SELFTEST below.
 // ---------------------------------------------------------------------
 const COMMENT_LIKE_PATTERN = /\/\/[^\n]*|\/\*[\s\S]*?\*\//g;
 
@@ -875,153 +1225,176 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Each criterion below independently re-reads and re-scans HEAD (and, for
-  // C10B-3, baseCommit too) rather than sharing state from an earlier
-  // criterion -- every check must stand on its own regardless of run order.
+  // ---------------------------------------------------------------------
+  // Boot ONE isolated daemon, shared by C10B-1/2/4 and torn down by
+  // DAEMON-TEARDOWN below. Sharing one long-lived instance across all three
+  // criteria is intentional, not an efficiency shortcut: it is what makes
+  // "the daemon holds one module instance across many requests" (the exact
+  // production property round-4 bypass (2) exploited the absence of)
+  // actually true of this run, rather than merely asserted by naming three
+  // criteria "independent." See the header's ROUND-5 note.
+  // ---------------------------------------------------------------------
+  let boot: BootResult;
+  try {
+    boot = await bootIsolatedDaemon();
+  } catch (err) {
+    boot = {
+      ok: false,
+      error: `bootIsolatedDaemon() threw: ${String((err as Error)?.stack ?? err)}`,
+      spawnedPid: null,
+      teardownIfSpawned: null,
+    };
+  }
+  const liveDaemon: LiveDaemon | null = boot.ok ? boot.daemon : null;
+  const bootFailureDetail = boot.ok ? null : boot.error;
 
-  // -----------------------------------------------------------------
-  // C10B-1 -- registration present, proven at RUNTIME (round 4 -- see the
-  // header's "ROUND-4" note): dynamically imports HEAD's real
-  // MCP_TEMPLATES, requires exactly one runtime element whose real `.id`
-  // equals 'voicebox', and requires its wire-serialized (JSON.stringify,
-  // exactly like res.json) own-key set to be EXACTLY FROZEN's key set -- no
-  // more, no fewer. The key-set check is what closes the round-3 vector at
-  // this criterion: a __proto__/inherited-toJSON override, an accessor, a
-  // spread, or a post-declaration defineProperty/setPrototypeOf mutation
-  // cannot smuggle an extra or missing wire field past this check, because
-  // it inspects the actually-serialized value, not source shape.
-  // -----------------------------------------------------------------
-  await checkCriterion('C10B-1', async () => {
-    const runtime = await importRealTemplatesAtHead();
-    if (!runtime.ok || !runtime.templates) {
+  async function recordDaemonBoundCriterion(
+    id: string,
+    assertion: string,
+    fields: readonly (keyof typeof FROZEN)[],
+    extraCheck?: (read: Record<string, unknown>) => string[],
+  ): Promise<void> {
+    if (!liveDaemon) {
+      record(id, '', assertion, false, '', {
+        detail: `isolated daemon never became ready: ${bootFailureDetail ?? 'unknown boot failure'}`,
+      });
+      return;
+    }
+    const observation = await observeVoiceboxWireEntryRepeated(liveDaemon.url, 3);
+    if (!observation.ok) {
       record(
-        'C10B-1',
-        `dynamic import() of a throwaway copy of HEAD's ${TEMPLATE_FILE}`,
-        "MCP_TEMPLATES has exactly one runtime element with id === 'voicebox'",
+        id,
+        `GET ${liveDaemon.url}/api/mcp/servers (repeated, real HTTP)`,
+        assertion,
         false,
         '',
-        { detail: runtime.error ?? 'runtime import failed for an unknown reason' },
+        { detail: observation.error ?? 'repeated wire observation failed for an unknown reason' },
       );
       return;
     }
-    const matches = findVoiceboxRuntimeEntries(runtime.templates);
-    if (matches.length !== 1) {
-      record(
-        'C10B-1',
-        `import HEAD's real MCP_TEMPLATES module, filter runtime elements by (t.id === 'voicebox')`,
-        "MCP_TEMPLATES has exactly one runtime element with id === 'voicebox'",
-        false,
-        `${runtime.templates.length} total runtime template(s); ${matches.length} with id === 'voicebox'`,
-        {
-          detail:
-            matches.length === 0
-              ? "no runtime element with id 'voicebox' -- VoiceBox is not registered yet"
-              : `${matches.length} runtime elements claim id 'voicebox' -- ambiguous`,
-        },
-      );
-      return;
-    }
-    const wire = serializeAsWireWould(matches[0]);
-    if (!wire.value) {
-      record(
-        'C10B-1',
-        'JSON.stringify(entry) then JSON.parse -- the same transform res.json performs',
-        "the voicebox entry serializes to a plain object exactly as apps/daemon/src/mcp-routes.ts:151's res.json would send it",
-        false,
-        '',
-        { detail: wire.problem },
-      );
-      return;
-    }
-    const actualKeys = Object.keys(wire.value).sort();
     const frozenKeys = Object.keys(FROZEN).sort();
-    const extra = actualKeys.filter((k) => !frozenKeys.includes(k));
-    const missing = frozenKeys.filter((k) => !actualKeys.includes(k));
-    const keySetOk = extra.length === 0 && missing.length === 0;
+    const perReadProblems = observation.reads.map((read, i) => {
+      const actualKeys = Object.keys(read).sort();
+      const extra = actualKeys.filter((k) => !frozenKeys.includes(k));
+      const missing = frozenKeys.filter((k) => !actualKeys.includes(k));
+      const keySetProblems =
+        extra.length || missing.length
+          ? [`read #${i + 1}: EXTRA keys=[${extra.join(', ')}] MISSING keys=[${missing.join(', ')}]`]
+          : [];
+      const fieldProblems = compareFrozenFields(read, fields).map((p) => `read #${i + 1}: ${p}`);
+      const extraProblems = (extraCheck?.(read) ?? []).map((p) => `read #${i + 1}: ${p}`);
+      return [...keySetProblems, ...fieldProblems, ...extraProblems];
+    });
+    const allProblems = perReadProblems.flat();
     record(
-      'C10B-1',
-      "import HEAD's real MCP_TEMPLATES module, find the id==='voicebox' element, JSON.stringify it exactly as res.json would",
-      `exactly one runtime element has id === 'voicebox', and its wire-serialized own-key set is exactly {${frozenKeys.join(', ')}} -- no more, no fewer`,
-      keySetOk,
-      `wire-serialized keys: [${actualKeys.join(', ')}]${extra.length ? `\nEXTRA keys not in FROZEN: [${extra.join(', ')}]` : ''}${missing.length ? `\nMISSING frozen keys: [${missing.join(', ')}]` : ''}`,
-      { detail: keySetOk ? undefined : `extra=${JSON.stringify(extra)} missing=${JSON.stringify(missing)}` },
+      id,
+      `GET ${liveDaemon.url}/api/mcp/servers (3 independent real HTTP reads against the one isolated daemon instance)`,
+      assertion,
+      allProblems.length === 0,
+      allProblems.join('\n') ||
+        `all ${observation.reads.length} wire reads matched FROZEN exactly: ${JSON.stringify(observation.reads[0])}`,
+      { detail: allProblems.length === 0 ? undefined : allProblems.join('; ') },
     );
-  });
+  }
 
   // -----------------------------------------------------------------
-  // C10B-2 -- correct transport/config shape, exact, proven at RUNTIME
-  // (round 4): the same wire-serialized voicebox entry C10B-1 established
-  // must have transport/url/category/authMode strictly equal to FROZEN and
-  // no 'headerFields' key at all. Depends on C10B-1 for the key-set
-  // guarantee (an extra/missing field is already caught there); this
-  // criterion checks the specific VALUES of the config-shape fields.
+  // C10B-1 -- registration present, proven at RUNTIME against the REAL
+  // booted daemon's REAL GET /api/mcp/servers response, read 3 independent
+  // times. Requires exactly one wire element per read whose id ===
+  // 'voicebox', and that read's own-key set to be EXACTLY FROZEN's key set.
   // -----------------------------------------------------------------
-  await checkCriterion('C10B-2', async () => {
-    const runtime = await importRealTemplatesAtHead();
-    if (!runtime.ok || !runtime.templates) {
-      record(
-        'C10B-2',
-        '',
-        'transport/url/category/authMode match FROZEN exactly at runtime; no headerFields key is served',
-        false,
-        '',
-        { detail: runtime.error ?? 'runtime import failed for an unknown reason' },
-      );
-      return;
-    }
-    const matches = findVoiceboxRuntimeEntries(runtime.templates);
-    if (matches.length !== 1) {
-      record(
-        'C10B-2',
-        '',
-        'transport/url/category/authMode match FROZEN exactly at runtime; no headerFields key is served',
-        false,
-        '',
-        { detail: `see C10B-1 -- ${matches.length} runtime element(s) with id 'voicebox'` },
-      );
-      return;
-    }
-    const wire = serializeAsWireWould(matches[0]);
-    if (!wire.value) {
-      record(
-        'C10B-2',
-        '',
-        'transport/url/category/authMode match FROZEN exactly at runtime; no headerFields key is served',
-        false,
-        '',
-        { detail: wire.problem },
-      );
-      return;
-    }
-    const problems = compareFrozenFields(wire.value, ['transport', 'url', 'category', 'authMode']);
-    if ('headerFields' in wire.value) {
-      problems.push(
-        `runtime-serialized entry has a 'headerFields' key (value=${JSON.stringify(wire.value['headerFields'])}) -- round-1 ruling pins X-Voicebox-Client-Id (and headerFields entirely) absent`,
-      );
-    }
-    record(
+  await checkCriterion('C10B-1', () =>
+    recordDaemonBoundCriterion(
+      'C10B-1',
+      "exactly one wire-observed element has id === 'voicebox' on every one of 3 independent real HTTP reads, and each read's own-key set is exactly FROZEN's key set -- no more, no fewer",
+      [],
+    ),
+  );
+
+  // -----------------------------------------------------------------
+  // C10B-2 -- correct transport/config shape, exact, proven at RUNTIME on
+  // the same repeated wire observation C10B-1 establishes.
+  // -----------------------------------------------------------------
+  await checkCriterion('C10B-2', () =>
+    recordDaemonBoundCriterion(
       'C10B-2',
-      "import HEAD's real MCP_TEMPLATES module, JSON.stringify the id==='voicebox' entry exactly as res.json would, inspect transport/url/category/authMode/headerFields",
-      `runtime-serialized transport===${JSON.stringify(FROZEN.transport)}, url===${JSON.stringify(FROZEN.url)} exactly, category===${JSON.stringify(FROZEN.category)}, authMode===${JSON.stringify(FROZEN.authMode)} exactly, no headerFields key served`,
-      problems.length === 0,
-      problems.join('\n') || JSON.stringify(wire.value),
-      { detail: problems.length === 0 ? undefined : problems.join('; ') },
+      "wire-observed transport===FROZEN.transport, url===FROZEN.url (full-string), category===FROZEN.category, authMode===FROZEN.authMode on every read; no 'headerFields' key served on any read",
+      ['transport', 'url', 'category', 'authMode'],
+      (read) =>
+        'headerFields' in read
+          ? [
+              `wire-observed entry has a 'headerFields' key (value=${JSON.stringify(read['headerFields'])}) -- round-1 ruling pins X-Voicebox-Client-Id (and headerFields entirely) absent`,
+            ]
+          : [],
+    ),
+  );
+
+  // -----------------------------------------------------------------
+  // C10B-4 -- no voiceover-workflow scope creep (round-1 finding 4), proven
+  // at RUNTIME on the same repeated wire observation.
+  // -----------------------------------------------------------------
+  await checkCriterion('C10B-4', () =>
+    recordDaemonBoundCriterion(
+      'C10B-4',
+      'wire-observed label/description/example/homepage are byte-identical to the frozen strings on every read',
+      ['label', 'description', 'example', 'homepage'],
+    ),
+  );
+
+  // -----------------------------------------------------------------
+  // DAEMON-TEARDOWN -- infra check, not a PRD criterion (mirrors
+  // GATE-INTEGRITY's "infra check" shape). Binding safety constraint for
+  // this run: a failed or partial teardown FAILS the run. If the daemon
+  // never finished booting, nothing was left running either way -- recorded
+  // as `not-exercised`, never a vacuous `pass`.
+  // -----------------------------------------------------------------
+  await checkCriterion('DAEMON-TEARDOWN', async () => {
+    if (boot.ok) {
+      const teardown = await boot.daemon.shutdown();
+      record(
+        'DAEMON-TEARDOWN',
+        'killGroupFailClosed(pid) -- SIGTERM the process group, poll for group emptiness, escalate to SIGKILL, re-scan ps before declaring success',
+        "the isolated daemon's entire process group is confirmed empty after teardown",
+        teardown.ok,
+        teardown.detail,
+        { detail: teardown.ok ? undefined : teardown.detail },
+      );
+      return;
+    }
+    if (boot.spawnedPid !== null) {
+      // Boot spawned a process but never became ready; bootIsolatedDaemon()
+      // already ran killGroupFailClosed() internally on that failure path
+      // (see `failBoot()`) -- report that real teardown result here rather
+      // than re-deriving it, since a process genuinely was spawned and
+      // needed cleanup.
+      const teardown = boot.teardownIfSpawned;
+      record(
+        'DAEMON-TEARDOWN',
+        'killGroupFailClosed(pid), run inside bootIsolatedDaemon()\'s own failure path',
+        "the isolated daemon's entire process group is confirmed empty after teardown, even though boot itself never became ready",
+        teardown?.ok === true,
+        teardown?.detail ?? 'no teardown result recorded for a spawned pid -- treated as unconfirmed',
+        { detail: teardown?.ok === true ? undefined : (teardown?.detail ?? 'unconfirmed teardown after a spawned pid') },
+      );
+      return;
+    }
+    // spawn() itself never produced a pid -- genuinely nothing was ever
+    // running, so there is nothing to have leaked. Distinct from `pass`:
+    // the mechanism was not exercised this run.
+    record(
+      'DAEMON-TEARDOWN',
+      '',
+      "the isolated daemon's entire process group is confirmed empty after teardown",
+      true,
+      `no process was ever spawned this run (boot failed before spawn: ${bootFailureDetail ?? 'unknown'})`,
+      { status: 'not-exercised' },
     );
   });
 
   // -----------------------------------------------------------------
   // C10B-3 -- no extra surface added (round-1 findings 1-3, round-3
-  // finding 1 + ruling): lease-glob diff subset check against the NARROWED
-  // lease (mcp-config.ts only), asserting BOTH allow===exactly one entry
-  // AND deny contains this verifier and the PRD (round-3: "the
-  // implementation lease proposal must keep your own PRD + verifier in the
-  // DENY list"); both baseCommit and HEAD's MCP_TEMPLATES arrays must be
-  // structurally identifiable by id (every element a plain object literal
-  // with a literal string id, no duplicate id across the array -- see
-  // `ArrayScan.problems`' doc comment for why this stays AST/text-based
-  // post-round-4); the file's text OUTSIDE the array's own span must be
-  // byte-identical; every pre-existing entry byte-identical; exactly one
-  // net-new id, 'voicebox'.
+  // finding 1 + ruling): UNCHANGED from round 4 -- see the header's
+  // ROUND-5 note on why this stays AST/text-based.
   // -----------------------------------------------------------------
   function globToRegExp(glob: string): RegExp {
     let re = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&');
@@ -1133,68 +1506,7 @@ async function main(): Promise<void> {
   });
 
   // -----------------------------------------------------------------
-  // C10B-4 -- no voiceover-workflow scope creep (round-1 finding 4), proven
-  // at RUNTIME (round 4): byte-exact equality against the ONE frozen string
-  // per free-text field, checked on the actually-served (wire-serialized)
-  // value rather than a static AST read -- the same mechanism as C10B-2, so
-  // a __proto__/inherited-toJSON override, a spread, an accessor, or a
-  // post-declaration mutation cannot smuggle different wording past this
-  // check either.
-  // -----------------------------------------------------------------
-  await checkCriterion('C10B-4', async () => {
-    const runtime = await importRealTemplatesAtHead();
-    if (!runtime.ok || !runtime.templates) {
-      record(
-        'C10B-4',
-        '',
-        'label/description/example/homepage are byte-identical to the frozen strings, at runtime',
-        false,
-        '',
-        { detail: runtime.error ?? 'runtime import failed for an unknown reason' },
-      );
-      return;
-    }
-    const matches = findVoiceboxRuntimeEntries(runtime.templates);
-    if (matches.length !== 1) {
-      record(
-        'C10B-4',
-        '',
-        'label/description/example/homepage are byte-identical to the frozen strings, at runtime',
-        false,
-        '',
-        { detail: `see C10B-1 -- ${matches.length} runtime element(s) with id 'voicebox'` },
-      );
-      return;
-    }
-    const wire = serializeAsWireWould(matches[0]);
-    if (!wire.value) {
-      record(
-        'C10B-4',
-        '',
-        'label/description/example/homepage are byte-identical to the frozen strings, at runtime',
-        false,
-        '',
-        { detail: wire.problem },
-      );
-      return;
-    }
-    const problems = compareFrozenFields(wire.value, ['label', 'description', 'example', 'homepage']);
-
-    record(
-      'C10B-4',
-      "import HEAD's real MCP_TEMPLATES module, JSON.stringify the id==='voicebox' entry exactly as res.json would, inspect label/description/example/homepage",
-      'runtime-serialized label/description/example/homepage are byte-identical to the frozen strings in this PRD\'s "Implementation surface" section',
-      problems.length === 0,
-      problems.join('\n') || JSON.stringify(wire.value),
-      { detail: problems.length === 0 ? undefined : problems.join('; ') },
-    );
-  });
-
-  // -----------------------------------------------------------------
-  // C10B-5 -- documentation record (round-1 finding 6, round-2 finding 6 /
-  // round-3 finding 2 fix): a genuinely NEW comment token (never a string or
-  // template-literal token, at any nesting depth of interpolation) must
-  // exist at HEAD but not at baseCommit.
+  // C10B-5 -- documentation record: UNCHANGED from round 4.
   // -----------------------------------------------------------------
   await checkCriterion('C10B-5', () => {
     const baseText = readFileAtCommit(baseCommit, TEMPLATE_FILE);
@@ -1223,13 +1535,10 @@ async function main(): Promise<void> {
   });
 
   // -----------------------------------------------------------------
-  // GATE-INTEGRITY -- infra check, not a PRD criterion (round-3 finding 3;
-  // mirrors scripts/waves/verify-w9-ingest.ts's own GATE-INTEGRITY shape).
-  // Defense in depth: self-hashes the file currently executing and compares
-  // against an orchestrator-placed approved-gate.sha256. The PRIMARY control
-  // remains C10B-3's lease-subset check (this file is not in the
-  // implementer's allow list); this check adds an independent layer that
-  // does not depend on lease/diff semantics at all.
+  // GATE-INTEGRITY -- infra check, not a PRD criterion. UNCHANGED from
+  // round 3/4. Defense in depth: self-hashes the file currently executing
+  // and compares against an orchestrator-placed approved-gate.sha256. The
+  // PRIMARY control remains C10B-3's lease-subset check.
   // -----------------------------------------------------------------
   await checkCriterion('GATE-INTEGRITY', () => {
     const selfPath = process.argv[1] ? path.resolve(process.argv[1]) : path.join(repoRoot, 'scripts/waves/verify-w10b.ts');
@@ -1266,11 +1575,8 @@ async function main(): Promise<void> {
   });
 
   // -----------------------------------------------------------------
-  // SCANNER-SELFTEST -- infra check, not a PRD criterion (round-3 finding 2:
-  // "add a template-heavy fixture proving the fix"). Two-file constraint
-  // means the fixture lives here, in-process, rather than as a third file.
-  // Exercises collectComments() against the exact round-2 false-positive
-  // cases plus positive/negative controls.
+  // SCANNER-SELFTEST -- infra check, not a PRD criterion. UNCHANGED from
+  // round 3.
   // -----------------------------------------------------------------
   await checkCriterion('SCANNER-SELFTEST', () => {
     const cases: Array<{ name: string; source: string; expectNm25Comments: string[] }> = [
@@ -1336,84 +1642,42 @@ async function main(): Promise<void> {
   });
 
   // -----------------------------------------------------------------
-  // RUNTIME-SELFTEST -- infra check, not a PRD criterion (round 4: proves
-  // the runtime-import mechanism C10B-1/2/4 now depend on actually detects
-  // the round-3 REJECT vector and its sibling shapes, rather than merely
-  // asserting it does in a comment). Exercises the EXACT same pipeline
-  // C10B-1/2/4 use (importTemplatesModuleFromSource ->
-  // findVoiceboxRuntimeEntries -> serializeAsWireWould -> compareFrozenFields)
-  // against eight synthetic module sources -- never touching this
-  // repository's real mcp-config.ts -- mirroring SCANNER-SELFTEST's
-  // established in-process-fixture pattern (the two-file constraint means
-  // the fixtures live here, not as a third file).
+  // WIRE-SELFTEST -- infra check, not a PRD criterion (round 5, replaces
+  // round 4's RUNTIME-SELFTEST). See the header's WIRE-SELFTEST note for
+  // the full mechanism and rationale. Proves this file's own
+  // fetch+parse+compare pipeline correctly passes a clean entry and
+  // correctly DETECTS every named mutation-probe divergence vector over a
+  // real loopback HTTP round trip.
   // -----------------------------------------------------------------
-  await checkCriterion('RUNTIME-SELFTEST', async () => {
-    const frozenKeysOrdered = Object.keys(FROZEN) as (keyof typeof FROZEN)[];
-    const frozenFieldsSource = frozenKeysOrdered.map((k) => `    ${k}: ${JSON.stringify(FROZEN[k])},`).join('\n');
-    const frozenFieldsSourceNoUrl = frozenKeysOrdered
-      .filter((k) => k !== 'url')
-      .map((k) => `    ${k}: ${JSON.stringify(FROZEN[k])},`)
-      .join('\n');
-    const evilObjectLiteral =
-      "{ id: 'voicebox', label: 'EVIL', description: 'evil', example: 'evil', homepage: 'https://evil.invalid', transport: 'http', authMode: 'oauth', category: 'utilities', url: 'http://evil.invalid' }";
-
-    const cases: Array<{ name: string; source: string; expectClean: boolean }> = [
-      {
-        name: 'clean-legitimate-entry',
-        source: `export const MCP_TEMPLATES = [\n  {\n${frozenFieldsSource}\n  },\n];\n`,
-        expectClean: true,
-      },
+  await checkCriterion('WIRE-SELFTEST', async () => {
+    const cases: Array<{ name: string; kind: FixtureKind; expectClean: boolean }> = [
+      { name: 'clean-legitimate-entry', kind: 'clean-legitimate-entry', expectClean: true },
       {
         name: 'round3-proto-inherited-tojson (the exact round-3 REJECT vector)',
-        source: `export const MCP_TEMPLATES = [\n  {\n${frozenFieldsSource}\n    __proto__: { toJSON: () => (${evilObjectLiteral}) },\n  },\n];\n`,
+        kind: 'proto-inherited-tojson',
         expectClean: false,
       },
-      {
-        name: 'own-method-toJSON',
-        source: `export const MCP_TEMPLATES = [\n  {\n${frozenFieldsSource}\n    toJSON() { return ${evilObjectLiteral}; },\n  },\n];\n`,
-        expectClean: false,
-      },
-      {
-        name: 'round2-spread-override (regression)',
-        source: `export const MCP_TEMPLATES = [\n  {\n${frozenFieldsSource}\n    ...{ url: 'http://evil.invalid', authMode: 'oauth' },\n  },\n];\n`,
-        expectClean: false,
-      },
-      {
-        name: 'getter-accessor-override',
-        source: `export const MCP_TEMPLATES = [\n  {\n${frozenFieldsSourceNoUrl}\n    get url() { return 'http://evil.invalid'; },\n  },\n];\n`,
-        expectClean: false,
-      },
-      {
-        name: 'defineProperty-after-declaration',
-        source: `export const MCP_TEMPLATES = [\n  {\n${frozenFieldsSource}\n  },\n];\nObject.defineProperty(MCP_TEMPLATES[0], 'url', { value: 'http://evil.invalid', enumerable: true, configurable: true });\n`,
-        expectClean: false,
-      },
-      {
-        name: 'setPrototypeOf-after-declaration',
-        source: `export const MCP_TEMPLATES = [\n  {\n${frozenFieldsSource}\n  },\n];\nObject.setPrototypeOf(MCP_TEMPLATES[0], { toJSON: () => (${evilObjectLiteral}) });\n`,
-        expectClean: false,
-      },
-      {
-        name: 'dead-branch-lookalike-ternary',
-        source: `const ALWAYS_EVIL = (1 === 1);\nexport const MCP_TEMPLATES = [\n  {\n${frozenFieldsSourceNoUrl}\n    url: (ALWAYS_EVIL ? 'http://evil.invalid' : ${JSON.stringify(FROZEN.url)}),\n  },\n];\n`,
-        expectClean: false,
-      },
+      { name: 'own-method-toJSON', kind: 'own-method-tojson', expectClean: false },
+      { name: 'round2-spread-override (regression)', kind: 'spread-override', expectClean: false },
+      { name: 'getter-accessor-override', kind: 'getter-accessor-override', expectClean: false },
+      { name: 'defineProperty-after-declaration', kind: 'defineProperty-after-declaration', expectClean: false },
+      { name: 'setPrototypeOf-after-declaration', kind: 'setPrototypeOf-after-declaration', expectClean: false },
+      { name: 'dead-branch-lookalike-ternary', kind: 'dead-branch-lookalike-ternary', expectClean: false },
     ];
-
     const outcomes: Array<{ name: string; ok: boolean; detail: string }> = [];
     for (const c of cases) {
       // eslint-disable-next-line no-await-in-loop -- fixtures must run
-      // sequentially: each writes to its own throwaway temp dir and cleans
-      // up before the next starts, so there is no benefit to parallelizing
-      // and it keeps failure attribution unambiguous.
-      const outcome = await runOneRuntimeSelftestCase(c.name, c.source, c.expectClean);
+      // sequentially: each binds its own throwaway in-process http server
+      // and closes it before the next starts, so there is no benefit to
+      // parallelizing and it keeps failure attribution unambiguous.
+      const outcome = await runOneWireSelftestCase(c.name, c.kind, c.expectClean);
       outcomes.push(outcome);
     }
     const failures = outcomes.filter((o) => !o.ok);
     record(
-      'RUNTIME-SELFTEST',
-      'in-process fixture cases: write a synthetic MCP_TEMPLATES module, dynamically import it exactly like importRealTemplatesAtHead() does, run it through the same findVoiceboxRuntimeEntries/serializeAsWireWould/compareFrozenFields pipeline C10B-1/2/4 use',
-      'the runtime-import mechanism correctly passes a clean legitimate entry and correctly DETECTS every named divergence vector as a mismatch (no false green): __proto__/inherited toJSON (the exact round-3 vector), an own toJSON method, a property spread overriding earlier fields (round-2 regression), a getter/accessor, a post-declaration Object.defineProperty mutation, a post-declaration Object.setPrototypeOf mutation, and a dead-branch-lookalike conditional',
+      'WIRE-SELFTEST',
+      'in-process node:http fixture cases: serve a synthetic { servers: [], templates: [entry] } body exactly like mcp-routes.ts:157, fetch it twice over real loopback HTTP through the exact fetchMcpServersWire()/findVoiceboxWireEntries()/compareFrozenFields() pipeline C10B-1/2/4 use',
+      'the wire-observation mechanism correctly passes a clean legitimate entry and correctly DETECTS every named divergence vector as a mismatch over the wire (no false green): __proto__/inherited toJSON (the round-3 vector), an own toJSON method, a property spread overriding earlier fields (round-2 regression), a getter/accessor, a post-declaration Object.defineProperty mutation, a post-declaration Object.setPrototypeOf mutation, and a dead-branch-lookalike conditional',
       failures.length === 0,
       outcomes.map((o) => `[${o.ok ? 'OK' : 'FAIL'}] ${o.name}: ${o.detail}`).join('\n'),
       {
@@ -1426,8 +1690,7 @@ async function main(): Promise<void> {
   });
 
   // -----------------------------------------------------------------
-  // HEAD-DRIFT -- infra check, not a PRD criterion (mirrors the pattern in
-  // scripts/waves/verify-w9-ingest.ts).
+  // HEAD-DRIFT -- infra check, not a PRD criterion. UNCHANGED.
   // -----------------------------------------------------------------
   const headShaFinal = sh('git', ['rev-parse', 'HEAD']).stdout.trim();
   await checkCriterion('HEAD-DRIFT', () => {
@@ -1468,15 +1731,18 @@ async function main(): Promise<void> {
     console.error(`verify-w10b: FAILED to write final manifest: ${String(err)}`);
   }
 
-  const failures = results.filter((r) => r.status === 'fail');
+  const nonPassing = results.filter((r) => r.status !== 'pass');
   console.log(
-    `\nverify-w10b: ${results.length - failures.length}/${results.length} criteria pass (treeDirty=${treeDirty}, gateIntegrityPinned=${gateIntegrityPinned})`,
+    `\nverify-w10b: ${results.length - nonPassing.length}/${results.length} criteria pass (treeDirty=${treeDirty}, gateIntegrityPinned=${gateIntegrityPinned})`,
   );
-  for (const r of results) console.log(`  [${r.status.toUpperCase()}] ${r.id}${r.detail ? ` (${r.detail})` : ''}`);
+  for (const r of results) {
+    const label = r.status === 'pass' ? 'PASS' : r.status === 'not-exercised' ? 'N/EX' : 'FAIL';
+    console.log(`  [${label}] ${r.id}${r.detail ? ` (${r.detail})` : ''}`);
+  }
   if (treeDirty) console.log('  ⚠ tree is dirty: this run is advisory, never a wave pass (VERIFICATION-CONTRACT.md §2)');
   console.log(`MANIFEST_SHA256=${manifestSha256}`);
   console.log(`MANIFEST_PATH=${path.join(proofDir, 'manifest.json')}`);
-  process.exit(failures.length === 0 && !treeDirty && manifestWritten ? 0 : 1);
+  process.exit(nonPassing.length === 0 && !treeDirty && manifestWritten ? 0 : 1);
 }
 
 main().catch((err) => {
