@@ -1844,6 +1844,122 @@ function processGroupSurvivors(pgid: number): ProcessTableScanResult {
   const r = sh('ps', ['-Ao', 'pid=,pgid=,comm='], { timeoutMs: 15_000 });
   return classifyProcessTableScan(r.status, r.stdout, r.stderr, process.pid, pgid);
 }
+/** Kernel-level, `ps`/session-agnostic liveness probe (signal-0 `process.kill`)
+ * -- the independent oracle `evaluateTargetVisibility` below needs, since it
+ * must confirm the target is alive through a mechanism that does NOT go
+ * through the same `ps` scan whose trustworthiness is under test. */
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    return code !== 'ESRCH'; // ESRCH = no such process; anything else (e.g. EPERM) means it still exists
+  }
+}
+
+interface TargetVisibilityResult {
+  ok: boolean;
+  detail: string;
+}
+/** INVARIANT 4 (founder ruling W9XF-R1, amended): upgrades the self-visibility
+ * control above. Self-visibility alone proves the scan sees the CALLER (this
+ * verifier's own pid) -- it says nothing about whether the scan can see the
+ * TARGET's session at all. `bootIsolatedDaemon` spawns the daemon
+ * `detached: true` (its own session, pgid === its own pid), a DIFFERENT
+ * session than the caller's. A session-scoped `ps` invocation (or shim)
+ * could enumerate only the CALLER's own session -- passing the
+ * self-visibility control every time, since the caller genuinely is visible
+ * -- while never showing so much as one row for the daemon's session,
+ * regardless of whether the daemon actually has survivors. Every such scan
+ * would then read as "self visible, zero target rows" -- exactly the shape
+ * `PROCESS_TABLE_SELF_PROBES`'s first fixture already accepts as
+ * trustworthy, because in ISOLATION that shape genuinely is a well-formed,
+ * self-consistent scan result; the gap is architectural, not a parsing bug.
+ *
+ * The fix is a POSITIVE control, evaluated once per teardown BEFORE any kill
+ * signal is sent: while the target is independently (kernel-level,
+ * `process.kill(pid, 0)`, session/`ps`-agnostic) confirmed alive, the SAME
+ * `ps`-based scan mechanism must ALSO show a row for that exact pgid --
+ * trivially true for a healthy target, since `detached: true` makes the
+ * leader its own pgid. A later "zero target rows" result (post-kill) is
+ * trusted as "confirmed empty" ONLY when this same-run, same-mechanism
+ * target-visibility check passed; a target that was never shown to be
+ * visible in the first place can never be "confirmed" absent later. Matches
+ * scripts/waves/verify-w9-filesystem.ts's `evaluateTargetVisibility` (commit
+ * 0d6bf026f): validated end-to-end against a real spawned sentinel plus a
+ * PATH-shimmed `ps` that filters out a specific pgid (simulating a
+ * session-scoped-blind scan) before being wired in here -- the OLD
+ * self-visibility-only logic was fooled (`ok: true` even though the
+ * target's entire session was invisible to the scan); this control
+ * correctly rejects the identical exploit, while a real healthy teardown
+ * against real `ps` still confirms normally. */
+function evaluateTargetVisibility(targetAliveAtStart: boolean, preKillScan: ProcessTableScanResult | null): TargetVisibilityResult {
+  if (!targetAliveAtStart) {
+    return {
+      ok: false,
+      detail: 'target-visibility not established: the target was not independently confirmed alive (process.kill(pid,0)) at teardown start -- a later "confirmed empty" verdict cannot be trusted without this positive control',
+    };
+  }
+  if (!preKillScan || !preKillScan.ok || preKillScan.survivors.length === 0) {
+    return {
+      ok: false,
+      detail: `target-visibility FAILED: process.kill(pid,0) confirms the target is alive, but the ps-based scan for its own pgid found ${!preKillScan || !preKillScan.ok ? `an untrustworthy scan (${preKillScan?.detail ?? 'no scan performed'})` : 'zero rows'} -- the scan mechanism may be blind to this target's session (e.g. a session-scoped ps)`,
+    };
+  }
+  return {
+    ok: true,
+    detail: `target-visibility confirmed: ${preKillScan.survivors.length} row(s) for the target's own pgid seen while it was independently confirmed alive`,
+  };
+}
+const TARGET_VISIBILITY_SELF_PROBES: Array<{
+  name: string;
+  targetAliveAtStart: boolean;
+  preKillScan: ProcessTableScanResult | null;
+  expectOk: boolean;
+}> = [
+  {
+    name: 'normal healthy case: target alive, scan sees its own pgid row',
+    targetAliveAtStart: true,
+    preKillScan: { ok: true, survivors: ['pid=999 pgid=999 node'], detail: 'ok' },
+    expectOk: true,
+  },
+  {
+    name: 'INVARIANT 4 exploit: session-scoped-blind scan -- target alive, self visible, but 0 target rows',
+    targetAliveAtStart: true,
+    preKillScan: { ok: true, survivors: [], detail: 'trustworthy: self visible, 0 target rows' },
+    expectOk: false,
+  },
+  {
+    name: 'target alive, but the pre-kill scan itself was untrustworthy',
+    targetAliveAtStart: true,
+    preKillScan: { ok: false, survivors: [], detail: 'malformed rows' },
+    expectOk: false,
+  },
+  {
+    name: 'target already not alive at teardown start -- no positive control possible',
+    targetAliveAtStart: false,
+    preKillScan: null,
+    expectOk: false,
+  },
+];
+let targetVisibilitySelfProbeResult: { pass: boolean; report: string[]; passCount: number; total: number } | null = null;
+function runTargetVisibilitySelfProbes(): { pass: boolean; report: string[]; passCount: number; total: number } {
+  if (targetVisibilitySelfProbeResult) return targetVisibilitySelfProbeResult;
+  const report: string[] = [];
+  let passCount = 0;
+  for (const c of TARGET_VISIBILITY_SELF_PROBES) {
+    const result = evaluateTargetVisibility(c.targetAliveAtStart, c.preKillScan);
+    if (result.ok === c.expectOk) {
+      passCount++;
+      report.push(`PASS ${c.name}: ok=${result.ok}`);
+    } else {
+      report.push(`FAIL ${c.name}: expected ok=${c.expectOk}, got ok=${result.ok} detail=${result.detail}`);
+    }
+  }
+  targetVisibilitySelfProbeResult = { pass: passCount === TARGET_VISIBILITY_SELF_PROBES.length, report, passCount, total: TARGET_VISIBILITY_SELF_PROBES.length };
+  return targetVisibilitySelfProbeResult;
+}
 async function waitForGroupCondition(check: () => boolean, timeoutMs: number, intervalMs = 200): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -1857,29 +1973,42 @@ async function waitForGroupCondition(check: () => boolean, timeoutMs: number, in
  * the real system process table, never inferred from a single leader's
  * `exit` event), and fails closed: a `ps` enumeration failure (nonzero
  * exit, OR exit-zero-but-untrustworthy per the self-visibility control
- * above) is UNCONFIRMED, not "empty"/"nothing survived". Matches
+ * above, OR a post-kill "zero rows" that never passed the INVARIANT 4
+ * target-visibility positive control) is UNCONFIRMED, not
+ * "empty"/"nothing survived". Matches
  * scripts/waves/verify-w9-filesystem.ts's `killGroupFailClosed` (commit
- * 79b15e90a). */
+ * 0d6bf026f). */
 async function killGroupFailClosed(pgid: number): Promise<{ ok: boolean; detail: string }> {
-  // Gate on the process-table-scan self-probes FIRST: a survivor scan is
-  // never trusted for a real teardown verdict in a run where the
-  // classification logic behind it cannot classify its own known-broken
-  // fixtures correctly. Memoized -- runs once per verifier process.
+  // Gate on BOTH self-probe suites FIRST (self-visibility + INVARIANT 4
+  // target-visibility): a survivor scan is never trusted for a real
+  // teardown verdict in a run where the classification logic behind it
+  // cannot classify its own known-broken fixtures correctly. Both
+  // memoized -- run once per verifier process, not once per teardown call.
   const selfProbes = runProcessTableSelfProbes();
-  const selfProbeSummary = `process-table self-probes ${selfProbes.passCount}/${selfProbes.total} pass`;
-  if (!selfProbes.pass) {
+  const targetVisibilityProbes = runTargetVisibilitySelfProbes();
+  const selfProbeSummary = `process-table self-probes ${selfProbes.passCount}/${selfProbes.total} pass, target-visibility self-probes ${targetVisibilityProbes.passCount}/${targetVisibilityProbes.total} pass`;
+  if (!selfProbes.pass || !targetVisibilityProbes.pass) {
+    const failures = [...selfProbes.report, ...targetVisibilityProbes.report].filter((l) => l.startsWith('FAIL'));
     return {
       ok: false,
-      detail: `${selfProbeSummary} -- refusing to trust any survivor scan this run: ${selfProbes.report.filter((l) => l.startsWith('FAIL')).join(' | ')}`,
+      detail: `${selfProbeSummary} -- refusing to trust any survivor scan this run: ${failures.join(' | ')}`,
     };
   }
+  // INVARIANT 4 (founder ruling W9XF-R1, amended): establish the
+  // target-visibility positive control BEFORE sending any signal, while the
+  // target is still whatever it currently is -- see
+  // `evaluateTargetVisibility`'s doc comment for the full mechanism and the
+  // exploit this closes.
+  const targetAliveAtStart = isPidAlive(pgid);
+  const preKillScan = targetAliveAtStart ? processGroupSurvivors(pgid) : null;
+  const targetVisibility = evaluateTargetVisibility(targetAliveAtStart, preKillScan);
   try {
     process.kill(-pgid, 'SIGTERM');
   } catch (err) {
     // ESRCH here means the group is already gone -- proceed to the
     // confirmation scan rather than assuming success from the throw alone.
     if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
-      return { ok: false, detail: `${selfProbeSummary}; SIGTERM to group -${pgid} failed: ${String(err)}` };
+      return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; SIGTERM to group -${pgid} failed: ${String(err)}` };
     }
   }
   const emptyAfterTerm = await waitForGroupCondition(() => {
@@ -1891,7 +2020,7 @@ async function killGroupFailClosed(pgid: number): Promise<{ ok: boolean; detail:
       process.kill(-pgid, 'SIGKILL');
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
-        return { ok: false, detail: `${selfProbeSummary}; SIGKILL to group -${pgid} failed: ${String(err)}` };
+        return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; SIGKILL to group -${pgid} failed: ${String(err)}` };
       }
     }
     const emptyAfterKill = await waitForGroupCondition(() => {
@@ -1901,9 +2030,9 @@ async function killGroupFailClosed(pgid: number): Promise<{ ok: boolean; detail:
     if (!emptyAfterKill) {
       const scan = processGroupSurvivors(pgid);
       if (!scan.ok) {
-        return { ok: false, detail: `${selfProbeSummary}; SCAN UNTRUSTWORTHY after SIGTERM+SIGKILL -- teardown NOT confirmed, never treated as an empty group: ${scan.detail}` };
+        return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; SCAN UNTRUSTWORTHY after SIGTERM+SIGKILL -- teardown NOT confirmed, never treated as an empty group: ${scan.detail}` };
       }
-      return { ok: false, detail: `${selfProbeSummary}; process group -${pgid} still has survivors after SIGTERM+SIGKILL -- teardown NOT confirmed: ${scan.survivors.join('; ')}` };
+      return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; process group -${pgid} still has survivors after SIGTERM+SIGKILL -- teardown NOT confirmed: ${scan.survivors.join('; ')}` };
     }
   }
   // waitForGroupCondition's own successful exit already re-scanned and found
@@ -1911,12 +2040,23 @@ async function killGroupFailClosed(pgid: number): Promise<{ ok: boolean; detail:
   // than trusting a boolean alone.
   const finalScan = processGroupSurvivors(pgid);
   if (!finalScan.ok) {
-    return { ok: false, detail: `${selfProbeSummary}; FINAL SCAN UNTRUSTWORTHY -- teardown NOT confirmed, never treated as an empty group: ${finalScan.detail}` };
+    return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; FINAL SCAN UNTRUSTWORTHY -- teardown NOT confirmed, never treated as an empty group: ${finalScan.detail}` };
   }
   if (finalScan.survivors.length > 0) {
-    return { ok: false, detail: `${selfProbeSummary}; process group -${pgid} has survivors after kill+wait: ${finalScan.survivors.join('; ')}` };
+    return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; process group -${pgid} has survivors after kill+wait: ${finalScan.survivors.join('; ')}` };
   }
-  return { ok: true, detail: `${selfProbeSummary}; process group -${pgid} confirmed empty (${finalScan.detail})` };
+  // A "zero survivors" result from the SAME scan mechanism is only trusted
+  // as "confirmed empty" when the target-visibility positive control above
+  // actually passed -- otherwise this scan mechanism was never shown to be
+  // able to see this target's session at all, and "zero rows" is exactly
+  // what a session-scoped-blind scan would ALWAYS report, empty or not.
+  if (!targetVisibility.ok) {
+    return {
+      ok: false,
+      detail: `${selfProbeSummary}; ${targetVisibility.detail}; post-kill scan shows zero survivors, but that result is NOT TRUSTED without a passing target-visibility positive control -- teardown NOT confirmed`,
+    };
+  }
+  return { ok: true, detail: `${selfProbeSummary}; ${targetVisibility.detail}; process group -${pgid} confirmed empty (${finalScan.detail})` };
 }
 /** Refuses any URL that is not `127.0.0.1`, and hard-refuses the two protected default-namespace daemon ports (finding 2's binding safety requirement) -- this is the "validate origin" half of "every probe fetch must set redirect to manual and validate origin and status so a redirect cannot reach a forbidden port." */
 function assertSafeLoopbackUrl(urlString: string): URL {
