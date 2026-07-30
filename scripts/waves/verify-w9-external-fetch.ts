@@ -1702,29 +1702,147 @@ function runSsrfSuite(testFiles: string[], attempt: number): { ok: boolean; resu
 // PRODUCT-side implementation criterion in the PRD's "Confirm-round
 // dispositions" section instead of made here.
 // =========================================================================
-/** Scans the REAL system process table (never trusts a leader's own `exit`
- * event, or a resolved-without-verification promise, as proof the whole
- * group is gone) for any process still reporting the given process-group
- * id. A failed `ps` invocation returns a ONE-ELEMENT sentinel array (never
- * `[]`) so every caller's `.length === 0` check treats a broken scan as
- * "still has survivors" -- fail CLOSED, matching
- * verify-w9-filesystem.ts's `processGroupSurvivors` exactly. */
-function processGroupSurvivors(pgid: number): string[] {
-  const r = sh('ps', ['-Ao', 'pid=,pgid=,comm='], { timeoutMs: 15_000 });
-  if (r.status !== 0) {
-    return [`ps scan itself failed (exit=${r.status}, stderr=${r.stderr.slice(0, 300)}) -- treated as UNCONFIRMED, never as proof of a clean exit`];
+// -------------------------------------------------------------------------
+// INVARIANT 2 (founder ruling W9XF-R1, closes CR-4 fully): self-visibility
+// control on the `ps` scan itself. Ported verbatim in spirit from
+// scripts/waves/verify-w9-filesystem.ts's `classifyProcessTableScan` /
+// `PROCESS_TABLE_SELF_PROBES` / `runProcessTableSelfProbes` (commit
+// 79b15e90a, F4 fix). The round-2 fix already treated a nonzero `ps` exit as
+// unconfirmed, but exit-ZERO-but-EMPTY or exit-zero-with-malformed-rows
+// output still read as "zero matching rows" -- i.e. a genuinely empty group
+// -- when it is equally consistent with the SCAN ITSELF being broken (a
+// misconfigured `ps`, a sandboxed/restricted environment silently returning
+// nothing, output truncated by an unexpected wrapper). The two must never be
+// conflated. Fix: every scan also checks whether THIS VERIFIER'S OWN pid
+// (`process.pid`, definitely alive -- it is running this very check) appears
+// SOMEWHERE in the same enumeration. If it does not, or any row fails to
+// parse, the scan is classified untrustworthy and returns `ok: false` --
+// callers must treat that as a run failure, never as "confirmed empty".
+// -------------------------------------------------------------------------
+interface ProcessTableScanResult {
+  /** True only when the scan itself is TRUSTWORTHY (exit 0, this verifier's
+   * own known-alive pid is visible somewhere in the output, every row
+   * parsed) -- never merely "found zero matching rows." `survivors` is only
+   * meaningful when this is true. */
+  ok: boolean;
+  survivors: string[];
+  detail: string;
+}
+/** Pure, deterministic classification over a `ps -Ao pid=,pgid=,comm=`-shaped
+ * invocation's raw exit status + stdout -- separated from the actual `ps`
+ * call below so its trustworthiness logic can be exercised with SYNTHETIC
+ * input (`PROCESS_TABLE_SELF_PROBES`). */
+function classifyProcessTableScan(status: number, stdout: string, stderr: string, selfPid: number, targetPgid: number): ProcessTableScanResult {
+  if (status !== 0) {
+    return { ok: false, survivors: [], detail: `ps scan itself failed (exit=${status}, stderr=${stderr.slice(0, 300)}) -- treated as UNCONFIRMED, never as proof of a clean exit` };
   }
   const survivors: string[] = [];
-  for (const line of r.stdout.split('\n')) {
+  const malformed: string[] = [];
+  let sawSelf = false;
+  let rowCount = 0;
+  for (const line of stdout.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed) continue;
+    rowCount++;
     const parts = trimmed.split(/\s+/);
     const rowPid = Number(parts[0]);
     const rowPgid = Number(parts[1]);
-    if (!Number.isFinite(rowPid) || !Number.isFinite(rowPgid)) continue;
-    if (rowPgid === pgid) survivors.push(`pid=${rowPid} pgid=${rowPgid} comm=${parts.slice(2).join(' ')}`);
+    if (parts.length < 3 || !Number.isFinite(rowPid) || !Number.isFinite(rowPgid)) {
+      malformed.push(trimmed.slice(0, 160));
+      continue;
+    }
+    if (rowPid === selfPid) sawSelf = true;
+    if (rowPgid === targetPgid) survivors.push(`pid=${rowPid} pgid=${rowPgid} comm=${parts.slice(2).join(' ')}`);
   }
-  return survivors;
+  if (malformed.length > 0) {
+    return {
+      ok: false,
+      survivors: [],
+      detail: `ps output contained ${malformed.length} unparseable row(s) out of ${rowCount} -- enumeration integrity not confirmed, treated as a scan failure, never as proof of an empty group: ${malformed.slice(0, 3).join(' | ')}`,
+    };
+  }
+  if (!sawSelf) {
+    return {
+      ok: false,
+      survivors: [],
+      detail: `ps output (exit=0, ${rowCount} row(s)) never included this verifier's own pid=${selfPid} -- a process KNOWN to be alive right now -- so enumeration itself is broken (self-visibility control failed), treated as a scan failure, never as proof of an empty group`,
+    };
+  }
+  return { ok: true, survivors, detail: `ps scan trustworthy: self pid=${selfPid} visible among ${rowCount} row(s), 0 malformed` };
+}
+/** Synthetic-input self-probes for `classifyProcessTableScan`, run once per
+ * verifier process (memoized) and gating `killGroupFailClosed` below -- a
+ * teardown scan is never trusted for a real verdict in a run where the
+ * classification logic behind it cannot classify its own known fixtures
+ * correctly. */
+const PROCESS_TABLE_SELF_PROBES: Array<{ name: string; status: number; stdout: string; expectOk: boolean; expectSurvivorCount?: number }> = [
+  {
+    name: 'well-formed output, self visible, no target-pgid match',
+    status: 0,
+    stdout: '    1     1 launchd\n 4242   999 node\n  555   555 sh\n',
+    expectOk: true,
+    expectSurvivorCount: 0,
+  },
+  {
+    name: 'well-formed output, self visible, target-pgid HAS a survivor',
+    status: 0,
+    stdout: '    1     1 launchd\n 4242   999 node\n 6001   777 hermes-agent\n',
+    expectOk: true,
+    expectSurvivorCount: 1,
+  },
+  {
+    name: 'F4: exit-zero but EMPTY output (enumeration silently produced nothing)',
+    status: 0,
+    stdout: '',
+    expectOk: false,
+  },
+  {
+    name: 'F4: exit-zero, well-formed OTHER rows, but self pid missing entirely',
+    status: 0,
+    stdout: '    1     1 launchd\n  555   555 sh\n',
+    expectOk: false,
+  },
+  {
+    name: 'F4: exit-zero, garbage/malformed rows',
+    status: 0,
+    stdout: 'not-a-pid not-a-pgid garbage\n 4242   999 node\n',
+    expectOk: false,
+  },
+  {
+    name: 'nonzero exit (ps itself failed)',
+    status: 1,
+    stdout: '',
+    expectOk: false,
+  },
+];
+let processTableSelfProbeResult: { pass: boolean; report: string[]; passCount: number; total: number } | null = null;
+function runProcessTableSelfProbes(): { pass: boolean; report: string[]; passCount: number; total: number } {
+  if (processTableSelfProbeResult) return processTableSelfProbeResult;
+  const SELF_PID = 4242;
+  const TARGET_PGID = 777;
+  const report: string[] = [];
+  let passCount = 0;
+  for (const c of PROCESS_TABLE_SELF_PROBES) {
+    const result = classifyProcessTableScan(c.status, c.stdout, '', SELF_PID, TARGET_PGID);
+    const okMatches = result.ok === c.expectOk;
+    const survivorMatches = c.expectSurvivorCount === undefined || (result.ok && result.survivors.length === c.expectSurvivorCount);
+    if (okMatches && survivorMatches) {
+      passCount++;
+      report.push(`PASS ${c.name}: ok=${result.ok} survivors=${result.survivors.length}`);
+    } else {
+      report.push(`FAIL ${c.name}: expected ok=${c.expectOk}${c.expectSurvivorCount !== undefined ? ` survivors=${c.expectSurvivorCount}` : ''}, got ok=${result.ok} survivors=${result.survivors.length} detail=${result.detail}`);
+    }
+  }
+  processTableSelfProbeResult = { pass: passCount === PROCESS_TABLE_SELF_PROBES.length, report, passCount, total: PROCESS_TABLE_SELF_PROBES.length };
+  return processTableSelfProbeResult;
+}
+/** Scans the REAL system process table (never trusts a leader's own `exit`
+ * event, or a resolved-without-verification promise, as proof the whole
+ * group is gone) for any process still reporting the given process-group
+ * id, via the self-visibility-checked classifier above. */
+function processGroupSurvivors(pgid: number): ProcessTableScanResult {
+  const r = sh('ps', ['-Ao', 'pid=,pgid=,comm='], { timeoutMs: 15_000 });
+  return classifyProcessTableScan(r.status, r.stdout, r.stderr, process.pid, pgid);
 }
 async function waitForGroupCondition(check: () => boolean, timeoutMs: number, intervalMs = 200): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
@@ -1737,42 +1855,68 @@ async function waitForGroupCondition(check: () => boolean, timeoutMs: number, in
 /** Signals the WHOLE process group (never an individually-tracked PID
  * list), escalates SIGTERM -> SIGKILL on GROUP EMPTINESS (re-scanned via
  * the real system process table, never inferred from a single leader's
- * `exit` event), and fails closed: a `ps` enumeration failure is
- * UNCONFIRMED, not "empty"/"nothing survived". Matches
- * scripts/waves/verify-w9-filesystem.ts's `killGroupFailClosed`. */
+ * `exit` event), and fails closed: a `ps` enumeration failure (nonzero
+ * exit, OR exit-zero-but-untrustworthy per the self-visibility control
+ * above) is UNCONFIRMED, not "empty"/"nothing survived". Matches
+ * scripts/waves/verify-w9-filesystem.ts's `killGroupFailClosed` (commit
+ * 79b15e90a). */
 async function killGroupFailClosed(pgid: number): Promise<{ ok: boolean; detail: string }> {
+  // Gate on the process-table-scan self-probes FIRST: a survivor scan is
+  // never trusted for a real teardown verdict in a run where the
+  // classification logic behind it cannot classify its own known-broken
+  // fixtures correctly. Memoized -- runs once per verifier process.
+  const selfProbes = runProcessTableSelfProbes();
+  const selfProbeSummary = `process-table self-probes ${selfProbes.passCount}/${selfProbes.total} pass`;
+  if (!selfProbes.pass) {
+    return {
+      ok: false,
+      detail: `${selfProbeSummary} -- refusing to trust any survivor scan this run: ${selfProbes.report.filter((l) => l.startsWith('FAIL')).join(' | ')}`,
+    };
+  }
   try {
     process.kill(-pgid, 'SIGTERM');
   } catch (err) {
     // ESRCH here means the group is already gone -- proceed to the
     // confirmation scan rather than assuming success from the throw alone.
     if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
-      return { ok: false, detail: `SIGTERM to group -${pgid} failed: ${String(err)}` };
+      return { ok: false, detail: `${selfProbeSummary}; SIGTERM to group -${pgid} failed: ${String(err)}` };
     }
   }
-  const emptyAfterTerm = await waitForGroupCondition(() => processGroupSurvivors(pgid).length === 0, 8_000);
+  const emptyAfterTerm = await waitForGroupCondition(() => {
+    const scan = processGroupSurvivors(pgid);
+    return scan.ok && scan.survivors.length === 0;
+  }, 8_000);
   if (!emptyAfterTerm) {
     try {
       process.kill(-pgid, 'SIGKILL');
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
-        return { ok: false, detail: `SIGKILL to group -${pgid} failed: ${String(err)}` };
+        return { ok: false, detail: `${selfProbeSummary}; SIGKILL to group -${pgid} failed: ${String(err)}` };
       }
     }
-    const emptyAfterKill = await waitForGroupCondition(() => processGroupSurvivors(pgid).length === 0, 5_000);
+    const emptyAfterKill = await waitForGroupCondition(() => {
+      const scan = processGroupSurvivors(pgid);
+      return scan.ok && scan.survivors.length === 0;
+    }, 5_000);
     if (!emptyAfterKill) {
-      const survivors = processGroupSurvivors(pgid);
-      return { ok: false, detail: `process group -${pgid} still has survivors after SIGTERM+SIGKILL -- teardown NOT confirmed: ${survivors.join('; ')}` };
+      const scan = processGroupSurvivors(pgid);
+      if (!scan.ok) {
+        return { ok: false, detail: `${selfProbeSummary}; SCAN UNTRUSTWORTHY after SIGTERM+SIGKILL -- teardown NOT confirmed, never treated as an empty group: ${scan.detail}` };
+      }
+      return { ok: false, detail: `${selfProbeSummary}; process group -${pgid} still has survivors after SIGTERM+SIGKILL -- teardown NOT confirmed: ${scan.survivors.join('; ')}` };
     }
   }
   // waitForGroupCondition's own successful exit already re-scanned and found
-  // the group empty, but re-derive the survivor list one more time
-  // explicitly rather than trusting a boolean alone.
-  const survivors = processGroupSurvivors(pgid);
-  if (survivors.length > 0) {
-    return { ok: false, detail: `process group -${pgid} has survivors after kill+wait: ${survivors.join('; ')}` };
+  // the group empty, but re-derive the scan one more time explicitly rather
+  // than trusting a boolean alone.
+  const finalScan = processGroupSurvivors(pgid);
+  if (!finalScan.ok) {
+    return { ok: false, detail: `${selfProbeSummary}; FINAL SCAN UNTRUSTWORTHY -- teardown NOT confirmed, never treated as an empty group: ${finalScan.detail}` };
   }
-  return { ok: true, detail: `process group -${pgid} confirmed empty (group-wide ps scan found nothing)` };
+  if (finalScan.survivors.length > 0) {
+    return { ok: false, detail: `${selfProbeSummary}; process group -${pgid} has survivors after kill+wait: ${finalScan.survivors.join('; ')}` };
+  }
+  return { ok: true, detail: `${selfProbeSummary}; process group -${pgid} confirmed empty (${finalScan.detail})` };
 }
 /** Refuses any URL that is not `127.0.0.1`, and hard-refuses the two protected default-namespace daemon ports (finding 2's binding safety requirement) -- this is the "validate origin" half of "every probe fetch must set redirect to manual and validate origin and status so a redirect cannot reach a forbidden port." */
 function assertSafeLoopbackUrl(urlString: string): URL {
@@ -1972,6 +2116,49 @@ function buildIsolatedDaemonRunnerScript(serverTsUrl: string, maxRemoteBytes: nu
     'process.on("SIGTERM", async () => { try { await started.shutdown?.(); } finally { process.exit(0); } });',
   ].join('\n');
 }
+// -------------------------------------------------------------------------
+// INVARIANT 1 (founder ruling W9XF-R1, closes CR-3 fully -- was ruled
+// TRANSITIVE): CR-3's fix removed this verifier's own direct import of
+// `packages/platform/dist/index.mjs`, but `bootIsolatedDaemon` below
+// dynamically imports `apps/daemon/src/server.ts`, which STATICALLY imports
+// `@open-design/platform` (and other first-party `@open-design/*` workspace
+// packages) -- those imports resolve through ordinary Node module
+// resolution (`node_modules` -> each package's own gitignored `dist/*.mjs`
+// bundle), an unpinned transitive path this verifier's own CR-3 fix never
+// touched. Ported verbatim in spirit from scripts/waves/
+// verify-w9-filesystem.ts's `ensureWorkspaceDepsRebuiltFromHead` (commit
+// 79b15e90a, F3 fix): before any daemon boot, force a fresh
+// `pnpm --filter "@open-design/daemon^..." run build` -- pnpm's own
+// computed first-party dependency closure (10 packages on this tree),
+// memoized once per verifier process so the two `bootIsolatedDaemon()` call
+// sites (CXF-6, CXF-11) rebuild once, not twice. Rebuild, not hash-pin:
+// unconditionally commit-binds the live boot every run (self-healing
+// against any prior dist state, stale or tampered) rather than merely
+// detecting a mismatch and refusing to proceed; measured ~3.5s wall clock
+// for all 10 packages on this tree, fast enough to just do it. A failed
+// rebuild throws, which checkCriterion()'s wrapper already turns into a
+// hard criterion failure.
+// -------------------------------------------------------------------------
+let daemonWorkspaceDepsRebuiltFromHead: Promise<{ detail: string }> | null = null;
+function ensureDaemonWorkspaceDepsRebuiltFromHead(): Promise<{ detail: string }> {
+  if (!daemonWorkspaceDepsRebuiltFromHead) {
+    daemonWorkspaceDepsRebuiltFromHead = (async () => {
+      const startedAt = Date.now();
+      const r = sh('pnpm', ['--filter', '@open-design/daemon^...', 'run', 'build'], { timeoutMs: 5 * 60_000 });
+      const durationMs = Date.now() - startedAt;
+      if (r.status !== 0) {
+        throw new Error(
+          `rebuilding apps/daemon's first-party workspace dependencies from the current checkout failed (exit=${r.status}) -- refusing to boot a live daemon against possibly-stale/untrusted dist: ${(r.stderr || r.stdout).slice(-2000)}`,
+        );
+      }
+      return {
+        detail: `INVARIANT 1: workspace dependency closure rebuilt from the current checkout -- \`pnpm --filter "@open-design/daemon^..." run build\` exited 0 in ${durationMs}ms; every transitively-imported first-party dist (packages/platform included, via server.ts's own static import) is fresh from tracked src at this run's checkout, never a possibly-stale/tampered prior build`,
+      };
+    })();
+  }
+  return daemonWorkspaceDepsRebuiltFromHead;
+}
+
 interface IsolatedDaemonHandle {
   baseUrl: string;
   telemetryUrl: string;
@@ -1979,9 +2166,11 @@ interface IsolatedDaemonHandle {
   routeInventory: unknown;
   pgid: number;
   proc: ReturnType<typeof spawn>;
+  workspaceRebuildDetail: string;
 }
 /** Spawns the real production daemon (dynamically imports apps/daemon/src/server.ts's own startServer -- never a reimplementation) DETACHED, in its own process group, in a fresh, isolated OD_DATA_DIR on an OS-assigned port. Never touches 7456/51012 by construction (port:0). Caller MUST eventually call stopIsolatedDaemon on the returned handle. */
 async function bootIsolatedDaemon(): Promise<IsolatedDaemonHandle> {
+  const rebuild = await ensureDaemonWorkspaceDepsRebuiltFromHead();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'w9xf-daemon-data-'));
   const runnerPath = path.join(os.tmpdir(), `w9xf-daemon-runner-${process.pid}-${Date.now()}.mjs`);
   const serverTsUrl = pathToFileURL(path.join(repoRoot, 'apps/daemon/src/server.ts')).href;
@@ -2024,20 +2213,39 @@ async function bootIsolatedDaemon(): Promise<IsolatedDaemonHandle> {
     });
     assertSafeLoopbackUrl(ready.url);
     assertSafeLoopbackUrl(ready.telemetryUrl);
-    return { baseUrl: ready.url, telemetryUrl: ready.telemetryUrl, dataDir, routeInventory: ready.routeInventory, pgid, proc };
+    return { baseUrl: ready.url, telemetryUrl: ready.telemetryUrl, dataDir, routeInventory: ready.routeInventory, pgid, proc, workspaceRebuildDetail: rebuild.detail };
   } catch (err) {
-    await killGroupFailClosed(pgid).catch(() => ({ ok: false, detail: 'killGroupFailClosed itself threw' }));
-    try {
-      fs.rmSync(runnerPath, { force: true });
-    } catch {
-      /* best effort */
+    // INVARIANT 3 (founder ruling W9XF-R1, new BLOCKING F3): the OLD version
+    // of this catch block discarded killGroupFailClosed's result entirely
+    // (fire-and-forget, `.catch(() => ({...}))` only handled a THROW, never
+    // consumed the returned ok/detail) and unconditionally deleted BOTH
+    // artifacts regardless of whether teardown actually succeeded --
+    // evidence removed before survivors were ever confirmed gone. Fixed:
+    // consume the teardown result; delete runnerPath/dataDir ONLY when
+    // teardown is confirmed ok; on an unconfirmed teardown, RETAIN both as
+    // forensic evidence and make that fact part of the thrown error (which
+    // checkCriterion() already turns into a hard run failure -- no separate
+    // fail-path is needed, but the failure must be visibly ABOUT the
+    // unconfirmed teardown, not silently indistinguishable from the
+    // original boot error alone).
+    const teardown = await killGroupFailClosed(pgid).catch((teardownErr: unknown) => ({ ok: false, detail: `killGroupFailClosed itself threw: ${String(teardownErr)}` }));
+    let teardownNote: string;
+    if (teardown.ok) {
+      try {
+        fs.rmSync(runnerPath, { force: true });
+      } catch {
+        /* best effort */
+      }
+      try {
+        fs.rmSync(dataDir, { recursive: true, force: true });
+      } catch {
+        /* best effort */
+      }
+      teardownNote = `boot-failure teardown confirmed ok, artifacts removed: ${teardown.detail}`;
+    } else {
+      teardownNote = `boot-failure teardown UNCONFIRMED -- artifacts RETAINED for forensic evidence (runnerPath=${runnerPath}, dataDir=${dataDir}): ${teardown.detail}`;
     }
-    try {
-      fs.rmSync(dataDir, { recursive: true, force: true });
-    } catch {
-      /* best effort */
-    }
-    throw err;
+    throw new Error(`${String((err as Error)?.stack ?? err)} | ${teardownNote}`);
   }
 }
 /** Stops the daemon's FULL process GROUP and confirms zero survivors (a group-wide `ps` scan, never leader-liveness alone) before removing its data dir. A partial or unconfirmed teardown returns ok:false and does NOT remove the data dir (evidence preserved for investigation) -- per the binding safety rule, a failed teardown must fail the run, never be silently swallowed. */
@@ -2957,6 +3165,7 @@ async function main(): Promise<void> {
     const infraNotes: string[] = [];
     try {
       daemon = await bootIsolatedDaemon();
+      infraNotes.push(daemon.workspaceRebuildDetail);
       canary = await startCanaryServer();
       // Probe-infra self-check: runs even with no attribution matrix, so the
       // boot/probe/teardown pipeline's own soundness is demonstrated
@@ -3285,6 +3494,7 @@ async function main(): Promise<void> {
     const infraNotes: string[] = [];
     try {
       daemon = await bootIsolatedDaemon();
+      infraNotes.push(daemon.workspaceRebuildDetail);
 
       // CR-2: empirical interception proof, in THIS run's own daemon.
       const interception = await proveStubInterception(daemon);
