@@ -8,7 +8,7 @@
   "description": "Build a swirling particle galaxy — tens of thousands of additive-blended GPU points spiraling around a bright core, their orbits solved in the vertex shader — rendered live at 60fps as a single self-contained index.html.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/webgl-particle-galaxy",

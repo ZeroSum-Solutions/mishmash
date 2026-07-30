@@ -8,7 +8,7 @@
   "description": "Northwind Design's demo-day pitch: hook, traction, moat, and the raise — built to make a partner sit up by page three. Built as a decision-grade fundraising pitch deck for accelerator partners, angels.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/html-ppt-pitch-deck",
@@ -49,7 +49,7 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Create \"Write a Demo Day Pitch like a Top Accelerator Partner\" as a decision-grade Fundraising pitch deck in this template's own visual system. Subject: Open Design's demo-day pitch: hook, traction, moat, and the raise — built to make a partner sit up by page three. Audience: accelerator partners, angels. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would an investor know why this is venture-scale and urgent.",
+      "query": "Create \"Write a Demo Day Pitch like a Top Accelerator Partner\" as a decision-grade Fundraising pitch deck in this template's own visual system. Subject: MishMash's demo-day pitch: hook, traction, moat, and the raise — built to make a partner sit up by page three. Audience: accelerator partners, angels. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would an investor know why this is venture-scale and urgent.",
       "exampleOutputs": [
         {
           "path": "./example.html",

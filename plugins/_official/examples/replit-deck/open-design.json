@@ -8,7 +8,7 @@
   "description": "For product and technical management work: turn PRDs, roadmaps, RFCs, architecture reviews, and retros into decision documents. Built around the core query \"pm-feature-business-case-deck\", with product strategy lead judgment, buyer-ready proof, and this outcome: approve the feature, architecture, roadmap, or incident follow-up.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/replit-deck",

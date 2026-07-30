@@ -8,7 +8,7 @@
   "description": "A self-contained WebGL2 hero: layered aurora light curtains warped over a night sky scattered with stars; move the cursor to sway the veil.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/webgl-aurora-veil",

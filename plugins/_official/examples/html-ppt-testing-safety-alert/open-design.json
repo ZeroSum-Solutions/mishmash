@@ -8,7 +8,7 @@
   "description": "A hospital data-governance briefing: patient-data risk, the control framework, accountability, and the approval the board must give. Built as a decision-grade policy briefing deck for health-system board, regulators.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/html-ppt-testing-safety-alert",

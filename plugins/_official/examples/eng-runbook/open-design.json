@@ -8,7 +8,7 @@
   "description": "An engineering runbook — service overview, alerts table, dashboards links, common procedures with copy-pasteable commands, on-call rotation, and an incident-response checklist. Use when the brief mentions \"runbook\", \"ops doc\", \"on-call guide\", \"SRE doc\", or \"ops manual\".",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/eng-runbook",

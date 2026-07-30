@@ -61,7 +61,7 @@
       "motion": "scroll"
     },
     "useCase": {
-      "query": "Create \"Present a Financial Review like a Startup CFO\" as a decision-grade Data, KPI & finance deck in this template's own visual system. Subject: Open Design's financial review: runway, burn, and the sustainability plan that keeps the project independent. Audience: board, leadership. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: does every chart have a decision above it.",
+      "query": "Create \"Present a Financial Review like a Startup CFO\" as a decision-grade Data, KPI & finance deck in this template's own visual system. Subject: MishMash's financial review: runway, burn, and the sustainability plan that keeps the project independent. Audience: board, leadership. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: does every chart have a decision above it.",
       "exampleOutputs": [
         {
           "path": "./example.html",

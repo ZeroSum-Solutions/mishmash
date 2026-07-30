@@ -60,7 +60,7 @@
       "motion": "deck"
     },
     "useCase": {
-      "query": "Create \"Write a Competitive Displacement Deck like a Top Sales Engineer\" as a decision-grade B2B sales deck in this template's own visual system. Subject: Open Design vs closed cloud design tools: a side-by-side displacement case on control, cost (BYOK), and lock-in. Audience: evaluation committee. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: can the champion forward this internally without rewriting it.",
+      "query": "Create \"Write a Competitive Displacement Deck like a Top Sales Engineer\" as a decision-grade B2B sales deck in this template's own visual system. Subject: MishMash vs closed cloud design tools: a side-by-side displacement case on control, cost (BYOK), and lock-in. Audience: evaluation committee. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: can the champion forward this internally without rewriting it.",
       "exampleOutputs": [
         {
           "path": "./example.html",

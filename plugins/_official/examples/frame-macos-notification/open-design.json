@@ -8,7 +8,7 @@
   "description": "Realistic macOS notification banner with app icon, title, and body, suited to video overlays or product teasers.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/frame-macos-notification",

@@ -8,7 +8,7 @@
   "description": "A three-card social-media carousel laid out as 1080×1080 squares — three cinematic, on-brand panels with display headlines that connect across the series (\"onwards.\" → \"to the next one.\" → \"looking ahead.\"). Each card has a brand mark, a number / total, a caption, and a \"loop\" affordance. Use when the brief asks for a \"carousel post\", \"social carousel\", \"Instagram carousel\", \"LinkedIn series\", \"X thread cards\", or \"three-post series\".",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/social-carousel",

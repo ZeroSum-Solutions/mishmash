@@ -8,7 +8,7 @@
   "description": "Build a real-time visualizer whose heavy compute runs in a Web Worker — particle systems, physics, fractals, data/audio viz — optionally sharing memory via SharedArrayBuffer, rendered to canvas at 60fps. Trigger when the user asks for a web worker, simulation, particle system, physics, fractal, off-main-thread compute, or real-time visualizer.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/worker-visualizer",

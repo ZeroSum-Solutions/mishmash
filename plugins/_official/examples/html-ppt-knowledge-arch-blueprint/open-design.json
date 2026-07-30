@@ -8,7 +8,7 @@
   "description": "Northwind Design's incident retro: the daemon-restart data bug, the root cause, the fix, and the systemic follow-ups. Built as a decision-grade product management deck for engineering, SRE, leadership.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/html-ppt-knowledge-arch-blueprint",
@@ -54,7 +54,7 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Create \"Turn an Incident Retro into a Learning Deck like a Platform VP\" as a decision-grade Product management deck in this template's own visual system. Subject: Open Design's incident retro: the daemon-restart data bug, the root cause, the fix, and the systemic follow-ups. Audience: engineering, SRE, leadership. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: can cross-functional reviewers agree on the next irreversible step.",
+      "query": "Create \"Turn an Incident Retro into a Learning Deck like a Platform VP\" as a decision-grade Product management deck in this template's own visual system. Subject: MishMash's incident retro: the daemon-restart data bug, the root cause, the fix, and the systemic follow-ups. Audience: engineering, SRE, leadership. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: can cross-functional reviewers agree on the next irreversible step.",
       "exampleOutputs": [
         {
           "path": "./example.html",

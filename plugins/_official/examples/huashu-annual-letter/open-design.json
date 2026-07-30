@@ -53,7 +53,7 @@
       "motion": "deck"
     },
     "useCase": {
-      "query": "Create \"Write an Annual Founder's Letter like a Mission-Driven CEO\" as a decision-grade Corporate strategy deck in this template's own visual system. Subject: Open Design's annual letter to its community: the year's story, what it learned, and where it's going next. Audience: community, contributors, investors. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would a board member know what to approve and why before page five.",
+      "query": "Create \"Write an Annual Founder's Letter like a Mission-Driven CEO\" as a decision-grade Corporate strategy deck in this template's own visual system. Subject: MishMash's annual letter to its community: the year's story, what it learned, and where it's going next. Audience: community, contributors, investors. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would a board member know what to approve and why before page five.",
       "exampleOutputs": [
         {
           "path": "./example.html",

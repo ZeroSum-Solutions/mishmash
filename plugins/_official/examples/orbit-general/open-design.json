@@ -8,7 +8,7 @@
   "description": "Open Orbit briefing skill — selected by the Orbit pipeline when the user has two or more connectors connected. Pulls the past 24 hours of activity from every authenticated connector (GitHub, Linear, Notion, Slack, Lark, Calendar, Gmail, Drive, Sentry, Vercel, …) and renders a single adaptive bento-grid dashboard at the top of \"My Designs\". Each connector module picks its own UI form (list, avatar stack, status ring, heatmap, file grid, alert card, …) based on the data shape it returns, so the layout scales as Orbit's connector ecosystem grows. This skill should not be triggered manually — it is invoked by Orbit's daily-digest scheduler against the user's live connector data.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/orbit-general",

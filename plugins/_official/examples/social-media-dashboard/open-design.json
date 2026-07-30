@@ -8,7 +8,7 @@
   "description": "Creator-facing social media analytics dashboard in a single HTML file. A platform switcher (X / LinkedIn / YouTube / Instagram), a row of KPI cards (followers, engagement rate, likes, reposts), a follower-growth chart, a \"top post this week\" preview, and a trending topics / top comments side panel. Use when the brief mentions a \"social media dashboard\", \"creator analytics\", \"social analytics\", or names specific platforms (X, Twitter, LinkedIn, YouTube, Instagram, TikTok) together with metrics like followers, engagement, likes, reposts.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/social-media-dashboard",

@@ -8,7 +8,7 @@
   "description": "Guided scenario for creating a local Northwind Design plugin folder that can be added to My plugins.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/scenarios/od-plugin-authoring",
@@ -73,7 +73,7 @@
       "prompt:inject"
     ],
     "useCase": {
-      "query": "Create an Open Design plugin for {{pluginGoal}}. Produce a folder named generated-plugin with SKILL.md, open-design.json, and any useful examples or assets. Follow docs/plugins-spec.md and finish with a readiness summary plus next actions: Add to My plugins, Publish repo, or Open Design PR.",
+      "query": "Create a MishMash plugin for {{pluginGoal}}. Produce a folder named generated-plugin with SKILL.md, open-design.json, and any useful examples or assets. Follow docs/plugins-spec.md and finish with a readiness summary plus next actions: Add to My plugins, Publish repo, or MishMash PR.",
       "exampleOutputs": [
         {
           "path": "./examples/generated-plugin/open-design.json",

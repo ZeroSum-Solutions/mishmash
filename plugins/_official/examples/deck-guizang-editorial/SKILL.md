@@ -2,9 +2,9 @@
 name: deck-guizang-editorial
 en_name: "Write an Annual Marketing Plan like a World-Class CMO"
 description: |
-  Open Design's FY26 marketing plan: brand-to-pipeline — audience, offer, channel mix, and the launch calendar that ties creative to growth. Built as a decision-grade marketing & GTM deck for CMO, growth lead, founder.
+  MishMash's FY26 marketing plan: brand-to-pipeline — audience, offer, channel mix, and the launch calendar that ties creative to growth. Built as a decision-grade marketing & GTM deck for CMO, growth lead, founder.
 en_description: |
-  Open Design's FY26 marketing plan: brand-to-pipeline — audience, offer, channel mix, and the launch calendar that ties creative to growth. Built as a decision-grade marketing & GTM deck for CMO, growth lead, founder.
+  MishMash's FY26 marketing plan: brand-to-pipeline — audience, offer, channel mix, and the launch calendar that ties creative to growth. Built as a decision-grade marketing & GTM deck for CMO, growth lead, founder.
 tags:
   - "marketing-gtm"
   - "annual-marketing-plan"
@@ -50,7 +50,7 @@ od:
     requires: false
   category: "marketing-gtm"
   scenario: "marketing"
-  example_prompt: "Create \"Write an Annual Marketing Plan like a World-Class CMO\" as a decision-grade Marketing & GTM deck in this template's own visual system. Subject: Open Design's FY26 marketing plan: brand-to-pipeline — audience, offer, channel mix, and the launch calendar that ties creative to growth. Audience: CMO, growth lead, founder. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: can the plan connect creative choices to measurable growth."
+  example_prompt: "Create \"Write an Annual Marketing Plan like a World-Class CMO\" as a decision-grade Marketing & GTM deck in this template's own visual system. Subject: MishMash's FY26 marketing plan: brand-to-pipeline — audience, offer, channel mix, and the launch calendar that ties creative to growth. Audience: CMO, growth lead, founder. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: can the plan connect creative choices to measurable growth."
 ---
 
 [Template: Guizang Editorial Ink Deck (Editorial × E-Ink)]

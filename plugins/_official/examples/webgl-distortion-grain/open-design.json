@@ -8,7 +8,7 @@
   "description": "A vertical gallery (Three.js) where planes bend with scroll velocity, ripple under the cursor via simplex noise, and carry a film grain.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "credits": [

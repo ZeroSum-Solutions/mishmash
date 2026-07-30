@@ -59,7 +59,7 @@
       "motion": "deck"
     },
     "useCase": {
-      "query": "Create \"Write a Revenue-Driver Story like a Board-Level Finance Partner\" as a decision-grade Data, KPI & finance deck in this template's own visual system. Subject: Open Design's revenue-driver narrative: what actually moves ARR, the leverage points, and the forecast. Audience: board, finance leadership. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: does every chart have a decision above it.",
+      "query": "Create \"Write a Revenue-Driver Story like a Board-Level Finance Partner\" as a decision-grade Data, KPI & finance deck in this template's own visual system. Subject: MishMash's revenue-driver narrative: what actually moves ARR, the leverage points, and the forecast. Audience: board, finance leadership. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: does every chart have a decision above it.",
       "exampleOutputs": [
         {
           "path": "./example.html",

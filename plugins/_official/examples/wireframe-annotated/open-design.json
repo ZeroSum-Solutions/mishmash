@@ -8,7 +8,7 @@
   "description": "An annotated / redline lo-fi wireframe of a desktop landing page — greybox blocks inside a browser frame, numbered annotation pins (①–⑤), and a right-hand spec panel mapping each pin to a short engineering / UX note. Use when the brief asks for \"annotated wireframe\", \"redline\", \"wireframe spec\", \"lo-fi landing\", \"low fidelity\", \"wireframe diagram\", or \"annotated wireframe\".",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/wireframe-annotated",

@@ -2,9 +2,9 @@
 name: deck-swiss-international
 en_name: "Write a Board Pre-Read like a Fortune-500 Board Chair"
 description: |
-  Open Design's FY26 board pre-read: the open-core bet, growth vs burn, and the one decision the board must approve. Built as a decision-grade corporate strategy deck for board, CEO, CFO.
+  MishMash's FY26 board pre-read: the open-core bet, growth vs burn, and the one decision the board must approve. Built as a decision-grade corporate strategy deck for board, CEO, CFO.
 en_description: |
-  Open Design's FY26 board pre-read: the open-core bet, growth vs burn, and the one decision the board must approve. Built as a decision-grade corporate strategy deck for board, CEO, CFO.
+  MishMash's FY26 board pre-read: the open-core bet, growth vs burn, and the one decision the board must approve. Built as a decision-grade corporate strategy deck for board, CEO, CFO.
 tags:
   - "corporate-strategy"
   - "board-pre-read-deck"
@@ -49,7 +49,7 @@ od:
     requires: false
   category: "corporate-strategy"
   scenario: "strategy"
-  example_prompt: "Create \"Write a Board Pre-Read like a Fortune-500 Board Chair\" as a decision-grade Corporate strategy deck in this template's own visual system. Subject: Open Design's FY26 board pre-read: the open-core bet, growth vs burn, and the one decision the board must approve. Audience: board, CEO, CFO. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would a board member know what to approve and why before page five."
+  example_prompt: "Create \"Write a Board Pre-Read like a Fortune-500 Board Chair\" as a decision-grade Corporate strategy deck in this template's own visual system. Subject: MishMash's FY26 board pre-read: the open-core bet, growth vs burn, and the one decision the board must approve. Audience: board, CEO, CFO. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would a board member know what to approve and why before page five."
 ---
 
 [Template: Swiss International Deck]

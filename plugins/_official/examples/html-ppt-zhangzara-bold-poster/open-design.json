@@ -8,7 +8,7 @@
   "description": "Northwind Design's Series A growth story: the traction curve, the expansion motion, and why it's venture-scale. Built as a decision-grade fundraising pitch deck for Series A partners.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/html-ppt-zhangzara-bold-poster",
@@ -61,7 +61,7 @@
       "entry": "./example.html"
     },
     "useCase": {
-      "query": "Create \"Write a Series A Growth Story like a Tier-1 VC Partner\" as a decision-grade Fundraising pitch deck in this template's own visual system. Subject: Open Design's Series A growth story: the traction curve, the expansion motion, and why it's venture-scale. Audience: Series A partners. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would an investor know why this is venture-scale and urgent.",
+      "query": "Create \"Write a Series A Growth Story like a Tier-1 VC Partner\" as a decision-grade Fundraising pitch deck in this template's own visual system. Subject: MishMash's Series A growth story: the traction curve, the expansion motion, and why it's venture-scale. Audience: Series A partners. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: would an investor know why this is venture-scale and urgent.",
       "exampleOutputs": [
         {
           "path": "./example.html",

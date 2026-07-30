@@ -8,7 +8,7 @@
   "description": "A self-contained WebGL2 hero: a flowing field screened through a rotated halftone dot grid into a duotone print aesthetic; move the cursor to bend the drift.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/webgl-halftone-drift",

@@ -8,7 +8,7 @@
   "description": "Structured medical case presentation for clinical rounds, conferences, and documentation. Generates SOAP-format or narrative case reports with physiologically accurate vitals, labs, and evidence-based plans. Use when the brief mentions \"case report\", \"case presentation\", \"SOAP note\", \"clinical case\", \"ward rounds\", \"case summary\", or \"patient presentation\".",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/clinical-case-report",

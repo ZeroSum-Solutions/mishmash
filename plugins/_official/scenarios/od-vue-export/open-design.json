@@ -8,7 +8,7 @@
   "description": "Starter downstream export plugin for turning an accepted Northwind Design artifact into a Vue 3 single-file component handoff.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/scenarios/od-vue-export",
@@ -49,7 +49,7 @@
       "fs:write"
     ],
     "useCase": {
-      "query": "Export the accepted Open Design artifact to a Vue 3 single-file component. Preserve the visual system, use Composition API patterns where state is needed, and finish with integration notes.",
+      "query": "Export the accepted MishMash artifact to a Vue 3 single-file component. Preserve the visual system, use Composition API patterns where state is needed, and finish with integration notes.",
       "exampleOutputs": []
     },
     "inputs": [

@@ -58,7 +58,7 @@
       "motion": "deck"
     },
     "useCase": {
-      "query": "Create \"Build a Buyer-Committee Leave-Behind like an Enterprise Sales Lead\" as a decision-grade B2B sales deck in this template's own visual system. Subject: Open Design procurement & security leave-behind: the one-pager-plus a buying committee can forward and approve internally. Audience: buying committee, security, procurement. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: can the champion forward this internally without rewriting it.",
+      "query": "Create \"Build a Buyer-Committee Leave-Behind like an Enterprise Sales Lead\" as a decision-grade B2B sales deck in this template's own visual system. Subject: MishMash procurement & security leave-behind: the one-pager-plus a buying committee can forward and approve internally. Audience: buying committee, security, procurement. First ask only for missing essentials: audience, decision target, source-of-truth materials, deadline, and must-keep numbers. Then produce the slide plan, written slides, visual direction, speaker-ready structure, and a critic pass against this rubric: can the champion forward this internally without rewriting it.",
       "exampleOutputs": [
         {
           "path": "./example.html",

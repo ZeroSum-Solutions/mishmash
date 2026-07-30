@@ -8,7 +8,7 @@
   "description": "Build a raymarched 3D hero — soft-shadowed morphing metaballs with a fresnel rim light, orbiting slowly and sphere-traced per pixel in a fragment shader — rendered full-screen at 60fps as a single self-contained index.html.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/webgl-raymarched-hero",

@@ -8,7 +8,7 @@
   "description": "A crisp greybox / blueprint lo-fi wireframe of a desktop SaaS dashboard — neutral grey blocks, image placeholders with a diagonal-cross X, lorem-bar text, a schematic chart panel, and monospace redline annotations on a 12-column grid. Use when the brief asks for \"greybox\", \"blueprint wireframe\", \"lo-fi dashboard\", \"low fidelity\", \"wireframe diagram\", or \"greybox prototype\".",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/wireframe-greybox",

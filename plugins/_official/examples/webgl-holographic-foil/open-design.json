@@ -8,7 +8,7 @@
   "description": "A self-contained WebGL2 hero: thin-film interference over a crushed-foil surface whose palette shifts with the viewing angle; move the cursor to tilt the film.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/webgl-holographic-foil",

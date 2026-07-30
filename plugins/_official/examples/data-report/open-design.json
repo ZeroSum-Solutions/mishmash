@@ -8,7 +8,7 @@
   "description": "Turns CSV, Excel, or JSON data into a polished visual report page.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/data-report",

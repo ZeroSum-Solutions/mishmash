@@ -8,7 +8,7 @@
   "description": "Cursor light trail, chromatic rays, and directional flares for word-by-word quote reveals in video intros.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/vfx-text-cursor",
