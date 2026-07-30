@@ -433,6 +433,72 @@ new findings plus a residual sweep, all fixed in this second authorized round:
   change, since it is a terminal/excluded node) and the ingest tranche's own "23 routes" are left as
   written — neither is a candidate for reconciliation.
 
+### Update (founder ruling W9FS-R2, round-3 — final scoped round before park: INVARIANT 1
+target-visibility closed, INVARIANT 2 / F5 workspace-wide pinning closed, INVARIANT 3 / F6
+forensic-retention closed, INVARIANT 4 / C9F-1 criteria-row truth closed)
+
+After a third consecutive non-APPROVE (the round-2 CONFIRM reviewer independently reconstructed the
+verifier's module graph — 437 modules from `server.ts` — and confirmed the round-2 F3 fix's rebuild
+closure was airtight; F3 itself is CLOSED, not reopened), the stop rule escalated to the founder.
+Founder ruling W9FS-R2 authorized exactly one further scoped round, bounded to four invariants, as
+this wave's final round before park:
+
+- **INVARIANT 1 — target-visibility, upgrades the round-2 self-visibility control.** The round-2
+  fix (F4) proved a survivor scan sees the CALLER (this verifier's own pid) but said nothing about
+  whether it can see the TARGET's session — `bootIsolatedDaemon` spawns the daemon `detached: true`,
+  its own session, distinct from the caller's. A session-scoped `ps` (real or shimmed) could
+  enumerate only the caller's session, passing self-visibility every time while never showing the
+  daemon's session at all — reading as "self visible, zero target rows" on every scan regardless of
+  whether the daemon actually has survivors, which round-2's own first self-probe fixture accepted
+  as trustworthy in isolation (correctly, for a single scan taken alone — the gap is architectural,
+  not a parsing bug). **Fix:** a positive control, `evaluateTargetVisibility`, evaluated once per
+  teardown call BEFORE any kill signal: while the target is independently (kernel-level,
+  `process.kill(pid, 0)`, session/`ps`-agnostic) confirmed alive, the SAME `ps`-based scan mechanism
+  must ALSO show a row for that exact pgid (trivially true for a healthy target, since
+  `detached: true` makes the leader its own pgid). A later "zero target rows" result is trusted as
+  "confirmed empty" ONLY when this same-run, same-mechanism check passed. Gated by its own synthetic
+  self-probes (`TARGET_VISIBILITY_SELF_PROBES`/`runTargetVisibilitySelfProbes`, four cases: healthy,
+  the session-scoped-blind exploit, an untrustworthy pre-kill scan, and target-already-dead-at-start),
+  alongside the existing process-table self-probes, both gating `killGroupFailClosed`. **Validated
+  end-to-end before being wired in**, not just unit-level: against a real spawned sentinel plus a
+  PATH-shimmed `ps` that filters out a specific pgid (simulating session-scoped blindness), the OLD
+  round-2 self-visibility-only logic was demonstrably FOOLED (`ok: true` even though the target's
+  entire session was invisible); the SAME exploit against the new target-visibility-gated logic was
+  correctly REJECTED (`ok: false`); a real healthy teardown against real `ps` still confirmed
+  normally either way.
+- **INVARIANT 2 — commit-binding for ALL evidence paths, closes F5 (HIGH).** The round-2 F3 fix
+  rebuilt only `apps/daemon`'s own dependency closure (`@open-design/daemon^...`, 10 packages) before
+  booting the live daemon — correct for that ONE evidence path, but `checkC9F9` runs `pnpm
+  typecheck`, itself a SECOND evidence-bearing path that typechecks every workspace package,
+  including `apps/web` (outside `apps/daemon`'s dependency graph), which depends on
+  `@open-design/components` and `@open-design/host` — neither covered by the daemon-scoped filter.
+  **Fix: widen to the union rather than track two closures.** The rebuild now covers every
+  `packages/*` workspace member with a `build` script (`pnpm --filter "./packages/*" run build`,
+  all 14 today), a strict superset of the daemon-only closure, called from both
+  `bootIsolatedDaemon` and `checkC9F9` (before `pnpm guard`/`pnpm typecheck`), still memoized to run
+  once per verifier process (~13s wall clock for all 14, measured directly against this tree). A
+  hand-tracked union of "every evidence path's own dependency graph" would have the same blind-spot
+  shape the original F3 finding rejected — a future third evidence path consuming a fifteenth
+  package would silently reopen the gap; a full workspace-wide rebuild has no such blind spot by
+  construction.
+- **INVARIANT 3 — shutdown consumes the teardown result, closes F6 (MED).** `LiveDaemon.shutdown()`
+  called `killGroupFailClosed` then unconditionally deleted `bootDir`/`dataDir` regardless of the
+  result — an UNCONFIRMED teardown destroyed the only forensic evidence of what actually happened,
+  on exactly the runs that most needed it kept. **Fix:** delete only when `result.ok === true`; on
+  any unconfirmed/partial result, retain both directories and surface their paths in the returned
+  failure detail (`forensic evidence RETAINED (not deleted): bootDir=... dataDir=...`).
+- **INVARIANT 4 — PRD truth, closes the F2 residual.** The normative C9F-1 row in "Success criteria"
+  still described the superseded `git show <baseCommit>:...` text-parsing mechanism scoped only to
+  `register*Routes` bodies + bootstrap calls — the same staleness already fixed in "Frozen route
+  snapshot + drift detection" during round 2, but this SEPARATE table row was missed. Rewritten to
+  describe the real mechanism: the detached-worktree TypeChecker scan across all five discovery
+  mechanisms (including the F1 commit-bound cross-package resolution), the pre-boot workspace-wide
+  rebuild (INVARIANT 2), and the self-visibility-plus-target-visibility-gated teardown confirmation
+  (INVARIANT 1). A bounded grep for any other C9F-1-mechanism description elsewhere in the document
+  found no further contradictions — the only other `git show` reference (in "Proposed lease"'s LEASE
+  description) is accurate as written, since the LEASE check genuinely does read `leases.json` via
+  `git show`, unrelated to C9F-1's own mechanism.
+
 ## Inclusion rule (mechanical, re-runnable)
 
 Stated precisely so a future run reproduces the same set without human judgment at classification
@@ -862,7 +928,7 @@ All criteria inherit `VERIFICATION-CONTRACT.md` §3. Verified by `scripts/waves/
 
 | ID | Criterion | Verification |
 |---|---|---|
-| C9F-1 | Route snapshot + three-bucket inclusion classification frozen at `baseCommit`, drift-checked against a live daemon boot, duplicate-checked, partition-checked, classifier self-probed | AST scan of `git show <baseCommit>:...` scoped to `register*Routes` bodies + `server.ts` bootstrap calls; live `routeInventory` comparison via an isolated, real-child-process daemon boot with confirmed-empty process-group teardown; 12/12 self-probes pass; `fs-hit ∪ unresolved ∪ clean` exactly equals the candidate universe with no overlap |
+| C9F-1 | Route snapshot + three-bucket inclusion classification frozen at `baseCommit`, drift-checked against a live daemon boot, duplicate-checked, partition-checked, classifier self-probed | TypeChecker-based AST scan of a real detached `git worktree` checkout at `baseCommit` (never `git show` text parsing, never the working tree) across all five discovery mechanisms in "Inclusion rule" (literal calls, `defineJsonRoute`/`mountJsonRoute`, named-const resolution — cross-package literals resolved from that package's own tracked `src/*.ts` via a `paths` override, never gitignored `dist`, F1 fix — call-site parameter substitution, structural bootstrap-helper recognition); live `routeInventory` comparison via an isolated, real-child-process daemon boot, preceded by a fresh workspace-wide rebuild of every first-party `packages/*` member so the live side also never resolves unpinned mutable `dist` (F3/INVARIANT 2 fix); process-group teardown confirmed empty via a self-visibility control (the scan must see this verifier's own pid) AND a target-visibility positive control (the scan must show the daemon's own pid among its rows while independently confirmed alive, before a later zero-rows result is trusted, INVARIANT 1 fix); 12/12 inclusion/exposure classifier self-probes pass, plus the process-table-scan and target-visibility self-probes gating teardown confirmation; `fs-hit ∪ unresolved ∪ clean` exactly equals the candidate universe with no overlap |
 | C9F-2 | Risk-ranking formula (exposure 0/1/3 + mechanical impact 0–3) enforced exactly per confirmed-in-scope row; exposure-classifier self-probed | AST-derived `exposure` matches the middleware-array + straight-line-guard grammar exactly; `impact` matches the reachable-primitive-class rule (or a declared override with a ≥20-char reason and `declaredImpact > mechanicalImpact`); `score`/`tier` formula-exact; the same 12/12 `C9F-1` self-probes (which cover both classifiers) pass |
 | C9F-3 | Attribution matrix exists, covers exactly the confirmed in-scope (`fs-hit`) set, structurally well-formed | `docs/security/filesystem-tranche-attribution.json` parses; exactly one row per `fs-hit` route (mechanically re-derived count, never hardcoded), no orphans/gaps/duplicates; attributed/unattributed/known-vulnerable/unresolved-out-of-tranche counts reported |
 | C9F-4 | Every matrix row fully, structurally attributed | All six required fields clear the floor/denylist/repetition checks; `authn` names the row's own exposure class; `acceptedRisk.decisionRef` resolves to a unique, fully-structured, route-bound, non-self-accepted `### W9F-ACCEPT-*` entry in `DECISIONS.md@baseCommit`; `control`/`acceptedRisk` mutually exclusive and required exactly when `exposure === 3` |
