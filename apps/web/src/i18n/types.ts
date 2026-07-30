@@ -1231,6 +1231,7 @@ export interface Dict {
   'recentProjects.viewAll': string;
   'recentProjects.empty': string;
   'pluginsHome.title': string;
+  'home.workflowsAndAssetsTitle': string;
   'pluginsHome.subtitle': string;
   'pluginsHome.browseRegistry': string;
   'pluginsHome.count': string;
