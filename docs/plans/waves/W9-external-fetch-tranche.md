@@ -22,10 +22,12 @@ written into `docs/plans/waves/leases.json` by this PRD, and no source file outs
 `docs/plans/waves/W9-external-fetch-tranche.md` and `scripts/waves/verify-w9-external-fetch.ts`
 is touched by this change.
 
-**Status: FOUNDER-RULING FIX (W9XF-R1) COMPLETE — the wave's FINAL authorized fix round before park;
-see "Founder ruling W9XF-R1 dispositions" below for INVARIANT 1-3, and "Confirm-round dispositions"
-for CR-1 through CR-5 (CR-1/CR-2/CR-5 confirmed closed by the founder ruling; CR-3/CR-4 required this
-round's invariants to close fully). Not yet re-confirmed.**
+**Status: FOUNDER-RULING FIX (W9XF-R1, AS AMENDED) COMPLETE — the wave's FINAL authorized fix round
+before park; see "Founder ruling W9XF-R1 dispositions" below for INVARIANT 1-4 (INVARIANT 4,
+target-visibility, added by amendment once the `w9fs` reference implementation landed), and
+"Confirm-round dispositions" for CR-1 through CR-5 (CR-1/CR-2/CR-5 confirmed closed by the founder
+ruling; CR-3/CR-4 required this round's invariants to close fully). Not yet re-confirmed. One
+fidelity-only confirmation pass, covering all four invariants together, freezes the wave.**
 Per the NM-41C gate (`W5-W11-gated.md` lines 8–24), this document is written and
 frozen *before* any implementation work starts, and is reviewed by a reviewer who did not write it
 and will not implement it, before it is unfrozen for a `/goal` run. **Round 1 returned REJECT with 7
@@ -1027,14 +1029,18 @@ per-run output, matching "Verified baseline"'s own convention of only recording 
 run's real captured text). Protected default-namespace daemons (ports 7456/51012, PIDs matching that
 namespace) were confirmed untouched, both before and after.
 
-## Founder ruling W9XF-R1 dispositions (fix round 3)
+## Founder ruling W9XF-R1 dispositions (fix round 3, amended with INVARIANT 4)
 
 The confirm round returned NOT CONFIRMED a second time (third consecutive non-APPROVE), tripping the
 program's stop rule and escalating to the founder. **Founder ruling W9XF-R1** confirmed CR-1, CR-2,
 and CR-5 CLOSED (the bounded arithmetic, the per-daemon interception gating, and the PRD wording were
 all explicitly re-verified), and authorized exactly one further scoped fix round against three
-invariants — the wave's final round before park. All three are closed below, verifier-only; the
+invariants — the wave's final round before park. All three were closed first, verifier-only; the
 closed CR-1/CR-2/CR-5 mechanisms were not touched except where an invariant required it (none did).
+**The ruling was subsequently AMENDED to add INVARIANT 4 (target-visibility)** once its reference
+implementation landed in the sibling `w9fs` verifier — a fourth, equally scoped invariant, closed in
+the same fix round rather than opening a new one, since it upgrades the same self-visibility
+mechanism INVARIANT 2 introduced rather than touching any other surface.
 
 1. **INVARIANT 1 (closes CR-3 fully — round 2's fix was ruled TRANSITIVE, not complete).** Round 2
    removed this verifier's own direct import of `packages/platform/dist/index.mjs`, but
@@ -1084,6 +1090,37 @@ teardown is confirmed ok and retains them (verified still present on disk) other
 and `pnpm typecheck` both exit 0. Protected default-namespace daemons were confirmed untouched before
 and after.
 
+**INVARIANT 4 (ruling W9XF-R1 amended — target-visibility, unblocked once the reference
+implementation landed in the sibling `w9fs` verifier).** Round-3's self-visibility control (INVARIANT
+2 above) proved a survivor scan sees the CALLER (this verifier's own pid) — it says nothing about
+whether the scan can see the TARGET's session at all. `bootIsolatedDaemon` spawns the daemon
+`detached: true`, its own session, distinct from the caller's; a session-scoped `ps` (or a
+PATH-shimmed one) could enumerate only the caller's own session, passing self-visibility every single
+time while never showing so much as one row for the daemon's session, regardless of whether it
+actually has survivors — a scan shaped exactly like "self visible, zero target rows", which round-3's
+own logic already accepted as trustworthy-and-empty. Ported `evaluateTargetVisibility` from
+`scripts/waves/verify-w9-filesystem.ts` (commit `0d6bf026f`): a POSITIVE control evaluated once per
+teardown, BEFORE any kill signal, while the target is independently (kernel-level,
+`process.kill(pid,0)`, `ps`-agnostic — the new `isPidAlive` helper) confirmed alive — the SAME
+`ps`-based scan mechanism must ALSO show a row for that exact pgid. A later post-kill "zero target
+rows" result is trusted as confirmed-empty ONLY when this same-run, same-mechanism check passed.
+Gated by 4 synthetic self-probes (mirroring the process-table self-probe discipline already in
+place), memoized to run once per verifier process. `killGroupFailClosed`'s teardown detail now
+carries both gate summaries plus the target-visibility row count.
+
+**Verification performed this round:** two further runs reproduce the identical 5/14 honest
+pre-implementation baseline; both CXF-6's and CXF-11's teardown evidence carries
+`"process-table self-probes 6/6 pass, target-visibility self-probes 4/4 pass"` plus
+`"target-visibility confirmed: N row(s) for the target's own pgid seen while it was independently
+confirmed alive"`, confirming both criteria route through the upgraded path; zero survivors both
+runs. A standalone controlled probe reproducing the `w9fs` exploit exactly — a real spawned sentinel
+plus a PATH-shimmed `ps` that filters out the target's own pgid rows while leaving the caller
+visible — confirmed the OLD self-visibility-only logic is fooled (`ok:true` despite the target's
+whole session being invisible to the scan) while the NEW target-visibility-gated logic correctly
+rejects the identical exploit with an explicit blind-scan/target-visibility-failure message. `pnpm
+guard` and `pnpm typecheck` both exit 0. Protected default-namespace daemons were confirmed
+untouched before and after.
+
 ## Adversarial review
 
 **Round 1 returned REJECT** (7 blocking findings, disposed above). Round 2 also absorbed one
@@ -1092,9 +1129,11 @@ above). **The subsequent confirm round returned NOT CONFIRMED twice in a row** (
 time, disposed in "Confirm-round dispositions"; a second NOT CONFIRMED on the fix-round-2 verifier
 tripped the program's stop rule and escalated to the founder). **Founder ruling W9XF-R1** confirmed
 CR-1/CR-2/CR-5 closed and authorized one final scoped fix round against three invariants (CR-3/CR-4's
-remaining gaps plus one new finding) — disposed in "Founder ruling W9XF-R1 dispositions" above. None
-of the review/confirm passes above constitute a green light to implement; it has not yet been
-re-confirmed. Per `W5-W11-gated.md`'s expansion gate, this document must be reviewed by a
+remaining gaps plus one new finding), **later amended to add a fourth invariant (target-visibility)**
+once its reference implementation landed — all four disposed in "Founder ruling W9XF-R1 dispositions"
+above. None of the review/confirm passes above constitute a green light to implement; it has not yet
+been re-confirmed — **one fidelity-only confirmation pass, covering all four invariants together, is
+what freezes the wave.** Per `W5-W11-gated.md`'s expansion gate, this document must be reviewed by a
 reviewer who did not author it and will not implement it, and both this document and
 `scripts/waves/verify-w9-external-fetch.ts` must be frozen on `main` before any `/goal` run against
 this slug begins. Known residuals the author flags proactively, so a reviewer does not have to
