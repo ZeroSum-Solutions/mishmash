@@ -355,8 +355,22 @@ describe('ProjectView conversation delete', () => {
 
     renderProjectView(vi.fn());
 
-    await waitFor(() => expect(chatPaneProps.onSubmitQuestionForm).toBeDefined());
-    expect(chatPaneProps.questionFormSubmitDisabled).toBe(false);
+    // `onSubmitQuestionForm` is an inline callback ChatPane receives on
+    // every render, so it is already defined the moment ChatPane first
+    // mounts — before the separate `listMessages`/`fetchPreviewComments`
+    // load (which drives `questionFormSubmitDisabled` via
+    // `currentConversationLoading`) has necessarily resolved. Waiting for
+    // `onSubmitQuestionForm` alone and then asserting
+    // `questionFormSubmitDisabled` on a later, separate line risks reading
+    // it mid-load: under contention the two async chains can drift apart
+    // widely enough that the callback is defined while messages are still
+    // loading. Asserting both in the same retried `waitFor` waits for the
+    // state the test actually means — messages loaded, form enabled — so a
+    // still-loading snapshot just retries instead of asserting on it.
+    await waitFor(() => {
+      expect(chatPaneProps.onSubmitQuestionForm).toBeDefined();
+      expect(chatPaneProps.questionFormSubmitDisabled).toBe(false);
+    });
     expect(fileWorkspaceProps.questionForm).toBeUndefined();
   });
 });
