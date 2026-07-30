@@ -9,7 +9,9 @@
 criterion): the orchestrator adds the entry only after this PRD and its verifier are frozen and
 independently approved.
 
-**Status: EXPANSION DRAFT, fix round 3 (rounds 1 and 2 REJECTed).** This document is an
+**Status: EXPANSION DRAFT, fix round 4 (rounds 1, 2, and 3 REJECTed; round 3 tripped the program's
+three-consecutive-REJECT stop rule and escalated to a binding GPT-5.6 tribunal ruling, implemented in
+this round — exactly one further fix round, per the ruling's own terms).** This document is an
 **expansion of the `W5-W11-gated.md` Wave 10 skeleton (`w10f-storage` row, NM-36C paragraph)**,
 produced under the "expansion gate" (`W5-W11-gated.md` lines 8–24): written and frozen *before* any
 implementation work starts, reviewed by an adversarial reviewer who did not write it and will not
@@ -31,13 +33,25 @@ Seven more HIGH findings accompanied it (a Tier-1-mislabeled-as-Tier-2 positive 
 not-realized accounting, decorative AST bindings, a token-presence founder-decision gate, an
 unsatisfiable review-record path set, unconfirmed daemon teardown, and a false-red in this PRD's own
 registry example). **Binding ruling: the verifier must never invoke `apply` — not against a temp
-root, not with `--confirm`, not ever.** This round is the resulting architectural change, not
-another patch — see **Verifier safety model** (renamed from "fixture-isolation guarantee") and
-**Round-2 findings → closures** near the end. The three freeze-blocking founder questions raised in
-round 1 have since been answered by founder delegation (see **Founder rulings**, immediately after
-Scope) and their real decision records have now landed in `docs/plans/waves/DECISIONS.md` — this
-PRD's own author does not edit that file, and C10F-14 binds mechanically to the real headings there,
-not to this PRD's restatement of them.
+root, not with `--confirm`, not ever.** This round-2 rule is exactly what round 4 corrects.
+
+**Round-3 disposition.** REJECTed a third time, tripping the program's stop rule. The round-2 "never
+call apply" rule closed one defect class by introducing another: proving deletion semantics required
+delegating to product-authored Vitest files and proving those files were "bound" to production via
+AST import-graph inspection — the same source-shape-proves-runtime-behavior pattern this program's
+`W9AS-PARK`/`W10A-PARK`/`W10B-PARK` records had already identified as unsound and non-convergent for
+three other waves. **Binding tribunal ruling (round 4, this round): OS-level sandbox confinement
+replaces the "never call apply" rule; static AST/registry/delete-call-graph proof is removed entirely
+in favor of a runtime interposer plus doubled snapshot proof; every evidence commit rebuilds in a
+fresh detached clone; teardown enumeration uncertainty hard-fails the run.** See **Verifier safety
+model** for the full architecture and **Round 4 — binding tribunal ruling → closures** near the end
+(the round-1/round-2 findings tables are retired — every mechanism they closed either still stands
+under a new name or was itself superseded by this round; see that section for the mapping). The three
+freeze-blocking founder questions raised in round 1 have since been answered by founder delegation
+(see **Founder rulings**, immediately after Scope) and their real decision records have now landed in
+`docs/plans/waves/DECISIONS.md` — this PRD's own author does not edit that file, and C10F-14 binds
+mechanically to exact SHA-256 digests of the real sections there, not to this PRD's restatement of
+them.
 
 ---
 
@@ -110,124 +124,115 @@ all. This verifier **never invokes `apply`**, under any name, against any root, 
   subset of this same, already-vetted path family into this wave's scope instead of inventing a new
   "is this generated content" heuristic — see "Founder rulings."
 
-## Verifier safety model (closes round-1 finding 1 and the round-2 CRITICAL finding — outranks everything else in this document)
+## Verifier safety model (round 4 — binding tribunal ruling, outranks everything else in this document)
 
-**The single most safety-critical property this PRD states, now in its third and final shape.**
-Round 1 found the verifier's fixtures were built under the checkout's REAL `.tmp/tools-dev/...`, so
-a production `plan` could pick up real, inactive namespaces from the operator's own past dev
-sessions, and a subsequent verifier-issued `apply` would delete them. The round-1 fix — an
-`OD_STORAGE_TMP_ROOT` "brace" plus a lexical "belt" gating every verifier-issued `apply` call — was
-REJECTED again in round 2: the belt validated only the paths a `plan` response *claimed* it would
-touch, then `apply` was invoked with nothing but a bare `planId`, which unconstrained production
-code is free to re-derive its own deletion targets from however it likes. **The belt validated a
-description of the work, never the work itself — no tighter belt fixes that, because the verifier
-cannot observe or constrain what a black-box `apply` implementation does on the other side of an
-HTTP/CLI boundary it doesn't control.**
+**The single most safety-critical property this PRD states, now rebuilt on a fourth, final
+architecture after a GPT-5.6 escalation tribunal.** Round 3's "the verifier itself never invokes
+`apply`" rule was itself the defect the tribunal corrected: refusing to call the destructive endpoint
+from the verifier only ever produced evidence about a black box's *description* of its own tests
+(vitest title/import-binding proof), never about its actual runtime behavior, and the program's own
+W9AS-PARK/W10A-PARK/W10B-PARK precedents (`DECISIONS.md`) had already established the same lesson for
+sibling waves: a criterion asserting runtime behavior must OBSERVE that behavior, never infer it from
+source shape. The tribunal's ruling replaces the "never call apply" rule with **OS-level confinement
+that makes calling apply safe**: every product, daemon, CLI, and package-script process this verifier
+ever spawns — and every descendant — runs inside one inherited `sandbox-exec` (macOS Seatbelt) jail
+whose filesystem write authority is limited to a single fresh scratch envelope and whose network
+authority is limited to a verifier-assigned loopback port that is never `7456` or `51012`. Inside that
+jail, the verifier's own black-box probes MAY call real `gc-apply` — an apply implementation may
+delete disposable fixtures the probe built itself, but no process in the verification tree has OS
+authority to mutate operator data, because the jail — not a refusal to dial the endpoint — is what
+makes that safe.
 
-**Binding ruling (round 2, unconditional): this verifier never invokes `apply` — not against a temp
-root, not with `--confirm`, not as a negative control expected to be rejected, not ever.** Coverage
-that used to come from calling `apply` and inspecting its response is re-established two different
-ways, matched to what each criterion actually needs to prove:
+Four binding invariants govern every criterion below:
 
-1. **PLAN-ONLY, verifier-side (safe, real, never destructive).** Anything that only needs to prove
-   something about *eligibility* — which paths become candidates, under what category, with what
-   retention window, reported how — keeps booting an isolated daemon, building real fixtures under a
-   fresh temp root, and calling `od storage gc plan`/`report` for real. `plan` is dry-run by
-   construction and C10F-6 proves its own call graph contains no delete primitive, so this stays
-   unconditionally safe regardless of what fixtures exist. The `OD_STORAGE_TMP_ROOT` brace from
-   round 1 is kept exactly for this: the storage-gc surface **must** accept it — an env var, read at
-   daemon-boot time exactly like the existing `OD_DATA_DIR` precedent — redirecting every Tier-1
-   `.tmp/<source>/<namespace>` root resolution to `<OD_STORAGE_TMP_ROOT>/.tmp/<source>/<namespace>`.
-   Unset, it falls back to the real project root exactly as today. Every Tier-1 fixture in every
-   plan-only criterion is built under a freshly `mkdtemp`'d temp project root — never the checkout —
-   and every daemon this verifier boots carries that temp root as `OD_STORAGE_TMP_ROOT`; every Tier-2
-   (`RUNTIME_DATA_DIR`-rooted) fixture is built under that same daemon's freshly `mkdtemp`'d
-   `OD_DATA_DIR`. The round-1 belt survives, renamed and repurposed as plan-CORRECTNESS evidence
-   folded into every observed plan (never a destructive-action gate, since nothing destructive is
-   gated here anymore): every plan candidate this run ever observes must stay confined to one of
-   those two fixture roots.
-2. **DELETION SEMANTICS, as the PRODUCT'S OWN vitest tests — never this verifier.** Proving a file is
-   *really gone* (not merely "reported removed") can only be done by code that runs `apply` for real
-   against a fixture root **it constructs itself**, entirely inside the daemon's own test process —
-   exactly what `apps/daemon/tests/*.test.ts` already does throughout this codebase. Five **required
-   red-spec test files** are mandated by exact name and exact required test title(s) — see "Required
-   red-spec test files," below. Each one must assert REALIZED on-disk state (`fs.existsSync`/
-   `fs.readdirSync` against the fixture root that test built itself) — a reported `removed[]`/
-   `skipped[]` accounting is evidence a well-written test may also check, never the assertion the
-   verifier trusts. For each required file the verifier proves, and never assumes: it **exists** at
-   HEAD with every required title present (real AST `test(...)`/`it(...)` call sites); it is **bound**
-   to the production GC path (imports a module inside `storage`'s own reachable set and references
-   the binding, or drives a real endpoint path from a real call-expression position); and it went
-   **red before green** — proved by REAL vitest execution, never by reading source: at HEAD, right
-   now, in this real checkout, every required title passes; independently, the file's own
-   *introduction commit* (the first commit in `baseCommit..HEAD` history adding that exact path) is
-   checked out into an isolated `git worktree add --detach`, given a frozen `pnpm install --offline
-   --frozen-lockfile`, and run for real *as committed at that commit* (no HEAD overlay) — proving the
-   file did not arrive already fully green.
+1. **`I-W10F-VITEST-CONFINEMENT`.** No implementation-authored code (product, daemon, CLI, browser,
+   package-script, or test process, and every descendant) may execute outside a successfully
+   preflighted OS jail. Before ANY repository code runs, a fixed preflight proves a child inside the
+   jail can create/delete an inside-envelope canary but cannot modify or delete a byte-verified canary
+   outside its writable subtree — missing sandbox tooling, policy rejection, `EPERM`, a failed canary,
+   or inability to restrict network/filesystem authority is a hard failure, never a skip or an
+   unsandboxed fallback. `HOME`, `TMPDIR`, XDG paths, package caches, `OD_DATA_DIR`,
+   `OD_STORAGE_TMP_ROOT`, cwd, and proof-output paths all resolve inside that one fresh
+   `mkdtemp`-created scratch envelope; the jailed process environment is built from an explicit
+   allowlist, never spread from the ambient environment. **Implementation-authored Vitest files cease
+   to be load-bearing evidence and are never spawned by the verifier** — the "required red-spec test
+   files" table this document carried in rounds 1–3 is retired as a *verifier-graded* requirement (see
+   "Required red-spec test files" for its replacement).
+2. **`I-W10F-DELETE-PROOF`.** AST call graphs, registry-literal validation, imported-binding
+   references, route-string positions, test titles, and assertion counts carry **zero behavioral
+   authority**. Three runtime-truth layers replace them:
+   - **A verifier-owned preload interposer**, installed via Node's `--import` before the daemon's own
+     `server.ts` loads, wraps every mutating `node:fs`, `node:fs/promises`, and `node:child_process`
+     operation, re-synchronizes Node's built-in ESM bindings after wrapping
+     (`module.syncBuiltinESMExports()`), and denies the attempt while the real `GET
+     /api/storage/gc-plan` request the verifier issued is in flight.
+   - **Preflight canaries** independently prove the interposer intercepts five call shapes — property
+     access, a direct `node:fs` import, a direct `node:fs/promises` import, an aliased/indirect
+     wrapper, and a spawned deletion command — against a byte-verified denied canary, while deletion of
+     an allowed scratch fixture still succeeds when the interposer is not in deny mode.
+   - **Doubled real-request replay**: the daemon boots twice, with freshly randomized fixtures each
+     time; each real `plan` request must trigger zero mutation-attempt events while it is in flight,
+     and the fixture tree's full `lstat` snapshot (path, type, device, inode, mode, ownership, size,
+     nanosecond timestamps, symlink target) plus SHA-256 for regular files must be byte-identical
+     before and after (C10F-6). The OS jail remains the safety net if the interposer ever misses an
+     exotic call.
 
-   **On "does the verifier reach `apply`" — a distinction stated explicitly so a future reviewer does
-   not re-litigate it.** Running the required red specs means the verifier spawns `vitest`
-   (`sh('pnpm', [...'vitest','run'...])`), which executes the product's own test file, which itself
-   calls `apply`. That is *not* the class the round-2 binding ruling closed, and is not required to
-   be closed by it. The failure mode that ruling exists to prevent is: the gate constructs a deletion
-   plan, executes it, and thereby only ever inspects a *description* of the work it is supposed to
-   judge. Running the product's own test suite is categorically different — the verifier chooses no
-   target, builds no plan, passes no `--confirm`, and owns no fixture; it only reads a JSON verdict
-   from a test file that constructs and owns its own fixture root, exactly what ordinary CI already
-   does for every test in this repo. If executing the product's tests counted as the verifier
-   "reaching" `apply`, no gate could ever run tests at all. **What this does NOT settle:** whether a
-   given required red-spec file actually confines its own fixture root correctly is a genuine,
-   separate concern — a badly-written product test could delete something real. That is a
-   **product-test review concern, not a gate-architecture concern**, and C10F-13's adversarial review
-   is where it is named and judged (see C10F-13, below).
-3. **`NO-DESTRUCTIVE-INVOCATION` (new, self-enforcing) plus a type-level closure.** A dedicated
-   meta-check AST-scans the verifier's own source and fails the gate if a future edit reintroduces an
-   `apply`/`--confirm`/`gc-apply` invocation anywhere. Round 3: this scan is honestly a *regression
-   guard* for the two literal idioms this file uses today (a literal array element, a literal/
-   template URL) — it would not by itself catch a deliberately obfuscated future bypass (string
-   concatenation, a renamed wrapper, variable indirection). The residual is closed at the type level
-   instead of the scan level: `runStorageCli`'s `args` parameter is typed `readonly
-   SafeStorageCliArg[]`, a closed literal-string union (`'gc' | 'plan' | 'report' | '--json'`) that
-   does not include `'apply'` or `'--confirm'` at all — passing either is a TypeScript compile error,
-   caught by `pnpm typecheck`, which C10F-12 already runs on every invocation (`tsc -p
-   scripts/tsconfig.json --noEmit`, included via the root `typecheck` script, covers this file). A
-   computed/concatenated string is never assignable to a closed literal union without an explicit,
-   visible, auditable unsafe cast — obfuscation stops being a scan-evasion problem and becomes a
-   compile error. The AST scan stays as defense in depth; it costs nothing.
-4. **`FIXTURE-ISOLATION` (meta, carried forward from round 1, strengthened in round 2 and round 3).**
-   Structural: the verifier's own source is self-scanned to confirm the real checkout's
-   `.tmp/tools-dev/` is referenced from **exactly one**, provably read-only function. Runtime: before
-   any fixture work, a read-only listing of whatever namespaces already exist in the real checkout is
-   taken (never written to), and none may ever appear among the plan candidates observed across the
-   entire run. Round 2 added two more mandatory conjuncts to this same check's pass condition: every
-   plan candidate observed this run stayed confined to its own fixture roots (item 1, above), and
-   **every daemon teardown this run performed confirmed zero survivors** — a failed or partial teardown fails
-   `FIXTURE-ISOLATION`, and therefore fails the run; it is never merely recorded as evidence. Daemon
-   teardown itself is rebuilt around POSIX process **groups**: every daemon subprocess is spawned
-   detached (its own session/process group, pgid = its own pid), teardown signals the whole group
-   (`process.kill(-pgid, sig)`, SIGTERM then SIGKILL escalation) and **polls for zero survivors**
-   before resolving — a process-group leader's own `exit` event is never treated as proof the whole
-   group exited, per `DECISIONS.md`'s `W9AS-PARK` carry-forward (a sibling wave was parked over
-   exactly this failure mode).
+   Every other deletion-semantics criterion (C10F-3, C10F-5, C10F-7, C10F-9, C10F-10's `gc-apply` leg,
+   C10F-11, C10F-17) is proven by a **verifier-owned black-box probe**: it issues the real HTTP/CLI
+   action against a jailed daemon it booted itself, over a fixture root it built itself, and compares
+   exact realized filesystem state (existence, byte content, `lstat`) — never a reported `removed[]`/
+   `skipped[]` array. Each probe is replayed against the criterion's *named red commit* — `baseCommit`,
+   the last commit this program guarantees predates any storage-gc implementation — and against HEAD:
+   at the red commit the probe must fail cleanly (not crash) while an unrelated positive control
+   (`GET /api/health`, a core daemon route untouched by this wave) still succeeds; at HEAD, once
+   implemented, the probe must be satisfied. Founder-authority (C10F-14) has no runtime observable, so
+   it uses the narrow structural exception this program's own `W9AS-PARK` record allows: exact SHA-256
+   digests of the three named `DECISIONS.md` sections, read via `git show` at `baseCommit` — never
+   prose or token matching.
+3. **`I-W10F-EVIDENCE-BINDING`.** Every load-bearing HEAD-or-red-commit execution runs from a **fresh
+   detached clone** (`git clone --no-local --no-hardlinks --no-checkout <repoRoot> <clone>` then
+   `git -C <clone> checkout --detach <exact 40-character sha>`, `HEAD` re-verified against the
+   requested sha), a **frozen offline `pnpm install --offline --frozen-lockfile`** whose own
+   postinstall scripts rebuild every workspace package (including the daemon's own `tsc -p
+   tsconfig.json` and `packages/sidecar-proto`'s esbuild+`tsc` build) from tracked source inside the
+   jail, and never the live checkout's `dist/`, `node_modules/`, or other ignored/build artifacts.
+   Reviewer identity (C10F-13) comes only from two exact `git log` commands anchored at `baseCommit`
+   (`git log --format=%an%x00%ae <baseCommit>` for known-before-implementation contributors; `git log
+   --format=%an%x00%ae <baseCommit>..<reviewedCommit>` for implementation authors) — `--all` is
+   forbidden.
+4. **`I-W10F-TEARDOWN-FAIL-CLOSED`.** Process-group absence is established only by a successful,
+   completely parsed `ps -Ao pid=,pgid=` enumeration returning a **known** set (including a known
+   *empty* set). A nonzero exit, spawn error, timeout, or malformed line produces `state:"unknown"` —
+   **never `[]`**. Each enumeration point retries three times, 200ms apart; after SIGTERM a known
+   nonempty set is polled for up to 8 seconds, then escalated to a group SIGKILL with a 4-second
+   confirmation window; if enumeration ever becomes `unknown`, teardown issues best-effort group
+   SIGKILL and performs one final three-attempt enumeration, still returning `ok:false` unless that
+   final result is `known` with zero members. Any enumeration uncertainty at any point this run
+   **hard-fails `FIXTURE-ISOLATION` and the whole run**, and the scratch envelope is retained as
+   forensic evidence (path + outstanding pgid printed) until zero survivors are independently
+   confirmed — cleanup happens only after that confirmation.
 
-   **Round 3: a third, honest terminal state — `not-exercised` — distinct from both `pass` and
-   `fail`.** `allDaemonTeardownResults.every(r => r.ok)` on an empty array is `true` by JS semantics,
-   not by evidence. Pre-implementation, `storageEntry` is `null`, so no plan-only criterion's
-   `requireSharedDaemon()` call and no dedicated-daemon-boot criterion ever calls
-   `bootIsolatedDaemon()` at all — zero plans observed, zero daemons booted, zero teardowns
-   performed. Reporting a bare `pass` in that state would claim the process-group teardown mechanism
-   had been proven safe when it never ran. `FIXTURE-ISOLATION` now distinguishes: an actual
-   structural defect (always evaluated, since the self-scan runs regardless of implementation state)
-   or an actual leak/confinement/teardown *failure* (only possible once something was exercised, so
-   these cannot false-fail pre-implementation) still fails outright; a clean structural scan with
-   zero plans observed and/or zero daemons booted reports `not-exercised` — not a defect finding, but
-   not a proof either; only when everything checked *and* both runtime conjuncts were genuinely
-   exercised does it report a real `pass`. `not-exercised` blocks the overall gate exactly like
-   `fail` does (see "How the verifier runs") — it is reported separately for honesty, never treated
-   as equivalent to a proven pass. This mirrors this program's existing precedent for an honest
-   non-pass terminal state (W1's C1-12 `blocked-on-founder`, which can never read `pass`), and closes
-   the same failure class `scripts/waves/verify-w0.ts` already guards against by pairing every
-   `.every()` on a results array with an explicit `length > 0 &&` guard.
+**Superseded control paths removed this round, not left dormant beside the new ones:**
+`REQUIRED_RED_SPECS`/`runVitestFileJson`/`replayFileRedAtCommit`/`checkRequiredRedSpecSync`/
+`extractTestTitlesFromSource` (vitest is no longer evidence); `findRegistryLiteral` and the registry
+literal-property helpers (registry AST validation carries zero authority — replaced by
+`CATEGORY_MATRIX`, the verifier's own ground-truth statement of the ruling's exact seven-category
+allowlist, asserted at runtime); `functionCallGraphContainsDeleteCall` and its supporting AST walk
+(static delete-scanning is removed entirely — replaced by the interposer + doubled snapshot proof);
+`safeApply`/`NO-DESTRUCTIVE-INVOCATION`'s self-scan and the `SafeStorageCliArg` closed-literal-union
+type-level closure (the round-3 "verifier never calls apply" rule is exactly what this round
+corrects). `FIXTURE-ISOLATION` is rebuilt around the jail's structurally stronger guarantee (the
+sandbox denies any write outside the scratch envelope at the OS level, regardless of what a daemon's
+own logic attempts) plus the `I-W10F-TEARDOWN-FAIL-CLOSED` enumeration-uncertainty hard-fail, and
+still reports the honest third terminal state, `not-exercised` (distinct from both `pass` and `fail`,
+blocking the gate exactly like `fail` does), when no daemon was ever booted this run — pre-
+implementation, `storageEntry` is `null`, so nothing runs, and reporting a bare `pass` in that state
+would claim a mechanism was proven safe when it never exercised. This mirrors this program's existing
+precedent for an honest non-pass terminal state (W1's C1-12 `blocked-on-founder`).
+
+**No retained manifest proves this architecture until a clean, exact-HEAD run exists.** Every
+manifest this document or the goal-state proof directory references is timestamped and commit-bound;
+a manifest from a prior architecture (rounds 1–3) proves nothing about this one.
 
 ## Threat model
 
@@ -242,7 +247,7 @@ ways, matched to what each criterion actually needs to prove:
 | T7 | **Partial-failure inconsistency.** Report doesn't reflect what was actually removed vs. skipped. | A data-integrity failure one layer up from deletion itself. |
 | T8 | **Retention-window misconfiguration treated as "delete everything now."** | The one operator-tunable knob becomes the easiest way to nuke a category. |
 | T9 | **Report/reality drift.** Totals cached/derived from the plan rather than the filesystem. | Defeats the report's entire audit value. |
-| T10 | **The gate itself deletes real data.** The verifier's own fixtures reach the operator's real checkout, or the verifier's own destructive calls reach real data through a black-box `apply`. | Round-1 CRITICAL, then round-2 CRITICAL on the same class disguised. Closed by never invoking `apply` from the verifier at all (`NO-DESTRUCTIVE-INVOCATION`, self-enforcing), `OD_STORAGE_TMP_ROOT` + `FIXTURE-ISOLATION` for the remaining plan-only fixture risk, and moving every deletion-realization proof into the product's own tests over fixture roots those tests construct themselves. |
+| T10 | **The gate itself deletes real data.** The verifier's own fixtures or destructive calls reach the operator's real checkout. | Round-1 CRITICAL, round-2 CRITICAL on the same class disguised, round-3 CRITICAL again (source-shape proof of a "never call apply" rule that itself trapped the program's own deletion-semantics evidence in an unsound pattern). Round 4 (binding tribunal ruling): closed by OS-level `sandbox-exec` confinement (`I-W10F-VITEST-CONFINEMENT`) that makes it structurally impossible for ANY process this verifier spawns — including one that calls real `gc-apply` — to write outside one fresh scratch envelope, regardless of what the daemon's own logic attempts; the verifier's black-box probes now call real `gc-apply` safely, inside that jail. |
 | T11 | **Orphan-detection false positive.** A referenced artifact is misclassified as orphaned and deleted (Founder Ruling 3's "dangerous" category). | The orphan check is itself a bug surface with the same blast radius as T5 — a wrong "no referencing row" read destroys live, referenced user content. |
 
 ## Scope
@@ -395,28 +400,21 @@ on them existing in exactly this shape.
   sidebar nav entry, typed i18n keys, "Plan"/"Apply" actions, real `fetch()` calls whose URL
   argument is the exact string for each of the three routes.
 
-### Required red-spec test files (mandatory, exact names and exact required test titles)
+### Required red-spec test files — RETIRED as a verifier-graded requirement (round 4)
 
-The product's own tests, never the verifier, prove deletion is realized. Each file must build its
-own fixture root (never the checkout, never a directory the verifier controls), run a real `apply`
-against it, and assert `fs.existsSync`/`fs.readdirSync` on that root directly — reported
-`removed[]`/`skipped[]` accounting may additionally be checked but never substitutes for the
-on-disk assertion. Test titles are matched **exactly** (`test('<exact title>', ...)` /
-`it('<exact title>', ...)`) — the verifier finds each file's own introduction commit by walking real
-git history and replays it in an isolated worktree to prove genuine red-before-green (see "Verifier
-safety model").
-
-| File (`apps/daemon/tests/`) | Required test title(s) (verbatim) | Closes |
-|---|---|---|
-| `storage-gc-symlink-escape.test.ts` | `W10F-GC: a symlink to an external directory inside an eligible namespace is never entered by apply, and a real expired file in the same namespace is removed` | T2 |
-| `storage-gc-imported-folder.test.ts` | `W10F-GC: apply never removes anything under an imported-folder project's metadata.baseDir, while a genuine orphaned Tier-2 fixture in the same run is removed` | T4 |
-| `storage-gc-apply-semantics.test.ts` | `W10F-GC: apply without --confirm is rejected and deletes nothing`; `W10F-GC: apply against an unknown planId is rejected and deletes nothing`; `W10F-GC: apply's realized removed[] set exactly equals the plan's candidates minus a namespace that became active after planning, and the survivor is skipped with a non-empty reason`; `W10F-GC: a file created after planning is never removed by apply even though it lives in an otherwise-eligible namespace` | T6, T7 |
-| `storage-gc-report-reconciliation.test.ts` | `W10F-GC: report totals after apply equal a fresh on-disk stat walk of the surviving fixture tree, not the plan's predicted totals` | T9 |
-| `storage-gc-orphan-detection.test.ts` | `W10F-GC: a referenced artifact with a live database row is never a plan candidate and is never removed by apply`; `W10F-GC: a genuinely orphaned artifact with no referencing database row is a plan candidate and is removed by apply` | T11 |
-
-`storage-gc-apply-semantics.test.ts` additionally must drive the exact `/api/storage/gc-apply` path
-from a real call-expression position — C10F-10 cross-references this specific binding as its
-gc-apply parity proof, since the verifier itself never generates gc-apply traffic to log.
+Rounds 1–3 mandated five named product-authored Vitest files as the sole evidence for deletion
+semantics. **The round-4 binding tribunal ruling retires this table as verifier-graded evidence**:
+"implementation-authored code" ceases to be load-bearing once the OS jail makes it safe for the
+verifier to exercise the real `gc-apply` endpoint itself. C10F-3, C10F-5, C10F-7, C10F-9, and
+C10F-17 (T2, T4, T6/T7, T9, T11) are now proven by **verifier-owned black-box probes** that build
+their own fixture root inside the jail, issue the real HTTP/CLI action (including real `gc-apply`),
+and compare exact realized filesystem state — see each criterion's Verification section, below, and
+"Verifier safety model" for the shared red/HEAD replay pattern every probe uses. This does not lower
+the bar on the eventual implementation's own test suite — ordinary engineering practice (and
+`AGENTS.md`'s "Bug follow-up workflow") still expects the implementer to write real Vitest coverage
+for `apps/daemon/src/storage-gc/**` — it only removes that suite from being the verifier's OWN
+evidence, per the same reasoning `W9AS-PARK`/`W10A-PARK`/`W10B-PARK` already established for sibling
+waves: a criterion asserting runtime behavior must observe that behavior directly.
 
 ## Success criteria
 
@@ -441,15 +439,20 @@ from it.
 
 **Decoy.** A generic walker with an age filter fails the runtime half: a decoy fixture under an
 **unlisted** category, aged 5000 days, is correctly excluded by a registry-shaped implementation and
-wrongly included by a walker-shaped one — round 2: probed at **both** Tier 1
-(`.tmp/not-a-real-category/...`) and Tier 2 (a decoy directory directly under `RUNTIME_DATA_DIR`),
+wrongly included by a walker-shaped one — probed at Tier 1 (`.tmp/not-a-real-category/...`), Tier 2
+(a decoy directory directly under `RUNTIME_DATA_DIR`), and Tier 3 (an unpinned e2e-adjacent decoy),
 since a Tier-1-only probe never exercises the `.od`-side allowlist Founder Ruling 3 requires.
 
-**Verification.** AST scan for the pure-data shape (unwrapping an `as const` assertion around the
-array literal) and per-entry field validity. Runtime: `gc plan --json` against an unlisted-category
-decoy at Tier 1 **and** an unlisted-category decoy directly under `RUNTIME_DATA_DIR` (Tier 2) —
-neither is ever a candidate. Cross-check: every registry entry's `category` has a corresponding key
-in the plan's own `retentionWindows`.
+**Verification (round 4 — runtime only; no registry-literal AST result contributes to pass/fail,**
+per `I-W10F-DELETE-PROOF`). The verifier's own ground truth is the ruling's exact seven-category
+matrix (`tools-dev`, `tools-serve`, `tools-pack`, `daemon-logs`, `plugin-asset-cache`,
+`orphaned-staging`, `e2e-test-output`) — asserted, never read from source. Two jailed daemon boots:
+(1) no overrides — a real, eligible, aged positive fixture for every category with a stated default,
+plus unlisted-category decoys at all three roots; (2) the two no-default categories overridden so
+they can also yield a positive fixture, plus a narrow override on `tools-dev` held against boot (1)'s
+untouched siblings. Pass requires: `retentionWindows` keys are exactly the seven named categories;
+every category yields a real candidate; no unlisted-category decoy at any root ever leaks; changing
+one category's window changes only that category.
 
 ---
 
@@ -464,9 +467,10 @@ in the plan's own `retentionWindows`.
 root `.tmp/tools-dev/<ns>` vs. an unrelated sibling `.tmp/tools-devEVIL/<ns>` sharing only the
 string prefix.
 
-**Verification.** Red spec seeds the source-level collision fixture plus a genuine in-scope file,
-asserts by **exact path equality** against `candidates[].path`: the collision sibling never
-appears; the real file's exact absolute path does.
+**Verification.** The verifier's own black-box probe (against a jailed HEAD daemon, no red/HEAD
+replay needed — this is a scope check with no destructive half) seeds the source-level collision
+fixture plus a genuine in-scope file, asserts by **exact path equality** against `candidates[].path`:
+the collision sibling never appears; the real file's exact absolute path does.
 
 ---
 
@@ -476,19 +480,20 @@ appears; the real file's exact absolute path does.
 followed for enumeration or deletion. Closes **T2**.
 
 **Satisfiability.** lstat's directory entries; does not recurse through a symlink whose realpath
-resolves outside every allowed root; the required red spec's own `apply` proves the external content
-survives and the real in-scope file is removed.
+resolves outside every allowed root; a real `apply`, run by the verifier inside the OS jail, proves
+the external content survives and the real in-scope file is removed.
 
 **Decoy.** A symlink-to-a-**file** test proves nothing (`unlink` never dereferences). The real
 vulnerability is a symlink to a directory, followed during recursion.
 
-**Verification.** Two halves, never overlapping in what they prove. *Plan-only (verifier-side,
-safe):* symlink (`dir` type) inside an eligible namespace → external fixture directory with an aged
-file, plus a real in-scope expired file; asserts nothing under the external directory ever appears
-in `candidates[].path`, and the real in-scope expired file does. *Deletion semantics (the product's
-own test, never the verifier):* `storage-gc-symlink-escape.test.ts` (required red-spec table, above)
-proves the external content's hash survives a real `apply` and the real in-scope file is actually
-gone, over a fixture root it builds itself.
+**Verification (round 4 — verifier-owned black-box probe, real `apply` inside the jail, no product
+test file).** Symlink (`dir` type) inside an eligible namespace → external fixture directory (outside
+the daemon's own fixture roots but still inside the verifier's scratch envelope) with a byte-verified
+aged file, plus a real in-scope expired file. The probe calls real `gc plan` then real `gc apply
+--confirm`, and asserts: nothing under the external directory ever appears in `candidates[].path`;
+the external file's SHA-256 is unchanged after `apply`; the real in-scope expired file is actually
+gone from disk. Replayed against `baseCommit` (must fail cleanly, `/api/health` still `ok:true`) and
+HEAD (must be satisfied) per "Verifier safety model."
 
 ---
 
@@ -503,8 +508,9 @@ category uniformly.
 **Decoy.** An mtime heuristic fails a namespace whose only write was at startup. A decoy
 special-casing one category fails the multi-category sweep.
 
-**Verification.** Per registry-declared Tier-1 category: real short-lived stamped process; excluded
-while alive (exact-path match); included once inactive (exact-path match).
+**Verification.** Per `CATEGORY_MATRIX` Tier-1 category (round 4 — the verifier's own ground-truth
+statement, never a registry AST read): real short-lived stamped process; excluded while alive
+(exact-path match); included once inactive (exact-path match).
 
 ---
 
@@ -514,47 +520,52 @@ while alive (exact-path match); included once inactive (exact-path match).
 genuine Tier-2 item **is** collected in the same run. Closes **T4**.
 
 **Satisfiability.** Never enumerates `PROJECTS_DIR`/project metadata, or explicitly excludes any
-`hasExternalProjectRoot` path before considering it; the required red spec's own `apply` proves
-`baseDir` survives byte-identical and the Tier-2 control is actually gone.
+`hasExternalProjectRoot` path before considering it; a real `apply`, run by the verifier inside the
+OS jail, proves `baseDir` survives byte-identical and the Tier-2 control is actually gone.
 
 **Decoy.** A hardcoded `PROJECTS_DIR`-substring filter fails a `baseDir` that doesn't textually
-contain it. A GC that collects nothing (global no-op) fails the missing positive control — round 2:
-the positive control must be a genuine **Tier-2** (`RUNTIME_DATA_DIR`-rooted) fixture, never a
-Tier-1 (`.tmp/...`) fixture mislabeled as Tier-2, which would prove nothing about `.od`-side
-collection at all.
+contain it. A GC that collects nothing (global no-op) fails the missing positive control — the
+positive control must be a genuine **Tier-2** (`RUNTIME_DATA_DIR`-rooted) fixture, never a Tier-1
+(`.tmp/...`) fixture mislabeled as Tier-2, which would prove nothing about `.od`-side collection at
+all.
 
-**Verification.** Two halves, never overlapping in what they prove. *Plan-only (verifier-side,
-safe):* a real imported-folder project via `POST /api/import/folder`, plus a genuine Tier-2
-(`RUNTIME_DATA_DIR`-rooted) fixture aged past a registry-declared window; asserts no candidate path
-equals/is prefixed by anything under `baseDir`, and the Tier-2 fixture **is** a candidate.
-*Deletion semantics (the product's own test, never the verifier):*
-`storage-gc-imported-folder.test.ts` (required red-spec table, above) proves `baseDir`'s content
-hash survives a real `apply` byte-identical while the Tier-2 control is actually gone, over a
-fixture root it builds itself.
+**Verification (round 4 — verifier-owned black-box probe, real `apply` inside the jail, no product
+test file).** A real imported-folder project via `POST /api/import/folder`, plus a genuine Tier-2
+(`RUNTIME_DATA_DIR`-rooted) fixture aged past its window. The probe calls real `gc plan` then real
+`gc apply --confirm`, and asserts: no candidate path equals/is prefixed by anything under `baseDir`;
+the Tier-2 fixture **is** a candidate; `baseDir`'s content SHA-256 is unchanged after `apply`; the
+Tier-2 control is actually gone from disk. Replayed against `baseCommit` and HEAD per "Verifier
+safety model."
 
 ---
 
 ### C10F-6 — Dry-run is the default and the only read path
 
-**Statement.** `plan` never mutates the filesystem; CLI exits `0` with schema-valid JSON;
-`planStorageRetention`'s own call graph contains no filesystem-delete primitive. Closes part of
-**T6**.
+**Statement.** `plan` never mutates the filesystem; CLI exits `0` with schema-valid JSON; the real
+plan request, observed under a runtime interposer, triggers zero mutation-attempt events. Closes part
+of **T6**.
 
-**Satisfiability.** Pure read; no `fs.rm`/`unlink`/`rmdir` reachable from `planStorageRetention`'s
-own body, or from any function it actually calls, transitively.
+**Satisfiability.** Pure read; no mutating `node:fs`/`node:fs/promises`/`node:child_process`
+operation is ever attempted while handling a real `GET /api/storage/gc-plan` request.
 
-**Decoy.** A shared `planAndMaybeApply(mutate)` function fails the exact-export-name requirement —
-there is no `planStorageRetention` for the call-graph walk to root at. Round 2: a **file-level**
-reachability check (any delete call anywhere in the whole transitively-imported file set) both
-false-reds a `planStorageRetention` that happens to share a file with a correct
-`applyStorageRetention` containing a real delete call, and under-attributes a delete call reached
-only through an indirect same-file helper. A real, function-level call graph closes both directions.
+**Decoy (round 4 — static delete-scanning is removed entirely, per `I-W10F-DELETE-PROOF`).** AST call
+graphs cannot see indirection, obfuscation, or any mutating primitive outside a hardcoded name list —
+this program's own round-2/round-3 history with this exact criterion is the demonstrated case: a
+direct-import `rmSync` probe against this file's own historical shape returned zero hits, confirming
+the underlying "the call graph never deletes" claim was unverified by the check that claimed to prove
+it. A runtime interposer that wraps the actual mutating operations, not their spelling in source,
+closes this class structurally.
 
-**Verification.** Multiset of two fixture namespaces before/after `plan --json`; exit `0`,
-schema-valid JSON, both trees byte-identical. A real, memoized, cycle-safe call graph walk rooted at
-`export function planStorageRetention` — following only calls it actually makes, to same-file
-functions or functions imported from inside `storage`'s own reachable set — confirms zero
-delete-primitive calls anywhere in that graph.
+**Verification (round 4 — runtime interposer + doubled real-request replay with exact whole-tree
+snapshots; no AST call-graph walk).** Two independent jailed daemon boots, each with freshly
+randomized fixtures. Each boot: full `lstat`+SHA-256 snapshot of the fixture tree (path, type,
+device, inode, mode, ownership, size, nanosecond timestamps, symlink target, content hash) before a
+real `GET /api/storage/gc-plan` request; the daemon process runs with the verifier's own runtime
+interposer preloaded via `--import`, denying and recording any mutating `node:fs`/
+`node:fs/promises`/`node:child_process` call while that specific request is in flight; snapshot again
+after. Pass requires, for BOTH boots: CLI exits `0` with schema-valid JSON, zero mutation-attempt
+events recorded during the request window, and the before/after snapshots are byte-for-byte
+identical.
 
 ---
 
@@ -566,24 +577,24 @@ re-validated-ineligible candidate carries a non-empty `reason`; a post-plan surp
 swept in. Closes **T6, T7**.
 
 **Satisfiability.** Rejects both negative cases outright; iterates the plan's exact list; re-runs
-safety checks per candidate; records every skip with a reason; the required red spec's own `apply`
-proves all of the above against realized on-disk state.
+safety checks per candidate; records every skip with a reason; a real `apply`, run by the verifier
+inside the OS jail, proves all of the above against realized on-disk state.
 
 **Decoy.** Re-scanning the registry at apply time (ignoring `planId`) lets a post-plan surprise file
-get swept in. Round 2: trusting the **reported** `removed[]` array for this comparison is itself
-gameable — an implementation can delete the surprise file while simply omitting it from `removed[]`
-and pass. The round-1 verifier-side version of this criterion also violates the round-2 binding
-ruling by construction: proving any of this requires calling `apply`, which this verifier may never
-do, including as a "should be rejected" negative control.
+get swept in. Trusting the **reported** `removed[]` array for this comparison is itself gameable — an
+implementation can delete the surprise file while simply omitting it from `removed[]` and pass; this
+criterion compares the verifier's own filesystem observation, never the reported array, as ground
+truth (a reported `removed[]` may additionally be checked but never substitutes for it).
 
-**Verification.** Entirely the required red spec (round 3 — this verifier calls `apply` for none of
-this, ever): `storage-gc-apply-semantics.test.ts` (required red-spec table, above) must, over a
-fixture root it builds itself, reject a missing `--confirm` and an unknown `planId`; assert the
-realized on-disk survivor set exactly equals the plan minus a namespace that became active after
-planning (multiset), with a non-empty skip reason on that survivor; and assert a post-plan surprise
-file literally still exists on disk after `apply` returns. The verifier proves this file exists, is
-bound to production (including the exact `/api/storage/gc-apply` call-expression binding), and
-proves each required title red-before-green by real vitest execution — see "Verifier safety model."
+**Verification (round 4 — verifier-owned black-box probe, real `apply` inside the jail, no product
+test file).** The probe plans two namespaces, then: (1) sends `gc apply` without `--confirm` — must
+be rejected and the fixture must still exist; (2) sends `gc apply --confirm` against a fabricated
+unknown `planId` — must be rejected; (3) makes one namespace active (a real short-lived stamped
+process) and drops a post-plan surprise file into the other AFTER planning, then sends the real
+`gc apply --plan <planId> --confirm` — asserts the realized on-disk survivor set exactly equals the
+plan minus the namespace that became active (multiset over the verifier's own `fs.existsSync`
+checks, never the reported array), the survivor carries a non-empty skip reason, and the surprise
+file is still on disk. Replayed against `baseCommit` and HEAD per "Verifier safety model."
 
 ---
 
@@ -616,21 +627,22 @@ category held fixed across wide/narrow.
 independently-computed ground truth. Closes **T9**.
 
 **Satisfiability.** Walks each category's actual root and `fs.stat`s at call time; re-derives
-post-apply, never arithmetic-subtracts the plan's prediction; the required red spec's own `apply`
-and its own fresh `fs.stat` walk prove this against realized state.
+post-apply, never arithmetic-subtracts the plan's prediction; a real `apply`, run by the verifier
+inside the OS jail, and the verifier's own fresh `fs.stat` walk prove this against realized state.
 
 **Decoy.** Arithmetic subtraction fails when a candidate's size changes between plan and apply.
-Round 2: comparing the **reported** `report` totals against a loose "at least the survivor's bytes,
-and different from before" bound (rather than an exact re-derivation) lets arbitrary inflated totals
-pass — proving the report is exact requires bracketing a real `apply`, which this verifier may
-never issue.
+Comparing the **reported** `report` totals against a loose "at least the survivor's bytes, and
+different from before" bound (rather than an exact re-derivation) lets arbitrary inflated totals pass
+— proving the report is exact requires bracketing a real `apply` and comparing against the verifier's
+own independent ground truth.
 
-**Verification.** Entirely the required red spec (round 3): `storage-gc-report-reconciliation.test.ts`
-(required red-spec table, above) must, over a fixture root it builds itself, change a candidate's
-size between plan and apply, then assert the after-apply `report` totals equal a **fresh**
-independently-computed `fs.stat` walk of the surviving fixture tree exactly — never the plan's
-predicted totals. The verifier proves this file exists, is bound to production, and proves the
-required title red-before-green by real vitest execution.
+**Verification (round 4 — verifier-owned black-box probe, real `apply` inside the jail, no product
+test file).** The probe plans a namespace with a survivor fixture, changes a candidate's size between
+plan and apply (defeating arithmetic subtraction), sends real `gc apply --confirm`, then real
+`report`. Asserts: the after-apply `report` totals are consistent with the verifier's own **fresh**
+`fs.stat` walk of the surviving fixture tree — computed independently, never derived from the plan's
+predicted totals or the apply response. Replayed against `baseCommit` and HEAD per "Verifier safety
+model."
 
 ---
 
@@ -648,37 +660,39 @@ never visited). Round 2: a matched string literal ANYWHERE in a file (an unused 
 dead variable) is not proof of a real call — the literal must sit in real `CallExpression` argument
 position.
 
-**Verification.** Manifest row validity. **Runtime proof for `gc-plan`/`report`:** the shared
-daemon's real `http.Server`'s `'request'` events are captured to a log for the whole plan-only run
-(attached from outside, no production-code change, and never includes `gc-apply` since this
-verifier never generates that traffic); the log must contain a real `GET .../gc-plan`,
-`GET .../report`. **Binding proof for `gc-apply`:** cross-references `storage-gc-apply-semantics.test.ts`'s
-own binding (required red-spec table, above) — that file must drive the exact `/api/storage/gc-apply`
-path from a real call-expression position, and must itself be fully proven (exists, bound,
-red-before-green) — the product's own test is the only safe source of real gc-apply traffic. AST
-scan of every `StorageRetention*.tsx` for exact-path string literals in real call-expression
-position, for all three routes.
+**Verification (round 4 — real captured traffic for all three routes, including `gc-apply`).**
+Manifest row validity. Every jailed daemon this run boots has its real `http.Server`'s `'request'`
+events captured to a log (attached from outside, no production-code change); the aggregated logs
+across the whole run must contain a real `GET .../gc-plan`, `GET .../report`, and — now that the
+verifier itself issues real `gc-apply` traffic inside the jail (C10F-3/5/7/9/17's probes) — a real
+`POST .../gc-apply`. AST scan of every `StorageRetention*.tsx` for exact-path string literals in real
+call-expression position, for all three routes (no runtime alternative exists for the UI leg without
+adding browser automation, which this round does not do).
 
 ---
 
-### C10F-11 — Every red spec binds to the production GC path, strictly scoped
+### C10F-11 — Every verifier-owned probe issues the real action it claims to (repurposed, round 4)
 
-**Statement.** Every red spec imports a module inside `storage`'s **own** reachable set (never a
-server.ts-wide union) **and references** the binding, or drives the real CLI/HTTP surface via a
-real AST call-site.
+**Statement (repurposed).** Rounds 1–3 stated this criterion as "every red spec binds to the
+production GC path" — meaningless once product-authored Vitest files stop being evidence
+(`I-W10F-VITEST-CONFINEMENT`). Round 4 restates it as `I-W10F-DELETE-PROOF`'s own requirement made
+auditable: **every black-box probe that claims runtime evidence this round actually issued a real
+HTTP or CLI action against its exact expected production surface** — never a stub, and never a claim
+decoupled from an actual request.
 
-**Satisfiability.** Imports the storage-gc module by its real path, or drives it exclusively via
-real CLI/HTTP.
+**Satisfiability.** Every probe (C10F-1 through C10F-9, C10F-17) logs its real action (method + exact
+path, or exact `od storage` subcommand) to a shared ledger as it runs; C10F-11 asserts the ledger is
+non-empty and surface-correct for every one of them.
 
-**Decoy.** An unwired lookalike module (`storage-gc/legacy-gc.ts`) fails the strictly-scoped BFS.
-An import that's never referenced fails the imported-but-unused check — round 2: the AST traversal
-implementing this check must genuinely *prune* descent into the `ImportDeclaration` node itself, or
-the import specifier's own name identifier satisfies "referenced" trivially and the check never
-fires.
+**Decoy.** A probe that short-circuits on a caught error before ever calling `fetch`/spawning the CLI
+would still be able to report a plausible-looking `satisfied: false` — the ledger check catches a
+probe that silently never exercised the real surface even once, as opposed to one that exercised it
+and observed a real rejection.
 
-**Verification.** Per spec file: resolve relative imports; require at least one inside
-`storageReachable` AND actually referenced, or a real AST call-site for one of the three exact
-paths.
+**Verification.** Cross-references the real-action ledger every probe above appends to while it ran;
+requires at least one logged entry per criterion, naming its exact expected surface. Pre-
+implementation (`storageEntry` is `null`), no probe above ever reaches its real-action call — this
+criterion correctly fails by name in that state, not vacuously.
 
 ---
 
@@ -704,17 +718,13 @@ fails guard immediately.
 non-placeholder-looking string. Diff over the **full owned/lease surface** between `reviewedCommit`
 and `HEAD` empty. `verdict === 'APPROVE'`.
 
-**Round 3, named explicitly: this review is also the fixture-confinement check the gate architecture
-itself cannot perform.** The verifier proves the five required red-spec files (see "Verifier safety
-model," item 2) exist, are bound to production, and went red before green — it deliberately never
-inspects whether each one's *own* synthetic fixture root is actually confined to a throwaway
-directory, versus, say, a path under the real checkout or a shared/reused location. A red-spec file
-that builds its fixture correctly and one that (by bug or bad-faith) reuses a real path are
-AST-indistinguishable at the level this verifier operates. The reviewer named in this record is
-responsible for confirming each required red-spec file's fixture construction is genuinely isolated
-before recording `verdict: 'APPROVE'` — the same standard already implicit in C10F-17's "the second,
-human-in-the-loop layer that must independently judge the genuineness of both fixtures," generalized
-here to all five required files.
+**Round 4: this review's fixture-confinement role narrows, since the verifier's own probes (not
+product-authored Vitest files) are now the load-bearing evidence and those probes' fixtures are
+themselves confined by the OS jail, not merely by convention.** What C10F-13's reviewer must still
+independently judge is the ACTUAL implementation itself: whether `apps/daemon/src/storage-gc/**`'s
+eligibility, apply, and orphan-check logic is sound beyond what the verifier's probes happen to
+exercise — the same standard C10F-17's own doc comment already names for the orphan-detection
+mechanism specifically, generalized here to the whole module.
 
 **Satisfiability.** Commit the whole implementation as P; a distinct, previously-active reviewer
 reviews P; the record naming `reviewedCommit: P` is committed afterward.
@@ -731,18 +741,21 @@ round 1's list omitted. Round 2 also found any fabricated `Name <email>` string,
 belonging to nobody who has ever touched this repository, passed — the added
 "has-committed-to-this-repo-before" check raises that bar.
 
-**Verification.** Strict-ancestor + `git diff --name-only reviewedCommit HEAD -- <full owned-path
-list, excluding the review record's own path>` empty (`apps/daemon/src/storage-gc/**`,
-`apps/daemon/src/routes/storage-gc.ts`, `apps/daemon/src/cli.ts`, `apps/daemon/src/server.ts`,
-`apps/daemon/tests/**`, `packages/contracts/src/api/storage-gc.ts`,
-`packages/contracts/src/index.ts`, `apps/web/src/components/SettingsDialog.tsx`,
-`apps/web/src/components/StorageRetention*`, `apps/web/src/i18n/types.ts`,
-`apps/web/src/i18n/locales/en.ts`, `scripts/waves/capability-manifest.json`,
-`docs/security/daemon-threat-model.md`, `docs/plans/waves/DECISIONS.md`); `reviewer` matches
-`/^[^<>]+ <[^<>@]+@[^<>]+>$/`, is exact-absent from `git log --format='%an <%ae>'
-baseCommit..reviewedCommit`, and is exact-present in `git log --all --format='%an <%ae>'`; `model`
-matches a real-looking name pattern (letters/digits/./-/space, ≥6 chars, contains a digit) and is not
-a placeholder; `verdict === 'APPROVE'`.
+**Verification (round 4 — reviewer identity via the two exact `git log` commands
+`I-W10F-EVIDENCE-BINDING` specifies; `--all` is forbidden).** Strict-ancestor +
+`git diff --name-only reviewedCommit HEAD -- <full owned-path list, excluding the review record's own
+path>` empty (`apps/daemon/src/storage-gc/**`, `apps/daemon/src/routes/storage-gc.ts`,
+`apps/daemon/src/cli.ts`, `apps/daemon/src/server.ts`, `apps/daemon/tests/**`,
+`packages/contracts/src/api/storage-gc.ts`, `packages/contracts/src/index.ts`,
+`apps/web/src/components/SettingsDialog.tsx`, `apps/web/src/components/StorageRetention*`,
+`apps/web/src/i18n/types.ts`, `apps/web/src/i18n/locales/en.ts`,
+`scripts/waves/capability-manifest.json`, `docs/security/daemon-threat-model.md`,
+`docs/plans/waves/DECISIONS.md`); `reviewer` matches `/^[^<>]+ <[^<>@]+@[^<>]+>$/` and, parsed into a
+name/email pair, is an exact member of `git log --format=%an%x00%ae <baseCommit>`'s output (a real
+identity known before this wave's own implementation range) and exact-absent from `git log
+--format=%an%x00%ae <baseCommit>..<reviewedCommit>`'s output (never one of the implementation's own
+authors); `model` matches a real-looking name pattern (letters/digits/./-/space, ≥6 chars, contains a
+digit) and is not a placeholder; `verdict === 'APPROVE'`.
 
 ---
 
@@ -768,11 +781,16 @@ even after the founder decisions were correctly recorded; (2) the round-1 verifi
 the OPPOSITE of the real decision would have passed. Both are fixed: real headings, and the body
 must state the ruling's own content (the 7/14/3-day figures; "narrow" e2e scope; "allowlist").
 
-**Verification.** Read-only parse of `DECISIONS.md` for each of the three real headings; extract the
-body to the next heading boundary; require it to both exist and contain the ruling's own stated
-content — the windows section must mention `7`, `14`, and `3` as whole-word tokens; the e2e-scope
-section must mention "narrow[ly]"; the deletable-categories section must mention "allowlist". All
-three required.
+**Verification (round 4 — exact SHA-256 digest, never prose/token matching, per `I-W10F-DELETE-PROOF`'s
+F7 exception).** `git show "${baseCommit}:docs/plans/waves/DECISIONS.md"`; normalize CRLF to LF; for
+each of the three real headings, extract heading-inclusive through the byte before the next Markdown
+heading; trim trailing whitespace; append one LF; SHA-256. All three digests must exactly equal the
+ruling's own stated values (`W10F-RETENTION-WINDOWS` →
+`41cc817995122d00997142c6c8773ac468e0f048abc8e361db3721777c44c544`; `W10F-E2E-ARTIFACT-SCOPE` →
+`5d81e84b9389c19486ca3f37de3fa07b0c29063b00fd316a33a49eae4788e4c4`; `W10F-OD-DELETABLE-CATEGORIES` →
+`4f76d3eb93659494d4c37814cf18caf0f5a6c026c948b031892c199075d9b370`). The extraction algorithm was
+validated against the real, landed `DECISIONS.md` content before this document was written — all
+three digests matched exactly on the first attempt.
 
 ---
 
@@ -803,16 +821,15 @@ outright, and the no-default probe is schema-based (asserting `retentionWindows[
 Tier-2 category. The PRD's own claimed override positive control (below) was also never actually run
 by the round-1/round-2 verifier code — it is now.
 
-**Verification.** Structural: registry `defaultRetentionDays` per entry matches the Ruling-1 table
-above by `justification`, and each of `inactive-namespace`/`log-retention`/`e2e-artifact` must
-actually be present as a registry entry (a missing entry fails, never vacuously passes). Runtime,
-three dedicated daemon boots: (1) **no env overrides at all** — `retentionWindows[cat] = {days: 7,
-source: 'default'}` exactly for `inactive-namespace`, `{days: 14, source: 'default'}` for
-`log-retention`, `{days: 3, source: 'default'}` for `e2e-artifact`; a `regenerable-cache`/
-`orphan-checked` category echoes `{days: null, source: 'unset'}` exactly and an aged fixture under it
-(built under `RUNTIME_DATA_DIR`, the correct Tier-2 location) is never a candidate; (2) **that same
-no-default category's env var set explicitly** — an identically-aged fixture under it echoes
-`{days: <override>, source: 'override'}` and **is** a candidate (the positive control).
+**Verification (round 4 — runtime only, against `CATEGORY_MATRIX`, the verifier's own ground-truth
+statement of Ruling 1; no registry-literal AST result contributes to pass/fail).** Two jailed daemon
+boots: (1) **no env overrides at all** — `retentionWindows[cat] = {days: 7, source: 'default'}`
+exactly for every `inactive-namespace` category, `{days: 14, source: 'default'}` for `log-retention`,
+`{days: 3, source: 'default'}` for `e2e-artifact`; `plugin-asset-cache` echoes `{days: null,
+source: 'unset'}` exactly and an aged fixture under it (built under `RUNTIME_DATA_DIR`) is never a
+candidate; (2) **that same no-default category's env var set explicitly** — an identically-aged
+fixture under it echoes `{days: <override>, source: 'override'}` and **is** a candidate (the positive
+control).
 
 ---
 
@@ -832,62 +849,75 @@ list (i.e. a self-invented "this also looks generated" guess) fails the cross-re
 (e.g. sweeps an entire `e2e/ui/` subtree by pattern rather than the named files) fails the runtime
 negative control below.
 
-**Verification.** Structural: AST-extract the real string-literal path segments passed to
-`path.join(...)` inside `cleanArtifacts()`; every Tier-3 registry `pinnedRelativePaths` entry must
-be an exact member of that set. Runtime (**plan-only, verifier-side — deliberately, see below**): a
-fixture aged past 3 days under a pinned path IS a plan candidate; an otherwise-identical fixture
-aged the same amount under an unpinned, e2e-adjacent path (simulating user-authored content the
-implementation must not generalize to) is NEVER a plan candidate.
+**Verification (round 4 — structural leg reads only the pre-existing, non-implementation
+`e2e/scripts/playwright.ts`, never a registry AST read; scope itself is proven purely at runtime).**
+Structural sanity: AST-extract the real string-literal path segments passed to `path.join(...)`
+inside `cleanArtifacts()` — this is reading a frozen, already-audited file this wave does not touch,
+not the implementation's own registry. Runtime (**plan-only — deliberately, see below**): a fixture
+aged past 3 days under one of those real target paths IS a plan candidate; an otherwise-identical
+fixture aged the same amount under an unpinned, e2e-adjacent sibling path (simulating user-authored
+content the implementation must not generalize to) is NEVER a plan candidate.
 
 **Why this one stays plan-only.** Unlike C10F-3/5/7/9/17, this criterion's threat is *scope* — which
 paths are eligible at all — never the accuracy of realized-vs-reported deletion accounting. Plan
 candidacy IS the correct and sufficient runtime observable for a scope question; there is nothing
-further a real `apply` would prove here that plan-only candidacy doesn't already prove, so it does
-not fall under the round-2 binding ruling's target (destructive calls proving deletion realization).
-Realized deletion of an eligible e2e artifact, generically, is already covered by
-`storage-gc-apply-semantics.test.ts`'s required assertions.
+further a real `apply` would prove here that plan-only candidacy doesn't already prove. Realized
+deletion of an eligible e2e artifact, generically, is already covered by C10F-7's apply-semantics
+probe.
 
 ---
 
 ### C10F-17 — Orphan detection is proven safe (Founder Ruling 3's mandatory design consequence)
 
-**Statement.** `orphan-checked` collection requires a red spec proving, in one paired test: a
-referenced artifact (a real row exists pointing at it) is never collected and never removed by
-`apply`; a genuinely orphaned one (no referencing row) is collected and IS removed by `apply`.
-Closes **T11**.
+**Statement.** `orphan-checked` collection requires, in one paired real-request probe: a referenced
+artifact (the daemon is made aware of it via a real production request) is never a plan candidate and
+is never removed by a real `apply`; a genuinely orphaned one (no daemon awareness at all) is a plan
+candidate and IS removed by a real `apply`. Closes **T11**.
 
-**Satisfiability.** `apps/daemon/tests/storage-gc-orphan-detection.test.ts` exists, binds to
-production per C10F-11's rules, contains the two required test titles (required red-spec table,
-above), and proves each one red-before-green by real vitest execution.
+**Satisfiability.** The verifier's own black-box probe, run inside the OS jail, drives both halves
+against a real jailed daemon.
 
-**Decoy.** A test asserting only the orphaned-collected half (no referenced-survives control) passes
-a naive "orphan detection exists" check while leaving T11 wide open — this criterion requires both,
-by exact title. Round 2: checking only that titles matching "referenced"/"orphan" exist — never
-executing the tests or verifying their assertions/fixtures for real — lets a stubbed-out or
-vacuously-passing test satisfy this criterion; the round-3 fix requires full execution, exact
-required titles, and red-before-green.
+**Decoy.** A probe asserting only the orphaned-collected half (no referenced-survives control) passes
+a naive "orphan detection exists" check while leaving T11 wide open — this criterion requires both, in
+the same run, against the same daemon.
 
-**Verification.** File existence + C10F-11-style import/reachability binding. Real vitest execution
-at HEAD requires both required titles to report `passed`; each title's own introduction commit is
-independently found and replayed in an isolated worktree to prove it was genuinely red before this
-run. This is real-execution proof, not merely a fixture the verifier constructs itself (the real DB
-reference mechanism is an implementation detail this PRD does not prescribe); **C10F-13's
-adversarial-review record is the second, human-in-the-loop layer that must independently judge the
-genuineness of both fixtures** before `verdict: APPROVE` is legitimate.
+**Verification (round 4 — verifier-owned black-box probe, real `apply` inside the jail, no product
+test file).** The "referenced" fixture uses the closest real, generically-available production
+mechanism for making the daemon aware of a path (`POST /api/import/folder`, already used by C10F-5);
+the "orphaned" fixture is a file the verifier places directly under the `orphaned-staging` Tier-2 root
+with no daemon awareness at all. The probe calls real `gc plan` then real `gc apply --confirm`, and
+asserts: the referenced fixture is never a candidate and survives `apply` on disk; the orphaned
+fixture IS a candidate and is actually gone after `apply`. Replayed against `baseCommit` and HEAD per
+"Verifier safety model." The real DB-reference mechanism remains an implementation detail this PRD
+does not prescribe — **C10F-13's adversarial-review record is the second, human-in-the-loop layer
+that must independently judge the genuineness of the eventual implementation's own orphan-check logic
+beyond what this probe happens to exercise** before `verdict: APPROVE` is legitimate.
 
 ---
 
-### NO-DESTRUCTIVE-INVOCATION, FIXTURE-ISOLATION, GATE-INTEGRITY, LEASE, HEAD-DRIFT
+### SANDBOX-CONFINEMENT, INTERPOSER-CANARY-VALIDATION, FIXTURE-ISOLATION, TEARDOWN-FAILS-CLOSED-SELFTEST, GATE-INTEGRITY, LEASE, HEAD-DRIFT
 
 Meta/infra checks — about the gate's own integrity and safety, never the product:
 
-- **NO-DESTRUCTIVE-INVOCATION** (new, round 3) — AST self-scan of the verifier's own source; fails
-  if it contains any `apply`/`--confirm`/`gc-apply` invocation, anywhere, under any name. Mechanical,
-  self-enforcing closure of the round-2 CRITICAL finding, independent of every other check.
-- **FIXTURE-ISOLATION** — see "Verifier safety model." Structural self-scan + runtime no-leak proof
-  + plan-confinement proof + all-daemon-teardowns-confirmed proof. Mechanical closure of round-1
-  finding 1 and round-2 finding 7 (a failed/partial teardown now fails this check, and therefore
-  fails the run — never merely recorded as evidence).
+- **SANDBOX-CONFINEMENT** (new, round 4) — the `I-W10F-VITEST-CONFINEMENT` preflight: an
+  inside-envelope canary create+delete succeeds; a byte-verified outside-envelope canary write+delete
+  both fail. Runs before any repository code executes; hard-fails the whole run (never a skip) if the
+  jail is unavailable or the containment proof fails.
+- **INTERPOSER-CANARY-VALIDATION** (new, round 4) — the `I-W10F-DELETE-PROOF` layer-(b) canary set:
+  five independent call shapes (property access, direct `node:fs` import, direct `node:fs/promises`
+  import, aliased/indirect wrapper, spawned deletion command) against a byte-verified denied canary,
+  plus an allowed-scratch-fixture positive control. Every criterion that boots a jailed daemon or CLI
+  is skipped honestly if this does not pass.
+- **FIXTURE-ISOLATION** — rebuilt around the jail's structurally stronger guarantee (see "Verifier
+  safety model"): self-scan for any `fs` mutation call in this file targeting a `repoRoot`-derived
+  path, plus all-daemon-teardowns-confirmed-zero-survivors, with zero enumeration uncertainty
+  anywhere this run (`I-W10F-TEARDOWN-FAIL-CLOSED` hard-fails this check on any `state:"unknown"`).
+  `not-exercised`, never a vacuous pass, when no daemon was ever booted this run.
+- **TEARDOWN-FAILS-CLOSED-SELFTEST** (new, round 4) — a controlled enumeration-uncertainty probe,
+  isolated from every real daemon this run boots, against disposable dummy process groups: forced
+  `ps` failure (nonzero exit, timeout, malformed output) must each yield `state:"unknown"`, never
+  `[]`, and the full teardown wrapper must report `ok:false` with the scratch envelope retained for
+  that case; a genuinely healthy empty enumeration remains the sole zero-survivor pass.
 - **GATE-INTEGRITY** — sha256 of the verifier and this PRD checked against an orchestrator-held
   `approved-gate.sha256`. Advisory pre-approval; blocking once it exists.
 - **LEASE** — diff subset of `leases.json@baseCommit`'s `W10f` entry. Fails cleanly pre-freeze (no
@@ -973,28 +1003,18 @@ check: `NO-DESTRUCTIVE-INVOCATION`, `FIXTURE-ISOLATION`, `GATE-INTEGRITY`, `HEAD
 never touches ports 7456/51012 or the operator's live daemon pids (confirmed via `lsof`/`ps` before
 and after — unchanged) and leaves no orphaned processes (confirmed via `ps aux` after the run).
 
-## Round-1 findings → closures
+## Round 4 — binding tribunal ruling → closures
 
-| # | Severity | Finding (condensed) | Closure |
-|---|---|---|---|
-| 1 | CRITICAL | Fixtures built under the real checkout `.tmp/tools-dev/`; apply could delete real data | `OD_STORAGE_TMP_ROOT` (brace) + `assertPlanConfinedToTempRoot` before every apply (belt) + `FIXTURE-ISOLATION` structural+runtime proof |
-| 2 | HIGH | C10F-1 accepted unsafe literals and banned all `readdir`; C10F-2 never injected the collision into the real path; C10F-3's symlink-to-file test proved nothing | Pure-data registry validator; runtime decoy-directory proof replaces the readdir ban; C10F-2 moved to source-level collision with exact-path JSON assertions; C10F-3 rebuilt around a symlink-to-DIRECTORY |
-| 3 | HIGH | C10F-4 one category, substring match; C10F-5 no positive control, no apply-response check | C10F-4 sweeps every Tier-1 category with exact-path JSON; C10F-5 adds a genuine positive control and checks `apply`'s parsed response |
-| 4 | HIGH | C10F-6 ignored exit/JSON validity, one namespace, no real reachability proof; C10F-7 missing negative controls, no exact multiset, no skip-reason check; daemon teardown unproven | C10F-6 checks exit+schema+multi-namespace+real reachability BFS; C10F-7 adds both negative controls + exact multiset diff + skip-reason check; teardown uses `@open-design/platform`'s real process-tree utilities |
-| 5 | HIGH | C10F-8 set env on the CLI subprocess after the daemon already booted; one category; substring match | C10F-8 boots four dedicated daemons with the override set at BOOT time; exact field comparison; a second category held fixed |
-| 6 | HIGH | C10F-10 accepted a path prefix and any similarly-named call; C10F-11 unioned the whole server.ts graph and accepted comment-text matches | C10F-10 requires the three exact routes AND real captured HTTP traffic AND an AST-exact UI call-site scan; C10F-11 scopes reachability strictly and adds an imported-but-unused check |
-| 7 | HIGH | C10F-13 `model` unvalidated; `reviewer` substring-matched (empty string always "matched"); owned-paths list incomplete | `model` validated non-placeholder; `reviewer` exact-format + exact-distinctness; owned-paths expanded to the full lease surface |
-| 8 | HIGH | Lease missing contracts-barrel/SettingsDialog/i18n grants; founder questions 1/2/4 left open | Lease expanded; C10F-14 added, mechanically binding the gate to real `DECISIONS.md` records; questions 1/2/4 now ruled (Founder rulings) and operationalized as C10F-15/16/17 |
+Rounds 1 and 2's finding tables are retired (round 4 is a wholesale architectural replacement, not a
+patch on top of them; every mechanism they closed either still stands under a new name below or was
+itself superseded). Round 3's own architecture — "the verifier never invokes `apply`," product-
+authored Vitest files as evidence, AST call-graph/registry-literal proof — is what round 4 replaces,
+per the escalation tribunal's binding ruling (three consecutive REJECTs on round 3 tripped this
+program's stop rule).
 
-## Round-2 findings → closures
-
-| # | Severity | Finding (condensed) | Closure |
-|---|---|---|---|
-| 1 | CRITICAL | The round-1 "belt" validated only the lexical paths a `plan` response claimed; `safeApply` then handed unconstrained production code a bare `planId`, free to re-derive its own deletion targets. A description of the work is not the work. | Architectural: `safeApply` and every call to it are deleted. This verifier never invokes `apply` — plan-only criteria keep proving eligibility for real (safe by construction, since `plan` is dry-run and C10F-6 proves its call graph never deletes); deletion semantics move entirely to five named, required product tests (`REQUIRED_RED_SPECS`) that build their own fixtures, run `apply` for real inside the daemon's own test process, and are proven to exist/bind/red-before-green by this verifier without ever running `apply` itself. `NO-DESTRUCTIVE-INVOCATION` self-enforces against regression. |
-| 2 | HIGH | C10F-1's registry-consumption was unproven and its only unknown-category probe was Tier-1-shaped; C10F-5's claimed Tier-2 positive control was actually `.tmp/tools-dev`, a Tier-1 fixture. | C10F-1 adds a genuine `RUNTIME_DATA_DIR`-rooted (Tier-2) unknown-category probe alongside the Tier-1 one, plus a registry-category-to-`retentionWindows`-key cross-check. C10F-5's positive control is rebuilt under `RUNTIME_DATA_DIR` against a real Tier-2 registry entry. |
-| 3 | HIGH | C10F-7/C10F-9 trusted reported accounting (`removed[]`, `report` totals) over realized on-disk state. | Both criteria move entirely to required red specs (`storage-gc-apply-semantics.test.ts`, `storage-gc-report-reconciliation.test.ts`) that assert `fs.existsSync`/an independent `fs.stat` walk directly against their own fixture root. |
-| 4 | HIGH | `fileCallsStorageEndpointByExactPath` matched a literal anywhere in a file, never requiring call-expression position; `importedIdentifierIsReferenced`'s pruning was fake (the generic `walk` helper always recurses regardless of the visitor's return), so an unused import's own specifier name satisfied "referenced." | The endpoint matcher now requires `parent is CallExpression && parent.arguments includes node`. The unused-import check is a dedicated, self-contained traversal that genuinely returns before calling `ts.forEachChild` on an `ImportDeclaration`. |
-| 5 | HIGH | C10F-14 accepted any ≥20-character text after its markers, including contradicting text; C10F-15 vacuously passed a missing registry entry and its no-default probe was dead code (gated on `tier === 1`, but no-default categories are always Tier 2); C10F-17 checked only test titles, never executing the tests. | C10F-14 requires content matching the ruling's own stated figures/scope. C10F-15 requires each entry to actually exist and redesigns the no-default probe around the tri-state `retentionWindows` schema at the correct Tier-2 location, plus the previously-unrun override positive control. C10F-17 becomes a full required-red-spec check (existence + binding + real execution + red-before-green). |
-| 6 | HIGH | C10F-13's `OWNED_REVIEW_PATHS` included the review record's own path, making the "diff must be empty since `reviewedCommit`" check unsatisfiable by any legitimate record (the record is necessarily committed after `reviewedCommit`); the leased `StorageRetention*` glob was missing; a fabricated `Name <email>` distinct from commit authors passed. | The review record's own path is removed from the owned-path set; `StorageRetention*` is added; `reviewer` must additionally appear in `git log --all` (a real prior contributor identity), and `model` must match a real-looking pattern with a digit. |
-| 7 | HIGH | Daemon teardown returned an `ok` result that dedicated-daemon callers discarded; `FIXTURE-ISOLATION` never consumed it, so a remaining listener-owning descendant could coexist with a green gate. | Teardown is rebuilt around POSIX process groups (`detached:true` + `process.kill(-pgid, sig)` + poll-for-zero-survivors); every result is pushed into one shared `allDaemonTeardownResults` array by `bootIsolatedDaemon`'s own `.stop()` wrapper; `FIXTURE-ISOLATION` requires every entry `ok`, so a failed/partial teardown fails the run. |
-| 8 | HIGH | `findRegistryLiteral` required the array literal to be the DIRECT initializer, so this PRD's own `as const`-wrapped example would false-red; C10F-8 required `daemonBooted===true` for a rejection, false-redding a correct fail-fast boot refusal; C10F-6's file-level delete-call scan both false-reds a legitimate `planStorageRetention` colocated with a correct `applyStorageRetention`, and under-attributes indirect delete calls. | `findRegistryLiteral` unwraps an `AsExpression` before checking for an array literal. C10F-8 accepts either a nonzero status or a boot refusal as "rejected." C10F-6 walks a real, memoized, cycle-safe call graph rooted at `planStorageRetention` specifically. |
+| Invariant | What it closes | Closure in this document / verifier |
+|---|---|---|
+| `I-W10F-VITEST-CONFINEMENT` | T10 (the gate itself deletes real data) — round 3's "never call apply" rule is itself the defect: refusing to dial the endpoint only ever produced evidence about a black box's *description* of its own tests. | Every product/daemon/CLI/package-script process runs inside a `sandbox-exec` jail confined to one fresh scratch envelope with loopback-only, non-protected-port network authority; preflighted before any repository code executes. Implementation-authored Vitest files are retired as verifier evidence (see "Required red-spec test files"). |
+| `I-W10F-DELETE-PROOF` | F4 (this program's recurring finding class: AST/registry/call-graph proof of runtime behavior is unsound and non-convergent, per `W9AS-PARK`/`W10A-PARK`/`W10B-PARK`) and F6 (registry-literal validation carrying pass/fail authority). | `findRegistryLiteral`, `functionCallGraphContainsDeleteCall`, and the red-spec import/binding machinery are removed. C10F-1 asserts the exact seven-category runtime matrix (`CATEGORY_MATRIX`) directly. C10F-6 is proven by a runtime interposer plus doubled real-request snapshot replay. C10F-3/5/7/9/10(apply leg)/11/17 are proven by verifier-owned black-box probes that call real `gc-apply` inside the jail and compare realized filesystem state, replayed at `baseCommit` and HEAD. C10F-14 is proven by exact SHA-256 digests of the named `DECISIONS.md` sections. |
+| `I-W10F-EVIDENCE-BINDING` | Live-checkout `dist`/`node_modules`/ignored-artifact contamination of evidence; `--all`-scoped reviewer-identity spoofing. | Every evidence commit (HEAD and each probe's red-commit replay) rebuilds in a fresh `git clone --no-local --no-hardlinks --no-checkout` + `checkout --detach`, frozen offline `pnpm install --offline --frozen-lockfile` (whose own postinstall scripts rebuild every workspace package from tracked source). C10F-13's reviewer identity comes only from two exact `baseCommit`-anchored `git log` commands; `--all` is forbidden. |
+| `I-W10F-TEARDOWN-FAIL-CLOSED` | The `W9AS-PARK` teardown carry-forward's residual gap: a `ps` enumeration that silently degrades to "no survivors" on a parse/spawn/timeout failure. | `listProcessGroupMemberPids` returns a discriminated `{state:"known", pids}` / `{state:"unknown", attempts}` — never `[]` on uncertainty. Any `unknown` result hard-fails `FIXTURE-ISOLATION` and the whole run, triggers best-effort SIGKILL escalation, and retains the scratch envelope until zero survivors are independently confirmed. `TEARDOWN-FAILS-CLOSED-SELFTEST` proves this against forced `ps` failure modes. |
