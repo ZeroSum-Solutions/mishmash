@@ -647,13 +647,13 @@ describe('public MCP discovery + generation tools', () => {
       JSON.stringify({
         plugins: [
           {
-            id: 'example-html-ppt-pitch-deck',
+            id: 'sample-pitch-deck-fixture',
             title: 'Html Ppt Pitch Deck',
             sourceKind: 'bundled',
             fsPath: '/some/path',
             installedAt: 1234,
             manifest: {
-              name: 'example-html-ppt-pitch-deck',
+              name: 'sample-pitch-deck-fixture',
               title: 'HTML PPT Pitch Deck',
               description: 'Investor-ready 10-slide HTML pitch deck — gradient hero, big numbers, traction bar chart.',
               tags: ['deck', 'pitch'],
@@ -670,7 +670,7 @@ describe('public MCP discovery + generation tools', () => {
     const parsed = JSON.parse(firstText(result));
     expect(parsed.plugins).toEqual([
       {
-        id: 'example-html-ppt-pitch-deck',
+        id: 'sample-pitch-deck-fixture',
         title: 'HTML PPT Pitch Deck',
         description: 'Investor-ready 10-slide HTML pitch deck — gradient hero, big numbers, traction bar chart.',
         kind: 'deck',

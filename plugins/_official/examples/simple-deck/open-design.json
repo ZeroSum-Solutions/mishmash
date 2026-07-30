@@ -13,6 +13,7 @@
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/simple-deck",
   "tags": [
+    "scenario",
     "example",
     "first-party",
     "deck",
