@@ -1,0 +1,73 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-web-clone",
+  "title": "Website Clone",
+  "version": "0.1.0",
+  "publishedAt": "2026-07-10T03:28:06Z",
+  "description": "Clone or visually recreate a website using source-first reconnaissance, route crawling, interaction probes, asset capture, and post-clone audit notes.",
+  "license": "MIT",
+  "author": {
+    "name": "Jane xiaoer / MishMash",
+    "url": "https://github.com/Jane-xiaoer/claude-skill-web-clone"
+  },
+  "homepage": "https://github.com/Jane-xiaoer/claude-skill-web-clone",
+  "tags": [
+    "example",
+    "first-party",
+    "prototype",
+    "web",
+    "website",
+    "web-clone",
+    "website-clone",
+    "site-clone",
+    "reproduce-site",
+    "visual-clone"
+  ],
+  "od": {
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "prototype",
+    "scenario": "web-clone",
+    "surface": "web",
+    "preview": {
+      "type": "html",
+      "entry": "./index.html"
+    },
+    "useCase": {
+      "query": "Clone or visually recreate this website: {{targetUrl}}. Use the web-clone workflow: find real source first, recon the site, choose a fidelity path, build a local clone, remove tracking, and write NOTES.md plus clone/audit evidence."
+    },
+    "inputs": [
+      {
+        "name": "targetUrl",
+        "label": "Target URL",
+        "type": "string",
+        "required": false,
+        "placeholder": "https://example.com"
+      }
+    ],
+    "context": {
+      "skills": [
+        {
+          "ref": "web-clone"
+        }
+      ]
+    },
+    "pipeline": {
+      "stages": [
+        {
+          "id": "generate",
+          "atoms": [
+            "file-write",
+            "live-artifact"
+          ]
+        }
+      ]
+    },
+    "capabilities": [
+      "prompt:inject",
+      "fs:write",
+      "shell"
+    ]
+  }
+}

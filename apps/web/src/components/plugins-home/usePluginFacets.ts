@@ -96,15 +96,25 @@ export function usePluginFacets({
 
   // Atoms are infrastructure pieces (`code-import`, `patch-edit`) that
   // are not user-facing on the home grid; the original section already
-  // filtered them out and we preserve that contract. We immediately
-  // sort by visual-appeal score so the first viewport leads with the
-  // cinematic decks / image / video templates rather than alphabetical
-  // bundled noise. Featured plugins get a +1000 score boost inside the
-  // sort so curator picks stay anchored to the front of every category view.
+  // filtered them out and we preserve that contract. The `scenario`-tagged
+  // od-* flow plugins (`od-new-generation`, migrations, exports) are flow
+  // definitions the composer dispatches by id — they must stay installed
+  // but are not gallery assets, so the curated grid excludes them too.
+  // (`od.kind === 'scenario'` is NOT the discriminator: most catalog items
+  // are scenario-kind pipelines; the `scenario` TAG marks only the flows.)
+  // We immediately sort by visual-appeal score so the first viewport leads
+  // with the cinematic decks / image / video templates rather than
+  // alphabetical bundled noise. Featured plugins get a +1000 score boost
+  // inside the sort so curator picks stay anchored to the front of every
+  // category view.
   const visiblePlugins = useMemo(
     () =>
       sortByVisualAppeal(
-        plugins.filter((p) => p.manifest?.od?.kind !== 'atom'),
+        plugins.filter(
+          (p) =>
+            p.manifest?.od?.kind !== 'atom' &&
+            !(p.manifest?.tags ?? []).includes('scenario'),
+        ),
       ),
     [plugins],
   );

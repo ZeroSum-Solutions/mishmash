@@ -1,0 +1,62 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "od-share-to-community",
+  "title": "Share to community",
+  "version": "0.1.0",
+  "publishedAt": "2026-06-05T08:09:04Z",
+  "description": "Package the work the user just finished into an Northwind Design plugin and route them to the existing Add-to-My-plugins / Open-Design-PR buttons. Triggered by the post-completion 'Share to Northwind Design' submission action.",
+  "license": "MIT",
+  "author": {
+    "name": "MishMash",
+    "url": "https://github.com/nexu-io"
+  },
+  "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/scenarios/od-share-to-community",
+  "tags": [
+    "scenario",
+    "first-party",
+    "plugin-authoring",
+    "share",
+    "contribute"
+  ],
+  "compat": {
+    "agentSkills": [
+      { "path": "./SKILL.md" }
+    ]
+  },
+  "od": {
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "scenario": "plugin-sharing",
+    "mode": "scenario",
+    "context": {
+      "skills": [
+        { "path": "./SKILL.md" }
+      ]
+    },
+    "pipeline": {
+      "stages": [
+        {
+          "id": "inspect-project",
+          "atoms": [
+            "file-read"
+          ]
+        },
+        {
+          "id": "package-plugin",
+          "atoms": [
+            "file-write"
+          ]
+        }
+      ]
+    },
+    "capabilities": [
+      "prompt:inject",
+      "fs:read",
+      "fs:write"
+    ],
+    "useCase": {
+      "query": "Package the work I just finished in this project as a MishMash plugin so I can install it into My plugins and open a PR to the MishMash community catalog. Auto-derive the manifest from what's already in the project — don't ask me for fields the project files already answer."
+    }
+  }
+}
