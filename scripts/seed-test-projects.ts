@@ -166,13 +166,13 @@ const WEBS: SeedFixture[] = [
 
 const DEFAULT_PLUGINS: SeedFixture[] = [
   {
-    skillId: 'html-ppt-pitch-deck',
+    skillId: 'simple-deck',
     sourceKind: 'default-plugin',
-    pluginId: 'example-html-ppt-pitch-deck',
+    pluginId: 'example-simple-deck',
     kind: 'deck',
-    name: 'Default plugin — pitch deck',
+    name: 'Default plugin — simple deck',
     pendingPrompt:
-      'Run the bundled pitch-deck plugin for a seed-stage AI design product and produce the HTML slide artifact.',
+      'Run the bundled simple-deck plugin for a seed-stage AI design product and produce the HTML slide artifact.',
   },
   {
     skillId: 'dashboard',
