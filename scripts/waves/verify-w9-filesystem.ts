@@ -2228,6 +2228,107 @@ function processGroupSurvivors(pgid: number): ProcessTableScanResult {
   const r = sh('ps', ['-Ao', 'pid=,pgid=,comm='], { timeoutMs: 15_000 });
   return classifyProcessTableScan(r.status, r.stdout, process.pid, pgid);
 }
+
+interface TargetVisibilityResult {
+  ok: boolean;
+  detail: string;
+}
+/** INVARIANT 1 fix (round-3 founder ruling W9FS-R2, upgrades the round-2
+ * self-visibility control): self-visibility alone proves the scan sees the
+ * CALLER (this verifier's own pid) -- it says nothing about whether the
+ * scan can see the TARGET's session at all. `bootIsolatedDaemon` spawns the
+ * daemon `detached: true` (its own session, pgid === its own pid), which is
+ * a DIFFERENT session than the caller's. A session-scoped `ps` invocation
+ * (or shim) could enumerate only the CALLER's own session -- passing the
+ * self-visibility control every time, since the caller genuinely is visible
+ * -- while never showing so much as one row for the daemon's session,
+ * regardless of whether the daemon actually has survivors. Every such scan
+ * would then read as "self visible, zero target rows" -- exactly the shape
+ * `PROCESS_TABLE_SELF_PROBES`' first fixture (below) already accepts as
+ * trustworthy, because in ISOLATION that shape genuinely is a well-formed,
+ * self-consistent scan result; the gap is architectural, not a parsing bug.
+ *
+ * The fix is a POSITIVE control, evaluated once per teardown BEFORE any
+ * kill signal is sent: while the target is independently (kernel-level,
+ * `process.kill(pid, 0)`, session/`ps`-agnostic) confirmed alive, the SAME
+ * `ps`-based scan mechanism must ALSO show a row for that exact pgid --
+ * trivially true for a healthy target, since `detached: true` makes the
+ * leader its own pgid. A later "zero target rows" result (post-kill) is
+ * trusted as "confirmed empty" ONLY when this same-run, same-mechanism
+ * target-visibility check passed; a target that was never shown to be
+ * visible in the first place can never be "confirmed" absent later. Proven
+ * against a real spawned sentinel plus a PATH-shimmed `ps` that filters out
+ * a specific pgid (simulating a session-scoped-blind scan) before being
+ * wired in: the OLD self-visibility-only logic was fooled (`ok: true` even
+ * though the target's entire session was invisible to the scan); this
+ * control correctly rejects the identical exploit, while a real healthy
+ * teardown against real `ps` still confirms normally. */
+function evaluateTargetVisibility(targetAliveAtStart: boolean, preKillScan: ProcessTableScanResult | null): TargetVisibilityResult {
+  if (!targetAliveAtStart) {
+    return {
+      ok: false,
+      detail: 'target-visibility not established: the target was not independently confirmed alive (process.kill(pid,0)) at teardown start -- a later "confirmed empty" verdict cannot be trusted without this positive control',
+    };
+  }
+  if (!preKillScan || !preKillScan.ok || preKillScan.survivors.length === 0) {
+    return {
+      ok: false,
+      detail: `target-visibility FAILED: process.kill(pid,0) confirms the target is alive, but the ps-based scan for its own pgid found ${!preKillScan || !preKillScan.ok ? `an untrustworthy scan (${preKillScan?.detail ?? 'no scan performed'})` : 'zero rows'} -- the scan mechanism may be blind to this target's session (e.g. a session-scoped ps)`,
+    };
+  }
+  return {
+    ok: true,
+    detail: `target-visibility confirmed: ${preKillScan.survivors.length} row(s) for the target's own pgid seen while it was independently confirmed alive`,
+  };
+}
+const TARGET_VISIBILITY_SELF_PROBES: Array<{
+  name: string;
+  targetAliveAtStart: boolean;
+  preKillScan: ProcessTableScanResult | null;
+  expectOk: boolean;
+}> = [
+  {
+    name: 'normal healthy case: target alive, scan sees its own pgid row',
+    targetAliveAtStart: true,
+    preKillScan: { ok: true, survivors: ['pid=999 pgid=999 node'], detail: 'ok' },
+    expectOk: true,
+  },
+  {
+    name: 'INVARIANT 1 exploit: session-scoped-blind scan -- target alive, self visible, but 0 target rows',
+    targetAliveAtStart: true,
+    preKillScan: { ok: true, survivors: [], detail: 'trustworthy: self visible, 0 target rows' },
+    expectOk: false,
+  },
+  {
+    name: 'target alive, but the pre-kill scan itself was untrustworthy',
+    targetAliveAtStart: true,
+    preKillScan: { ok: false, survivors: [], detail: 'malformed rows' },
+    expectOk: false,
+  },
+  {
+    name: 'target already not alive at teardown start -- no positive control possible',
+    targetAliveAtStart: false,
+    preKillScan: null,
+    expectOk: false,
+  },
+];
+let targetVisibilitySelfProbeResult: { pass: boolean; report: string[]; passCount: number; total: number } | null = null;
+function runTargetVisibilitySelfProbes(): { pass: boolean; report: string[]; passCount: number; total: number } {
+  if (targetVisibilitySelfProbeResult) return targetVisibilitySelfProbeResult;
+  const report: string[] = [];
+  let passCount = 0;
+  for (const c of TARGET_VISIBILITY_SELF_PROBES) {
+    const result = evaluateTargetVisibility(c.targetAliveAtStart, c.preKillScan);
+    if (result.ok === c.expectOk) {
+      passCount++;
+      report.push(`PASS ${c.name}: ok=${result.ok}`);
+    } else {
+      report.push(`FAIL ${c.name}: expected ok=${c.expectOk}, got ok=${result.ok} detail=${result.detail}`);
+    }
+  }
+  targetVisibilitySelfProbeResult = { pass: passCount === TARGET_VISIBILITY_SELF_PROBES.length, report, passCount, total: TARGET_VISIBILITY_SELF_PROBES.length };
+  return targetVisibilitySelfProbeResult;
+}
 async function waitForCondition(check: () => boolean, timeoutMs: number, intervalMs = 200): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -2259,26 +2360,35 @@ async function waitForCondition(check: () => boolean, timeoutMs: number, interva
  * broader/fuzzy match), still kills by exact PID only, still fails closed on
  * any unconfirmed or partial result. */
 async function killGroupFailClosed(pid: number): Promise<{ ok: boolean; detail: string }> {
-  // Gate on the process-table-scan self-probes FIRST (F4 fix, round-2
-  // review): a survivor scan is never trusted for a real teardown verdict in
-  // a run where the classification logic behind it cannot classify its own
-  // known-broken fixtures correctly. Memoized -- runs once per verifier
-  // process, not once per teardown call.
+  // Gate on BOTH self-probe suites FIRST (F4 fix round-2 + INVARIANT 1
+  // round-3): a survivor scan is never trusted for a real teardown verdict
+  // in a run where the classification logic behind it cannot classify its
+  // own known-broken fixtures correctly. Both memoized -- run once per
+  // verifier process, not once per teardown call.
   const selfProbes = runProcessTableSelfProbes();
-  const selfProbeSummary = `process-table self-probes ${selfProbes.passCount}/${selfProbes.total} pass`;
-  if (!selfProbes.pass) {
+  const targetVisibilityProbes = runTargetVisibilitySelfProbes();
+  const selfProbeSummary = `process-table self-probes ${selfProbes.passCount}/${selfProbes.total} pass, target-visibility self-probes ${targetVisibilityProbes.passCount}/${targetVisibilityProbes.total} pass`;
+  if (!selfProbes.pass || !targetVisibilityProbes.pass) {
+    const failures = [...selfProbes.report, ...targetVisibilityProbes.report].filter((l) => l.startsWith('FAIL'));
     return {
       ok: false,
-      detail: `${selfProbeSummary} -- refusing to trust any survivor scan this run: ${selfProbes.report.filter((l) => l.startsWith('FAIL')).join(' | ')}`,
+      detail: `${selfProbeSummary} -- refusing to trust any survivor scan this run: ${failures.join(' | ')}`,
     };
   }
+  // INVARIANT 1 (round-3 founder ruling): establish the target-visibility
+  // positive control BEFORE sending any signal, while the target is still
+  // whatever it currently is -- see `evaluateTargetVisibility`'s doc comment
+  // for the full mechanism and the exploit this closes.
+  const targetAliveAtStart = isPidAlive(pid);
+  const preKillScan = targetAliveAtStart ? processGroupSurvivors(pid) : null;
+  const targetVisibility = evaluateTargetVisibility(targetAliveAtStart, preKillScan);
   try {
     process.kill(-pid, 'SIGTERM');
   } catch (err) {
     // ESRCH here means the group is already gone -- proceed to the
     // confirmation scan rather than assuming success from the throw alone.
     if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
-      return { ok: false, detail: `${selfProbeSummary}; SIGTERM to group -${pid} failed: ${String(err)}` };
+      return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; SIGTERM to group -${pid} failed: ${String(err)}` };
     }
   }
   const emptyAfterTerm = await waitForCondition(() => {
@@ -2290,7 +2400,7 @@ async function killGroupFailClosed(pid: number): Promise<{ ok: boolean; detail: 
       process.kill(-pid, 'SIGKILL');
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'ESRCH') {
-        return { ok: false, detail: `${selfProbeSummary}; SIGKILL to group -${pid} failed: ${String(err)}` };
+        return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; SIGKILL to group -${pid} failed: ${String(err)}` };
       }
     }
     const emptyAfterKill = await waitForCondition(() => {
@@ -2300,9 +2410,9 @@ async function killGroupFailClosed(pid: number): Promise<{ ok: boolean; detail: 
     if (!emptyAfterKill) {
       const scan = processGroupSurvivors(pid);
       if (!scan.ok) {
-        return { ok: false, detail: `${selfProbeSummary}; SCAN UNTRUSTWORTHY after SIGTERM+SIGKILL -- teardown NOT confirmed, never treated as an empty group: ${scan.detail}` };
+        return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; SCAN UNTRUSTWORTHY after SIGTERM+SIGKILL -- teardown NOT confirmed, never treated as an empty group: ${scan.detail}` };
       }
-      return { ok: false, detail: `${selfProbeSummary}; process group -${pid} still has survivors after SIGTERM+SIGKILL -- teardown NOT confirmed: ${scan.survivors.join('; ')}` };
+      return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; process group -${pid} still has survivors after SIGTERM+SIGKILL -- teardown NOT confirmed: ${scan.survivors.join('; ')}` };
     }
   }
   // waitForCondition's own successful exit already re-scanned and found the
@@ -2311,71 +2421,77 @@ async function killGroupFailClosed(pid: number): Promise<{ ok: boolean; detail: 
   // own, the same posture the rest of this teardown path takes.
   const finalScan = processGroupSurvivors(pid);
   if (!finalScan.ok) {
-    return { ok: false, detail: `${selfProbeSummary}; FINAL SCAN UNTRUSTWORTHY -- teardown NOT confirmed, never treated as an empty group: ${finalScan.detail}` };
+    return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; FINAL SCAN UNTRUSTWORTHY -- teardown NOT confirmed, never treated as an empty group: ${finalScan.detail}` };
   }
   if (finalScan.survivors.length > 0) {
-    return { ok: false, detail: `${selfProbeSummary}; process group -${pid} has survivors after kill+wait: ${finalScan.survivors.join('; ')}` };
+    return { ok: false, detail: `${selfProbeSummary}; ${targetVisibility.detail}; process group -${pid} has survivors after kill+wait: ${finalScan.survivors.join('; ')}` };
   }
-  return { ok: true, detail: `${selfProbeSummary}; process group -${pid} confirmed empty (${finalScan.detail})` };
+  // A "zero survivors" result from the SAME scan mechanism is only trusted
+  // as "confirmed empty" when the target-visibility positive control above
+  // actually passed -- otherwise this scan mechanism was never shown to be
+  // able to see this target's session at all, and "zero rows" is exactly
+  // what a session-scoped-blind scan would ALWAYS report, empty or not.
+  if (!targetVisibility.ok) {
+    return {
+      ok: false,
+      detail: `${selfProbeSummary}; ${targetVisibility.detail}; post-kill scan shows zero survivors, but that result is NOT TRUSTED without a passing target-visibility positive control -- teardown NOT confirmed`,
+    };
+  }
+  return { ok: true, detail: `${selfProbeSummary}; ${targetVisibility.detail}; process group -${pid} confirmed empty (${finalScan.detail})` };
 }
 
-/** F3 fix (round-2 review, HIGH): the LIVE side of the base-vs-live drift
- * comparison boots `apps/daemon/src/server.ts` for real via `tsx`, whose
- * runtime `import`s of first-party `@open-design/*` workspace packages
- * resolve through ordinary Node module resolution -- `node_modules` ->
- * each package's `package.json` "exports"/"main" -> its own gitignored
- * `dist/*.mjs` bundle. The F1 fix made the BASE (static-scan) side
- * commit-bound (reads tracked `packages/<pkg>/src/*.ts` directly, never
- * `dist`), but left the LIVE side unpinned: someone could mutate a
- * dist bundle post-build with `git status` clean, and the live daemon would
- * actually execute that mutated code with no rebuild or hash check to catch
- * it -- trading the original shared-dist gap for a new
- * source-scan-vs-mutable-runtime divergence.
+/** F3 fix (round-2 review, HIGH), WIDENED by INVARIANT 2 (round-3 founder
+ * ruling W9FS-R2, closes F5 HIGH): every evidence-bearing path this verifier
+ * runs must resolve first-party `@open-design/*` packages from freshly
+ * rebuilt output, never a possibly-stale or mutated gitignored `dist`
+ * bundle. The round-2 fix rebuilt only `apps/daemon`'s OWN dependency
+ * closure (`@open-design/daemon^...`, 10 packages) before booting the live
+ * daemon (`bootIsolatedDaemon`) -- correct for THAT evidence path, but round
+ * 3's reviewer found a second, distinct evidence path this missed entirely:
+ * `checkC9F9` runs `pnpm typecheck`, which is `pnpm -r --if-present run
+ * typecheck` across EVERY workspace package, including `apps/web` --
+ * outside `apps/daemon`'s own dependency graph -- which depends on
+ * `@open-design/components` and `@open-design/host`. Neither was covered by
+ * the daemon-scoped filter, so C9F-9's own evidence could still be produced
+ * against unpinned mutable dist.
  *
- * Fix: rebuild, not hash-pin. Before the live daemon boots, force a fresh
- * `pnpm --filter "@open-design/daemon^..." run build` -- the exact
- * house idiom `apps/daemon`'s own `typecheck` script already uses for its
- * two most-typecheck-relevant deps (`@open-design/contracts` and
- * `@open-design/registry-protocol`), generalized here to the FULL dependency
- * closure pnpm itself computes from `apps/daemon/package.json` (currently 10
- * packages: agui-adapter, contracts, diagnostics, launcher-proto, platform,
- * plugin-runtime, registry-protocol, release, sidecar, sidecar-proto) so
- * this never has to be manually kept in sync with which packages are named
- * in a specific finding. Chosen over hash-pin-and-fail because a full
- * rebuild is fast in practice (~3.5s wall clock for all 10, measured
- * directly against this tree) -- the F1 fix note's own "too slow" escape
- * hatch for a weaker byte-identity check does not apply -- and because
- * REBUILDING makes the live boot unconditionally commit-bound every run
- * (self-healing against ANY prior dist state, stale or tampered) rather than
- * merely detecting a mismatch against dist and refusing to proceed, which
- * would make the verifier brittle against ordinary un-rebuilt dev staleness
- * that carries no security meaning at all. Building from the CURRENT
- * checkout's on-disk `packages/<pkg>/src` (not a detached worktree) is correct
- * here specifically because the live daemon boot ALREADY executes the
- * current checkout's own `apps/daemon/src/server.ts`, never a frozen
- * baseCommit copy -- consistent, not a new asymmetry -- and this verifier's
- * own `treeDirty` check is what proves "current checkout" and "HEAD" agree
- * for any run whose manifest is meant to be trusted. Memoized so the two
- * `bootIsolatedDaemon()` call sites (`checkC9F1`, `checkC9F8`) rebuild once
- * per verifier process, not twice. A failed rebuild throws, which every
- * caller already treats as a hard criterion failure. */
-let workspaceDepsRebuiltFromHead: Promise<void> | null = null;
-function ensureWorkspaceDepsRebuiltFromHead(): Promise<void> {
-  if (!workspaceDepsRebuiltFromHead) {
-    workspaceDepsRebuiltFromHead = (async () => {
-      const r = sh('pnpm', ['--filter', '@open-design/daemon^...', 'run', 'build'], { timeoutMs: 5 * 60_000 });
+ * Fix: widen to the union rather than track two closures. This now rebuilds
+ * every `packages/*` workspace member with a `build` script
+ * (`pnpm --filter "./packages/*" run build`, currently all 14: agui-adapter,
+ * components, contracts, diagnostics, download, host, launcher-proto,
+ * metatool, platform, plugin-runtime, registry-protocol, release, sidecar,
+ * sidecar-proto) rather than `apps/daemon`'s narrower dependency closure --
+ * a strict superset, so this still covers `bootIsolatedDaemon`'s needs
+ * exactly as before. Chosen over hand-tracking "the union of every evidence
+ * path's own dependency graph" because that union is exactly as fragile as
+ * the single-package list F3's original finding rejected: a THIRD evidence
+ * path added later, consuming a FIFTEENTH package, would silently reopen
+ * the same gap. A full workspace-wide rebuild has no such blind spot by
+ * construction. Still fast enough to unconditionally force every run: ~13s
+ * wall clock for all 14 packages, measured directly against this tree.
+ * Called from both `bootIsolatedDaemon` (via the live-daemon-boot call
+ * sites, `checkC9F1`/`checkC9F8`) and `checkC9F9` (before `pnpm
+ * guard`/`pnpm typecheck`), memoized so it still only runs ONCE per
+ * verifier process regardless of how many criteria need it. A failed
+ * rebuild throws, which every caller already treats as a hard criterion
+ * failure. */
+let firstPartyPackagesRebuiltFromHead: Promise<void> | null = null;
+function ensureFirstPartyPackagesRebuiltFromHead(): Promise<void> {
+  if (!firstPartyPackagesRebuiltFromHead) {
+    firstPartyPackagesRebuiltFromHead = (async () => {
+      const r = sh('pnpm', ['--filter', './packages/*', 'run', 'build'], { timeoutMs: 5 * 60_000 });
       if (r.status !== 0) {
         throw new Error(
-          `rebuilding apps/daemon's first-party workspace dependencies from the current checkout failed (exit=${r.status}) -- refusing to boot a live daemon against possibly-stale/untrusted dist: ${(r.stderr || r.stdout).slice(-2000)}`,
+          `rebuilding every first-party packages/* workspace member from the current checkout failed (exit=${r.status}) -- refusing to trust any evidence path that could consume their gitignored dist output: ${(r.stderr || r.stdout).slice(-2000)}`,
         );
       }
     })();
   }
-  return workspaceDepsRebuiltFromHead;
+  return firstPartyPackagesRebuiltFromHead;
 }
 
 async function bootIsolatedDaemon(): Promise<LiveDaemon> {
-  await ensureWorkspaceDepsRebuiltFromHead();
+  await ensureFirstPartyPackagesRebuiltFromHead();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'w9fs-daemon-data-'));
   const serverTsPath = path.join(repoRoot, 'apps/daemon/src/server.ts');
   const marker = crypto.randomBytes(16).toString('hex');
@@ -2486,6 +2602,19 @@ async function bootIsolatedDaemon(): Promise<LiveDaemon> {
     routeInventory: parsed.routeInventory,
     shutdown: async () => {
       const result = await killGroupFailClosed(childPid);
+      // INVARIANT 3 fix (round-3 founder ruling, F6 MED): an UNCONFIRMED
+      // teardown must never destroy the only forensic evidence of what
+      // actually happened. Delete `bootDir`/`dataDir` ONLY when the
+      // teardown itself is confirmed (`result.ok === true`) -- on any
+      // unconfirmed/partial result, RETAIN both directories (the generated
+      // boot script + captured stdout/stderr context, and the daemon's own
+      // data root) and surface their paths in the failure detail so a human
+      // or agent investigating this run knows exactly where to look. This
+      // was previously unconditional, silently discarding evidence on
+      // exactly the runs that most needed it kept.
+      if (!result.ok) {
+        return { ok: false, detail: `${result.detail}; forensic evidence RETAINED (not deleted): bootDir=${bootDir} dataDir=${dataDir}` };
+      }
       try {
         fs.rmSync(bootDir, { recursive: true, force: true });
         fs.rmSync(dataDir, { recursive: true, force: true });
@@ -3615,6 +3744,14 @@ async function checkC9F8(): Promise<void> {
 // =========================================================================
 async function checkC9F9(): Promise<void> {
   const startedAt = Date.now();
+  // INVARIANT 2 fix (round-3 founder ruling, F5 HIGH): `pnpm typecheck`
+  // below is itself an evidence-bearing path -- it typechecks every
+  // workspace package (`pnpm -r --if-present run typecheck`), including
+  // packages outside `apps/daemon`'s own dependency graph (e.g. `apps/web`,
+  // which depends on `@open-design/components`/`@open-design/host`). Ensure
+  // the SAME workspace-wide rebuild `bootIsolatedDaemon` uses has run first,
+  // so this evidence path also never resolves unpinned mutable dist.
+  await ensureFirstPartyPackagesRebuiltFromHead();
   const guard = sh('pnpm', ['guard'], { timeoutMs: 15 * 60_000 });
   const typecheck = sh('pnpm', ['typecheck'], { timeoutMs: 15 * 60_000 });
   const ok = guard.status === 0 && typecheck.status === 0;
