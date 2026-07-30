@@ -203,34 +203,38 @@ frozen/external, not part of the implementer's lease.
 ## Success criteria
 
 All five are mechanical; none require human judgment (VERIFICATION-CONTRACT.md §3 R7 does not
-apply — nothing here is marked `human:`). **This table reflects round-1, round-3, round-4, and
-round-5 adversarial-review fixes** (finding numbers refer to "Round 1 adversarial review," "Round 3
-adversarial review," "Round 3 verdict," "Round 4 fix," and "Round 5 fix" below); the pre-fix
-versions are superseded, not merely amended in place, because several mechanisms changed shape, not
-just wording — most recently C10B-1/2/4's move from a verifier-owned temp-file import + in-process
-`JSON.stringify` (round 4, REJECTED) to a real booted-daemon HTTP observation (round 5). Five infra
+apply — nothing here is marked `human:`). **This table reflects round-1, round-3, round-4, round-5,
+and round-6 adversarial-review fixes** (finding numbers refer to "Round 1 adversarial review," "Round
+3 adversarial review," "Round 3 verdict," "Round 4 fix," "Round 5 fix," "Round 5 REJECT," and "Round
+6 fix" below); the pre-fix versions are superseded, not merely amended in place, because several
+mechanisms changed shape, not just wording — most recently C10B-1/2/4's move from round 5's FIXED,
+source-legible 3-reads-per-criterion pattern to round 6's randomized-per-run read horizon. Six infra
 checks — `LEASE` (folded into C10B-3), `GATE-INTEGRITY`, `SCANNER-SELFTEST`, `WIRE-SELFTEST` (round
-5, replaces round 4's `RUNTIME-SELFTEST`), and `DAEMON-TEARDOWN` (new in round 5) — are not numbered
-PRD criteria (matching how `scripts/waves/verify-w9-ingest.ts` treats its own
-`LEASE`/`HEAD-DRIFT`/`GATE-INTEGRITY` checks) but still gate the verifier's overall exit code; see
-"Definition of green."
+5, replaces round 4's `RUNTIME-SELFTEST`), `TEARDOWN-ARTIFACTS-SELFTEST` (new in round 6), and
+`DAEMON-TEARDOWN` (new in round 5) — are not numbered PRD criteria (matching how
+`scripts/waves/verify-w9-ingest.ts` treats its own `LEASE`/`HEAD-DRIFT`/`GATE-INTEGRITY` checks) but
+still gate the verifier's overall exit code; see "Definition of green."
 
 | ID | Assertion |
 |---|---|
-| **C10B-1** | Proven at RUNTIME against a REAL booted daemon as of round 5 (round 4's temp-file-import version of this criterion was itself REJECTED — see "Round 4 fix," "Round 4 REJECT," and "Round 5 fix" below). The verifier boots `apps/daemon/src/server.ts` completely unmodified, from this repository's own working tree, in an isolated namespace (fresh `OD_DATA_DIR`, OS-assigned ephemeral port, its own process group — see "Round 5 fix"), and issues three independent real `GET /api/mcp/servers` requests against it. Each read requires exactly one wire-observed array element whose real `.id` property equals `'voicebox'`, with an own-enumerable key set of exactly `{id, label, description, example, homepage, transport, authMode, category, url}` — no more and no fewer — on every one of the three reads. Missing registration, an ambiguous (duplicate) `id`, or an extra/missing wire-observed key on any read all fail this criterion closed. |
-| **C10B-2** | Proven at RUNTIME against the same real booted daemon and the same three-times-repeated `GET /api/mcp/servers` observation C10B-1 establishes: on every read, `transport` is exactly `'http'`; `url` is exactly the string `'http://127.0.0.1:17493/mcp'` — full-string equality, not component checks (finding 5: component checks silently allowed credentials/query/fragment through) — so `http://user:pass@127.0.0.1:17493/mcp?x#y` is rejected outright, not partially accepted; `category` is exactly `'utilities'`; `authMode` is exactly `'none'`, present not absent (finding 5); and no `headerFields` key is present in the actual HTTP response body (round-1 ruling — pins `X-Voicebox-Client-Id` absent by construction, not merely unfilled). Because these are wire-observed values from a real network round trip through production's own `res.json`, not any verifier-reconstructed serialization, a property spread, `__proto__`/inherited `toJSON`, an accessor, or a post-declaration mutation that would otherwise override them is caught automatically — round 4 tried to prove this same guarantee with a verifier-owned proxy for production and lost three ways (see "Round 4 REJECT"); round 5 removes the proxy by observing the real thing instead of reconstructing it. |
+| **C10B-1** | Proven at RUNTIME against a REAL booted daemon (round 5; round 4's temp-file-import version of this criterion was itself REJECTED — see "Round 4 fix," "Round 4 REJECT," "Round 5 fix," and "Round 5 REJECT" below). The verifier boots `apps/daemon/src/server.ts` completely unmodified, from this repository's own working tree, in an isolated namespace (fresh generic-named `OD_DATA_DIR`, OS-assigned ephemeral port, its own process group, first-party workspace deps rebuilt from HEAD before boot — see "Round 6 fix"), and issues a RANDOMIZED-PER-RUN number of independent real `GET /api/mcp/servers` requests against it (a burst of 5-14 reads, freshly drawn from `crypto.randomInt()` at run time, plus one further read after an independently randomized 250-2499ms delay — round 6 fix #1, closing round 5's fixed-3-reads bypass). Each read requires exactly one wire-observed array element whose real `.id` property equals `'voicebox'`, with an own-enumerable key set of exactly `{id, label, description, example, homepage, transport, authMode, category, url}` — no more and no fewer — on EVERY read of the randomized schedule. Missing registration, an ambiguous (duplicate) `id`, or an extra/missing wire-observed key on any read all fail this criterion closed. **Honest bound (round 6, replacing round 5's "structurally closed" overclaim):** randomizing the horizon converts a bypass that always defeated a fixed-count check into one that only sometimes defeats a given run, with odds unpredictable to the candidate code — it does not, and by information-theoretic necessity cannot, rule out a getter honest for an arbitrarily large or time-delayed hardcoded threshold; no finite verification run can. |
+| **C10B-2** | Proven at RUNTIME against the same real booted daemon and the same randomized-horizon repeated `GET /api/mcp/servers` observation C10B-1 establishes: on every read, `transport` is exactly `'http'`; `url` is exactly the string `'http://127.0.0.1:17493/mcp'` — full-string equality, not component checks (finding 5: component checks silently allowed credentials/query/fragment through) — so `http://user:pass@127.0.0.1:17493/mcp?x#y` is rejected outright, not partially accepted; `category` is exactly `'utilities'`; `authMode` is exactly `'none'`, present not absent (finding 5); and no `headerFields` key is present in the actual HTTP response body (round-1 ruling — pins `X-Voicebox-Client-Id` absent by construction, not merely unfilled). Because these are wire-observed values from a real network round trip through production's own `res.json`, not any verifier-reconstructed serialization, a property spread, `__proto__`/inherited `toJSON`, an accessor, or a post-declaration mutation that would otherwise override them is caught automatically — round 4 tried to prove this same guarantee with a verifier-owned proxy for production and lost three ways (see "Round 4 REJECT"); round 5 removes the proxy by observing the real thing instead of reconstructing it; round 6 makes the number and timing of those real observations unpredictable to candidate code (see C10B-1's honest bound, which applies here too). |
 | **C10B-3** | No extra surface, proven several independent ways (round-1 findings 1/2/3; round-3 findings 1/3) — **unchanged since round 4**, per the founder's carve-out that a structural/AST check may remain only for facts with no runtime observable (this one is inherently a two-commit TEXT comparison): (a) `git diff --name-only <baseCommit>...HEAD` is a subset of the `"W10b"` lease read from `leases.json@baseCommit`, whose `allow` list is asserted to be *exactly* `["apps/daemon/src/mcp-config.ts"]` **and** whose `deny` list is asserted to contain both this PRD and `scripts/waves/verify-w10b.ts` — a widened `allow` or a missing `deny` entry fails this criterion, not just an out-of-lease diff; (b) both `baseCommit`'s and HEAD's `MCP_TEMPLATES` arrays are structurally identifiable by id (every element a plain object literal with a literal string `id`, no duplicate `id` across the array) — the frozen-value correctness of the `voicebox` entry itself is proven at runtime by C10B-1/2/4, not by this structural scan; (c) the file's text **outside** the `MCP_TEMPLATES` array literal's own span (before its `[`, after its `]`) is byte-identical between `baseCommit` and HEAD; (d) every pre-existing array entry, keyed by `id`, is byte-identical between `baseCommit` and HEAD; (e) exactly one `id` is new, and it is `'voicebox'`. |
-| **C10B-4** | No voiceover-workflow scope creep, by exact match instead of denylist (finding 4: a finite blocklist is always evadable by paraphrase — "narration audio," string concatenation, a newline mid-phrase, all defeat a regex scan). Proven at RUNTIME against the real booted daemon, on the same repeated wire observation C10B-1/2 use: `label`, `description`, `example`, and `homepage` are each **byte-for-byte identical** to the frozen strings in "Implementation surface" above (mirrored verbatim as `verify-w10b.ts`'s `FROZEN` constant), as actually received over a real HTTP response body, not as read from source or reconstructed in-process. There is no wording these fields may take other than the one already reviewed, and no source-shape trick (spread, `__proto__`/inherited `toJSON`, accessor, post-declaration mutation) can present different wording over the wire without this criterion catching it on one of its three independent reads. |
-| **C10B-5** | Documentation record, proven via real comment tokens, never text inside a string or template literal at any interpolation depth (round-1 finding 6; round-3 finding 2 — a hand-rolled scanner loop previously misclassified template-tail text as a comment once a `${...}` substitution was involved). `collectComments()` walks the parsed AST to record every string/template-literal token's exact span, then finds comment-shaped text in the raw source and discards any match whose start falls inside one of those spans — so text can only count as a comment if it is genuinely outside every literal the parser found. At least one comment present at HEAD but **absent** at `baseCommit` contains the literal substring `NM-25`. `SCANNER-SELFTEST` (an infra check, not a numbered criterion) proves this mechanism against the exact round-2 false-positive shapes. Unaffected by round 4 or round 5 — this criterion answers a two-commit comment-provenance question with no runtime observable and was never part of any REJECT finding. |
+| **C10B-4** | No voiceover-workflow scope creep, by exact match instead of denylist (finding 4: a finite blocklist is always evadable by paraphrase — "narration audio," string concatenation, a newline mid-phrase, all defeat a regex scan). Proven at RUNTIME against the real booted daemon, on the same randomized-horizon repeated wire observation C10B-1/2 use: `label`, `description`, `example`, and `homepage` are each **byte-for-byte identical** to the frozen strings in "Implementation surface" above (mirrored verbatim as `verify-w10b.ts`'s `FROZEN` constant), as actually received over a real HTTP response body, not as read from source or reconstructed in-process. There is no wording these fields may take other than the one already reviewed, and no source-shape trick (spread, `__proto__`/inherited `toJSON`, accessor, post-declaration mutation) can present different wording over the wire without this criterion catching it on one of its randomized-count reads. |
+| **C10B-5** | Documentation record, proven via real comment tokens, never text inside a string or template literal at any interpolation depth (round-1 finding 6; round-3 finding 2 — a hand-rolled scanner loop previously misclassified template-tail text as a comment once a `${...}` substitution was involved). `collectComments()` walks the parsed AST to record every string/template-literal token's exact span, then finds comment-shaped text in the raw source and discards any match whose start falls inside one of those spans — so text can only count as a comment if it is genuinely outside every literal the parser found. At least one comment present at HEAD but **absent** at `baseCommit` contains the literal substring `NM-25`. `SCANNER-SELFTEST` (an infra check, not a numbered criterion) proves this mechanism against the exact round-2 false-positive shapes. Unaffected by round 4, 5, or 6 — this criterion answers a two-commit comment-provenance question with no runtime observable and was never part of any REJECT finding. |
 
-**No criterion's scope changed in round 5.** The five themes are identical to round 1: registration
-present, correct transport/config shape, no extra surface, no scope creep, documentation record.
-Round 5 only replaced HOW C10B-1/2/4 are proven (verifier-reconstructed serialization → real booted
-daemon's real HTTP response); it did not add, remove, or widen what any criterion asserts, and
-nothing in the new mechanism reaches past NM-25's registration-only boundary (see "Round 5 fix" for
-why booting the real daemon as a verification tool is not itself a scope expansion of the product
-surface). No criterion was cut for NM-25 scope in this round — none of the inherited criteria ever
-exceeded registration-only, and round 5 did not introduce any that would.
+**No criterion's scope changed in round 5 or round 6.** The five themes are identical to round 1:
+registration present, correct transport/config shape, no extra surface, no scope creep, documentation
+record. Round 5 replaced HOW C10B-1/2/4 are proven (verifier-reconstructed serialization → real
+booted daemon's real HTTP response); round 6 replaced HOW MANY TIMES and WHEN those real observations
+happen (fixed 3 reads → randomized-per-run horizon) and closed five further mechanism-level residuals
+(fingerprints, commit-binding, self-hash, cleanup ordering, target-visibility). Neither round added,
+removed, or widened what any criterion asserts, and nothing in either round's mechanism reaches past
+NM-25's registration-only boundary (see "Round 5 fix" and "Round 6 fix" for why booting the real
+daemon as a verification tool, and rebuilding its first-party workspace dependencies before doing so,
+are not themselves a scope expansion of the product surface). No criterion was cut for NM-25 scope in
+either round — none of the inherited criteria ever exceeded registration-only, and neither round
+introduced any that would.
 
 ### Why these five and not more
 
@@ -258,20 +262,25 @@ during authoring; that is a requirement on this file, not a wave-completion crit
 ## Definition of "green"
 
 The wave is green when a single `pnpm exec tsx scripts/waves/verify-w10b.ts` run against a clean
-tree (`treeDirty: false`) reports `status: "pass"` for C10B-1 through C10B-5, plus the five infra
-checks `GATE-INTEGRITY`, `SCANNER-SELFTEST`, `WIRE-SELFTEST` (round 5, replaces round 4's
-`RUNTIME-SELFTEST`), `DAEMON-TEARDOWN` (new in round 5), and `HEAD-DRIFT` (LEASE is folded into
-C10B-3, not a separate manifest entry), in
-`~/.claude/goal-state/mishmash-w10b-voicebox/proof/manifest.json`,
-with `exitCode: 0` overall. `GATE-INTEGRITY` passes trivially (recorded
-`gateIntegrityPinned: false`) until the orchestrator places
-`~/.claude/goal-state/mishmash-w10b-voicebox/approved-gate.sha256`; once pinned it must match this
+tree (`treeDirty: false`) reports `status: "pass"` for C10B-1 through C10B-5, plus the six infra
+checks `GATE-INTEGRITY` (round 6: always-active self-vs-HEAD tamper-evidence, not only once pinned),
+`SCANNER-SELFTEST`, `WIRE-SELFTEST` (round 5, replaces round 4's `RUNTIME-SELFTEST`),
+`TEARDOWN-ARTIFACTS-SELFTEST` (new in round 6), `DAEMON-TEARDOWN` (new in round 5, now gated on a
+target-visibility positive control per round 6), and `HEAD-DRIFT` (LEASE is folded into C10B-3, not a
+separate manifest entry), in `~/.claude/goal-state/mishmash-w10b-voicebox/proof/manifest.json`, with
+`exitCode: 0` overall. `GATE-INTEGRITY`'s self-vs-HEAD sub-check passes trivially whenever the tree is
+honestly dirty (expected during authoring — the overall run already fails via `treeDirty` in that
+case) and fails only when the tree claims clean while the executing bytes diverge from HEAD (the
+assume-unchanged/skip-worktree tamper scenario it exists to catch); its approved-hash sub-check passes
+trivially (recorded `gateIntegrityPinned: false`) until the orchestrator places
+`~/.claude/goal-state/mishmash-w10b-voicebox/approved-gate.sha256`, and once pinned must match this
 file's own sha256 exactly. `DAEMON-TEARDOWN` records `status: "not-exercised"` (counts as `!==
 "pass"`, never a silent green) only in the unreached case where the isolated daemon never finished
 spawning at all, so nothing was left running either way; whenever a process was actually spawned —
 whether the boot completed or failed partway through — `DAEMON-TEARDOWN` reports the REAL confirmed
-process-group teardown result, and a failed or partial teardown fails the run. No other wave depends
-on this one; nothing consumes W10b's manifest the way W3's C3-4 consumes W9-ingest's.
+process-group teardown result (target-visibility positive control included), and a failed, partial,
+or unconfirmed teardown fails the run. No other wave depends on this one; nothing consumes W10b's
+manifest the way W3's C3-4 consumes W9-ingest's.
 
 ## Proposed write lease (text only — `leases.json` is HARD DENY for this document)
 
@@ -297,46 +306,58 @@ No overlap with any currently-defined lease: `apps/daemon/src/mcp-config.ts` doe
 any `allow`/`deny` list for W-C, W0, W7, W1, W2, W4, W9-ingest, or W3 (checked directly against
 `docs/plans/waves/leases.json` this session).
 
-## Verified baseline (round 5, this run, pre-implementation)
+## Verified baseline (round 6, this run, pre-implementation)
+
+Ran `pnpm exec tsx scripts/waves/verify-w10b.ts` on branch `feat/w10b-voicebox-registration`, twice
+in a row against the clean, committed tree (`treeDirty: false`), after the round-6 fix below, before
+any implementation exists. Both runs: RED, nonzero exit, same character — **6/11 passing —
+`GATE-INTEGRITY`, `SCANNER-SELFTEST`, `WIRE-SELFTEST`, `TEARDOWN-ARTIFACTS-SELFTEST`,
+`DAEMON-TEARDOWN`, and `HEAD-DRIFT`** — differing only in the randomized read-horizon schedule each
+run drew (different `crypto.randomInt()` burst counts and tail delays each time, by design — see
+"Round 6 fix" #1). This shape changed from round 5's "5/10" with `TEARDOWN-ARTIFACTS-SELFTEST` added
+as a sixth infra check in round 6; `GATE-INTEGRITY` now ALSO passes its always-active self-vs-HEAD
+sub-check on a clean tree (it correctly FAILED that same sub-check during authoring, while the tree
+was still honestly dirty — see "Round 6 fix" #4). All six infra checks are self-contained and do not
+depend on VoiceBox being registered, so they correctly pass before implementation too.
+`TEARDOWN-ARTIFACTS-SELFTEST` and `WIRE-SELFTEST` exercise only synthetic fixtures (real on-disk temp
+files for the former, a throwaway in-process HTTP server for the latter), never this repository's
+actual `mcp-config.ts` or the real booted daemon. C10B-1/2/4 fail because the real isolated daemon
+boots successfully (first-party workspace deps freshly rebuilt from HEAD per "Round 6 fix" #3) against
+the real, unmodified `mcp-config.ts` and correctly observes zero wire-served elements with
+`id === 'voicebox'` on the first read of the randomized-horizon burst each criterion takes; C10B-3
+fails closed on both grounds (no `"W10b"` key in `leases.json@baseCommit` yet, and zero new
+`MCP_TEMPLATES` entries); C10B-5 fails because `apps/daemon/src/mcp-config.ts` has not changed at all
+between `baseCommit` and HEAD, so no new comment exists to find. This is the intended fail-closed
+state, not a bug. Both runs independently confirmed: zero process-group survivors after teardown (with
+a passed target-visibility positive control both times), no leftover temp directories, and the
+default-namespace daemons on ports 7456/51012 unaffected (same PIDs/process-group ids before and after
+every run in this authoring session, checked directly via `ps`/`lsof`). Total wall-clock per run was
+roughly a minute (dominated by the ~10s first-party workspace rebuild plus the randomized burst/tail
+delays across three criteria), materially slower than round 5's ~5s but still well within a normal
+interactive verification budget. Once implementation lands and the proposed lease entry is added to
+`leases.json`, re-running the same command with no other changes is the sole gate (plus, at the
+orchestrator's discretion, pinning `approved-gate.sha256` for `GATE-INTEGRITY`'s defense-in-depth
+layer). As an authoring-time sanity check (never committed, reverted immediately via
+`git checkout --`, confirmed byte-identical to the pre-edit file by sha256), the exact frozen object
+was added to `apps/daemon/src/mcp-config.ts` and the verifier re-run against the dirty working tree:
+C10B-1/2/4 correctly went GREEN (the real booted daemon served the real registered entry, matching
+FROZEN on every read of that run's randomized-horizon schedule) while C10B-3/5 correctly stayed RED
+(they read `HEAD` via `git show`, which does not see an uncommitted working-tree edit — confirming
+C10B-1/2/4 observe the working tree while C10B-3/5 observe committed history, exactly as designed, and
+that a true positive does make C10B-1/2/4 pass rather than the mechanism being unsatisfiable by any
+implementation).
+
+### Round 5 baseline (superseded by round 6 above, kept for history)
 
 Ran `pnpm exec tsx scripts/waves/verify-w10b.ts` on branch `feat/w10b-voicebox-registration`, twice
 in a row, after the round-5 fix below, before any implementation exists. Both runs: RED, nonzero
 exit, byte-identical shape — exactly **5/10 passing — `GATE-INTEGRITY` (unpinned),
 `SCANNER-SELFTEST`, `WIRE-SELFTEST`, `DAEMON-TEARDOWN`, and `HEAD-DRIFT`** — with `treeDirty: true`
-in this authoring session specifically because the round-5 verifier rewrite itself is
-uncommitted at the moment these runs were taken (a real completion run always requires
-`treeDirty: false`, per "Definition of green"). This shape changed from round 4's "4/9" (`LEASE`
-folded into C10B-3 is not a separate manifest entry, so round 3 was "1/6" → "3/8" → round 4's
-"4/9") once `WIRE-SELFTEST` replaced `RUNTIME-SELFTEST` and `DAEMON-TEARDOWN` was added in round 5
-— all five infra checks are self-contained and do not depend on VoiceBox being registered, so they
-correctly pass before implementation too. `DAEMON-TEARDOWN` in particular passes even
-pre-implementation because it is testing the boot/teardown MECHANISM, not the registration content:
-the isolated daemon boots (with no `voicebox` template present, exactly as C10B-1/2/4 correctly
-observe), serves whatever `MCP_TEMPLATES` actually contains, and is torn down cleanly regardless.
-`WIRE-SELFTEST` exercises eight synthetic fixtures against a throwaway in-process HTTP server, never
-touching this repository's actual `mcp-config.ts` or booting the real daemon, so it too is
-meaningful — and passes — even before any `voicebox` entry exists. C10B-1/2/4 fail because the real
-isolated daemon boots successfully against the real, unmodified `mcp-config.ts` and correctly
-observes zero wire-served elements with `id === 'voicebox'` on every one of the three independent
-reads each criterion takes; C10B-3 fails closed on both grounds (no `"W10b"` key in
-`leases.json@baseCommit` yet, and zero new `MCP_TEMPLATES` entries); C10B-5 fails because
-`apps/daemon/src/mcp-config.ts` has not changed at all between `baseCommit` and HEAD, so no new
-comment exists to find. This is the intended fail-closed state, not a bug. Both runs independently
-confirmed: zero process-group survivors after teardown (fresh `ps -Ao pid=,pgid=,comm=` scan found
-nothing under either run's daemon pgid), no leftover temp directories, and the default-namespace
-daemons on ports 7456/51012 unaffected (same PIDs/process-group ids before and after both runs).
-Once implementation lands and the proposed lease entry is added to `leases.json`, re-running the
-same command with no other changes is the sole gate (plus, at the orchestrator's discretion, pinning
-`approved-gate.sha256` for `GATE-INTEGRITY`'s defense-in-depth layer). As an authoring-time sanity
-check (never committed, reverted immediately via `git checkout --`), the exact frozen object was
-added to `apps/daemon/src/mcp-config.ts` and the verifier re-run against the dirty working tree:
-C10B-1/2/4 correctly went GREEN (the real booted daemon served the real registered entry, matching
-FROZEN on all three independent reads) while C10B-3/5 correctly stayed RED (they read `HEAD` via
-`git show`, which does not see an uncommitted working-tree edit — confirming C10B-1/2/4 observe the
-working tree while C10B-3/5 observe committed history, exactly as designed, and that a true positive
-does make C10B-1/2/4 pass rather than the mechanism being unsatisfiable by any implementation).
+in this authoring session specifically because the round-5 verifier rewrite itself was uncommitted at
+the moment these runs were taken. This round-5 mechanism was subsequently REJECTED on confirmation
+review — see "Round 5 REJECT" and "Round 6 fix" below.
 
-### Round 4 baseline (superseded by round 5 above, kept for history)
+### Round 4 baseline (superseded by round 5/6 above, kept for history)
 
 Ran `pnpm exec tsx scripts/waves/verify-w10b.ts` on branch `feat/w10b-voicebox-registration`,
 re-confirmed after the round-4 fix below, before any implementation exists. Expected and
@@ -746,3 +767,160 @@ authoring-time-only sanity check, the exact frozen object was added to `apps/dae
 pre-edit file by sha256): C10B-1/2/4 correctly went GREEN against the real booted daemon serving the
 real registered entry, proving the mechanism is satisfiable by a genuine implementation and not merely
 "always red." This PRD and verifier are presented for round-5 confirmation review.
+
+## Round 5 REJECT
+
+**REJECT**, but the round-5 core was independently CONFIRMED VALID, not re-architected: the
+confirmation reviewer verified that C10B-1/2/4 now fetch the actual `GET /api/mcp/servers` response
+production generates rather than re-stringifying a reconstructed entry, that the round-4
+`toJSON(key)` root-vs-array-key bypass has no direct survivor, that the diff range is exactly the two
+deliverable files with `leases.json`/`DECISIONS.md`/`docs/security/**` untouched, that NM-25 scope is
+respected, and that `apps/daemon/src/mcp-config.ts` is byte-identical across worktree/HEAD/parent
+(satisfiability-proof residue clean). Six findings nonetheless kept the verdict at REJECT, four of
+them BLOCKER:
+
+1. **BLOCKER — single-read snapshot analogue survives.** The daemon is genuinely one long-lived
+   process, but the verifier performed a FIXED, predictable nine sequential reads (three per
+   criterion) with no delay or randomized horizon. A zero-diagnostic `get url()` returning the frozen
+   URL for reads 1-9 and an evil URL on read 10 passed every check.
+2. **BLOCKER — verifier-identity analogue survives.** The exact `import.meta.url`-based temp-path
+   vector was closed (the daemon imports its real source path through the real `server.ts`), but the
+   daemon still received unmistakable verifier fingerprints: `OD_DATA_DIR` always began the literal
+   substring `w10b-daemon-data-`, and the boot entrypoint always lived under a `w10b-daemon-boot-*`
+   directory as `boot.mjs`. A zero-diagnostic initializer keyed on `process.env.OD_DATA_DIR?.includes(
+   "w10b-daemon-data-")` would pass under verification and diverge during a normal launch.
+3. **Non-blocking — serialization context's original bypass IS closed.** C10B-1/2/4 fetch the real
+   response; the former root-vs-array-key `toJSON(key)` bypass has no direct survivor. Narrower
+   observation, not a blocker: the verifier did not validate `Content-Type` or `servers`/exact
+   top-level keys, but since the route is outside the implementation lease this was not treated as
+   blocking.
+4. **BLOCKER — transitive commit-binding is absent.** `apps/daemon/src/server.ts` statically imports
+   first-party `@open-design/*` packages whose exports resolve to gitignored `dist/*.mjs` bundles,
+   never rebuilt by the verifier. A stale or hand-edited package artifact could execute during daemon
+   import without appearing in `treeDirty` or being bound to HEAD.
+5. **BLOCKER — FROZEN is committed but not fully tamper-evident in the executing run.** `GATE-INTEGRITY`
+   explicitly passed while unpinned, and the executing file was never compared to
+   `git show HEAD:scripts/waves/verify-w10b.ts` — final binding relied only on `git status`, which an
+   `assume-unchanged`/`skip-worktree` flag can fool while the actually-executing bytes redefine
+   `FROZEN` (independent of `mcp-config.ts`, so C10B-3's lease-diff check never sees it).
+6. **BLOCKER — cleanup ordering fails on multiple paths.** Normal shutdown, boot failure, and the boot
+   timeout all deleted `bootDir`/`dataDir` even when `killGroupFailClosed()` returned `ok: false`;
+   `node --check` failure and a spawn-with-no-pid both returned without removing either directory even
+   though nothing was ever spawned; probe fetches had no timeout, so a hanging route could block the
+   run from ever reaching teardown; there was no outer signal handler protecting the daemon's lifetime
+   if the verifier itself were interrupted.
+7. **BLOCKER — DAEMON-TEARDOWN does not establish enumeration trust.** No pre-teardown assertion
+   confirmed the target PID/PGID was visible through the same `ps` mechanism before trusting a
+   post-kill "zero rows" result as proof of a clean exit — a session-scoped or PATH-shimmed `ps`
+   returning exit 0 with empty/self-only output would read as "confirmed empty" regardless of whether
+   the target was actually gone.
+
+Also noted: the empty-array `.every()` vacuity concern had no additional surviving issue; red-spec
+attributability was adequate; the PRD was found not fully honest about proof strength, claiming the
+three round-4 bypasses were closed "structurally" despite findings 1-2 above, and citing a
+`DECISIONS.md` `W10B-PARK` entry that was not yet present in the file at review time (the file
+contained only the round-4 authorization).
+
+`VERDICT: REJECT because predictable verifier fingerprints, a fixed nine-read horizon, unpinned
+ignored build inputs, and fail-open teardown enumeration still permit concrete false greens and
+unconfirmed process leakage.`
+
+Per the founder-authorized autonomous fix-round policy for this fresh review arc (this was
+non-APPROVE #1), an autonomous fix round was authorized without re-litigating the confirmed-valid
+core. Closed below.
+
+## Round 6 fix (founder-authorized autonomous fix round)
+
+Closes all six round-5 findings. Full per-fix rationale lives in `scripts/waves/verify-w10b.ts`'s own
+header comment (search `ROUND 6`); this section summarizes each fix and states the honest bound where
+one applies.
+
+**1. READ-HORIZON.** `observeVoiceboxWireEntryRepeated()` draws a FRESH burst-read count
+(`crypto.randomInt(5, 15)`, i.e. 5-14 reads) and a FRESH long-tail delay (`crypto.randomInt(250,
+2500)` ms) at RUN TIME for every criterion invocation, interleaves unpredictable real traffic
+(`GET /api/mcp/install-info`, a pre-existing side-effect-free route) between reads, and always ends
+with one more read after the independently randomized delay. `crypto.randomInt()` is OS-entropy-backed,
+deliberately preferred over the seedable `Math.random()` PRNG for the stronger unpredictability
+property this check wants; both, along with `Date.now()`, are ordinary permitted APIs in this
+program-scaffolding CLI script, which is not one of `apps/daemon`'s product Workflow-automation
+scripts and answers to none of their separate determinism constraints. **Honest bound:** this converts
+round 5's bypass — which ALWAYS defeated a fixed, source-legible read count deterministically — into
+one that only SOMETIMES defeats a given run, with odds unpredictable to the candidate code. It does
+NOT, and by information-theoretic necessity cannot, close the residual of a getter honest for an
+arbitrarily large or arbitrarily time-delayed hardcoded threshold; no finite verification run,
+randomized or not, can distinguish that from a genuinely honest implementation. The success-criteria
+table's wording for C10B-1/2 states this bound explicitly, replacing round 5's "structurally closed"
+overclaim.
+
+**2. VERIFIER FINGERPRINTS.** Temp-dir prefixes for both `OD_DATA_DIR` and the boot-script directory
+changed from `w10b-daemon-data-`/`w10b-daemon-boot-` to a generic `od-` prefix (matching this
+product's own internal `OD_*`/`.od/`/`od` naming convention, per the founder's NM-03 ruling to keep
+those identifiers, rather than inventing a verifier-neutral scheme from nothing); the generated
+entrypoint filename changed from `boot.mjs` to `main.mjs`. Swept and confirmed clean: `OD_BIND_HOST`
+is a legitimate config value any real launch could set; `OD_API_TOKEN`/`OD_WEB_PORT` deletions are
+indistinguishable from a real deployment that never set them; the bound port is always OS-assigned,
+never fixed/guessable; `apps/daemon/src/mcp-config.ts`'s confirmed-narrow import surface
+(`node:fs/promises`, `node:fs`, `node:crypto`, `node:path` only, re-confirmed this round) has no
+plausible path to inspect its own process's argv or listening port. **Disclosed, not closed:** the
+boot mechanism (a generated single-file `tsx` launcher) remains structurally distinguishable from a
+`pnpm tools-dev` launch by anything that can see argv globally — no `--od-stamp-*` flags, no IPC
+socket. Closing that would mean routing an isolated verifier through the full sidecar control plane,
+which is disproportionate for a registration-only wave and was not done.
+
+**3. TRANSITIVE COMMIT-BINDING.** `ensureDaemonWorkspaceDepsRebuiltFromHead()` forces a fresh
+`pnpm --filter "@open-design/daemon^..." run build` (the 10-package first-party closure
+`apps/daemon/src/server.ts` transitively imports, confirmed via `pnpm --filter ... list`) before any
+daemon boot, memoized once per verifier process (~10s wall clock on this tree, confirmed this
+session). Rebuild rather than hash-pin: unconditionally commit-binds every run's live boot rather than
+merely detecting and refusing a stale dist.
+
+**4. SELF-HASH.** `GATE-INTEGRITY` now ALWAYS compares the executing file's own bytes against
+`git show HEAD:scripts/waves/verify-w10b.ts`, independent of `git status --porcelain`. A mismatch
+while the tree independently claims to be clean is a tamper alarm (the assume-unchanged/skip-worktree
+scenario finding 5 named) and fails the check; a mismatch while the tree honestly reports itself dirty
+is recorded as an informational difference, since the overall run already fails via `treeDirty` in
+that case regardless. Confirmed this session: during authoring (dirty tree), this sub-check correctly
+recorded the expected-mismatch case; nothing in this authoring session ever exercised the tamper-alarm
+branch, since no `assume-unchanged`/`skip-worktree` flag was ever set. The pre-existing approved-hash
+comparison (once `approved-gate.sha256` is pinned) is unchanged and layers on top.
+
+**5. CLEANUP ORDERING.** `finalizeArtifacts()` is now the single, shared implementation for every exit
+path that owns daemon-boot artifacts: deletes `paths` ONLY when the teardown result is `ok: true`; on
+any unconfirmed/failed teardown, RETAINS every path and names them in the returned detail.
+`cleanupNeverSpawnedArtifacts()` is the separate, unconditional-delete path used only when no process
+was ever spawned (`node --check` failure, spawn-with-no-pid) — nothing could have leaked in those
+cases. `TEARDOWN-ARTIFACTS-SELFTEST` (new infra check) proves both branches against REAL on-disk temp
+directories created for the test: a confirmed-ok result deletes them; an unconfirmed/failed result
+retains them and names the retained path in its detail. Probe fetches now carry a bounded
+`AbortSignal.timeout(10_000)` (`safeProbeFetch`) so a hanging route cannot block the run from reaching
+teardown; the verifier's own process registers `SIGINT`/`SIGTERM` handlers that best-effort tear down
+any currently-tracked live daemon before exiting, in case the verifier itself is interrupted mid-run.
+
+**6. TARGET-VISIBILITY ENUMERATION.** `killGroupFailClosed()` is rewritten, ported from
+`scripts/waves/verify-w9-filesystem.ts` commit `0d6bf026f` (the landed target-visibility reference
+this round's authorization named — confirmed landed and read in full before designing this fix, per
+instruction). It now: gates on synthetic-input self-probes for both the process-table classifier
+(`PROCESS_TABLE_SELF_PROBES`) and the target-visibility evaluator (`TARGET_VISIBILITY_SELF_PROBES`)
+before trusting any real scan; establishes, BEFORE sending any signal, that the target is
+independently alive (`process.kill(pid,0)`) AND that the same `ps`-based scan shows a row for that
+exact pgid while alive (the positive control); requires BOTH zero post-kill survivors AND a passed
+positive control before declaring "confirmed empty." `ps` exit-nonzero, empty output, malformed rows,
+or a missing self-visibility row are all an untrustworthy scan (RUN FAILURE), never proof of a clean
+exit — a scan that never proved it could see the target's session is never trusted for the negative
+result either, even reporting zero rows.
+
+**Verification performed:** `pnpm exec tsc -p scripts/tsconfig.json --noEmit` exits 0 (no
+diagnostics). `pnpm guard` (102/102) and repo-wide `pnpm typecheck` both exit 0. `pnpm exec tsx
+scripts/waves/verify-w10b.ts` run twice against the clean, committed pre-implementation tree reports
+RED both times with the same 6/11 character (see "Verified baseline" above), with different
+randomized read schedules each run (confirming the horizon randomization is genuinely per-run, not a
+fixed constant read at startup and reused). `TEARDOWN-ARTIFACTS-SELFTEST` passed both times against
+real on-disk fixtures. `DAEMON-TEARDOWN` passed both times with a confirmed target-visibility positive
+control. Zero process-group survivors and zero leftover temp directories after every run this session
+(both pre- and post-commit); the default-namespace daemons on ports 7456/51012 were confirmed
+unaffected (same PID/process-group identity) before and after every run. As an authoring-time-only
+sanity check (never committed, reverted via `git checkout --`, confirmed byte-identical to the
+pre-edit file by sha256), the exact frozen object was added to `apps/daemon/src/mcp-config.ts`:
+C10B-1/2/4 correctly went GREEN against the real booted daemon, on every read of that run's randomized
+schedule, proving the new mechanism remains satisfiable by a genuine implementation and not merely
+"always red." This PRD and verifier are presented for the next confirmation review.
