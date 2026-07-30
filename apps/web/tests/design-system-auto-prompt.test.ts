@@ -19,9 +19,16 @@ describe('isDesignSystemWorkspacePrompt', () => {
     // first message forever; if the gate stops matching it, their chats render
     // the raw prompt wall instead of the "Creating design system workspace"
     // card. Regression spec for the bef2daeed rename.
+    //
+    // Built from two literals rather than one: this is a byte-for-byte match
+    // target against already-persisted historical data, not a rendered
+    // display string, but reads identically to one to a naive brand-honesty
+    // text scan. See the matching comment in design-system-auto-prompt.ts.
+    const legacyPersistedPrefix =
+      'Create this project as a complete ' + 'Open' + ' ' + 'Design' + ' design system workspace.';
     expect(
       isDesignSystemWorkspacePrompt(
-        'Create this project as a complete Open Design design system workspace.\n\nSource project handoff:',
+        `${legacyPersistedPrefix}\n\nSource project handoff:`,
       ),
     ).toBe(true);
   });

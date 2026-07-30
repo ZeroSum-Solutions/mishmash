@@ -87,12 +87,12 @@ describe('Home logo assets', () => {
     expect(
       appIconHash,
       `apps/web/public/app-icon.png sha256 hash ${appIconHash} must not equal the retired ` +
-        `Open Design PNG's sha256 hash ${RETIRED_APP_ICON_PNG_SHA256} -- the favicon/apple-touch-icon raster asset must be the current MishMash glyph`,
+        `pre-fork PNG's sha256 hash ${RETIRED_APP_ICON_PNG_SHA256} -- the favicon/apple-touch-icon raster asset must be the current MishMash glyph`,
     ).not.toBe(RETIRED_APP_ICON_PNG_SHA256);
     expect(
       logoHash,
       `apps/web/public/logo.png sha256 hash ${logoHash} must not equal the retired ` +
-        `Open Design PNG's sha256 hash ${RETIRED_LOGO_PNG_SHA256} -- the logo raster asset must be the current MishMash glyph`,
+        `pre-fork PNG's sha256 hash ${RETIRED_LOGO_PNG_SHA256} -- the logo raster asset must be the current MishMash glyph`,
     ).not.toBe(RETIRED_LOGO_PNG_SHA256);
   });
 

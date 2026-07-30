@@ -132,10 +132,10 @@ describe('SettingsDialog about update control', () => {
           incoming: {
             arch: 'arm64',
             artifact: {
-              name: 'Open Design Beta.dmg',
+              name: 'MishMash Beta.dmg',
               platformKey: 'macAppleSilicon',
               type: 'dmg',
-              url: 'https://fixture.test/Open Design Beta.dmg',
+              url: 'https://fixture.test/MishMash Beta.dmg',
             },
             channel: 'beta',
             progress: {
@@ -165,13 +165,13 @@ describe('SettingsDialog about update control', () => {
       deriveUpdaterModel(
         updateStatus({
           artifact: {
-            name: 'Open Design Beta.dmg',
+            name: 'MishMash Beta.dmg',
             platformKey: 'macAppleSilicon',
             type: 'dmg',
-            url: 'https://fixture.test/Open Design Beta.dmg',
+            url: 'https://fixture.test/MishMash Beta.dmg',
           },
           availableVersion: '1.2.3-beta.4',
-          downloadPath: '/tmp/Open Design Beta.dmg',
+          downloadPath: '/tmp/MishMash Beta.dmg',
           state: 'downloaded',
         }),
         { hostAvailable: true },
@@ -225,17 +225,17 @@ describe('SettingsDialog about update control', () => {
       deriveUpdaterModel(
         updateStatus({
           artifact: {
-            name: 'Open Design Beta.dmg',
+            name: 'MishMash Beta.dmg',
             platformKey: 'macAppleSilicon',
             type: 'dmg',
-            url: 'https://fixture.test/Open Design Beta.dmg',
+            url: 'https://fixture.test/MishMash Beta.dmg',
           },
           availableVersion: '1.2.3-beta.4',
-          downloadPath: '/tmp/Open Design Beta.dmg',
+          downloadPath: '/tmp/MishMash Beta.dmg',
           installResult: {
             dryRun: true,
             openedAt: '2026-05-19T00:00:00.000Z',
-            path: '/tmp/Open Design Beta.dmg',
+            path: '/tmp/MishMash Beta.dmg',
           },
           state: 'downloaded',
         }),
@@ -279,7 +279,7 @@ describe('SettingsDialog about update control', () => {
       deriveUpdaterModel(
         updateStatus({
           availableVersion: '1.2.3-beta.4',
-          downloadPath: '/tmp/Open Design Beta.dmg',
+          downloadPath: '/tmp/MishMash Beta.dmg',
           state: 'error',
         }),
         { hostAvailable: true },

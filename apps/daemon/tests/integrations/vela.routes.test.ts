@@ -1028,7 +1028,7 @@ describe('POST /api/integrations/vela/login', () => {
     expect(env.VELA_API_URL).toBe(`${baseUrl}/api/integrations/vela/api-proxy`);
   });
 
-  it('passes Open Design attribution device id to vela login', async () => {
+  it('passes MishMash attribution device id to vela login', async () => {
     const dataDir = process.env.OD_DATA_DIR as string;
     const previous = await readAppConfig(dataDir);
     const dumpPath = path.join(tmpHome, 'vela-env-attribution.json');
@@ -1064,7 +1064,7 @@ describe('POST /api/integrations/vela/login', () => {
     }
   });
 
-  it('omits Open Design attribution device id without analytics consent headers', async () => {
+  it('omits MishMash attribution device id without analytics consent headers', async () => {
     const dataDir = process.env.OD_DATA_DIR as string;
     const previous = await readAppConfig(dataDir);
     const dumpPath = path.join(tmpHome, 'vela-env-attribution-no-headers.json');
@@ -1095,7 +1095,7 @@ describe('POST /api/integrations/vela/login', () => {
     }
   });
 
-  it('omits Open Design attribution device id when telemetry metrics are disabled', async () => {
+  it('omits MishMash attribution device id when telemetry metrics are disabled', async () => {
     const dataDir = process.env.OD_DATA_DIR as string;
     const previous = await readAppConfig(dataDir);
     const dumpPath = path.join(tmpHome, 'vela-env-attribution-metrics-off.json');
@@ -1535,7 +1535,7 @@ describe('ALL /api/integrations/vela/message-center/*', () => {
 });
 
 describe('POST /api/integrations/vela/analytics-entry', () => {
-  it('mirrors Open Design AMR entry clicks to the AMR analytics ingest shape', async () => {
+  it('mirrors MishMash AMR entry clicks to the AMR analytics ingest shape', async () => {
     const requests: unknown[] = [];
     const captureServer = createServer((req, res) => {
       let raw = '';
@@ -1672,7 +1672,7 @@ describe('POST /api/integrations/vela/analytics-entry', () => {
     }
   });
 
-  it('mirrors Open Design onboarding profile snapshots with the header-derived device id', async () => {
+  it('mirrors MishMash onboarding profile snapshots with the header-derived device id', async () => {
     const requests: unknown[] = [];
     const captureServer = createServer((req, res) => {
       let raw = '';
