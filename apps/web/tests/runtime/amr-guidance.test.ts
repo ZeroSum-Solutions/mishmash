@@ -2,19 +2,34 @@ import { describe, expect, it } from 'vitest';
 import { amrRechargeUrlForProfile, resolveRunFailureUi } from '../../src/runtime/amr-guidance';
 
 describe('amrRechargeUrlForProfile', () => {
-  it('matches the selected AMR profile wallet origin', () => {
-    expect(amrRechargeUrlForProfile('prod')).toBe(
-      'https://open-design.ai/amr/wallet?source=open_design',
-    );
+  // R2 (Sol post-pin review #1): the production console previously lived on
+  // the retired open-design.ai domain, which is not this fork's
+  // (docs/FORK-PIN.md). Rather than repoint it at an invented replacement
+  // egress destination, the link is disabled — `prod` and any unrecognized
+  // profile now resolve to the inert `#` anchor. `test`/`local` point at the
+  // AMR gateway's own non-retired hosts and are unaffected.
+  it('disables the retired open-design.ai wallet link for prod/unknown profiles', () => {
+    expect(amrRechargeUrlForProfile('prod')).toBe('#');
+    expect(amrRechargeUrlForProfile(' unknown ')).toBe('#');
+    // An empty/blank profile is not the same input shape as an unrecognized
+    // one (' unknown ' above) -- both must independently fall through to the
+    // same disabled anchor rather than the check only exercising one shape.
+    expect(amrRechargeUrlForProfile('')).toBe('#');
+  });
+
+  it('leaves the non-retired test/local wallet origins untouched', () => {
     expect(amrRechargeUrlForProfile('test')).toBe(
       'https://vela.powerformer.net/wallet?source=open_design',
     );
     expect(amrRechargeUrlForProfile('local')).toBe(
       'http://localhost:5173/wallet?source=open_design',
     );
-    expect(amrRechargeUrlForProfile(' unknown ')).toBe(
-      'https://open-design.ai/amr/wallet?source=open_design',
-    );
+  });
+
+  it('never resolves any profile to the retired open-design.ai host', () => {
+    for (const profile of ['prod', 'test', 'local', ' unknown ', null, undefined]) {
+      expect(amrRechargeUrlForProfile(profile)).not.toContain('open-design.ai');
+    }
   });
 });
 

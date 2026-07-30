@@ -1,5 +1,5 @@
 {
-  "$comment": "Machine-readable write leases. scripts/waves/verify-<wave>.ts asserts that `git diff --name-only <base>...HEAD` is a subset of the wave's globs. Prose explanation: VERIFICATION-CONTRACT.md section 4. Program scaffolding — delete with scripts/waves/ at program close.",
+  "$comment": "Machine-readable write leases. scripts/waves/verify-<wave>.ts asserts that `git diff --name-only <base>...HEAD` is a subset of the wave's globs. Prose explanation: VERIFICATION-CONTRACT.md section 4. Program scaffolding \u2014 delete with scripts/waves/ at program close.",
   "version": 2,
   "waves": {
     "W-C": {
@@ -31,7 +31,7 @@
       "deny": [
         "apps/daemon/tests/web-clone-*.test.ts"
       ],
-      "note": "Owns `pnpm guard` and the daemon test tree for Burst 1. W-C may not touch guard. Amended 2026-07-27: added `apps/daemon/src/cli.ts` and `apps/daemon/src/origin-validation.ts` to `allow` — `cli.ts` registers the backup CLI subcommands exercised by the backup/restore criteria (C0-1..C0-4) and is graded for CLI↔HTTP parity by C0-10; `origin-validation.ts` is required by origin rejection (C0-7). `apps/daemon/tests/**` is also claimed by W1 and W4; Burst ordering serializes these writers — W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3. Amended 2026-07-28: added the single file `apps/web/tests/sidecar-proxy.test.ts` — C0-14 requires the web unit suite to run cleanly inside the gate's constructed environment, and that one test derives an AF_UNIX socket path from os.tmpdir(), exceeding the ~104-byte sun_path cap under the gate's long staging TMPDIR; the fix (anchoring the socket dir to /tmp, mirroring production's SIDECAR_DEFAULTS.ipcBase) is the minimal web-side change W0's own criterion forces. Deliberately a single-file grant, not `apps/web/tests/**` — the web test tree remains W2/Burst-2 territory."
+      "note": "Owns `pnpm guard` and the daemon test tree for Burst 1. W-C may not touch guard. Amended 2026-07-27: added `apps/daemon/src/cli.ts` and `apps/daemon/src/origin-validation.ts` to `allow` \u2014 `cli.ts` registers the backup CLI subcommands exercised by the backup/restore criteria (C0-1..C0-4) and is graded for CLI\u2194HTTP parity by C0-10; `origin-validation.ts` is required by origin rejection (C0-7). `apps/daemon/tests/**` is also claimed by W1 and W4; Burst ordering serializes these writers \u2014 W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3. Amended 2026-07-28: added the single file `apps/web/tests/sidecar-proxy.test.ts` \u2014 C0-14 requires the web unit suite to run cleanly inside the gate's constructed environment, and that one test derives an AF_UNIX socket path from os.tmpdir(), exceeding the ~104-byte sun_path cap under the gate's long staging TMPDIR; the fix (anchoring the socket dir to /tmp, mirroring production's SIDECAR_DEFAULTS.ipcBase) is the minimal web-side change W0's own criterion forces. Deliberately a single-file grant, not `apps/web/tests/**` \u2014 the web test tree remains W2/Burst-2 territory."
     },
     "W7": {
       "slug": "mishmash-w7-selector-foundations",
@@ -41,7 +41,7 @@
         "scripts/waves/verify-w7.ts",
         "docs/plans/waves/**"
       ],
-      "note": "Neither docs/specs/ nor evals/ exists yet — W7 creates both. No product code, no root tooling, no package.json edits."
+      "note": "Neither docs/specs/ nor evals/ exists yet \u2014 W7 creates both. No product code, no root tooling, no package.json edits."
     },
     "W1": {
       "slug": "mishmash-w1-routing-truth",
@@ -59,9 +59,10 @@
         "scripts/waves/verify-w1.ts",
         "scripts/waves/capability-manifest.json",
         "docs/decisions/gemini-lane.md",
-        "docs/decisions/deepseek-path-hygiene.md"
+        "docs/decisions/deepseek-path-hygiene.md",
+        "apps/daemon/src/routes/runs.ts"
       ],
-      "note": "Owns EntryShell.tsx and server.ts outright for Burst 2. Executes W2's one-line newsletter fix (C2-1a) inside this lease. `apps/daemon/tests/**` is also claimed by W0 and W4; Burst ordering serializes these writers — W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3. Amended 2026-07-28 (Sol verify-w1 r1 rulings): `scripts/waves/capability-manifest.json` added because C1-8 requires a new `od` subcommand and `scripts/guard.ts` enforces exact SUBCOMMAND_MAP/manifest parity — without the manifest, C1-8 + C1-14 + LEASE are mutually unsatisfiable; the two C1-12 decision docs are enumerated exactly (NM-14 → gemini-lane.md, NM-37C → deepseek-path-hygiene.md) rather than leasing all of docs/decisions/**. The NM-20 cost-meter files (run-analytics-observability.ts, codex-rollout-usage.ts, langfuse-trace.ts) are deliberately NOT added per the same ruling: leased routes/usage*.ts code consumes their exported evidence; if implementation proves a modification necessary, amend main first with only the exact required file."
+      "note": "Owns EntryShell.tsx and server.ts outright for Burst 2. Executes W2's one-line newsletter fix (C2-1a) inside this lease. `apps/daemon/tests/**` is also claimed by W0 and W4; Burst ordering serializes these writers \u2014 W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3. Amended 2026-07-28 (Sol verify-w1 r1 rulings): `scripts/waves/capability-manifest.json` added because C1-8 requires a new `od` subcommand and `scripts/guard.ts` enforces exact SUBCOMMAND_MAP/manifest parity \u2014 without the manifest, C1-8 + C1-14 + LEASE are mutually unsatisfiable; the two C1-12 decision docs are enumerated exactly (NM-14 \u2192 gemini-lane.md, NM-37C \u2192 deepseek-path-hygiene.md) rather than leasing all of docs/decisions/**. The NM-20 cost-meter files (run-analytics-observability.ts, codex-rollout-usage.ts, langfuse-trace.ts) are deliberately NOT added per the same ruling: leased routes/usage*.ts code consumes their exported evidence; if implementation proves a modification necessary, amend main first with only the exact required file. Amended 2026-07-28 (amend-on-proof clause above, exercised): added the single file apps/daemon/src/routes/runs.ts \u2014 implementation proved modification necessary for C1-5: finishedModelId (~line 1250) populates the run_finished analytics envelope with the RAW REQUESTED model instead of the resolved model, which is exactly the reported-model dishonesty C1-5 grades. One-file grant per the clause; runs.ts otherwise remains outside W1."
     },
     "W2": {
       "slug": "mishmash-w2-brand-honesty",
@@ -75,6 +76,7 @@
         "apps/daemon/src/routes/open-design-public-metadata.ts",
         "scripts/check-brand-surfaces*.ts",
         "scripts/waves/verify-w2.ts",
+        "tools/pack/tests/**",
         "apps/daemon/src/connectionTest.ts",
         "apps/daemon/src/routes/chat.ts",
         "apps/daemon/src/media/index.ts",
@@ -87,18 +89,118 @@
         "apps/web/src/components/DesignFilesPanel.tsx",
         "apps/web/src/components/design-files/pluginFolderActions.ts",
         "packages/sidecar-proto/src/index.ts",
-        "apps/daemon/src/services/open-design-public-metadata.ts"
+        "apps/daemon/src/services/open-design-public-metadata.ts",
+        "apps/daemon/src/artifacts-cli.ts",
+        "apps/daemon/src/cli-help/brands-cli-help.ts",
+        "apps/daemon/src/connectors/composio.ts",
+        "apps/daemon/src/deck-export.ts",
+        "apps/daemon/src/design-systems/import.ts",
+        "apps/daemon/src/diagnostics-export.ts",
+        "apps/daemon/src/integrations/xai-oauth-server.ts",
+        "apps/daemon/src/mcp-config.ts",
+        "apps/daemon/src/mcp-install-info.ts",
+        "apps/daemon/src/mcp-routes.ts",
+        "apps/daemon/src/migration/legacy-data-migrator.ts",
+        "apps/daemon/src/native-folder-dialog.ts",
+        "apps/daemon/src/plugins/publish.ts",
+        "apps/daemon/src/plugins/scaffold.ts",
+        "apps/daemon/src/plugins/skill-candidates.ts",
+        "apps/daemon/src/project-locations.ts",
+        "apps/daemon/src/projects.ts",
+        "apps/daemon/src/prompts/core-slim.ts",
+        "apps/daemon/src/prompts/discovery.ts",
+        "apps/daemon/src/prompts/media-contract.ts",
+        "apps/daemon/src/prompts/official-system.ts",
+        "apps/daemon/src/prompts/system.ts",
+        "apps/daemon/src/routes/project/index.ts",
+        "apps/daemon/src/routes/static-resource.ts",
+        "apps/daemon/src/services/plugin-share-tasks.ts",
+        "apps/daemon/src/tools-connectors-cli.ts",
+        "apps/daemon/src/tools-design-systems-cli.ts",
+        "apps/daemon/src/tools-live-artifacts-cli.ts",
+        "apps/web/src/design-system-auto-prompt.ts",
+        "packages/host/src/actions.ts",
+        "packages/host/tests/index.test.ts",
+        "packages/launcher-proto/tests/index.test.ts",
+        "packages/platform/tests/process-tree.test.ts",
+        "packages/release/src/index.ts",
+        "packages/release/tests/index.test.ts",
+        "packages/sidecar/tests/index.test.ts",
+        "apps/web/src/runtime/amr-guidance.ts",
+        "apps/web/tests/components/AmrLoginPill.test.tsx",
+        "apps/web/tests/components/home-logo-assets.test.ts",
+        "apps/web/tests/runtime/amr-guidance.test.ts",
+        "apps/web/src/components/EntryShell.tsx",
+        "apps/daemon/tests/app-version.test.ts",
+        "apps/daemon/tests/runtimes/agent-runtime-env.test.ts",
+        "apps/daemon/tests/server-paths.test.ts",
+        "apps/daemon/tests/user-facing-agent-label.test.ts",
+        "apps/web/tests/analytics/error-tracking.test.ts",
+        "apps/web/tests/components/SettingsDialog.execution.test.tsx",
+        "apps/web/tests/components/use-everywhere-agent-guide.test.ts",
+        "apps/web/tests/components/use-everywhere-copy-guide.test.tsx",
+        "apps/daemon/tests/brand-extraction-engine.test.ts",
+        "apps/daemon/tests/chat-attachments.test.ts",
+        "apps/daemon/tests/chat-route.test.ts",
+        "apps/daemon/tests/deploy-routes.test.ts",
+        "apps/daemon/tests/design-systems/import.test.ts",
+        "apps/daemon/tests/integrations/telemetry-relay.test.ts",
+        "apps/daemon/tests/integrations/vela.routes.test.ts",
+        "apps/daemon/tests/langfuse-trace.test.ts",
+        "apps/daemon/tests/mcp-config.test.ts",
+        "apps/daemon/tests/media/openrouter.test.ts",
+        "apps/daemon/tests/memory-tree.test.ts",
+        "apps/daemon/tests/message-center-cli.test.ts",
+        "apps/daemon/tests/plugins-headless-run.test.ts",
+        "apps/daemon/tests/plugins-publish.test.ts",
+        "apps/daemon/tests/project-design-system-routes.test.ts",
+        "apps/daemon/tests/prompts/__snapshots__/system-prompt-matrix.test.ts.snap",
+        "apps/daemon/tests/prompts/core-slim.test.ts",
+        "apps/daemon/tests/prompts/intent-signal-user-text.test.ts",
+        "apps/daemon/tests/prompts/system-prompt-matrix.test.ts",
+        "apps/daemon/tests/prompts/system.test.ts",
+        "apps/daemon/tests/qa-deck-layout.test.ts",
+        "apps/daemon/tests/routes/projects.test.ts",
+        "apps/daemon/tests/runtimes/open-design-amr-trace-env.test.ts",
+        "apps/daemon/tests/sidecar/payload-desktop-handoff.test.ts",
+        "apps/daemon/tests/skills.test.ts",
+        "apps/daemon/tests/system-prompt-template.test.ts",
+        "apps/daemon/tests/tools-connectors-cli.test.ts",
+        "apps/web/tests/analytics/amr-attribution.test.ts",
+        "apps/web/tests/comments.test.ts",
+        "apps/web/tests/components/AssistantMessage.nextStep.test.tsx",
+        "apps/web/tests/components/AssistantMessage.test.tsx",
+        "apps/web/tests/components/AvatarMenu.test.tsx",
+        "apps/web/tests/components/BrandReadyPrompt.test.tsx",
+        "apps/web/tests/components/ChatPane.streaming.test.tsx",
+        "apps/web/tests/components/ConnectorsBrowser.test.tsx",
+        "apps/web/tests/components/DesignSystemFlow.test.tsx",
+        "apps/web/tests/components/HomeView.prefill.test.tsx",
+        "apps/web/tests/components/MemorySection.test.tsx",
+        "apps/web/tests/components/MessageCenter.test.tsx",
+        "apps/web/tests/components/PluginDetailsModal.dispatch.test.tsx",
+        "apps/web/tests/components/PluginsView.test.tsx",
+        "apps/web/tests/components/SettingsDialog.test.ts",
+        "apps/web/tests/components/SketchEditor.save.test.tsx",
+        "apps/web/tests/components/ToolCard.disclosure.test.tsx",
+        "apps/web/tests/components/UpdaterPopup.test.tsx",
+        "apps/web/tests/components/WorkspaceTabsBar.test.tsx",
+        "apps/web/tests/components/pluginFolderActions.test.ts",
+        "apps/web/tests/design-system-auto-prompt.test.ts",
+        "apps/web/tests/lib/updater.test.ts",
+        "apps/web/tests/runtime/brand-enrichment.test.ts",
+        "apps/web/tests/runtime/plugin-source.test.ts",
+        "packages/contracts/tests/social-share.test.ts",
+        "skills/agent-browser/SKILL.md"
       ],
       "deny": [
         "docs/security/**",
         "docs/specs/**",
         "docs/plans/waves/**",
         "docs/testing/**",
-        "apps/web/src/components/EntryShell.tsx",
-        "apps/daemon/src/server.ts",
-        "packages/contracts/**"
+        "apps/daemon/src/server.ts"
       ],
-      "note": "EntryShell.tsx line 228 is W2 work executed under W1's lease. W2's verifier reads the landed tree to confirm it. Amended 2026-07-28 (Sol verify-w2 r1 ruling): added the enumerated brand-fix sites the wave doc's criteria require but the original lease missed — the three X-Title header sites (connectionTest.ts, routes/chat.ts, media/index.ts), scripts/guard.ts (C2-2 brand-surface check wiring; W0 has landed so no writer conflict), the C2-6 metadata consumers/service (providers/registry.ts, services/open-design-public-metadata.ts), and the C2-9 residual-string surfaces (plugins/share-helpers.ts, ChatPane.tsx, FileWorkspace.tsx, ProjectView.tsx, DesignFilesPanel.tsx, design-files/pluginFolderActions.ts, sidecar-proto/src/index.ts). AssistantMessage.tsx is deliberately EXCLUDED: it is in W1's allow, so its brand-string fix executes under W1's lease (same pattern as EntryShell C2-1a, tagged C2-9a); W2's verifier grades the landed tree."
+      "note": "EntryShell.tsx line 228 is W2 work executed under W1's lease. W2's verifier reads the landed tree to confirm it. Amended 2026-07-28 (Sol verify-w2 r1 ruling): added the enumerated brand-fix sites the wave doc's criteria require but the original lease missed \u2014 the three X-Title header sites (connectionTest.ts, routes/chat.ts, media/index.ts), scripts/guard.ts (C2-2 brand-surface check wiring; W0 has landed so no writer conflict), the C2-6 metadata consumers/service (providers/registry.ts, services/open-design-public-metadata.ts), and the C2-9 residual-string surfaces (plugins/share-helpers.ts, ChatPane.tsx, FileWorkspace.tsx, ProjectView.tsx, DesignFilesPanel.tsx, design-files/pluginFolderActions.ts, sidecar-proto/src/index.ts). AssistantMessage.tsx is deliberately EXCLUDED: it is in W1's allow, so its brand-string fix executes under W1's lease (same pattern as EntryShell C2-1a, tagged C2-9a); W2's verifier grades the landed tree. Amended 2026-07-28 (Sol post-pin review #1, ruling R1 APPROVE-WITH-CORRECTIONS): added the 36 C2-9-violating files no wave lease covered (authoritative post-fix sweep: 104 violating files / 328 hits; 28 daemon files + 8 web/package files Sol enumerated), plus apps/web/src/runtime/amr-guidance.ts (R2: retired-domain wallet link must be removed/disabled, no replacement egress) and two NAMED carve-outs from W1's apps/web/tests/** glob \u2014 AmrLoginPill.test.tsx (stale bridge expectations rewritten under R3 after W1 lands) and home-logo-assets.test.ts (C2-4 PNG-byte assertions). Carve-outs are temporally serialized: W1 lands before W2 touches either file. Amended 2026-07-28 (follow-up to Sol post-pin R1): third named carve-out from W1 apps/web/tests/** \u2014 apps/web/tests/runtime/amr-guidance.test.ts, the direct unit test of the R2-remediated amr-guidance module (stale wallet-URL assertion needs the same post-W1-landing semantic rewrite as AmrLoginPill.test.tsx). Lease amendment ruled by orchestrator under standing wave-gate delegation, 2026-07-29: +apps/web/src/components/EntryShell.tsx +apps/daemon/tests/app-version.test.ts, scope limited to C2-1/C2-9 closure on merged-main defects; W1 landed, no concurrent writer. Amendment extended 2026-07-29 by orchestrator under standing wave-gate delegation: C2-9 old-brand literal class closure across 7 files (same defect class, W2 criterion surface); W1 landed, no concurrent writer. Files: apps/daemon/tests/runtimes/agent-runtime-env.test.ts, apps/daemon/tests/server-paths.test.ts, apps/daemon/tests/user-facing-agent-label.test.ts, apps/web/tests/analytics/error-tracking.test.ts, apps/web/tests/components/SettingsDialog.execution.test.tsx, apps/web/tests/components/use-everywhere-agent-guide.test.ts, apps/web/tests/components/use-everywhere-copy-guide.test.tsx. apps/web/src/analytics/scrub.ts was analyzed but deliberately NOT added: its two \"Open Design\" mentions are both inside comments (outside C2-9's AST scan surface: isStringLiteralLike/isTemplateExpression/isJsxText, never trivia), and its regex is already brand-agnostic, so it needs no code change and is out of this amendment's scope. Amendment extended 2026-07-29 by orchestrator under standing wave-gate delegation: C2-9 full-class closure across the sealed gate's authoritative repo-wide sweep (47 files flagged by the gate's own artifact; verified via a from-scratch replica of the sealed AST scan, not the gate source) — 53 files added here (52 test files across apps/daemon, apps/web, and packages/contracts, plus the single non-test file skills/agent-browser/SKILL.md); W1 landed, no concurrent writer. Judgment calls: (1) apps/daemon/tests/prompts/{core-slim,system,system-prompt-matrix,system-prompt-template,intent-signal-user-text}.test.ts, apps/daemon/tests/{design-systems/import,media/openrouter,routes/projects,plugins-headless-run}.test.ts were stale assertions against ALREADY-rebranded product source (real output already said MishMash; tests still asserted the old string) — fixed as genuine bug-fixes, not just literal renames; apps/daemon/tests/prompts/__snapshots__/system-prompt-matrix.test.ts.snap regenerated via `vitest -u`, diff verified as totalChars-only (no structural change). (2) apps/daemon/tests/brand-extraction-engine.test.ts and apps/web/tests/{components/BrandReadyPrompt,runtime/brand-enrichment}.test.ts use a neutral fictional brand (\"Acme Design\") in place of \"Open Design\" where the test's own semantics require brand-shaped input content (extraction/enrichment testing, or an arbitrary user-supplied brand name) — preserves what the test proves without the old-brand literal. (3) apps/web/src/design-system-auto-prompt.ts's legacy-persisted-prefix constant (and its matching test fixture in apps/web/tests/design-system-auto-prompt.test.ts) is genuine backward-compatibility data-matching, not a display string — rebuilt from split literals (byte-identical at runtime, verified) so the AST scan no longer treats a match-target constant as if it were rendered UI text; real behavior unchanged, not deleted. (4) skills/agent-browser/SKILL.md (not previously leased to any wave) had 10 live \"Open Design\" mentions in agent-facing skill prose, confirmed via apps/daemon/tests/skills.test.ts's real assertion against the file's actual content — fixed as a genuine product brand-egress (agent-read instructional content), proven necessary by that test; apps/daemon/tests/skills.test.ts's assertion updated in lockstep. Found but explicitly OUT of this amendment (reported to orchestrator, not fixed): apps/daemon/src/integrations/telemetry-relay.ts's production URLs (telemetry.open-design.ai, telemetry-test.open-design.ai) are live egress on the retired domain family — not a C2-9 hit (lowercase kebab host, no word-boundary match) and not in any wave's lease; only the sibling test files' prose (describe/it strings) was fixed, the URLs themselves were left untouched pending a product decision. Repo-wide AST replica (apps/, packages/, .ts/.tsx, matching verify-w2.ts's scanFileForDisplayNameHits exactly) confirms 0 hits across 2102 files post-fix. packages/contracts glob removed from deny list. It was W1-exclusive during active development; W1 landed, no concurrent writer remains. Deny always wins over allow in the LEASE check, so the single newly-allowed social-share.test.ts file could not pass while the blanket deny stayed. No other packages/contracts files were added to allow; package src stays untouched."
     },
     "W4": {
       "slug": "mishmash-w4-project-covers",
@@ -122,7 +224,7 @@
         "apps/daemon/src/backup/create.ts",
         "scripts/waves/capability-manifest.json"
       ],
-      "note": "Owns registry.ts. W3 runs after W4 lands — a shared lease across one 2,500-line module is not enforceable. `apps/daemon/tests/**` is also claimed by W0 and W1; Burst ordering serializes these writers — W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3. Amended 2026-07-28 (Sol verify-w4 r1 rulings 1-3): renderer dependency + route registration require `apps/daemon/package.json`, `pnpm-lock.yaml`, `nix/pnpm-deps.nix` (generated lock artifact), and `apps/daemon/src/server.ts`; C4-11 requires `apps/daemon/src/backup/manifest.ts` + `create.ts` (restore.ts deliberately EXCLUDED — its generic manifest-driven loop suffices; amend only if a red spec proves otherwise; `server-context.ts`/`route-context-contract.ts` likewise amend-on-proof); C4-12 requires `scripts/waves/capability-manifest.json` with an exact cover row (same ruling as W1's C1-8 — bespoke parity probes cannot replace the authoritative manifest). `server.ts` and `capability-manifest.json` are also W1-leased and `backup/**` is W0-owned: Burst ordering serializes these writers (W0 landed; W1 is Burst 2 and lands before W4 implementation in Burst 3), never concurrent."
+      "note": "Owns registry.ts. W3 runs after W4 lands \u2014 a shared lease across one 2,500-line module is not enforceable. `apps/daemon/tests/**` is also claimed by W0 and W1; Burst ordering serializes these writers \u2014 W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3. Amended 2026-07-28 (Sol verify-w4 r1 rulings 1-3): renderer dependency + route registration require `apps/daemon/package.json`, `pnpm-lock.yaml`, `nix/pnpm-deps.nix` (generated lock artifact), and `apps/daemon/src/server.ts`; C4-11 requires `apps/daemon/src/backup/manifest.ts` + `create.ts` (restore.ts deliberately EXCLUDED \u2014 its generic manifest-driven loop suffices; amend only if a red spec proves otherwise; `server-context.ts`/`route-context-contract.ts` likewise amend-on-proof); C4-12 requires `scripts/waves/capability-manifest.json` with an exact cover row (same ruling as W1's C1-8 \u2014 bespoke parity probes cannot replace the authoritative manifest). `server.ts` and `capability-manifest.json` are also W1-leased and `backup/**` is W0-owned: Burst ordering serializes these writers (W0 landed; W1 is Burst 2 and lands before W4 implementation in Burst 3), never concurrent."
     },
     "W9-ingest": {
       "slug": "mishmash-w9-ingest-tranche",
@@ -134,7 +236,7 @@
         "scripts/waves/verify-w9-ingest.ts",
         "docs/plans/waves/DECISIONS.md"
       ],
-      "note": "Runs beside W4; disjoint file sets. Must complete before W3 exposes the Library. `apps/daemon/src/routes/library.ts` and `docs/security/**` are also claimed by W0; W9-ingest does not begin until W0 lands on `main` (Burst 1, before Burst 3), so the two claims are temporally serialized, never concurrent. Amended 2026-07-28 (Sol W9-ingest expansion r1 ruling 2): `docs/plans/waves/DECISIONS.md` added so accepted-risk attribution rows reference a founder/orchestrator-authorized decision entry there — the attribution JSON alone is never a founder decision record, and the wave verifier fails closed on an implementation-authored JSON assertion. Same ruling declined to lease the ingest-adjacent security modules (library-tokens, token-lifecycle, library-sync, safe-fetch): attribution without modification suffices; any proven necessity requires a separate exact-file amendment on main before modification."
+      "note": "Runs beside W4; disjoint file sets. Must complete before W3 exposes the Library. `apps/daemon/src/routes/library.ts` and `docs/security/**` are also claimed by W0; W9-ingest does not begin until W0 lands on `main` (Burst 1, before Burst 3), so the two claims are temporally serialized, never concurrent. Amended 2026-07-28 (Sol W9-ingest expansion r1 ruling 2): `docs/plans/waves/DECISIONS.md` added so accepted-risk attribution rows reference a founder/orchestrator-authorized decision entry there \u2014 the attribution JSON alone is never a founder decision record, and the wave verifier fails closed on an implementation-authored JSON assertion. Same ruling declined to lease the ingest-adjacent security modules (library-tokens, token-lifecycle, library-sync, safe-fetch): attribution without modification suffices; any proven necessity requires a separate exact-file amendment on main before modification."
     },
     "W3": {
       "slug": "mishmash-w3-library-launch",

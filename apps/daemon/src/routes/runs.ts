@@ -3,6 +3,7 @@ import type Database from 'better-sqlite3';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import {
+  buildModelRouting,
   defaultScenarioPluginIdForProjectMetadata,
   RUN_RESULT_PACKAGE_SCHEMA,
   type AppliedPluginSnapshot,
@@ -63,7 +64,6 @@ import {
 import {
   amrUserIdForRunAnalytics,
   agentProviderIdForRunAnalytics,
-  hasExplicitRequestedModelForAnalytics,
   runtimeTypeForRunAnalytics,
   scanRunEventsForUsageAnalytics,
   summarizeRunTimingAnalytics,
@@ -145,6 +145,8 @@ interface ChatRun {
   assistantMessageId: string | null;
   agentId: string | null;
   model?: string | null;
+  modelRequested?: string | null;
+  modelReported?: string | null;
   status: ChatRunStatus;
   createdAt: number;
   updatedAt: number;
@@ -494,6 +496,34 @@ function toOdNativeEvent(record: RunEventRecord): OdNativeEvent | null {
   return { kind: record.event, ...toJsonRecord(record.data) } as OdNativeEvent;
 }
 
+// C1-5: the model_id stamped on the run_finished PostHog event. Reuses
+// buildModelRouting -- the SAME canonical logic GET /api/runs/:id's
+// persisted modelRouting.resolved field already uses -- rather than
+// re-deriving a parallel fallback chain: `run.model` is the resolved field
+// server.ts sets at spawn time from resolveModelForAgent's fallback; when
+// resolution deliberately deferred to the CLI's own default (run.model
+// null), the fallback is `run.modelReported`, the CLI's own echo tracked
+// directly on the run object. `usageAnalytics.agent_reported_model` (from
+// scanRunEventsForUsageAnalytics) is NOT a safe substitute for that
+// fallback: its own needAgentModel optimization skips computing it
+// whenever the RAW requested model looked "explicit," even when that raw
+// request was invalid and got silently discarded by resolution -- exactly
+// the scenario a substitution-triggering run produces. Exported so a red
+// spec can pin this without booting a full daemon.
+export function resolveFinishedModelIdForAnalytics(run: {
+  modelRequested?: string | null;
+  model?: string | null;
+  modelReported?: string | null;
+}): string {
+  return modelIdForTracking(
+    buildModelRouting({
+      requestedRaw: run.modelRequested,
+      resolvedRaw: run.model,
+      reportedRaw: run.modelReported,
+    }).resolved,
+  );
+}
+
 export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
   const { db, design } = ctx;
   const { createSseResponse, sendApiError } = ctx.http;
@@ -837,9 +867,22 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       const appCfgForAnalytics = await readAppConfig(RUNTIME_DATA_DIR).catch(
         () => ({} as Record<string, unknown>),
       );
-      const detectedAgentsForAnalytics = await detectAgents(
-        toJsonRecord((appCfgForAnalytics as { agentCliEnv?: unknown }).agentCliEnv),
-      ).catch((): Array<{ id: string; available: boolean }> => []);
+      // C1-5: detectAgents() probes every registered agent def with no
+      // caching anywhere in the codebase (verified: agents.ts/detection.ts
+      // memoizes nothing beyond per-agent capability flags) -- measured
+      // ~16s cold in this repo's own dev environment. Analytics prep must
+      // never block the run_finished capture on that; a bounded, best-effort
+      // budget degrades runtime_type dimensionality gracefully on timeout
+      // (the same empty-array shape the existing .catch() below already
+      // handles for an outright detection failure), rather than silently
+      // starving the whole run_finished PostHog event past any reasonable
+      // "did telemetry actually fire" window.
+      const detectedAgentsForAnalytics = await Promise.race([
+        detectAgents(
+          toJsonRecord((appCfgForAnalytics as { agentCliEnv?: unknown }).agentCliEnv),
+        ),
+        new Promise<DetectedAgent[]>((resolve) => setTimeout(() => resolve([]), 2000)),
+      ]).catch((): Array<{ id: string; available: boolean }> => []);
       const velaStatusForAnalytics = (() => {
         try {
           const configuredAmrEnv = agentCliEnvForAgent(
@@ -1247,9 +1290,9 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
           firstTokenSeen: Boolean(run.analyticsTelemetry?.firstTokenAt),
           artifactWriteSeen: artifactCount > 0 || designSystemCreated || previewModuleCount > 0,
         });
-        const finishedModelId = hasExplicitRequestedModelForAnalytics(reqBody.model)
-          ? modelIdForTracking(reqBody.model)
-          : modelIdForTracking(usageAnalytics.agent_reported_model);
+        // C1-5: must be the RESOLVED model, not the raw requested one --
+        // see resolveFinishedModelIdForAnalytics's own doc comment above.
+        const finishedModelId = resolveFinishedModelIdForAnalytics(run);
         const runtimeVersions = getDetectedRuntimeVersions(run.agentId);
         for (const [index, retryEvent] of runRetryEventsForAnalytics(run.events).entries()) {
           design.analytics.capture({

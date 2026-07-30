@@ -35,12 +35,6 @@ interface CachedGithubLatestReleaseInfo {
   fetchedAt: number;
 }
 
-interface CachedDiscordPresence {
-  onlineCount: number;
-  memberCount: number;
-  fetchedAt: number;
-}
-
 interface GithubRepoMetadataPayload {
   stargazers_count?: unknown;
 }
@@ -50,35 +44,17 @@ interface GithubLatestReleasePayload {
   html_url?: unknown;
 }
 
-interface DiscordInviteProfilePayload {
-  online_count?: unknown;
-  member_count?: unknown;
-}
-
-interface DiscordInvitePayload {
-  approximate_presence_count?: unknown;
-  approximate_member_count?: unknown;
-  profile?: unknown;
-}
-
 export interface OpenDesignPublicMetadataServiceOptions {
   fetchImpl?: typeof fetch;
   now?: () => number;
 }
 
-const OPEN_DESIGN_GITHUB_REPO_API = 'https://api.github.com/repos/nexu-io/open-design';
-const OPEN_DESIGN_GITHUB_RELEASE_LATEST_API = 'https://api.github.com/repos/nexu-io/open-design/releases/latest';
+// Repointed at this fork's own repository (docs/FORK-PIN.md) -- the upstream
+// `nexu-io/open-design` repo is a different project's identity, not ours.
+const OPEN_DESIGN_GITHUB_REPO_API = 'https://api.github.com/repos/wiggdevin/mishmash';
+const OPEN_DESIGN_GITHUB_RELEASE_LATEST_API = 'https://api.github.com/repos/wiggdevin/mishmash/releases/latest';
 const OPEN_DESIGN_GITHUB_CACHE_TTL_MS = 60 * 60 * 1000;
 const OPEN_DESIGN_GITHUB_TIMEOUT_MS = 4_000;
-const OPEN_DESIGN_DISCORD_INVITE_CODE = 'mHAjSMV6gz';
-export const OPEN_DESIGN_DISCORD_INVITE_URL = `https://discord.gg/${OPEN_DESIGN_DISCORD_INVITE_CODE}`;
-const OPEN_DESIGN_DISCORD_INVITE_API = `https://discord.com/api/v10/invites/${OPEN_DESIGN_DISCORD_INVITE_CODE}?with_counts=true`;
-const OPEN_DESIGN_DISCORD_CACHE_TTL_MS = 5 * 60 * 1000;
-const OPEN_DESIGN_DISCORD_TIMEOUT_MS = 4_000;
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 function readFiniteNonNegativeNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
@@ -101,8 +77,6 @@ export function createOpenDesignPublicMetadataService({
   let githubRepoInflight: Promise<OpenDesignGithubRepoStats> | null = null;
   let githubLatestReleaseCache: CachedGithubLatestReleaseInfo | null = null;
   let githubLatestReleaseInflight: Promise<OpenDesignGithubLatestReleaseInfo> | null = null;
-  let discordPresenceCache: CachedDiscordPresence | null = null;
-  let discordPresenceInflight: Promise<OpenDesignDiscordPresence> | null = null;
 
   async function readGithubRepoStats(): Promise<OpenDesignGithubRepoStats> {
     const currentTime = now();
@@ -193,58 +167,13 @@ export function createOpenDesignPublicMetadataService({
     return githubLatestReleaseInflight;
   }
 
+  // This fork has no public community Discord -- it is a private, internal
+  // team tool (docs/FORK-PIN.md), not the upstream open-source project.
+  // Reporting "not configured" here, with no outbound request, is the
+  // honest answer; querying and re-serving the UPSTREAM project's invite
+  // under this fork's own /api/community/discord identity would not be.
   async function readDiscordPresence(): Promise<OpenDesignDiscordPresence> {
-    const currentTime = now();
-    if (
-      discordPresenceCache &&
-      currentTime - discordPresenceCache.fetchedAt < OPEN_DESIGN_DISCORD_CACHE_TTL_MS
-    ) {
-      return withFreshness(discordPresenceCache, false);
-    }
-
-    if (discordPresenceInflight) return discordPresenceInflight;
-
-    discordPresenceInflight = (async () => {
-      const ctrl = new AbortController();
-      const timeout = setTimeout(() => ctrl.abort(), OPEN_DESIGN_DISCORD_TIMEOUT_MS);
-      try {
-        const response = await fetchImpl(OPEN_DESIGN_DISCORD_INVITE_API, {
-          headers: {
-            accept: 'application/json',
-            'user-agent': 'open-design-daemon',
-          },
-          signal: ctrl.signal,
-        });
-        if (!response.ok) {
-          throw new Error(`Discord invite metadata request failed with HTTP ${response.status}`);
-        }
-        const payload = (await response.json()) as DiscordInvitePayload;
-        const profile = isObject(payload.profile)
-          ? (payload.profile as DiscordInviteProfilePayload)
-          : null;
-        const onlineCount =
-          readFiniteNonNegativeNumber(payload.approximate_presence_count) ??
-          readFiniteNonNegativeNumber(profile?.online_count);
-        const memberCount =
-          readFiniteNonNegativeNumber(payload.approximate_member_count) ??
-          readFiniteNonNegativeNumber(profile?.member_count);
-
-        if (onlineCount == null || memberCount == null) {
-          throw new Error('Discord invite metadata did not include numeric member counts');
-        }
-
-        discordPresenceCache = { onlineCount, memberCount, fetchedAt: now() };
-        return withFreshness(discordPresenceCache, false);
-      } catch (error) {
-        if (discordPresenceCache) return withFreshness(discordPresenceCache, true);
-        throw error;
-      } finally {
-        clearTimeout(timeout);
-        discordPresenceInflight = null;
-      }
-    })();
-
-    return discordPresenceInflight;
+    return { onlineCount: 0, memberCount: 0, fetchedAt: now(), stale: true };
   }
 
   return {

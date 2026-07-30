@@ -181,10 +181,10 @@ describe('AvatarMenu', () => {
     expect(onOpenSettings).toHaveBeenCalledWith('execution');
   });
 
-  it('pins Open Design to the top of the CLI picker', async () => {
+  it('pins MishMash AMR to the top of the CLI picker', async () => {
     const amrAgent: AgentInfo = {
       id: 'amr',
-      name: 'Open Design AMR',
+      name: 'MishMash AMR',
       bin: 'vela',
       available: true,
       models: [{ id: 'default', label: 'Default (CLI config)' }],
@@ -323,7 +323,7 @@ describe('AvatarMenu', () => {
       agents: [
         {
           id: 'amr',
-          name: 'Open Design AMR',
+          name: 'MishMash AMR',
           bin: 'vela',
           available: true,
           models: [{ id: 'default', label: 'Default (CLI config)' }],
@@ -386,7 +386,7 @@ describe('AvatarMenu', () => {
       agents: [
         {
           id: 'amr',
-          name: 'Open Design AMR',
+          name: 'MishMash AMR',
           bin: 'vela',
           available: true,
           models: [{ id: 'default', label: 'Default (CLI config)' }],
@@ -442,7 +442,7 @@ describe('AvatarMenu', () => {
       agents: [
         {
           id: 'amr',
-          name: 'Open Design AMR',
+          name: 'MishMash AMR',
           bin: 'vela',
           available: true,
           models: [{ id: 'default', label: 'Default (CLI config)' }],
@@ -487,7 +487,7 @@ describe('AvatarMenu', () => {
       agents: [
         {
           id: 'amr',
-          name: 'Open Design AMR',
+          name: 'MishMash AMR',
           bin: 'vela',
           available: true,
           models: [{ id: 'default', label: 'Default (CLI config)' }],
@@ -542,7 +542,7 @@ describe('AvatarMenu', () => {
       agents: [
         {
           id: 'amr',
-          name: 'Open Design AMR',
+          name: 'MishMash AMR',
           bin: 'vela',
           available: true,
           models: [{ id: 'default', label: 'Default (CLI config)' }],

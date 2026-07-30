@@ -12,6 +12,7 @@ import { checkDesignSystemComponentFixtureReport } from "./check-components-fixt
 import { checkDesignSystemFlagParity } from "./check-design-system-flag-parity.ts";
 import { checkComponentsManifestExtraction } from "./check-components-manifest-extraction.ts";
 import { checkPluginPreviewManifest } from "./check-plugin-preview-manifest.ts";
+import { checkBrandSurfaces } from "./check-brand-surfaces.ts";
 import { validatePlaywrightSuiteTopology } from "../e2e/lib/playwright/suites.ts";
 import {
   checkDesignSystemA1RequiredTokens,
@@ -1952,6 +1953,7 @@ const checks: GuardCheck[] = [
   { name: "design system flag parity", run: checkDesignSystemFlagParity },
   { name: "design system component manifest extraction", run: checkComponentsManifestExtraction },
   { name: "capability manifest parity", run: checkCapabilityManifestParity },
+  { name: "brand surfaces", run: checkBrandSurfaces },
 ];
 
 async function runChecks(): Promise<boolean> {

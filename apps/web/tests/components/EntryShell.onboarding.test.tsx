@@ -1127,7 +1127,16 @@ describe('EntryShell onboarding MishMash AMR runtime', () => {
     expect(complete).not.toHaveProperty('discovery_source_other');
   });
 
-  it('submits the optional newsletter email when finishing onboarding', async () => {
+  // C2-1a: MishMash ships with no newsletter endpoint configured by default
+  // (NEXT_PUBLIC_NEWSLETTER_URL unset, as in this test environment), so a
+  // well-formed email must never be posted anywhere -- the old code
+  // silently leaked it to a hardcoded open-design.ai/subscribe fallback
+  // instead. This test used to assert the OLD (leaking) behavior; it now
+  // asserts the fix: no request attempt and no analytics event, even
+  // though the email itself is valid and the user completed the step. The
+  // mock has no `/subscribe` handler, so a regression back to the old
+  // fallback would throw via the `unexpected fetch` guard below.
+  it('does not submit the newsletter email when no newsletter URL is configured', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       void init;
       const url = String(input);
@@ -1138,9 +1147,6 @@ describe('EntryShell onboarding MishMash AMR runtime', () => {
           configPath: '/x',
           user: { id: 'u', email: 'user@example.com' },
         });
-      }
-      if (url.endsWith('/subscribe')) {
-        return jsonResponse({ ok: true });
       }
       throw new Error(`unexpected fetch: ${url}`);
     });
@@ -1170,19 +1176,10 @@ describe('EntryShell onboarding MishMash AMR runtime', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Build a design system' }));
 
-    const subscribeCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/subscribe'));
-    expect(subscribeCall).toBeTruthy();
-    expect(JSON.parse(String(subscribeCall?.[1]?.body))).toEqual({
-      email: 'tester@studio.com',
-      source: 'client',
-    });
-
-    expect(findTrackedEvent('ui_click', (payload) => payload.element === 'newsletter_email')).toMatchObject({
-      page_name: 'onboarding',
-      element: 'newsletter_email',
-      action: 'subscribe',
-      newsletter_opt_in: true,
-    });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/subscribe'))).toBe(false);
+    expect(
+      trackedEvents('ui_click').some(([, payload]) => (payload as { element?: unknown }).element === 'newsletter_email'),
+    ).toBe(false);
   });
 
   it('skips the newsletter request when the email field is left blank', async () => {

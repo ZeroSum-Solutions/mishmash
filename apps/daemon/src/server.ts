@@ -129,6 +129,11 @@ import {
   scanRunEventsForFinishedProps,
   scanRunEventsForRetrySideEffects,
 } from './runtimes/run-lifecycle-analytics.js';
+import {
+  computeRunUsageRecord,
+  ensureUsageTable,
+  recordRunUsage,
+} from './runtimes/usage-tracking.js';
 export {
   composeLiveInstructionPrompt,
   formatDesignFilesWorkspaceHint,
@@ -617,6 +622,7 @@ import { EmptyTranscriptError, synthesizeHandoffPrompt } from './design/index.js
 import { TranscriptExportLockedError } from './transcript-export.js';
 import { registerChatRoutes } from './routes/chat.js';
 import { registerRunRoutes } from './routes/runs.js';
+import { registerUsageRoutes } from './routes/usage.js';
 import { registerTerminalRoutes } from './routes/terminal.js';
 import { createTerminalService } from './terminals.js';
 import { registerSocialShareRoutes } from './routes/social-share.js';
@@ -1193,7 +1199,7 @@ export function createAgentRuntimeToolPrompt(
     '',
     `- Daemon URL: \`${daemonUrl}\` (also available as \`OD_DAEMON_URL\`).`,
     '- `OD_NODE_BIN` is the absolute path to the Node-compatible runtime that started the daemon; packaged desktop installs provide this even when the user has no system `node` on PATH.',
-    '- `OD_BIN` is the absolute path to the Open Design CLI script. On POSIX shells run wrappers with `"$OD_NODE_BIN" "$OD_BIN" tools ...`; do not call bare `od`, which may resolve to the system octal-dump command on Unix-like systems.',
+    '- `OD_BIN` is the absolute path to the MishMash CLI script. On POSIX shells run wrappers with `"$OD_NODE_BIN" "$OD_BIN" tools ...`; do not call bare `od`, which may resolve to the system octal-dump command on Unix-like systems.',
     '- On PowerShell use `& $env:OD_NODE_BIN $env:OD_BIN tools ...`; on cmd.exe use `"%OD_NODE_BIN%" "%OD_BIN%" tools ...`.',
     tokenLine,
     '- Prefer project wrapper commands through `OD_NODE_BIN` + `OD_BIN` over raw HTTP. The wrappers read these environment values automatically.',
@@ -1450,10 +1456,22 @@ export function composeChatUserRequestForAgent(
   // `RuntimeAgentDef.resumesSessionViaCli`.
   const skip = options.skipTranscript === true;
   const bodySource = skip ? currentPrompt : message;
+  // C1-7: a caller that never sends a distinct `currentPrompt` field at all
+  // (e.g. a bare `POST /api/runs` body carrying only `message` -- the `od`
+  // CLI, `od run continue`, and other non-web-client callers all send this
+  // shape) has `bodySource === undefined` here whenever `skip` is true, so
+  // the real user text living in `message` was silently discarded in favor
+  // of the placeholder below on every resumed turn from such a caller. Only
+  // fall back to `message` when `currentPrompt` was never a string at all --
+  // an explicit empty string is the real web client's own "nothing else
+  // typed this turn" signal and must still fall through to the placeholder,
+  // not resend the full rendered transcript `skipTranscript` exists to avoid.
   const body =
     typeof bodySource === 'string' && bodySource.trim()
       ? bodySource
-      : '(No extra typed instruction.)';
+      : typeof bodySource !== 'string' && typeof message === 'string' && message.trim()
+        ? message
+        : '(No extra typed instruction.)';
   const transition = formAnswerTransitionForCurrentPrompt(currentPrompt);
   if (!transition) return body;
   if (skip) {
@@ -2530,6 +2548,10 @@ export async function startServer({
     readAppConfig,
   });
   const { analyticsService } = telemetry;
+  // NM-20 cost meter: own table, migrated once at startup (see
+  // usage-tracking.ts for why this is a dedicated table rather than a new
+  // `messages` column or PersistedAgentEvent kind).
+  ensureUsageTable(db);
   const design = {
     runs: createChatRunService({
       createSseResponse,
@@ -2542,6 +2564,27 @@ export async function startServer({
       onEventEmitted: (run, record) => {
         if (!run.sideEffectLedger) run.sideEffectLedger = createRunSideEffectLedger();
         foldEventIntoRunSideEffectLedger(run.sideEffectLedger, record);
+      },
+      // NM-20/C1-7: computed once, here, from the still-live run.events
+      // (SSE shape) and the routing-truth fields set during the spawn --
+      // persisted durably so a project's cost total survives a daemon
+      // restart and does not depend on the in-memory run surviving its TTL.
+      onRunFinished: (run) => {
+        if (!run.projectId || !run.id) return;
+        const record = computeRunUsageRecord({
+          requestedRaw: run.modelRequested,
+          resolvedRaw: run.model,
+          reportedRaw: run.modelReported,
+          agentId: run.agentId ?? null,
+          events: Array.isArray(run.events) ? run.events : [],
+        });
+        recordRunUsage(db, {
+          runId: run.id,
+          projectId: run.projectId,
+          conversationId: run.conversationId ?? null,
+          agentId: run.agentId ?? null,
+          record,
+        });
       },
     }),
     analytics: analyticsService,
@@ -3375,7 +3418,7 @@ export async function startServer({
       try { const project = getProject(db, req.params.id); if (!project) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found'); const body = req.body && typeof req.body === 'object' ? req.body : {}; const relativePath = normalizeProjectPluginFolderPath(body.path); const projectRoot = resolveProjectDir(PROJECTS_DIR, req.params.id, project.metadata); const folder = await resolveProjectChildDirectory(projectRoot, relativePath); const warnings = []; const log = []; let plugin = null; let message = 'Install finished.'; for await (const ev of installPlugin(db, { source: folder, roots: PLUGIN_REGISTRY_ROOTS })) { if (ev.message) log.push(ev.message); if (Array.isArray(ev.warnings)) warnings.splice(0, warnings.length, ...ev.warnings); if (ev.kind === 'success') { plugin = ev.plugin; message = `Installed ${ev.plugin.title}.`; break; } if (ev.kind === 'error') { message = ev.message; break; } } res.status(plugin ? 200 : 400).json({ ok: Boolean(plugin), plugin, warnings, message, log }); } catch (err) { const code = err && err.code; const status = code === 'ENOENT' || code === 'ENOTDIR' ? 404 : 400; sendApiError(res, status, status === 404 ? 'PLUGIN_FOLDER_NOT_FOUND' : 'BAD_REQUEST', String(err?.message || err)); }
     },
     handleProjectPluginCli: async (req, res, action) => {
-      try { const project = getProject(db, req.params.id); if (!project) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found'); const body = req.body && typeof req.body === 'object' ? req.body : {}; const relativePath = normalizeProjectPluginFolderPath(body.path); const projectRoot = resolveProjectDir(PROJECTS_DIR, req.params.id, project.metadata); const folder = await resolveProjectChildDirectory(projectRoot, relativePath); const subcommand = action === 'publish-github' ? 'publish-repo' : 'open-design-pr'; const timeout = action === 'publish-github' ? 240_000 : 300_000; const result = await execCommandViaLoginShell(OD_NODE_BIN, [OD_BIN, 'plugin', subcommand, folder, '--json'], { timeout }); const payload = result.stdout ? JSON.parse(result.stdout) : null; if (!result.ok || !payload?.ok) return res.status(500).json({ ok: false, code: payload?.error?.label || (action === 'publish-github' ? 'publish-repo-failed' : 'open-design-pr-failed'), message: payload?.error?.stderr || payload?.error?.stdout || (action === 'publish-github' ? 'GitHub repo publish failed.' : 'Open Design PR creation failed.'), log: payload?.steps?.map((step) => step.stderr || step.stdout || step.command).filter(Boolean) ?? [result.stderr || result.stdout || `${subcommand} failed`] }); res.json({ ok: true, message: action === 'publish-github' ? (payload.repoUrl ? `Published plugin to ${payload.repoUrl}.` : 'Published plugin to GitHub.') : (payload.prUrl ? `Opened Open Design PR flow at ${payload.prUrl}.` : 'Opened Open Design PR flow.'), ...(payload.repoUrl ? { url: payload.repoUrl } : {}), ...(payload.prUrl ? { url: payload.prUrl } : {}), log: payload.steps?.map((step) => step.stderr || step.stdout || step.command).filter(Boolean) ?? [] }); } catch (err) { res.status(400).json({ ok: false, message: String(err?.message || err), log: [] }); }
+      try { const project = getProject(db, req.params.id); if (!project) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found'); const body = req.body && typeof req.body === 'object' ? req.body : {}; const relativePath = normalizeProjectPluginFolderPath(body.path); const projectRoot = resolveProjectDir(PROJECTS_DIR, req.params.id, project.metadata); const folder = await resolveProjectChildDirectory(projectRoot, relativePath); const subcommand = action === 'publish-github' ? 'publish-repo' : 'open-design-pr'; const timeout = action === 'publish-github' ? 240_000 : 300_000; const result = await execCommandViaLoginShell(OD_NODE_BIN, [OD_BIN, 'plugin', subcommand, folder, '--json'], { timeout }); const payload = result.stdout ? JSON.parse(result.stdout) : null; if (!result.ok || !payload?.ok) return res.status(500).json({ ok: false, code: payload?.error?.label || (action === 'publish-github' ? 'publish-repo-failed' : 'open-design-pr-failed'), message: payload?.error?.stderr || payload?.error?.stdout || (action === 'publish-github' ? 'GitHub repo publish failed.' : 'PR creation failed.'), log: payload?.steps?.map((step) => step.stderr || step.stdout || step.command).filter(Boolean) ?? [result.stderr || result.stdout || `${subcommand} failed`] }); res.json({ ok: true, message: action === 'publish-github' ? (payload.repoUrl ? `Published plugin to ${payload.repoUrl}.` : 'Published plugin to GitHub.') : (payload.prUrl ? `Opened PR flow at ${payload.prUrl}.` : 'Opened PR flow.'), ...(payload.repoUrl ? { url: payload.repoUrl } : {}), ...(payload.prUrl ? { url: payload.prUrl } : {}), log: payload.steps?.map((step) => step.stderr || step.stdout || step.command).filter(Boolean) ?? [] }); } catch (err) { res.status(400).json({ ok: false, message: String(err?.message || err), log: [] }); }
     },
     handleCandidateDraft: async (req, res) => {
       if (!isLocalSameOrigin(req, resolvedPort)) return res.status(403).json({ error: 'cross-origin request rejected' });
@@ -4298,6 +4341,13 @@ export async function startServer({
     // is optional and only set when the chat body actually carried it.
     const telemetryPrompt = telemetryPromptFromRunRequest(message, currentPrompt);
     if (typeof telemetryPrompt === 'string') run.userPrompt = telemetryPrompt;
+    // `modelRequested` is the routing-truth `requested` field (NM-13a) --
+    // the raw value the caller sent, verbatim, even when it never resolves
+    // to anything valid. `run.model` is set again below, after resolution,
+    // to the RESOLVED model (what actually got launched) so telemetry
+    // reflects execution, not the raw ask (C1-5); this early assignment is
+    // only a placeholder for a run that fails before resolution runs.
+    run.modelRequested = typeof model === 'string' ? model : null;
     if (typeof model === 'string' && model) run.model = model;
     if (typeof reasoning === 'string' && reasoning) run.reasoning = reasoning;
     if (typeof skillId === 'string' && skillId) run.skillId = skillId;
@@ -4955,6 +5005,12 @@ export async function startServer({
         // the probe failure and applies the identical fallback.
       }
     }
+    // Routing truth (NM-13a): `run.model` now records what the daemon is
+    // actually about to launch (RESOLVED), not the raw request captured
+    // above -- `safeModel` is null when resolution deliberately deferred to
+    // the CLI's own default, which `buildModelRouting` readers backfill from
+    // whatever the CLI later echoes.
+    run.model = safeModel;
     const agentResumeCtx =
       agentSupportsSessionResume && run.conversationId
         ? resolveAgentResumeContext(db, {
@@ -7070,6 +7126,15 @@ export async function startServer({
         return;
       }
       if (ev.type === 'tool_result' && typeof ev.toolUseId === 'string') {
+        // NM-33/C1-10: kimi's CLI process exits 0 even when a tool call it
+        // made failed -- unlike Claude/codex there is no turn-level
+        // stop_reason/is_error frame to trust, so a failed tool call would
+        // otherwise read as a completed run. Track it here (where isError
+        // is already normalized per-lane) and let the code===0 guard below
+        // override the apparent clean exit.
+        if (def.id === 'kimi' && Boolean(ev.isError)) {
+          run.kimiToolFailureObserved = true;
+        }
         const verdict = toolLoopGuard.observeToolResult(
           ev.toolUseId,
           Boolean(ev.isError),
@@ -7167,6 +7232,20 @@ export async function startServer({
           resumed: agentResumeCtx.isResuming,
         });
         publishNativeSessionRecoveryMetadata();
+      }
+      // Routing truth (NM-13a) `reported`: some lanes echo the model that
+      // actually executed on their own init/status event (Claude's
+      // `system`/`init`, cursor-agent's `system`/`init`, the generic
+      // json-event-stream gemini `init` handler). Codex's `thread.started`
+      // and Antigravity's plain stream never carry `.model` at all -- that
+      // is a genuine evidence ceiling (NM-13c), not a bug, so `reported`
+      // legitimately stays unset for those lanes.
+      if (
+        ev?.type === 'status' &&
+        typeof ev.model === 'string' &&
+        ev.model.trim().length > 0
+      ) {
+        run.modelReported = ev.model.trim();
       }
       lastAgentEventPhase = summarizeAgentEventForInactivity(ev);
       noteAgentActivity();
@@ -7275,6 +7354,20 @@ export async function startServer({
             },
           ));
           return;
+        }
+        // Routing truth (NM-13a) `reported`: Claude's own `system`/`init`
+        // event (claude-stream.ts maps it to `{type:'status',
+        // label:'initializing', model, sessionId}`) echoes the model that
+        // actually executed. This inline callback is Claude's OWN event
+        // path -- separate from `sendAgentEvent` below, which the
+        // gemini/qoder/pi-rpc/opencode lanes share -- so it needs its own
+        // copy of this capture; it does not run through sendAgentEvent.
+        if (
+          ev?.type === 'status' &&
+          typeof (ev as any).model === 'string' &&
+          (ev as any).model.trim().length > 0
+        ) {
+          run.modelReported = (ev as any).model.trim();
         }
         lastAgentEventPhase = summarizeAgentEventForInactivity(ev);
         noteAgentActivity();
@@ -7671,6 +7764,22 @@ export async function startServer({
           ));
           return finishWithRetryDecision('failed', code ?? 1, signal ?? null);
         }
+      }
+      // Kimi silent-success guard (NM-33/C1-10): kimi's `-p` mode exits 0
+      // regardless of whether a tool call it made actually failed -- there
+      // is no turn-level stop_reason/is_error frame like Claude/codex have,
+      // so a genuinely failed tool call would otherwise read as a completed
+      // run. `run.kimiToolFailureObserved` is set above whenever a
+      // tool_result's (generalized, non-Bash-only) isError detection fired
+      // during this run. A warning beside an apparently-successful run is
+      // not a fix -- the run itself must terminate failed.
+      if (code === 0 && !run.cancelRequested && run.kimiToolFailureObserved) {
+        send('error', createSseErrorPayload(
+          'AGENT_EXECUTION_FAILED',
+          'A tool call failed during this run. Kimi reported the failure in the tool result but completed the process normally, so this run is marked failed rather than silently succeeding.',
+          { retryable: true },
+        ));
+        return finishWithRetryDecision('failed', code, signal);
       }
       // Empty-output guard: a clean `code === 0` exit with no visible
       // output means the run silently finished without producing anything.
@@ -8278,7 +8387,7 @@ export async function startServer({
       systemPrompt: [
         renderOrbitTemplateSystemPrompt(template),
         systemPrompt,
-        'You are Orbit, an autonomous activity-summary agent inside Open Design.',
+        'You are Orbit, an autonomous activity-summary agent inside MishMash.',
         'You must discover connectors and connector tools yourself through the OD CLI; the daemon has not chosen tools for you.',
         'You must create and register a Live Artifact as the final deliverable. Do not merely describe what you would do.',
         'Do not ask follow-up questions, do not emit <question-form>, and do not wait for user input. This run is unattended; pick reasonable defaults and complete the artifact.',
@@ -8353,6 +8462,7 @@ export async function startServer({
       reconcileAssistantMessageOnRunEnd,
     },
   });
+  registerUsageRoutes(app, { db });
 
   // Each routine fire resolves an agent, prepares project/conversation state,
   // and dispatches into the same chat runner used by manual runs.
