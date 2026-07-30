@@ -22,8 +22,10 @@ written into `docs/plans/waves/leases.json` by this PRD, and no source file outs
 `docs/plans/waves/W9-external-fetch-tranche.md` and `scripts/waves/verify-w9-external-fetch.ts`
 is touched by this change.
 
-**Status: CONFIRM-ROUND FIX 2 COMPLETE (fixing the confirm round's 5 findings — CR-1 through CR-4
-BLOCKING, CR-5 LOW — see "Confirm-round dispositions" below), not yet re-confirmed or re-reviewed.**
+**Status: FOUNDER-RULING FIX (W9XF-R1) COMPLETE — the wave's FINAL authorized fix round before park;
+see "Founder ruling W9XF-R1 dispositions" below for INVARIANT 1-3, and "Confirm-round dispositions"
+for CR-1 through CR-5 (CR-1/CR-2/CR-5 confirmed closed by the founder ruling; CR-3/CR-4 required this
+round's invariants to close fully). Not yet re-confirmed.**
 Per the NM-41C gate (`W5-W11-gated.md` lines 8–24), this document is written and
 frozen *before* any implementation work starts, and is reviewed by a reviewer who did not write it
 and will not implement it, before it is unfrozen for a `/goal` run. **Round 1 returned REJECT with 7
@@ -1025,14 +1027,74 @@ per-run output, matching "Verified baseline"'s own convention of only recording 
 run's real captured text). Protected default-namespace daemons (ports 7456/51012, PIDs matching that
 namespace) were confirmed untouched, both before and after.
 
+## Founder ruling W9XF-R1 dispositions (fix round 3)
+
+The confirm round returned NOT CONFIRMED a second time (third consecutive non-APPROVE), tripping the
+program's stop rule and escalating to the founder. **Founder ruling W9XF-R1** confirmed CR-1, CR-2,
+and CR-5 CLOSED (the bounded arithmetic, the per-daemon interception gating, and the PRD wording were
+all explicitly re-verified), and authorized exactly one further scoped fix round against three
+invariants — the wave's final round before park. All three are closed below, verifier-only; the
+closed CR-1/CR-2/CR-5 mechanisms were not touched except where an invariant required it (none did).
+
+1. **INVARIANT 1 (closes CR-3 fully — round 2's fix was ruled TRANSITIVE, not complete).** Round 2
+   removed this verifier's own direct import of `packages/platform/dist/index.mjs`, but
+   `bootIsolatedDaemon` dynamically imports `apps/daemon/src/server.ts`, which statically imports
+   `@open-design/platform` (and 9 other first-party `@open-design/*` workspace packages) — an
+   unpinned transitive path through ordinary `node_modules` resolution into each package's own
+   gitignored `dist/*.mjs` bundle. Fixed by porting `ensureWorkspaceDepsRebuiltFromHead` from
+   `scripts/waves/verify-w9-filesystem.ts` (commit `79b15e90a`, that program's own F3 fix): before
+   any daemon boot, `ensureDaemonWorkspaceDepsRebuiltFromHead()` forces a fresh
+   `pnpm --filter "@open-design/daemon^..." run build` — pnpm's own computed first-party dependency
+   closure (10 packages on this tree) — memoized once per verifier process (~4.8s measured this
+   round, confirmed identical across both `bootIsolatedDaemon()` call sites via the same duration
+   figure appearing in both CXF-6's and CXF-11's captured evidence). Rebuild, not hash-pin, for the
+   same reason the reference implementation chose it: unconditionally commit-binds the live boot
+   every run rather than merely detecting staleness.
+2. **INVARIANT 2 (closes CR-4 fully).** Round 2's `killGroupFailClosed` already treated a nonzero
+   `ps` exit as unconfirmed, but exit-ZERO-but-EMPTY or exit-zero-with-malformed-rows output still
+   read as "zero matching rows" — i.e. a genuinely empty group — which is equally consistent with the
+   scan itself being broken. Fixed by porting `classifyProcessTableScan` /
+   `PROCESS_TABLE_SELF_PROBES` / `runProcessTableSelfProbes` from the same `verify-w9-filesystem.ts`
+   commit (its F4 fix): every scan now also checks whether THIS VERIFIER'S OWN pid (definitely alive)
+   appears somewhere in the same enumeration; any malformed row or a missing self-pid makes the scan
+   untrustworthy (`ok: false`), which `killGroupFailClosed` treats as a run failure, never as an
+   empty group. Gated by 6 synthetic self-probes (mirroring the file's own classifier self-probe
+   discipline), run once per verifier process before any real scan is trusted.
+3. **INVARIANT 3 (new BLOCKING finding, F3).** The failed-daemon-boot cleanup path in
+   `bootIsolatedDaemon`'s `catch` block discarded `killGroupFailClosed`'s result entirely
+   (fire-and-forget) and unconditionally deleted both the runner script and the data directory —
+   evidence removed before survivors were ever confirmed gone. Fixed: the catch block now consumes
+   the teardown result; the two artifacts are deleted ONLY on a confirmed-zero-survivors teardown,
+   and RETAINED as forensic evidence (with the thrown error naming both artifact paths and the
+   unconfirmed-teardown reason) when teardown cannot be confirmed — the thrown error still fails the
+   run via `checkCriterion()`'s existing any-throw-is-a-failure semantics, so no separate fail path
+   was needed, only the artifact-retention and result-consumption fix.
+
+**Verification performed this round:** two runs against this tree reproduce the identical 5/14
+honest pre-implementation baseline (same criteria pass/fail as every prior round); CXF-11's negative
+control (`flowed`/`stayedUnderCeiling`/`terminatedByBound`) and positive control are unchanged in
+character; both boots' captured evidence carries the INVARIANT 1 rebuild line (identical duration
+across CXF-6 and CXF-11's boots within a run, proving memoization) and the INVARIANT 2 self-visibility
+line (`"self pid=<pid> visible among N row(s), 0 malformed"`); both runs' teardowns confirm zero
+survivors. A standalone 15-check controlled probe — synthetic `classifyProcessTableScan` inputs
+covering exit-0-empty, exit-0-malformed, missing-self-pid, and nonzero-exit, plus a real spawned
+sentinel process torn down under both a healthy and a `ps`-broken PATH shim — independently confirmed
+every claim above end-to-end, including that the failed-boot path deletes artifacts only when
+teardown is confirmed ok and retains them (verified still present on disk) otherwise. `pnpm guard`
+and `pnpm typecheck` both exit 0. Protected default-namespace daemons were confirmed untouched before
+and after.
+
 ## Adversarial review
 
 **Round 1 returned REJECT** (7 blocking findings, disposed above). Round 2 also absorbed one
 additional routed finding (S9XF-7/CXF-11) and three coordinator rulings (see "Round 2 rulings"
-above). **The subsequent confirm round returned NOT CONFIRMED twice** (5 findings the first time;
-disposed in "Confirm-round dispositions" above, fix round 2) — none of the review/confirm passes
-above constitute a green light to implement; it has not yet been re-reviewed/re-confirmed. Per
-`W5-W11-gated.md`'s expansion gate, this document must be reviewed by a
+above). **The subsequent confirm round returned NOT CONFIRMED twice in a row** (5 findings the first
+time, disposed in "Confirm-round dispositions"; a second NOT CONFIRMED on the fix-round-2 verifier
+tripped the program's stop rule and escalated to the founder). **Founder ruling W9XF-R1** confirmed
+CR-1/CR-2/CR-5 closed and authorized one final scoped fix round against three invariants (CR-3/CR-4's
+remaining gaps plus one new finding) — disposed in "Founder ruling W9XF-R1 dispositions" above. None
+of the review/confirm passes above constitute a green light to implement; it has not yet been
+re-confirmed. Per `W5-W11-gated.md`'s expansion gate, this document must be reviewed by a
 reviewer who did not author it and will not implement it, and both this document and
 `scripts/waves/verify-w9-external-fetch.ts` must be frozen on `main` before any `/goal` run against
 this slug begins. Known residuals the author flags proactively, so a reviewer does not have to
