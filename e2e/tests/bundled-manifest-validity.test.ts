@@ -63,13 +63,25 @@ describe('bundled manifest validity', () => {
         `${folderId} must be a registration-safe folder id`,
       ).toBe(true);
 
-      const parsed = parseManifest(await readFile(manifestPath, 'utf8'));
+      const raw = await readFile(manifestPath, 'utf8');
+      const parsed = parseManifest(raw);
       expect(
         parsed.ok,
         `${path.relative(repoRoot, manifestPath)} must parse: ${parsed.ok ? '' : parsed.errors.join('; ')}`,
       ).toBe(true);
       if (parsed.ok) {
         expect(parsed.manifest.name, `${folderId} manifest must declare a name`).toBeTruthy();
+      }
+
+      // `publishedAt` is the stable fresh-install signal for the gallery's
+      // Newest sort (apps/web sortOrder.ts); an unparseable value silently
+      // degrades ordering to per-machine seed timestamps.
+      const { publishedAt } = JSON.parse(raw) as { publishedAt?: unknown };
+      if (publishedAt !== undefined) {
+        expect(
+          Number.isFinite(Date.parse(String(publishedAt))),
+          `${folderId} publishedAt must be a parseable timestamp, got ${JSON.stringify(publishedAt)}`,
+        ).toBe(true);
       }
     }
   });

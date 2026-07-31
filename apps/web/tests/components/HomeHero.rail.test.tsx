@@ -373,6 +373,34 @@ describe('HomeHero intent rail', () => {
     ]);
   });
 
+  it('keeps the hyperframes chip curation-governed over usage popularity', () => {
+    // The popularity snapshot scores video-template-frame-liquid-bg-hero;
+    // the curated chroma-glitch replacement has no usage history. The chip
+    // must defer to curation, not bury the curated pick under popularity.
+    const popularIncumbent = makePlugin(
+      'video-template-frame-liquid-bg-hero',
+      'video',
+      'Liquid Background Hero',
+      ['hyperframes'],
+    );
+    const curatedReplacement = makePlugin(
+      'video-template-frame-chroma-glitch',
+      'video',
+      'Chroma Glitch Title',
+      ['hyperframes'],
+    );
+    expect(
+      homeHeroExamplePluginsForChip(
+        'hyperframes',
+        [popularIncumbent, curatedReplacement],
+        'en',
+      ).map((p) => p.id),
+    ).toEqual([
+      'video-template-frame-chroma-glitch',
+      'video-template-frame-liquid-bg-hero',
+    ]);
+  });
+
   it('keeps curated presets even when they rely on fallback prompt text', () => {
     const avatarPortrait = makePlugin(
       'image-template-profile-avatar-anime-girl-to-cinematic-photo',

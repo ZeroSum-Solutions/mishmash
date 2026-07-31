@@ -273,6 +273,31 @@ describe('PluginsHomeSection (category bar)', () => {
     expect(screen.queryByTestId('plugins-home-row-subcategory-hyperframes')).toBeNull();
   });
 
+  it('keeps the HyperFrames facet curation-governed over usage popularity', () => {
+    // video-template-frame-liquid-bg-hero carries a real entry in the
+    // generated popularity snapshot; the curated chroma-glitch replacement
+    // ships with no usage history (its predecessor's popularity entry was
+    // pruned). Popularity-first ordering would bury the curator's pick.
+    renderSection([
+      makePlugin({
+        id: 'video-template-frame-liquid-bg-hero',
+        mode: 'video',
+        tags: ['hyperframes'],
+      }),
+      makePlugin({
+        id: 'video-template-frame-chroma-glitch',
+        mode: 'video',
+        tags: ['hyperframes'],
+      }),
+    ]);
+
+    fireEvent.click(screen.getByTestId('plugins-home-pill-category-hyperframes'));
+    expect(pluginIds()).toEqual([
+      'video-template-frame-chroma-glitch',
+      'video-template-frame-liquid-bg-hero',
+    ]);
+  });
+
   it('groups Live Artifact as its own flat Community category', () => {
     renderSection();
 

@@ -4,7 +4,7 @@
   "name": "example-agency-marquee-reveal",
   "title": "Agency Marquee Reveal",
   "version": "0.1.0",
-  "publishedAt": "undefined",
+  "publishedAt": "2026-07-31T00:07:01Z",
   "description": "Produce a self-contained agency landing hero that never stops moving: a synthetic ping-pong playhead (0→1→0, frame-rate-independent exponential damping) drives a velocity-reactive infinite marquee, a word-by-word igniting headline, and a sticky fold-style panel handoff — all playing on loop with zero scrolling or user input, from the first frame. One self-contained HTML file, 60fps, zero dependencies.",
   "license": "MIT",
   "author": {

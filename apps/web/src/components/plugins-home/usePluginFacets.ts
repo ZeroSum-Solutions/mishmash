@@ -149,16 +149,19 @@ export function usePluginFacets({
     if (mode === 'saved') return filterByQuery(savedList, query, locale);
     // Facet selection runs on `orderedPlugins` so the user's hot/newest sort
     // choice flows through. OPEND-449 usage ordering is the default ("hot")
-    // experience: non-prototype facets lead by real usage, the Prototype facet
-    // keeps its curated order, and the default mode-seeds + no-preview tiles
-    // sink to the bottom. When the user explicitly switches to "newest",
-    // respect that chronological order and skip the usage re-sort.
+    // experience: non-curation facets lead by real usage, the Prototype and
+    // HyperFrames facets keep their curated order (their curated picks ship
+    // HTML previews with no usage history, so popularity would bury the
+    // curator's intended leads), and the default mode-seeds + no-preview
+    // tiles sink to the bottom. When the user explicitly switches to
+    // "newest", respect that chronological order and skip the usage re-sort.
     const slice = applyFacetSelection(orderedPlugins, selection);
     let base: InstalledPluginRecord[];
     if (sortOrder === 'newest') {
       base = slice;
     } else if (selection.category) {
-      const curationGoverned = selection.category === 'prototype';
+      const curationGoverned =
+        selection.category === 'prototype' || selection.category === 'hyperframes';
       base = [...slice].sort((a, b) =>
         comparePluginGalleryOrder(a.id, b.id, curationGoverned, curationGoverned),
       );

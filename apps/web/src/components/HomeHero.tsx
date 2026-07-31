@@ -3874,10 +3874,11 @@ function comparePluginPresetOrder(
   chipId: string,
 ): number {
   // Gallery order (OPEND-449): pins first, default seeds + no-preview tiles sunk
-  // to the bottom, then usage popularity for non-prototype chips. The prototype
-  // chip stays curation-governed, so popularity is skipped and it keeps its
-  // curated order.
-  const curationGoverned = chipId === 'prototype';
+  // to the bottom, then usage popularity for non-curated chips. The prototype
+  // and hyperframes chips stay curation-governed, so popularity is skipped and
+  // they keep their curated order (the curated hyperframes ship HTML previews
+  // with no usage history, so popularity would bury them).
+  const curationGoverned = chipId === 'prototype' || chipId === 'hyperframes';
   const gallery = comparePluginGalleryOrder(a.id, b.id, curationGoverned, curationGoverned);
   if (gallery !== 0) return gallery;
   const aCurated = curatedPluginPriorityForChip(a, chipId);
