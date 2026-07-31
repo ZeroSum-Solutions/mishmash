@@ -84,6 +84,20 @@ const mediaGeneration = make({
   tags: ['scenario', 'first-party', 'media-generation', 'image', 'video', 'audio'],
 });
 
+// Mirrors plugins/_official/examples/simple-deck: a `scenario`-tagged flow
+// plugin dispatched by id, never rendered as a tile in the Workflows-and-Assets
+// grid (see galleryVisibility.ts / bundled-roster.test.ts's HIDDEN_FLOW_ROSTER).
+// It is NOT in EXAMPLE_PRESET_HIDDEN_PLUGIN_IDS, so only the shared
+// isGalleryVisiblePlugin predicate keeps it out of the example-prompt rail too.
+const simpleDeckFlow = make({
+  id: 'example-simple-deck',
+  title: 'Write an Operating Review like a Disciplined COO',
+  tags: ['scenario', 'example', 'first-party', 'deck', 'slides'],
+  mode: 'deck',
+  surface: 'web',
+  scenario: 'strategy',
+});
+
 describe('pluginMatchesExampleChip — audio chip', () => {
   it('keeps a genuine audio template under the audio chip', () => {
     expect(pluginMatchesExampleChip(audioJingle, 'audio')).toBe(true);
@@ -106,5 +120,12 @@ describe('homeHeroExamplePluginsForChip — audio chip', () => {
     expect(ids).toContain('sample-audio-jingle');
     expect(ids).not.toContain('video-template-hyperframes-brand-sizzle-reel');
     expect(ids).not.toContain('od-media-generation');
+  });
+});
+
+describe('homeHeroExamplePluginsForChip — gallery visibility parity', () => {
+  it('hides a scenario-tagged flow plugin from the deck chip rail, matching the Workflows-and-Assets grid', () => {
+    const ids = homeHeroExamplePluginsForChip('deck', [simpleDeckFlow], 'en').map((p) => p.id);
+    expect(ids).not.toContain('example-simple-deck');
   });
 });

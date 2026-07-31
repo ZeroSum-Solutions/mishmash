@@ -158,7 +158,13 @@ export function usePluginFacets({
     const slice = applyFacetSelection(orderedPlugins, selection);
     let base: InstalledPluginRecord[];
     if (sortOrder === 'newest') {
-      base = slice;
+      // Newest still owes the sink guarantee: default mode-seeds and
+      // no-preview tiles must never surface mid-grid just because their
+      // publishedAt lands among real content (see pluginPopularity.ts's
+      // isSunkToBottom / SINK set). sinkToBottom preserves the incoming
+      // (newest) order within each partition, so chronological order is
+      // unaffected — only the sunk tiles move to the tail.
+      base = sinkToBottom(slice);
     } else if (selection.category) {
       const curationGoverned =
         selection.category === 'prototype' || selection.category === 'hyperframes';

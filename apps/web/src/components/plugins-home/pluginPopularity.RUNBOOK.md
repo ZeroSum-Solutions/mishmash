@@ -86,10 +86,12 @@ facet (they stay visible, so facet counts match production):
 - **false**: usage has no effect anywhere; the whole gallery falls back to the
   curated/visual order.
 
-Which facets are curation-governed is decided by the caller, not this knob:
-`visualScore.ts` marks `byMode('prototype')` tiles (minus the Live Artifact
-picks) as governed, and `HomeHero.tsx` marks the `prototype` chip. Extend that
-if another facet should also stay editorially curated.
+Which facets are curation-governed is decided independently by each caller, not
+this knob: `usePluginFacets.ts` (`selection.category === 'prototype' ||
+selection.category === 'hyperframes'`) and `HomeHero.tsx`'s
+`comparePluginPresetOrder` (`chipId === 'prototype' || chipId === 'hyperframes'`)
+each hardcode the same check. Extend both if another facet should also stay
+editorially curated.
 
 ## Curator override — `ALWAYS_PINNED`
 
