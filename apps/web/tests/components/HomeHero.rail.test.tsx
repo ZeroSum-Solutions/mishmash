@@ -335,7 +335,7 @@ describe('HomeHero intent rail', () => {
       'gpu',
       'powered-preview',
     ]);
-    const worker = makePlugin('example-worker-visualizer', 'prototype', 'Worker Visualizer', [
+    const worker = makePlugin('sample-worker-visualizer', 'prototype', 'Worker Visualizer', [
       'web-worker',
       'worker',
       'sharedarraybuffer',

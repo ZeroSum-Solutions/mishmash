@@ -1,0 +1,100 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-archive-elastic-gallery",
+  "title": "Archive Elastic Gallery",
+  "version": "0.1.0",
+  "publishedAt": "undefined",
+  "description": "A perpetually-reshuffling gallery grid choreographed by a self-driven boomerang playhead: differential per-column elastic lag stretches the grid like taffy, a perspective depth-shuffle cycles between two 3D recipes every loop, and one tile auto-fires a sliced-band hover-distortion reveal with a character-scramble caption on a timer — continuous motion from frame 0, no scroll or hover required.",
+  "license": "MIT",
+  "author": {
+    "name": "MishMash",
+    "url": "https://github.com/nexu-io"
+  },
+  "credits": [
+    {
+      "role": "motion",
+      "name": "darkroomengineering/lenis",
+      "license": "MIT"
+    },
+    {
+      "role": "effect",
+      "name": "codrops/ElasticGridScroll",
+      "license": "MIT"
+    },
+    {
+      "role": "effect",
+      "name": "codrops/Scroll3DGrid",
+      "license": "MIT"
+    },
+    {
+      "role": "effect",
+      "name": "codrops/ClipHoverEffect",
+      "license": "MIT"
+    },
+    {
+      "role": "imagery",
+      "name": "Original (canvas-generated)"
+    }
+  ],
+  "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/archive-elastic-gallery",
+  "tags": [
+    "example",
+    "first-party",
+    "gallery",
+    "canvas",
+    "elastic",
+    "parallax",
+    "3d",
+    "depth-shuffle",
+    "scramble-text",
+    "archive",
+    "untitled"
+  ],
+  "compat": {
+    "agentSkills": [
+      {
+        "path": "./SKILL.md"
+      }
+    ]
+  },
+  "od": {
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "prototype",
+    "scenario": "design",
+    "surface": "web",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html"
+    },
+    "useCase": {
+      "query": "Build a perpetually-reshuffling gallery grid driven by a self-running boomerang playhead: differential per-column elastic lag, a cycling 3D perspective depth-shuffle, and one tile that auto-fires a sliced-band reveal plus a character-scramble caption on a timer — continuous choreography from frame 0, no scroll or hover needed."
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        }
+      ],
+      "designSystem": {
+        "primary": true
+      }
+    },
+    "pipeline": {
+      "stages": [
+        {
+          "id": "generate",
+          "atoms": [
+            "file-write",
+            "live-artifact"
+          ]
+        }
+      ]
+    },
+    "capabilities": [
+      "prompt:inject",
+      "fs:write"
+    ]
+  }
+}

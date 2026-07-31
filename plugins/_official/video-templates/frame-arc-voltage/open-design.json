@@ -1,0 +1,127 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "video-template-frame-arc-voltage",
+  "title": "Arc Voltage",
+  "version": "0.1.0",
+  "publishedAt": "undefined",
+  "description": "High-energy beat-synced title frame — white-hot Lichtenberg arcs strike across a graphite-black canvas on a fixed beat grid, each beat triggering a pulse-ring bloom and a strobe-safe flash, with the title punching in on the downbeat.",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "nexu-io",
+    "url": "https://github.com/nexu-io",
+    "contact": "open-design@nexu.io"
+  },
+  "homepage": "https://github.com/nexu-io/html-video/tree/main/templates/frame-arc-voltage",
+  "tags": [
+    "video-template",
+    "first-party",
+    "video",
+    "hyperframes",
+    "html-video",
+    "motion",
+    "canvas",
+    "lichtenberg",
+    "fractal-branching",
+    "beat-sync",
+    "strobe-safe",
+    "voltage",
+    "high-energy",
+    "title-reveal"
+  ],
+  "compat": {
+    "agentSkills": [
+      {
+        "path": "./SKILL.md"
+      }
+    ]
+  },
+  "od": {
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "hyperframes",
+    "engine": "hyperframes",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html"
+    },
+    "useCase": {
+      "query": "Use the Arc Voltage Frame template to turn my title into a high-energy beat-synced reveal — white-hot Lichtenberg arcs strike across a graphite-black canvas on a fixed beat grid, each beat triggering an expanding pulse-ring bloom and a strobe-safe localized flash, with the title punching in on the downbeat. Preserve the template's visual signature, use real content, and avoid lorem ipsum or placeholder images."
+    },
+    "inputs": [
+      {
+        "name": "aspect",
+        "label": "Aspect ratio",
+        "type": "select",
+        "options": [
+          "16:9"
+        ],
+        "default": "16:9"
+      },
+      {
+        "name": "format",
+        "label": "Output format",
+        "type": "select",
+        "options": [
+          "mp4",
+          "webm"
+        ],
+        "default": "mp4"
+      },
+      {
+        "name": "durationSec",
+        "label": "Duration (seconds)",
+        "type": "number",
+        "default": 15
+      }
+    ],
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "pipeline": {
+      "stages": [
+        {
+          "id": "compose",
+          "atoms": [
+            "file-write"
+          ]
+        },
+        {
+          "id": "render",
+          "atoms": [
+            "media-video"
+          ]
+        }
+      ]
+    },
+    "capabilities": [
+      "prompt:inject",
+      "fs:write",
+      "media:video-generate"
+    ],
+    "provenance": {
+      "origin": {
+        "name": "none (original technique composed from public-domain algorithms)",
+        "kind": "none",
+        "reference": "Lichtenberg figures (public-domain electrical/mathematical branching phenomenon) rendered via midpoint-displacement fractal subdivision, a classic procedural-graphics algorithm; palette via Inigo Quilez's public 'cosine gradient' formula (iquilezles.org/www/articles/palettes)."
+      },
+      "via_skill": {
+        "name": "darkroomengineering/lenis",
+        "author": "darkroom.engineering",
+        "url": "https://github.com/darkroomengineering/lenis",
+        "license": "MIT",
+        "source_file": "concept only — the discrete-arrival easing idea (clamped ease-out-expo, 1.001 - 2^(-10t)); no Lenis source code copied, reimplemented from scratch in vanilla JS/canvas as the shared beat-response curve"
+      },
+      "transformation": "Original composition, not derived from a static preset: a fixed-BPM beat-grid trigger clock (128 BPM) fires beat events; each beat recurses a fresh Lichtenberg-style branching arc (midpoint-displacement fractal subdivision, public domain) onto canvas, spawns a single expanding pulse-ring bloom, and gates a strobe-safe localized flash (opacity capped at 45%, radial, never full-viewport) — all three driven through one shared clamped ease-out arrival curve for a fast-strike/soft-settle signature. Every 4th beat (the downbeat) is louder and drives the title punch. Arc color sweeps white-hot core to violet corona by distance from the strike origin via an IQ cosine-gradient palette. Built as original canvas/CSS/JS; no upstream source code copied verbatim.\n"
+    }
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "video-template-frame-chroma-glitch",
+  "title": "Chroma Glitch Title",
+  "version": "0.1.0",
+  "publishedAt": "undefined",
+  "description": "Restrained broadcast-glitch title frame: an irregular clip-path band jitter and an RGB channel-split flash both pulse on one fixed rhythmic beat over a drifting cyan scanline, reading as a deliberate transmission cut rather than continuous noise.",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "nexu-io",
+    "url": "https://github.com/nexu-io",
+    "contact": "open-design@nexu.io"
+  },
+  "homepage": "https://github.com/nexu-io/html-video/tree/main/templates/frame-chroma-glitch",
+  "tags": [
+    "video-template",
+    "first-party",
+    "video",
+    "hyperframes",
+    "html-video",
+    "motion",
+    "title",
+    "cyberpunk",
+    "chroma-glitch",
+    "rgb-split",
+    "scanline",
+    "broadcast",
+    "transmission",
+    "presentation"
+  ],
+  "compat": {
+    "agentSkills": [
+      {
+        "path": "./SKILL.md"
+      }
+    ]
+  },
+  "od": {
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "hyperframes",
+    "engine": "hyperframes",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html"
+    },
+    "useCase": {
+      "query": "Use the Chroma Glitch Title template to turn my content into a restrained broadcast-glitch title frame: an irregular clip-path band jitter and a chromatic RGB channel-split flash pulsing on one fixed rhythmic beat over a drifting scanline, reading as a deliberate transmission cut rather than continuous noise. Preserve the template's visual signature, use real content and data, and avoid lorem ipsum or placeholder images."
+    },
+    "inputs": [
+      {
+        "name": "aspect",
+        "label": "Aspect ratio",
+        "type": "select",
+        "options": [
+          "16:9"
+        ],
+        "default": "16:9"
+      },
+      {
+        "name": "format",
+        "label": "Output format",
+        "type": "select",
+        "options": [
+          "mp4",
+          "webm"
+        ],
+        "default": "mp4"
+      },
+      {
+        "name": "durationSec",
+        "label": "Duration (seconds)",
+        "type": "number",
+        "default": 15
+      }
+    ],
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "pipeline": {
+      "stages": [
+        {
+          "id": "compose",
+          "atoms": [
+            "file-write"
+          ]
+        },
+        {
+          "id": "render",
+          "atoms": [
+            "media-video"
+          ]
+        }
+      ]
+    },
+    "capabilities": [
+      "prompt:inject",
+      "fs:write",
+      "media:video-generate"
+    ],
+    "provenance": {
+      "origin": {
+        "name": "Codrops",
+        "kind": "demo-studio",
+        "reference": "CSSGlitchEffect (irregular clip-path band-jitter timing) and TextDistortionEffects (RGB channel-split concept, originally Blotter/WebGL) — Codrops's own custom permissive clause, not an OSI license; no LICENSE file ships, README allows building upon it, no resale; confirmed via a 404 on the license-detection API."
+      },
+      "transformation": "Reimplemented from scratch in vanilla CSS + a few lines of vanilla JS: no Codrops or Blotter source is copied. The clip-path polygon jitter and the RGB-split are both keyed to one shared --delay-anim rhythm so the glitch recurs on a fixed cadence instead of on every frame; scanline drift, the sweeping scan-beam, and the single mirrored-slice flash are original."
+    }
+  }
+}

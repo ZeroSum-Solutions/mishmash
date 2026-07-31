@@ -1,0 +1,111 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "video-template-frame-shuffle-kinetic-type",
+  "title": "Shuffle Kinetic Type",
+  "version": "0.1.0",
+  "publishedAt": "undefined",
+  "description": "A looping title card where the headline perpetually decrypts itself — each character cycles a random glyph and resolves left-to-right in a traveling wave, breathes through a weight/width pulse, then reverses and re-shuffles into the next word.",
+  "license": "MIT",
+  "author": {
+    "name": "MishMash",
+    "url": "https://github.com/nexu-io"
+  },
+  "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/video-templates/frame-shuffle-kinetic-type",
+  "tags": [
+    "video-template",
+    "first-party",
+    "video",
+    "hyperframes",
+    "html-video",
+    "motion",
+    "kinetic",
+    "typography",
+    "decode",
+    "scramble",
+    "glitch-type",
+    "title-card",
+    "broadcast",
+    "presentation"
+  ],
+  "compat": {
+    "agentSkills": [
+      {
+        "path": "./SKILL.md"
+      }
+    ]
+  },
+  "od": {
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "video",
+    "scenario": "video",
+    "surface": "hyperframes",
+    "engine": "hyperframes",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html"
+    },
+    "useCase": {
+      "query": "Use the Shuffle Kinetic Type HyperFrames template to create a 15s title-card video. Replace the sample headline/kicker/byline copy with real content, preserve the decode-wave / breathe / reverse motion signature and the infinite loop structure, and render to MP4."
+    },
+    "inputs": [
+      {
+        "name": "aspect",
+        "label": "Aspect ratio",
+        "type": "select",
+        "options": [
+          "16:9"
+        ],
+        "default": "16:9"
+      },
+      {
+        "name": "format",
+        "label": "Output format",
+        "type": "select",
+        "options": [
+          "mp4",
+          "webm"
+        ],
+        "default": "mp4"
+      },
+      {
+        "name": "durationSec",
+        "label": "Duration (seconds)",
+        "type": "number",
+        "default": 15
+      }
+    ],
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        }
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "pipeline": {
+      "stages": [
+        {
+          "id": "compose",
+          "atoms": [
+            "file-write"
+          ]
+        },
+        {
+          "id": "render",
+          "atoms": [
+            "media-video"
+          ]
+        }
+      ]
+    },
+    "capabilities": [
+      "prompt:inject",
+      "fs:write",
+      "media:video-generate"
+    ]
+  }
+}

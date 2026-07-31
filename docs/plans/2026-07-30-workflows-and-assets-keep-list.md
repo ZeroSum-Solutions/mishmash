@@ -2,10 +2,12 @@
 
 Generated 2026-07-30 from the 8-shard judge fan-out + curated-id bias + hand-tuning. Companion to 2026-07-30-workflows-and-assets-curation.md.
 
+2026-07-31 reference-integration pass: 8 tiles replaced 1:1 by patterns harvested from the five reference repos (satus, lenis, react-three-fiber, Codrops, awesome-threejs) — each replacement won an adversarial head-to-head judge verdict against the tile it displaced. Total stays 90.
+
 ## website (50)
 
-- `example-pricing-page` — Pricing Page (score 6)
-- `example-waitlist-page` — Waitlist Page (score 6)
+- `example-pricing-spring-tiers` — Spring Tiers Pricing (reference-integration replacement for example-pricing-page; judge 9.0 vs 4.5)
+- `example-aurora-launch-glass` — Aurora Launch (reference-integration replacement for example-waitlist-page; judge 8.2 vs 5.3)
 - `design-system-glassmorphism` — Glassmorphism (score 6)
 - `design-system-neobrutalism` — Neobrutalism (score 6)
 - `design-system-minimal` — Minimal (score 6)
@@ -51,9 +53,9 @@ Generated 2026-07-30 from the 8-shard judge fan-out + curated-id bias + hand-tun
 - `design-system-lamborghini` — Lamborghini (score 6, demo-wow)
 - `design-system-mission-control` — Mission Control Design System (score 6, demo-wow)
 - `design-system-totality-festival` — Totality Festival (score 6, demo-wow)
-- `example-kami-landing` — Kami Landing (score 6, demo-wow)
-- `example-webgl-pixel-reveal-gallery` — Pixel Reveal Gallery (score 6, demo-wow)
-- `example-worker-visualizer` — Worker Visualizer (score 6, demo-wow)
+- `example-agency-marquee-reveal` — Agency Marquee Reveal (reference-integration replacement for example-kami-landing; judge 8.0 vs 4.5, Satus/Lenis DNA)
+- `example-archive-elastic-gallery` — Archive Elastic Gallery (reference-integration replacement for example-webgl-pixel-reveal-gallery; judge 8.3 vs 5.7, Codrops grid DNA)
+- `example-curl-field-hero` — Curl Field Hero (reference-integration replacement for example-worker-visualizer; judge 7.8 vs 5.2, r3f/flow-field DNA)
 
 ## app (20)
 
@@ -100,9 +102,9 @@ Generated 2026-07-30 from the 8-shard judge fan-out + curated-id bias + hand-tun
 - `video-template-frame-takram-organic` — Takram Organic Frame (score 7, demo-wow)
 - `example-motion-frames` — Motion Frames (score 6, demo-wow)
 - `example-video-hyperframes` — Hyperframes Video (score 6, demo-wow)
-- `video-template-frame-creative-voltage` — Creative Voltage Frame (score 6, demo-wow)
-- `video-template-frame-glitch-title` — Glitch Title Frame (score 6, demo-wow)
-- `video-template-frame-kinetic-type` — Kinetic Type (score 6, demo-wow)
+- `video-template-frame-arc-voltage` — Arc Voltage (reference-integration replacement for video-template-frame-creative-voltage; judge 8.4 vs 4.5)
+- `video-template-frame-chroma-glitch` — Chroma Glitch Title (reference-integration replacement for video-template-frame-glitch-title; judge 8.5 vs 6.0, Codrops glitch DNA)
+- `video-template-frame-shuffle-kinetic-type` — Shuffle Kinetic Type (reference-integration replacement for video-template-frame-kinetic-type; judge 7.8 vs 6.8, Codrops type DNA)
 
 ## Deleted (351)
 

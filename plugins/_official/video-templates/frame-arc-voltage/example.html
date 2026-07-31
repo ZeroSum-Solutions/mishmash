@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Arc Voltage · Beat-Synced Lichtenberg Strike</title>
+<!--
+  Arc Voltage — a high-energy, beat-synced title frame.
+  Self-contained canvas + CSS + vanilla JS. No build step, no network calls.
+
+  Attribution / inspiration (concepts only — no source code copied):
+  - Beat-clock "arrival" easing: the clamped ease-out-expo curve
+    (1.001 - 2^(-10t)) used to drive every response below is inspired by the
+    discrete-arrival easing idea used in darkroomengineering/lenis (MIT).
+    Only the formula/concept is reused; no Lenis source is included.
+  - Branching arcs: midpoint-displacement fractal subdivision, the classic
+    public-domain procedural-graphics technique behind Lichtenberg-figure
+    renderers. Original canvas implementation, redrawn fresh every beat.
+  - Palette: Inigo Quilez's public "cosine gradient" palette formula
+    (iquilezles.org/www/articles/palettes/palettes.htm) — a public formula,
+    tuned here to sweep from white-hot core to violet corona by distance
+    from the strike origin.
+-->
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; }
+  body {
+    overflow: hidden;
+    background: #0a0a0d;
+    color: #f5f4f8;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    position: relative;
+  }
+
+  canvas#fx { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* faint moving scanlines — cheap, compositor-only, continuous "electric hum" */
+  .scan {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    mix-blend-mode: overlay;
+    background: repeating-linear-gradient(180deg,
+      rgba(255,255,255,0.05) 0px, rgba(255,255,255,0.05) 1px,
+      transparent 2px, transparent 4px);
+    animation: scan-drift 7s linear infinite;
+  }
+  @keyframes scan-drift { from { background-position: 0 0; } to { background-position: 0 120px; } }
+
+  .vignette {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    background: radial-gradient(120% 120% at 50% 50%, transparent 55%, rgba(0,0,0,0.55) 100%);
+  }
+
+  .hud {
+    position: fixed; z-index: 3; display: flex; align-items: center; gap: 0.8em;
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", monospace;
+    font-size: clamp(10px, 1vw, 13px); letter-spacing: 0.18em; text-transform: uppercase;
+    color: rgba(245,244,248,0.6); pointer-events: none;
+  }
+  .hud-tl { top: clamp(20px, 4vw, 44px); left: clamp(20px, 4vw, 44px); }
+  .hud-br { bottom: clamp(20px, 4vw, 44px); right: clamp(20px, 4vw, 44px); }
+  .hud .rec { display: inline-flex; align-items: center; gap: 0.5em; color: #e8b34a; }
+  .hud .rec::before {
+    content: ""; width: 7px; height: 7px; border-radius: 50%; background: #e8b34a;
+    box-shadow: 0 0 8px 1px rgba(232,179,74,0.9);
+    animation: rec-blink 1.6s ease-in-out infinite;
+  }
+  @keyframes rec-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .hud .beats { display: inline-flex; gap: 6px; margin-left: 0.4em; }
+  .hud .beats i {
+    width: 6px; height: 6px; border-radius: 50%; display: block; font-style: normal;
+    background: rgba(245,244,248,0.22); opacity: 0.35;
+  }
+
+  .frame {
+    position: fixed; left: clamp(24px, 6vw, 72px); right: clamp(24px, 6vw, 72px);
+    bottom: clamp(24px, 6vw, 72px); z-index: 4;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", monospace;
+    font-weight: 700; font-size: clamp(11px, 1.05vw, 14px); letter-spacing: 0.35em;
+    text-transform: uppercase; color: #e8b34a; margin-bottom: clamp(14px, 2vw, 22px);
+  }
+  .title-punch { display: block; transform-origin: left bottom; will-change: transform, filter; }
+  h1.title {
+    font-weight: 800; line-height: 0.94; letter-spacing: -0.02em;
+    font-size: clamp(40px, 8.6vw, 130px); margin: 0;
+  }
+  h1.title .ln { display: block; }
+  h1.title .accent {
+    color: #f5f4f8; -webkit-text-stroke: 1.5px rgba(139,92,246,0.9);
+  }
+  p.sub {
+    font-weight: 500; font-size: clamp(14px, 1.4vw, 19px); line-height: 1.5;
+    max-width: 46ch; color: rgba(245,244,248,0.66); margin-top: clamp(16px, 2.2vw, 26px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .scan { animation: none !important; }
+    .hud .rec::before { animation: none !important; opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<canvas id="fx"></canvas>
+<div class="scan"></div>
+<div class="vignette"></div>
+
+<div class="hud hud-tl">
+  <span class="rec">Live</span>
+  <span>128 BPM</span>
+  <span class="beats"><i></i><i></i><i></i><i></i></span>
+</div>
+
+<div class="frame">
+  <p class="eyebrow">Night Circuit — Live Visuals</p>
+  <div class="title-punch" id="titlePunch">
+    <h1 class="title">
+      <span class="ln accent">Strike</span>
+      <span class="ln">on the one.</span>
+    </h1>
+  </div>
+  <p class="sub">A new arc, every beat. Never the same shape twice.</p>
+</div>
+
+<div class="hud hud-br">Night Circuit · Arc Voltage Frame</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const mql = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+  const reduceMotion = !!(mql && mql.matches);
+
+  const canvas = document.getElementById('fx');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const titlePunch = document.getElementById('titlePunch');
+  const beatDots = Array.prototype.slice.call(document.querySelectorAll('.beats i'));
+
+  let W = 0, H = 0, DPR = 1;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = canvas.clientWidth || window.innerWidth;
+    H = canvas.clientHeight || window.innerHeight;
+    canvas.width = Math.max(1, Math.round(W * DPR));
+    canvas.height = Math.max(1, Math.round(H * DPR));
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    if (reduceMotion) renderStatic();
+  }
+
+  // ---- clamped ease-out "arrival" curve ----------------------------------
+  // Concept adapted from darkroomengineering/lenis's discrete-arrival easing
+  // (MIT license) — formula only, no source copied. Every response below
+  // (strike reveal, ring, flash, title punch) runs through this single curve
+  // for a consistent fast-strike / soft-settle signature.
+  function arrive(t) {
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const v = 1.001 - Math.pow(2, -10 * t);
+    return v < 0 ? 0 : v > 1 ? 1 : v;
+  }
+
+  // ---- IQ cosine-gradient palette (public formula, iquilezles.org) ------
+  // color(t) = a + b*cos(2*PI*(c*t)) per channel, solved so t=0 -> white-hot
+  // and t=1 -> violet corona (#8b5cf6), used as a radial gradient keyed to
+  // distance from the strike origin.
+  const PAL_A = 0.5, PAL_B = 0.5;
+  const PAL_C = [0.2357, 0.2949, 0.0599];
+  function palette(t) {
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    return [
+      PAL_A + PAL_B * Math.cos(6.28318 * PAL_C[0] * t),
+      PAL_A + PAL_B * Math.cos(6.28318 * PAL_C[1] * t),
+      PAL_A + PAL_B * Math.cos(6.28318 * PAL_C[2] * t)
+    ];
+  }
+  const PALETTE_STOPS = [0, 0.2, 0.4, 0.6, 0.8, 1];
+
+  // ---- deterministic PRNG (mulberry32) so every strike is reproducible ---
+  function rand(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // ---- Lichtenberg branching via midpoint displacement -------------------
+  // Classic fractal technique: split a segment at its midpoint, offset the
+  // midpoint perpendicular to the segment by a shrinking random amount, and
+  // recurse on both halves. A small chance to spawn a shorter side branch at
+  // each split gives the organic, forked look of a real Lichtenberg figure.
+  const STAGGER_MS = 8;
+  function buildArc(x0, y0, x1, y1, depth, disp, rng) {
+    const segs = [];
+    (function recurse(ax, ay, bx, by, d, disp, order) {
+      if (d <= 0) { segs.push({ ax, ay, bx, by, order }); return; }
+      const mx = (ax + bx) / 2, my = (ay + by) / 2;
+      const dx = bx - ax, dy = by - ay;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len;
+      const off = (rng() * 2 - 1) * disp;
+      const px = mx + nx * off, py = my + ny * off;
+      recurse(ax, ay, px, py, d - 1, disp * 0.56, order + 1);
+      recurse(px, py, bx, by, d - 1, disp * 0.56, order + 1);
+      if (d > 1 && rng() < 0.32) {
+        const bang = Math.atan2(dy, dx) + (rng() * 2 - 1) * 1.1;
+        const blen = len * 0.32 * (0.5 + rng() * 0.5);
+        recurse(px, py, px + Math.cos(bang) * blen, py + Math.sin(bang) * blen, d - 2, disp * 0.4, order + 1);
+      }
+    })(x0, y0, x1, y1, depth, disp, 0);
+    return segs;
+  }
+
+  function strikeAt(ox, oy, big, rng) {
+    const ang = -Math.PI * 0.36 + (rng() * 2 - 1) * 0.5;
+    const len = (big ? 0.58 : 0.4) * Math.max(W, H);
+    const ex = ox + Math.cos(ang) * len;
+    const ey = oy + Math.sin(ang) * len;
+    const depth = big ? 7 : 6;
+    const disp = (big ? 0.15 : 0.1) * Math.min(W, H);
+    const segs = buildArc(ox, oy, ex, ey, depth, disp, rng);
+    return { segs, big, born: 0, origin: [ox, oy], len };
+  }
+
+  function strikePath(st, revealAge) {
+    const path = new Path2D();
+    for (let i = 0; i < st.segs.length; i++) {
+      const s = st.segs[i];
+      if (revealAge != null && revealAge < s.order * STAGGER_MS) continue;
+      path.moveTo(s.ax, s.ay);
+      path.lineTo(s.bx, s.by);
+    }
+    return path;
+  }
+  function strikeGradient(st) {
+    const g = ctx.createRadialGradient(st.origin[0], st.origin[1], 0, st.origin[0], st.origin[1], Math.max(st.len, 1));
+    for (const t of PALETTE_STOPS) {
+      const [r, gc, b] = palette(t);
+      g.addColorStop(t, 'rgb(' + (r * 255 | 0) + ',' + (gc * 255 | 0) + ',' + (b * 255 | 0) + ')');
+    }
+    return g;
+  }
+  function strokeStrike(st, path, alpha) {
+    if (alpha <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = strikeGradient(st);
+    ctx.lineWidth = st.big ? 2.6 : 1.7;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.shadowColor = 'rgba(139,92,246,0.85)';
+    ctx.shadowBlur = st.big ? 16 : 10;
+    ctx.stroke(path);
+    ctx.restore();
+  }
+
+  // Expanding pulse-ring bloom — scale 0 -> 2.4 through the arrival curve
+  // (fast pop, then a lingering glow), capped to a single ring in flight
+  // by simply replacing the one `ring` object each beat (see fireBeat).
+  function drawRing(x, y, scale, alpha, big) {
+    if (alpha <= 0) return;
+    const base = Math.min(W, H) * 0.05;
+    const r = Math.max(1, base * (0.35 + scale));
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = 'rgb(232,179,74)';
+    ctx.lineWidth = big ? 3 : 2;
+    ctx.shadowColor = 'rgba(232,179,74,0.85)';
+    ctx.shadowBlur = big ? 22 : 13;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+
+  // Strobe-safe localized flash: opacity capped at 0.45, soft radial falloff
+  // around the strike origin (never full-viewport), linear fade to zero
+  // within 240ms, gated to the same fixed beat clock — at 128 BPM that is a
+  // ~2.1Hz trigger rate, comfortably under the ~3Hz photosensitive-seizure
+  // guideline even at this up-tempo setting.
+  function drawFlash(x, y, alpha, big) {
+    if (alpha <= 0) return;
+    const r = Math.min(W, H) * (big ? 0.46 : 0.32);
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, 'rgba(255,255,255,' + alpha + ')');
+    g.addColorStop(0.4, 'rgba(196,181,253,' + (alpha * 0.5) + ')');
+    g.addColorStop(1, 'rgba(196,181,253,0)');
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawAmbient(now) {
+    const breathe = 0.5 + 0.5 * Math.sin(now * 0.0006);
+    const g = ctx.createRadialGradient(W * 0.6, H * 0.38, 0, W * 0.6, H * 0.38, Math.max(W, H) * 0.75);
+    g.addColorStop(0, 'rgba(96,64,150,' + (0.045 + 0.03 * breathe) + ')');
+    g.addColorStop(1, 'rgba(10,10,13,0)');
+    ctx.save(); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.restore();
+  }
+
+  let particles = null;
+  function initParticles() {
+    particles = [];
+    for (let i = 0; i < 42; i++) {
+      particles.push({
+        x: Math.random() * W, y: Math.random() * H,
+        vy: 5 + Math.random() * 9, r: 0.6 + Math.random() * 1.2,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+  }
+  function drawParticles(now, dt) {
+    if (!particles) initParticles();
+    ctx.save();
+    for (const p of particles) {
+      p.y -= p.vy * dt;
+      if (p.y < -8) { p.y = H + 8; p.x = Math.random() * W; }
+      const flicker = 0.3 + 0.35 * (0.5 + 0.5 * Math.sin(now * 0.002 + p.phase));
+      ctx.fillStyle = 'rgba(196,181,253,' + (0.16 * flicker) + ')';
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ---- fixed beat-grid trigger clock --------------------------------------
+  // A fixed-BPM timer fires "beat" events; each beat spawns one fresh
+  // arc strike + one pulse ring + one flash, and every 4th beat (the
+  // downbeat) is louder and drives the title punch.
+  const BPM = 128;
+  const BEAT_MS = 60000 / BPM;
+  const BAR_BEATS = 4;
+  let strikes = [];
+  let ring = null;
+  let flash = null;
+  let beatIndex = 0;
+  let lastDownbeatAt = -Infinity;
+  const beatFireTimes = [-1e9, -1e9, -1e9, -1e9];
+
+  function originForBeat(i) {
+    return [
+      W * 0.6 + Math.sin(i * 0.9) * W * 0.07,
+      H * 0.34 + Math.cos(i * 0.55) * H * 0.05
+    ];
+  }
+  function fireBeat(now, idx) {
+    const big = idx % BAR_BEATS === 0;
+    const rng = rand(((idx + 1) * 2654435761) >>> 0);
+    const [ox, oy] = originForBeat(idx);
+    const st = strikeAt(ox, oy, big, rng);
+    st.born = now;
+    strikes.unshift(st);
+    if (strikes.length > 2) strikes.length = 2;
+    ring = { x: ox, y: oy, born: now, big };
+    flash = { x: ox, y: oy, born: now, big };
+    beatFireTimes[idx % BAR_BEATS] = now;
+    if (big) lastDownbeatAt = now;
+  }
+
+  function updateHud() {
+    const now = performance.now();
+    for (let i = 0; i < beatDots.length; i++) {
+      const age = now - beatFireTimes[i];
+      const g = Math.max(0, 1 - age / 460);
+      beatDots[i].style.background = g > 0.02 ? 'rgb(232,179,74)' : 'rgba(245,244,248,0.22)';
+      beatDots[i].style.boxShadow = g > 0.02 ? '0 0 ' + (6 * g) + 'px rgba(232,179,74,' + g + ')' : 'none';
+      beatDots[i].style.opacity = String(0.35 + 0.65 * g);
+    }
+  }
+  function updateTitlePunch(now) {
+    if (!titlePunch) return;
+    const age = now - lastDownbeatAt;
+    const p = Math.min(1, age / 380);
+    const k = 1 - arrive(p);
+    titlePunch.style.transform = 'scale(' + (1 + 0.055 * k) + ')';
+    titlePunch.style.filter = 'brightness(' + (1 + 0.4 * k) + ') drop-shadow(0 0 ' + (20 * k) + 'px rgba(139,92,246,' + (0.55 * k) + '))';
+  }
+
+  function render(now, dt) {
+    ctx.fillStyle = '#0a0a0d';
+    ctx.fillRect(0, 0, W, H);
+    drawAmbient(now);
+    drawParticles(now, dt);
+
+    for (let i = strikes.length - 1; i >= 0; i--) {
+      const st = strikes[i];
+      const age = now - st.born;
+      const life = 650, fadeStart = 210;
+      if (age > life) { strikes.splice(i, 1); continue; }
+      const reveal = arrive(Math.min(1, age / 170));
+      const fade = age <= fadeStart ? 1 : Math.max(0, 1 - (age - fadeStart) / (life - fadeStart));
+      strokeStrike(st, strikePath(st, age), reveal * fade);
+    }
+
+    if (ring) {
+      const age = now - ring.born, life = 420;
+      if (age <= life) {
+        const p = age / life;
+        drawRing(ring.x, ring.y, arrive(p) * 2.4, (1 - p) * (ring.big ? 0.85 : 0.55), ring.big);
+      } else ring = null;
+    }
+    if (flash) {
+      const age = now - flash.born, life = 240;
+      if (age <= life) {
+        const p = age / life;
+        drawFlash(flash.x, flash.y, (1 - p) * (flash.big ? 0.45 : 0.28), flash.big);
+      } else flash = null;
+    }
+
+    updateHud();
+    updateTitlePunch(now);
+  }
+
+  let started = false, nextBeatAt = 0, lastT = null;
+  function frame(now) {
+    if (!started) {
+      started = true;
+      lastT = now;
+      fireBeat(now, beatIndex++);
+      nextBeatAt = now + BEAT_MS;
+    }
+    const dt = Math.min(0.05, (now - lastT) / 1000);
+    lastT = now;
+    let guard = 0;
+    while (now >= nextBeatAt && guard < 4) {
+      fireBeat(now, beatIndex++);
+      nextBeatAt += BEAT_MS;
+      guard++;
+    }
+    if (guard >= 4) nextBeatAt = now + BEAT_MS;
+    render(now, dt);
+    requestAnimationFrame(frame);
+  }
+
+  // ---- reduced-motion: one composed, fully-settled static frame ---------
+  function renderStatic() {
+    ctx.fillStyle = '#0a0a0d'; ctx.fillRect(0, 0, W, H);
+    const g = ctx.createRadialGradient(W * 0.6, H * 0.36, 0, W * 0.6, H * 0.36, Math.max(W, H) * 0.75);
+    g.addColorStop(0, 'rgba(96,64,150,0.07)'); g.addColorStop(1, 'rgba(10,10,13,0)');
+    ctx.save(); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.restore();
+    const rng = rand(7);
+    const st = strikeAt(W * 0.6, H * 0.32, true, rng);
+    strokeStrike(st, strikePath(st, null), 0.95);
+    drawRing(st.origin[0], st.origin[1], 1.5, 0.3, true);
+    if (titlePunch) { titlePunch.style.transform = 'none'; titlePunch.style.filter = 'none'; }
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+  if (reduceMotion) { renderStatic(); }
+  else { requestAnimationFrame(frame); }
+})();
+</script>
+</body>
+</html>

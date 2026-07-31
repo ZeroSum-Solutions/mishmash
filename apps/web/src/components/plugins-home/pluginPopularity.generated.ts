@@ -36,7 +36,7 @@ export const PLUGIN_POPULARITY_META: PluginPopularityMeta = {
   windowDays: 28,
   weights: { users: 0.6, runs: 0.4 },
   minUsers: 20,
-  count: 34,
+  count: 31,
 };
 
 // Plugin id -> blended popularity score in [0, 1], most-popular first.
@@ -64,16 +64,13 @@ export const PLUGIN_POPULARITY: Readonly<Record<string, number>> = {
   'example-mockup-device-3d': 0.4381,
   'image-template-profile-avatar-anime-girl-to-cinematic-photo': 0.4237,
   'image-template-profile-avatar-casual-fashion-grid-photoshoot': 0.4209,
-  'video-template-frame-kinetic-type': 0.4018,
   'image-template-notion-team-dashboard-live-artifact': 0.3997,
   'example-finance-report': 0.3962,
   'example-trading-analysis-dashboard-template': 0.394,
   'example-web-prototype-taste-soft': 0.391,
   'video-template-frame-liquid-bg-hero': 0.3843,
   'example-webgl-caustic-pool': 0.3768,
-  'video-template-frame-glitch-title': 0.3722,
   'example-web-prototype-taste-brutalist': 0.3705,
-  'video-template-frame-creative-voltage': 0.3385,
   'example-flowai-live-dashboard-template': 0.3364,
 };
 

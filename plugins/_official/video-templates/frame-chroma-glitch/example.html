@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chroma Glitch Title · DEAD AIR</title>
+<!--
+  Chroma Glitch Title — original build, vanilla CSS + a few lines of vanilla JS.
+  No external requests, no build step, no third-party runtime code.
+
+  Attribution / inspiration:
+  - Irregular clip-path band-jitter glitch timing is a technique pattern from
+    Codrops "CSS Glitch Effect" (codrops/CSSGlitchEffect — Codrops's own custom
+    permissive clause, not an OSI MIT license; no LICENSE file ships with the
+    repo, the README allows building upon it and disallows resale, confirmed
+    via a 404 on the license-detection API). The ~15 irregular clip-path
+    keyframe steps and per-duplicate-layer translate3d jitter below are
+    reimplemented from scratch against that pattern description; no source
+    from the Codrops repo is copied.
+  - The chromatic RGB-channel-split flash is conceptually adapted from Codrops
+    "Text Distortion Effects" (codrops/TextDistortionEffects), which builds its
+    split with a Blotter WebGL ChannelSplitMaterial. Same Codrops custom
+    license as above. Reimplemented here natively as plain duplicated DOM text
+    layers offset a couple of px apart with mix-blend-mode:screen — no Blotter,
+    no WebGL, no shader code from that repo is used.
+  - The scanline hairline texture, the sweeping scan-beam, and the single
+    mirrored-slice flash are original CSS with no external source.
+-->
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #020203;
+  }
+  body {
+    --ink: #020203;
+    --paper: #f2f5fb;
+    --blue: #26e2ff;
+    --magenta: #ff2bd1;
+    --scan: rgba(64, 226, 255, .55);
+    --dim: rgba(242, 245, 251, .58);
+    position: relative;
+    color: var(--paper);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    isolation: isolate;
+  }
+  .mono {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  /* ---------- frame chrome ---------- */
+  .stage {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 3.6vw 4.2vw;
+    z-index: 10;
+  }
+  .meta {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11px; letter-spacing: .22em; text-transform: uppercase;
+    color: var(--dim);
+  }
+  .meta .tag { display: inline-flex; align-items: center; gap: 8px; }
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%; background: #ff3b4e;
+    animation: rec-blink 2.4s steps(1,end) infinite;
+  }
+  .accent { color: var(--magenta); }
+
+  .bracket { position: fixed; width: 22px; height: 22px; border-color: var(--dim); opacity: .45; z-index: 9; }
+  .bracket.tl { top: 2.6vw; left: 2.8vw; border-top: 1.5px solid; border-left: 1.5px solid; }
+  .bracket.tr { top: 2.6vw; right: 2.8vw; border-top: 1.5px solid; border-right: 1.5px solid; }
+  .bracket.bl { bottom: 2.6vw; left: 2.8vw; border-bottom: 1.5px solid; border-left: 1.5px solid; }
+  .bracket.br { bottom: 2.6vw; right: 2.8vw; border-bottom: 1.5px solid; border-right: 1.5px solid; }
+
+  /* ---------- center content ---------- */
+  .center {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; gap: 1.6vw; z-index: 10; position: relative;
+  }
+  .kicker {
+    font-size: 12.5px; letter-spacing: .34em; text-transform: uppercase; color: var(--dim);
+  }
+  .title-stack { position: relative; display: inline-block; --delay-anim: 0s; }
+  .title-stack h1 {
+    margin: 0; font-weight: 900; text-transform: uppercase;
+    letter-spacing: -0.015em; line-height: .86;
+    font-family: "Arial Black", -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-size: clamp(56px, 12.4vw, 196px);
+  }
+  .title-base {
+    position: relative; z-index: 3; color: var(--paper);
+    animation: jitter-base 2800ms infinite var(--delay-anim),
+               phosphor-breathe 4400ms ease-in-out infinite;
+  }
+  .title-blue {
+    position: absolute; inset: 0; z-index: 2; color: var(--blue);
+    mix-blend-mode: screen; opacity: 0;
+    animation: jitter-blue 2800ms infinite var(--delay-anim);
+  }
+  .title-magenta {
+    position: absolute; inset: 0; z-index: 2; color: var(--magenta);
+    mix-blend-mode: screen; opacity: 0;
+    animation: jitter-magenta 2800ms infinite var(--delay-anim);
+  }
+  .title-mirror {
+    position: absolute; inset: 0; z-index: 4; color: var(--paper); opacity: 0;
+    pointer-events: none;
+    animation: jitter-mirror 2800ms infinite var(--delay-anim);
+  }
+  .subtitle {
+    margin: 0; max-width: 46ch; font-size: clamp(12.5px, 1.05vw, 15px);
+    color: var(--dim); font-style: normal;
+  }
+
+  /* ---------- ambient texture (always running, frame 0) ---------- */
+  .scan-hairlines {
+    position: fixed; inset: -2px; pointer-events: none; z-index: 5; opacity: .09;
+    mix-blend-mode: overlay;
+    background-image: repeating-linear-gradient(0deg,
+      rgba(255,255,255,.9) 0px, rgba(255,255,255,.9) 1px,
+      transparent 1px, transparent 3px);
+    animation: scan-drift 5.6s linear infinite;
+  }
+  .scan-beam {
+    position: fixed; left: 0; right: 0; height: 2px; top: -4%;
+    background: var(--scan); mix-blend-mode: screen; opacity: 0; z-index: 6; pointer-events: none;
+    animation: beam-sweep 7.2s cubic-bezier(.65, 0, .35, 1) infinite;
+  }
+  .grain {
+    position: fixed; inset: 0; z-index: 1; opacity: .045; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ---------- keyframes ---------- */
+  @keyframes rec-blink {
+    0%, 38% { opacity: 1; }
+    40%, 78% { opacity: .18; }
+    80%, 100% { opacity: 1; }
+  }
+  @keyframes phosphor-breathe {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .93; }
+  }
+  @keyframes scan-drift {
+    from { background-position-y: 0; }
+    to   { background-position-y: 120px; }
+  }
+  @keyframes beam-sweep {
+    0%   { top: -4%;   opacity: 0;   }
+    6%   { opacity: .55; }
+    46%  { opacity: .55; }
+    52%  { top: 102%;  opacity: 0;   }
+    100% { top: 102%;  opacity: 0;   }
+  }
+
+  /* Base title layer: ~15 irregularly-spaced clip-path polygon bands + small
+     translate3d jitter, held in a clean state 68% of the cycle so the beat
+     reads as deliberate rather than continuous noise. */
+  @keyframes jitter-base {
+    0%, 68%   { clip-path: polygon(0 0%,100% 0%,100% 100%,0 100%); transform: translate3d(0,0,0);      animation-timing-function: steps(1,end); }
+    68.7%     { clip-path: polygon(0 22%,100% 22%,100% 39%,0 39%); transform: translate3d(-8px,1px,0);  animation-timing-function: steps(1,end); }
+    69.1%     { clip-path: polygon(0 4%,100% 4%,100% 13%,0 13%);   transform: translate3d(6px,-2px,0);  animation-timing-function: steps(1,end); }
+    69.6%     { clip-path: polygon(0 0%,100% 0%,100% 100%,0 100%); transform: translate3d(-3px,0,0);    animation-timing-function: steps(1,end); }
+    70.4%     { clip-path: polygon(0 58%,100% 58%,100% 87%,0 87%); transform: translate3d(-10px,2px,0); animation-timing-function: steps(1,end); }
+    70.7%     { clip-path: polygon(0 0%,100% 0%,100% 100%,0 100%); transform: translate3d(4px,-1px,0);  animation-timing-function: steps(1,end); }
+    71.5%     { clip-path: polygon(0 38%,100% 38%,100% 60%,0 60%); transform: translate3d(7px,1px,0);   animation-timing-function: steps(1,end); }
+    72.0%     { clip-path: polygon(0 0%,100% 0%,100% 100%,0 100%); transform: translate3d(-5px,0,0);    animation-timing-function: steps(1,end); }
+    72.4%     { clip-path: polygon(0 70%,100% 70%,100% 94%,0 94%); transform: translate3d(9px,-1px,0);  animation-timing-function: steps(1,end); }
+    73.3%     { clip-path: polygon(0 10%,100% 10%,100% 30%,0 30%); transform: translate3d(-7px,2px,0);  animation-timing-function: steps(1,end); }
+    74.1%     { clip-path: polygon(0 0%,100% 0%,100% 100%,0 100%); transform: translate3d(3px,0,0);     animation-timing-function: steps(1,end); }
+    74.6%     { clip-path: polygon(0 46%,100% 46%,100% 76%,0 76%); transform: translate3d(-9px,1px,0);  animation-timing-function: steps(1,end); }
+    75.8%     { clip-path: polygon(0 0%,100% 0%,100% 100%,0 100%); transform: translate3d(0,-1px,0);    animation-timing-function: steps(1,end); }
+    76.9%     { clip-path: polygon(0 18%,100% 18%,100% 34%,0 34%); transform: translate3d(8px,-2px,0);  animation-timing-function: steps(1,end); }
+    78.2%     { clip-path: polygon(0 0%,100% 0%,100% 100%,0 100%); transform: translate3d(-4px,0,0);    animation-timing-function: steps(1,end); }
+    79.6%     { clip-path: polygon(0 30%,100% 30%,100% 75%,0 75%); transform: translate3d(5px,1px,0);   animation-timing-function: steps(1,end); }
+    81.0%, 100% { clip-path: polygon(0 0%,100% 0%,100% 100%,0 100%); transform: translate3d(0,0,0);     animation-timing-function: steps(1,end); }
+  }
+  /* Blue channel: a small ±2-3px offset flash, keyed to a subset of the same beat. */
+  @keyframes jitter-blue {
+    0%, 68%    { opacity: 0;   transform: translate3d(0,0,0);    animation-timing-function: steps(1,end); }
+    68.7%      { opacity: .85; transform: translate3d(-3px,0,0); animation-timing-function: steps(1,end); }
+    69.6%      { opacity: 0;   transform: translate3d(0,0,0);    animation-timing-function: steps(1,end); }
+    70.4%      { opacity: .8;  transform: translate3d(-2px,1px,0); animation-timing-function: steps(1,end); }
+    71.5%      { opacity: 0;   transform: translate3d(0,0,0);    animation-timing-function: steps(1,end); }
+    72.4%      { opacity: .85; transform: translate3d(-3px,0,0); animation-timing-function: steps(1,end); }
+    74.1%      { opacity: 0;   transform: translate3d(0,0,0);    animation-timing-function: steps(1,end); }
+    74.6%      { opacity: .75; transform: translate3d(-2px,-1px,0); animation-timing-function: steps(1,end); }
+    76.9%      { opacity: .85; transform: translate3d(-3px,0,0); animation-timing-function: steps(1,end); }
+    78.2%, 100% { opacity: 0;  transform: translate3d(0,0,0);    animation-timing-function: steps(1,end); }
+  }
+  /* Magenta channel: opposite offset, offset marks so red/blue never land in perfect lockstep. */
+  @keyframes jitter-magenta {
+    0%, 69.6%  { opacity: 0;   transform: translate3d(0,0,0);    animation-timing-function: steps(1,end); }
+    70.7%      { opacity: .8;  transform: translate3d(3px,-1px,0); animation-timing-function: steps(1,end); }
+    71.5%      { opacity: 0;   transform: translate3d(0,0,0);    animation-timing-function: steps(1,end); }
+    73.3%      { opacity: .85; transform: translate3d(2px,1px,0); animation-timing-function: steps(1,end); }
+    74.1%      { opacity: 0;   transform: translate3d(0,0,0);    animation-timing-function: steps(1,end); }
+    75.8%      { opacity: .8;  transform: translate3d(3px,0,0);  animation-timing-function: steps(1,end); }
+    76.9%      { opacity: 0;   transform: translate3d(0,0,0);    animation-timing-function: steps(1,end); }
+    79.6%      { opacity: .85; transform: translate3d(2px,-1px,0); animation-timing-function: steps(1,end); }
+    81.0%, 100% { opacity: 0;  transform: translate3d(0,0,0);    animation-timing-function: steps(1,end); }
+  }
+  /* One mirrored-slice flash per pulse — punctuation, not continuous mirroring. */
+  @keyframes jitter-mirror {
+    0%, 72.0%   { opacity: 0;   transform: scale3d(-1,-1,1) translate3d(0,0,0); clip-path: polygon(0 40%,100% 40%,100% 58%,0 58%); animation-timing-function: steps(1,end); }
+    72.4%       { opacity: .55; transform: scale3d(-1,-1,1) translate3d(2px,0,0); clip-path: polygon(0 40%,100% 40%,100% 58%,0 58%); animation-timing-function: steps(1,end); }
+    73.3%, 100% { opacity: 0;   transform: scale3d(-1,-1,1) translate3d(0,0,0); clip-path: polygon(0 40%,100% 40%,100% 58%,0 58%); animation-timing-function: steps(1,end); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dot, .scan-hairlines, .scan-beam,
+    .title-base, .title-blue, .title-magenta, .title-mirror {
+      animation: none !important;
+    }
+    .dot { opacity: 1; }
+    .scan-beam { opacity: 0; }
+    .title-base { clip-path: none; transform: none; }
+    .title-blue { opacity: .55; transform: translate3d(-2px,0,0); }
+    .title-magenta { opacity: .55; transform: translate3d(2px,0,0); }
+    .title-mirror { display: none; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="bracket tl"></div>
+  <div class="bracket tr"></div>
+  <div class="bracket bl"></div>
+  <div class="bracket br"></div>
+
+  <div class="stage">
+    <div class="meta">
+      <span class="mono tag"><span class="dot" aria-hidden="true"></span>REC · CH.09</span>
+      <span class="mono tag">CHROMA-GLITCH · TITLE FRAME</span>
+    </div>
+
+    <div class="center">
+      <div class="kicker mono">Broadcast interrupt — unscheduled</div>
+      <div class="title-stack">
+        <h1 class="title-base">DEAD<br />AIR</h1>
+        <h1 class="title-blue" aria-hidden="true">DEAD<br />AIR</h1>
+        <h1 class="title-magenta" aria-hidden="true">DEAD<br />AIR</h1>
+        <h1 class="title-mirror" aria-hidden="true">DEAD<br />AIR</h1>
+      </div>
+      <p class="subtitle">Signal will resume automatically. Do not adjust your set.</p>
+    </div>
+
+    <div class="meta">
+      <span class="mono">TRANSMISSION FRAME 04</span>
+      <span class="mono accent">CYAN × MAGENTA SPLIT</span>
+      <span class="mono">⏵ <span id="tc">00:00:00:00</span></span>
+    </div>
+  </div>
+
+  <div class="scan-hairlines"></div>
+  <div class="scan-beam"></div>
+  <div class="grain"></div>
+
+<script>
+(function () {
+  var tcEl = document.getElementById('tc');
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!tcEl) return;
+  if (reduce) { tcEl.textContent = '00:00:00:00'; return; }
+
+  var start = null;
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function tick(ts) {
+    if (start === null) start = ts;
+    var elapsedFrames = Math.floor((ts - start) / (1000 / 60));
+    var ff = elapsedFrames % 60;
+    var totalSec = Math.floor(elapsedFrames / 60);
+    var ss = totalSec % 60;
+    var mm = Math.floor(totalSec / 60) % 60;
+    var hh = Math.floor(totalSec / 3600);
+    tcEl.textContent = pad(hh) + ':' + pad(mm) + ':' + pad(ss) + ':' + pad(ff);
+    window.requestAnimationFrame(tick);
+  }
+  window.requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
