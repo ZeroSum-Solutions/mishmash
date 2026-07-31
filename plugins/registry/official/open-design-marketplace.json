@@ -863,10 +863,10 @@
       "taskKind": "new-generation"
     },
     {
-      "name": "open-design/example-kami-landing",
-      "title": "Kami Landing",
+      "name": "open-design/example-agency-marquee-reveal",
+      "title": "Agency Marquee Reveal",
       "version": "0.1.0",
-      "source": "github:nexu-io/open-design@main/plugins/_official/examples/kami-landing",
+      "source": "github:nexu-io/open-design@main/plugins/_official/examples/agency-marquee-reveal",
       "publisher": {
         "id": "open-design",
         "url": "https://open-design.ai"
@@ -875,7 +875,7 @@
         "prompt:inject",
         "fs:write"
       ],
-      "description": "Produce a print-grade single-page kami (紙 / 纸) document — warm parchment canvas, ink-blue accent, serif at one weight, no italic, no cool grays. The output reads like a professional white paper or studio one-pager, not an app UI. Multilingual by design (EN · zh-CN · ja). One self-contained HTML file, zero dependencies.",
+      "description": "Produce a self-contained agency landing hero that never stops moving: a synthetic ping-pong playhead (0→1→0, frame-rate-independent exponential damping) drives a velocity-reactive infinite marquee, a word-by-word igniting headline, and a sticky fold-style panel handoff — all playing on loop with zero scrolling or user input, from the first frame. One self-contained HTML file, 60fps, zero dependencies.",
       "tags": [
         "example",
         "first-party",
@@ -883,16 +883,16 @@
         "marketing",
         "web",
         "desktop",
-        "kami",
         "untitled",
-        "paper-one-pager",
-        "white-paper",
-        "parchment-landing",
-        "editorial-document",
-        "print-grade-page",
-        "kami-landing"
+        "agency-landing",
+        "kinetic-typography",
+        "velocity-marquee",
+        "synthetic-playhead",
+        "fold-transition",
+        "perpetual-loop",
+        "scroll-story"
       ],
-      "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/kami-landing",
+      "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/agency-marquee-reveal",
       "license": "MIT",
       "mode": "prototype",
       "taskKind": "new-generation"
@@ -1143,10 +1143,10 @@
       "taskKind": "new-generation"
     },
     {
-      "name": "open-design/example-pricing-page",
-      "title": "Pricing Page",
+      "name": "open-design/example-pricing-spring-tiers",
+      "title": "Spring Tiers Pricing",
       "version": "0.1.0",
-      "source": "github:nexu-io/open-design@main/plugins/_official/examples/pricing-page",
+      "source": "github:nexu-io/open-design@main/plugins/_official/examples/pricing-spring-tiers",
       "publisher": {
         "id": "open-design",
         "url": "https://open-design.ai"
@@ -1155,7 +1155,7 @@
         "prompt:inject",
         "fs:write"
       ],
-      "description": "A standalone pricing page — header, plan tiers, feature comparison table,\nand an FAQ. Use when the brief asks for \"pricing\", \"plans\",\n\"subscription tiers\", or a \"compare plans\" page.",
+      "description": "A pricing page with a breathing first viewport — staggered tier-card reveals loop gently forever, a real spring-damped monthly/yearly toggle self-flips on a timer, and the recommended tier pulses with a velocity-driven skew — while staying a fully scannable SaaS pricing template with a comparison table and FAQ.",
       "tags": [
         "example",
         "first-party",
@@ -1164,13 +1164,16 @@
         "web",
         "desktop",
         "pricing",
-        "pricing-page",
+        "pricing-spring-tiers",
         "plans",
         "subscription",
         "compare-plans",
+        "motion",
+        "spring-physics",
+        "interactive",
         "untitled"
       ],
-      "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/pricing-page",
+      "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/pricing-spring-tiers",
       "license": "MIT",
       "mode": "prototype",
       "taskKind": "new-generation"
@@ -1346,10 +1349,10 @@
       }
     },
     {
-      "name": "open-design/example-waitlist-page",
-      "title": "Waitlist Page",
+      "name": "open-design/example-aurora-launch-glass",
+      "title": "Aurora Launch",
       "version": "0.1.0",
-      "source": "github:nexu-io/open-design@main/plugins/_official/examples/waitlist-page",
+      "source": "github:nexu-io/open-design@main/plugins/_official/examples/aurora-launch-glass",
       "publisher": {
         "id": "open-design",
         "url": "https://open-design.ai"
@@ -1358,7 +1361,7 @@
         "prompt:inject",
         "fs:write"
       ],
-      "description": "Minimal pre-launch landing with email capture, brand logo, and optional decorative layer.\nReads DESIGN.md for colors, typography, and layout rules.\nBest for: product launches, beta signups, early access programs, indie projects.",
+      "description": "Premium invite-only waitlist hero: a slow-drifting indigo-to-rose-gold aurora mesh breathes behind a frosted-glass signup card, a magnetic CTA settles under exponential damping toward a self-driven idle target, and a digit-flip countdown ticks live — every element self-animated so the card is never static.",
       "tags": [
         "example",
         "first-party",
@@ -1370,9 +1373,15 @@
         "coming-soon-page",
         "pre-launch-landing-page",
         "email-capture-page",
-        "launch-page"
+        "launch-page",
+        "aurora",
+        "glassmorphism",
+        "curl-noise",
+        "cosine-palette",
+        "magnetic-button",
+        "countdown"
       ],
-      "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/waitlist-page",
+      "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/aurora-launch-glass",
       "license": "MIT",
       "mode": "prototype",
       "taskKind": "new-generation"
@@ -1826,10 +1835,10 @@
       "taskKind": "new-generation"
     },
     {
-      "name": "open-design/video-template-frame-creative-voltage",
-      "title": "Creative Voltage Frame",
+      "name": "open-design/video-template-frame-arc-voltage",
+      "title": "Arc Voltage",
       "version": "0.1.0",
-      "source": "github:nexu-io/open-design@main/plugins/_official/video-templates/frame-creative-voltage",
+      "source": "github:nexu-io/open-design@main/plugins/_official/video-templates/frame-arc-voltage",
       "publisher": {
         "id": "open-design",
         "url": "https://open-design.ai"
@@ -1839,7 +1848,7 @@
         "fs:write",
         "media:video-generate"
       ],
-      "description": "Electric split with hand-drawn script — offset panels slide in, display title rises with an outlined word, script strokes itself in.",
+      "description": "High-energy beat-synced title frame — white-hot Lichtenberg arcs strike across a graphite-black canvas on a fixed beat grid, each beat triggering a pulse-ring bloom and a strobe-safe flash, with the title punching in on the downbeat.",
       "tags": [
         "video-template",
         "first-party",
@@ -1847,15 +1856,16 @@
         "hyperframes",
         "html-video",
         "motion",
-        "split-panel",
-        "electric",
-        "script",
-        "retro-modern",
+        "canvas",
+        "lichtenberg",
+        "fractal-branching",
+        "beat-sync",
+        "strobe-safe",
         "voltage",
-        "energetic",
-        "presentation"
+        "high-energy",
+        "title-reveal"
       ],
-      "homepage": "https://github.com/nexu-io/html-video/tree/main/templates/frame-creative-voltage",
+      "homepage": "https://github.com/nexu-io/html-video/tree/main/templates/frame-arc-voltage",
       "license": "Apache-2.0",
       "mode": "video",
       "taskKind": "new-generation"
@@ -1933,10 +1943,10 @@
       "taskKind": "new-generation"
     },
     {
-      "name": "open-design/video-template-frame-glitch-title",
-      "title": "Glitch Title Frame",
+      "name": "open-design/video-template-frame-chroma-glitch",
+      "title": "Chroma Glitch Title",
       "version": "0.1.0",
-      "source": "github:nexu-io/open-design@main/plugins/_official/video-templates/frame-glitch-title",
+      "source": "github:nexu-io/open-design@main/plugins/_official/video-templates/frame-chroma-glitch",
       "publisher": {
         "id": "open-design",
         "url": "https://open-design.ai"
@@ -1946,7 +1956,7 @@
         "fs:write",
         "media:video-generate"
       ],
-      "description": "Digital glitch, chromatic offset, and data-corruption title frame for video transitions or cyberpunk heroes.",
+      "description": "Restrained broadcast-glitch title frame: an irregular clip-path band jitter and an RGB channel-split flash both pulse on one fixed rhythmic beat over a drifting cyan scanline, reading as a deliberate transmission cut rather than continuous noise.",
       "tags": [
         "video-template",
         "first-party",
@@ -1955,23 +1965,24 @@
         "html-video",
         "motion",
         "title",
-        "glitch",
         "cyberpunk",
-        "rgb-shift",
-        "tech",
+        "chroma-glitch",
+        "rgb-split",
         "scanline",
+        "broadcast",
+        "transmission",
         "presentation"
       ],
-      "homepage": "https://github.com/nexu-io/html-video/tree/main/templates/frame-glitch-title",
+      "homepage": "https://github.com/nexu-io/html-video/tree/main/templates/frame-chroma-glitch",
       "license": "Apache-2.0",
       "mode": "video",
       "taskKind": "new-generation"
     },
     {
-      "name": "open-design/video-template-frame-kinetic-type",
-      "title": "Kinetic Type",
+      "name": "open-design/video-template-frame-shuffle-kinetic-type",
+      "title": "Shuffle Kinetic Type",
       "version": "0.1.0",
-      "source": "github:nexu-io/open-design@main/plugins/_official/video-templates/frame-kinetic-type",
+      "source": "github:nexu-io/open-design@main/plugins/_official/video-templates/frame-shuffle-kinetic-type",
       "publisher": {
         "id": "open-design",
         "url": "https://open-design.ai"
@@ -1981,7 +1992,7 @@
         "fs:write",
         "media:video-generate"
       ],
-      "description": "Bold kinetic typography promo",
+      "description": "A looping title card where the headline perpetually decrypts itself — each character cycles a random glyph and resolves left-to-right in a traveling wave, breathes through a weight/width pulse, then reverses and re-shuffles into the next word.",
       "tags": [
         "video-template",
         "first-party",
@@ -1991,13 +2002,15 @@
         "motion",
         "kinetic",
         "typography",
-        "promo",
-        "bold",
-        "motion-text",
+        "decode",
+        "scramble",
+        "glitch-type",
+        "title-card",
+        "broadcast",
         "presentation"
       ],
-      "homepage": "https://github.com/nexu-io/html-video/tree/main/templates/frame-kinetic-type",
-      "license": "Apache-2.0",
+      "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/video-templates/frame-shuffle-kinetic-type",
+      "license": "MIT",
       "mode": "video",
       "taskKind": "new-generation"
     },
