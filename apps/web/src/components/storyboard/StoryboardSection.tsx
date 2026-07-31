@@ -37,11 +37,7 @@ export function StoryboardSection({ active }: Props) {
       if (listResult.ok) setStoryboards(listResult.value);
       else setError(listResult.message);
       if (providers.status === 'ok') {
-        const map: ConfiguredProviderMap = {};
-        for (const [id, entry] of Object.entries(providers.providers ?? {})) {
-          map[id] = Boolean(entry?.apiKeyConfigured);
-        }
-        setConfigured(map);
+        setConfigured(providers.providers ?? {});
       }
       setLoading(false);
     });

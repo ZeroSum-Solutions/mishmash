@@ -9,7 +9,7 @@ import type { StoryboardFrameRef, StoryboardShot } from '@open-design/contracts'
 import { Button } from '@open-design/components';
 import { Icon } from '../Icon';
 import { useT } from '../../i18n';
-import type { MediaModel } from '../../media/models';
+import { findMediaModel, type MediaModel } from '../../media/models';
 import {
   STORYBOARD_DURATION_OPTIONS,
   type ConfiguredProviderMap,
@@ -77,6 +77,12 @@ export function ShotCard(props: ShotCardProps) {
   } = props;
   const t = useT();
   const state = computeShotEditorState(shot, previousShot);
+  // Keyframe pairs (start + end frame) only render through the Volcengine /
+  // OpenRouter Seedance 2.0 models that declare 'kf' — the daemon 400s an
+  // endImage sent against any other model (apps/daemon/src/media/index.ts).
+  // Gate the affordance on the CURRENTLY selected video model, not a static
+  // list, since a shot's model can change after an end frame was derived.
+  const supportsKeyframePairs = Boolean(findMediaModel(shot.model)?.caps?.includes('kf'));
 
   const [startDialog, setStartDialog] = useState<'generate' | 'replace' | 'iterate' | null>(null);
   const [endDialog, setEndDialog] = useState(false);
@@ -189,7 +195,7 @@ export function ShotCard(props: ShotCardProps) {
           <span className={styles.shotFrameSlotLabel}>{t('storyboard.endFrame')}</span>
           {shot.endFrame ? (
             <FrameThumb frame={shot.endFrame} url={frameUrl(shot.endFrame.path)} />
-          ) : (
+          ) : supportsKeyframePairs ? (
             <Button
               type="button"
               variant="subtle"
@@ -198,6 +204,10 @@ export function ShotCard(props: ShotCardProps) {
             >
               {t('storyboard.deriveEndFrame')}
             </Button>
+          ) : (
+            <p className={styles.shotDialogHelper} data-testid="derive-end-frame-unsupported-hint">
+              {t('storyboard.deriveEndFrameNeedsKeyframeModel')}
+            </p>
           )}
           {endDialog ? (
             <div className={styles.shotDialog} data-testid="end-frame-dialog">
@@ -241,7 +251,16 @@ export function ShotCard(props: ShotCardProps) {
             // resolutionForModelId's doc comment in model-defaults.ts) —
             // recompute it alongside the model, or a model swap leaves the
             // previous model's resolution persisted as stale metadata.
-            onFieldChange({ model, resolution: resolutionForModelId(model) });
+            // Also drop a previously-derived end frame when the newly
+            // selected model doesn't support keyframe pairs — otherwise a
+            // stale endFrame would still get sent as endImage at render time
+            // and the daemon would 400 (see supportsKeyframePairs above).
+            const nextSupportsKf = Boolean(findMediaModel(model)?.caps?.includes('kf'));
+            onFieldChange({
+              model,
+              resolution: resolutionForModelId(model),
+              ...(!nextSupportsKf && shot.endFrame ? { endFrame: undefined } : {}),
+            });
           }}
           aria-label={t('storyboard.videoModel')}
         >

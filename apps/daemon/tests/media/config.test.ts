@@ -789,6 +789,74 @@ describe('media-config Grok / xAI OAuth fallback', () => {
   });
 });
 
+describe('media-config Codex subscription readiness', () => {
+  let projectRoot: string;
+  let codexHomeDir: string;
+  const originalCodexHome = process.env.CODEX_HOME;
+
+  beforeEach(async () => {
+    projectRoot = await mkdtemp(path.join(tmpdir(), 'od-media-codex-project-'));
+    codexHomeDir = await mkdtemp(path.join(tmpdir(), 'od-media-codex-home-'));
+    // resolveCodexSubscriptionStatus falls back to the REAL ~/.codex/auth.json
+    // when CODEX_HOME is unset (codexHomeFromEnv) — point it at an isolated
+    // temp dir per test so the outcome doesn't depend on whether THIS
+    // machine happens to have a real, live Codex ChatGPT subscription logged
+    // in. Same gotcha/precedent as image-edit-fixes.test.ts's beforeEach.
+    process.env.CODEX_HOME = codexHomeDir;
+  });
+
+  afterEach(async () => {
+    if (originalCodexHome == null) {
+      delete process.env.CODEX_HOME;
+    } else {
+      process.env.CODEX_HOME = originalCodexHome;
+    }
+    await rm(projectRoot, { recursive: true, force: true });
+    await rm(codexHomeDir, { recursive: true, force: true });
+  });
+
+  function codexProvider(masked: { providers: unknown }) {
+    return (masked.providers as Record<string, unknown>).codex;
+  }
+
+  it('reports codex as configured via subscription when auth_mode is chatgpt', async () => {
+    await writeFile(
+      path.join(codexHomeDir, 'auth.json'),
+      JSON.stringify({ auth_mode: 'chatgpt' }),
+      'utf8',
+    );
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(codexProvider(masked)).toMatchObject({
+      configured: true,
+      source: 'codex-subscription',
+    });
+  });
+
+  it('reports codex as unconfigured when CODEX_HOME has no auth.json', async () => {
+    const masked = await readMaskedConfig(projectRoot);
+    expect(codexProvider(masked)).toMatchObject({
+      configured: false,
+      source: 'unset',
+    });
+  });
+
+  it('resolveProviderConfig also reflects codex subscription availability', async () => {
+    await writeFile(
+      path.join(codexHomeDir, 'auth.json'),
+      JSON.stringify({ auth_mode: 'chatgpt' }),
+      'utf8',
+    );
+
+    const resolved = await resolveProviderConfig(projectRoot, 'codex');
+    expect(resolved.apiKey).not.toBe('');
+
+    await rm(path.join(codexHomeDir, 'auth.json'));
+    const resolvedAfterLogout = await resolveProviderConfig(projectRoot, 'codex');
+    expect(resolvedAfterLogout.apiKey).toBe('');
+  });
+});
+
 describe('media-config model alias resolution (issue #1277)', () => {
   let projectRoot: string;
   const originalEnvAliases = process.env.OD_MEDIA_MODEL_ALIASES;

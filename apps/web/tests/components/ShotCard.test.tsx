@@ -57,7 +57,10 @@ function renderShotCard(shot: StoryboardShot, overrides: Partial<React.Component
       imageModels={IMAGE_MODELS}
       i2iImageModels={I2I_MODELS}
       videoModels={VIDEO_MODELS}
-      configured={{ openai: true, openrouter: true }}
+      configured={{
+        openai: { apiKey: '', baseUrl: '', apiKeyConfigured: true },
+        openrouter: { apiKey: '', baseUrl: '', apiKeyConfigured: true },
+      }}
       frameUrl={(p) => `/frame/${p}`}
       busy={false}
       canMoveUp={false}
@@ -194,6 +197,50 @@ describe('ShotCard editor state machine', () => {
     expect(handlers.onFieldChange).toHaveBeenCalledWith({
       model: 'openrouter/bytedance/seedance-2.0:480p',
       resolution: '480p',
+    });
+  });
+
+  // 'kf' (keyframe-pair) gating: findMediaModel() resolves shot.model against
+  // the REAL catalog (apps/web/src/media/models.ts), not the test's local
+  // `videoModels` fixture prop (which only feeds the <select> options) — so
+  // 'grok-imagine-video' below is a real i2v-capable catalog id that does
+  // NOT declare 'kf', and 'openrouter/bytedance/seedance-2.0:1080p' does.
+  it('hides Derive-from-start-frame for a non-kf i2v model and shows a hint instead', () => {
+    renderShotCard(
+      baseShot({ model: 'grok-imagine-video', startFrame: { path: 'start.png', origin: 'generated' } }),
+    );
+    expect(screen.queryByText('Derive from start frame')).toBeNull();
+    expect(screen.getByTestId('derive-end-frame-unsupported-hint')).toBeTruthy();
+  });
+
+  it('keeps Derive-from-start-frame enabled for a kf-capable model', () => {
+    renderShotCard(
+      baseShot({
+        model: 'openrouter/bytedance/seedance-2.0:1080p',
+        startFrame: { path: 'start.png', origin: 'generated' },
+      }),
+    );
+    expect(screen.getByText('Derive from start frame')).not.toBeDisabled();
+    expect(screen.queryByTestId('derive-end-frame-unsupported-hint')).toBeNull();
+  });
+
+  it('clears an existing end frame when switching to a non-kf video model, so it is never sent as endImage', () => {
+    const models: MediaModel[] = [
+      ...VIDEO_MODELS,
+      { id: 'grok-imagine-video', label: 'grok-imagine-video', hint: '', provider: 'grok', caps: ['t2v', 'i2v', 'audio'] },
+    ];
+    const handlers = renderShotCard(
+      baseShot({
+        startFrame: { path: 'start.png', origin: 'generated' },
+        endFrame: { path: 'end.png', origin: 'derived' },
+      }),
+      { videoModels: models },
+    );
+    fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'grok-imagine-video' } });
+    expect(handlers.onFieldChange).toHaveBeenCalledWith({
+      model: 'grok-imagine-video',
+      resolution: '720p',
+      endFrame: undefined,
     });
   });
 });

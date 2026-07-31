@@ -4293,6 +4293,7 @@ export const en: Dict = {
   'storyboard.endPromptPlaceholder': 'Describe the changed END state…',
   'storyboard.deriveEndFrame': 'Derive from start frame',
   'storyboard.deriveEndFrameHelper': 'Edit the start image so subject, angle, and lighting stay identical — describe the changed END state.',
+  'storyboard.deriveEndFrameNeedsKeyframeModel': 'Keyframe pairs need a Seedance model — switch this shot to one to derive an end frame.',
   'storyboard.motionPromptPlaceholder': "Only the motion — e.g. \"the components separate smoothly and float apart, camera orbits slowly\". Don't re-describe the frames.",
   'storyboard.videoModel': 'Model',
   'storyboard.duration': 'Duration',

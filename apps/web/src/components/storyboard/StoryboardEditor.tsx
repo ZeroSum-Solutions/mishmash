@@ -9,7 +9,8 @@ import type { Storyboard, StoryboardFrameRef, StoryboardShot } from '@open-desig
 import { Button } from '@open-design/components';
 import { Icon } from '../Icon';
 import { useT } from '../../i18n';
-import { IMAGE_MODELS, MEDIA_ASPECTS, VIDEO_MODELS } from '../../media/models';
+import { IMAGE_MODELS, MEDIA_ASPECTS, VIDEO_MODELS, type MediaModel } from '../../media/models';
+import { isMediaProviderPickerReady } from '../../media/provider-readiness';
 import {
   assembleStoryboard,
   exportStoryboardSlider,
@@ -24,7 +25,6 @@ import {
   type ConfiguredProviderMap,
   defaultConfiguredModel,
   i2iCapableImageModels,
-  keyframeCapableVideoModels,
   resolutionForModelId,
   STORYBOARD_DEFAULT_DURATION_SEC,
 } from './model-defaults';
@@ -88,15 +88,31 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
     };
   }, []);
 
-  const videoModels = useMemo(() => keyframeCapableVideoModels(VIDEO_MODELS), []);
+  // Every i2v-capable model from a provider the daemon can actually dispatch
+  // to — not just the narrower 'kf' (Seedance keyframe-pair) subset. A
+  // single start-frame i2v render dispatches generically across providers;
+  // 'kf' still gates the derive-end-frame affordance + endImage param
+  // specifically (see ShotCard.tsx), not list membership here.
+  // isMediaProviderPickerReady(provider) with no mediaProviders arg checks
+  // only `integrated`, so bfl/replicate/google/kling/midjourney-style
+  // placeholder providers never show up as selectable-but-broken.
+  const videoModels = useMemo(
+    () => VIDEO_MODELS.filter((m) => m.caps?.includes('i2v') && isMediaProviderPickerReady(m.provider)),
+    [],
+  );
   const i2iModels = useMemo(() => i2iCapableImageModels(IMAGE_MODELS), []);
   const defaultVideoModel = useMemo(
     () => defaultConfiguredModel(videoModels, configured) ?? videoModels[0],
     [videoModels, configured],
   );
+  // Cheap mood-draft lane: the t2v subset of the broadened list above,
+  // ordered cheapest-first (480p / fast / lite in the id) rather than the
+  // old :480p-suffix-only filter (which only ever matched the OpenRouter
+  // Seedance variant and silently fell back to the full list otherwise).
   const moodModels = useMemo(() => {
-    const p480 = videoModels.filter((m) => m.id.endsWith(':480p'));
-    return p480.length > 0 ? p480 : videoModels;
+    const t2vModels = videoModels.filter((m) => m.caps?.includes('t2v'));
+    const isCheap = (m: MediaModel) => /480p|fast|lite/i.test(m.id);
+    return [...t2vModels].sort((a, b) => Number(isCheap(b)) - Number(isCheap(a)));
   }, [videoModels]);
   const defaultMoodModel = useMemo(
     () => defaultConfiguredModel(moodModels, configured) ?? moodModels[0],

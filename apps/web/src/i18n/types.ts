@@ -4406,6 +4406,7 @@ export interface Dict {
   'storyboard.endPromptPlaceholder': string;
   'storyboard.deriveEndFrame': string;
   'storyboard.deriveEndFrameHelper': string;
+  'storyboard.deriveEndFrameNeedsKeyframeModel': string;
   'storyboard.motionPromptPlaceholder': string;
   'storyboard.videoModel': string;
   'storyboard.duration': string;

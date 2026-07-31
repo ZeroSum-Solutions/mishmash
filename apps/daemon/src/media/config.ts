@@ -345,6 +345,24 @@ async function resolveOpenAIAuthFileCredential(): Promise<OAuthCredential | null
   return null;
 }
 
+/**
+ * Codex's provider entry is `credentialsRequired: false` — it's a local CLI
+ * subscription, not a pasted API key — so there is no bearer token to
+ * return. The sentinel apiKey below only makes `Boolean(apiKey)` true for
+ * any generic caller; the actual codex dispatch (renderCodexImage) ignores
+ * `resolveProviderConfig`'s return value entirely and resolves its own CLI
+ * env via resolveCodexImagegenEnv. `source: 'codex-subscription'` is what
+ * readMaskedConfig actually surfaces to the Settings/Storyboard UI.
+ */
+async function resolveCodexOAuthCredential(
+  projectRoot: string,
+): Promise<OAuthCredential | null> {
+  const status = await resolveCodexSubscriptionStatus(projectRoot);
+  return status.available
+    ? { apiKey: 'codex-subscription-active', source: 'codex-subscription' }
+    : null;
+}
+
 async function resolveXAIOAuthCredential(
   projectRoot: string,
 ): Promise<OAuthCredential | null> {
@@ -401,7 +419,9 @@ export async function resolveProviderConfig(projectRoot: string, providerId: str
       ? await resolveOpenAIAuthFileCredential()
       : providerId === 'grok'
         ? await resolveXAIOAuthCredential(projectRoot)
-        : null
+        : providerId === 'codex'
+          ? await resolveCodexOAuthCredential(projectRoot)
+          : null
     : null;
   return {
     apiKey: envKey || entry.apiKey || externalCredential?.apiKey || '',
@@ -441,7 +461,9 @@ export async function readMaskedConfig(projectRoot: string): Promise<MaskedConfi
         ? await resolveOpenAIAuthFileCredential()
         : id === 'grok'
           ? await resolveXAIOAuthCredential(projectRoot)
-          : null
+          : id === 'codex'
+            ? await resolveCodexOAuthCredential(projectRoot)
+            : null
       : null;
     providers[id] = {
       configured: Boolean(envKey || hasStoredKey || externalCredential?.apiKey),
