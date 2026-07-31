@@ -49,3 +49,7 @@ See `docs/plans/2026-07-30-workflows-and-assets-keep-list.md` (generated alongsi
 ## 5. Rollback
 
 Everything is on `feat/workflows-and-assets`; folders are git-tracked (restore via checkout of the parent commit), DB backup at `~/Inbox/misc/mishmash-od-backup-2026-07-30/` before any mutation (`.od-backup-*` inside the repo would not be gitignored), and `pruneRemovedBundledPlugins` re-registers anything whose folder is restored on the next boot.
+
+## Adjacent issues (out of scope, discovered in review)
+
+- 2026-07-31 round-7 review: `apps/web/src/components/plugins-home/cards/HtmlSurface.tsx` arms a live preview iframe on first visibility and deliberately never disarms it when the card leaves the viewport (documented "once armed it stays mounted" policy). With a gallery of permanently-animating tiles (the webgl-* family predates this pass; the reference-integration tiles behave the same), scrolling the full grid accumulates mounted offscreen iframes. Chrome throttles rAF in offscreen sandboxed (opaque-origin) iframes, which bounds the cost, but an explicit disarm-on-exit (plus a regression test around observer exit after arming) would make the nearby-only policy in PreviewSurface.tsx actually hold. Pre-existing behavior, untouched by the curation and reference-integration commits — needs its own red spec and PR.

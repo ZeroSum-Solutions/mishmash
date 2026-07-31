@@ -142,6 +142,39 @@ describe('sortByVisualAppeal', () => {
     expect(sorted[0]).toBe('example-kanban-board');
   });
 
+  it('pins the curated hyperframe replacements above media-rich uncurated tiles', () => {
+    // The 2026-07-31 reference-integration frames ship HTML previews; their
+    // predecessors had baked video/poster clips. Curation is what keeps the
+    // replacements from sinking to the bottom of the gallery.
+    const curatedFrames = [
+      'video-template-frame-chroma-glitch',
+      'video-template-frame-arc-voltage',
+      'video-template-frame-shuffle-kinetic-type',
+    ];
+    const records = [
+      fixture({
+        id: 'video-template-frame-data-rollup',
+        od: {
+          surface: 'video',
+          mode: 'video',
+          preview: { type: 'video', video: 'r.mp4', poster: 'r.png' },
+        },
+      }),
+      ...curatedFrames.map((id) =>
+        fixture({
+          id,
+          od: {
+            surface: 'video',
+            mode: 'video',
+            preview: { type: 'html', entry: './example.html' },
+          },
+        }),
+      ),
+    ];
+    const sorted = sortByVisualAppeal(records).map((r) => r.id);
+    expect(sorted).toEqual([...curatedFrames, 'video-template-frame-data-rollup']);
+  });
+
   it('keeps numeric featured rank ahead of media bonuses', () => {
     const records = [
       fixture({

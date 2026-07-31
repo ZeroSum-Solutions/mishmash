@@ -54,7 +54,8 @@ export const CURATED_LIVE_ARTIFACT_PLUGIN_IDS = [
 // hyperframes curated pick (including the pinned community slides batch)
 // and all but one image pick. Empty arrays fall back to popularity +
 // visual-appeal ordering for those chips; re-populate only from curator
-// picks that are on the keep list.
+// picks that are on the keep list (the hyperframes picks below were
+// re-populated by the 2026-07-31 reference-integration pass).
 const CURATED_DECK_PLUGIN_IDS = [] as const;
 
 const CURATED_IMAGE_PLUGIN_IDS = [
@@ -63,7 +64,16 @@ const CURATED_IMAGE_PLUGIN_IDS = [
 
 const CURATED_VIDEO_PLUGIN_IDS = [] as const;
 
-const CURATED_HYPERFRAMES_PLUGIN_IDS = [] as const;
+// The 2026-07-31 reference-integration pass replaced the three retired
+// frame picks with adversarially-judged winners. They ship HTML previews
+// (their predecessors had baked video/poster clips scoring ~1450 in
+// pluginVisualScore), so without curation they would sink to the bottom
+// of the gallery; pin them in judge-score order.
+const CURATED_HYPERFRAMES_PLUGIN_IDS = [
+  'video-template-frame-chroma-glitch',
+  'video-template-frame-arc-voltage',
+  'video-template-frame-shuffle-kinetic-type',
+] as const;
 
 export const CURATED_PLUGIN_IDS_BY_CHIP = {
   prototype: CURATED_PROTOTYPE_PLUGIN_IDS,
