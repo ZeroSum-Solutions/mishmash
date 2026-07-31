@@ -19,8 +19,10 @@ bottom of their facet rather than topping it by default-usage.
 | `HomeHero.tsx` → `comparePluginPresetOrder` | source | Home rail sort (per-chip) — calls the comparator |
 
 Both sort sites call `comparePluginGalleryOrder(aId, bId, aCurationGoverned, bCurationGoverned)`
-first, then fall back to their existing keys (curated priority → featured →
-visual score → title). The comparator applies, in order:
+first, then fall back to their own keys — the facet grid to curated
+priority → featured → visual score → title, the Home rail
+(`comparePluginPresetOrder`) to per-chip curated priority → preset rank →
+title. The comparator applies, in order:
 
 1. **`ALWAYS_PINNED`** — curator force-front (empty by default).
 2. **Sink** — the default mode-seeds (`ALWAYS_LAST` = Web Prototype, Simple Deck)

@@ -7,10 +7,6 @@
   "publishedAt": "2026-07-31T00:07:01Z",
   "description": "A perpetually-reshuffling gallery grid choreographed by a self-driven boomerang playhead: differential per-column elastic lag stretches the grid like taffy, a perspective depth-shuffle cycles between two 3D recipes every loop, and one tile auto-fires a sliced-band hover-distortion reveal with a character-scramble caption on a timer — continuous motion from frame 0, no scroll or hover required.",
   "license": "MIT",
-  "author": {
-    "name": "MishMash",
-    "url": "https://github.com/nexu-io"
-  },
   "credits": [
     {
       "role": "motion",
@@ -37,6 +33,10 @@
       "name": "Original (canvas-generated)"
     }
   ],
+  "author": {
+    "name": "MishMash",
+    "url": "https://github.com/nexu-io"
+  },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/archive-elastic-gallery",
   "tags": [
     "example",

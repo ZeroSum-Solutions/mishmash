@@ -7,6 +7,9 @@
   "publishedAt": "2026-07-31T00:07:01Z",
   "description": "Restrained broadcast-glitch title frame: an irregular clip-path band jitter and an RGB channel-split flash both pulse on one fixed rhythmic beat over a drifting cyan scanline, reading as a deliberate transmission cut rather than continuous noise.",
   "license": "Apache-2.0",
+  "credits": [
+    "Pattern inspired by Codrops \"CSS Glitch Effect\" (codrops/CSSGlitchEffect) and, channel-split concept only, Codrops \"Text Distortion Effects\" — Codrops's own permissive terms (build-upon allowed, no resale); reimplemented from scratch in vanilla CSS/JS, no source copied."
+  ],
   "author": {
     "name": "nexu-io",
     "url": "https://github.com/nexu-io",

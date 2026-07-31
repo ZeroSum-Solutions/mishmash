@@ -7,6 +7,9 @@
   "publishedAt": "2026-07-31T00:07:01Z",
   "description": "Premium invite-only waitlist hero: a slow-drifting indigo-to-rose-gold aurora mesh breathes behind a frosted-glass signup card, a magnetic CTA settles under exponential damping toward a self-driven idle target, and a digit-flip countdown ticks live — every element self-animated so the card is never static.",
   "license": "MIT",
+  "credits": [
+    "Magnetic CTA chase damping adapted (formula only) from darkroomengineering/lenis (MIT); reimplemented from scratch in 2D canvas."
+  ],
   "author": {
     "name": "MishMash",
     "url": "https://github.com/nexu-io"

@@ -7,6 +7,11 @@
   "publishedAt": "2026-07-31T00:07:01Z",
   "description": "Build a full-viewport curl-noise particle flow field — several thousand particles advect along a genuine divergence-free vector field, colored by a continuous cosine-gradient palette and organized by a slow orbiting attractor, under a spare editorial title-card overlay — rendered at 60fps as a single self-contained index.html.",
   "license": "MIT",
+  "credits": [
+    "Curl-noise divergence-free flow field after Robert Bridson's curl-noise technique; original canvas implementation.",
+    "Additive point-sprite glow falloff inspired by pmndrs/drei Sparkles (MIT); reimplemented on canvas 2D.",
+    "Fluid vw-based type scale structure inspired by darkroomengineering/satus (MIT)."
+  ],
   "author": {
     "name": "MishMash",
     "url": "https://github.com/nexu-io"

@@ -7,6 +7,11 @@
   "publishedAt": "2026-07-31T00:07:01Z",
   "description": "A looping title card where the headline perpetually decrypts itself — each character cycles a random glyph and resolves left-to-right in a traveling wave, breathes through a weight/width pulse, then reverses and re-shuffles into the next word.",
   "license": "MIT",
+  "credits": [
+    "Character decode/scramble wave inspired by Codrops \"TypeShuffleAnimation\" (MIT); rewired into an infinite self-driven director, no source copied.",
+    "Per-character overflow-hidden stagger inspired by Codrops \"TypographyMotion\" (MIT); pattern only.",
+    "Fluid type scale and easing tokens inspired by darkroomengineering/satus (MIT)."
+  ],
   "author": {
     "name": "MishMash",
     "url": "https://github.com/nexu-io"

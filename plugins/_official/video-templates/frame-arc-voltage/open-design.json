@@ -7,6 +7,9 @@
   "publishedAt": "2026-07-31T00:07:01Z",
   "description": "High-energy beat-synced title frame — white-hot Lichtenberg arcs strike across a graphite-black canvas on a fixed beat grid, each beat triggering a pulse-ring bloom and a strobe-safe flash, with the title punching in on the downbeat.",
   "license": "Apache-2.0",
+  "credits": [
+    "Beat-clock discrete-arrival easing (formula only) adapted from darkroomengineering/lenis (MIT); all rendering code original."
+  ],
   "author": {
     "name": "nexu-io",
     "url": "https://github.com/nexu-io",
