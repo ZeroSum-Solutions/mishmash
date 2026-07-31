@@ -1,0 +1,251 @@
+import type http from 'node:http';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { startServer } from '../../src/server.js';
+
+// Mirrors tests/media/tasks-routes.test.ts: boot the REAL server via
+// startServer({port:0, returnServer:true}) and hit it with plain fetch().
+//
+// Fixture data below is entirely invented -- no bytes from the real local
+// Design Assets library ever enter this repo (hard rule).
+const SYNTHETIC_CATALOG = {
+  library: 'Synthetic Test Library',
+  rights_ledger: 'synthetic-ledger-fixture',
+  note: 'allowed_use per collection mirrors a synthetic RIGHTS.md fixture',
+  total_collections: 1,
+  groups: [
+    {
+      title: 'Synthetic Group',
+      folder: '00 Synthetic',
+      blurb: 'A synthetic group for tests.',
+      items: [
+        {
+          id: 'synthetic-item-1',
+          label: 'Synthetic Item',
+          rel: '00 Synthetic/item-1',
+          thumb: '.catalog/thumbs/synthetic-item-1.png',
+          kind: 'Synthetic kind',
+          files: 3,
+          size: '1 KB',
+          category: '00 Synthetic',
+          domains: ['test-domain'],
+          allowed_use: 'human-local-only',
+        },
+      ],
+    },
+  ],
+};
+
+// A tiny (67-byte) but structurally valid 1x1 transparent PNG -- enough for
+// the route to serve a real file with a real image/png Content-Type.
+const TINY_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
+// Windows non-admin runners can't create symlinks; probe once and skip the
+// symlink-escape cases there instead of failing.
+const canSymlink = (() => {
+  try {
+    const probeDir = mkdtempSync(path.join(tmpdir(), 'od-symlink-probe-'));
+    writeFileSync(path.join(probeDir, 'a'), '');
+    symlinkSync(path.join(probeDir, 'a'), path.join(probeDir, 'b'));
+    rmSync(probeDir, { recursive: true, force: true });
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+describe('design library routes', () => {
+  let server: http.Server | null = null;
+  let shutdown: (() => Promise<void> | void) | undefined;
+  let fixtureDir: string | null = null;
+  let outsideDir: string | null = null;
+  const PREV_ROOT = process.env.OD_DESIGN_LIBRARY_DIR;
+
+  afterEach(async () => {
+    await Promise.resolve(shutdown?.());
+    shutdown = undefined;
+    if (server) {
+      await new Promise<void>((resolve) => server?.close(() => resolve()));
+      server = null;
+    }
+    if (fixtureDir) {
+      rmSync(fixtureDir, { recursive: true, force: true });
+      fixtureDir = null;
+    }
+    if (outsideDir) {
+      rmSync(outsideDir, { recursive: true, force: true });
+      outsideDir = null;
+    }
+    if (PREV_ROOT === undefined) delete process.env.OD_DESIGN_LIBRARY_DIR;
+    else process.env.OD_DESIGN_LIBRARY_DIR = PREV_ROOT;
+  });
+
+  async function start(): Promise<string> {
+    const started = (await startServer({ port: 0, returnServer: true })) as {
+      url: string;
+      server: http.Server;
+      shutdown?: () => Promise<void> | void;
+    };
+    server = started.server;
+    shutdown = started.shutdown;
+    return started.url;
+  }
+
+  function makeFixture(): string {
+    const dir = mkdtempSync(path.join(tmpdir(), 'od-design-library-test-'));
+    writeFileSync(path.join(dir, 'catalog.json'), JSON.stringify(SYNTHETIC_CATALOG, null, 2), 'utf8');
+    const thumbsDir = path.join(dir, '.catalog', 'thumbs');
+    mkdirSync(thumbsDir, { recursive: true });
+    writeFileSync(path.join(thumbsDir, 'synthetic-item-1.png'), Buffer.from(TINY_PNG_BASE64, 'base64'));
+    return dir;
+  }
+
+  it('round-trips the synthetic catalog with its resolved root', async () => {
+    fixtureDir = makeFixture();
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/catalog`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as typeof SYNTHETIC_CATALOG & { root: string };
+    expect(body).toMatchObject({
+      library: 'Synthetic Test Library',
+      total_collections: 1,
+      root: fixtureDir,
+    });
+    expect(body.groups).toHaveLength(1);
+    expect(body.groups[0]?.items[0]).toMatchObject({
+      id: 'synthetic-item-1',
+      allowed_use: 'human-local-only',
+    });
+  });
+
+  it('serves a thumb file directly under the thumbs directory', async () => {
+    fixtureDir = makeFixture();
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/thumb/synthetic-item-1.png`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('image/png');
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect(bytes.length).toBeGreaterThan(0);
+  });
+
+  it('rejects a path-traversal thumb request with 400', async () => {
+    fixtureDir = makeFixture();
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    // encodeURIComponent keeps this a single path segment so it reaches the
+    // `:file` route param intact instead of being collapsed by URL dot-
+    // segment normalization -- same technique as the containment tests for
+    // /api/skills/:id/assets/*.
+    const traversal = encodeURIComponent('../../../../../../etc/passwd');
+    const res = await fetch(`${daemonUrl}/api/design-library/thumb/${traversal}`);
+    expect(res.status).toBe(400);
+  });
+
+  it('404s a thumb request for a file that does not exist', async () => {
+    fixtureDir = makeFixture();
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/thumb/does-not-exist.png`);
+    expect(res.status).toBe(404);
+  });
+
+  it('404s the catalog endpoint when the library root does not exist on this machine', async () => {
+    const missingRoot = path.join(tmpdir(), `od-design-library-missing-${Date.now()}`);
+    process.env.OD_DESIGN_LIBRARY_DIR = missingRoot;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/catalog`);
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body).toEqual({ error: 'design library not found' });
+  });
+
+  it('rejects a thumb request for a non-image extension with 400', async () => {
+    fixtureDir = makeFixture();
+    writeFileSync(path.join(fixtureDir, '.catalog', 'thumbs', 'page.html'), '<script>alert(1)</script>', 'utf8');
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/thumb/page.html`);
+    expect(res.status).toBe(400);
+  });
+
+  it.runIf(canSymlink)('rejects a thumb symlink that escapes the library root with 400', async () => {
+    fixtureDir = makeFixture();
+    outsideDir = mkdtempSync(path.join(tmpdir(), 'od-design-library-outside-'));
+    const secret = path.join(outsideDir, 'secret.png');
+    writeFileSync(secret, Buffer.from(TINY_PNG_BASE64, 'base64'));
+    // The symlink's own path sits inside thumbs/, so the lexical prefix
+    // check alone would pass -- only realpath re-validation catches it.
+    symlinkSync(secret, path.join(fixtureDir, '.catalog', 'thumbs', 'evil.png'));
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/thumb/evil.png`);
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects an open request without rel with 400', async () => {
+    fixtureDir = makeFixture();
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/open`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a path-traversal open request with 400', async () => {
+    fixtureDir = makeFixture();
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/open`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel: '../../../../etc' }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('404s an open request for a path that does not exist under the root', async () => {
+    fixtureDir = makeFixture();
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/open`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel: 'does-not-exist' }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it.runIf(canSymlink)('rejects an open request whose target symlinks outside the root with 400', async () => {
+    fixtureDir = makeFixture();
+    outsideDir = mkdtempSync(path.join(tmpdir(), 'od-design-library-outside-'));
+    symlinkSync(outsideDir, path.join(fixtureDir, 'escape'));
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/open`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel: 'escape' }),
+    });
+    expect(res.status).toBe(400);
+  });
+});
