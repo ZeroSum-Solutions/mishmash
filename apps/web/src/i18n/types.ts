@@ -1001,6 +1001,8 @@ export interface Dict {
   'entry.navTasks': string;
   'entry.navPlugins': string;
   'entry.navDesignSystems': string;
+  'entry.navDesignLibrary': string;
+  'entry.navStoryboard': string;
   'entry.navBrands': string;
   'entry.navIntegrations': string;
   // Client message center
@@ -4348,4 +4350,65 @@ export interface Dict {
   'questions.uploadNeedsProject': string;
   'questions.uploadPartialFailed': string;
   'questions.uploadFailed': string;
+  // Design Library — read-only browse of the local curated reference-asset
+  // library. Rights-gated: allowed_use tooltip copy lives here so the badge
+  // meanings stay in one place.
+  'designLibrary.title': string;
+  'designLibrary.rightsNote': string;
+  'designLibrary.searchPlaceholder': string;
+  'designLibrary.allCategories': string;
+  'designLibrary.allDomains': string;
+  'designLibrary.filesUnit': string;
+  'designLibrary.openFolder': string;
+  'designLibrary.duplicateOfPrefix': string;
+  'designLibrary.loading': string;
+  'designLibrary.emptyNotFound': string;
+  'designLibrary.emptyFiltered': string;
+  'designLibrary.allowedUse.ownCode': string;
+  'designLibrary.allowedUse.licensedSourceReview': string;
+  'designLibrary.allowedUse.humanLocalOnly': string;
+  'designLibrary.allowedUse.blockedPendingLicense': string;
+  // Storyboard — Seedance 2.0 image-first keyframe workflow.
+  'storyboard.title': string;
+  'storyboard.newStoryboard': string;
+  'storyboard.loading': string;
+  'storyboard.emptyState': string;
+  'storyboard.shotCount': string;
+  'storyboard.back': string;
+  'storyboard.ratio': string;
+  'storyboard.addShot': string;
+  'storyboard.assemble': string;
+  'storyboard.assembling': string;
+  'storyboard.assembleDone': string;
+  'storyboard.exportSlider': string;
+  'storyboard.exporting': string;
+  'storyboard.exportDone': string;
+  'storyboard.openFolder': string;
+  'storyboard.renderFailed': string;
+  'storyboard.moodLaneTitle': string;
+  'storyboard.moodLaneHelper': string;
+  'storyboard.moodPromptPlaceholder': string;
+  'storyboard.moodGenerate': string;
+  'storyboard.rendering': string;
+  'storyboard.shotLabel': string;
+  'storyboard.moveShotUp': string;
+  'storyboard.moveShotDown': string;
+  'storyboard.duplicateShot': string;
+  'storyboard.deleteShot': string;
+  'storyboard.startFrame': string;
+  'storyboard.endFrame': string;
+  'storyboard.iterate': string;
+  'storyboard.replace': string;
+  'storyboard.generate': string;
+  'storyboard.usePreviousEndFrame': string;
+  'storyboard.startPromptPlaceholder': string;
+  'storyboard.cancel': string;
+  'storyboard.endPromptPlaceholder': string;
+  'storyboard.deriveEndFrame': string;
+  'storyboard.deriveEndFrameHelper': string;
+  'storyboard.motionPromptPlaceholder': string;
+  'storyboard.videoModel': string;
+  'storyboard.duration': string;
+  'storyboard.render': string;
+  'storyboard.needsApiKey': string;
 }

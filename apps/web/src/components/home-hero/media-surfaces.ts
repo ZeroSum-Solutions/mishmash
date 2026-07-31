@@ -431,7 +431,7 @@ function validAudioDuration(kind: AudioKind, raw: unknown): number {
 
 function homeAudioModels(kind: AudioKind) {
   if (kind === 'music') return [];
-  const runnableProviders = new Set(['minimax', 'fishaudio', 'senseaudio', 'elevenlabs', 'openai', 'volcengine', 'aihubmix']);
+  const runnableProviders = new Set(['minimax', 'fishaudio', 'senseaudio', 'elevenlabs', 'openai', 'volcengine', 'grok', 'aihubmix']);
   return AUDIO_MODELS_BY_KIND[kind].filter((model) => runnableProviders.has(model.provider));
 }
 

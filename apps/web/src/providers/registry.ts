@@ -2852,3 +2852,286 @@ export async function fetchLibraryConnection(): Promise<LibraryConnectionStatus 
     return null;
   }
 }
+
+// --- Design Library ----------------------------------------------------------
+
+import type { DesignLibraryCatalog } from '@open-design/contracts';
+
+// Read-only browse of the local curated reference-asset library
+// (apps/daemon/src/routes/design-library.ts). Discriminated result (not a
+// bare null) so the section can show a real "not found on this machine"
+// empty state instead of an indistinguishable network failure.
+export type DesignLibraryCatalogResult =
+  | { ok: true; catalog: DesignLibraryCatalog }
+  | { ok: false; notFound: boolean; message: string };
+
+export async function fetchDesignLibraryCatalog(): Promise<DesignLibraryCatalogResult> {
+  try {
+    const resp = await fetch('/api/design-library/catalog');
+    if (!resp.ok) {
+      const payload = (await resp.json().catch(() => null)) as { error?: string } | null;
+      return {
+        ok: false,
+        notFound: resp.status === 404,
+        message: payload?.error || `Request failed (${resp.status})`,
+      };
+    }
+    return { ok: true, catalog: (await resp.json()) as DesignLibraryCatalog };
+  } catch (err) {
+    return { ok: false, notFound: false, message: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
+/** `thumb` is a rel path like `.catalog/thumbs/x.jpg` — the route only serves basenames. */
+export function designLibraryThumbUrl(thumb: string): string {
+  const file = thumb.split('/').pop() || thumb;
+  return `/api/design-library/thumb/${encodeURIComponent(file)}`;
+}
+
+export async function openDesignLibraryPath(rel: string): Promise<boolean> {
+  try {
+    const resp = await fetch('/api/design-library/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel }),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+// --- Storyboard ---------------------------------------------------------
+
+import type {
+  GenerateStoryboardFrameRequest,
+  GenerateStoryboardFrameResponse,
+  PatchStoryboardRequest,
+  RenderStoryboardShotResponse,
+  Storyboard,
+  StoryboardSummary,
+} from '@open-design/contracts';
+
+export type StoryboardApiResult<T> =
+  | { ok: true; value: T }
+  | {
+      ok: false;
+      message: string;
+      /** HTTP status, when the failure came from a response (vs. a network error). */
+      status?: number;
+      /**
+       * On a 409 (see PatchStoryboardRequest.expectedUpdatedAt), the server's
+       * CURRENT doc — callers can reapply their mutation to it and retry
+       * instead of losing the edit. Only ever set alongside status === 409.
+       */
+      conflict?: Storyboard;
+    };
+
+async function readStoryboardApiError(resp: Response): Promise<string> {
+  try {
+    const payload = (await resp.json()) as { error?: { message?: string } | string };
+    const message = typeof payload.error === 'string' ? payload.error : payload.error?.message;
+    return message || `Request failed (${resp.status})`;
+  } catch {
+    return `Request failed (${resp.status})`;
+  }
+}
+
+export async function fetchStoryboardList(): Promise<StoryboardApiResult<StoryboardSummary[]>> {
+  try {
+    const resp = await fetch('/api/storyboards');
+    if (!resp.ok) return { ok: false, message: await readStoryboardApiError(resp) };
+    const data = (await resp.json()) as { storyboards: StoryboardSummary[] };
+    return { ok: true, value: data.storyboards };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
+export async function createStoryboard(title: string): Promise<StoryboardApiResult<Storyboard>> {
+  try {
+    const resp = await fetch('/api/storyboards', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+    if (!resp.ok) return { ok: false, message: await readStoryboardApiError(resp) };
+    const data = (await resp.json()) as { storyboard: Storyboard };
+    return { ok: true, value: data.storyboard };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
+export async function fetchStoryboard(id: string): Promise<StoryboardApiResult<Storyboard>> {
+  try {
+    const resp = await fetch(`/api/storyboards/${encodeURIComponent(id)}`);
+    if (!resp.ok) return { ok: false, message: await readStoryboardApiError(resp) };
+    const data = (await resp.json()) as { storyboard: Storyboard };
+    return { ok: true, value: data.storyboard };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
+export async function patchStoryboard(
+  id: string,
+  patch: PatchStoryboardRequest,
+): Promise<StoryboardApiResult<Storyboard>> {
+  try {
+    const resp = await fetch(`/api/storyboards/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    if (resp.status === 409) {
+      // Optimistic-concurrency conflict (see PatchStoryboardRequest.expectedUpdatedAt):
+      // the body is {error:'storyboard changed', storyboard:<current doc>}, not the
+      // generic {error:{code,message}} envelope — read it directly so callers get
+      // the current doc to reapply their mutation against.
+      const payload = (await resp.json().catch(() => null)) as { error?: string; storyboard?: Storyboard } | null;
+      return {
+        ok: false,
+        status: 409,
+        message: (payload && typeof payload.error === 'string' && payload.error) || 'storyboard changed',
+        conflict: payload?.storyboard,
+      };
+    }
+    if (!resp.ok) return { ok: false, status: resp.status, message: await readStoryboardApiError(resp) };
+    const data = (await resp.json()) as { storyboard: Storyboard };
+    return { ok: true, value: data.storyboard };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
+export async function deleteStoryboard(id: string): Promise<boolean> {
+  try {
+    const resp = await fetch(`/api/storyboards/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * URL for a generated storyboard still/clip. Reuses the existing generic
+ * raw-file route every project already serves (range-request support for
+ * `<video>` seeking included) instead of adding a storyboard-specific
+ * static route — the hidden `storyboard-media` project is a normal project
+ * as far as file serving is concerned.
+ */
+export function storyboardFrameUrl(relPath: string): string {
+  return `/api/projects/storyboard-media/raw/${encodeURIComponent(relPath)}`;
+}
+
+export async function openStoryboardFolder(id: string): Promise<boolean> {
+  try {
+    const resp = await fetch(`/api/storyboards/${encodeURIComponent(id)}/open-folder`, { method: 'POST' });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function generateStoryboardFrame(
+  id: string,
+  input: GenerateStoryboardFrameRequest,
+): Promise<StoryboardApiResult<GenerateStoryboardFrameResponse>> {
+  try {
+    const resp = await fetch(`/api/storyboards/${encodeURIComponent(id)}/frames`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!resp.ok) return { ok: false, message: await readStoryboardApiError(resp) };
+    return { ok: true, value: (await resp.json()) as GenerateStoryboardFrameResponse };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
+export async function renderStoryboardShot(
+  id: string,
+  shotId: string,
+): Promise<StoryboardApiResult<RenderStoryboardShotResponse>> {
+  try {
+    const resp = await fetch(
+      `/api/storyboards/${encodeURIComponent(id)}/shots/${encodeURIComponent(shotId)}/render`,
+      { method: 'POST' },
+    );
+    if (!resp.ok) return { ok: false, message: await readStoryboardApiError(resp) };
+    return { ok: true, value: (await resp.json()) as RenderStoryboardShotResponse };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
+export async function assembleStoryboard(id: string): Promise<StoryboardApiResult<{ output: string }>> {
+  try {
+    const resp = await fetch(`/api/storyboards/${encodeURIComponent(id)}/assemble`, { method: 'POST' });
+    if (!resp.ok) return { ok: false, message: await readStoryboardApiError(resp) };
+    return { ok: true, value: (await resp.json()) as { output: string } };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
+export async function exportStoryboardSlider(id: string): Promise<StoryboardApiResult<{ output: string }>> {
+  try {
+    const resp = await fetch(`/api/storyboards/${encodeURIComponent(id)}/export-slider`, { method: 'POST' });
+    if (!resp.ok) return { ok: false, message: await readStoryboardApiError(resp) };
+    return { ok: true, value: (await resp.json()) as { output: string } };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
+export interface MediaTaskSnapshot {
+  status: 'running' | 'done' | 'failed' | 'interrupted';
+  nextSince?: number;
+  progress?: string[];
+  file?: { name?: string; size?: number; mime?: string };
+  error?: { message?: string };
+}
+
+/**
+ * Polls the EXISTING POST /api/media/tasks/:id/wait long-poll endpoint to
+ * completion. No web caller drove media generation directly before the
+ * Storyboard feature (generation was always chat-agent/CLI-driven), so
+ * there was no browser-side poll helper to reuse — this is deliberately a
+ * thin mirror of the CLI's pollUntilDoneOrBudget (apps/daemon/src/cli.ts),
+ * minus the process.exit calls a browser has no equivalent for.
+ */
+export async function waitForMediaTask(
+  taskId: string,
+  options: { totalBudgetMs?: number; onProgress?: (lines: string[]) => void } = {},
+): Promise<MediaTaskSnapshot> {
+  const totalBudgetMs = options.totalBudgetMs ?? 15 * 60 * 1000;
+  const startedAt = Date.now();
+  let since = 0;
+  let last: MediaTaskSnapshot = { status: 'running' };
+  while (Date.now() - startedAt < totalBudgetMs) {
+    const remaining = totalBudgetMs - (Date.now() - startedAt);
+    const timeoutMs = Math.max(500, Math.min(20_000, remaining));
+    let resp: Response;
+    try {
+      resp = await fetch(`/api/media/tasks/${encodeURIComponent(taskId)}/wait`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ since, timeoutMs }),
+      });
+    } catch (err) {
+      return { status: 'failed', error: { message: err instanceof Error ? err.message : 'Network error' } };
+    }
+    if (!resp.ok) {
+      return { status: 'failed', error: { message: await readStoryboardApiError(resp) } };
+    }
+    const snap = (await resp.json()) as MediaTaskSnapshot;
+    last = snap;
+    if (Array.isArray(snap.progress) && snap.progress.length > 0) options.onProgress?.(snap.progress);
+    if (typeof snap.nextSince === 'number') since = snap.nextSince;
+    if (snap.status === 'done' || snap.status === 'failed' || snap.status === 'interrupted') return snap;
+  }
+  return last;
+}

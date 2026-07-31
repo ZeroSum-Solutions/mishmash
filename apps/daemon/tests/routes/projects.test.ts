@@ -476,6 +476,21 @@ describe('GET /api/projects/:id resolvedDir', () => {
     expect(detail.status).toBe(404);
   });
 
+  it('rejects the reserved storyboard-media project id on POST /api/projects', async () => {
+    const resp = await fetch(`${baseUrl}/api/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: 'storyboard-media',
+        name: 'Squatting the storyboard bucket',
+      }),
+    });
+    expect(resp.status).toBe(400);
+    const body = (await resp.json()) as { error?: { code?: string; message?: string } };
+    expect(body.error?.code).toBe('BAD_REQUEST');
+    expect(body.error?.message).toMatch(/reserved project id/i);
+  });
+
   it('accepts an existing metadata.linkedDirs on POST /api/projects', async () => {
     const dir = makeFolder();
     const projectId = `proj-good-linked-${Date.now()}`;

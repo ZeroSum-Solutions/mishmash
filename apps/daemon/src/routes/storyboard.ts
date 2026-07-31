@@ -1,0 +1,856 @@
+// Storyboard — Seedance 2.0 image-first keyframe workflow (see
+// packages/contracts/src/api/storyboard.ts for the full shape). Every
+// storyboard is a single JSON file under RUNTIME_DATA_DIR/storyboards/<id>.json
+// (apps/daemon/src/storyboards/store.ts); every generated still/clip lives in
+// a hidden `storyboard-media` project so the existing media generate + task
+// machinery (POST /api/projects/:id/media/generate, POST
+// /api/media/tasks/:id/wait) works untouched — this module dispatches into
+// the same generateMedia()/task-store primitives registerMediaRoutes uses,
+// rather than duplicating the HTTP hop.
+//
+// Frame/shot output filenames are a best-effort prediction (see
+// GenerateStoryboardFrameResponse.framePath doc): image renderers may return
+// a different byte format than requested (nanobanana/openrouter/fal all
+// sniff the real extension from the response bytes), so the FINAL name can
+// differ from the one predicted here. Callers should treat the completed
+// media task's `file.name` (from POST /api/media/tasks/:id/wait) as
+// authoritative once the task is done — video renders don't have this
+// ambiguity (every video renderer hardcodes `.mp4`).
+
+import { spawn } from 'node:child_process';
+import { lstat, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import type { Express } from 'express';
+import type {
+  Storyboard,
+  StoryboardFrameRef,
+  StoryboardMoodDraft,
+  StoryboardResolution,
+  StoryboardShot,
+  StoryboardShotStatus,
+  StoryboardSummary,
+} from '@open-design/contracts';
+import type { RouteDeps } from '../server-context.js';
+import { isSafeId, mimeFor } from '../projects.js';
+import {
+  deleteStoryboard,
+  listStoryboards,
+  readStoryboard,
+  writeStoryboard,
+} from '../storyboards/store.js';
+
+export interface RegisterStoryboardRoutesDeps
+  extends RouteDeps<'http' | 'paths' | 'ids' | 'db' | 'projectStore' | 'projectFiles' | 'media'> {}
+
+/** Hidden project every generated storyboard still/clip lives under. Auto-created on first use. */
+const STORYBOARD_MEDIA_PROJECT_ID = 'storyboard-media';
+const STORYBOARD_RESOLUTIONS = new Set<StoryboardResolution>(['480p', '720p', '1080p']);
+const STORYBOARD_SHOT_STATUSES = new Set<StoryboardShotStatus>(['draft', 'rendering', 'done', 'failed']);
+const STORYBOARD_MOOD_STATUSES = new Set(['idle', 'rendering', 'done', 'failed']);
+const STORYBOARD_FRAME_ORIGINS = new Set(['generated', 'derived', 'uploaded', 'previous-shot']);
+const MIN_SHOT_DURATION_SEC = 4;
+const MAX_SHOT_DURATION_SEC = 15;
+// export-slider base64-inlines every selected frame into one HTML file —
+// cap the total so a storyboard with a pile of oversized frames can't
+// inflate an unbounded response/HTML file in memory.
+const STORYBOARD_SLIDER_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
+
+// Frame refs (StoryboardFrameRef.path) and shot render outputs
+// (StoryboardShot.output) are client-controllable — PATCH accepts a whole
+// shots array, so an agent (or a hallucinated value) could set either to
+// `../../../etc/passwd` or similar. Reject unsafe values at validation time
+// (boundary validation) rather than relying solely on the containment
+// checks already inside resolveProjectImage/readProjectFile — those exist,
+// but a value that never should have been stored in the first place is the
+// more robust invariant, and assemble's ffmpeg concat list has no such
+// internal check at all today.
+function isSafeStoryboardRelPath(value: unknown): value is string {
+  if (typeof value !== 'string' || !value.trim()) return false;
+  // Control characters (including \n \r) can break the ffmpeg concat list's
+  // line-based `file '<path>'` grammar even inside a quoted segment.
+  if (/[\x00-\x1f]/.test(value)) return false;
+  if (value.includes('\\')) return false;
+  if (path.isAbsolute(value)) return false;
+  return value.split('/').every((segment) => segment !== '..' && segment !== '.' && segment !== '');
+}
+
+/**
+ * Re-resolves a client-supplied relative path against the storyboard-media
+ * project directory and requires the result to stay inside it — same
+ * containment idiom as static-resource.ts's `/api/skills/:id/assets/*`
+ * route. Returns null (never throws) when the path is missing, malformed,
+ * or escapes; callers turn that into a 400.
+ */
+function resolveWithinStoryboardMediaDir(projectDir: string, rel: unknown): string | null {
+  if (!isSafeStoryboardRelPath(rel)) return null;
+  const target = path.resolve(projectDir, rel);
+  if (target !== projectDir && !target.startsWith(projectDir + path.sep)) return null;
+  return target;
+}
+
+/**
+ * Symlink-aware re-validation for READS of a client-influenced path that has
+ * already cleared resolveWithinStoryboardMediaDir's lexical check. The
+ * lexical check alone is fooled by a symlink *inside* the storyboard-media
+ * project pointing outside it — the literal path stays under the project
+ * dir, but the OS follows the link at open() time. Same attack class as
+ * design-library.ts's withinReal / projects.ts's resolveSafeReal. The target
+ * must already exist; returns null (never throws) on any failure so callers
+ * turn it into a uniform 400.
+ */
+async function resolveWithinStoryboardMediaDirReal(projectDir: string, rel: unknown): Promise<string | null> {
+  const target = resolveWithinStoryboardMediaDir(projectDir, rel);
+  if (!target) return null;
+  const baseReal = await realpath(projectDir).catch(() => projectDir);
+  let targetReal: string;
+  try {
+    targetReal = await realpath(target);
+  } catch {
+    return null;
+  }
+  if (targetReal !== baseReal && !targetReal.startsWith(baseReal + path.sep)) return null;
+  return targetReal;
+}
+
+/**
+ * Guards a WRITE target inside the storyboard-media project dir against a
+ * previously-planted symlink. Unlike the read-side helper above, a write
+ * NEVER follows an existing symlink at the target — even one that would
+ * resolve back inside the project — since following it would let an
+ * attacker alias the write onto an arbitrary file (e.g. `final.mp4`
+ * replaced with a symlink to some other path before assemble runs). Also
+ * realpath-validates the target's parent directory so a symlinked ancestor
+ * can't redirect the write outside the project tree. `absoluteTarget` is
+ * always built by the route itself (fixed/randomUUID-based names), never
+ * taken verbatim from client input. Returns null (never throws) on failure.
+ */
+async function assertSafeStoryboardWriteTarget(projectDir: string, absoluteTarget: string): Promise<boolean> {
+  try {
+    const st = await lstat(absoluteTarget);
+    if (st.isSymbolicLink()) return false;
+  } catch (err: any) {
+    if (err?.code !== 'ENOENT') throw err;
+  }
+  const parent = path.dirname(absoluteTarget);
+  const baseReal = await realpath(projectDir).catch(() => projectDir);
+  const parentReal = await realpath(parent).catch(() => null);
+  if (!parentReal || (parentReal !== baseReal && !parentReal.startsWith(baseReal + path.sep))) {
+    return false;
+  }
+  return true;
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function newStoryboard(id: string, title: string): Storyboard {
+  const ts = nowIso();
+  return {
+    id,
+    title: title || 'Untitled storyboard',
+    createdAt: ts,
+    updatedAt: ts,
+    ratio: '16:9',
+    moodDrafts: [],
+    shots: [],
+  };
+}
+
+function summarize(storyboard: Storyboard): StoryboardSummary {
+  return {
+    id: storyboard.id,
+    title: storyboard.title,
+    createdAt: storyboard.createdAt,
+    updatedAt: storyboard.updatedAt,
+    shotCount: storyboard.shots.length,
+  };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** Validates and normalizes one incoming FrameRef-shaped object; null on failure. */
+function validateFrameRef(raw: unknown, fieldLabel: string): { ok: true; value: StoryboardFrameRef } | { ok: false; error: string } {
+  if (!isPlainObject(raw)) return { ok: false, error: `${fieldLabel} must be an object` };
+  if (!isSafeStoryboardRelPath(raw.path)) {
+    return {
+      ok: false,
+      error: `${fieldLabel}.path must be a safe relative path (no ".." segments, no leading "/", no backslashes or control characters)`,
+    };
+  }
+  if (typeof raw.origin !== 'string' || !STORYBOARD_FRAME_ORIGINS.has(raw.origin as any)) {
+    return { ok: false, error: `${fieldLabel}.origin must be one of generated|derived|uploaded|previous-shot` };
+  }
+  const value: StoryboardFrameRef = {
+    path: raw.path.trim(),
+    origin: raw.origin as StoryboardFrameRef['origin'],
+    ...(typeof raw.prompt === 'string' ? { prompt: raw.prompt } : {}),
+    ...(typeof raw.model === 'string' ? { model: raw.model } : {}),
+    ...(typeof raw.derivedFrom === 'string' ? { derivedFrom: raw.derivedFrom } : {}),
+  };
+  return { ok: true, value };
+}
+
+function validateShot(raw: unknown, index: number): { ok: true; value: StoryboardShot } | { ok: false; error: string } {
+  const label = `shots[${index}]`;
+  if (!isPlainObject(raw)) return { ok: false, error: `${label} must be an object` };
+  if (typeof raw.id !== 'string' || !raw.id.trim()) return { ok: false, error: `${label}.id must be a non-empty string` };
+  if (typeof raw.order !== 'number' || !Number.isFinite(raw.order)) {
+    return { ok: false, error: `${label}.order must be a number` };
+  }
+  if (typeof raw.motionPrompt !== 'string') {
+    return { ok: false, error: `${label}.motionPrompt must be a string` };
+  }
+  if (typeof raw.model !== 'string' || !raw.model.trim()) {
+    return { ok: false, error: `${label}.model must be a non-empty string` };
+  }
+  if (typeof raw.resolution !== 'string' || !STORYBOARD_RESOLUTIONS.has(raw.resolution as any)) {
+    return { ok: false, error: `${label}.resolution must be one of 480p|720p|1080p` };
+  }
+  if (typeof raw.durationSec !== 'number' || raw.durationSec < MIN_SHOT_DURATION_SEC || raw.durationSec > MAX_SHOT_DURATION_SEC) {
+    return { ok: false, error: `${label}.durationSec must be a number between ${MIN_SHOT_DURATION_SEC} and ${MAX_SHOT_DURATION_SEC}` };
+  }
+  if (typeof raw.status !== 'string' || !STORYBOARD_SHOT_STATUSES.has(raw.status as any)) {
+    return { ok: false, error: `${label}.status must be one of draft|rendering|done|failed` };
+  }
+  let startFrame: StoryboardFrameRef | undefined;
+  if (raw.startFrame !== undefined) {
+    const parsed = validateFrameRef(raw.startFrame, `${label}.startFrame`);
+    if (!parsed.ok) return parsed;
+    startFrame = parsed.value;
+  }
+  let endFrame: StoryboardFrameRef | undefined;
+  if (raw.endFrame !== undefined) {
+    const parsed = validateFrameRef(raw.endFrame, `${label}.endFrame`);
+    if (!parsed.ok) return parsed;
+    endFrame = parsed.value;
+  }
+  if (endFrame && !startFrame) {
+    return { ok: false, error: `${label}.endFrame requires ${label}.startFrame` };
+  }
+  // `output` feeds ffmpeg's concat list verbatim in the assemble route
+  // (no containment check of its own there) — validate it here too, same
+  // as frame refs, so an unsafe value never persists in the first place.
+  if (raw.output !== undefined && !isSafeStoryboardRelPath(raw.output)) {
+    return {
+      ok: false,
+      error: `${label}.output must be a safe relative path (no ".." segments, no leading "/", no backslashes or control characters)`,
+    };
+  }
+  const value: StoryboardShot = {
+    id: raw.id.trim(),
+    order: raw.order,
+    ...(typeof raw.title === 'string' ? { title: raw.title } : {}),
+    ...(startFrame ? { startFrame } : {}),
+    ...(endFrame ? { endFrame } : {}),
+    motionPrompt: raw.motionPrompt,
+    model: raw.model.trim(),
+    resolution: raw.resolution as StoryboardResolution,
+    durationSec: raw.durationSec,
+    ...(typeof raw.taskId === 'string' ? { taskId: raw.taskId } : {}),
+    ...(typeof raw.output === 'string' ? { output: raw.output } : {}),
+    status: raw.status as StoryboardShotStatus,
+    ...(typeof raw.error === 'string' ? { error: raw.error } : {}),
+  };
+  return { ok: true, value };
+}
+
+function validateMoodDraft(raw: unknown, index: number): { ok: true; value: StoryboardMoodDraft } | { ok: false; error: string } {
+  const label = `moodDrafts[${index}]`;
+  if (!isPlainObject(raw)) return { ok: false, error: `${label} must be an object` };
+  if (typeof raw.id !== 'string' || !raw.id.trim()) return { ok: false, error: `${label}.id must be a non-empty string` };
+  if (typeof raw.prompt !== 'string') return { ok: false, error: `${label}.prompt must be a string` };
+  if (typeof raw.model !== 'string' || !raw.model.trim()) return { ok: false, error: `${label}.model must be a non-empty string` };
+  if (typeof raw.status !== 'string' || !STORYBOARD_MOOD_STATUSES.has(raw.status)) {
+    return { ok: false, error: `${label}.status must be one of idle|rendering|done|failed` };
+  }
+  const value: StoryboardMoodDraft = {
+    id: raw.id.trim(),
+    prompt: raw.prompt,
+    model: raw.model.trim(),
+    ...(typeof raw.taskId === 'string' ? { taskId: raw.taskId } : {}),
+    ...(typeof raw.output === 'string' ? { output: raw.output } : {}),
+    status: raw.status as StoryboardMoodDraft['status'],
+    ...(typeof raw.error === 'string' ? { error: raw.error } : {}),
+  };
+  return { ok: true, value };
+}
+
+export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRoutesDeps) {
+  const { isLocalSameOrigin, resolvedPortRef, sendApiError } = ctx.http;
+  const { PROJECT_ROOT, PROJECTS_DIR, RUNTIME_DATA_DIR } = ctx.paths;
+  const { randomUUID } = ctx.ids;
+  const db = ctx.db;
+  const { getProject, insertProject } = ctx.projectStore;
+  const { ensureProject, resolveProjectDir, readProjectFile } = ctx.projectFiles;
+  const { generateMedia, createMediaTask, persistMediaTask, appendTaskProgress, notifyTaskWaiters } = ctx.media;
+  const getResolvedPort = () => resolvedPortRef.current;
+
+  const requireLocal = (req: any, res: any): boolean => {
+    if (!isLocalSameOrigin(req, getResolvedPort())) {
+      sendApiError(res, 403, 'FORBIDDEN', 'cross-origin request rejected: storyboards are restricted to the local UI / CLI');
+      return false;
+    }
+    return true;
+  };
+
+  // Idempotent: only the first caller actually inserts the project row /
+  // creates the directory; concurrent callers await the same promise.
+  let ensureMediaProjectPromise: Promise<void> | null = null;
+  function ensureStoryboardMediaProject(): Promise<void> {
+    if (!ensureMediaProjectPromise) {
+      ensureMediaProjectPromise = (async () => {
+        if (!getProject(db, STORYBOARD_MEDIA_PROJECT_ID)) {
+          const ts = Date.now();
+          insertProject(db, {
+            id: STORYBOARD_MEDIA_PROJECT_ID,
+            name: 'Storyboard Media',
+            metadata: { internal: true, kind: 'storyboard-media' },
+            createdAt: ts,
+            updatedAt: ts,
+          });
+        }
+        await ensureProject(PROJECTS_DIR, STORYBOARD_MEDIA_PROJECT_ID);
+      })().catch((err) => {
+        // Let the next call retry instead of caching a permanent failure.
+        ensureMediaProjectPromise = null;
+        throw err;
+      });
+    }
+    return ensureMediaProjectPromise;
+  }
+
+  function dispatchMediaTask(input: {
+    surface: 'image' | 'video';
+    model: string;
+    prompt: string;
+    output: string;
+    aspect?: string | undefined;
+    length?: number | undefined;
+    image?: string | undefined;
+    endImage?: string | undefined;
+  }): { taskId: string; task: ReturnType<typeof createMediaTask> } {
+    const taskId = randomUUID();
+    const task = createMediaTask(taskId, STORYBOARD_MEDIA_PROJECT_ID, { surface: input.surface, model: input.model });
+    task.status = 'running';
+    persistMediaTask(task);
+
+    generateMedia({
+      projectRoot: PROJECT_ROOT,
+      projectsRoot: PROJECTS_DIR,
+      projectId: STORYBOARD_MEDIA_PROJECT_ID,
+      surface: input.surface,
+      model: input.model,
+      prompt: input.prompt,
+      output: input.output,
+      aspect: input.aspect,
+      length: input.length,
+      image: input.image,
+      endImage: input.endImage,
+      onProgress: (line: any) => appendTaskProgress(task, line),
+    })
+      .then((meta: any) => {
+        task.status = 'done';
+        task.file = meta;
+        task.endedAt = Date.now();
+        persistMediaTask(task);
+        notifyTaskWaiters(task);
+      })
+      .catch((err: any) => {
+        task.status = 'failed';
+        task.error = {
+          message: String(err && err.message ? err.message : err),
+          status: typeof err?.status === 'number' ? err.status : 400,
+          code: err?.code,
+        };
+        task.endedAt = Date.now();
+        // persistMediaTask/notifyTaskWaiters can throw on an I/O error (e.g.
+        // the SQLite write failing); this .catch() has no further handler of
+        // its own, so an uncaught throw here becomes an unhandled rejection.
+        // Log and swallow instead — the in-memory task is still marked
+        // failed even if persisting it lost the race.
+        try {
+          persistMediaTask(task);
+          notifyTaskWaiters(task);
+        } catch (persistErr) {
+          console.error('[storyboard] failed to persist failed media task', persistErr);
+        }
+      });
+
+    return { taskId, task };
+  }
+
+  app.get('/api/storyboards', async (req, res) => {
+    if (!requireLocal(req, res)) return;
+    const storyboards = await listStoryboards(RUNTIME_DATA_DIR);
+    res.json({ storyboards: storyboards.map(summarize) });
+  });
+
+  app.post('/api/storyboards', async (req, res) => {
+    if (!requireLocal(req, res)) return;
+    const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+    const storyboard = newStoryboard(randomUUID(), title);
+    await writeStoryboard(RUNTIME_DATA_DIR, storyboard);
+    res.status(201).json({ storyboard });
+  });
+
+  app.get('/api/storyboards/:id', async (req, res) => {
+    if (!requireLocal(req, res)) return;
+    if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
+    const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+    if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+    res.json({ storyboard });
+  });
+
+  app.patch('/api/storyboards/:id', async (req, res) => {
+    if (!requireLocal(req, res)) return;
+    if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
+    const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+    if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+
+    const patch = req.body ?? {};
+    // Optimistic concurrency: when the caller passes the updatedAt it last
+    // read, reject a PATCH built from a stale snapshot instead of silently
+    // last-write-wins clobbering concurrent edits made by another client in
+    // the meantime. Omitting the field keeps the previous behavior.
+    if (patch.expectedUpdatedAt !== undefined) {
+      if (typeof patch.expectedUpdatedAt !== 'string') {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'expectedUpdatedAt must be a string');
+      }
+      if (patch.expectedUpdatedAt !== storyboard.updatedAt) {
+        return res.status(409).json({ error: 'storyboard changed', storyboard });
+      }
+    }
+    if (patch.title !== undefined) {
+      if (typeof patch.title !== 'string' || !patch.title.trim()) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'title must be a non-empty string');
+      }
+    }
+    if (patch.ratio !== undefined && (typeof patch.ratio !== 'string' || !patch.ratio.trim())) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'ratio must be a non-empty string');
+    }
+    let nextMoodDrafts: StoryboardMoodDraft[] | undefined;
+    if (patch.moodDrafts !== undefined) {
+      if (!Array.isArray(patch.moodDrafts)) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'moodDrafts must be an array');
+      }
+      const parsed: StoryboardMoodDraft[] = [];
+      for (let i = 0; i < patch.moodDrafts.length; i++) {
+        const result = validateMoodDraft(patch.moodDrafts[i], i);
+        if (!result.ok) return sendApiError(res, 400, 'BAD_REQUEST', result.error);
+        parsed.push(result.value);
+      }
+      nextMoodDrafts = parsed;
+    }
+    let nextShots: StoryboardShot[] | undefined;
+    if (patch.shots !== undefined) {
+      if (!Array.isArray(patch.shots)) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'shots must be an array');
+      }
+      const parsed: StoryboardShot[] = [];
+      for (let i = 0; i < patch.shots.length; i++) {
+        const result = validateShot(patch.shots[i], i);
+        if (!result.ok) return sendApiError(res, 400, 'BAD_REQUEST', result.error);
+        parsed.push(result.value);
+      }
+      nextShots = parsed;
+    }
+
+    if (typeof patch.title === 'string' && patch.title.trim()) storyboard.title = patch.title.trim();
+    if (typeof patch.ratio === 'string' && patch.ratio.trim()) storyboard.ratio = patch.ratio.trim();
+    if (nextMoodDrafts) storyboard.moodDrafts = nextMoodDrafts;
+    if (nextShots) storyboard.shots = nextShots;
+    storyboard.updatedAt = nowIso();
+
+    await writeStoryboard(RUNTIME_DATA_DIR, storyboard);
+    res.json({ storyboard });
+  });
+
+  app.delete('/api/storyboards/:id', async (req, res) => {
+    if (!requireLocal(req, res)) return;
+    if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
+    const deleted = await deleteStoryboard(RUNTIME_DATA_DIR, req.params.id);
+    if (!deleted) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+    res.status(204).end();
+  });
+
+  // Reveals the hidden storyboard-media project folder in the OS file
+  // browser — same fire-and-forget `open` spawn as design-library's
+  // POST /api/design-library/open.
+  app.post('/api/storyboards/:id/open-folder', async (req, res) => {
+    if (!requireLocal(req, res)) return;
+    if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
+    const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+    if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+    await ensureStoryboardMediaProject();
+    const target = resolveProjectDir(PROJECTS_DIR, STORYBOARD_MEDIA_PROJECT_ID);
+    const child = spawn('open', [target], { detached: true, stdio: 'ignore' });
+    // A spawn failure (e.g. ENOENT) emits an unhandled 'error' event with no
+    // listener otherwise, which crashes the daemon — the 204 below may
+    // already be on the wire by the time it fires, which is fine; this is
+    // fire-and-forget UX (reveal in Finder), not a request the caller awaits.
+    child.on('error', () => {});
+    child.unref();
+    res.status(204).end();
+  });
+
+  // Generates a still (or, for the mood-exploration lane, a cheap t2v clip)
+  // via the same media-generate path as POST /api/projects/:id/media/generate,
+  // scoped to the hidden storyboard-media project. i2i when sourceImage is
+  // given (start-frame creation, iteration, and end-frame derivation all go
+  // through this one route with the default image surface). `framePath` in
+  // the response is a best-effort prediction — see the module doc comment
+  // above.
+  app.post('/api/storyboards/:id/frames', async (req, res) => {
+    if (!requireLocal(req, res)) return;
+    if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
+    const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+    if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+
+    const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
+    if (!prompt) return sendApiError(res, 400, 'BAD_REQUEST', 'prompt is required');
+    const model = typeof req.body?.model === 'string' ? req.body.model.trim() : '';
+    if (!model) return sendApiError(res, 400, 'BAD_REQUEST', 'model is required');
+    const aspect = typeof req.body?.aspect === 'string' ? req.body.aspect : undefined;
+    let sourceImage: string | undefined;
+    if (req.body?.sourceImage !== undefined && req.body?.sourceImage !== '') {
+      if (!isSafeStoryboardRelPath(req.body.sourceImage)) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'sourceImage must be a safe relative path');
+      }
+      sourceImage = req.body.sourceImage;
+    }
+    const surface = req.body?.surface === 'video' ? 'video' : 'image';
+    const durationSec = typeof req.body?.durationSec === 'number' ? req.body.durationSec : undefined;
+
+    await ensureStoryboardMediaProject();
+    const mediaProjectDir = resolveProjectDir(PROJECTS_DIR, STORYBOARD_MEDIA_PROJECT_ID);
+    if (sourceImage && !(await resolveWithinStoryboardMediaDirReal(mediaProjectDir, sourceImage))) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'sourceImage escapes the storyboard project directory');
+    }
+
+    const framePath = surface === 'video' ? `frame-${randomUUID()}.mp4` : `frame-${randomUUID()}.png`;
+    const { taskId } = dispatchMediaTask({
+      surface,
+      model,
+      prompt,
+      output: framePath,
+      aspect,
+      length: surface === 'video' ? durationSec : undefined,
+      image: surface === 'image' ? sourceImage : undefined,
+    });
+
+    res.status(202).json({ taskId, framePath });
+  });
+
+  // Validates start frame present + non-empty motion prompt, dispatches a
+  // video generate (image=startFrame, endImage=endFrame when set), and
+  // marks the shot 'rendering' with the dispatched taskId. Does NOT wait
+  // for completion — the caller (web UI / `od storyboard render-shot`)
+  // polls the existing POST /api/media/tasks/:id/wait and PATCHes the final
+  // status/output back onto the storyboard. Keeps this route fast and
+  // reuses the existing task machinery instead of a second long-poll loop.
+  app.post('/api/storyboards/:id/shots/:shotId/render', async (req, res) => {
+    if (!requireLocal(req, res)) return;
+    if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
+    const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+    if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+    const shot = storyboard.shots.find((s) => s.id === req.params.shotId);
+    if (!shot) return sendApiError(res, 404, 'NOT_FOUND', 'shot not found');
+    if (!shot.startFrame?.path) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'shot needs a start frame before it can render');
+    }
+    const motionPrompt = typeof shot.motionPrompt === 'string' ? shot.motionPrompt.trim() : '';
+    if (!motionPrompt) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'motion prompt is required');
+    }
+
+    await ensureStoryboardMediaProject();
+    const mediaProjectDir = resolveProjectDir(PROJECTS_DIR, STORYBOARD_MEDIA_PROJECT_ID);
+    if (!(await resolveWithinStoryboardMediaDirReal(mediaProjectDir, shot.startFrame.path))) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'shot startFrame.path escapes the storyboard project directory');
+    }
+    if (shot.endFrame?.path && !(await resolveWithinStoryboardMediaDirReal(mediaProjectDir, shot.endFrame.path))) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'shot endFrame.path escapes the storyboard project directory');
+    }
+
+    const outputPath = `shot-${shot.id}.mp4`;
+    const { taskId } = dispatchMediaTask({
+      surface: 'video',
+      model: shot.model,
+      prompt: motionPrompt,
+      output: outputPath,
+      aspect: storyboard.ratio,
+      length: shot.durationSec,
+      image: shot.startFrame.path,
+      endImage: shot.endFrame?.path,
+    });
+
+    shot.status = 'rendering';
+    shot.taskId = taskId;
+    delete shot.error;
+    storyboard.updatedAt = nowIso();
+    await writeStoryboard(RUNTIME_DATA_DIR, storyboard);
+
+    res.status(202).json({ taskId });
+  });
+
+  // ffmpeg concat of ordered done-shot outputs -> final.mp4. Detects a
+  // missing ffmpeg binary via the same spawn call (ENOENT) rather than a
+  // separate probe.
+  app.post('/api/storyboards/:id/assemble', async (req, res) => {
+    if (!requireLocal(req, res)) return;
+    if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
+    const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+    if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+
+    const doneShots = [...storyboard.shots]
+      .sort((a, b) => a.order - b.order)
+      .filter((shot) => shot.status === 'done' && shot.output);
+    if (doneShots.length === 0) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'no rendered shots to assemble — render at least one shot first');
+    }
+
+    await ensureStoryboardMediaProject();
+    const projectDir = resolveProjectDir(PROJECTS_DIR, STORYBOARD_MEDIA_PROJECT_ID);
+
+    // Re-validate every shot.output against the storyboard-media project
+    // dir before it ever reaches the ffmpeg concat list — PATCH's own
+    // validateShot already rejects unsafe values going forward, but this
+    // re-check covers any shot written before that validation existed and
+    // is the only containment check this route has of its own.
+    const resolvedOutputs: string[] = [];
+    for (const shot of doneShots) {
+      const resolved = await resolveWithinStoryboardMediaDirReal(projectDir, shot.output);
+      if (!resolved) {
+        return sendApiError(res, 400, 'BAD_REQUEST', `shot ${shot.id}.output escapes the storyboard project directory`);
+      }
+      resolvedOutputs.push(resolved);
+    }
+
+    const listFile = path.join(projectDir, `.storyboard-concat-${storyboard.id}.txt`);
+    const outputName = 'final.mp4';
+    const outputFile = path.join(projectDir, outputName);
+
+    // Both are write targets ffmpeg or this route itself will write through
+    // — refuse if either has been replaced by a symlink (never follow one),
+    // and re-validate the parent dir hasn't been symlinked out from under us.
+    if (!(await assertSafeStoryboardWriteTarget(projectDir, listFile))) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'concat list target is unsafe');
+    }
+    if (!(await assertSafeStoryboardWriteTarget(projectDir, outputFile))) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'output target is unsafe');
+    }
+
+    // ffmpeg's concat demuxer needs a text file of `file '<absolute path>'`
+    // lines; single quotes in a path must be escaped per its own grammar.
+    const listBody = resolvedOutputs
+      .map((resolved) => `file '${resolved.replace(/'/g, "'\\''")}'`)
+      .join('\n');
+    await writeFile(listFile, listBody, 'utf8');
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn('ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', outputFile]);
+        let stderr = '';
+        child.stderr?.on('data', (chunk) => { stderr += String(chunk); });
+        child.on('error', (err: any) => {
+          if (err?.code === 'ENOENT') {
+            reject(Object.assign(new Error('ffmpeg-not-found'), { code: 'ENOENT' }));
+          } else {
+            reject(err);
+          }
+        });
+        child.on('close', (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(stderr.trim() || `ffmpeg exited with code ${code}`));
+        });
+      });
+    } catch (err: any) {
+      if (err?.code === 'ENOENT') {
+        return sendApiError(
+          res,
+          501,
+          'INTERNAL_ERROR',
+          'ffmpeg not found on this machine. Install it (e.g. `brew install ffmpeg` on macOS) and retry.',
+        );
+      }
+      return sendApiError(res, 500, 'INTERNAL_ERROR', String(err && err.message ? err.message : err));
+    } finally {
+      await rm(listFile, { force: true });
+    }
+
+    res.json({ output: outputName });
+  });
+
+  // Writes a self-contained slider.html: the ordered shot start/end frames
+  // (base64-inlined) as a full-viewport scroll-snap + crossfade interaction.
+  // GSAP-free per the repo's design-authority licensing boundary (see
+  // docs/decisions/gsap-licensing.md) — plain CSS scroll-snap/crossfade at
+  // the repo's own fixed easing/timing, no per-slide authoring surface.
+  app.post('/api/storyboards/:id/export-slider', async (req, res) => {
+    if (!requireLocal(req, res)) return;
+    if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
+    const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+    if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+
+    const ordered = [...storyboard.shots]
+      .sort((a, b) => a.order - b.order)
+      .filter((shot) => shot.startFrame?.path);
+    if (ordered.length === 0) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'no frames to export — add a start frame to at least one shot first');
+    }
+
+    await ensureStoryboardMediaProject();
+    const mediaProjectDir = resolveProjectDir(PROJECTS_DIR, STORYBOARD_MEDIA_PROJECT_ID);
+
+    // Re-resolve + containment-check every frame path against the
+    // storyboard-media project dir before reading it — readProjectFile has
+    // its own containment check too (resolveSafeReal), but that is a deep
+    // internal safety net; validating at this boundary means a bad value is
+    // rejected here with a clean 400 instead of relying solely on that.
+    // realpath (not just the lexical check) so a symlink planted inside the
+    // project can't redirect the read outside it.
+    const framePaths: string[] = [];
+    for (const shot of ordered) {
+      const startReal = await resolveWithinStoryboardMediaDirReal(mediaProjectDir, shot.startFrame!.path);
+      if (!startReal) {
+        return sendApiError(res, 400, 'BAD_REQUEST', `shot ${shot.id} startFrame.path escapes the storyboard project directory`);
+      }
+      framePaths.push(startReal);
+      if (shot.endFrame?.path) {
+        const endReal = await resolveWithinStoryboardMediaDirReal(mediaProjectDir, shot.endFrame.path);
+        if (!endReal) {
+          return sendApiError(res, 400, 'BAD_REQUEST', `shot ${shot.id} endFrame.path escapes the storyboard project directory`);
+        }
+        framePaths.push(endReal);
+      }
+    }
+
+    // Every frame gets base64-inlined into one HTML file — sum sizes up
+    // front so a storyboard with a pile of oversized frames can't inflate an
+    // unbounded response/HTML file in memory.
+    let totalFrameBytes = 0;
+    for (const framePath of framePaths) {
+      totalFrameBytes += (await stat(framePath)).size;
+    }
+    if (totalFrameBytes > STORYBOARD_SLIDER_MAX_TOTAL_BYTES) {
+      return sendApiError(
+        res,
+        413,
+        'PAYLOAD_TOO_LARGE',
+        `total frame size (${totalFrameBytes} bytes) exceeds the ${STORYBOARD_SLIDER_MAX_TOTAL_BYTES}-byte slider export limit`,
+      );
+    }
+
+    const slides: Array<{ title: string; startDataUrl: string; endDataUrl: string | null }> = [];
+    for (const shot of ordered) {
+      const start = await readProjectFile(PROJECTS_DIR, STORYBOARD_MEDIA_PROJECT_ID, shot.startFrame!.path);
+      const startDataUrl = `data:${mimeFor(shot.startFrame!.path)};base64,${start.buffer.toString('base64')}`;
+      let endDataUrl: string | null = null;
+      if (shot.endFrame?.path) {
+        const end = await readProjectFile(PROJECTS_DIR, STORYBOARD_MEDIA_PROJECT_ID, shot.endFrame.path);
+        endDataUrl = `data:${mimeFor(shot.endFrame.path)};base64,${end.buffer.toString('base64')}`;
+      }
+      slides.push({ title: shot.title || `Shot ${shot.order + 1}`, startDataUrl, endDataUrl });
+    }
+
+    const html = buildSliderHtml(storyboard.title, slides);
+    const outputName = 'slider.html';
+    const sliderPath = path.join(mediaProjectDir, outputName);
+    if (!(await assertSafeStoryboardWriteTarget(mediaProjectDir, sliderPath))) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'slider output target is unsafe');
+    }
+    await writeFile(sliderPath, html, 'utf8');
+
+    res.json({ output: outputName });
+  });
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * Self-contained sliding web export: full-viewport CSS scroll-snap
+ * sections, one per shot, crossfading from its start frame to its end
+ * frame (when present) as the section becomes fully in view. No GSAP, no
+ * per-slide authoring controls — a one-shot export, not an editing surface
+ * (see the repo's GSAP-conditional design-authority boundary).
+ */
+function buildSliderHtml(
+  title: string,
+  slides: Array<{ title: string; startDataUrl: string; endDataUrl: string | null }>,
+): string {
+  const easing = 'cubic-bezier(0.23, 1, 0.32, 1)';
+  const slideMarkup = slides
+    .map((slide, index) => `
+    <section class="slide" data-index="${index}">
+      <img class="frame frame-start" src="${slide.startDataUrl}" alt="" />
+      ${slide.endDataUrl ? `<img class="frame frame-end" src="${slide.endDataUrl}" alt="" />` : ''}
+      <span class="label">${escapeHtml(slide.title)}</span>
+    </section>`)
+    .join('\n');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${escapeHtml(title)} — storyboard slider</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  .slider { height: 100vh; overflow-y: scroll; scroll-snap-type: y mandatory; }
+  .slide {
+    height: 100vh;
+    scroll-snap-align: start;
+    position: relative;
+    overflow: hidden;
+    background: #000;
+  }
+  .slide .frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .slide .frame-end { opacity: 0; transition: opacity 200ms ${easing}; }
+  .slide.show-end .frame-start { opacity: 0; transition: opacity 140ms ${easing}; }
+  .slide.show-end .frame-end { opacity: 1; }
+  .slide .label {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    color: #fff;
+    font: 500 14px/1.4 -apple-system, BlinkMacSystemFont, sans-serif;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  }
+</style>
+</head>
+<body>
+<div class="slider" id="slider">${slideMarkup}
+</div>
+<script>
+  // Minimal, dependency-free: crossfade to the end frame once a slide is
+  // essentially fully in view; back to the start frame otherwise. No
+  // authoring surface — durations/easing above are fixed at export time.
+  var slides = document.querySelectorAll('.slide');
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        entry.target.classList.toggle('show-end', entry.intersectionRatio > 0.98);
+      });
+    }, { threshold: [0, 0.5, 0.98, 1] });
+    slides.forEach(function (slide) { io.observe(slide); });
+  }
+</script>
+</body>
+</html>
+`;
+}

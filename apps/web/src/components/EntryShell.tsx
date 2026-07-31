@@ -95,6 +95,8 @@ import { DesignSystemsTab } from './DesignSystemsTab';
 import { BrandsTab } from './BrandsTab';
 import { EntryNavRail, type EntryView as EntryViewKind } from './EntryNavRail';
 import { LibrarySection } from './LibrarySection';
+import { DesignLibrarySection } from './DesignLibrarySection';
+import { StoryboardSection } from './storyboard/StoryboardSection';
 import { UpdaterPopup } from './UpdaterPopup';
 import { WhatsNewPopup } from './WhatsNewPopup';
 import { AmrBalanceDialog } from './AmrBalanceDialog';
@@ -1277,6 +1279,12 @@ export function EntryShell({
                 />
               </div>
             ) : null}
+            <div data-testid="entry-view-design-library" data-active={view === 'design-library' ? 'true' : 'false'} {...inactiveViewProps(view === 'design-library')}>
+              <DesignLibrarySection active={view === 'design-library'} />
+            </div>
+            <div data-testid="entry-view-storyboard" data-active={view === 'storyboard' ? 'true' : 'false'} {...inactiveViewProps(view === 'storyboard')}>
+              <StoryboardSection active={view === 'storyboard'} />
+            </div>
             <div data-testid="entry-view-brands" data-active={view === 'brands' ? 'true' : 'false'} {...inactiveViewProps(view === 'brands')}>
               <BrandsTab
                 onApplyDesignSystem={onChangeDefaultDesignSystem}

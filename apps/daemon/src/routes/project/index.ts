@@ -1216,6 +1216,14 @@ function buildDesignSystemCopyPendingPrompt(input: {
   ].filter(Boolean).join('\n');
 }
 
+// Project ids the daemon itself owns for internal bookkeeping and never
+// hands out through the generic create route — 'storyboard-media' is the
+// hidden project every storyboard-generated still/clip lives under (see
+// routes/storyboard.ts). Without this, an ordinary POST /api/projects with
+// that id would squat the slot and silently mix a user's own files into the
+// storyboard bucket.
+const RESERVED_PROJECT_IDS = new Set(['storyboard-media']);
+
 export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDeps) {
   const { db, design } = ctx;
   const { sendApiError, createSseResponse } = ctx.http;
@@ -1560,6 +1568,9 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         req.body || {};
       if (typeof id !== 'string' || !isSafeId(id)) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'invalid project id');
+      }
+      if (RESERVED_PROJECT_IDS.has(id)) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'reserved project id');
       }
       if (typeof name !== 'string' || !name.trim()) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'name required');

@@ -74,6 +74,7 @@ const MEDIA_GENERATE_STRING_FLAGS = new Set([
   'audio-kind',
   'composition-dir',
   'image',
+  'end-image',
   'daemon-url',
   'language',
 ]);
@@ -191,6 +192,11 @@ const DAEMON_BOOLEAN_FLAGS = new Set([
 ]);
 const LIBRARY_STRING_FLAGS = new Set(['daemon-url', 'query', 'tag']);
 const LIBRARY_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
+// `od storyboard …` mirrors the Storyboard section against /api/storyboards.
+// Hoisted so the top-of-file SUBCOMMAND_MAP dispatch (which runs during
+// module evaluation) doesn't hit a temporal-dead-zone on these sets.
+const STORYBOARD_STRING_FLAGS = new Set(['daemon-url', 'title']);
+const STORYBOARD_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 // `od usage …` (NM-20 cost & usage meter). Hoisted up here for the same
 // reason as LIBRARY_STRING_FLAGS above: the top-level `await
 // SUBCOMMAND_MAP[first](rest)` dispatcher runs long before the module
@@ -390,6 +396,8 @@ const SUBCOMMAND_MAP = {
   doctor: runDoctor,
   config: runConfig,
   library: runLibrary,
+  'design-library': runDesignLibrary,
+  storyboard: runStoryboard,
   figma: runFigma,
   backup: runBackup,
   restore: runRestore,
@@ -1145,6 +1153,7 @@ async function runMediaGenerate(rawArgs) {
     audioKind: flags['audio-kind'],
     compositionDir: flags['composition-dir'],
     image: flags.image,
+    endImage: flags['end-image'],
     language: flags.language,
   };
   if (flags.length != null) body.length = Number(flags.length);
@@ -1448,6 +1457,10 @@ Common options:
                             future image-edit endpoints). Daemon reads
                             the file from the project, base64-encodes
                             it, and forwards it to the upstream API.
+  --end-image <path>        Project-relative path to an END (last) keyframe.
+                            Requires --image. Only Volcengine and OpenRouter
+                            Seedance 2.0 models support start/end keyframe
+                            pairs (see /api/media/models for the \`kf\` cap).
   --daemon-url <url>
 
 Output: a single line of JSON: {"file": { name, size, kind, mime, ... }}
@@ -8601,6 +8614,320 @@ async function runWhatsNew(args) {
   } else {
     console.log(`\nNo release highlights right now.`);
   }
+}
+
+function printDesignLibraryHelp() {
+  console.log(`Usage:
+  od design-library catalog [--json]
+
+Reads the local Design Library catalog (~/Desktop/Design Assets/catalog.json
+by default, or OD_DESIGN_LIBRARY_DIR) over the same GET
+/api/design-library/catalog contract the web Design Library tab reads.
+Read-only — this command never uploads or copies library bytes.
+
+Options:
+  --json               Print the raw response envelope
+  --daemon-url <url>   Override daemon URL`);
+}
+
+// `od design-library catalog` — AGENTS.md's UI/CLI dual-track rule: every
+// capability reachable through the web UI also gets a CLI mirror, same
+// contract, same API. Mirrors the `od media <sub>` dispatch shape.
+async function runDesignLibrary(args) {
+  const sub = args.find((a) => !a.startsWith('-')) || '';
+  if (sub === 'help' || sub === '-h' || sub === '--help' || sub === '') {
+    printDesignLibraryHelp();
+    return;
+  }
+  if (sub !== 'catalog') {
+    console.error(`unknown subcommand: od design-library ${sub}`);
+    printDesignLibraryHelp();
+    process.exit(1);
+  }
+  const idx = args.indexOf(sub);
+  const subArgs = [...args.slice(0, idx), ...args.slice(idx + 1)];
+  return runDesignLibraryCatalog(subArgs);
+}
+
+async function runDesignLibraryCatalog(rawArgs) {
+  const flags = parseFlags(rawArgs, { string: LIBRARY_STRING_FLAGS, boolean: LIBRARY_BOOLEAN_FLAGS });
+  if (flags.help || flags.h) {
+    printDesignLibraryHelp();
+    return;
+  }
+  const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/design-library/catalog`);
+  } catch (err) {
+    return exitWithStructuredError({
+      code: 'daemon-not-running',
+      message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+    });
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  const data = await resp.json();
+  process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: od storyboard (Seedance start/end keyframe-pair workflow).
+//
+// AGENTS.md's UI/CLI dual-track rule: every capability reachable through the
+// web UI also gets a CLI mirror, same contract, same /api/storyboards API.
+// Kept deliberately minimal (list/create/render-shot/assemble, plus `get` —
+// needed so an external agent can discover a shot id to pass to
+// render-shot at all): shot editing (adding shots, iterating frames,
+// deriving end frames) is an interactive web-UI flow this CLI doesn't try
+// to replace.
+// ---------------------------------------------------------------------------
+
+function printStoryboardHelp() {
+  console.log(`Usage:
+  od storyboard list [--json]
+  od storyboard create [--title "<title>"] [--json]
+  od storyboard get <id> [--json]
+  od storyboard render-shot <id> <shotId> [--json]
+  od storyboard assemble <id> [--json]
+
+Reads/writes the same /api/storyboards contract the web Storyboard section
+uses. \`render-shot\` dispatches the shot's video render, polls it to
+completion the same way \`od media generate\` does, then PATCHes the
+storyboard with the final status/output/error before printing the result.
+Shot creation/editing (frames, motion prompts, model/resolution/duration) is
+a web-UI flow; this CLI covers list/create/render/assemble only.
+
+Options:
+  --title <text>       Storyboard title (create only; defaults to "Untitled storyboard").
+  --json                Print the raw response envelope.
+  --daemon-url <url>   Override daemon URL`);
+}
+
+async function runStoryboard(args) {
+  const sub = args.find((a) => !a.startsWith('-')) || '';
+  if (sub === 'help' || sub === '-h' || sub === '--help' || sub === '') {
+    printStoryboardHelp();
+    return;
+  }
+  const known = ['list', 'create', 'get', 'render-shot', 'assemble'];
+  if (!known.includes(sub)) {
+    console.error(`unknown subcommand: od storyboard ${sub}`);
+    printStoryboardHelp();
+    process.exit(1);
+  }
+  const idx = args.indexOf(sub);
+  const subArgs = [...args.slice(0, idx), ...args.slice(idx + 1)];
+  let flags;
+  try {
+    flags = parseFlags(subArgs, { string: STORYBOARD_STRING_FLAGS, boolean: STORYBOARD_BOOLEAN_FLAGS });
+  } catch (err) {
+    console.error(err.message);
+    printStoryboardHelp();
+    process.exit(2);
+  }
+  if (flags.help || flags.h) {
+    printStoryboardHelp();
+    return;
+  }
+  const base = await cliDaemonBaseUrl(flags);
+  const positionals = subArgs.filter((a) => !a.startsWith('--'));
+
+  const writeJson = (data) => process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+
+  if (sub === 'list') {
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/storyboards`);
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    const storyboards = data.storyboards ?? [];
+    if (storyboards.length === 0) {
+      console.log('No storyboards yet. Create one with `od storyboard create --title "..."`.');
+      return;
+    }
+    console.log('# id\ttitle\tshots\tupdatedAt');
+    for (const sb of storyboards) {
+      console.log([sb.id, sb.title, sb.shotCount, sb.updatedAt].join('\t'));
+    }
+    return;
+  }
+
+  if (sub === 'create') {
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/storyboards`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: flags.title }),
+      });
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    console.log(`[storyboard] created ${data.storyboard?.id} — ${data.storyboard?.title}`);
+    return;
+  }
+
+  if (sub === 'get') {
+    const id = positionals[0];
+    if (!id) {
+      console.error('Usage: od storyboard get <id>');
+      process.exit(2);
+    }
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/storyboards/${encodeURIComponent(id)}`);
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    return writeJson(data);
+  }
+
+  if (sub === 'render-shot') {
+    const [id, shotId] = positionals;
+    if (!id || !shotId) {
+      console.error('Usage: od storyboard render-shot <id> <shotId>');
+      process.exit(2);
+    }
+    let renderResp;
+    try {
+      renderResp = await fetch(`${base}/api/storyboards/${encodeURIComponent(id)}/shots/${encodeURIComponent(shotId)}/render`, {
+        method: 'POST',
+      });
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!renderResp.ok) return structuredHttpFailure(renderResp);
+    const { taskId } = await renderResp.json();
+    if (!taskId) {
+      console.error('daemon did not return a taskId');
+      process.exit(4);
+    }
+    console.error(`[storyboard] shot ${shotId} rendering (task ${taskId})…`);
+    const snap = await waitForMediaTaskSnapshot(base, taskId, 25 * 60 * 1000);
+
+    // Re-read the storyboard so the PATCH only touches this one shot's
+    // fields, leaving every other shot/mood-draft untouched.
+    let current;
+    try {
+      const getResp = await fetch(`${base}/api/storyboards/${encodeURIComponent(id)}`);
+      if (getResp.ok) current = (await getResp.json()).storyboard;
+    } catch {
+      // best-effort; if this fails we still report the render outcome below
+    }
+    if (current) {
+      const shots = current.shots.map((shot) => {
+        if (shot.id !== shotId) return shot;
+        if (!snap || snap.status === 'running') {
+          return { ...shot, status: 'rendering', taskId };
+        }
+        if (snap.status === 'done') {
+          return { ...shot, status: 'done', output: snap.file?.name, error: undefined };
+        }
+        return { ...shot, status: 'failed', error: snap.error?.message || 'render failed' };
+      });
+      try {
+        await fetch(`${base}/api/storyboards/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ shots }),
+        });
+      } catch {
+        // best-effort; the render itself already happened regardless
+      }
+    }
+
+    if (flags.json) return writeJson({ taskId, ...snap });
+    if (!snap || snap.status === 'running') {
+      console.error(`shot ${shotId} still rendering after the poll budget; task ${taskId} continues in the background.`);
+      process.exit(2);
+    }
+    if (snap.status === 'done') {
+      console.log(`[storyboard] shot ${shotId} done — ${snap.file?.name}`);
+      return;
+    }
+    console.error(`[storyboard] shot ${shotId} failed: ${snap.error?.message || 'unknown error'}`);
+    process.exit(5);
+  }
+
+  if (sub === 'assemble') {
+    const id = positionals[0];
+    if (!id) {
+      console.error('Usage: od storyboard assemble <id>');
+      process.exit(2);
+    }
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/storyboards/${encodeURIComponent(id)}/assemble`, { method: 'POST' });
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    console.log(`[storyboard] assembled ${data.output}`);
+    return;
+  }
+}
+
+/**
+ * Polls POST /api/media/tasks/:id/wait to completion (or until totalBudgetMs
+ * elapses), returning the final snapshot instead of exiting the process —
+ * unlike pollUntilDoneOrBudget (which always ends the process itself), a
+ * caller here still has work to do afterward (PATCHing the storyboard).
+ * Returns null only on a network failure; a budget timeout returns the last
+ * snapshot seen (status still 'running').
+ */
+async function waitForMediaTaskSnapshot(base, taskId, totalBudgetMs) {
+  const perCallTimeoutMs = 4_000;
+  const startedAt = Date.now();
+  const url = `${base}/api/media/tasks/${encodeURIComponent(taskId)}/wait`;
+  let since = 0;
+  let lastSnapshot = null;
+  while (Date.now() - startedAt < totalBudgetMs) {
+    const remaining = totalBudgetMs - (Date.now() - startedAt);
+    const callTimeout = Math.max(500, Math.min(perCallTimeoutMs, remaining));
+    let resp;
+    try {
+      resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ since, timeoutMs: callTimeout }),
+      });
+    } catch (err) {
+      surfaceFetchError(err, base);
+      return lastSnapshot;
+    }
+    if (!resp.ok) return lastSnapshot;
+    let snap;
+    try {
+      snap = await resp.json();
+    } catch {
+      return lastSnapshot;
+    }
+    lastSnapshot = snap;
+    if (Array.isArray(snap.progress)) {
+      for (const line of snap.progress) process.stderr.write(`${line}\n`);
+    }
+    if (typeof snap.nextSince === 'number') since = snap.nextSince;
+    if (snap.status === 'done' || snap.status === 'failed' || snap.status === 'interrupted') {
+      return snap;
+    }
+  }
+  return lastSnapshot;
 }
 
 // ---------------------------------------------------------------------------

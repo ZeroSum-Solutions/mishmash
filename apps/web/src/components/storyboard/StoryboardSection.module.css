@@ -1,0 +1,349 @@
+.root {
+  display: flex;
+  flex-direction: column;
+}
+
+.status {
+  padding: 32px 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.empty {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 200ms cubic-bezier(0.23, 1, 0.32, 1), transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.card:hover {
+  border-color: var(--text-soft);
+  transform: translateY(-1px);
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.cardMeta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* --- editor --- */
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.editorHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.backButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.titleInput {
+  flex: 1;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+.titleInput:hover,
+.titleInput:focus {
+  border-color: var(--border);
+  background: var(--bg-panel);
+}
+
+/* --- mood lane --- */
+
+.moodLane {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-panel);
+}
+.moodLaneToggle {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+.moodLaneBody {
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.moodLaneHelper {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.moodLaneForm {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.moodDraftRail {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-top: 8px;
+}
+.moodDraftCard {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.moodDraftVideo {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background: #000;
+}
+.moodDraftPrompt {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- shot lane --- */
+
+.shotLane {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.shotCard {
+  flex: 0 0 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-panel);
+}
+.shotCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.shotCardIndex {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.shotCardHeadActions {
+  display: flex;
+  gap: 4px;
+}
+.shotCardHeadActions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+.shotCardHeadActions button:hover {
+  background: var(--border);
+  color: var(--text);
+}
+.shotCardHeadActions button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.shotFrames {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.shotFrameSlot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 90px;
+}
+.shotFrameSlotLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.shotFrameThumb {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #000;
+}
+.shotFrameActions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.shotDialog {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  animation: shot-dialog-in 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@keyframes shot-dialog-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+.shotDialogHelper {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.shotDialogTextarea {
+  min-height: 56px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 12px;
+  resize: vertical;
+}
+.shotDialogActions {
+  display: flex;
+  gap: 6px;
+}
+
+.motionPromptInput {
+  min-height: 60px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  resize: vertical;
+}
+
+.renderControls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.renderControls select {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.shotStatusLine {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.shotStatusError {
+  color: var(--color-danger, #d33);
+}
+.shotVideoPreview {
+  width: 100%;
+  border-radius: 8px;
+  background: #000;
+}
+
+.addShotButton {
+  flex: 0 0 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 200px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.addShotButton:hover {
+  color: var(--text);
+  border-color: var(--text-soft);
+}
+
+.footerBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.footerMessage {
+  font-size: 12px;
+  color: var(--text-muted);
+}
