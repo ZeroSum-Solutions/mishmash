@@ -45,6 +45,32 @@ vi.mock("@open-design/platform", () => ({
   stopProcesses,
 }));
 
+// lifecycle.ts's failure-diagnostics path (createLaunchFailureMessage ->
+// collectLaunchAssessment/collectLaunchXattrSummary/collectSystemPolicyLog)
+// shells out to real macOS binaries (codesign, spctl, xattr, /usr/bin/log)
+// via `promisify(execFile)`. Mock the node:child_process seam so those calls
+// never touch the real OS: they fail fast instead of taking ~10s against a
+// throwaway fake bundle.
+vi.mock("node:child_process", () => ({
+  execFile: vi.fn(
+    (
+      _file: string,
+      _args: readonly string[],
+      _options: unknown,
+      callback: (error: NodeJS.ErrnoException | null, stdout: string, stderr: string) => void,
+    ) => {
+      callback(
+        Object.assign(new Error("execFile is mocked in tests; no real system command runs"), {
+          code: "ENOENT",
+        }),
+        "",
+        "",
+      );
+      return new EventEmitter() as unknown as ChildProcess;
+    },
+  ),
+}));
+
 const { startPackedMacApp, stopPackedMacApp } = await import("../src/mac/lifecycle.js");
 
 function makeConfig(root: string, overrides: Partial<ToolPackConfig> = {}): ToolPackConfig {
