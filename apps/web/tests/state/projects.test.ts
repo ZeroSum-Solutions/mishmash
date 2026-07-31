@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ChatMessage } from '@open-design/contracts';
 import {
   applyPlugin,
   contributeGeneratedPluginToOpenDesign,
@@ -11,6 +12,7 @@ import {
   listPlugins,
   pickLocalFolderPath,
   publishGeneratedPluginToGitHub,
+  saveMessage,
 } from '../../src/state/projects';
 
 describe('applyPlugin', () => {
@@ -60,6 +62,46 @@ describe('applyPlugin', () => {
       grantCaps: [],
       locale: 'zh-CN',
     });
+  });
+});
+
+describe('saveMessage', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const message: ChatMessage = { id: 'm1', role: 'user', content: 'hi' };
+
+  it('resolves true on a 2xx daemon response', async () => {
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => new Response(null, { status: 200 })));
+
+    await expect(saveMessage('project-1', 'conversation-1', message)).resolves.toBe(true);
+  });
+
+  it('resolves false and logs instead of silently dropping a non-2xx response', async () => {
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => new Response(null, { status: 404 })));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(saveMessage('project-1', 'conversation-1', message)).resolves.toBe(false);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[saveMessage] failed:',
+      expect.objectContaining({ projectId: 'project-1', conversationId: 'conversation-1', status: 404 }),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('resolves false and logs instead of silently swallowing a network failure', async () => {
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => {
+      throw new Error('network down');
+    }));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(saveMessage('project-1', 'conversation-1', message)).resolves.toBe(false);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[saveMessage] failed:',
+      expect.objectContaining({ projectId: 'project-1', conversationId: 'conversation-1' }),
+    );
+    warnSpy.mockRestore();
   });
 });
 
