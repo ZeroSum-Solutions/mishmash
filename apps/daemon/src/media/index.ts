@@ -64,6 +64,7 @@ import {
   type MediaProvider,
   type MediaSurface,
   VIDEO_LENGTHS_SEC,
+  VIDEO_MODELS,
   findMediaModel,
   findProvider,
   modelsForSurface,
@@ -91,10 +92,15 @@ import {
   AIHUBMIX_DEFAULT_BASE_URL,
   aihubmixHeaders,
   aihubmixWireModel,
-  aihubmixVideoSeconds,
   aihubmixGeminiImageBytes,
   classifyAIHubMixModel,
 } from '../integrations/aihubmix.js';
+import {
+  aihubmixMediaRegistry,
+  buildVideoRequest,
+  deriveVideoFamily,
+  type ModelCapability,
+} from '../media-adapters/index.js';
 
 const execFile = promisify(execFileCb);
 type ProviderConfig = { apiKey?: string; baseUrl?: string; model?: string };
@@ -139,6 +145,13 @@ type MediaContext = {
   promptInfluence: number | undefined;
   compositionDir: string | null;
   imageRef: ImageRef | null;
+  /**
+   * Resolved end (last) keyframe for Seedance-style start/end keyframe-pair
+   * i2v. `null` when the caller didn't pass `endImage`. Only Volcengine and
+   * OpenRouter Seedance 2.0 models (the ones carrying the `kf` capability)
+   * consume this — see the capability guard in `generateMedia` below.
+   */
+  endImageRef: ImageRef | null;
   requestInit: MediaRequestInit;
   /** Additional reference images for multi-image i2v / style reference flows. */
   imageRefs: ImageRef[];
@@ -324,7 +337,7 @@ export async function generateMedia(args: {
   projectRoot: string; projectsRoot: string; projectId: string; surface: MediaSurface; model: string;
   prompt?: string; output?: string; aspect?: string; length?: number; duration?: number; voice?: string;
   audioKind?: AudioKind; language?: string; loop?: boolean; promptInfluence?: number;
-  compositionDir?: string; image?: string; images?: string[]; onProgress?: ProgressFn; requestInit?: MediaRequestInit;
+  compositionDir?: string; image?: string; endImage?: string; images?: string[]; onProgress?: ProgressFn; requestInit?: MediaRequestInit;
   onProviderRequestSettled?: (summary: ImageGenerationRequestSummary & { providerId: string }) => void;
 }) {
   const {
@@ -460,6 +473,59 @@ export async function generateMedia(args: {
   // and decide how to splice the data URL into their request.
   const imageRef = await resolveProjectImage(image, dir);
 
+  // Reject a reference image for a video model whose declared caps don't
+  // include i2v. Without this, renderVolcengineVideo / renderGrokVideo /
+  // renderFalVideo splice ctx.imageRef into the wire request gated only on
+  // truthiness — so a t2v-only catalog model (e.g.
+  // doubao-seedance-1-0-lite-t2v-250428, wan-2.1-t2v) silently gets an image
+  // attached that the model never declared support for, instead of a clear
+  // error. Scoped to registered catalog models only — the Fal custom-path and
+  // AIHubMix catch-all defs above don't carry reliable per-model capability
+  // data, so they're left to the provider/family-aware builder to enforce.
+  if (
+    surface === 'video'
+    && imageRef
+    && !isFalCustomPath
+    && !isCatalogBypass
+    && !def.caps.includes('i2v')
+  ) {
+    throw new Error(
+      `${model} is a text-to-video model (caps: ${def.caps.join(', ') || 'none'}) and can't take a `
+      + 'reference image. Remove --image, or switch to an i2v-capable model.',
+    );
+  }
+
+  // End (last) keyframe for the Seedance start/end keyframe-pair workflow.
+  // Resolved the same way as the start frame; Ark requires first_frame
+  // whenever last_frame is present, so an end frame with no start frame is
+  // rejected up front at the route (routes/media.ts) — this is a defense in
+  // depth check for any other caller of generateMedia directly.
+  const endImageRef = await resolveProjectImage(args.endImage, dir);
+  if (endImageRef && !imageRef) {
+    throw new Error('endImage requires image (Ark requires first_frame whenever last_frame is present).');
+  }
+  // Keyframe pairs are a narrow capability: only the Volcengine and
+  // OpenRouter Seedance 2.0 catalog models declare `kf` (see
+  // apps/daemon/src/media/models.ts). Gate by provider id here too, not just
+  // caps, so a mis-catalogued model can't silently have its end frame
+  // dropped by a renderer that never looks at ctx.endImageRef.
+  if (
+    surface === 'video'
+    && endImageRef
+    && !isFalCustomPath
+    && !isCatalogBypass
+    && (
+      (def.provider !== 'volcengine' && def.provider !== 'openrouter')
+      || !def.caps.includes('i2v')
+      || !def.caps.includes('kf')
+    )
+  ) {
+    const supported = VIDEO_MODELS.filter((m) => m.caps.includes('kf')).map((m) => m.id).join(', ');
+    throw new Error(
+      `${model} does not support an end (last) keyframe. Supported models: ${supported || 'none configured'}.`,
+    );
+  }
+
   // Multi-image support: resolve additional images from the `images`
   // array param. The first resolved image (imageRef) is the primary
   // reference; additional images flow as style/content references.
@@ -506,6 +572,9 @@ export async function generateMedia(args: {
     // Resolved reference image for i2v / image-edit flows. `null` when
     // the agent didn't pass --image. See resolveProjectImage below.
     imageRef,
+    // Resolved end (last) keyframe for the Seedance start/end keyframe-pair
+    // workflow. `null` when the agent didn't pass --end-image.
+    endImageRef,
     requestInit: requestInit || {},
     imageRefs,
     projectRoot,
@@ -892,9 +961,18 @@ async function renderOpenAIImage(ctx: MediaContext, credentials: ProviderConfig)
   }
   const rawBase = credentials.baseUrl || 'https://api.openai.com/v1';
   const azure = detectAzureEndpoint(rawBase);
-  const url = buildOpenAIImageUrl(rawBase, azure);
+  // gpt-image-2 (and the other gpt-image-*/dall-e-* models tagged `i2i` in
+  // the catalog) route through the images/edits shape when a reference
+  // image is supplied — mirrors renderCustomOpenAIImage's edit branch.
+  // Without this, ctx.imageRef was silently dropped: the request still went
+  // to images/generations and produced an unrelated fresh image instead of
+  // an edit.
+  const isEdit = Boolean(ctx.imageRef?.dataUrl);
+  const url = isEdit
+    ? buildOpenAIImageEditUrl(rawBase, azure)
+    : buildOpenAIImageUrl(rawBase, azure);
 
-  const body: Record<string, unknown> = {
+  const fields: Record<string, string | number> = {
     prompt: ctx.prompt || 'A high-quality reference image.',
     n: 1,
     size: openaiSizeFor(ctx.model, ctx.aspect),
@@ -904,23 +982,22 @@ async function renderOpenAIImage(ctx: MediaContext, credentials: ProviderConfig)
   // compatible across both flavors. The wire-name (post-alias) goes
   // on the body so the user's alias from issue #1277 reaches the API.
   if (!azure) {
-    body.model = ctx.wireModel;
+    fields.model = ctx.wireModel;
   }
   // Capability branches key off the CATALOG id (not the alias) so a
   // user who aliased `dall-e-3` to a custom Azure / proxy deployment
   // still gets the DALL-E-specific quality + response_format flags
   // (lefarcen + codex P2 on PR #1309).
   if (ctx.model.startsWith('dall-e-')) {
-    body.response_format = 'b64_json';
-    body.quality = ctx.model === 'dall-e-3' ? 'hd' : 'standard';
+    fields.response_format = 'b64_json';
+    fields.quality = ctx.model === 'dall-e-3' ? 'hd' : 'standard';
   } else {
     // gpt-image-* accepts quality 'high' | 'medium' | 'low'.
-    body.quality = 'high';
+    fields.quality = 'high';
   }
 
   const headers: Record<string, string> = {
     'authorization': `Bearer ${credentials.apiKey}`,
-    'content-type': 'application/json',
   };
   if (azure) {
     // Azure's canonical auth header. Some deployments accept Bearer
@@ -930,10 +1007,30 @@ async function renderOpenAIImage(ctx: MediaContext, credentials: ProviderConfig)
     headers['api-key'] = credentials.apiKey;
   }
 
+  // The real OpenAI /v1/images/edits endpoint requires multipart/form-data
+  // with the image sent as an uploaded file — the JSON {images:[{image_url}]}
+  // shape this used to send 400s against the actual API (it only worked
+  // against OpenAI-compatible aggregators, which is what renderCustomOpenAIImage
+  // still targets). Never set content-type manually for the multipart request;
+  // fetch derives the boundary from the FormData instance itself.
+  let requestBody: RequestInit['body'];
+  if (isEdit) {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(fields)) form.append(key, String(value));
+    const { mime, dataUrl, path: refPath } = ctx.imageRef!;
+    const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    const ext = path.extname(refPath) || '.png';
+    form.append('image', new Blob([Buffer.from(base64, 'base64')], { type: mime }), `image${ext}`);
+    requestBody = form;
+  } else {
+    headers['content-type'] = 'application/json';
+    requestBody = JSON.stringify(fields);
+  }
+
   const resp = await fetch(url, withMediaRequestInit(ctx, {
     method: 'POST',
     headers,
-    body: JSON.stringify(body),
+    body: requestBody,
     dispatcher: ctx.requestInit.dispatcher
       ?? openAIImageDispatcher as unknown as NonNullable<RequestInit['dispatcher']>,
     signal: AbortSignal.timeout(Math.max(OPENAI_IMAGE_HEADERS_TIMEOUT_MS, OPENAI_IMAGE_BODY_TIMEOUT_MS)),
@@ -1410,7 +1507,7 @@ function buildOpenAIImageUrl(baseUrl: string, isAzure: boolean): string {
   return parsed.toString();
 }
 
-function buildOpenAIImageEditUrl(baseUrl: string): string {
+function buildOpenAIImageEditUrl(baseUrl: string, isAzure = false): string {
   let parsed;
   try {
     parsed = new URL(baseUrl);
@@ -1419,6 +1516,9 @@ function buildOpenAIImageEditUrl(baseUrl: string): string {
     return normalizeOpenAICompatiblePath(stripped, 'images', 'edits');
   }
   parsed.pathname = normalizeOpenAICompatiblePath(parsed.pathname, 'images', 'edits');
+  if (isAzure && !parsed.searchParams.has('api-version')) {
+    parsed.searchParams.set('api-version', AZURE_DEFAULT_API_VERSION);
+  }
   return parsed.toString();
 }
 
@@ -1593,12 +1693,33 @@ async function renderVolcengineVideo(ctx: MediaContext, credentials: ProviderCon
   // it as the first frame and animates from there. We pass the data
   // URL directly; the API does not require a public URL. When no
   // image is provided, this is a regular t2v call.
+  //
+  // Start/end keyframe pairs (Seedance 2.0's `kf` capability): when an end
+  // frame is also supplied, both entries carry an explicit `role` so Ark
+  // knows which is the first vs. last frame (`role: 'last_frame'` requires
+  // `role: 'first_frame'` on the same request). Image-only requests keep the
+  // original role-less shape exactly as before — generateMedia's guard
+  // above already rejects an end frame without a start frame, so `role` is
+  // only ever added in the pair case.
   const content: Array<Record<string, unknown>> = [{ type: 'text', text: fullText }];
   if (ctx.imageRef && ctx.imageRef.dataUrl) {
-    content.push({
-      type: 'image_url',
-      image_url: { url: ctx.imageRef.dataUrl },
-    });
+    if (ctx.endImageRef && ctx.endImageRef.dataUrl) {
+      content.push({
+        type: 'image_url',
+        image_url: { url: ctx.imageRef.dataUrl },
+        role: 'first_frame',
+      });
+      content.push({
+        type: 'image_url',
+        image_url: { url: ctx.endImageRef.dataUrl },
+        role: 'last_frame',
+      });
+    } else {
+      content.push({
+        type: 'image_url',
+        image_url: { url: ctx.imageRef.dataUrl },
+      });
+    }
   }
 
   const taskBody = {
@@ -1715,7 +1836,7 @@ async function renderVolcengineImage(ctx: MediaContext, credentials: ProviderCon
   }
   const baseUrl = (credentials.baseUrl || 'https://ark.cn-beijing.volces.com/api/v3').replace(/\/$/, '');
 
-  const body = {
+  const body: Record<string, unknown> = {
     model: ctx.wireModel,
     prompt: ctx.prompt || 'A high-quality reference image.',
     response_format: 'b64_json',
@@ -1724,6 +1845,14 @@ async function renderVolcengineImage(ctx: MediaContext, credentials: ProviderCon
     // wire name. lefarcen + codex P2 on PR #1309.
     size: openaiSizeFor(ctx.model, ctx.aspect),
   };
+  // Ark's image API unifies generate + edit behind the same
+  // /images/generations endpoint: passing `image` (a URL or base64 data
+  // URL) switches doubao-seededit-3.0 (catalogued `i2i`) into edit mode.
+  // Without this, ctx.imageRef was silently dropped and every request —
+  // edit or not — produced a fresh t2i image.
+  if (ctx.imageRef?.dataUrl) {
+    body.image = ctx.imageRef.dataUrl;
+  }
   const resp = await fetch(`${baseUrl}/images/generations`, withMediaRequestInit(ctx, {
     method: 'POST',
     headers: {
@@ -2179,6 +2308,18 @@ async function renderOpenRouterVideo(
         frame_type: 'first_frame',
       },
     ];
+  }
+
+  // Start/end keyframe pairs (Seedance 2.0's `kf` capability): append the
+  // end (last) frame to `frame_images` alongside the first_frame entry built
+  // above. generateMedia's guard already requires a start frame whenever an
+  // end frame is supplied, so `frame_images` is always populated here too.
+  if (ctx.endImageRef && ctx.endImageRef.dataUrl && Array.isArray(body.frame_images)) {
+    (body.frame_images as Array<Record<string, unknown>>).push({
+      type: 'image_url',
+      image_url: { url: ctx.endImageRef.dataUrl },
+      frame_type: 'last_frame',
+    });
   }
 
   // ── Step 1: Submit the generation request ──────────────────────────
@@ -3473,6 +3614,40 @@ function aihubmixVideoSizeFor(aspect: string | undefined): string {
   }
 }
 
+// Resolve a model's capability from the shared media-adapters registry; for
+// catalogue models not in the seed, synthesize a sensible default (family +
+// duration set derived from the wire name). Mirrors byok-tools.ts's
+// aihubmixVideoCapabilityFor (duplicated here rather than imported — that
+// function isn't exported, and this module doesn't reach into byok-tools.ts's
+// private helpers). Phase 2 replaces the registry's seed with a live AIHubMix
+// /api/v1/models fetch.
+function aihubmixVideoCapabilityFor(catalogModel: string): ModelCapability {
+  const existing = aihubmixMediaRegistry.get(catalogModel);
+  if (existing) return existing;
+  const wire = aihubmixWireModel(catalogModel);
+  const lower = wire.toLowerCase();
+  const isVeo = lower.startsWith('veo');
+  const supportedDurations = isVeo
+    ? [4, 6, 8]
+    : lower.startsWith('sora')
+      ? [4, 8, 12]
+      : lower.startsWith('wan')
+        ? [5, 10]
+        : undefined;
+  // Veo is text-to-video only on the gateway (every reference form is rejected),
+  // so never grant it an i2v cap even if a future wire name contained "i2v".
+  const i2v = !isVeo && lower.includes('i2v');
+  return {
+    id: wire,
+    apiModel: wire,
+    mediaType: 'video',
+    family: deriveVideoFamily(wire),
+    caps: i2v ? ['i2v'] : ['t2v'],
+    ...(i2v ? { supportedFrameImages: ['first_frame'] } : {}),
+    ...(supportedDurations ? { supportedDurations } : {}),
+  };
+}
+
 async function renderAIHubMixVideo(
   ctx: MediaContext,
   credentials: ProviderConfig,
@@ -3482,22 +3657,30 @@ async function renderAIHubMixVideo(
     throw new Error('no AIHubMix API key — configure it in Settings or set OD_AIHUBMIX_API_KEY');
   }
   const baseUrl = (credentials.baseUrl || AIHUBMIX_DEFAULT_BASE_URL).replace(/\/$/, '');
-  const wireModel = aihubmixWireModel(credentials.model || ctx.wireModel);
+  const catalogModel = credentials.model || ctx.wireModel;
   const size = aihubmixVideoSizeFor(ctx.aspect);
-  // Snap to the model family's allowed duration set (Veo: 4/6/8, Sora: 4/8/12,
-  // wan: 5/10) so an out-of-set value isn't rejected upstream.
-  const seconds = aihubmixVideoSeconds(wireModel, ctx.length || 5);
 
-  const body: Record<string, unknown> = {
-    model: wireModel,
+  // Build the family-aware wire body (wan/veo/seedance/generic all shape the
+  // request differently — see media-adapters/video.ts). This mirrors the BYOK
+  // chat-tool path (byok-tools.ts's executeAIHubMixGenerateVideo), which was
+  // fixed to use the same builder after probing proved the flat
+  // {model,prompt,size,seconds,input_reference?} body wrong for wan/veo — wan
+  // needs {input:{prompt,media:[...]},parameters:{...}} and veo needs a
+  // NUMERIC seconds with no reference field at all. This renderer, the
+  // primary `od media generate` / NewProjectPanel path, was still building
+  // that stale flat shape.
+  const cap = aihubmixVideoCapabilityFor(catalogModel);
+  if (ctx.imageRef?.dataUrl && !cap.caps.includes('i2v')) {
+    throw new Error(`${cap.apiModel} is a text-to-video model and can't take a reference image. Remove the image, or switch to an i2v-capable model.`);
+  }
+  const built = buildVideoRequest(cap, {
     prompt: ctx.prompt || 'A short cinematic clip.',
     size,
-    seconds,
-  };
-  // First-frame reference for i2v flows; AIHubMix accepts a data URL.
-  if (ctx.imageRef?.dataUrl) {
-    body.input_reference = ctx.imageRef.dataUrl;
-  }
+    ...(typeof ctx.length === 'number' ? { durationSeconds: ctx.length } : {}),
+    ...(ctx.aspect ? { aspectRatio: ctx.aspect } : {}),
+    ...(ctx.imageRef?.dataUrl ? { imageRef: { dataUrl: ctx.imageRef.dataUrl } } : {}),
+  });
+  const body = built.body;
 
   const submitResp = await fetch(`${baseUrl}/videos`, withMediaRequestInit(ctx, {
     method: 'POST',
@@ -3614,7 +3797,7 @@ async function renderAIHubMixVideo(
 
   return {
     bytes,
-    providerNote: `aihubmix/${wireModel} · ${size} · ${seconds}s · ${bytes.length} bytes`,
+    providerNote: `aihubmix/${built.wireModel} · ${built.family} · ${size} · ${bytes.length} bytes`,
     suggestedExt: '.mp4',
   };
 }
@@ -3716,8 +3899,8 @@ const FAL_ENDPOINTS: Record<string, string> = {
   'flux-schnell-fal':    'fal-ai/flux/schnell',
   'ideogram-v3-fal':     'fal-ai/ideogram/v3',
   'recraft-v3-fal':      'fal-ai/recraft-v3',
-  'sora-2':              'fal-ai/sora',
-  'sora-2-pro':          'fal-ai/sora',
+  'sora-2':              'fal-ai/sora-2/text-to-video',
+  'sora-2-pro':          'fal-ai/sora-2/text-to-video/pro',
   'veo-3-fal':           'fal-ai/veo3',
   'veo-2-fal':           'fal-ai/veo2',
   'wan-2.1-t2v':         'fal-ai/wan-t2v',
