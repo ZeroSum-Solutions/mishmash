@@ -13,10 +13,11 @@
     "Fluid type scale and easing tokens inspired by darkroomengineering/satus (MIT)."
   ],
   "author": {
-    "name": "MishMash",
-    "url": "https://github.com/nexu-io"
+    "name": "nexu-io",
+    "url": "https://github.com/nexu-io",
+    "contact": "open-design@nexu.io"
   },
-  "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/video-templates/frame-shuffle-kinetic-type",
+  "homepage": "https://github.com/nexu-io/html-video/tree/main/templates/frame-shuffle-kinetic-type",
   "tags": [
     "video-template",
     "first-party",

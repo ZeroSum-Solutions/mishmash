@@ -2009,7 +2009,7 @@
         "broadcast",
         "presentation"
       ],
-      "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/video-templates/frame-shuffle-kinetic-type",
+      "homepage": "https://github.com/nexu-io/html-video/tree/main/templates/frame-shuffle-kinetic-type",
       "license": "MIT",
       "mode": "video",
       "taskKind": "new-generation"

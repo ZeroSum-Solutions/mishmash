@@ -3,7 +3,7 @@ name: video-template-frame-shuffle-kinetic-type
 description: Use this plugin when the user wants a "Shuffle Kinetic Type" HyperFrames motion video — a looping decode/scramble title card
 license: MIT
 metadata:
-  author: MishMash
+  author: nexu-io
   version: "0.1.0"
 od:
   mode: video
