@@ -1233,7 +1233,7 @@ export interface Dict {
   'recentProjects.viewAll': string;
   'recentProjects.empty': string;
   'pluginsHome.title': string;
-  'home.workflowsAndAssetsTitle': string;
+  'home.workflowsLink.label': string;
   'pluginsHome.subtitle': string;
   'pluginsHome.browseRegistry': string;
   'pluginsHome.count': string;
@@ -3120,10 +3120,10 @@ export interface Dict {
   'home.featured.template.core2.descriptor': string;
   'home.featured.tool.heroCreation.label': string;
   'home.featured.tool.heroCreation.descriptor': string;
-  'home.featured.tool.webShells.label': string;
-  'home.featured.tool.webShells.descriptor': string;
-  'home.featured.tool.scrollAnimations.label': string;
-  'home.featured.tool.scrollAnimations.descriptor': string;
+  'home.featured.tool.cloneRebrand.label': string;
+  'home.featured.tool.cloneRebrand.descriptor': string;
+  'home.featured.library.label': string;
+  'home.featured.library.descriptor': string;
   'home.featured.tool.scrollFilm.label': string;
   'home.featured.tool.scrollFilm.descriptor': string;
   'studio.firstArtifactHint.title': string;

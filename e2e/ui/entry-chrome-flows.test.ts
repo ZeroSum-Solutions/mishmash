@@ -363,17 +363,15 @@ test('[P1] home view exposes the redesigned hero, recent projects, and starters'
   await createProject(page, 'Home structure recent project');
   await gotoEntryHome(page);
 
-  // The redesigned entry shell keeps every view mounted (only the active one
-  // is visible), so `plugins-home-section` exists in both the home and plugins
-  // views; scope the lookup to the home view to keep the locator unambiguous.
+  // Studio-entrance restructure (docs/plans/2026-08-01-home-studio-entrance-
+  // restructure.md): Home renders the Featured starters row plus a quiet
+  // workflows link-out; the gallery grid lives only on the Plugins view.
   const home = page.getByTestId('entry-view-home');
   await expect(page.getByTestId('recent-projects-strip')).toBeVisible();
   await expect(page.getByTestId('recent-projects-view-all')).toBeVisible();
-  await expect(home.getByTestId('plugins-home-section')).toBeVisible();
-  await expect(home.getByTestId('plugins-home-browse-registry')).toBeVisible();
-  // The Community gallery defaults to the All slice (#5759).
-  await expect(home.getByTestId('plugins-home-pill-category-all')).toHaveAttribute('aria-selected', 'true');
-  await expect(home.getByTestId('plugins-home-pill-category-deck')).toHaveAttribute('aria-selected', 'false');
+  await expect(home.getByTestId('featured-templates-row')).toBeAttached();
+  await expect(home.getByTestId('home-workflows-linkrow')).toBeAttached();
+  await expect(home.getByTestId('plugins-home-section')).toHaveCount(0);
   await expect(page.getByTestId('home-hero')).toBeVisible();
   await expect(page.getByTestId('home-templates-hint')).toHaveCount(0);
   await expect(page.getByTestId('entry-nav-home')).toHaveAttribute('aria-current', 'page');
@@ -902,7 +900,7 @@ test('[P1] home starters can browse registry and use a starter from Home', async
   await gotoEntryHome(page);
   // The browse link lives inside the first-run reveal container; reveal it
   // first or the collapsed overlay intercepts the click.
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
   await expect(home.getByTestId('plugins-home-browse-registry')).toBeVisible();
   await home.getByTestId('plugins-home-browse-registry').click();
   await expect(page).toHaveURL(/\/plugins$/);
@@ -942,7 +940,7 @@ test('[P1] home starters gallery inline Use applies the starter without opening 
   });
 
   await gotoEntryHome(page);
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
   const card = home.locator('article.plugins-home__card[data-plugin-id="localized-plugin"]');
   await expect(card).toBeVisible();
 
@@ -966,9 +964,10 @@ test('[P2] home starters shows the empty catalog state when no plugins are avail
   });
 
   await gotoEntryHome(page);
-  // `plugins-home-section` is rendered in both the home and plugins views (both
-  // stay mounted), so scope to the home view to keep the locator unambiguous.
-  await expect(page.getByTestId('entry-view-home').getByTestId('plugins-home-section')).toContainText(
+  // The gallery left the Home view (studio-entrance restructure); the empty
+  // catalog state is asserted on the Plugins view, its only remaining home.
+  await page.getByTestId('entry-nav-plugins').dispatchEvent('click');
+  await expect(page.getByTestId('entry-view-plugins').getByTestId('plugins-home-section')).toContainText(
     'Catalog is empty.',
   );
 });
@@ -984,7 +983,7 @@ test('[P2] home starters search and facet filters narrow the visible gallery', a
 
   await gotoEntryHome(page);
 
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
   const deckCategory = home.getByTestId('plugins-home-pill-category-deck');
   // The gallery defaults to the All slice (#5759); pick Deck explicitly
   // before asserting the deck-only visibility set.
@@ -1014,7 +1013,7 @@ test('[P1] home starters category tabs and subcategory tabs switch the gallery s
   });
 
   await gotoEntryHome(page);
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
 
   // The gallery defaults to the All slice (#5759): the All pill is selected
   // and every facet is visible until a category is picked.
@@ -1075,7 +1074,7 @@ test('[P1] home starters can jump into plugin creation through the registry brow
   await gotoEntryHome(page);
   // The browse link lives inside the first-run reveal container; reveal it
   // first or the collapsed overlay intercepts the click.
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
   await home.getByTestId('plugins-home-browse-registry').click();
   await expect(page).toHaveURL(/\/plugins$/);
   await expect(page.locator('h1').filter({ hasText: 'Plugins' })).toBeVisible();
@@ -1098,7 +1097,7 @@ test('[P2] home starters search can enter a no-results state and recover with cl
   // `plugins-home-section` and its children are rendered in both the home and
   // plugins views (both stay mounted), so scope to the home view to keep these
   // strict-mode locators unambiguous.
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
   const search = home.getByTestId('plugins-home-search');
   await search.click({ force: true });
   await search.fill('no-such-starter');
@@ -1122,7 +1121,7 @@ test('[P2] home starters details modal opens from a gallery card and closes on E
 
   await gotoEntryHome(page);
 
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
   const card = home.locator('[data-plugin-id="localized-plugin"]').first();
   await expect(card).toBeVisible();
   await card.click();
@@ -1160,7 +1159,7 @@ test('[P1] home starters gallery card click opens the large preview detail modal
   });
 
   await gotoEntryHome(page);
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
 
   const card = home.locator('article.plugins-home__card[data-plugin-id="community-gallery-plugin"]');
   await expect(card).toBeVisible();
@@ -1236,7 +1235,7 @@ test('[P1] home starters gallery duplicate creates a project and exposes the ret
   ]);
 
   await gotoEntryHome(page);
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
   await duplicatePluginFromDetails(page, 'duplicate-gallery-plugin', /Duplicate Gallery Plugin/i, home);
 
   await expect
@@ -1276,7 +1275,7 @@ test('[P1] home starters gallery duplicate failure recovers without leaving Home
   });
 
   await gotoEntryHome(page);
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
   await duplicatePluginFromDetails(page, 'duplicate-failure-plugin', /Duplicate Failure Plugin/i, home);
 
   await expect
@@ -1312,7 +1311,7 @@ test('[P2] home starters html details modal exposes header actions and closes fr
   });
 
   await gotoEntryHome(page);
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
   const card = home.locator('article.plugins-home__card[data-plugin-id="html-details-plugin"]');
   await expect(card).toBeVisible();
   await card.click();
@@ -1372,7 +1371,7 @@ test('[P1] home starters WebGL example previews render real canvas output', asyn
   }
 
   await gotoEntryHome(page);
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
 
   for (const plugin of webglPlugins) {
     const card = home.locator(`article.plugins-home__card[data-plugin-id="${plugin.id}"]`);
@@ -1421,7 +1420,7 @@ test('[P1] home starters WebGL example previews resize the real canvas backing s
   });
 
   await gotoEntryHome(page);
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
   const card = home.locator(`article.plugins-home__card[data-plugin-id="${plugin.id}"]`);
   await expect(card).toBeVisible();
   await card.getByRole('button', { name: /View details for Aurora Veil/i }).click();
@@ -1494,7 +1493,7 @@ test('[P1] Community templates sort toggle switches to newest order and persists
   });
 
   await gotoEntryHome(page);
-  let home = await revealHomeTemplates(page);
+  let home = await openStartersGallery(page);
   const cardIds = async () => home.locator('article.plugins-home__card').evaluateAll((cards) =>
     cards.map((card) => card.getAttribute('data-plugin-id')),
   );
@@ -1508,7 +1507,7 @@ test('[P1] Community templates sort toggle switches to newest order and persists
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   await gotoEntryHome(page);
-  home = await revealHomeTemplates(page);
+  home = await openStartersGallery(page);
   await expect(home.getByTestId('plugins-home-sort-newest')).toHaveAttribute('aria-checked', 'true');
   expect((await cardIds()).slice(0, 3)).toEqual(['sort-newest-plain', 'sort-middle-plain', 'sort-hot-visual']);
 });
@@ -1550,7 +1549,7 @@ test('[P1] home starters html details sidebar handle stays clickable after info 
   });
 
   await gotoEntryHome(page);
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
   await home.locator('article.plugins-home__card[data-plugin-id="html-scroll-sidebar-plugin"]').click();
 
   const dialog = page.getByRole('dialog', { name: /HTML Scroll Sidebar Plugin preview/i });
@@ -1627,7 +1626,7 @@ test('[P2] home starters html details modal shows metadata links and supports co
   });
 
   await gotoEntryHome(page);
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
   const card = home.locator('article.plugins-home__card[data-plugin-id="html-metadata-plugin"]');
   await expect(card).toBeVisible();
   await card.click();
@@ -1691,7 +1690,7 @@ test('[P1] home starters Use plugin from the details modal applies the plugin to
   await gotoEntryHome(page);
   // Reveal first: a force-click on the details testid inside the collapsed
   // (inert) reveal container is silently swallowed.
-  const detailHome = await revealHomeTemplates(page);
+  const detailHome = await openStartersGallery(page);
   await detailHome.getByTestId('plugins-home-details-detail-use-plugin').click({ force: true });
 
   const dialog = page.getByRole('dialog', { name: /Detail Use Plugin preview/i });
@@ -1809,7 +1808,7 @@ test('[P0] @critical home starters Use with query carries the hydrated starter p
   await gotoEntryHome(page);
 
   const input = page.getByTestId('home-hero-input');
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
   // Use the starter from its detail modal; gallery inline Use is covered by a
   // separate case. This starter ships an example query, so the primary Use button loads the prompt:
   // it routes the plugin as the active run driver AND seeds the hydrated prompt.
@@ -1874,7 +1873,7 @@ test('[P0] @critical home plugin input edits are resolved and carried into proje
   });
 
   await gotoEntryHome(page);
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
   await home.getByTestId('plugins-home-details-parameterized-deck-plugin').click({ force: true });
   await page.getByTestId('plugin-details-use-parameterized-deck-plugin').click();
   await expect(page.getByTestId('home-hero-active-plugin')).toContainText('Parameterized Deck Plugin');
@@ -1946,7 +1945,7 @@ test('[P0] @critical required home plugin prompt parameters gate submit and bind
   });
 
   await gotoEntryHome(page);
-  const home = await revealHomeTemplates(page);
+  const home = await openStartersGallery(page);
   await openHomePluginDetails(page, 'guided-deck-plugin', /Guided Deck Plugin/i, home);
   await page.getByTestId('plugin-details-use-guided-deck-plugin').click();
 
@@ -2368,64 +2367,29 @@ async function gotoEntryHome(page: Page) {
   await expect(page.getByTestId('home-hero-input')).toBeVisible();
 }
 
-async function revealHomeTemplates(page: Page) {
-  const home = page.locator('[data-testid="entry-view-home"][data-active="true"]');
-  const section = home.getByTestId('plugins-home-section');
-  const reveal = home.locator('.home-templates-reveal');
-  const isRevealed = () =>
-    reveal.evaluate((node) => node.classList.contains('is-revealed')).catch(() => false);
-  // `HomeTemplatesReveal` keeps its revealed flag in component state, and the
-  // async projects fetch can remount it (or flip `enabled`) after we reveal,
-  // silently collapsing the gallery again. Reveal, then require the revealed
-  // state to survive a settle window before trusting it; retry on regression.
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    if (!(await reveal.count())) {
-      // Looks like pass-through mode, but the wrapper can mount late (React
-      // may still be processing the projects response and flip `enabled`
-      // right after we look). Hold one settle window and re-check; only a
-      // stable absence is really pass-through.
-      await page.waitForTimeout(600);
-      if (!(await reveal.count())) break;
-      continue;
-    }
-    const hint = home.getByTestId('home-templates-hint');
-    if (!(await isRevealed())) {
-      for (let wheel = 0; wheel < 3 && !(await isRevealed()); wheel += 1) {
-        await page.mouse.wheel(0, 900);
-        await page.waitForTimeout(120);
-      }
-      if (!(await isRevealed()) && (await hint.count())) {
-        await hint.scrollIntoViewIfNeeded();
-        await expect(hint).toBeVisible();
-        await hint.click();
-      }
-    }
-    await page.waitForTimeout(600);
-    if (await isRevealed()) break;
-  }
-  if (await reveal.count()) {
-    await expect(reveal).toHaveClass(/is-revealed/);
-    await expect(home.locator('.home-templates-reveal__body')).not.toHaveAttribute('inert', '');
-  }
-  await expect(section).toBeVisible();
-  await page.locator('.entry-main--scroll').evaluate((node) => {
-    node.scrollTop = node.scrollHeight;
-  });
-  return home;
+async function openStartersGallery(page: Page) {
+  // Studio-entrance restructure (docs/plans/2026-08-01-home-studio-entrance-
+  // restructure.md): the starters/workflows gallery grid left the Home view
+  // and now lives only on the Plugins view, so gallery-behavior tests open
+  // that view. The old Home reveal choreography went with the Home gallery.
+  await page.getByTestId('entry-nav-plugins').dispatchEvent('click');
+  const gallery = page.locator('[data-testid="entry-view-plugins"][data-active="true"]');
+  await expect(gallery.getByTestId('plugins-home-section')).toBeVisible();
+  return gallery;
 }
 
 async function openHomePluginDetails(
   page: Page,
   pluginId: string,
   name: RegExp,
-  scopedHome = page.locator('[data-testid="entry-view-home"][data-active="true"]'),
+  scopedHome = page.locator('[data-testid="entry-view-plugins"][data-active="true"]'),
 ) {
   // Always walk the reveal path (it is idempotent when the templates are
   // already expanded): a card inside the collapsed first-run reveal container
   // still reports isVisible(), so gating the reveal on card visibility leaves
   // the card without an actionable click point whenever the previous test in
   // the worker left the home in its collapsed hero state.
-  await revealHomeTemplates(page);
+  await openStartersGallery(page);
   const home = scopedHome;
   const card = home.locator(`article.plugins-home__card[data-plugin-id="${pluginId}"]`).first();
   await expect(card).toBeVisible();
@@ -2447,7 +2411,7 @@ async function duplicatePluginFromDetails(
   page: Page,
   pluginId: string,
   name: RegExp,
-  scopedHome = page.locator('[data-testid="entry-view-home"][data-active="true"]'),
+  scopedHome = page.locator('[data-testid="entry-view-plugins"][data-active="true"]'),
 ) {
   const dialog = await openHomePluginDetails(page, pluginId, name, scopedHome);
   await dialog.getByTestId(`plugin-details-use-${pluginId}-menu`).click();

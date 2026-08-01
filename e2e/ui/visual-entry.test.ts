@@ -57,44 +57,44 @@ test('[P2] captures the visual home harness', async ({ page }) => {
   await captureVisual(page, 'visual-home');
 });
 
-test('[P2] captures the home plugin catalog surface', async ({ page }) => {
+test('[P2] captures the plugins catalog surface', async ({ page }) => {
   test.setTimeout(90_000);
 
   await configureVisualPage(page);
   await gotoVisualHome(page);
 
-  // The redesigned entry shell keeps every view mounted (only the active one
-  // is visible) so tab switches don't reload thumbnails. That means
-  // `plugins-home-section` exists in both the home and plugins views, so
-  // scope the lookup to the home view to keep these strict-mode locators
-  // unambiguous.
-  const home = page.getByTestId('entry-view-home');
-  await expect(page.getByTestId('recent-projects-strip')).toBeVisible();
-  const community = home.getByTestId('plugins-home-section');
+  // Studio-entrance restructure: the gallery grid lives only on the Plugins
+  // view now, so the catalog capture opens that view. The capture name keeps
+  // its historical id so report timelines stay continuous.
+  await page.getByTestId('entry-nav-plugins').dispatchEvent('click');
+  const gallery = page.locator('[data-testid="entry-view-plugins"][data-active="true"]');
+  const community = gallery.getByTestId('plugins-home-section');
   await expect(community).toBeVisible();
   await scrollVisualLocatorIntoStableView(page, community);
-  await expect(home.locator('article.plugins-home__card--gallery').first()).toBeVisible();
-  await expect(home.getByTestId('plugins-home-search')).toBeVisible();
+  await expect(gallery.locator('article.plugins-home__card--gallery').first()).toBeVisible();
+  await expect(gallery.getByTestId('plugins-home-search')).toBeVisible();
 
   await captureVisual(page, 'visual-home-catalog');
 });
 
-test('[P2] captures the home plugin filtered surface', async ({ page }) => {
+test('[P2] captures the plugins filtered surface', async ({ page }) => {
   await configureVisualPage(page);
   await gotoVisualHome(page);
 
-  const home = page.getByTestId('entry-view-home');
-  await home.getByTestId('plugins-home-pill-category-deck').click();
-  await expect(home.locator('article.plugins-home__card[data-plugin-id="visual-deck-writer"]')).toBeVisible();
+  await page.getByTestId('entry-nav-plugins').dispatchEvent('click');
+  const gallery = page.locator('[data-testid="entry-view-plugins"][data-active="true"]');
+  await gallery.getByTestId('plugins-home-pill-category-deck').click();
+  await expect(gallery.locator('article.plugins-home__card[data-plugin-id="visual-deck-writer"]')).toBeVisible();
 
   await captureVisual(page, 'visual-home-plugin-filter');
 });
 
-test('[P2] captures the home plugin detail surface', async ({ page }) => {
+test('[P2] captures the plugins detail surface', async ({ page }) => {
   await configureVisualPage(page);
   await gotoVisualHome(page);
 
-  const home = page.getByTestId('entry-view-home');
+  await page.getByTestId('entry-nav-plugins').dispatchEvent('click');
+  const home = page.locator('[data-testid="entry-view-plugins"][data-active="true"]');
   await home.getByTestId('plugins-home-pill-category-deck').click();
   const card = home.locator('article.plugins-home__card[data-plugin-id="visual-deck-writer"]');
   await expect(card).toBeVisible();
@@ -111,7 +111,8 @@ test('[P2] captures the plugin detail share menu surface', async ({ page }) => {
   await configureVisualPage(page);
   await gotoVisualHome(page);
 
-  const home = page.getByTestId('entry-view-home');
+  await page.getByTestId('entry-nav-plugins').dispatchEvent('click');
+  const home = page.locator('[data-testid="entry-view-plugins"][data-active="true"]');
   await home.getByTestId('plugins-home-pill-category-deck').click();
   const card = home.locator('article.plugins-home__card[data-plugin-id="visual-deck-writer"]');
   await expect(card).toBeVisible();
@@ -159,7 +160,9 @@ test('[P2] captures the home plugin use staged surface', async ({ page }) => {
   await configureVisualPage(page);
   await gotoVisualHome(page);
 
-  const home = page.getByTestId('entry-view-home');
+  // The gallery lives on the Plugins view; Use hands back off to Home.
+  await page.getByTestId('entry-nav-plugins').dispatchEvent('click');
+  const home = page.locator('[data-testid="entry-view-plugins"][data-active="true"]');
   await home.getByTestId('plugins-home-pill-category-prototype').click();
   const card = home.locator('article.plugins-home__card[data-plugin-id="visual-prototype-starter"]');
   await expect(card).toBeVisible();
@@ -176,7 +179,9 @@ test('[P2] captures the home plugin use with query surface', async ({ page }) =>
   await configureVisualPage(page);
   await gotoVisualHome(page);
 
-  const home = page.getByTestId('entry-view-home');
+  // The gallery lives on the Plugins view; use-with-query hands back to Home.
+  await page.getByTestId('entry-nav-plugins').dispatchEvent('click');
+  const home = page.locator('[data-testid="entry-view-plugins"][data-active="true"]');
   await home.getByTestId('plugins-home-pill-category-deck').click();
   const card = home.locator('article.plugins-home__card[data-plugin-id="visual-deck-writer"]');
   await expect(card).toBeVisible();

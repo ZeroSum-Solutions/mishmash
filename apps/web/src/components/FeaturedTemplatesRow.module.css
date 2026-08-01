@@ -127,3 +127,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.libraryCard {
+  border-style: dashed;
+  background: transparent;
+}
+
+.libraryCard:hover {
+  background: var(--bg-subtle);
+}

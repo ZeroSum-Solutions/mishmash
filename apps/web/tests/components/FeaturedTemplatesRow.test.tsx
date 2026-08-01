@@ -89,13 +89,14 @@ afterEach(() => {
 });
 
 describe('FeaturedTemplatesRow', () => {
-  it('renders all 4 template cards and all 4 tool cards, with the UI8 badge only on template cards', async () => {
-    render(<FeaturedTemplatesRow onOpenProject={vi.fn()} onToolAction={vi.fn()} />);
+  it('renders 4 template cards, 3 tool cards, and the library tail card, with the UI8 badge only on template cards', async () => {
+    render(<FeaturedTemplatesRow onOpenProject={vi.fn()} onToolAction={vi.fn()} onBrowseLibrary={vi.fn()} />);
 
     const templateCards = await screen.findAllByTestId('featured-template-card');
     expect(templateCards).toHaveLength(4);
     const toolCards = screen.getAllByTestId('featured-tool-card');
-    expect(toolCards).toHaveLength(4);
+    expect(toolCards).toHaveLength(3);
+    expect(screen.getByTestId('featured-library-card')).toBeTruthy();
 
     for (const card of templateCards) {
       expect(card.textContent).toContain('UI8 licensed');
@@ -108,19 +109,20 @@ describe('FeaturedTemplatesRow', () => {
     expect(screen.getByText('Morrow')).toBeTruthy();
     expect(screen.getByText('Azurio')).toBeTruthy();
     expect(screen.getByText('Core 2')).toBeTruthy();
-    expect(screen.getByText('Hero creation')).toBeTruthy();
-    expect(screen.getByText('Web shells')).toBeTruthy();
-    expect(screen.getByText('Scroll animations')).toBeTruthy();
     expect(screen.getByText('Scroll film')).toBeTruthy();
+    expect(screen.getByText('Hero creation')).toBeTruthy();
+    expect(screen.getByText('Clone + rebrand')).toBeTruthy();
+    expect(screen.getByText('Browse the kit library')).toBeTruthy();
   });
 
   it('hides the template cards but keeps the tools row when the catalog is absent', async () => {
     fetchDesignLibraryCatalog.mockResolvedValue({ ok: false, notFound: true, message: 'not found' });
-    render(<FeaturedTemplatesRow onOpenProject={vi.fn()} onToolAction={vi.fn()} />);
+    render(<FeaturedTemplatesRow onOpenProject={vi.fn()} onToolAction={vi.fn()} onBrowseLibrary={vi.fn()} />);
 
     await waitFor(() => expect(fetchDesignLibraryCatalog).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId('featured-template-card')).toBeNull();
-    expect(screen.getAllByTestId('featured-tool-card')).toHaveLength(4);
+    expect(screen.getAllByTestId('featured-tool-card')).toHaveLength(3);
+    expect(screen.getByTestId('featured-library-card')).toBeTruthy();
   });
 
   it('starts a project from a template card and opens it on success', async () => {
@@ -129,7 +131,7 @@ describe('FeaturedTemplatesRow', () => {
       response: { ok: true, projectId: 'proj-123', conversationId: 'conv-1' },
     });
     const onOpenProject = vi.fn();
-    render(<FeaturedTemplatesRow onOpenProject={onOpenProject} onToolAction={vi.fn()} />);
+    render(<FeaturedTemplatesRow onOpenProject={onOpenProject} onToolAction={vi.fn()} onBrowseLibrary={vi.fn()} />);
 
     const dwellCard = await screen.findByText('Dwell');
     fireEvent.click(dwellCard.closest('button')!);
@@ -141,7 +143,7 @@ describe('FeaturedTemplatesRow', () => {
   it('shows an error toast and does not navigate when starting a template project fails', async () => {
     startDesignLibraryProject.mockResolvedValue({ ok: false, message: 'boom' });
     const onOpenProject = vi.fn();
-    render(<FeaturedTemplatesRow onOpenProject={onOpenProject} onToolAction={vi.fn()} />);
+    render(<FeaturedTemplatesRow onOpenProject={onOpenProject} onToolAction={vi.fn()} onBrowseLibrary={vi.fn()} />);
 
     const dwellCard = await screen.findByText('Dwell');
     fireEvent.click(dwellCard.closest('button')!);
@@ -165,7 +167,7 @@ describe('FeaturedTemplatesRow', () => {
       ],
     };
     fetchDesignLibraryCatalog.mockResolvedValue({ ok: true, catalog: restrictedCatalog });
-    render(<FeaturedTemplatesRow onOpenProject={vi.fn()} onToolAction={vi.fn()} />);
+    render(<FeaturedTemplatesRow onOpenProject={vi.fn()} onToolAction={vi.fn()} onBrowseLibrary={vi.fn()} />);
 
     const templateCards = await screen.findAllByTestId('featured-template-card');
     expect(templateCards).toHaveLength(3);
@@ -180,29 +182,43 @@ describe('FeaturedTemplatesRow', () => {
     // (`{ ok: true, catalog: {} }`) used to throw inside the fetch .then and
     // surface as 14 unhandled rejections across suites.
     fetchDesignLibraryCatalog.mockResolvedValue({ ok: true, catalog: {} as DesignLibraryCatalog });
-    render(<FeaturedTemplatesRow onOpenProject={vi.fn()} onToolAction={vi.fn()} />);
+    render(<FeaturedTemplatesRow onOpenProject={vi.fn()} onToolAction={vi.fn()} onBrowseLibrary={vi.fn()} />);
 
     await waitFor(() => expect(fetchDesignLibraryCatalog).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId('featured-template-card')).toBeNull();
-    expect(screen.getAllByTestId('featured-tool-card')).toHaveLength(4);
+    expect(screen.getAllByTestId('featured-tool-card')).toHaveLength(3);
+    expect(screen.getByTestId('featured-library-card')).toBeTruthy();
   });
 
   it('fires onToolAction with the right tool id for each tool card', async () => {
     const onToolAction = vi.fn();
-    render(<FeaturedTemplatesRow onOpenProject={vi.fn()} onToolAction={onToolAction} />);
-
-    fireEvent.click(screen.getByText('Hero creation').closest('button')!);
-    expect(onToolAction).toHaveBeenCalledWith('hero-creation');
-
-    fireEvent.click(screen.getByText('Web shells').closest('button')!);
-    expect(onToolAction).toHaveBeenCalledWith('web-shells');
-
-    fireEvent.click(screen.getByText('Scroll animations').closest('button')!);
-    expect(onToolAction).toHaveBeenCalledWith('scroll-animations');
+    render(<FeaturedTemplatesRow onOpenProject={vi.fn()} onToolAction={onToolAction} onBrowseLibrary={vi.fn()} />);
 
     fireEvent.click(screen.getByText('Scroll film').closest('button')!);
     expect(onToolAction).toHaveBeenCalledWith('scroll-film');
 
-    expect(onToolAction).toHaveBeenCalledTimes(4);
+    fireEvent.click(screen.getByText('Hero creation').closest('button')!);
+    expect(onToolAction).toHaveBeenCalledWith('hero-creation');
+
+    fireEvent.click(screen.getByText('Clone + rebrand').closest('button')!);
+    expect(onToolAction).toHaveBeenCalledWith('clone-rebrand');
+
+    expect(onToolAction).toHaveBeenCalledTimes(3);
+  });
+
+  it('fires onBrowseLibrary (not onToolAction) from the library tail card', async () => {
+    const onToolAction = vi.fn();
+    const onBrowseLibrary = vi.fn();
+    render(
+      <FeaturedTemplatesRow
+        onOpenProject={vi.fn()}
+        onToolAction={onToolAction}
+        onBrowseLibrary={onBrowseLibrary}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('featured-library-card'));
+    expect(onBrowseLibrary).toHaveBeenCalledTimes(1);
+    expect(onToolAction).not.toHaveBeenCalled();
   });
 });
