@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<title>Scroll Film — one story, every scroll a frame.</title>
+<meta name="description" content="Tool preview for the Scroll Film generator: a chapter card, a scroll-progress rail, and a slow ambient drift standing in for the cinematic pinned-scene choreography the tool writes as real GSAP ScrollTrigger code." />
+<!--
+  Static tile preview for the od-scroll-film tool card, not a generated
+  scroll film itself. The home gallery renders this document tiny and
+  scaled up as a thumbnail (see apps/web/src/components/plugins-home/
+  cards/HtmlSurface.tsx) — it is never scrolled inside the tile, so the
+  choreography this preview needs to sell is an ambient loop that is
+  already fully composed at first paint, not an interactive demo of
+  pin/scrub scroll-linking. The actual generation protocol (SKILL.md)
+  requires real vendored GSAP ScrollTrigger code in its output; this
+  preview intentionally stays framework-free — it only needs to read as
+  "cinematic, chaptered, in motion," not to prove the library is wired.
+
+  All motion below is plain CSS @keyframes; the grain texture is an
+  inline SVG feTurbulence filter (procedural, no image asset). Original
+  composition — no source copied.
+-->
+<style>
+:root {
+  --ink: #0a0b0d;
+  --ink-deep: #050506;
+  --bone: #f2ede2;
+  --bone-dim: #a39c8c;
+  --ember: #c9743a;
+  --hairline: rgba(242, 237, 226, 0.16);
+
+  --serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', Palatino, serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --motion-mult: 1;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--ink);
+  overflow: hidden;
+}
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.stage {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+  background:
+    radial-gradient(120% 90% at 50% 112%, rgba(201, 116, 58, 0.22), transparent 60%),
+    radial-gradient(140% 100% at 50% -10%, rgba(40, 44, 56, 0.9), var(--ink) 55%);
+  overflow: hidden;
+}
+
+/* Procedural grain, no image asset */
+.grain {
+  position: absolute;
+  inset: -20%;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+/* Slow drifting horizon band — the "depth" the scroll film's parallax
+   layers would occupy once a real story is generated. */
+.horizon {
+  position: absolute;
+  left: 50%;
+  bottom: -6%;
+  width: 160vw;
+  height: 42vh;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  background: linear-gradient(180deg, rgba(201, 116, 58, 0.16), rgba(201, 116, 58, 0) 70%);
+  transform: translateX(-50%);
+  animation: driftHorizon 22s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes driftHorizon {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-2.4vh); }
+}
+
+.frame {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(20px, 6vw, 72px);
+}
+
+.kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  font-family: var(--mono);
+  font-size: clamp(0.62rem, 1.2vw, 0.82rem);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--ember);
+  margin: 0 0 clamp(14px, 2.6vw, 26px);
+  animation: fadeUp 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.1s;
+}
+.kicker::before {
+  content: '';
+  width: 1.6em;
+  height: 1px;
+  background: var(--ember);
+  display: inline-block;
+}
+
+.headline {
+  font-family: var(--serif);
+  font-weight: 400;
+  color: var(--bone);
+  font-size: clamp(1.9rem, 6.4vw, 4.4rem);
+  line-height: 1.04;
+  letter-spacing: -0.01em;
+  max-width: 12ch;
+  margin: 0 0 clamp(20px, 4vw, 40px);
+  animation: fadeUp 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.24s;
+}
+.headline em {
+  font-style: italic;
+  color: var(--ember);
+}
+
+.chapter-row {
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 2.4vw, 22px);
+  animation: fadeUp 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.4s;
+}
+
+.chapter-count {
+  font-family: var(--mono);
+  font-size: clamp(0.72rem, 1.3vw, 0.92rem);
+  color: var(--bone-dim);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.chapter-count b { color: var(--bone); font-weight: 500; }
+
+.rail {
+  display: flex;
+  gap: clamp(6px, 1vw, 10px);
+}
+.rail-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--hairline);
+}
+.rail-dot.is-active {
+  background: var(--ember);
+  animation: pulseDot 2.6s ease-in-out infinite;
+}
+
+.scroll-cue {
+  position: absolute;
+  right: clamp(20px, 6vw, 56px);
+  bottom: clamp(22px, 5vw, 44px);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--bone-dim);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+.scroll-cue svg {
+  width: 14px;
+  height: 20px;
+  animation: cueBob 1.8s ease-in-out infinite;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulseDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.6); opacity: 0.7; }
+}
+@keyframes cueBob {
+  0%, 100% { transform: translateY(0); opacity: 0.55; }
+  50% { transform: translateY(6px); opacity: 1; }
+}
+
+/* prefers-reduced-motion: the film reads as one fully composed still
+   frame — no drift, no pulsing dot, no bobbing cue, nothing scheduled. */
+@media (prefers-reduced-motion: reduce) {
+  .horizon,
+  .kicker,
+  .headline,
+  .chapter-row,
+  .rail-dot.is-active,
+  .scroll-cue svg {
+    animation: none !important;
+  }
+  .kicker,
+  .headline,
+  .chapter-row {
+    opacity: 1;
+    transform: none;
+  }
+}
+</style>
+</head>
+<body>
+<div class="stage">
+  <svg class="grain" aria-hidden="true">
+    <filter id="grainFilter">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" />
+      <feColorMatrix type="saturate" values="0" />
+    </filter>
+    <rect width="100%" height="100%" filter="url(#grainFilter)" />
+  </svg>
+  <div class="horizon" aria-hidden="true"></div>
+
+  <div class="frame">
+    <p class="kicker">Scroll Film</p>
+    <h1 class="headline">One story. Every scroll <em>a frame</em>.</h1>
+    <div class="chapter-row">
+      <span class="chapter-count"><b>02</b> / 07</span>
+      <span class="rail" role="presentation">
+        <span class="rail-dot"></span>
+        <span class="rail-dot is-active"></span>
+        <span class="rail-dot"></span>
+        <span class="rail-dot"></span>
+        <span class="rail-dot"></span>
+        <span class="rail-dot"></span>
+        <span class="rail-dot"></span>
+      </span>
+    </div>
+  </div>
+
+  <div class="scroll-cue" aria-hidden="true">
+    <span>Scroll</span>
+    <svg viewBox="0 0 14 20" fill="none">
+      <path d="M7 1V19M7 19L1 13M7 19L13 13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  </div>
+</div>
+<p class="sr-only">
+  Scroll Film turns an idea into a long-form scroll-driven story site: one
+  continuous narrative told through pinned scenes, scrubbed reveals, and
+  chapter transitions, generated as real GSAP ScrollTrigger code.
+</p>
+</body>
+</html>

@@ -1,0 +1,114 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "od-scroll-film",
+  "title": "Scroll Film",
+  "version": "0.1.0",
+  "publishedAt": "2026-08-01T15:00:00Z",
+  "description": "Turn a user's idea into a long-form, scroll-driven cinematic story site: one continuous narrative told through pinned scenes, scrubbed reveals, parallax depth, and chapter transitions, choreographed with generated GSAP ScrollTrigger code and delivered as a single self-contained HTML file.",
+  "license": "MIT",
+  "credits": [
+    "Chapter-card kicker/progress-rail scrollytelling convention after the common Pudding.cool / NYT long-form scroll pattern — original implementation, no source copied.",
+    "Pin + scale-through scene handoff after the velar-luxury-real-estate house precedent (plugins/_official/examples/velar-luxury-real-estate) — same repository, reimplemented generically."
+  ],
+  "author": {
+    "name": "MishMash",
+    "url": "https://github.com/nexu-io"
+  },
+  "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/scenarios/od-scroll-film",
+  "tags": [
+    "scenario",
+    "first-party",
+    "scroll-film",
+    "storytelling",
+    "scrollytelling",
+    "one-page",
+    "scroll-animation",
+    "gsap",
+    "scrolltrigger",
+    "cinematic",
+    "narrative"
+  ],
+  "compat": {
+    "agentSkills": [
+      {
+        "path": "./SKILL.md"
+      }
+    ]
+  },
+  "od": {
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "scenario": "scroll-film",
+    "mode": "scenario",
+    "surface": "web",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html"
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "gsap-scrolltrigger"
+        }
+      ],
+      "craft": [
+        "animation-discipline",
+        "accessibility-baseline",
+        "anti-ai-slop"
+      ]
+    },
+    "pipeline": {
+      "stages": [
+        {
+          "id": "discovery",
+          "atoms": [
+            "discovery-question-form"
+          ]
+        },
+        {
+          "id": "plan",
+          "atoms": [
+            "direction-picker",
+            "todo-write"
+          ]
+        },
+        {
+          "id": "generate",
+          "atoms": [
+            "file-write",
+            "live-artifact"
+          ]
+        },
+        {
+          "id": "critique",
+          "atoms": [
+            "critique-theater"
+          ],
+          "repeat": true,
+          "until": "critique.score>=4 || iterations>=3"
+        }
+      ]
+    },
+    "capabilities": [
+      "prompt:inject",
+      "fs:write"
+    ],
+    "useCase": {
+      "query": "Generate a long-form scroll-driven cinematic story site from this idea: {{idea}}. Derive 5-9 narrative beats, choreograph each as a pinned/scrubbed/parallax/reveal scene with generated GSAP ScrollTrigger code, add chapter transitions and a persistent progress cue, respect prefers-reduced-motion, and ship as one self-contained index.html with zero network requests.",
+      "exampleOutputs": []
+    },
+    "inputs": [
+      {
+        "name": "idea",
+        "type": "string",
+        "required": true,
+        "label": "Your idea",
+        "placeholder": "A founder's origin story for a solar farm startup, told as one continuous scroll..."
+      }
+    ]
+  }
+}
