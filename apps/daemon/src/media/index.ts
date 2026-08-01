@@ -72,6 +72,7 @@ import {
 import { assertAndFetchExternalAsset } from '../connectionTest.js';
 import { normalizeCodexConfigFile } from '../codex-config-normalize.js';
 import {
+  refreshHiggsfieldMcpToken,
   resolveCodexImagegenEnv,
   resolveCodexSubscriptionStatus,
   resolveModelAlias,
@@ -504,8 +505,8 @@ export async function generateMedia(args: {
   if (endImageRef && !imageRef) {
     throw new Error('endImage requires image (Ark requires first_frame whenever last_frame is present).');
   }
-  // Keyframe pairs are a narrow capability: only the Volcengine and
-  // OpenRouter Seedance 2.0 catalog models declare `kf` (see
+  // Keyframe pairs are a narrow capability: only the Volcengine, OpenRouter,
+  // and Higgsfield Seedance 2.0 catalog models declare `kf` (see
   // apps/daemon/src/media/models.ts). Gate by provider id here too, not just
   // caps, so a mis-catalogued model can't silently have its end frame
   // dropped by a renderer that never looks at ctx.endImageRef.
@@ -515,7 +516,7 @@ export async function generateMedia(args: {
     && !isFalCustomPath
     && !isCatalogBypass
     && (
-      (def.provider !== 'volcengine' && def.provider !== 'openrouter')
+      (def.provider !== 'volcengine' && def.provider !== 'openrouter' && def.provider !== 'higgsfield')
       || !def.caps.includes('i2v')
       || !def.caps.includes('kf')
     )
@@ -818,6 +819,16 @@ export async function generateMedia(args: {
       suggestedExt = result.suggestedExt;
     } else if (def.provider === 'kie' && surface === 'video') {
       const result = await renderKieVideo(ctx, credentials, args.onProgress);
+      bytes = result.bytes;
+      providerNote = result.providerNote;
+      suggestedExt = result.suggestedExt;
+    } else if (def.provider === 'higgsfield' && surface === 'image') {
+      const result = await renderHiggsfieldImage(ctx, credentials);
+      bytes = result.bytes;
+      providerNote = result.providerNote;
+      suggestedExt = result.suggestedExt;
+    } else if (def.provider === 'higgsfield' && surface === 'video') {
+      const result = await renderHiggsfieldVideo(ctx, credentials, args.onProgress);
       bytes = result.bytes;
       providerNote = result.providerNote;
       suggestedExt = result.suggestedExt;
@@ -4490,6 +4501,463 @@ async function renderKieVideo(ctx: MediaContext, credentials: ProviderConfig, on
     providerNote: `kie/${wireModel} · ${ctx.aspect} · ${bytes.length} bytes`,
     suggestedExt: '.mp4',
   };
+}
+
+// ---------------------------------------------------------------------------
+// Provider: Higgsfield — bridged over the daemon-stored MCP OAuth token for
+// the `higgsfield-openclaw` server (mcp-config.ts's built-in template +
+// mcp-tokens.ts). Unlike every provider above, there is no pasted API key:
+// credentials come from resolveProviderConfig's 'higgsfield' branch
+// (media/config.ts resolveHiggsfieldMcpCredential), which reads the same
+// enabled http/sse MCP server config + stored OAuth token the daemon
+// already uses to wire external MCP servers into agent spawns.
+//
+// Wire protocol (live-verified 2026-07-31 against a real 1-credit job;
+// saved catalogs at scratchpad/hf-models-image.txt + hf-models-video.txt):
+// streamable-HTTP MCP JSON-RPC at POST https://mcp.higgsfield.ai/mcp.
+// Responses may be SSE-framed (`data: ...` lines) even though we send
+// `Accept: application/json, text/event-stream` — parse the LAST `data:`
+// line as JSON when present. The session id comes back as the
+// `mcp-session-id` response header and is echoed on every subsequent call
+// in the same session. Sequence per generation:
+//   initialize (protocolVersion '2025-03-26') -> notifications/initialized
+//   -> tools/call generate_image | generate_video -> tools/call job_status
+//   (sync:true, looped until terminal) -> download results.rawUrl.
+// i2i / i2v source frames go through tools/call media_upload (returns a
+// presigned PUT url + media_id) -> PUT the bytes -> tools/call
+// media_confirm -> pass medias:[{value: media_id, role}] on the generate_*
+// call. nano_banana_pro and gpt_image_2 both use role 'image' for their
+// single reference-image input (NOT 'image_references' — verified against
+// the saved catalog); seedance_2_0 / seedance_2_0_mini use start_image (+
+// end_image for seedance_2_0's keyframe-pair workflow).
+//
+// generate_image / generate_video wrap their tool arguments in a nested
+// `{params: {...}}` object; job_status / media_upload / media_confirm take
+// FLAT argument objects (no params wrapper) — this asymmetry is exactly
+// what the saved probe transcripts show, not an inconsistency to "fix".
+// ---------------------------------------------------------------------------
+
+const HIGGSFIELD_MCP_URL = 'https://mcp.higgsfield.ai/mcp';
+
+/**
+ * Resolve the MCP endpoint the renderer will send the OAuth bearer to.
+ * credentials.baseUrl is honored (a hand-edited server.url, or a stored
+ * providers.higgsfield.baseUrl override from media-config) but MUST be
+ * https: — the bearer token never travels cleartext. Mirrors the https
+ * requirement findHiggsfieldMcpServer applies to registered MCP servers.
+ */
+function higgsfieldMcpEndpoint(credentials: ProviderConfig): string {
+  const url = credentials.baseUrl || HIGGSFIELD_MCP_URL;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Higgsfield MCP URL is not a valid URL: ${url}`);
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`Higgsfield MCP URL must use https:// (refusing to send the OAuth token over ${parsed.protocol}//): ${url}`);
+  }
+  return url;
+}
+
+const HIGGSFIELD_PROTOCOL_VERSION = '2025-03-26';
+const HIGGSFIELD_IMAGE_REF_ROLE = 'image';
+const HIGGSFIELD_VIDEO_START_ROLE = 'start_image';
+const HIGGSFIELD_VIDEO_END_ROLE = 'end_image';
+// The roster models are pinned to a 5s duration today (seedance_2_0's own
+// range is 4-15s, but every higgsfield video entry MishMash exposes is
+// scoped to 5s only — see models.ts's roster comment) so we just send a
+// fixed value rather than threading ctx.length through a clamp table.
+const HIGGSFIELD_FIXED_VIDEO_DURATION_SEC = 5;
+const HIGGSFIELD_NO_CREDENTIAL_MESSAGE =
+  'no Higgsfield MCP connection — connect it under Settings -> MCP servers (the higgsfield-openclaw template).';
+
+// Allowed aspect_ratios per wire model id (post `higgsfield/` strip),
+// copied verbatim from the saved catalog files. Anything not in this table
+// (e.g. a supportsCustomModel override) passes ctx.aspect straight through.
+const HIGGSFIELD_IMAGE_ASPECTS: Record<string, readonly string[]> = {
+  soul_2: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'],
+  nano_banana_pro: ['1:1', '3:2', '2:3', '4:3', '3:4', '4:5', '5:4', '9:16', '16:9', '21:9'],
+  gpt_image_2: ['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3'],
+};
+const HIGGSFIELD_VIDEO_ASPECTS: Record<string, readonly string[]> = {
+  seedance_2_0: ['auto', '16:9', '9:16', '4:3', '3:4', '1:1', '21:9'],
+  seedance_2_0_mini: ['auto', '16:9', '9:16', '4:3', '3:4', '1:1', '21:9'],
+  kling3_0_turbo: ['16:9', '9:16', '1:1'],
+};
+
+function higgsfieldWireModel(id: string): string {
+  return id.replace(/^higgsfield\//, '');
+}
+
+function higgsfieldAspectFor(aspect: string | undefined, allowed: readonly string[]): string | undefined {
+  if (aspect && allowed.includes(aspect)) return aspect;
+  return allowed[0];
+}
+
+/**
+ * Thrown only for a 401 from the Higgsfield MCP endpoint. This is the ONLY
+ * error withHiggsfieldAuth catches to trigger a refresh-then-retry; every
+ * other error (4xx/5xx, malformed payload, terminal job failure) propagates
+ * as a plain Error so generateMedia's single try/catch surfaces it as-is.
+ */
+class HiggsfieldAuthError extends Error {}
+
+/** Parse a Higgsfield MCP response body — plain JSON, or SSE-framed
+ * (`data: {...}` lines), taking the LAST `data:` line when framed. */
+function parseHiggsfieldPayload(text: string): any {
+  if (!text) return null;
+  let payload = text;
+  if (text.startsWith('event:') || text.includes('\ndata:') || text.startsWith('data:')) {
+    const lines = text.split('\n').filter((l) => l.startsWith('data:'));
+    payload = lines[lines.length - 1]?.slice(5).trim() ?? '';
+  }
+  if (!payload) return null;
+  try {
+    return JSON.parse(payload);
+  } catch {
+    throw new Error(`higgsfield MCP non-JSON response: ${truncate(text, 200)}`);
+  }
+}
+
+async function higgsfieldRpc(
+  mcpUrl: string,
+  bearer: string,
+  body: Record<string, unknown>,
+  sessionId: string | undefined,
+  ctx: Pick<MediaContext, 'requestInit'>,
+): Promise<{ json: any; sessionId: string | undefined }> {
+  const resp = await fetch(mcpUrl, withMediaRequestInit(ctx, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'accept': 'application/json, text/event-stream',
+      'authorization': `Bearer ${bearer}`,
+      ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
+    },
+    body: JSON.stringify(body),
+  }));
+  const sid = resp.headers.get('mcp-session-id') ?? sessionId;
+  const text = await resp.text();
+  if (resp.status === 401) {
+    throw new HiggsfieldAuthError(`higgsfield MCP 401: ${truncate(text, 200)}`);
+  }
+  if (!resp.ok) {
+    throw new Error(`higgsfield MCP ${resp.status}: ${truncate(text, 240)}`);
+  }
+  return { json: parseHiggsfieldPayload(text), sessionId: sid };
+}
+
+/** Fire-and-forget notification — no `id`, so no JSON-RPC response is
+ * expected; mirrors the reference probe client (scratchpad/hf-call.mjs),
+ * which doesn't check this call's status either. */
+async function higgsfieldNotifyInitialized(
+  mcpUrl: string,
+  bearer: string,
+  sessionId: string | undefined,
+  ctx: Pick<MediaContext, 'requestInit'>,
+): Promise<void> {
+  await fetch(mcpUrl, withMediaRequestInit(ctx, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'accept': 'application/json, text/event-stream',
+      'authorization': `Bearer ${bearer}`,
+      ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+  }));
+}
+
+async function higgsfieldInitSession(
+  mcpUrl: string,
+  bearer: string,
+  ctx: Pick<MediaContext, 'requestInit'>,
+): Promise<string | undefined> {
+  const init = await higgsfieldRpc(mcpUrl, bearer, {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'initialize',
+    params: {
+      protocolVersion: HIGGSFIELD_PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: 'mishmash-daemon', version: '0.0.1' },
+    },
+  }, undefined, ctx);
+  if (init.json?.error) {
+    throw new Error(`higgsfield MCP handshake failed: ${init.json.error.message || JSON.stringify(init.json.error)}`);
+  }
+  await higgsfieldNotifyInitialized(mcpUrl, bearer, init.sessionId, ctx);
+  return init.sessionId;
+}
+
+async function higgsfieldToolCall(
+  mcpUrl: string,
+  bearer: string,
+  sessionId: string | undefined,
+  id: number,
+  name: string,
+  toolArguments: Record<string, unknown>,
+  ctx: Pick<MediaContext, 'requestInit'>,
+): Promise<any> {
+  const { json } = await higgsfieldRpc(mcpUrl, bearer, {
+    jsonrpc: '2.0',
+    id,
+    method: 'tools/call',
+    params: { name, arguments: toolArguments },
+  }, sessionId, ctx);
+  if (json?.error) {
+    throw new Error(`higgsfield ${name} error: ${json.error.message || JSON.stringify(json.error)}`);
+  }
+  const result = json?.result;
+  if (result?.isError) {
+    const text = (result.content ?? [])
+      .map((block: any) => (typeof block?.text === 'string' ? block.text : ''))
+      .filter(Boolean)
+      .join(' ');
+    throw new Error(`higgsfield ${name} error: ${text || 'unknown tool error'}`);
+  }
+  return result;
+}
+
+/**
+ * Push a local reference image (already resolved to a base64 data URL by
+ * resolveProjectImage) through the media_upload / PUT / media_confirm
+ * three-step dance and return the resulting media_id — what `medias[].value`
+ * expects on the generate_* call.
+ */
+async function higgsfieldUploadMedia(
+  mcpUrl: string,
+  bearer: string,
+  sessionId: string | undefined,
+  nextId: () => number,
+  ref: ImageRef,
+  ctx: Pick<MediaContext, 'requestInit'>,
+): Promise<string> {
+  const uploadResult = await higgsfieldToolCall(mcpUrl, bearer, sessionId, nextId(), 'media_upload', {
+    filename: path.basename(ref.path) || `upload${path.extname(ref.abs) || '.png'}`,
+    content_type: ref.mime,
+  }, ctx);
+  const upload = uploadResult?.structuredContent?.uploads?.[0];
+  if (!upload?.upload_url || !upload?.media_id) {
+    throw new Error(`higgsfield media_upload response missing uploads[0]: ${truncate(JSON.stringify(uploadResult ?? {}), 200)}`);
+  }
+  const base64 = ref.dataUrl.slice(ref.dataUrl.indexOf(',') + 1);
+  const putResp = await fetch(upload.upload_url, withMediaRequestInit(ctx, {
+    method: 'PUT',
+    headers: { 'content-type': upload.content_type || ref.mime },
+    body: Buffer.from(base64, 'base64'),
+  }));
+  if (!putResp.ok) {
+    throw new Error(`higgsfield media upload PUT ${putResp.status}`);
+  }
+  await higgsfieldToolCall(mcpUrl, bearer, sessionId, nextId(), 'media_confirm', {
+    type: 'image',
+    media_id: upload.media_id,
+  }, ctx);
+  return upload.media_id;
+}
+
+function higgsfieldMaxPollMs(defaultMs: number): number {
+  const v = Number(process.env.OD_HIGGSFIELD_MAX_POLL_MS);
+  return Number.isFinite(v) && v >= 30_000 ? v : defaultMs;
+}
+
+// Upstream status-name drift insurance: any of these mean "still working",
+// not just 'pending'. Everything else (including an empty/missing status)
+// is treated as terminal and fails loud — that catch-all stays intentional,
+// this only widens what counts as "keep polling."
+const HIGGSFIELD_NON_TERMINAL_STATUSES = new Set([
+  'pending', 'queuing', 'generating', 'processing', 'queued',
+]);
+
+/**
+ * tools/call the given generate_* tool (arguments wrapped in `{params}`),
+ * then poll job_status(sync:true) until a terminal status, returning the
+ * completed job's results.rawUrl. sync:true long-polls server-side up to
+ * ~25s per call, so this loop adds no client-side sleep between iterations
+ * — it just re-issues job_status until the overall `maxMs` ceiling trips.
+ * Any status not in HIGGSFIELD_NON_TERMINAL_STATUSES (and not 'completed')
+ * is treated as a terminal failure and throws with the raw generation
+ * payload for detail.
+ */
+async function higgsfieldGenerateAndPoll(
+  mcpUrl: string,
+  bearer: string,
+  sessionId: string | undefined,
+  nextId: () => number,
+  toolName: 'generate_image' | 'generate_video',
+  params: Record<string, unknown>,
+  maxMs: number,
+  ctx: Pick<MediaContext, 'requestInit'>,
+  onProgress?: ProgressFn,
+): Promise<string> {
+  const genResult = await higgsfieldToolCall(mcpUrl, bearer, sessionId, nextId(), toolName, { params }, ctx);
+  const results = genResult?.structuredContent?.results;
+  const jobId = Array.isArray(results) ? results[0]?.id : undefined;
+  if (typeof jobId !== 'string' || !jobId) {
+    const rawText = (genResult?.content ?? [])
+      .map((block: any) => (typeof block?.text === 'string' ? block.text : ''))
+      .filter(Boolean)
+      .join(' ');
+    throw new Error(
+      `higgsfield ${toolName} response missing results[0].id: ${truncate(rawText || JSON.stringify(genResult ?? {}), 200)}`,
+    );
+  }
+
+  const startedAt = Date.now();
+  let lastStatus = '';
+  if (typeof onProgress === 'function') {
+    onProgress(`higgsfield ${toolName} job ${jobId} accepted; polling status…`);
+  }
+  while (Date.now() - startedAt < maxMs) {
+    const pollResult = await higgsfieldToolCall(mcpUrl, bearer, sessionId, nextId(), 'job_status', {
+      jobId,
+      sync: true,
+    }, ctx);
+    const generation = pollResult?.structuredContent?.generation;
+    lastStatus = typeof generation?.status === 'string' ? generation.status : '';
+    if (typeof onProgress === 'function') {
+      const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+      onProgress(`higgsfield job ${jobId} status=${lastStatus || 'pending'} (elapsed ${elapsedSec}s)`);
+    }
+    if (lastStatus === 'completed') {
+      const rawUrl = generation?.results?.rawUrl;
+      if (typeof rawUrl !== 'string' || !rawUrl) {
+        throw new Error(`higgsfield job completed but had no results.rawUrl: ${truncate(JSON.stringify(generation ?? {}), 200)}`);
+      }
+      return rawUrl;
+    }
+    if (!HIGGSFIELD_NON_TERMINAL_STATUSES.has(lastStatus)) {
+      throw new Error(`higgsfield job ${jobId} ${lastStatus || 'failed'}: ${truncate(JSON.stringify(generation ?? {}), 240)}`);
+    }
+  }
+  const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+  const ceilSec = Math.round(maxMs / 1000);
+  throw new Error(
+    `higgsfield job ${jobId} timed out after ${elapsedSec}s waiting for status=completed `
+    + `(last status: ${lastStatus || 'unknown'}, ceiling ${ceilSec}s). `
+    + `Raise OD_HIGGSFIELD_MAX_POLL_MS to extend the ceiling.`,
+  );
+}
+
+const HIGGSFIELD_REAUTH_MESSAGE =
+  'Higgsfield MCP session expired and could not be refreshed — reconnect it under Settings -> MCP servers (the higgsfield-openclaw template).';
+
+/**
+ * Run `attempt` with `bearer`; on a 401 (HiggsfieldAuthError) anywhere in
+ * the flow, refresh the daemon-stored MCP token once and re-run the ENTIRE
+ * attempt from scratch with the fresh bearer (a new session, since the old
+ * one may be tied to the now-invalid token). Both a refresh that comes back
+ * empty (no refresh_token / tokenEndpoint on file) AND a refresh that throws
+ * (e.g. a revoked refresh token rejected by the token endpoint) surface the
+ * same actionable HIGGSFIELD_REAUTH_MESSAGE instead of either the original
+ * raw 401 or the token endpoint's raw error text.
+ */
+async function withHiggsfieldAuth<T>(
+  ctx: Pick<MediaContext, 'projectRoot'>,
+  bearer: string,
+  attempt: (bearer: string) => Promise<T>,
+): Promise<T> {
+  try {
+    return await attempt(bearer);
+  } catch (err) {
+    if (!(err instanceof HiggsfieldAuthError)) throw err;
+    let refreshed: string | null;
+    try {
+      refreshed = await refreshHiggsfieldMcpToken(ctx.projectRoot);
+    } catch {
+      throw new Error(HIGGSFIELD_REAUTH_MESSAGE);
+    }
+    if (!refreshed) throw new Error(HIGGSFIELD_REAUTH_MESSAGE);
+    return await attempt(refreshed);
+  }
+}
+
+async function renderHiggsfieldImage(ctx: MediaContext, credentials: ProviderConfig): Promise<RenderResult> {
+  if (!credentials.apiKey) {
+    throw new Error(HIGGSFIELD_NO_CREDENTIAL_MESSAGE);
+  }
+  // credentials.baseUrl is the actually-registered server.url from Settings
+  // -> MCP servers (resolveHiggsfieldMcpCredential) — a hand-edited path on
+  // the same host must be honored, not silently overridden by the default.
+  const mcpUrl = higgsfieldMcpEndpoint(credentials);
+  const wireModel = higgsfieldWireModel(credentials.model || ctx.wireModel);
+  const prompt = ctx.prompt || 'A high-quality reference image.';
+  const allowedAspects = HIGGSFIELD_IMAGE_ASPECTS[wireModel];
+  const aspectRatio = allowedAspects ? higgsfieldAspectFor(ctx.aspect, allowedAspects) : ctx.aspect;
+
+  const attempt = async (bearer: string): Promise<RenderResult> => {
+    let id = 1;
+    const nextId = () => ++id;
+    const sessionId = await higgsfieldInitSession(mcpUrl, bearer, ctx);
+    let medias: Array<{ value: string; role: string }> | undefined;
+    if (ctx.imageRef?.dataUrl) {
+      const mediaId = await higgsfieldUploadMedia(mcpUrl, bearer, sessionId, nextId, ctx.imageRef, ctx);
+      medias = [{ value: mediaId, role: HIGGSFIELD_IMAGE_REF_ROLE }];
+    }
+    const rawUrl = await higgsfieldGenerateAndPoll(mcpUrl, bearer, sessionId, nextId, 'generate_image', {
+      model: wireModel,
+      prompt,
+      ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
+      count: 1,
+      ...(medias ? { medias } : {}),
+    }, higgsfieldMaxPollMs(5 * 60 * 1000), ctx);
+    const dlResp = await fetch(rawUrl, withMediaRequestInit(ctx));
+    if (!dlResp.ok) throw new Error(`higgsfield image download ${dlResp.status}`);
+    const bytes = Buffer.from(await dlResp.arrayBuffer());
+    return {
+      bytes,
+      providerNote: `higgsfield/${wireModel} · ${aspectRatio ?? ctx.aspect} · ${bytes.length} bytes`,
+      suggestedExt: sniffImageExt(bytes),
+    };
+  };
+
+  return withHiggsfieldAuth(ctx, credentials.apiKey, attempt);
+}
+
+async function renderHiggsfieldVideo(ctx: MediaContext, credentials: ProviderConfig, onProgress?: ProgressFn): Promise<RenderResult> {
+  if (!credentials.apiKey) {
+    throw new Error(HIGGSFIELD_NO_CREDENTIAL_MESSAGE);
+  }
+  // See renderHiggsfieldImage's matching comment above.
+  const mcpUrl = higgsfieldMcpEndpoint(credentials);
+  const wireModel = higgsfieldWireModel(credentials.model || ctx.wireModel);
+  const prompt = ctx.prompt || 'A short cinematic clip.';
+  const allowedAspects = HIGGSFIELD_VIDEO_ASPECTS[wireModel];
+  const aspectRatio = allowedAspects ? higgsfieldAspectFor(ctx.aspect, allowedAspects) : ctx.aspect;
+
+  const attempt = async (bearer: string): Promise<RenderResult> => {
+    let id = 1;
+    const nextId = () => ++id;
+    const sessionId = await higgsfieldInitSession(mcpUrl, bearer, ctx);
+    const medias: Array<{ value: string; role: string }> = [];
+    if (ctx.imageRef?.dataUrl) {
+      const mediaId = await higgsfieldUploadMedia(mcpUrl, bearer, sessionId, nextId, ctx.imageRef, ctx);
+      medias.push({ value: mediaId, role: HIGGSFIELD_VIDEO_START_ROLE });
+    }
+    if (ctx.endImageRef?.dataUrl) {
+      const endMediaId = await higgsfieldUploadMedia(mcpUrl, bearer, sessionId, nextId, ctx.endImageRef, ctx);
+      medias.push({ value: endMediaId, role: HIGGSFIELD_VIDEO_END_ROLE });
+    }
+    const rawUrl = await higgsfieldGenerateAndPoll(mcpUrl, bearer, sessionId, nextId, 'generate_video', {
+      model: wireModel,
+      prompt,
+      ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
+      duration: HIGGSFIELD_FIXED_VIDEO_DURATION_SEC,
+      ...(medias.length > 0 ? { medias } : {}),
+    }, higgsfieldMaxPollMs(10 * 60 * 1000), ctx, onProgress);
+    const dlResp = await fetch(rawUrl, withMediaRequestInit(ctx));
+    if (!dlResp.ok) throw new Error(`higgsfield video download ${dlResp.status}`);
+    const bytes = Buffer.from(await dlResp.arrayBuffer());
+    return {
+      bytes,
+      providerNote: `higgsfield/${wireModel} · ${aspectRatio ?? ctx.aspect} · ${bytes.length} bytes`,
+      suggestedExt: '.mp4',
+    };
+  };
+
+  return withHiggsfieldAuth(ctx, credentials.apiKey, attempt);
 }
 
 // ---------------------------------------------------------------------------

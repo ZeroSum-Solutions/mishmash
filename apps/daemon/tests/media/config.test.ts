@@ -857,6 +857,170 @@ describe('media-config Codex subscription readiness', () => {
   });
 });
 
+describe('media-config Higgsfield MCP OAuth readiness', () => {
+  let projectRoot: string;
+  const originalDataDir = process.env.OD_DATA_DIR;
+  const originalMediaConfigDir = process.env.OD_MEDIA_CONFIG_DIR;
+
+  const HIGGSFIELD_SERVER = {
+    id: 'higgsfield-openclaw',
+    label: 'Higgsfield (OpenClaw)',
+    transport: 'http',
+    enabled: true,
+    url: 'https://mcp.higgsfield.ai/mcp',
+  };
+
+  beforeEach(async () => {
+    // Isolated per-test dataDir — mediaConfigDir(projectRoot) falls back to
+    // <projectRoot>/.od by default, same idiom as the CODEX_HOME isolation
+    // above (a fresh temp dir per test so nothing bleeds across runs).
+    projectRoot = await mkdtemp(path.join(tmpdir(), 'od-media-higgsfield-project-'));
+    delete process.env.OD_DATA_DIR;
+    delete process.env.OD_MEDIA_CONFIG_DIR;
+  });
+
+  afterEach(async () => {
+    if (originalDataDir == null) delete process.env.OD_DATA_DIR;
+    else process.env.OD_DATA_DIR = originalDataDir;
+    if (originalMediaConfigDir == null) delete process.env.OD_MEDIA_CONFIG_DIR;
+    else process.env.OD_MEDIA_CONFIG_DIR = originalMediaConfigDir;
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  async function writeMcpConfigFixture(servers: unknown[]) {
+    const file = path.join(projectRoot, '.od', 'mcp-config.json');
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, JSON.stringify({ servers }), 'utf8');
+  }
+
+  async function writeMcpTokenFixture(serverId: string, token: Record<string, unknown>) {
+    const file = path.join(projectRoot, '.od', 'mcp-tokens.json');
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, JSON.stringify({ servers: { [serverId]: token } }), 'utf8');
+  }
+
+  function higgsfieldProvider(masked: { providers: unknown }) {
+    return (masked.providers as Record<string, unknown>).higgsfield;
+  }
+
+  it('reports higgsfield as configured when an enabled mcp.higgsfield.ai server has a stored token', async () => {
+    await writeMcpConfigFixture([HIGGSFIELD_SERVER]);
+    await writeMcpTokenFixture('higgsfield-openclaw', {
+      accessToken: 'hf-access-1',
+      tokenType: 'Bearer',
+      savedAt: Date.now(),
+    });
+
+    const resolved = await resolveProviderConfig(projectRoot, 'higgsfield');
+    const masked = await readMaskedConfig(projectRoot);
+
+    expect(resolved.apiKey).toBe('hf-access-1');
+    // resolveProviderConfig (unlike readMaskedConfig) surfaces the
+    // registered server's own url as baseUrl, so the renderer's MCP calls
+    // route to a hand-edited endpoint instead of a hardcoded default
+    // (review finding #20).
+    expect(resolved.baseUrl).toBe(HIGGSFIELD_SERVER.url);
+    expect(higgsfieldProvider(masked)).toMatchObject({
+      configured: true,
+      source: 'higgsfield-mcp-oauth',
+      // The real access token must never route into the masked fields the
+      // Settings UI renders — apiKeyTail is stored-key-only (higgsfield has
+      // none) and baseUrl only ever reflects a manually-stored entry, never
+      // the OAuth-resolved MCP endpoint (review finding #22).
+      apiKeyTail: '',
+      baseUrl: '',
+    });
+  });
+
+  it('still counts as configured when the access token is expired but a refresh_token is on file', async () => {
+    await writeMcpConfigFixture([HIGGSFIELD_SERVER]);
+    await writeMcpTokenFixture('higgsfield-openclaw', {
+      accessToken: 'hf-access-expired',
+      refreshToken: 'hf-refresh-1',
+      tokenType: 'Bearer',
+      savedAt: Date.now(),
+      expiresAt: Date.now() - 1000,
+    });
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(higgsfieldProvider(masked)).toMatchObject({
+      configured: true,
+      source: 'higgsfield-mcp-oauth',
+      apiKeyTail: '',
+      baseUrl: '',
+    });
+  });
+
+  it('reports higgsfield as unconfigured when no mcp.higgsfield.ai server is registered', async () => {
+    const masked = await readMaskedConfig(projectRoot);
+    expect(higgsfieldProvider(masked)).toMatchObject({
+      configured: false,
+      source: 'unset',
+    });
+  });
+
+  it('reports higgsfield as unconfigured when the registered server is disabled', async () => {
+    await writeMcpConfigFixture([{ ...HIGGSFIELD_SERVER, enabled: false }]);
+    await writeMcpTokenFixture('higgsfield-openclaw', {
+      accessToken: 'hf-access-2',
+      tokenType: 'Bearer',
+      savedAt: Date.now(),
+    });
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(higgsfieldProvider(masked)).toMatchObject({
+      configured: false,
+      source: 'unset',
+    });
+  });
+
+  it('reports higgsfield as unconfigured when the server is enabled but has no stored token', async () => {
+    await writeMcpConfigFixture([HIGGSFIELD_SERVER]);
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(higgsfieldProvider(masked)).toMatchObject({
+      configured: false,
+      source: 'unset',
+    });
+  });
+
+  it('treats an expired token with no refresh_token as unconfigured', async () => {
+    await writeMcpConfigFixture([HIGGSFIELD_SERVER]);
+    await writeMcpTokenFixture('higgsfield-openclaw', {
+      accessToken: 'hf-access-expired-2',
+      tokenType: 'Bearer',
+      savedAt: Date.now(),
+      expiresAt: Date.now() - 1000,
+    });
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(higgsfieldProvider(masked)).toMatchObject({
+      configured: false,
+      source: 'unset',
+    });
+  });
+
+  it('ignores a same-host server of an unsupported transport (stdio) and reports unconfigured', async () => {
+    await writeMcpConfigFixture([{
+      id: 'higgsfield-openclaw',
+      transport: 'stdio',
+      enabled: true,
+      command: 'higgsfield-mcp',
+    }]);
+    await writeMcpTokenFixture('higgsfield-openclaw', {
+      accessToken: 'hf-access-3',
+      tokenType: 'Bearer',
+      savedAt: Date.now(),
+    });
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(higgsfieldProvider(masked)).toMatchObject({
+      configured: false,
+      source: 'unset',
+    });
+  });
+});
+
 describe('media-config model alias resolution (issue #1277)', () => {
   let projectRoot: string;
   const originalEnvAliases = process.env.OD_MEDIA_MODEL_ALIASES;
@@ -1204,5 +1368,78 @@ describe('seedProviderIfMissing', () => {
       apiKey: 'sa-final',
       baseUrl: 'https://api.senseaudio.cn',
     });
+  });
+});
+
+describe('media-config Higgsfield MCP protocol guard', () => {
+  let projectRoot: string;
+  const originalMediaConfigDir = process.env.OD_MEDIA_CONFIG_DIR;
+  const originalDataDir = process.env.OD_DATA_DIR;
+
+  beforeEach(async () => {
+    projectRoot = await mkdtemp(path.join(tmpdir(), 'od-media-higgsfield-'));
+    delete process.env.OD_MEDIA_CONFIG_DIR;
+    delete process.env.OD_DATA_DIR;
+  });
+
+  afterEach(async () => {
+    if (originalMediaConfigDir == null) {
+      delete process.env.OD_MEDIA_CONFIG_DIR;
+    } else {
+      process.env.OD_MEDIA_CONFIG_DIR = originalMediaConfigDir;
+    }
+    if (originalDataDir == null) {
+      delete process.env.OD_DATA_DIR;
+    } else {
+      process.env.OD_DATA_DIR = originalDataDir;
+    }
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  async function writeHiggsfieldMcpFixture(url: string) {
+    const configFile = path.join(projectRoot, '.od', 'mcp-config.json');
+    await mkdir(path.dirname(configFile), { recursive: true });
+    await writeFile(configFile, JSON.stringify({
+      servers: [{
+        id: 'higgsfield-openclaw',
+        label: 'Higgsfield (OpenClaw)',
+        transport: 'http',
+        enabled: true,
+        url,
+      }],
+    }), 'utf8');
+    const tokensFile = path.join(projectRoot, '.od', 'mcp-tokens.json');
+    await writeFile(tokensFile, JSON.stringify({
+      servers: { 'higgsfield-openclaw': { accessToken: 'hf-plaintext-token', tokenType: 'Bearer', savedAt: Date.now() } },
+    }), 'utf8');
+  }
+
+  function higgsfieldProvider(masked: Awaited<ReturnType<typeof readMaskedConfig>>) {
+    return masked.providers.higgsfield;
+  }
+
+  // Red-spec for the http:// bearer-downgrade finding: an enabled server
+  // entry whose url host matches mcp.higgsfield.ai but whose protocol is
+  // plain http:// must NOT be treated as a configured Higgsfield connection —
+  // otherwise the renderer would send the OAuth Bearer token to a cleartext
+  // endpoint.
+  it('an enabled http://mcp.higgsfield.ai/mcp server with a stored token is NOT configured', async () => {
+    await writeHiggsfieldMcpFixture('http://mcp.higgsfield.ai/mcp');
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(higgsfieldProvider(masked)?.configured).toBe(false);
+
+    const resolved = await resolveProviderConfig(projectRoot, 'higgsfield');
+    expect(resolved.apiKey).toBe('');
+  });
+
+  it('the same server over https://mcp.higgsfield.ai/mcp IS configured (control case)', async () => {
+    await writeHiggsfieldMcpFixture('https://mcp.higgsfield.ai/mcp');
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(higgsfieldProvider(masked)?.configured).toBe(true);
+
+    const resolved = await resolveProviderConfig(projectRoot, 'higgsfield');
+    expect(resolved.apiKey).toBe('hf-plaintext-token');
   });
 });

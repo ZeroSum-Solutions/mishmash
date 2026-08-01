@@ -41,6 +41,7 @@ export type MediaProviderId =
   | 'bfl'
   | 'fal'
   | 'kie'
+  | 'higgsfield'
   | 'replicate'
   | 'google'
   | 'midjourney'
@@ -195,6 +196,13 @@ export const MEDIA_PROVIDERS: MediaProvider[] = [
     hint: 'Kling / Seedance / Flux / Qwen / Grok Imagine via one prepaid credit pool',
     integrated: true,
     defaultBaseUrl: 'https://api.kie.ai',
+  },
+  {
+    id: 'higgsfield',
+    label: 'Higgsfield',
+    hint: 'Uses your Higgsfield subscription credits via the connected MCP — connect it under Settings → MCP servers',
+    integrated: true,
+    supportsCustomModel: true,
   },
   {
     id: 'leonardo',
@@ -541,6 +549,16 @@ export const IMAGE_MODELS: MediaModel[] = [
   { id: 'qwen/image-to-image', label: 'qwen-edit (Kie)', hint: 'Kie.ai · Qwen image-to-image', provider: 'kie', caps: ['i2i'] },
   { id: 'grok-imagine/text-to-image', label: 'grok-imagine (Kie)', hint: 'Kie.ai · Grok Imagine text-to-image', provider: 'kie', caps: ['t2i'] },
 
+  // Higgsfield — bridged over the daemon-stored MCP OAuth token for the
+  // `higgsfield-openclaw` server (apps/daemon/src/mcp-config.ts). Wire
+  // contract + per-model media roles verified 2026-07-31 against a live
+  // 1-credit probe; saved catalogs at scratchpad/hf-models-image.txt +
+  // hf-models-video.txt. nano_banana_pro / gpt_image_2 i2i role is 'image'
+  // (NOT 'image_references').
+  { id: 'higgsfield/soul_2', label: 'Soul 2.0 (Higgsfield)', hint: 'Higgsfield · flagship aesthetic model', provider: 'higgsfield', caps: ['t2i'] },
+  { id: 'higgsfield/nano_banana_pro', label: 'Nano Banana Pro (Higgsfield)', hint: 'Higgsfield · Google Nano Banana Pro, text + i2i', provider: 'higgsfield', caps: ['t2i', 'i2i'] },
+  { id: 'higgsfield/gpt_image_2', label: 'GPT Image 2 (Higgsfield)', hint: 'Higgsfield · OpenAI GPT Image 2, text + i2i', provider: 'higgsfield', caps: ['t2i', 'i2i'] },
+
   // Leonardo.ai models
   { id: 'leonardo-phoenix', label: 'Phoenix', hint: 'Leonardo · versatile', provider: 'leonardo', caps: ['t2i'] },
   { id: 'leonardo-kino-xl', label: 'Kino XL', hint: 'Leonardo · cinematic', provider: 'leonardo', caps: ['t2i'] },
@@ -661,6 +679,18 @@ export const VIDEO_MODELS: MediaModel[] = [
   { id: 'kling-2.6/image-to-video', label: 'kling-2.6-i2v (Kie)', hint: 'Kie.ai · Kling 2.6 image-to-video', provider: 'kie', caps: ['i2v'] },
   { id: 'bytedance/seedance-2', label: 'seedance-2.0 (Kie)', hint: 'Kie.ai · ByteDance · t2v + i2v + audio', provider: 'kie', caps: ['t2v', 'i2v', 'audio'] },
   { id: 'bytedance/seedance-2-fast', label: 'seedance-2.0-fast (Kie)', hint: 'Kie.ai · ByteDance · faster, cheaper', provider: 'kie', caps: ['t2v', 'i2v', 'audio'] },
+
+  // Higgsfield video — same MCP bridge as the image entries above.
+  // seedance_2_0 and seedance_2_0_mini both declare `kf` (start_image/
+  // end_image roles verified in the saved catalog) — seedance_2_0_mini is
+  // the cheap mood-sketch lane the storyboard mood lane defaults to when
+  // higgsfield is configured (see
+  // apps/web/src/components/storyboard/model-defaults.ts). kling3_0_turbo's
+  // catalog entry documents a start_image role + image-to-video tag too, so
+  // it declares `i2v` here as well (no end_image role, so no `kf`).
+  { id: 'higgsfield/seedance_2_0', label: 'Seedance 2.0 (Higgsfield)', hint: 'Higgsfield · ByteDance · t2v + i2v + keyframe pairs', provider: 'higgsfield', caps: ['t2v', 'i2v', 'kf'] },
+  { id: 'higgsfield/seedance_2_0_mini', label: 'Seedance 2.0 Mini (Higgsfield)', hint: 'Higgsfield · cheap/fast mood-sketch lane', provider: 'higgsfield', caps: ['t2v', 'i2v', 'kf'] },
+  { id: 'higgsfield/kling3_0_turbo', label: 'Kling 3.0 Turbo (Higgsfield)', hint: 'Higgsfield · Kling · fast text-to-video', provider: 'higgsfield', caps: ['t2v', 'i2v'] },
 
   // MiniMax video.
   { id: 'minimax-video-01', label: 'video-01', hint: 'MiniMax · Hailuo', provider: 'minimax', caps: ['t2v', 'i2v'] },

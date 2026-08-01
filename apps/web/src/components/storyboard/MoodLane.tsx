@@ -3,7 +3,7 @@
 // model, and previous drafts with video previews. Deliberately NOT the same
 // quality bar as shot rendering; see `helper` copy below.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { StoryboardMoodDraft } from '@open-design/contracts';
 import { Button } from '@open-design/components';
 import { useT } from '../../i18n';
@@ -14,17 +14,34 @@ import styles from './StoryboardSection.module.css';
 export interface MoodLaneProps {
   drafts: StoryboardMoodDraft[];
   models: MediaModel[];
+  /** Preselected model id for the picker below — see
+   * model-defaults.ts's defaultMoodLaneModel (issue #25: prefers a
+   * configured/ready higgsfield/seedance_2_0_mini over the cheap-first
+   * `models` order). Falls back to `models[0]` when unset/not found. */
+  defaultModelId?: string;
   configured: ConfiguredProviderMap;
   busy: boolean;
   frameUrl: (path: string) => string;
   onGenerate: (prompt: string, model: string) => void;
 }
 
-export function MoodLane({ drafts, models, configured, busy, frameUrl, onGenerate }: MoodLaneProps) {
+export function MoodLane({ drafts, models, defaultModelId, configured, busy, frameUrl, onGenerate }: MoodLaneProps) {
   const t = useT();
   const [open, setOpen] = useState(drafts.length === 0);
   const [prompt, setPrompt] = useState('');
-  const [model, setModel] = useState(models[0]?.id ?? '');
+  const [model, setModel] = useState(defaultModelId ?? models[0]?.id ?? '');
+  // StoryboardSection's media-provider config fetch resolves asynchronously
+  // (see its useEffect), so a fast "New storyboard" click can mount this
+  // component before it lands — defaultModelId then arrives as a later prop
+  // update rather than being present at mount. Adopt it whenever it changes,
+  // but only until the user makes their own pick — set once, a manual
+  // selection must never be silently overridden by a subsequent recompute.
+  const userSelectedModel = useRef(false);
+  useEffect(() => {
+    if (userSelectedModel.current) return;
+    const next = defaultModelId ?? models[0]?.id ?? '';
+    setModel((current) => (current === next ? current : next));
+  }, [defaultModelId, models]);
 
   return (
     <section className={styles.moodLane}>
@@ -41,7 +58,11 @@ export function MoodLane({ drafts, models, configured, busy, frameUrl, onGenerat
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
             />
-            <select value={model} onChange={(e) => setModel(e.target.value)} aria-label={t('storyboard.videoModel')}>
+            <select
+              value={model}
+              onChange={(e) => { userSelectedModel.current = true; setModel(e.target.value); }}
+              aria-label={t('storyboard.videoModel')}
+            >
               {models.map((m) => (
                 <option key={m.id} value={m.id}>
                   {isModelConfigured(m, configured) ? m.label : `${m.label} ${t('storyboard.needsApiKey')}`}
