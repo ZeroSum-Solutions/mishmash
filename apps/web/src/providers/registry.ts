@@ -2756,7 +2756,7 @@ export interface LibraryUploadOutcome {
   code?: string;
 }
 
-function readFileAsDataUrl(file: File): Promise<string> {
+export function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
@@ -2910,6 +2910,7 @@ import type {
   RenderStoryboardShotResponse,
   Storyboard,
   StoryboardSummary,
+  UploadStoryboardFrameResponse,
 } from '@open-design/contracts';
 
 export type StoryboardApiResult<T> =
@@ -3023,6 +3024,24 @@ export async function deleteStoryboard(id: string): Promise<boolean> {
  */
 export function storyboardFrameUrl(relPath: string): string {
   return `/api/projects/storyboard-media/raw/${encodeURIComponent(relPath)}`;
+}
+
+/**
+ * Uploads a single external image (file-picker or drag-and-drop) into the
+ * hidden storyboard-media project. Unlike its StoryboardApiResult siblings
+ * above, this throws on failure — callers (StoryboardEditor's per-shot and
+ * whole-list upload handlers) already run inside a try/catch that clears
+ * their own busy state, so a thrown error is the simplest shape to funnel
+ * into that catch.
+ */
+export async function uploadStoryboardFrame(id: string, dataUrl: string): Promise<UploadStoryboardFrameResponse> {
+  const resp = await fetch(`/api/storyboards/${encodeURIComponent(id)}/uploads`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dataUrl }),
+  });
+  if (!resp.ok) throw new Error(await readStoryboardApiError(resp));
+  return (await resp.json()) as UploadStoryboardFrameResponse;
 }
 
 export async function openStoryboardFolder(id: string): Promise<boolean> {

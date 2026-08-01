@@ -2106,6 +2106,12 @@ export async function startServer({
   // wall — well past 4mb for image/markup-heavy sites. Give it a dedicated limit
   // (registered before the global parser so it claims the body first).
   app.use('/api/brands/:id/extract-from-html', express.json({ limit: '32mb' }));
+  // Storyboard uploads carry an external image inline as a base64 `data:` URI
+  // (POST /api/storyboards/:id/uploads) — base64 inflates the raw ~16MiB cap
+  // (STORYBOARD_UPLOAD_MAX_BYTES, capped to match the media pipeline's own
+  // image cap) by ~33%, so 48mb covers it with plenty of headroom
+  // (registered before the global parser so it claims the body first).
+  app.use('/api/storyboards/:id/uploads', express.json({ limit: '48mb' }));
   app.use(express.json({ limit: '4mb' }));
   const projectPreviewScopes = createProjectPreviewScopeRegistry();
 

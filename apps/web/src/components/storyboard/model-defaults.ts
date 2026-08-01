@@ -10,10 +10,33 @@
 // below) rather than hiding them.
 
 import type { StoryboardResolution } from '@open-design/contracts';
+import {
+  isStoryboardUploadMimeAllowed,
+  STORYBOARD_UPLOAD_MAX_BYTES,
+  storyboardUploadAcceptAttr,
+} from '@open-design/contracts';
 import { isStoredMediaProviderEntryPresent } from '../../state/config';
 import type { MediaProviderCredentials } from '../../types';
 import { findProvider, type MediaModel } from '../../media/models';
 import { isMediaModelPickerReady } from '../../media/provider-readiness';
+
+/** `accept` attribute for the upload file-pickers (ShotCard slots + the multi-image "Add shots from images" input). */
+export const STORYBOARD_UPLOAD_ACCEPT = storyboardUploadAcceptAttr();
+
+export type StoryboardUploadValidationError = 'bad-type' | 'too-large';
+
+/**
+ * Client-side pre-flight mirroring the daemon's own POST
+ * /api/storyboards/:id/uploads checks (shared constants from
+ * @open-design/contracts) — rejects an obviously-bad file before spending a
+ * FileReader pass + network round trip on it. The daemon remains the source
+ * of truth; this is a UX shortcut, not the only enforcement.
+ */
+export function validateStoryboardUploadFile(file: File): StoryboardUploadValidationError | null {
+  if (!isStoryboardUploadMimeAllowed(file.type)) return 'bad-type';
+  if (file.size > STORYBOARD_UPLOAD_MAX_BYTES) return 'too-large';
+  return null;
+}
 
 export type ConfiguredProviderMap = Record<string, MediaProviderCredentials>;
 
@@ -88,6 +111,32 @@ export function defaultConfiguredModel(
     (a, b) => modelSortPriority(a, configured) - modelSortPriority(b, configured),
   );
   return sorted.find((m) => m.default) ?? sorted[0];
+}
+
+/** The mood lane's preferred cheap-sketch model once Higgsfield is
+ * connected — it bills against the user's existing Higgsfield subscription
+ * credits rather than a per-generation metered key. */
+export const HIGGSFIELD_MOOD_MODEL_ID = 'higgsfield/seedance_2_0_mini';
+
+/**
+ * Mood-lane default (issue #25 — "the mood exploration board should be set
+ * to default take higgsfield"): when `HIGGSFIELD_MOOD_MODEL_ID` is present
+ * in `models` and configured/ready, it wins outright over the cheap-first
+ * heuristic StoryboardEditor.tsx sorts `models` with. Otherwise falls back
+ * to the existing defaultConfiguredModel cheap-first behavior unchanged.
+ * Isolated as its own helper (rather than an inline special case in
+ * StoryboardEditor's JSX/useMemo) so this one rule has a single,
+ * unit-testable home.
+ */
+export function defaultMoodLaneModel(
+  models: MediaModel[],
+  configured: ConfiguredProviderMap,
+): MediaModel | undefined {
+  const higgsfieldMood = models.find((m) => m.id === HIGGSFIELD_MOOD_MODEL_ID);
+  if (higgsfieldMood && isMediaModelPickerReady(higgsfieldMood.id, configured)) {
+    return higgsfieldMood;
+  }
+  return defaultConfiguredModel(models, configured);
 }
 
 /** Image models capable of i2i (iterate on current frame / derive end frame). */

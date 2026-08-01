@@ -15,6 +15,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { STORYBOARD_UPLOAD_MAX_BYTES } from '@open-design/contracts';
 import { startServer } from '../../src/server.js';
 
 const PNG_BASE64 =
@@ -186,6 +187,34 @@ describe('storyboard routes', () => {
     const body = (await resp.json()) as { error?: { message?: string } | string };
     const message = typeof body.error === 'string' ? body.error : body.error?.message;
     expect(message).toMatch(/endFrame requires .*startFrame/);
+  });
+
+  it('PATCH rejects a shots array containing duplicate shot ids with 400 (review finding: 409-retry re-append)', async () => {
+    await boot();
+    const created = await createStoryboard();
+    const shotTemplate = {
+      id: 'shot-dup',
+      order: 0,
+      motionPrompt: 'the camera pans slowly to the right',
+      model: 'openrouter/bytedance/seedance-2.0:1080p',
+      resolution: '1080p',
+      durationSec: 5,
+      status: 'draft',
+    };
+    const resp = await fetch(`${base}/api/storyboards/${created.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ shots: [shotTemplate, { ...shotTemplate, order: 1 }] }),
+    });
+    expect(resp.status).toBe(400);
+    const body = (await resp.json()) as { error?: { message?: string } | string };
+    const message = typeof body.error === 'string' ? body.error : body.error?.message;
+    expect(message).toMatch(/duplicate shot id/);
+
+    // The rejected patch must not have taken effect.
+    const getResp = await fetch(`${base}/api/storyboards/${created.id}`);
+    const currentDoc = ((await getResp.json()) as any).storyboard;
+    expect(currentDoc.shots).toEqual([]);
   });
 
   it('PATCH rejects a shot.output path that escapes the storyboard project dir', async () => {
@@ -623,6 +652,109 @@ describe('storyboard routes', () => {
     } finally {
       rmSync(outsideDir, { recursive: true, force: true });
     }
+  });
+
+  it('POST /uploads writes the decoded image into the media project and the path round-trips through GET raw', async () => {
+    await boot();
+    const created = await createStoryboard();
+    const resp = await fetch(`${base}/api/storyboards/${created.id}/uploads`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dataUrl: `data:image/png;base64,${PNG_BASE64}` }),
+    });
+    expect(resp.status).toBe(201);
+    const { path: relPath } = (await resp.json()) as { path: string };
+    expect(relPath).toMatch(/^upload-.+\.png$/);
+
+    const dataDir = process.env.OD_DATA_DIR;
+    if (!dataDir) throw new Error('OD_DATA_DIR is required for daemon route tests');
+    const onDisk = await readFile(path.join(dataDir, 'projects', 'storyboard-media', relPath));
+    expect(onDisk.equals(Buffer.from(PNG_BASE64, 'base64'))).toBe(true);
+
+    const rawResp = await fetch(`${base}/api/projects/storyboard-media/raw/${relPath}`);
+    expect(rawResp.status).toBe(200);
+    const rawBytes = Buffer.from(await rawResp.arrayBuffer());
+    expect(rawBytes.equals(Buffer.from(PNG_BASE64, 'base64'))).toBe(true);
+  });
+
+  it('POST /uploads 404s for an unknown storyboard', async () => {
+    await boot();
+    const resp = await fetch(`${base}/api/storyboards/does-not-exist/uploads`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dataUrl: `data:image/png;base64,${PNG_BASE64}` }),
+    });
+    expect(resp.status).toBe(404);
+  });
+
+  it('POST /uploads 400s for a dataUrl whose MIME type is not in the png|jpeg|webp allowlist', async () => {
+    await boot();
+    const created = await createStoryboard();
+    const resp = await fetch(`${base}/api/storyboards/${created.id}/uploads`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dataUrl: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=' }),
+    });
+    expect(resp.status).toBe(400);
+    const body = (await resp.json()) as { error?: { message?: string } | string };
+    const message = typeof body.error === 'string' ? body.error : body.error?.message;
+    expect(message).toMatch(/data:image\/\(png\|jpeg\|webp\);base64,<payload>/);
+  });
+
+  it('POST /uploads 400s for malformed base64', async () => {
+    await boot();
+    const created = await createStoryboard();
+    const resp = await fetch(`${base}/api/storyboards/${created.id}/uploads`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dataUrl: 'data:image/png;base64,!!!not-valid-base64!!!' }),
+    });
+    expect(resp.status).toBe(400);
+    const body = (await resp.json()) as { error?: { message?: string } | string };
+    const message = typeof body.error === 'string' ? body.error : body.error?.message;
+    expect(message).toMatch(/malformed base64/);
+  });
+
+  it('POST /uploads 413s when the decoded image exceeds the upload limit', async () => {
+    await boot();
+    const created = await createStoryboard();
+    const oversize = Buffer.alloc(STORYBOARD_UPLOAD_MAX_BYTES + 1024);
+    const resp = await fetch(`${base}/api/storyboards/${created.id}/uploads`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dataUrl: `data:image/png;base64,${oversize.toString('base64')}` }),
+    });
+    expect(resp.status).toBe(413);
+    const body = (await resp.json()) as { error?: { message?: string } | string };
+    const message = typeof body.error === 'string' ? body.error : body.error?.message;
+    expect(message).toMatch(/exceeds the .*-byte upload limit/);
+  });
+
+  // Exact-boundary cases (review finding #8) — the prior 413 case only ever
+  // exercised limit+1KiB, leaving the `>` (not `>=`) comparison at
+  // storyboard.ts's size check untested at the actual boundary.
+  it('POST /uploads accepts a decoded image of EXACTLY STORYBOARD_UPLOAD_MAX_BYTES with 201', async () => {
+    await boot();
+    const created = await createStoryboard();
+    const exact = Buffer.alloc(STORYBOARD_UPLOAD_MAX_BYTES);
+    const resp = await fetch(`${base}/api/storyboards/${created.id}/uploads`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dataUrl: `data:image/png;base64,${exact.toString('base64')}` }),
+    });
+    expect(resp.status).toBe(201);
+  });
+
+  it('POST /uploads 413s a decoded image of exactly STORYBOARD_UPLOAD_MAX_BYTES + 1 byte', async () => {
+    await boot();
+    const created = await createStoryboard();
+    const overByOne = Buffer.alloc(STORYBOARD_UPLOAD_MAX_BYTES + 1);
+    const resp = await fetch(`${base}/api/storyboards/${created.id}/uploads`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dataUrl: `data:image/png;base64,${overByOne.toString('base64')}` }),
+    });
+    expect(resp.status).toBe(413);
   });
 
   it('assemble 400s when no shot is done', async () => {

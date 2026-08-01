@@ -142,6 +142,51 @@ export interface GenerateStoryboardFrameResponse {
   framePath: string;
 }
 
+// --- Upload (external image import) -----------------------------------------
+
+/**
+ * Largest external image upload accepted, in bytes. MUST NOT EXCEED the
+ * media pipeline's own image cap — apps/daemon/src/media/index.ts's
+ * resolveProjectImage() rejects any image over its local MAX_IMAGE_BYTES (16
+ * MiB) before it can be sent to a renderer, so a bigger value here would let
+ * a 17-32 MiB upload attach to a shot that can then never actually render.
+ * The web UI sends the file inline as a base64 `data:` URI through POST
+ * /api/storyboards/:id/uploads, which rides a dedicated 48mb JSON body limit
+ * (server.ts) — base64 inflation (~33%) leaves this constant comfortable
+ * headroom under that transport limit. Enforced on both surfaces (same
+ * shared-constant idiom as packages/contracts/src/api/library.ts's
+ * LIBRARY_UPLOAD_MAX_BYTES) so an oversized file fails with a clear message
+ * instead of a generic 413.
+ */
+export const STORYBOARD_UPLOAD_MAX_BYTES = 16 * 1024 * 1024;
+
+/**
+ * Exact MIME types POST /api/storyboards/:id/uploads accepts. svg is
+ * excluded because it's scriptable; gif/avif are excluded because the i2i
+ * providers this feature feeds don't accept them.
+ */
+export const STORYBOARD_UPLOAD_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
+
+export function isStoryboardUploadMimeAllowed(mime: string | undefined): boolean {
+  return typeof mime === 'string' && (STORYBOARD_UPLOAD_MIME_TYPES as readonly string[]).includes(mime);
+}
+
+/** `accept` attribute value for a Storyboard frame upload file-picker. */
+export function storyboardUploadAcceptAttr(): string {
+  return STORYBOARD_UPLOAD_MIME_TYPES.join(',');
+}
+
+/** Body of POST /api/storyboards/:id/uploads. */
+export interface UploadStoryboardFrameRequest {
+  /** `data:image/(png|jpeg|webp);base64,<payload>` — see STORYBOARD_UPLOAD_MIME_TYPES. */
+  dataUrl: string;
+}
+
+export interface UploadStoryboardFrameResponse {
+  /** Storyboard-project-relative path the uploaded image was written to, e.g. "upload-<uuid>.png". */
+  path: string;
+}
+
 export interface RenderStoryboardShotResponse {
   taskId: string;
 }

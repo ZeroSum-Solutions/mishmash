@@ -935,6 +935,7 @@
       "DELETE /api/storyboards/:param",
       "POST /api/storyboards/:param/open-folder",
       "POST /api/storyboards/:param/frames",
+      "POST /api/storyboards/:param/uploads",
       "POST /api/storyboards/:param/shots/:param/render",
       "POST /api/storyboards/:param/assemble",
       "POST /api/storyboards/:param/export-slider"

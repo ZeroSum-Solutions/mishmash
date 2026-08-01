@@ -4,7 +4,7 @@
 // /api/storyboards/:id; individual shot cards stay presentational (see
 // ShotCard.tsx).
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import type { Storyboard, StoryboardFrameRef, StoryboardShot } from '@open-design/contracts';
 import { Button } from '@open-design/components';
 import { Icon } from '../Icon';
@@ -17,20 +17,25 @@ import {
   generateStoryboardFrame,
   openStoryboardFolder,
   patchStoryboard,
+  readFileAsDataUrl,
   renderStoryboardShot,
   storyboardFrameUrl,
+  uploadStoryboardFrame,
   waitForMediaTask,
 } from '../../providers/registry';
 import {
   type ConfiguredProviderMap,
   defaultConfiguredModel,
+  defaultMoodLaneModel,
   i2iCapableImageModels,
   resolutionForModelId,
   STORYBOARD_DEFAULT_DURATION_SEC,
+  STORYBOARD_UPLOAD_ACCEPT,
+  validateStoryboardUploadFile,
 } from './model-defaults';
 import { MoodLane } from './MoodLane';
 import { ShotCard } from './ShotCard';
-import { persistStoryboardMutation, type StoryboardMutator } from './storyboard-persist';
+import { appendShotIfAbsent, persistStoryboardMutation, type StoryboardMutator } from './storyboard-persist';
 import styles from './StoryboardSection.module.css';
 
 export interface StoryboardEditorProps {
@@ -55,6 +60,16 @@ function newShot(order: number, model: string): StoryboardShot {
   };
 }
 
+/**
+ * Wraps the result of appendShotIfAbsent back into a full Storyboard,
+ * returning `prev` itself (same reference) when the shots array didn't
+ * change — lets runMutation's own `next === base` check skip a redundant
+ * PATCH entirely when the append was a no-op.
+ */
+function withShots(prev: Storyboard, shots: StoryboardShot[]): Storyboard {
+  return shots === prev.shots ? prev : { ...prev, shots };
+}
+
 export function StoryboardEditor({ storyboard: initial, configured, onBack }: StoryboardEditorProps) {
   const t = useT();
   const [storyboard, setStoryboard] = useState<Storyboard>(initial);
@@ -62,6 +77,14 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
   const [busyShotIds, setBusyShotIds] = useState<Set<string>>(() => new Set());
   const [footerBusy, setFooterBusy] = useState<'assemble' | 'export' | null>(null);
   const [footerMessage, setFooterMessage] = useState<string | null>(null);
+  // State for the shot-list-level "Add shots from images" tile — kept
+  // separate from footerBusy/footerMessage above (those are assemble/export
+  // specific) and from busyShotIds (which gates existing per-shot cards, not
+  // a tile that doesn't correspond to any shot yet).
+  const [shotsUploadBusy, setShotsUploadBusy] = useState(false);
+  const [shotsUploadError, setShotsUploadError] = useState<string | null>(null);
+  const [shotsDragOver, setShotsDragOver] = useState(false);
+  const multiFileInputRef = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Always-current storyboard doc, independent of React's render/commit
@@ -114,8 +137,11 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
     const isCheap = (m: MediaModel) => /480p|fast|lite/i.test(m.id);
     return [...t2vModels].sort((a, b) => Number(isCheap(b)) - Number(isCheap(a)));
   }, [videoModels]);
+  // defaultMoodLaneModel prefers a configured/ready higgsfield/seedance_2_0_mini
+  // over the cheap-first sort below (issue #25); it falls back to the same
+  // defaultConfiguredModel cheap-first pick otherwise.
   const defaultMoodModel = useMemo(
-    () => defaultConfiguredModel(moodModels, configured) ?? moodModels[0],
+    () => defaultMoodLaneModel(moodModels, configured) ?? moodModels[0],
     [moodModels, configured],
   );
   const defaultImageModel = useMemo(
@@ -186,16 +212,15 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
   function addShot() {
     const model = defaultVideoModel?.id ?? '';
     const shot = newShot(0, model);
-    runMutation((prev) => ({ ...prev, shots: [...prev.shots, { ...shot, order: prev.shots.length }] }));
+    runMutation((prev) => withShots(prev, appendShotIfAbsent(prev.shots, { ...shot, order: prev.shots.length })));
   }
 
   function duplicateShot(shot: StoryboardShot) {
     const newId = crypto.randomUUID();
-    runMutation((prev) => ({
-      ...prev,
-      shots: [
-        ...prev.shots,
-        {
+    runMutation((prev) =>
+      withShots(
+        prev,
+        appendShotIfAbsent(prev.shots, {
           ...shot,
           id: newId,
           order: prev.shots.length,
@@ -203,9 +228,9 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
           taskId: undefined,
           output: undefined,
           error: undefined,
-        },
-      ],
-    }));
+        }),
+      ),
+    );
   }
 
   function deleteShot(shotId: string) {
@@ -242,13 +267,15 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
       const result = await generateStoryboardFrame(storyboardRef.current.id, { prompt, model, sourceImage });
       if (!aliveRef.current) return;
       if (!result.ok) {
-        updateShot(shotId, { error: result.message });
+        // status:'failed' is what actually makes ShotCard render `error`
+        // (its status==='failed' gate) — error alone is silently invisible.
+        updateShot(shotId, { status: 'failed', error: result.message });
         return;
       }
       const snap = await waitForMediaTask(result.value.taskId);
       if (!aliveRef.current) return;
       if (snap.status !== 'done') {
-        updateShot(shotId, { error: snap.error?.message || t('storyboard.renderFailed') });
+        updateShot(shotId, { status: 'failed', error: snap.error?.message || t('storyboard.renderFailed') });
         return;
       }
       const framePath = snap.file?.name || result.value.framePath;
@@ -281,6 +308,92 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
     updateShot(shot.id, {
       startFrame: { ...previous.endFrame, origin: 'previous-shot' },
     });
+  }
+
+  // Uploaded frames carry no prompt/model (both optional on
+  // StoryboardFrameRef) — newFrameRef stores those fields verbatim, and an
+  // uploaded image has neither, so a plain literal is used here instead to
+  // avoid persisting bogus empty-string prompt/model onto the ref.
+  async function runUpload(shotId: string, slot: 'start' | 'end', file: File) {
+    setShotBusy(shotId, true);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const { path } = await uploadStoryboardFrame(storyboardRef.current.id, dataUrl);
+      if (!aliveRef.current) return;
+      const frameRef: StoryboardFrameRef = { path, origin: 'uploaded' };
+      // Clears any previous failed-upload state so a stale error/status
+      // doesn't linger once a later upload attempt succeeds.
+      updateShot(shotId, slot === 'end' ? { endFrame: frameRef, status: 'draft', error: undefined } : { startFrame: frameRef, status: 'draft', error: undefined });
+    } catch (err) {
+      if (!aliveRef.current) return;
+      // status:'failed' is what actually makes ShotCard render `error` (see
+      // its status==='failed' gate) — same shape runFrameGeneration and
+      // handleRender's own failure branch below use, since an upload is a
+      // discrete pass/fail action a user needs to see and can retry, same as
+      // a render.
+      updateShot(shotId, { status: 'failed', error: err instanceof Error ? err.message : t('storyboard.uploadFailed') });
+    } finally {
+      setShotBusy(shotId, false);
+    }
+  }
+
+  function handleUploadFile(shotId: string, slot: 'start' | 'end', file: File) {
+    const invalid = validateStoryboardUploadFile(file);
+    if (invalid) {
+      updateShot(shotId, {
+        status: 'failed',
+        error: invalid === 'too-large' ? t('storyboard.uploadErrorTooLarge') : t('storyboard.uploadErrorBadType'),
+      });
+      return;
+    }
+    void runUpload(shotId, slot, file);
+  }
+
+  /** Validates every file, uploads the valid ones sequentially, and appends one new shot per successful upload. Skipped files are named in one aggregate message rather than one error per file. */
+  async function handleAddShotsFromImages(files: File[]) {
+    const validFiles: File[] = [];
+    const invalidNames: string[] = [];
+    for (const file of files) {
+      if (validateStoryboardUploadFile(file) === null) validFiles.push(file);
+      else invalidNames.push(file.name);
+    }
+    setShotsUploadError(invalidNames.length > 0 ? t('storyboard.uploadSkippedSome', { files: invalidNames.join(', ') }) : null);
+    if (validFiles.length === 0) return;
+
+    setShotsUploadBusy(true);
+    try {
+      for (const file of validFiles) {
+        const dataUrl = await readFileAsDataUrl(file);
+        const { path } = await uploadStoryboardFrame(storyboardRef.current.id, dataUrl);
+        if (!aliveRef.current) return;
+        const model = defaultVideoModel?.id ?? '';
+        const shot = newShot(0, model);
+        runMutation((prev) =>
+          withShots(
+            prev,
+            appendShotIfAbsent(prev.shots, { ...shot, order: prev.shots.length, startFrame: { path, origin: 'uploaded' } }),
+          ),
+        );
+      }
+    } catch (err) {
+      if (!aliveRef.current) return;
+      setShotsUploadError(err instanceof Error ? err.message : t('storyboard.uploadFailed'));
+    } finally {
+      if (aliveRef.current) setShotsUploadBusy(false);
+    }
+  }
+
+  function handleMultiFileInputChange(e: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (files.length > 0) void handleAddShotsFromImages(files);
+  }
+
+  function handleShotsDrop(e: DragEvent<HTMLButtonElement>) {
+    e.preventDefault();
+    setShotsDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) void handleAddShotsFromImages(files);
   }
 
   async function handleRender(shot: StoryboardShot) {
@@ -383,6 +496,7 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
       <MoodLane
         drafts={storyboard.moodDrafts}
         models={moodModels}
+        defaultModelId={defaultMoodModel?.id}
         configured={configured}
         busy={false}
         frameUrl={storyboardFrameUrl}
@@ -406,6 +520,7 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
             onIterateStart={(prompt, model) => handleIterateStart(shot, prompt, model)}
             onDeriveEnd={(prompt, model) => handleDeriveEnd(shot, prompt, model)}
             onUsePreviousEndFrame={() => index > 0 && handleUsePreviousEndFrame(shot, orderedShots[index - 1]!)}
+            onUploadFile={(slot, file) => handleUploadFile(shot.id, slot, file)}
             onFieldChange={(patch) => updateShot(shot.id, patch)}
             onRender={() => void handleRender(shot)}
             onDuplicate={() => duplicateShot(shot)}
@@ -420,7 +535,31 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
           <Icon name="plus" size={16} />
           {t('storyboard.addShot')}
         </button>
+        <button
+          type="button"
+          className={`${styles.addShotsButton}${shotsDragOver ? ` ${styles.addShotsButtonDragOver}` : ''}`}
+          data-testid="add-shots-from-images"
+          disabled={shotsUploadBusy}
+          onClick={() => multiFileInputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); if (!shotsUploadBusy) setShotsDragOver(true); }}
+          onDragLeave={() => setShotsDragOver(false)}
+          onDrop={handleShotsDrop}
+        >
+          <Icon name="upload" size={16} />
+          {t('storyboard.addShotsFromImages')}
+          <span className={styles.addShotsButtonHint}>{t('storyboard.dropImageHint')}</span>
+        </button>
+        <input
+          ref={multiFileInputRef}
+          type="file"
+          accept={STORYBOARD_UPLOAD_ACCEPT}
+          multiple
+          className={styles.hiddenFileInput}
+          data-testid="add-shots-from-images-input"
+          onChange={handleMultiFileInputChange}
+        />
       </div>
+      {shotsUploadError ? <p className={`${styles.shotStatusLine} ${styles.shotStatusError}`}>{shotsUploadError}</p> : null}
 
       <footer className={styles.footerBar}>
         <Button type="button" variant="primary" disabled={!hasDoneShot || footerBusy !== null} onClick={() => void handleAssemble()}>

@@ -13,10 +13,26 @@
 // Kept dependency-free of the network/React so it's directly unit-testable:
 // StoryboardEditor.tsx supplies `patch` (registry.ts's patchStoryboard).
 
-import type { Storyboard } from '@open-design/contracts';
+import type { Storyboard, StoryboardShot } from '@open-design/contracts';
 import type { StoryboardApiResult } from '../../providers/registry';
 
 export type StoryboardMutator = (prev: Storyboard) => Storyboard;
+
+/**
+ * Appends `shot` onto `shots` unless a shot with the same id is already
+ * present, in which case `shots` is returned unchanged (same reference).
+ * Every append-style shot mutator in StoryboardEditor.tsx (add shot,
+ * duplicate shot, add shots from images) is built on this instead of an
+ * unconditional `[...shots, shot]` push: persistStoryboardMutation's 409
+ * retry (below) reapplies the SAME mutator to whatever the server's current
+ * doc turns out to be, and if that doc already contains the shot (e.g. a
+ * prior attempt at this exact append already reached the server despite
+ * this client observing a 409), an unconditional append would duplicate it.
+ */
+export function appendShotIfAbsent(shots: StoryboardShot[], shot: StoryboardShot): StoryboardShot[] {
+  if (shots.some((s) => s.id === shot.id)) return shots;
+  return [...shots, shot];
+}
 
 export type StoryboardPatchFn = (
   id: string,

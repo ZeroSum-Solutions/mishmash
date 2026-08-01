@@ -4299,4 +4299,11 @@ export const en: Dict = {
   'storyboard.duration': 'Duration',
   'storyboard.render': 'Render',
   'storyboard.needsApiKey': '(needs API key)',
+  'storyboard.uploadImage': 'Upload image',
+  'storyboard.addShotsFromImages': 'Add shots from images',
+  'storyboard.dropImageHint': 'or drop image files here',
+  'storyboard.uploadErrorBadType': 'Only PNG, JPEG, or WebP images are supported.',
+  'storyboard.uploadErrorTooLarge': 'Images must be 16 MB or smaller.',
+  'storyboard.uploadFailed': 'Upload failed',
+  'storyboard.uploadSkippedSome': 'Skipped {files}: only PNG, JPEG, or WebP images up to 16 MB are supported.',
 };

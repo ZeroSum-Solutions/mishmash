@@ -195,7 +195,7 @@ const LIBRARY_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 // `od storyboard …` mirrors the Storyboard section against /api/storyboards.
 // Hoisted so the top-of-file SUBCOMMAND_MAP dispatch (which runs during
 // module evaluation) doesn't hit a temporal-dead-zone on these sets.
-const STORYBOARD_STRING_FLAGS = new Set(['daemon-url', 'title']);
+const STORYBOARD_STRING_FLAGS = new Set(['daemon-url', 'title', 'file', 'shot', 'slot']);
 const STORYBOARD_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 // `od usage …` (NM-20 cost & usage meter). Hoisted up here for the same
 // reason as LIBRARY_STRING_FLAGS above: the top-level `await
@@ -8687,18 +8687,25 @@ function printStoryboardHelp() {
   od storyboard list [--json]
   od storyboard create [--title "<title>"] [--json]
   od storyboard get <id> [--json]
+  od storyboard upload <id> --file <path> [--shot <shotId>] [--slot start|end] [--json]
   od storyboard render-shot <id> <shotId> [--json]
   od storyboard assemble <id> [--json]
 
 Reads/writes the same /api/storyboards contract the web Storyboard section
-uses. \`render-shot\` dispatches the shot's video render, polls it to
-completion the same way \`od media generate\` does, then PATCHes the
-storyboard with the final status/output/error before printing the result.
-Shot creation/editing (frames, motion prompts, model/resolution/duration) is
-a web-UI flow; this CLI covers list/create/render/assemble only.
+uses. \`upload\` posts an image file into the hidden storyboard-media
+project the same way the web UI's drag-and-drop upload does; pass --shot to
+also PATCH that shot's start (default) or end frame to the uploaded path.
+\`render-shot\` dispatches the shot's video render, polls it to completion
+the same way \`od media generate\` does, then PATCHes the storyboard with
+the final status/output/error before printing the result. Shot creation/
+editing beyond upload (motion prompts, model/resolution/duration) is a
+web-UI flow; this CLI covers list/create/upload/render/assemble only.
 
 Options:
   --title <text>       Storyboard title (create only; defaults to "Untitled storyboard").
+  --file <path>        Image file to upload (upload only; .png/.jpg/.jpeg/.webp).
+  --shot <shotId>       Shot to attach the uploaded frame to (upload only).
+  --slot <start|end>   Which frame slot to PATCH (upload --shot only; default start).
   --json                Print the raw response envelope.
   --daemon-url <url>   Override daemon URL`);
 }
@@ -8709,7 +8716,7 @@ async function runStoryboard(args) {
     printStoryboardHelp();
     return;
   }
-  const known = ['list', 'create', 'get', 'render-shot', 'assemble'];
+  const known = ['list', 'create', 'get', 'upload', 'render-shot', 'assemble'];
   if (!known.includes(sub)) {
     console.error(`unknown subcommand: od storyboard ${sub}`);
     printStoryboardHelp();
@@ -8792,6 +8799,112 @@ async function runStoryboard(args) {
     if (!resp.ok) return structuredHttpFailure(resp);
     const data = await resp.json();
     return writeJson(data);
+  }
+
+  if (sub === 'upload') {
+    const id = positionals[0];
+    if (!id || !flags.file) {
+      console.error('Usage: od storyboard upload <id> --file <path> [--shot <shotId>] [--slot start|end]');
+      process.exit(2);
+    }
+    if (flags.slot !== undefined && flags.slot !== 'start' && flags.slot !== 'end') {
+      console.error(`--slot must be one of: start | end (got "${flags.slot}")`);
+      process.exit(2);
+    }
+    const slot = flags.slot === 'end' ? 'end' : 'start';
+    const extMatch = /\.([a-z0-9]+)$/i.exec(flags.file);
+    const ext = extMatch ? extMatch[1].toLowerCase() : '';
+    // Same allowlist as the daemon route (STORYBOARD_UPLOAD_MIME_TYPES) —
+    // mapped from the file's OWN extension, never trusted from elsewhere.
+    const mime = ext === 'png' ? 'image/png'
+      : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg'
+      : ext === 'webp' ? 'image/webp'
+      : null;
+    if (!mime) {
+      console.error(`unsupported file extension "${ext || '(none)'}" — use .png, .jpg/.jpeg, or .webp`);
+      process.exit(2);
+    }
+    const { readFile } = await import('node:fs/promises');
+    let bytes;
+    try {
+      bytes = await readFile(flags.file);
+    } catch (err) {
+      console.error(`could not read ${flags.file}: ${err?.message ?? err}`);
+      process.exit(2);
+    }
+    const dataUrl = `data:${mime};base64,${bytes.toString('base64')}`;
+
+    let uploadResp;
+    try {
+      uploadResp = await fetch(`${base}/api/storyboards/${encodeURIComponent(id)}/uploads`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ dataUrl }),
+      });
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!uploadResp.ok) return structuredHttpFailure(uploadResp);
+    const uploadData = await uploadResp.json();
+
+    if (!flags.shot) {
+      if (flags.json) return writeJson(uploadData);
+      console.log(`[storyboard] uploaded ${uploadData.path}`);
+      return;
+    }
+
+    const shotId = flags.shot;
+    const frameField = slot === 'end' ? 'endFrame' : 'startFrame';
+    // Attaches the uploaded frame to one shot's start/end slot. Mirrors the
+    // web UI's optimistic-concurrency PATCH shape (storyboard-persist.ts):
+    // read the current doc, PATCH with expectedUpdatedAt, and on a 409
+    // (another writer moved the doc in between) reapply the same change to
+    // the conflict response's current doc and retry once rather than
+    // silently clobbering it.
+    async function patchShotFrame(current) {
+      const shots = current.shots.map((shot) =>
+        shot.id === shotId ? { ...shot, [frameField]: { path: uploadData.path, origin: 'uploaded' } } : shot,
+      );
+      return fetch(`${base}/api/storyboards/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ shots, expectedUpdatedAt: current.updatedAt }),
+      });
+    }
+
+    let getResp;
+    try {
+      getResp = await fetch(`${base}/api/storyboards/${encodeURIComponent(id)}`);
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!getResp.ok) return structuredHttpFailure(getResp);
+    let current = (await getResp.json()).storyboard;
+    if (!current.shots.some((s) => s.id === shotId)) {
+      console.error(`shot ${shotId} not found in storyboard ${id}`);
+      process.exit(4);
+    }
+
+    let patchResp = await patchShotFrame(current);
+    if (patchResp.status === 409) {
+      current = (await patchResp.json()).storyboard;
+      // Re-verify the shot is still there before retrying — a concurrently
+      // deleted shot would otherwise make patchShotFrame's retry a silent
+      // no-op (the .map() below just leaves the array unchanged) reported
+      // as a successful upload.
+      if (!current.shots.some((s) => s.id === shotId)) {
+        console.error(`shot ${shotId} was deleted from storyboard ${id} before the upload could be attached`);
+        process.exit(4);
+      }
+      patchResp = await patchShotFrame(current);
+    }
+    if (!patchResp.ok) return structuredHttpFailure(patchResp);
+    const patched = await patchResp.json();
+    if (flags.json) return writeJson({ ...uploadData, storyboard: patched.storyboard });
+    console.log(`[storyboard] uploaded ${uploadData.path} -> shot ${shotId} ${frameField}`);
+    return;
   }
 
   if (sub === 'render-shot') {

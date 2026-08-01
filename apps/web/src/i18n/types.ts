@@ -4412,4 +4412,11 @@ export interface Dict {
   'storyboard.duration': string;
   'storyboard.render': string;
   'storyboard.needsApiKey': string;
+  'storyboard.uploadImage': string;
+  'storyboard.addShotsFromImages': string;
+  'storyboard.dropImageHint': string;
+  'storyboard.uploadErrorBadType': string;
+  'storyboard.uploadErrorTooLarge': string;
+  'storyboard.uploadFailed': string;
+  'storyboard.uploadSkippedSome': string;
 }

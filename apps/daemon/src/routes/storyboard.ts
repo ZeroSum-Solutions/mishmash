@@ -18,7 +18,7 @@
 // ambiguity (every video renderer hardcodes `.mp4`).
 
 import { spawn } from 'node:child_process';
-import { lstat, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { lstat, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Express } from 'express';
 import type {
@@ -30,6 +30,7 @@ import type {
   StoryboardShotStatus,
   StoryboardSummary,
 } from '@open-design/contracts';
+import { isStoryboardUploadMimeAllowed, STORYBOARD_UPLOAD_MAX_BYTES } from '@open-design/contracts';
 import type { RouteDeps } from '../server-context.js';
 import { isSafeId, mimeFor } from '../projects.js';
 import {
@@ -54,6 +55,19 @@ const MAX_SHOT_DURATION_SEC = 15;
 // cap the total so a storyboard with a pile of oversized frames can't
 // inflate an unbounded response/HTML file in memory.
 const STORYBOARD_SLIDER_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
+// `data:<mime>;base64,<payload>` shape — the mime capture is intentionally
+// generic (not anchored to the allowlist) so an unsupported-but-well-formed
+// type still gets a clear "must be png|jpeg|webp" 400 instead of falling
+// through to the stricter base64-payload check below.
+const STORYBOARD_UPLOAD_DATA_URL_RE = /^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64,(.*)$/i;
+const STORYBOARD_UPLOAD_BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
+
+/** mime is guaranteed one of STORYBOARD_UPLOAD_MIME_TYPES by the caller. */
+function storyboardUploadExtFor(mime: string): string {
+  if (mime === 'image/png') return 'png';
+  if (mime === 'image/jpeg') return 'jpg'; // conventional extension for the jpeg subtype
+  return 'webp';
+}
 
 // Frame refs (StoryboardFrameRef.path) and shot render outputs
 // (StoryboardShot.output) are client-controllable — PATCH accepts a whole
@@ -450,9 +464,22 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
         return sendApiError(res, 400, 'BAD_REQUEST', 'shots must be an array');
       }
       const parsed: StoryboardShot[] = [];
+      // Guards against a duplicated shot id reaching storage — e.g. a
+      // client-side 409 retry that re-applies an append mutator onto a doc
+      // that (for whatever reason) already contains the shot it was trying
+      // to add. The client-side fix (storyboard-persist.ts's
+      // appendShotIfAbsent) makes this unreachable from the shipped UI, but
+      // the server is the actual boundary: any other caller (CLI, a future
+      // integration, a hallucinated agent PATCH) must not be able to
+      // persist two shots sharing an id.
+      const seenShotIds = new Set<string>();
       for (let i = 0; i < patch.shots.length; i++) {
         const result = validateShot(patch.shots[i], i);
         if (!result.ok) return sendApiError(res, 400, 'BAD_REQUEST', result.error);
+        if (seenShotIds.has(result.value.id)) {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'duplicate shot id');
+        }
+        seenShotIds.add(result.value.id);
         parsed.push(result.value);
       }
       nextShots = parsed;
@@ -542,6 +569,89 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
     });
 
     res.status(202).json({ taskId, framePath });
+  });
+
+  // Accepts a single external image (file-picker or drag-and-drop) into the
+  // hidden storyboard-media project so it can immediately be used as a shot
+  // start/end frame or an i2i sourceImage — same directory every generated
+  // frame lives in (see storyboardFrameUrl's doc comment in registry.ts), so
+  // no new serving route is needed. The extension is derived from the
+  // validated MIME type only, never a client-supplied filename, so the
+  // stored name has no traversal surface at all.
+  app.post('/api/storyboards/:id/uploads', async (req, res) => {
+    if (!requireLocal(req, res)) return;
+    if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
+    const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+    if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+
+    const dataUrl = typeof req.body?.dataUrl === 'string' ? req.body.dataUrl : '';
+    const structureMatch = STORYBOARD_UPLOAD_DATA_URL_RE.exec(dataUrl);
+    const mime = structureMatch?.[1]?.toLowerCase() ?? '';
+    if (!structureMatch || !isStoryboardUploadMimeAllowed(mime)) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'dataUrl must be data:image/(png|jpeg|webp);base64,<payload>');
+    }
+    const payload = structureMatch[2] ?? '';
+    // Buffer.from(…, 'base64') silently drops invalid characters instead of
+    // throwing, so the charset/padding shape must be checked explicitly —
+    // otherwise a garbled payload would decode to a truncated (but
+    // "successful") image instead of failing loudly.
+    if (!STORYBOARD_UPLOAD_BASE64_RE.test(payload) || payload.length % 4 !== 0) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'malformed base64 payload');
+    }
+    // Reject an oversized payload BEFORE Buffer.from decodes it into memory —
+    // base64 groups 3 input bytes into 4 output chars, so
+    // 4*ceil(MAX_BYTES/3) is the largest encoded length any payload
+    // decoding to <= STORYBOARD_UPLOAD_MAX_BYTES bytes could ever have.
+    // (ceil(MAX_BYTES*4/3) looks equivalent but isn't when MAX_BYTES isn't a
+    // multiple of 3 — it under-counts by one char and would 413 a payload
+    // that decodes to exactly the limit.) Deferring this check to the
+    // decoded byte length (below) still catches every oversized upload
+    // correctly, but only after paying the allocation cost this guard
+    // avoids.
+    if (payload.length > 4 * Math.ceil(STORYBOARD_UPLOAD_MAX_BYTES / 3)) {
+      return sendApiError(
+        res,
+        413,
+        'PAYLOAD_TOO_LARGE',
+        `decoded image exceeds the ${STORYBOARD_UPLOAD_MAX_BYTES}-byte upload limit`,
+      );
+    }
+    const bytes = Buffer.from(payload, 'base64');
+    if (bytes.length === 0) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'malformed base64 payload');
+    }
+    if (bytes.length > STORYBOARD_UPLOAD_MAX_BYTES) {
+      return sendApiError(
+        res,
+        413,
+        'PAYLOAD_TOO_LARGE',
+        `decoded image (${bytes.length} bytes) exceeds the ${STORYBOARD_UPLOAD_MAX_BYTES}-byte upload limit`,
+      );
+    }
+
+    await ensureStoryboardMediaProject();
+    const mediaProjectDir = resolveProjectDir(PROJECTS_DIR, STORYBOARD_MEDIA_PROJECT_ID);
+    const relPath = `upload-${randomUUID()}.${storyboardUploadExtFor(mime)}`;
+    const targetPath = path.join(mediaProjectDir, relPath);
+    if (!(await assertSafeStoryboardWriteTarget(mediaProjectDir, targetPath))) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'upload target is unsafe');
+    }
+    // Atomic write, same temp+rename idiom as storyboards/store.ts's
+    // writeStoryboard: a crash mid-write must never leave a truncated file
+    // where a complete one is expected.
+    const tempPath = `${targetPath}.tmp-${randomUUID()}`;
+    try {
+      await writeFile(tempPath, bytes);
+      await rename(tempPath, targetPath);
+    } catch (err) {
+      // A failed write or rename must not leave the temp file orphaned in
+      // the media project dir — best-effort cleanup, then rethrow so the
+      // caller still sees the original failure.
+      await rm(tempPath, { force: true }).catch(() => {});
+      throw err;
+    }
+
+    res.status(201).json({ path: relPath });
   });
 
   // Validates start frame present + non-empty motion prompt, dispatches a

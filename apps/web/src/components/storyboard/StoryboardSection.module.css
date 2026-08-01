@@ -241,6 +241,16 @@
   gap: 4px;
 }
 
+.shotFrameSlotDragOver {
+  outline: 2px dashed var(--text-soft);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.hiddenFileInput {
+  display: none;
+}
+
 .shotDialog {
   grid-column: 1 / -1;
   display: flex;
@@ -334,6 +344,37 @@
 .addShotButton:hover {
   color: var(--text);
   border-color: var(--text-soft);
+}
+
+.addShotsButton {
+  flex: 0 0 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 200px;
+  padding: 8px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: center;
+  cursor: pointer;
+}
+.addShotsButton:hover,
+.addShotsButtonDragOver {
+  color: var(--text);
+  border-color: var(--text-soft);
+}
+.addShotsButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.addShotsButtonHint {
+  font-size: 10px;
+  color: var(--text-muted);
 }
 
 .footerBar {

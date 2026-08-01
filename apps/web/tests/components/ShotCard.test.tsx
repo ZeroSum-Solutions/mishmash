@@ -42,6 +42,7 @@ function renderShotCard(shot: StoryboardShot, overrides: Partial<React.Component
     onIterateStart: vi.fn(),
     onDeriveEnd: vi.fn(),
     onUsePreviousEndFrame: vi.fn(),
+    onUploadFile: vi.fn(),
     onFieldChange: vi.fn(),
     onRender: vi.fn(),
     onDuplicate: vi.fn(),
@@ -242,5 +243,64 @@ describe('ShotCard editor state machine', () => {
       resolution: '720p',
       endFrame: undefined,
     });
+  });
+});
+
+describe('ShotCard upload — drag-and-drop and file-picker', () => {
+  it('dropping an image file on the start-frame slot calls onUploadFile with the file', () => {
+    const handlers = renderShotCard(baseShot());
+    const dropzone = screen.getByTestId('start-frame-dropzone');
+    const file = new File(['abc'], 'photo.png', { type: 'image/png' });
+    fireEvent.drop(dropzone, { dataTransfer: { files: [file] } });
+    expect(handlers.onUploadFile).toHaveBeenCalledWith('start', file);
+  });
+
+  it('ignores a start-frame drop that carries no image file', () => {
+    const handlers = renderShotCard(baseShot());
+    const dropzone = screen.getByTestId('start-frame-dropzone');
+    const file = new File(['plain text'], 'notes.txt', { type: 'text/plain' });
+    fireEvent.drop(dropzone, { dataTransfer: { files: [file] } });
+    expect(handlers.onUploadFile).not.toHaveBeenCalled();
+  });
+
+  it('choosing a file via the start-frame Upload image input calls onUploadFile', () => {
+    const handlers = renderShotCard(baseShot());
+    const file = new File(['abc'], 'photo.png', { type: 'image/png' });
+    const input = screen.getByTestId('start-frame-file-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(handlers.onUploadFile).toHaveBeenCalledWith('start', file);
+  });
+
+  it('dropping an image file on the end-frame slot calls onUploadFile with the file', () => {
+    const handlers = renderShotCard(baseShot({ startFrame: { path: 'start.png', origin: 'generated' } }));
+    const dropzone = screen.getByTestId('end-frame-dropzone');
+    const file = new File(['abc'], 'end.webp', { type: 'image/webp' });
+    fireEvent.drop(dropzone, { dataTransfer: { files: [file] } });
+    expect(handlers.onUploadFile).toHaveBeenCalledWith('end', file);
+  });
+
+  it('choosing a file via the end-frame Upload image input calls onUploadFile', () => {
+    const handlers = renderShotCard(baseShot({ startFrame: { path: 'start.png', origin: 'generated' } }));
+    const file = new File(['abc'], 'end.png', { type: 'image/png' });
+    const input = screen.getByTestId('end-frame-file-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(handlers.onUploadFile).toHaveBeenCalledWith('end', file);
+  });
+
+  it('disables the Upload image affordance on both slots while the shot is busy', () => {
+    renderShotCard(
+      baseShot({ startFrame: { path: 'start.png', origin: 'generated' }, endFrame: { path: 'end.png', origin: 'derived' } }),
+      { busy: true },
+    );
+    expect(screen.getByTestId('start-frame-upload-button')).toBeDisabled();
+    expect(screen.getByTestId('end-frame-upload-button')).toBeDisabled();
+  });
+
+  it('a drop on the start-frame slot while busy does not call onUploadFile', () => {
+    const handlers = renderShotCard(baseShot(), { busy: true });
+    const dropzone = screen.getByTestId('start-frame-dropzone');
+    const file = new File(['abc'], 'photo.png', { type: 'image/png' });
+    fireEvent.drop(dropzone, { dataTransfer: { files: [file] } });
+    expect(handlers.onUploadFile).not.toHaveBeenCalled();
   });
 });

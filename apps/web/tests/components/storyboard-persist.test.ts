@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Storyboard, StoryboardShot } from '@open-design/contracts';
 import {
+  appendShotIfAbsent,
   persistStoryboardMutation,
   type StoryboardMutator,
 } from '../../src/components/storyboard/storyboard-persist';
@@ -101,5 +102,39 @@ describe('persistStoryboardMutation', () => {
     expect(patch).toHaveBeenCalledTimes(1);
     expect(patch.mock.calls[0]![1]).toMatchObject({ title: 'Renamed', expectedUpdatedAt: base.updatedAt });
     expect(result).toEqual({ ok: true, value: nextDoc });
+  });
+
+  // Red-spec for the duplicate-shot-ID bug: an append-style mutator built on
+  // appendShotIfAbsent must stay a no-op re-append when the 409 retry lands
+  // on a conflict doc that already contains the shot it was trying to add —
+  // e.g. because a prior attempt at this exact append already reached the
+  // server despite this client observing a 409. A mutator that unconditionally
+  // pushed the new shot (the pre-fix shape) would duplicate it here.
+  it('an idempotent append mutator does not duplicate the shot when the conflict doc already contains it', async () => {
+    const newShot: StoryboardShot = shot({ id: 'shot-new', order: 1 });
+    const base = doc({ shots: [shot()] }); // base doc: only shot-a, shot-new not appended yet
+
+    // The conflict doc the server returns on 409 ALREADY contains shot-new —
+    // e.g. a prior retry of this same append already landed.
+    const conflictDoc = doc({
+      updatedAt: '2026-01-01T00:05:00.000Z',
+      shots: [shot(), newShot],
+    });
+
+    const mutator: StoryboardMutator = (prev) => ({
+      ...prev,
+      shots: appendShotIfAbsent(prev.shots, newShot),
+    });
+
+    const patch = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 409, message: 'storyboard changed', conflict: conflictDoc })
+      .mockResolvedValueOnce({ ok: true, value: conflictDoc });
+
+    await persistStoryboardMutation('sb-1', base, mutator, patch);
+
+    expect(patch).toHaveBeenCalledTimes(2);
+    const retryCall = patch.mock.calls[1]![1] as { shots: StoryboardShot[] };
+    expect(retryCall.shots.filter((s) => s.id === 'shot-new')).toHaveLength(1);
   });
 });

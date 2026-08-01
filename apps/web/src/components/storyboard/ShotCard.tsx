@@ -4,7 +4,7 @@
 // which keeps the enablement/gating state machine (see shot-editor-state.ts)
 // testable without mocking network calls.
 
-import { useState } from 'react';
+import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import type { StoryboardFrameRef, StoryboardShot } from '@open-design/contracts';
 import { Button } from '@open-design/components';
 import { Icon } from '../Icon';
@@ -12,6 +12,7 @@ import { useT } from '../../i18n';
 import { findMediaModel, type MediaModel } from '../../media/models';
 import {
   STORYBOARD_DURATION_OPTIONS,
+  STORYBOARD_UPLOAD_ACCEPT,
   type ConfiguredProviderMap,
   isModelConfigured,
   resolutionForModelId,
@@ -33,6 +34,7 @@ export interface ShotCardProps {
   onIterateStart: (prompt: string, model: string) => void;
   onDeriveEnd: (prompt: string, model: string) => void;
   onUsePreviousEndFrame: () => void;
+  onUploadFile: (slot: 'start' | 'end', file: File) => void;
   onFieldChange: (patch: Partial<StoryboardShot>) => void;
   onRender: () => void;
   onDuplicate: () => void;
@@ -66,6 +68,7 @@ export function ShotCard(props: ShotCardProps) {
     onIterateStart,
     onDeriveEnd,
     onUsePreviousEndFrame,
+    onUploadFile,
     onFieldChange,
     onRender,
     onDuplicate,
@@ -90,6 +93,34 @@ export function ShotCard(props: ShotCardProps) {
   const [startModel, setStartModel] = useState(imageModels[0]?.id ?? '');
   const [endPrompt, setEndPrompt] = useState('');
   const [endModel, setEndModel] = useState(i2iImageModels[0]?.id ?? '');
+
+  const [dragOverSlot, setDragOverSlot] = useState<'start' | 'end' | null>(null);
+  const startFileInputRef = useRef<HTMLInputElement>(null);
+  const endFileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleSlotDragOver(slot: 'start' | 'end', event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    if (!busy) setDragOverSlot(slot);
+  }
+  function handleSlotDragLeave(slot: 'start' | 'end') {
+    setDragOverSlot((current) => (current === slot ? null : current));
+  }
+  function handleSlotDrop(slot: 'start' | 'end', event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setDragOverSlot(null);
+    if (busy) return;
+    // Take the first actual image in the drop and defer to onUploadFile's
+    // own validation (the exact png/jpeg/webp allowlist + size cap) for the
+    // specific error copy — pre-filtering to that strict allowlist here
+    // would silently drop e.g. a GIF instead of surfacing "unsupported type".
+    const file = Array.from(event.dataTransfer.files).find((f) => f.type.startsWith('image/'));
+    if (file) onUploadFile(slot, file);
+  }
+  function handleFileInputChange(slot: 'start' | 'end', event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = ''; // allow re-selecting the same file next time
+    if (file) onUploadFile(slot, file);
+  }
 
   const closeStartDialog = () => setStartDialog(null);
   const submitStartDialog = () => {
@@ -127,7 +158,13 @@ export function ShotCard(props: ShotCardProps) {
       </header>
 
       <div className={styles.shotFrames}>
-        <div className={styles.shotFrameSlot}>
+        <div
+          className={`${styles.shotFrameSlot}${dragOverSlot === 'start' ? ` ${styles.shotFrameSlotDragOver}` : ''}`}
+          data-testid="start-frame-dropzone"
+          onDragOver={(e) => handleSlotDragOver('start', e)}
+          onDragLeave={() => handleSlotDragLeave('start')}
+          onDrop={(e) => handleSlotDrop('start', e)}
+        >
           <span className={styles.shotFrameSlotLabel}>{t('storyboard.startFrame')}</span>
           {shot.startFrame ? (
             <>
@@ -149,6 +186,15 @@ export function ShotCard(props: ShotCardProps) {
                 >
                   {t('storyboard.replace')}
                 </Button>
+                <Button
+                  type="button"
+                  variant="subtle"
+                  disabled={busy}
+                  data-testid="start-frame-upload-button"
+                  onClick={() => startFileInputRef.current?.click()}
+                >
+                  {t('storyboard.uploadImage')}
+                </Button>
               </div>
             </>
           ) : (
@@ -166,8 +212,26 @@ export function ShotCard(props: ShotCardProps) {
                   {t('storyboard.usePreviousEndFrame')}
                 </Button>
               ) : null}
+              <Button
+                type="button"
+                variant="subtle"
+                disabled={busy}
+                data-testid="start-frame-upload-button"
+                onClick={() => startFileInputRef.current?.click()}
+              >
+                {t('storyboard.uploadImage')}
+              </Button>
+              <p className={styles.shotDialogHelper}>{t('storyboard.dropImageHint')}</p>
             </div>
           )}
+          <input
+            ref={startFileInputRef}
+            type="file"
+            accept={STORYBOARD_UPLOAD_ACCEPT}
+            className={styles.hiddenFileInput}
+            data-testid="start-frame-file-input"
+            onChange={(e) => handleFileInputChange('start', e)}
+          />
           {startDialog ? (
             <div className={styles.shotDialog} data-testid="start-frame-dialog">
               <textarea
@@ -191,24 +255,63 @@ export function ShotCard(props: ShotCardProps) {
           ) : null}
         </div>
 
-        <div className={styles.shotFrameSlot}>
+        <div
+          className={`${styles.shotFrameSlot}${dragOverSlot === 'end' ? ` ${styles.shotFrameSlotDragOver}` : ''}`}
+          data-testid="end-frame-dropzone"
+          onDragOver={(e) => handleSlotDragOver('end', e)}
+          onDragLeave={() => handleSlotDragLeave('end')}
+          onDrop={(e) => handleSlotDrop('end', e)}
+        >
           <span className={styles.shotFrameSlotLabel}>{t('storyboard.endFrame')}</span>
           {shot.endFrame ? (
-            <FrameThumb frame={shot.endFrame} url={frameUrl(shot.endFrame.path)} />
-          ) : supportsKeyframePairs ? (
-            <Button
-              type="button"
-              variant="subtle"
-              disabled={!state.canDeriveEndFrame || busy}
-              onClick={() => { setEndDialog(true); setEndModel(i2iImageModels[0]?.id ?? ''); }}
-            >
-              {t('storyboard.deriveEndFrame')}
-            </Button>
+            <>
+              <FrameThumb frame={shot.endFrame} url={frameUrl(shot.endFrame.path)} />
+              <Button
+                type="button"
+                variant="subtle"
+                disabled={busy}
+                data-testid="end-frame-upload-button"
+                onClick={() => endFileInputRef.current?.click()}
+              >
+                {t('storyboard.uploadImage')}
+              </Button>
+            </>
           ) : (
-            <p className={styles.shotDialogHelper} data-testid="derive-end-frame-unsupported-hint">
-              {t('storyboard.deriveEndFrameNeedsKeyframeModel')}
-            </p>
+            <div className={styles.shotFrameActions}>
+              {supportsKeyframePairs ? (
+                <Button
+                  type="button"
+                  variant="subtle"
+                  disabled={!state.canDeriveEndFrame || busy}
+                  onClick={() => { setEndDialog(true); setEndModel(i2iImageModels[0]?.id ?? ''); }}
+                >
+                  {t('storyboard.deriveEndFrame')}
+                </Button>
+              ) : (
+                <p className={styles.shotDialogHelper} data-testid="derive-end-frame-unsupported-hint">
+                  {t('storyboard.deriveEndFrameNeedsKeyframeModel')}
+                </p>
+              )}
+              <Button
+                type="button"
+                variant="subtle"
+                disabled={busy}
+                data-testid="end-frame-upload-button"
+                onClick={() => endFileInputRef.current?.click()}
+              >
+                {t('storyboard.uploadImage')}
+              </Button>
+              <p className={styles.shotDialogHelper}>{t('storyboard.dropImageHint')}</p>
+            </div>
           )}
+          <input
+            ref={endFileInputRef}
+            type="file"
+            accept={STORYBOARD_UPLOAD_ACCEPT}
+            className={styles.hiddenFileInput}
+            data-testid="end-frame-file-input"
+            onChange={(e) => handleFileInputChange('end', e)}
+          />
           {endDialog ? (
             <div className={styles.shotDialog} data-testid="end-frame-dialog">
               <p className={styles.shotDialogHelper}>{t('storyboard.deriveEndFrameHelper')}</p>
