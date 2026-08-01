@@ -38,6 +38,7 @@ export type MediaProviderId =
   | 'openrouter'
   | 'custom-image'
   | 'comfyui'
+  | 'sdcpp'
   | 'bfl'
   | 'fal'
   | 'kie'
@@ -172,6 +173,15 @@ export const MEDIA_PROVIDERS: MediaProvider[] = [
     integrated: false,
     defaultBaseUrl: 'http://127.0.0.1:8188',
     docsUrl: 'https://docs.comfy.org/development/core-concepts/workflow',
+  },
+  {
+    id: 'sdcpp',
+    label: 'stable-diffusion.cpp',
+    hint: 'Local native async server · loopback, no API key',
+    integrated: true,
+    credentialsRequired: false,
+    defaultBaseUrl: 'http://127.0.0.1:1234',
+    docsUrl: 'https://github.com/leejet/stable-diffusion.cpp/blob/master/examples/server/api.md',
   },
   {
     id: 'bfl',
@@ -514,6 +524,20 @@ export const IMAGE_MODELS: MediaModel[] = [
     label: 'custom-image',
     hint: 'Custom · OpenAI-compatible endpoint',
     provider: 'custom-image',
+    caps: ['t2i', 'i2i'],
+  },
+
+  // stable-diffusion.cpp — native async /sdcpp/v1 server, one baked-in
+  // checkpoint per running process (chosen at server launch, not per
+  // request). Locally-loaded checkpoint verified against a live spike:
+  // diffusion_model=z_image_turbo-Q4_K.gguf, llm(text encoder)=
+  // Qwen3-4B-Instruct-2507-Q4_K_M.gguf, vae=ae.safetensors (see the
+  // daemon's media/index.ts provider comment for the full wire contract).
+  {
+    id: 'sdcpp/z-image-turbo',
+    label: 'Z-Image Turbo (sd.cpp)',
+    hint: 'stable-diffusion.cpp · local loopback · Z-Image Turbo (Qwen3 text encoder)',
+    provider: 'sdcpp',
     caps: ['t2i', 'i2i'],
   },
 

@@ -1443,3 +1443,61 @@ describe('media-config Higgsfield MCP protocol guard', () => {
     expect(resolved.apiKey).toBe('hf-plaintext-token');
   });
 });
+
+// stable-diffusion.cpp is a baseUrl-only local provider with no bearer
+// token at all (loopback server, MEDIA_PROVIDERS entry has no ENV_KEYS
+// slot and no external-credential branch in resolveProviderConfig /
+// readMaskedConfig — same generic path every un-special-cased provider
+// gets). This section proves that generic path is enough: no code in
+// config.ts needed to be touched for sdcpp specifically.
+describe('media-config stable-diffusion.cpp (sdcpp) — baseUrl-only local provider', () => {
+  let projectRoot: string;
+
+  beforeEach(async () => {
+    projectRoot = await mkdtemp(path.join(tmpdir(), 'od-media-sdcpp-project-'));
+  });
+
+  afterEach(async () => {
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  function sdcppProvider(masked: Awaited<ReturnType<typeof readMaskedConfig>>) {
+    return (masked.providers as Record<string, unknown>).sdcpp as
+      | { configured: boolean; source: string; baseUrl: string }
+      | undefined;
+  }
+
+  it('resolveProviderConfig returns an empty apiKey and empty baseUrl with nothing stored (renderer supplies its own default)', async () => {
+    const resolved = await resolveProviderConfig(projectRoot, 'sdcpp');
+    expect(resolved.apiKey).toBe('');
+    expect(resolved.baseUrl).toBe('');
+  });
+
+  it('readMaskedConfig reports sdcpp as unconfigured (no apiKey, no external-credential branch) when nothing is stored — a local provider with defaultBaseUrl + credentialsRequired:false is still allowed to show "unset" here, the frontend picker readiness check ignores it', async () => {
+    const masked = await readMaskedConfig(projectRoot);
+    expect(sdcppProvider(masked)).toMatchObject({
+      configured: false,
+      source: 'unset',
+      baseUrl: '',
+    });
+  });
+
+  it('a stored baseUrl override (e.g. a non-default port) round-trips through writeConfig -> resolveProviderConfig / readMaskedConfig with no apiKey required', async () => {
+    await writeConfig(projectRoot, {
+      providers: { sdcpp: { baseUrl: 'http://127.0.0.1:9234' } },
+    });
+
+    const resolved = await resolveProviderConfig(projectRoot, 'sdcpp');
+    expect(resolved.apiKey).toBe('');
+    expect(resolved.baseUrl).toBe('http://127.0.0.1:9234');
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(sdcppProvider(masked)).toMatchObject({
+      // Still "unset"/unconfigured by readMaskedConfig's apiKey-only
+      // configured flag — sdcpp never has an apiKey to store. The stored
+      // baseUrl override itself is what resolveProviderConfig honors.
+      configured: false,
+      baseUrl: 'http://127.0.0.1:9234',
+    });
+  });
+});

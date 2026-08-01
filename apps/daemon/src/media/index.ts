@@ -832,6 +832,11 @@ export async function generateMedia(args: {
       bytes = result.bytes;
       providerNote = result.providerNote;
       suggestedExt = result.suggestedExt;
+    } else if (def.provider === 'sdcpp' && surface === 'image') {
+      const result = await renderSdcppImage(ctx, credentials, args.onProgress);
+      bytes = result.bytes;
+      providerNote = result.providerNote;
+      suggestedExt = result.suggestedExt;
     } else {
       // No real renderer wired up for this (provider, surface). Gate the
       // stub fallback behind OD_MEDIA_ALLOW_STUBS so release builds don't
@@ -4958,6 +4963,284 @@ async function renderHiggsfieldVideo(ctx: MediaContext, credentials: ProviderCon
   };
 
   return withHiggsfieldAuth(ctx, credentials.apiKey, attempt);
+}
+
+// ---------------------------------------------------------------------------
+// Provider: stable-diffusion.cpp — native async job API exposed by the
+// upstream project's examples/server (docs: examples/server/api.md /
+// docs.kie.ai-style but self-hosted). A single local process serves ONE
+// baked-in checkpoint chosen at server-launch time via --diffusion-model /
+// --llm / --vae flags, NOT per-request — there is no `model` field on the
+// wire at all, so credentials.model / supportsCustomModel have nothing to
+// plumb into the request body. The server listens on 127.0.0.1 by default
+// with no bearer token (loopback-only, no auth surface) — `sdcpp`'s
+// provider entry is `credentialsRequired: false`, same as hyperframes/codex.
+//
+//   Submit: POST {baseUrl}/sdcpp/v1/img_gen
+//           { prompt, width, height, sample_params: {...}, output_format:
+//             "png", init_image?, strength? } -> 202 Accepted
+//           { id, kind: "img_gen", status: "queued", created, poll_url }
+//   Poll:   GET {baseUrl}{poll_url}
+//           -> { id, kind, status, created, started, completed,
+//                queue_position, result, error }
+//           status ∈ queued | generating | completed | failed | cancelled.
+//           A non-null `error` ({code, message}) is ALWAYS the failure
+//           signal (covers both failed and cancelled) — check it before
+//           branching on status. On completion, result.images[0].b64_json
+//           is the PNG bytes, base64-encoded — there is no CDN URL to
+//           download (unlike kie/higgsfield), so the poll loop itself
+//           produces the final bytes.
+//   i2i: the native img_gen schema documents `init_image` (data URL or raw
+//        base64, 3-channel) + `strength` — a real, documented field, not a
+//        guess (examples/server/api.md, confirmed against
+//        routes_sdcpp.cpp's make_img_gen_features_json: init_image: true).
+//
+// Verified 2026-07 against a live spike (scratchpad/sdcpp-spike/):
+// job_submit_response.json / job_final_response.json are real captured
+// envelopes matching the shapes above byte-for-byte. The spike's server.log
+// shows the loaded checkpoint (diffusion_model=z_image_turbo-Q4_K.gguf,
+// llm=Qwen3-4B-Instruct-2507-Q4_K_M.gguf, vae=ae.safetensors) and its CLI
+// runs (cli_cold_run.log / cli_warm_run.log / cli_sample3.log) show the
+// model's own tuned recipe (sample_steps=8, txt_cfg=1.0,
+// distilled_guidance=3.5 — Z-Image Turbo is a distilled/few-step model),
+// which this renderer reuses as its request defaults. Single-flight queue:
+// 1024² took ~145-223s on the spike's M4 Max; smaller sizes are much
+// faster. Poll ceiling is env-overridable (OD_SDCPP_MAX_POLL_MS) per the
+// same pattern as OD_KIE_MAX_POLL_MS / OD_HIGGSFIELD_MAX_POLL_MS.
+// ---------------------------------------------------------------------------
+
+const SDCPP_DEFAULT_BASE_URL = 'http://127.0.0.1:1234';
+const SDCPP_DEFAULT_STEPS = 8;
+const SDCPP_DEFAULT_TXT_CFG = 1.0;
+const SDCPP_DEFAULT_DISTILLED_GUIDANCE = 3.5;
+const SDCPP_DEFAULT_I2I_STRENGTH = 0.75;
+// Generous cap for a SINGLE submit/poll HTTP round-trip. Both are meant to
+// be near-instant per the wire contract (job submission/status lookup, not
+// the generation itself) — this only bounds a server that accepts the TCP
+// connection but never sends headers/body, which would otherwise hang
+// `fetch()` forever. The while-loop's own `Date.now() - startedAt < maxMs`
+// ceiling only re-evaluates BETWEEN iterations and never gets a chance to
+// fire while a single fetch call is stuck in flight.
+const SDCPP_PER_REQUEST_TIMEOUT_MS = 30_000;
+
+// Same precedent as higgsfieldWireModel(): catalog ids carry a
+// `sdcpp/` provider prefix for readability in the picker, but the wire
+// protocol has no `model` field at all — this only trims the prefix for a
+// clean providerNote (e.g. "sdcpp/z-image-turbo", not
+// "sdcpp/sdcpp/z-image-turbo").
+function sdcppWireModel(id: string): string {
+  return id.replace(/^sdcpp\//, '');
+}
+
+function sdcppSizeFor(aspect: string | undefined): { width: number; height: number } {
+  // The native API wants explicit width/height (no aspect-ratio enum like
+  // kie/higgsfield). Long edge pinned to 1024 — matches the spike's
+  // verified-good 1024² recipe; callers needing a faster/cheaper
+  // generation get there via a smaller --aspect-driven box already, not a
+  // separate size knob (no such knob exists on this provider/model pair).
+  switch (aspect) {
+    case '16:9': return { width: 1024, height: 576 };
+    case '9:16': return { width: 576, height: 1024 };
+    case '4:3': return { width: 1024, height: 768 };
+    case '3:4': return { width: 768, height: 1024 };
+    default: return { width: 1024, height: 1024 };
+  }
+}
+
+function sdcppMaxPollMs(defaultMs: number): number {
+  const v = Number(process.env.OD_SDCPP_MAX_POLL_MS);
+  return Number.isFinite(v) && v >= 30_000 ? v : defaultMs;
+}
+
+/**
+ * Per-request AbortSignal for a single sdcpp fetch (submit or poll),
+ * bounded by whichever is SMALLER: the fixed SDCPP_PER_REQUEST_TIMEOUT_MS
+ * cap or the time remaining until the overall OD_SDCPP_MAX_POLL_MS
+ * deadline. Composes with any externally-supplied `requestInit.signal`
+ * (e.g. chat.ts's stop-generation signal, threaded through at runtime even
+ * though MediaRequestInit's TYPE only names `dispatcher`) via
+ * AbortSignal.any so aborting from either source works — neither cancel
+ * path replaces the other. Same composition precedent as
+ * brands/prefetch.ts / design/handoff-design.ts.
+ */
+function sdcppRequestSignal(
+  requestInit: MediaRequestInit,
+  startedAt: number,
+  maxMs: number,
+): { signal: AbortSignal; perRequestMs: number } {
+  const remainingMs = maxMs - (Date.now() - startedAt);
+  const perRequestMs = Math.max(0, Math.min(SDCPP_PER_REQUEST_TIMEOUT_MS, remainingMs));
+  const timeout = AbortSignal.timeout(perRequestMs);
+  const existing = (requestInit as RequestInit).signal;
+  return { signal: existing ? AbortSignal.any([existing, timeout]) : timeout, perRequestMs };
+}
+
+/**
+ * True when `err` is the DOMException AbortSignal.timeout() itself
+ * produces (name 'TimeoutError'), as opposed to an externally-supplied
+ * cancellation (name 'AbortError', e.g. the user hitting stop mid-chat) or
+ * an unrelated network error. Only this renderer's OWN timeout gets
+ * relabeled with a friendly, actionable message; everything else
+ * propagates as-is so external cancellation keeps behaving like every
+ * other provider.
+ */
+function isSdcppRequestTimeout(err: unknown): boolean {
+  return Boolean(err && typeof err === 'object' && (err as { name?: unknown }).name === 'TimeoutError');
+}
+
+async function renderSdcppImage(
+  ctx: MediaContext,
+  credentials: ProviderConfig,
+  onProgress?: ProgressFn,
+): Promise<RenderResult> {
+  const baseUrl = (credentials.baseUrl || SDCPP_DEFAULT_BASE_URL).replace(/\/$/, '');
+  const prompt = ctx.prompt || 'A high-quality reference image.';
+  const { width, height } = sdcppSizeFor(ctx.aspect);
+
+  const body: Record<string, unknown> = {
+    prompt,
+    width,
+    height,
+    sample_params: {
+      sample_steps: SDCPP_DEFAULT_STEPS,
+      guidance: {
+        txt_cfg: SDCPP_DEFAULT_TXT_CFG,
+        distilled_guidance: SDCPP_DEFAULT_DISTILLED_GUIDANCE,
+      },
+    },
+    output_format: 'png',
+  };
+  if (ctx.imageRef?.dataUrl) {
+    body.init_image = ctx.imageRef.dataUrl;
+    body.strength = SDCPP_DEFAULT_I2I_STRENGTH;
+  }
+
+  // The overall deadline covers submission AND every poll — a hung TCP
+  // connection during submit counts against the same OD_SDCPP_MAX_POLL_MS
+  // ceiling as a stalled poll, rather than getting an unbounded grace
+  // period before the ceiling clock even starts.
+  const maxMs = sdcppMaxPollMs(5 * 60 * 1000);
+  const startedAt = Date.now();
+
+  let createResp: Response;
+  try {
+    const { signal } = sdcppRequestSignal(ctx.requestInit, startedAt, maxMs);
+    createResp = await fetch(`${baseUrl}/sdcpp/v1/img_gen`, withMediaRequestInit(ctx, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal,
+    }));
+  } catch (err) {
+    if (isSdcppRequestTimeout(err)) {
+      const ceilSec = Math.round(maxMs / 1000);
+      throw new Error(
+        `sdcpp img_gen request timed out — ${baseUrl} accepted the connection but never responded `
+        + `(ceiling ${ceilSec}s from OD_SDCPP_MAX_POLL_MS/default). `
+        + `Raise OD_SDCPP_MAX_POLL_MS to extend the ceiling, or confirm sd-server is actually listening.`,
+      );
+    }
+    throw err;
+  }
+  const createText = await createResp.text();
+  // The native surface returns 202 on success (not 200) — checked
+  // explicitly rather than resp.ok so a 200 from some future/hand-edited
+  // baseUrl proxy doesn't get treated as a valid submission.
+  if (createResp.status !== 202) {
+    throw new Error(`sdcpp img_gen ${createResp.status}: ${truncate(createText, 240)}`);
+  }
+  let createData: any;
+  try {
+    createData = JSON.parse(createText);
+  } catch {
+    throw new Error(`sdcpp img_gen non-JSON: ${truncate(createText, 200)}`);
+  }
+  const pollUrl = createData?.poll_url;
+  if (typeof pollUrl !== 'string' || !pollUrl) {
+    throw new Error(`sdcpp img_gen response missing poll_url: ${truncate(createText, 200)}`);
+  }
+  // poll_url is always documented as a same-origin path (e.g.
+  // "/sdcpp/v1/jobs/job_…"), spliced straight onto baseUrl below. An
+  // absolute or otherwise malformed value would either silently redirect
+  // polling to a different host or blow up as an opaque `fetch` TypeError
+  // ("Failed to parse URL") instead of this renderer's usual labeled
+  // error — reject it up front with a clear message instead.
+  if (!pollUrl.startsWith('/')) {
+    throw new Error(`sdcpp img_gen response has a malformed poll_url (expected a path starting with "/"): ${truncate(pollUrl, 200)}`);
+  }
+  const jobId = typeof createData?.id === 'string' ? createData.id : '';
+
+  let lastStatus = '';
+  if (typeof onProgress === 'function') {
+    onProgress(`sdcpp job ${jobId} accepted; polling status…`);
+  }
+  while (Date.now() - startedAt < maxMs) {
+    await sleep(2000);
+    let pollResp: Response;
+    try {
+      const { signal } = sdcppRequestSignal(ctx.requestInit, startedAt, maxMs);
+      pollResp = await fetch(`${baseUrl}${pollUrl}`, withMediaRequestInit(ctx, { signal }));
+    } catch (err) {
+      if (isSdcppRequestTimeout(err)) {
+        const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+        const ceilSec = Math.round(maxMs / 1000);
+        throw new Error(
+          `sdcpp poll request for job ${jobId} timed out — the server accepted the connection but never `
+          + `responded (elapsed ${elapsedSec}s, ceiling ${ceilSec}s from OD_SDCPP_MAX_POLL_MS/default). `
+          + `Raise OD_SDCPP_MAX_POLL_MS to extend the ceiling.`,
+        );
+      }
+      throw err;
+    }
+    const pollText = await pollResp.text();
+    if (!pollResp.ok) {
+      throw new Error(`sdcpp poll ${pollResp.status}: ${truncate(pollText, 240)}`);
+    }
+    let pollData: any;
+    try {
+      pollData = JSON.parse(pollText);
+    } catch {
+      throw new Error(`sdcpp poll non-JSON: ${truncate(pollText, 200)}`);
+    }
+    lastStatus = typeof pollData?.status === 'string' ? pollData.status : '';
+    if (typeof onProgress === 'function') {
+      const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+      const qp = typeof pollData?.queue_position === 'number'
+        ? ` queue_position=${pollData.queue_position}`
+        : '';
+      onProgress(`sdcpp job ${jobId} status=${lastStatus || 'pending'}${qp} (elapsed ${elapsedSec}s)`);
+    }
+    // Non-null error is ALWAYS the failure signal (covers both `failed` and
+    // `cancelled` — both carry a populated {code, message} per the upstream
+    // contract), checked ahead of the status switch so neither terminal
+    // failure mode can fall through to the timeout branch below.
+    if (pollData?.error != null) {
+      const reason = pollData.error?.message || pollData.error?.code || 'unknown error';
+      throw new Error(`sdcpp job ${lastStatus || 'failed'}: ${reason}`);
+    }
+    if (lastStatus === 'completed') {
+      const images = pollData?.result?.images;
+      const b64 = Array.isArray(images) ? images[0]?.b64_json : undefined;
+      if (typeof b64 !== 'string' || !b64) {
+        throw new Error(
+          `sdcpp job completed but result had no images[0].b64_json: ${truncate(JSON.stringify(pollData?.result ?? {}), 200)}`,
+        );
+      }
+      const bytes = Buffer.from(b64, 'base64');
+      return {
+        bytes,
+        providerNote: `sdcpp/${sdcppWireModel(ctx.wireModel)} · ${width}x${height} · ${bytes.length} bytes`,
+        suggestedExt: sniffImageExt(bytes),
+      };
+    }
+  }
+  const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+  const ceilSec = Math.round(maxMs / 1000);
+  throw new Error(
+    `sdcpp job ${jobId} timed out after ${elapsedSec}s waiting for status=completed `
+    + `(last status: ${lastStatus || 'unknown'}, ceiling ${ceilSec}s). `
+    + `Raise OD_SDCPP_MAX_POLL_MS to extend the ceiling.`,
+  );
 }
 
 // ---------------------------------------------------------------------------
