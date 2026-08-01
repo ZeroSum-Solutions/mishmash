@@ -113,6 +113,24 @@ describe('copyDirectoryContents', () => {
     ).rejects.toMatchObject({ reason: 'symbolic links are not supported', relPath: 'linked.txt' });
   });
 
+  it.runIf(canSymlink)('calls onIncomplete for a symlinked source root and copies nothing', async () => {
+    const root = await makeTempRoot('od-copy-directory-symlink-root-');
+    const realSource = path.join(root, 'real-source');
+    const linkedSource = path.join(root, 'linked-source');
+    const dest = path.join(root, 'dest');
+    await mkdir(realSource, { recursive: true });
+    await writeFile(path.join(realSource, 'secret.txt'), 'secret', 'utf8');
+    await symlink(realSource, linkedSource);
+
+    const state = freshState();
+    await expect(
+      copyDirectoryContents(linkedSource, dest, state, { ...DEFAULT_OPTIONS, onIncomplete }),
+    ).rejects.toMatchObject({ reason: 'symbolic links are not supported', relPath: '.' });
+
+    expect(state.copiedFiles).toBe(0);
+    await expect(readFile(path.join(dest, 'secret.txt'), 'utf8')).rejects.toThrow();
+  });
+
   it('calls onIncomplete once the file-count cap would be exceeded', async () => {
     const root = await makeTempRoot('od-copy-directory-file-cap-');
     const source = path.join(root, 'source');

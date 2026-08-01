@@ -120,6 +120,39 @@ const START_PROJECT_CATALOG = {
           domains: ['test-domain'],
           allowed_use: 'licensed-source-review',
         },
+        // Its OWN directory entry is a symlink to restricted-kit, another
+        // collection inside the SAME fixture library -- realpath(target)
+        // still resolves inside root, so containment alone (withinReal)
+        // would pass it, but the bytes actually copied would be
+        // restricted-kit's under this item's licensed-source-review label.
+        {
+          id: 'in-root-symlinked-kit-1',
+          label: 'In-Root Symlinked Kit',
+          rel: '01 Kits/in-root-symlinked-kit',
+          thumb: null,
+          kind: 'HTML kit',
+          files: 1,
+          size: '1 KB',
+          category: '01 Kits',
+          domains: ['test-domain'],
+          allowed_use: 'licensed-source-review',
+        },
+        // Reached only through a symlinked INTERMEDIATE directory
+        // (nested-link -> permitted-kit); the final path segment (assets)
+        // is a real directory, not a symlink itself, so a leaf-only symlink
+        // check would miss this.
+        {
+          id: 'nested-symlink-kit-1',
+          label: 'Nested Symlink Kit',
+          rel: '01 Kits/nested-link/assets',
+          thumb: null,
+          kind: 'HTML kit',
+          files: 1,
+          size: '1 KB',
+          category: '01 Kits',
+          domains: ['test-domain'],
+          allowed_use: 'licensed-source-review',
+        },
       ],
     },
   ],
@@ -205,6 +238,16 @@ describe('design library routes', () => {
       writeFileSync(path.join(symlinkedKit, 'index.html'), '<!doctype html><title>Symlinked</title>', 'utf8');
       writeFileSync(path.join(outside, 'linked-target.txt'), 'asset', 'utf8');
       symlinkSync(path.join(outside, 'linked-target.txt'), path.join(symlinkedKit, 'linked.txt'));
+
+      // in-root-symlinked-kit: its own directory entry is a symlink to
+      // restricted-kit, a DIFFERENT (restricted) collection inside this
+      // same fixture library -- see FIX 3.
+      symlinkSync(restrictedKit, path.join(kitsRoot, 'in-root-symlinked-kit'));
+
+      // nested-link -> permitted-kit: a symlinked intermediate directory.
+      // The catalog item's rel resolves through it to a real subdirectory
+      // (permitted-kit/assets), which is not itself a symlink.
+      symlinkSync(permittedKit, path.join(kitsRoot, 'nested-link'));
     }
 
     return { dir, outside };
@@ -464,6 +507,48 @@ describe('design library routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rel: '01 Kits/escape-kit' }),
+      });
+      expect(res.status).toBe(400);
+    },
+  );
+
+  it.runIf(canSymlink)(
+    'rejects a start-project request whose catalog item folder symlinks to a restricted collection inside the same library with 400',
+    async () => {
+      const fixture = makeStartProjectFixture();
+      fixtureDir = fixture.dir;
+      outsideDir = fixture.outside;
+      process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+      const daemonUrl = await start();
+
+      const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rel: '01 Kits/in-root-symlinked-kit' }),
+      });
+      expect(res.status).toBe(400);
+
+      // Nothing was copied -- confirm no project got created for it either.
+      const listRes = await fetch(`${daemonUrl}/api/projects`);
+      const listBody = await listRes.json();
+      const names = JSON.stringify(listBody);
+      expect(names).not.toContain('In-Root Symlinked Kit');
+    },
+  );
+
+  it.runIf(canSymlink)(
+    'rejects a start-project request whose rel path resolves through a symlinked intermediate directory with 400',
+    async () => {
+      const fixture = makeStartProjectFixture();
+      fixtureDir = fixture.dir;
+      outsideDir = fixture.outside;
+      process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+      const daemonUrl = await start();
+
+      const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rel: '01 Kits/nested-link/assets' }),
       });
       expect(res.status).toBe(400);
     },

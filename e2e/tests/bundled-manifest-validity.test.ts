@@ -54,8 +54,8 @@ async function bundledManifestFolders(): Promise<ManifestFolder[]> {
 describe('bundled manifest validity', () => {
   it('every bundled manifest clears the daemon registration gates', async () => {
     const folders = await bundledManifestFolders();
-    // Keep this in sync with the roster pin (90 visible + 18 flows + 13 atoms).
-    expect(folders.length).toBe(121);
+    // Keep this in sync with the roster pin (90 visible + 19 flows + 13 atoms).
+    expect(folders.length).toBe(122);
 
     for (const { folderId, manifestPath } of folders) {
       expect(

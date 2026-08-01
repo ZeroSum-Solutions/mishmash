@@ -6,8 +6,20 @@
 //
 // This module owns only the walk. Callers own what an incomplete copy means
 // for their domain (HTTP status, error code, message) via `onIncomplete`.
+//
+// Threat model / residual risk: every entry (including the source root
+// itself, see below) is lstat-checked before it is trusted, but the checks
+// and the later mkdir/copyFile calls are separate syscalls -- a local
+// process with write access to the source tree can still swap a validated
+// directory for a symlink in the gap between them (TOCTOU). This is a local
+// daemon operating on local disk; defending against a concurrent adversarial
+// writer on the same machine is out of scope, same threat model as the rest
+// of the daemon's filesystem surface. Callers that need cross-request
+// consistency (e.g. rights-tiered content) must still re-validate their own
+// source root immediately before calling in, as routes/design-library.ts
+// does.
 
-import { copyFile, mkdir, readdir, stat } from 'node:fs/promises';
+import { copyFile, lstat, mkdir, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 export interface CopyDirectoryLimits {
@@ -48,6 +60,20 @@ export async function copyDirectoryContents(
   state: CopyDirectoryState,
   options: CopyDirectoryOptions,
 ): Promise<void> {
+  // The per-entry symlink check below only ever sees entries discovered by
+  // walking INTO a directory -- it never re-examines the directory it is
+  // about to walk. Without this, a caller that resolves a source root via
+  // lexical containment (target stays under some base by string prefix) but
+  // never lstats the root itself would happily walk through a root that is
+  // itself a symlink, copying whatever it points at under the caller's
+  // believed-safe label. Applying the check on every recursive call (not
+  // just the outermost one) is redundant but harmless -- each directory
+  // this function is about to descend into gets re-verified as a real
+  // directory, not a symlink, immediately before the walk.
+  const rootInfo = await lstat(sourceDir).catch(() => null);
+  if (rootInfo?.isSymbolicLink()) {
+    options.onIncomplete('symbolic links are not supported', '.');
+  }
   const entries = await readdir(sourceDir, { withFileTypes: true });
   await mkdir(destDir, { recursive: true });
   for (const entry of entries) {

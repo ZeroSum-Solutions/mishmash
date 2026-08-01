@@ -16,12 +16,20 @@
 // entirely and the tools row renders alone.
 
 import { useEffect, useState } from 'react';
-import type { DesignLibraryItem } from '@open-design/contracts';
+import type { DesignLibraryAllowedUse, DesignLibraryItem } from '@open-design/contracts';
 import { designLibraryThumbUrl, fetchDesignLibraryCatalog, startDesignLibraryProject } from '../providers/registry';
 import { Icon, type IconName } from './Icon';
 import { Toast } from './Toast';
 import { useT } from '../i18n';
 import styles from './FeaturedTemplatesRow.module.css';
+
+// Only these allowed_use tiers may render as a template card (mirrors
+// COPYABLE_ALLOWED_USE in DesignLibrarySection.tsx / the daemon's
+// design-library route). A featured rel reclassified to a restricted tier
+// must drop out of the row rather than keep rendering with the "UI8
+// licensed" badge and a copy affordance — that would violate the zero-copy-
+// affordance rights rule for restricted assets.
+const COPYABLE_ALLOWED_USE = new Set<DesignLibraryAllowedUse>(['own-code', 'licensed-source-review']);
 
 export type FeaturedToolId = 'hero-creation' | 'web-shells' | 'scroll-animations' | 'scroll-film';
 
@@ -142,7 +150,8 @@ export function FeaturedTemplatesRow({ onOpenProject, onToolAction }: Props) {
   }, []);
 
   const templates = FEATURED_TEMPLATES.map((spec) => ({ spec, item: items.get(spec.rel) ?? null })).filter(
-    (entry): entry is { spec: FeaturedTemplateSpec; item: DesignLibraryItem } => entry.item !== null,
+    (entry): entry is { spec: FeaturedTemplateSpec; item: DesignLibraryItem } =>
+      entry.item !== null && COPYABLE_ALLOWED_USE.has(entry.item.allowed_use),
   );
   const showTemplates = catalogAvailable && templates.length > 0;
 

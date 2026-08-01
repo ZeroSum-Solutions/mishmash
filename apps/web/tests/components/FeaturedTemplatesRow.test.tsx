@@ -150,6 +150,31 @@ describe('FeaturedTemplatesRow', () => {
     expect(onOpenProject).not.toHaveBeenCalled();
   });
 
+  it('excludes a featured card whose catalog item is not copyable, even when present', async () => {
+    const [baseGroup] = CATALOG.groups;
+    if (!baseGroup) throw new Error('CATALOG must have at least one group');
+    const restrictedCatalog: DesignLibraryCatalog = {
+      ...CATALOG,
+      groups: [
+        {
+          ...baseGroup,
+          items: baseGroup.items.map((item) =>
+            item.rel === '01 UI8 Kits/dwell' ? { ...item, allowed_use: 'human-local-only' } : item,
+          ),
+        },
+      ],
+    };
+    fetchDesignLibraryCatalog.mockResolvedValue({ ok: true, catalog: restrictedCatalog });
+    render(<FeaturedTemplatesRow onOpenProject={vi.fn()} onToolAction={vi.fn()} />);
+
+    const templateCards = await screen.findAllByTestId('featured-template-card');
+    expect(templateCards).toHaveLength(3);
+    expect(screen.queryByText('Dwell')).toBeNull();
+    expect(screen.getByText('Morrow')).toBeTruthy();
+    expect(screen.getByText('Azurio')).toBeTruthy();
+    expect(screen.getByText('Core 2')).toBeTruthy();
+  });
+
   it('fires onToolAction with the right tool id for each tool card', async () => {
     const onToolAction = vi.fn();
     render(<FeaturedTemplatesRow onOpenProject={vi.fn()} onToolAction={onToolAction} />);

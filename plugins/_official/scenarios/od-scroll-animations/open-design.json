@@ -1,0 +1,105 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "od-scroll-animations",
+  "title": "Scroll animations",
+  "version": "0.1.0",
+  "publishedAt": "2026-08-01T16:00:00Z",
+  "description": "Build a site from a user's idea with scroll-linked animation woven through it: scroll-triggered reveals, pinned sections, scrubbed sequences, and parallax depth, choreographed with generated GSAP ScrollTrigger code and delivered as a single self-contained HTML file.",
+  "license": "MIT",
+  "author": {
+    "name": "MishMash",
+    "url": "https://github.com/nexu-io"
+  },
+  "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/scenarios/od-scroll-animations",
+  "tags": [
+    "scenario",
+    "first-party",
+    "scroll-animations",
+    "scroll-animation",
+    "gsap",
+    "scrolltrigger",
+    "parallax",
+    "pin",
+    "scrub",
+    "reveal"
+  ],
+  "compat": {
+    "agentSkills": [
+      {
+        "path": "./SKILL.md"
+      }
+    ]
+  },
+  "od": {
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "scenario": "scroll-animations",
+    "mode": "scenario",
+    "surface": "web",
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        },
+        {
+          "ref": "gsap-scrolltrigger"
+        }
+      ],
+      "craft": [
+        "animation-discipline",
+        "accessibility-baseline",
+        "anti-ai-slop"
+      ]
+    },
+    "pipeline": {
+      "stages": [
+        {
+          "id": "discovery",
+          "atoms": [
+            "discovery-question-form"
+          ]
+        },
+        {
+          "id": "plan",
+          "atoms": [
+            "direction-picker",
+            "todo-write"
+          ]
+        },
+        {
+          "id": "generate",
+          "atoms": [
+            "file-write",
+            "live-artifact"
+          ]
+        },
+        {
+          "id": "critique",
+          "atoms": [
+            "critique-theater"
+          ],
+          "repeat": true,
+          "until": "critique.score>=4 || iterations>=3"
+        }
+      ]
+    },
+    "capabilities": [
+      "prompt:inject",
+      "fs:write"
+    ],
+    "useCase": {
+      "query": "Build the site described by this idea with scroll-linked animation woven throughout: {{idea}}. Identify which sections should pin, scrub, reveal, or parallax as the visitor scrolls, write real GSAP ScrollTrigger code for each, respect prefers-reduced-motion, and ship as one self-contained HTML file with zero network requests.",
+      "exampleOutputs": []
+    },
+    "inputs": [
+      {
+        "name": "idea",
+        "type": "string",
+        "required": true,
+        "label": "Your idea",
+        "placeholder": "A landing page for a fintech app with a pinned hero stat, scroll-scrubbed feature reveals, and a parallax proof section..."
+      }
+    ]
+  }
+}

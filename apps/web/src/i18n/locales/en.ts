@@ -2367,8 +2367,6 @@ export const en: Dict = {
   'home.featured.tool.webShells.descriptor': 'Structured page scaffolds',
   'home.featured.tool.scrollAnimations.label': 'Scroll animations',
   'home.featured.tool.scrollAnimations.descriptor': 'GSAP ScrollTrigger motion',
-  'home.featured.tool.scrollAnimations.promptSeed':
-    'Build a scroll-driven page with GSAP ScrollTrigger: pin key sections, scrub the animation timeline to scroll position, and add a subtle parallax reveal for supporting content as the user scrolls.',
   'home.featured.tool.scrollFilm.label': 'Scroll film',
   'home.featured.tool.scrollFilm.descriptor': 'One continuous scroll-driven story',
   'studio.firstArtifactHint.title': 'Your first design is ready',

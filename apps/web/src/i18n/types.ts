@@ -3124,7 +3124,6 @@ export interface Dict {
   'home.featured.tool.webShells.descriptor': string;
   'home.featured.tool.scrollAnimations.label': string;
   'home.featured.tool.scrollAnimations.descriptor': string;
-  'home.featured.tool.scrollAnimations.promptSeed': string;
   'home.featured.tool.scrollFilm.label': string;
   'home.featured.tool.scrollFilm.descriptor': string;
   'studio.firstArtifactHint.title': string;

@@ -11,7 +11,7 @@
 // routes/static-resource.ts.
 
 import fs from 'node:fs';
-import { readFile, readdir, realpath } from 'node:fs/promises';
+import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -131,6 +131,36 @@ async function withinReal(base: string, target: string): Promise<boolean> {
     return false;
   }
   return targetReal === baseReal || targetReal.startsWith(baseReal + path.sep);
+}
+
+// Stricter than withinReal: containment alone is not enough for a copy
+// source. An in-root symlink -- e.g. a catalog item folder that is itself a
+// symlink to a DIFFERENT, more-restricted collection elsewhere inside the
+// same library root, or a rel path with a symlinked intermediate directory
+// -- has a realpath that still resolves inside the root, so withinReal
+// passes it. But the bytes actually copied would belong to whatever the
+// symlink(s) point at, not to the catalog item the caller validated
+// allowed_use against: a licensed-tier rel could silently serve up
+// restricted-tier bytes.
+//
+// This requires the resolved target to be a real directory (not a symlink,
+// not a special file) AND requires that walking from the root's OWN
+// realpath by the exact same lexical relative path lands on the target's
+// realpath -- i.e. no symlink anywhere in the `rel` portion of the path, at
+// the leaf or in any intermediate segment. Comparing against `root`'s
+// realpath rather than `root` itself is deliberate: `root` can sit behind an
+// OS-level symlink with no bearing on this check (e.g. macOS's `/var` ->
+// `/private/var`, which every tmpdir-backed fixture resolves through) and
+// that must not be conflated with a symlink inside the library.
+async function isRealDirectoryWithNoSymlinkIndirection(root: string, target: string): Promise<boolean> {
+  const info = await lstat(target).catch(() => null);
+  if (!info || info.isSymbolicLink() || !info.isDirectory()) return false;
+  const relFromRoot = path.relative(root, target);
+  if (relFromRoot.startsWith('..')) return false;
+  const rootReal = await realpath(root).catch(() => null);
+  const targetReal = await realpath(target).catch(() => null);
+  if (!rootReal || !targetReal) return false;
+  return path.join(rootReal, relFromRoot) === targetReal;
 }
 
 export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLibraryRoutesDeps) {
@@ -266,7 +296,14 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
     if (!fs.existsSync(target)) {
       return res.status(404).json({ error: 'path not found' });
     }
-    if (!(await withinReal(root, target))) {
+    // Copy sources need the stricter no-symlink-indirection check, not mere
+    // realpath containment -- see isRealDirectoryWithNoSymlinkIndirection's
+    // docblock. copyDirectoryContents also lstat-checks this same directory
+    // again immediately before walking it (its own entry point, guarding
+    // its other caller); this check is what turns that into a clean 400
+    // instead of a generic 422/500 for this route, and narrows the TOCTOU
+    // window between validation and copy.
+    if (!(await isRealDirectoryWithNoSymlinkIndirection(root, target))) {
       return res.status(400).json({ error: 'invalid path' });
     }
 
