@@ -126,6 +126,7 @@ const HIDDEN_FLOW_ROSTER = [
   'od-plugin-contribute-open-design',
   'od-plugin-publish-github',
   'od-react-export',
+  'od-scroll-film',
   'od-share-to-community',
   'od-tune-collab',
   'od-vue-export',
