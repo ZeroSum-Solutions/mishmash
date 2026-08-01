@@ -2865,22 +2865,35 @@ export type DesignLibraryCatalogResult =
   | { ok: true; catalog: DesignLibraryCatalog }
   | { ok: false; notFound: boolean; message: string };
 
-// A 200 body must actually look like a catalog before consumers iterate it —
-// `groups` an array of groups whose `items` are arrays. Without this gate a
-// generic 200 stub (or a proxy answering `{}` for every route) reaches
-// consumers as `ok: true` and the first `for (const group of catalog.groups)`
-// throws.
+// A 200 body must actually look like a catalog before consumers use it.
+// Without this gate a generic 200 stub (or a proxy answering `{}` for every
+// route) reaches consumers as `ok: true` and the first
+// `for (const group of catalog.groups)` throws. The item check covers every
+// field consumers dereference in a throwing way (`domains` is iterated) or
+// branch on for rights decisions (`rel`, `allowed_use`) — a partial item like
+// `{}` must fail the gate, not crash DesignLibrarySection.
+function isDesignLibraryItemShape(item: unknown): boolean {
+  if (typeof item !== 'object' || item === null) return false;
+  const candidate = item as { id?: unknown; label?: unknown; rel?: unknown; domains?: unknown; allowed_use?: unknown };
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.label === 'string' &&
+    typeof candidate.rel === 'string' &&
+    Array.isArray(candidate.domains) &&
+    typeof candidate.allowed_use === 'string'
+  );
+}
+
 function isDesignLibraryCatalogShape(payload: unknown): payload is DesignLibraryCatalog {
   if (typeof payload !== 'object' || payload === null) return false;
   const groups = (payload as { groups?: unknown }).groups;
   return (
     Array.isArray(groups) &&
-    groups.every(
-      (group) =>
-        typeof group === 'object' &&
-        group !== null &&
-        Array.isArray((group as { items?: unknown }).items),
-    )
+    groups.every((group) => {
+      if (typeof group !== 'object' || group === null) return false;
+      const items = (group as { items?: unknown }).items;
+      return Array.isArray(items) && items.every(isDesignLibraryItemShape);
+    })
   );
 }
 

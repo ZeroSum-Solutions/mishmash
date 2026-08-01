@@ -1097,9 +1097,42 @@ describe('fetchDesignLibraryCatalog', () => {
     expect(result.ok).toBe(false);
   });
 
+  it('returns ok:false when an item lacks the load-bearing fields (terra r3 reproduction)', async () => {
+    // `{ groups: [{ items: [{}] }] }` passed the first, groups-only gate;
+    // DesignLibrarySection then threw iterating the missing `item.domains`.
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({ groups: [{ items: [{}] }] }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )));
+    const result = await fetchDesignLibraryCatalog();
+    expect(result.ok).toBe(false);
+  });
+
+  it('returns ok:false when an item has domains that is not an array', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({
+        groups: [{
+          title: 'x', folder: 'x', blurb: '',
+          items: [{ id: 'a', label: 'A', rel: 'g/a', thumb: null, kind: 'k', files: 1, size: '1 MB', category: 'g', domains: 'web', allowed_use: 'own-code' }],
+        }],
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )));
+    const result = await fetchDesignLibraryCatalog();
+    expect(result.ok).toBe(false);
+  });
+
   it('returns the catalog for a well-formed body', async () => {
     const catalog = {
-      library: 'L', rights_ledger: 'r', note: 'n', total_collections: 0, root: '/tmp/x', groups: [],
+      library: 'L', rights_ledger: 'r', note: 'n', total_collections: 1, root: '/tmp/x',
+      groups: [{
+        title: 'UI8 Kits', folder: '01 UI8 Kits', blurb: 'Purchased kits.',
+        items: [{
+          id: 'dwell', label: 'Dwell', rel: '01 UI8 Kits/dwell', thumb: '.catalog/thumbs/dwell.jpg',
+          kind: 'Next.js template', files: 40, size: '20 MB', category: '01 UI8 Kits',
+          domains: ['real-estate'], allowed_use: 'licensed-source-review',
+        }],
+      }],
     };
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(catalog), {
       status: 200,
