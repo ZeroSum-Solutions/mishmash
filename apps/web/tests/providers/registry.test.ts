@@ -1108,6 +1108,48 @@ describe('fetchDesignLibraryCatalog', () => {
     expect(result.ok).toBe(false);
   });
 
+  it('returns ok:false when group metadata is not strings (terra r4 finding 1)', async () => {
+    // A valid item inside a group whose title/folder/blurb are objects used to
+    // pass the gate; React then threw rendering `group.title` as a child.
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({
+        library: 'L', rights_ledger: 'r', note: 'n', total_collections: 1, root: '/tmp/x',
+        groups: [{
+          title: {}, folder: {}, blurb: {},
+          items: [{ id: 'a', label: 'A', rel: 'g/a', thumb: null, kind: 'k', files: 1, size: '1 MB', category: 'g', domains: ['web'], allowed_use: 'own-code' }],
+        }],
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )));
+    const result = await fetchDesignLibraryCatalog();
+    expect(result.ok).toBe(false);
+  });
+
+  it('returns ok:false when item render/consumer fields are mistyped (terra r4 finding 2)', async () => {
+    // thumb:{} threw `thumb.split is not a function` in designLibraryThumbUrl;
+    // kind/files/size/domains-element objects threw as invalid React children.
+    const base = { id: 'a', label: 'A', rel: 'g/a', thumb: null, kind: 'k', files: 1, size: '1 MB', category: 'g', domains: ['web'], allowed_use: 'own-code' };
+    for (const overrides of [
+      { thumb: {} },
+      { kind: {} },
+      { files: {} },
+      { size: {} },
+      { category: {} },
+      { domains: [{}] },
+      { duplicate_of: {} },
+    ]) {
+      vi.stubGlobal('fetch', vi.fn(async () => new Response(
+        JSON.stringify({
+          library: 'L', rights_ledger: 'r', note: 'n', total_collections: 1, root: '/tmp/x',
+          groups: [{ title: 'x', folder: 'x', blurb: '', items: [{ ...base, ...overrides }] }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )));
+      const result = await fetchDesignLibraryCatalog();
+      expect(result.ok, `override ${JSON.stringify(overrides)} must fail the gate`).toBe(false);
+    }
+  });
+
   it('returns ok:false when an item has domains that is not an array', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(
       JSON.stringify({

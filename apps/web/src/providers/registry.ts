@@ -2855,7 +2855,12 @@ export async function fetchLibraryConnection(): Promise<LibraryConnectionStatus 
 
 // --- Design Library ----------------------------------------------------------
 
-import type { DesignLibraryCatalog, DesignLibraryStartProjectResponse } from '@open-design/contracts';
+import type {
+  DesignLibraryCatalog,
+  DesignLibraryGroup,
+  DesignLibraryItem,
+  DesignLibraryStartProjectResponse,
+} from '@open-design/contracts';
 
 // Read-only browse of the local curated reference-asset library
 // (apps/daemon/src/routes/design-library.ts). Discriminated result (not a
@@ -2868,32 +2873,57 @@ export type DesignLibraryCatalogResult =
 // A 200 body must actually look like a catalog before consumers use it.
 // Without this gate a generic 200 stub (or a proxy answering `{}` for every
 // route) reaches consumers as `ok: true` and the first
-// `for (const group of catalog.groups)` throws. The item check covers every
-// field consumers dereference in a throwing way (`domains` is iterated) or
-// branch on for rights decisions (`rel`, `allowed_use`) — a partial item like
-// `{}` must fail the gate, not crash DesignLibrarySection.
+// `for (const group of catalog.groups)` throws. The gate validates the FULL
+// `DesignLibraryCatalog` contract — every field, at every level — so the
+// predicate genuinely means what its type claims; per-field spot checks kept
+// leaving render paths that threw (objects as React children,
+// `thumb.split is not a function`). One deliberate loosening: `allowed_use`
+// is validated as `string`, not the four-tier union, because an unknown tier
+// must fail CLOSED downstream (it is not in any COPYABLE_ALLOWED_USE set, so
+// it gets zero copy affordances) rather than reject the whole catalog when
+// the daemon learns a new tier.
 function isDesignLibraryItemShape(item: unknown): boolean {
   if (typeof item !== 'object' || item === null) return false;
-  const candidate = item as { id?: unknown; label?: unknown; rel?: unknown; domains?: unknown; allowed_use?: unknown };
+  const candidate = item as Record<keyof DesignLibraryItem, unknown>;
   return (
     typeof candidate.id === 'string' &&
     typeof candidate.label === 'string' &&
     typeof candidate.rel === 'string' &&
+    (candidate.thumb === null || typeof candidate.thumb === 'string') &&
+    typeof candidate.kind === 'string' &&
+    typeof candidate.files === 'number' &&
+    typeof candidate.size === 'string' &&
+    typeof candidate.category === 'string' &&
     Array.isArray(candidate.domains) &&
-    typeof candidate.allowed_use === 'string'
+    candidate.domains.every((domain) => typeof domain === 'string') &&
+    typeof candidate.allowed_use === 'string' &&
+    (candidate.duplicate_of === undefined || typeof candidate.duplicate_of === 'string')
+  );
+}
+
+function isDesignLibraryGroupShape(group: unknown): boolean {
+  if (typeof group !== 'object' || group === null) return false;
+  const candidate = group as Record<keyof DesignLibraryGroup, unknown>;
+  return (
+    typeof candidate.title === 'string' &&
+    typeof candidate.folder === 'string' &&
+    typeof candidate.blurb === 'string' &&
+    Array.isArray(candidate.items) &&
+    candidate.items.every(isDesignLibraryItemShape)
   );
 }
 
 function isDesignLibraryCatalogShape(payload: unknown): payload is DesignLibraryCatalog {
   if (typeof payload !== 'object' || payload === null) return false;
-  const groups = (payload as { groups?: unknown }).groups;
+  const candidate = payload as Record<keyof DesignLibraryCatalog, unknown>;
   return (
-    Array.isArray(groups) &&
-    groups.every((group) => {
-      if (typeof group !== 'object' || group === null) return false;
-      const items = (group as { items?: unknown }).items;
-      return Array.isArray(items) && items.every(isDesignLibraryItemShape);
-    })
+    typeof candidate.library === 'string' &&
+    typeof candidate.rights_ledger === 'string' &&
+    typeof candidate.note === 'string' &&
+    typeof candidate.total_collections === 'number' &&
+    typeof candidate.root === 'string' &&
+    Array.isArray(candidate.groups) &&
+    candidate.groups.every(isDesignLibraryGroupShape)
   );
 }
 
