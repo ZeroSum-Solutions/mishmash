@@ -3103,6 +3103,30 @@ export interface Dict {
   'home.recommendation.browseAll': string;
   'home.recommendation.defaultProjectName': string;
   'home.recommendation.startFailed': string;
+
+  // Home featured row — UI8 template starters + tool starter cards
+  // (docs/plans/2026-08-01-ui8-kit-starters-and-home-restructure.md §Stream B)
+  'home.featured.title': string;
+  'home.featured.badge': string;
+  'home.featured.startError': string;
+  'home.featured.starting': string;
+  'home.featured.template.dwell.label': string;
+  'home.featured.template.dwell.descriptor': string;
+  'home.featured.template.morrow.label': string;
+  'home.featured.template.morrow.descriptor': string;
+  'home.featured.template.azurio.label': string;
+  'home.featured.template.azurio.descriptor': string;
+  'home.featured.template.core2.label': string;
+  'home.featured.template.core2.descriptor': string;
+  'home.featured.tool.heroCreation.label': string;
+  'home.featured.tool.heroCreation.descriptor': string;
+  'home.featured.tool.webShells.label': string;
+  'home.featured.tool.webShells.descriptor': string;
+  'home.featured.tool.scrollAnimations.label': string;
+  'home.featured.tool.scrollAnimations.descriptor': string;
+  'home.featured.tool.scrollAnimations.promptSeed': string;
+  'home.featured.tool.scrollFilm.label': string;
+  'home.featured.tool.scrollFilm.descriptor': string;
   'studio.firstArtifactHint.title': string;
   'studio.firstArtifactHint.body': string;
   'studio.firstArtifactHint.dismiss': string;

@@ -102,6 +102,7 @@ import { PluginDetailsModal } from './PluginDetailsModal';
 import { SkillDetailsModal } from './SkillDetailsModal';
 import { HomeTemplatesReveal } from './HomeTemplatesReveal';
 import { PluginsHomeSection } from './PluginsHomeSection';
+import { FeaturedTemplatesRow, type FeaturedToolId } from './FeaturedTemplatesRow';
 import type { PluginLoopSubmit } from './PluginLoopHome';
 import { localizePluginTitle } from './plugins-home/localization';
 import type { PluginUseAction } from './plugins-home/useActions';
@@ -112,6 +113,17 @@ import { RecommendedStartRegion } from './RecommendedStartRegion';
 import type { Recommendation } from '../onboarding/recommendation';
 import type { OnboardingEntry } from '../onboarding/onboarding-entry';
 import { AnimatePresence } from 'motion/react';
+
+// Plugin id each FeaturedTemplatesRow tool card binds — see
+// `handleFeaturedToolAction` below. `example-curl-field-hero` and
+// `example-web-prototype` ship today; `od-scroll-film` is Stream C's
+// bundled scenario and may not exist on a daemon that predates that merge.
+const FEATURED_TOOL_PLUGIN_ID: Record<FeaturedToolId, string> = {
+  'hero-creation': 'example-curl-field-hero',
+  'web-shells': 'example-web-prototype',
+  'scroll-animations': 'example-web-prototype',
+  'scroll-film': 'od-scroll-film',
+};
 
 export interface ActivePlugin {
   record: InstalledPluginRecord;
@@ -1785,6 +1797,33 @@ export function HomeView({
     }
   }
 
+  // Home featured row tool cards (FeaturedTemplatesRow) — same seed
+  // mechanism pickChip's 'create' group uses (usePlugin with deferApply),
+  // dispatched through a plain id → plugin-id table instead of the chip
+  // rail's own ChipAction union so the chip rail stays untouched. Each of
+  // these plugins may be missing on a given daemon (od-scroll-film ships
+  // with Stream C and lands after this row) — that surfaces the same
+  // "bundled scenario not installed" message pickChip already shows rather
+  // than throwing.
+  function handleFeaturedToolAction(toolId: FeaturedToolId) {
+    setError(null);
+    if (pluginsLoading) return;
+    const pluginId = FEATURED_TOOL_PLUGIN_ID[toolId];
+    const record = plugins.find((p) => p.id === pluginId);
+    if (!record) {
+      setError(
+        `Bundled scenario "${pluginId}" is not installed. Reinstall the daemon to restore the default plugin set.`,
+      );
+      return;
+    }
+    const promptSeed = toolId === 'scroll-animations' ? t('home.featured.tool.scrollAnimations.promptSeed') : undefined;
+    void usePlugin(record, promptSeed, {
+      projectKind: 'prototype',
+      chipId: `featured-${toolId}`,
+      deferApply: true,
+    });
+  }
+
   // Consume a one-shot Home composer chip intent (e.g. "Use in new chat" on the
   // Brands tab requesting the Prototype scenario). The entry shell keeps
   // HomeView mounted across view switches, so we react to the intent event
@@ -2241,6 +2280,10 @@ export function HomeView({
       <HomeTemplatesReveal
         enabled={!projectsLoading && projects.length === 0}
       >
+        <FeaturedTemplatesRow
+          onOpenProject={onOpenProject}
+          onToolAction={handleFeaturedToolAction}
+        />
         <PluginsHomeSection
           title={t('home.workflowsAndAssetsTitle')}
           plugins={plugins}
