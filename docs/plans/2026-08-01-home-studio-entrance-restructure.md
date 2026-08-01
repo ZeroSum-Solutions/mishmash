@@ -48,6 +48,14 @@ Split (2–1) + synthesis:
   Clone + rebrand card drives the existing `web-clone` chip via `pickChip` — the same
   path the rail uses; no new mechanism.
 - i18n: keys added/removed accordingly (`types.ts` + `en.ts`).
+- **Plugins view gallery tab** (added after the Playwright suite caught a real
+  regression): the installed tab filters to user-imported plugins, so removing the Home
+  grid left the bundled catalog with no surface anywhere. `PluginsView` gains a
+  `gallery` tab — now the default landing tab — rendering `PluginsHomeSection` in
+  gallery layout over the full catalog, with browse-registry switching to Available.
+  The Home link-out therefore lands directly on the catalog. Analytics contract
+  `CommunityGalleryClickProps.page_name` widened to `'home' | 'plugins'`, and
+  `PluginsTopClickProps.element` gains `'gallery_tab'`.
 - Deferred within phase 1: recent-card status badges (need hosting state; a Draft-only
   badge is noise — revisit in phase 3).
 

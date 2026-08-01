@@ -9,6 +9,7 @@ import {
 } from '@open-design/contracts';
 import { useAnalytics } from '../analytics/provider';
 import {
+  trackCommunityGalleryClick,
   trackPageView,
   trackPluginImportModalClick,
   trackPluginImportModalSurfaceView,
@@ -50,7 +51,7 @@ import type { PluginUseAction } from './plugins-home/useActions';
 import { AnimatePresence } from 'motion/react';
 import { navigate } from '../router';
 
-type PluginsTab = 'installed' | 'available' | 'sources' | 'team';
+type PluginsTab = 'gallery' | 'installed' | 'available' | 'sources' | 'team';
 
 const USER_SOURCE_KINDS = new Set<PluginSourceKind>([
   'user',
@@ -64,6 +65,7 @@ const USER_SOURCE_KINDS = new Set<PluginSourceKind>([
 const PLUGINS_TABS: ReadonlyArray<{
   id: PluginsTab;
 }> = [
+  { id: 'gallery' },
   { id: 'installed' },
   { id: 'available' },
   { id: 'sources' },
@@ -130,7 +132,7 @@ export function PluginsView({
   const [allInstalledPlugins, setAllInstalledPlugins] = useState<InstalledPluginRecord[]>([]);
   const [marketplaces, setMarketplaces] = useState<PluginMarketplace[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<PluginsTab>('installed');
+  const [activeTab, setActiveTab] = useState<PluginsTab>('gallery');
   const [importOpen, setImportOpen] = useState(false);
   const [pendingApplyId, setPendingApplyId] = useState<string | null>(null);
   const [pendingDuplicatePluginId, setPendingDuplicatePluginId] = useState<string | null>(null);
@@ -402,6 +404,42 @@ export function PluginsView({
 
       <div className="plugins-view__gallery">
         {loading ? <div className="plugins-view__empty">{t('pluginsView.loading')}</div> : null}
+
+        {!loading && activeTab === 'gallery' ? (
+          <PluginsHomeSection
+            title={t('pluginsView.galleryTitle')}
+            plugins={plugins}
+            loading={false}
+            activePluginId={activePlugin?.record.id ?? null}
+            pendingApplyId={pendingApplyId}
+            pendingDuplicateId={pendingDuplicatePluginId}
+            onUse={(record, action) => {
+              trackCommunityGalleryClick(analytics.track, {
+                page_name: 'plugins',
+                area: 'community_gallery',
+                element: 'use_plugin',
+                plugin_id: record.sourceMarketplaceEntryName ?? record.id,
+                plugin_type: record.marketplaceTrust ?? 'official',
+                action: action === 'use-with-query' ? 'use_with_query' : 'use',
+              });
+              void handleUsePlugin(record, action);
+            }}
+            onDuplicate={(record) => void handleDuplicatePlugin(record)}
+            onOpenDetails={(record) => {
+              trackCommunityGalleryClick(analytics.track, {
+                page_name: 'plugins',
+                area: 'community_gallery',
+                element: 'card',
+                plugin_id: record.sourceMarketplaceEntryName ?? record.id,
+                plugin_type: record.marketplaceTrust ?? 'official',
+              });
+              setDetailsRecord(record);
+            }}
+            onBrowseRegistry={() => setActiveTab('available')}
+            preferDefaultFacet
+            cardLayout="gallery"
+          />
+        ) : null}
 
         {!loading && activeTab === 'installed' ? (
           <PluginsHomeSection
@@ -795,6 +833,7 @@ function StatCard({ label, value }: { label: string; value: number }) {
 
 function pluginTabLabel(id: PluginsTab, t: ReturnType<typeof useI18n>['t']): string {
   switch (id) {
+    case 'gallery': return t('pluginsView.tab.gallery');
     case 'installed': return t('pluginsView.tab.installed');
     case 'available': return t('pluginsView.tab.available');
     case 'sources': return t('pluginsView.tab.sources');
@@ -804,6 +843,7 @@ function pluginTabLabel(id: PluginsTab, t: ReturnType<typeof useI18n>['t']): str
 
 function pluginTabHint(id: PluginsTab, t: ReturnType<typeof useI18n>['t']): string {
   switch (id) {
+    case 'gallery': return t('pluginsView.tabHint.gallery');
     case 'installed': return t('pluginsView.tabHint.installed');
     case 'available': return t('pluginsView.tabHint.available');
     case 'sources': return t('pluginsView.tabHint.sources');

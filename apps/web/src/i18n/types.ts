@@ -1317,14 +1317,17 @@ export interface Dict {
   'pluginsView.summaryAria': string;
   'pluginsView.areasAria': string;
   'pluginsView.loading': string;
+  'pluginsView.tab.gallery': string;
   'pluginsView.tab.installed': string;
   'pluginsView.tab.available': string;
   'pluginsView.tab.sources': string;
   'pluginsView.tab.team': string;
+  'pluginsView.tabHint.gallery': string;
   'pluginsView.tabHint.installed': string;
   'pluginsView.tabHint.available': string;
   'pluginsView.tabHint.sources': string;
   'pluginsView.tabHint.team': string;
+  'pluginsView.galleryTitle': string;
   'pluginsView.installedTitle': string;
   'pluginsView.installedSubtitle': string;
   'pluginsView.installedEmpty': string;

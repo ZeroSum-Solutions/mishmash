@@ -1281,10 +1281,13 @@ test('[P1] home starters gallery duplicate failure recovers without leaving Home
   await expect
     .poll(() => duplicateRequests.at(-1)?.name)
     .toBe('Duplicate Failure Plugin');
-  await expect(page).toHaveURL(/\/$/);
-  await expect(page.locator('.home-hero__error')).toContainText('Could not remix this template.');
-  await expect(page.getByTestId('home-hero-input')).toBeVisible();
-  await expect(page.getByTestId('home-hero-submit')).toBeEnabled();
+  // The gallery lives on the Plugins view now: the failure keeps the user
+  // there, surfaces the plugins-view notice, and leaves the gallery usable.
+  await expect(page).toHaveURL(/\/plugins$/);
+  await expect(page.locator('.plugins-view__notice.is-error')).toBeVisible();
+  await expect(
+    home.locator('article.plugins-home__card[data-plugin-id="duplicate-failure-plugin"]'),
+  ).toBeVisible();
 });
 
 test('[P2] home starters html details modal exposes header actions and closes from the close button', async ({ page }) => {
@@ -1782,12 +1785,10 @@ test('[P1] home starters route the picked plugin as the active driver from its d
 
   await gotoEntryHome(page);
 
-  const starterCard = page.locator('[data-plugin-id="localized-plugin"]').first();
-  await starterCard.scrollIntoViewIfNeeded();
-  // Community is a gallery: open the starter's detail modal and use it. This
-  // starter ships an example query, so the primary Use button loads the prompt
-  // and binds the plugin as the active driver (active-plugin chip); this case only
-  // asserts that chip, which appears on either Use variant.
+  // The gallery card lives on the Plugins view; openHomePluginDetails owns
+  // the navigation and scrolling. This starter ships an example query, so the
+  // primary Use button loads the prompt and binds the plugin as the active
+  // driver (active-plugin chip); this case only asserts that chip.
   await openHomePluginDetails(page, 'localized-plugin', /Localized Plugin/i);
   await page.getByTestId('plugin-details-use-localized-plugin').click();
   await expect(page.getByTestId('home-hero-active-plugin')).toBeVisible();
@@ -2374,6 +2375,8 @@ async function openStartersGallery(page: Page) {
   // that view. The old Home reveal choreography went with the Home gallery.
   await page.getByTestId('entry-nav-plugins').dispatchEvent('click');
   const gallery = page.locator('[data-testid="entry-view-plugins"][data-active="true"]');
+  // Tab state persists across view switches; pin the gallery tab explicitly.
+  await gallery.getByTestId('plugins-tab-gallery').click();
   await expect(gallery.getByTestId('plugins-home-section')).toBeVisible();
   return gallery;
 }
