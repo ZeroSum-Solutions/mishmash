@@ -1280,7 +1280,12 @@ export function EntryShell({
               </div>
             ) : null}
             <div data-testid="entry-view-design-library" data-active={view === 'design-library' ? 'true' : 'false'} {...inactiveViewProps(view === 'design-library')}>
-              <DesignLibrarySection active={view === 'design-library'} />
+              <DesignLibrarySection
+                active={view === 'design-library'}
+                onOpenProject={(projectId, conversationId) =>
+                  navigate({ kind: 'project', projectId, conversationId: conversationId ?? null, fileName: null })
+                }
+              />
             </div>
             <div data-testid="entry-view-storyboard" data-active={view === 'storyboard' ? 'true' : 'false'} {...inactiveViewProps(view === 'storyboard')}>
               <StoryboardSection active={view === 'storyboard'} />

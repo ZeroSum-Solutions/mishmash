@@ -8632,18 +8632,26 @@ async function runWhatsNew(args) {
 function printDesignLibraryHelp() {
   console.log(`Usage:
   od design-library catalog [--json]
+  od design-library start-project --rel <rel> [--name <name>] [--json]
 
 Reads the local Design Library catalog (~/Desktop/Design Assets/catalog.json
 by default, or OD_DESIGN_LIBRARY_DIR) over the same GET
 /api/design-library/catalog contract the web Design Library tab reads.
-Read-only — this command never uploads or copies library bytes.
+\`catalog\` is read-only — it never uploads or copies library bytes.
+
+\`start-project\` copies a licensed kit's files into a new managed project
+over the same POST /api/design-library/start-project contract as the web
+"Use as template" card action. Only catalog items whose allowed_use is
+licensed-source-review or own-code can be copied; every other tier 403s.
 
 Options:
+  --rel <rel>          Catalog item's rel path (e.g. "01 UI8 Kits/dwell")
+  --name <name>        Project name override (defaults to the item's label)
   --json               Print the raw response envelope
   --daemon-url <url>   Override daemon URL`);
 }
 
-// `od design-library catalog` — AGENTS.md's UI/CLI dual-track rule: every
+// `od design-library <sub>` — AGENTS.md's UI/CLI dual-track rule: every
 // capability reachable through the web UI also gets a CLI mirror, same
 // contract, same API. Mirrors the `od media <sub>` dispatch shape.
 async function runDesignLibrary(args) {
@@ -8652,14 +8660,17 @@ async function runDesignLibrary(args) {
     printDesignLibraryHelp();
     return;
   }
-  if (sub !== 'catalog') {
-    console.error(`unknown subcommand: od design-library ${sub}`);
-    printDesignLibraryHelp();
-    process.exit(1);
-  }
   const idx = args.indexOf(sub);
   const subArgs = [...args.slice(0, idx), ...args.slice(idx + 1)];
-  return runDesignLibraryCatalog(subArgs);
+  if (sub === 'catalog') {
+    return runDesignLibraryCatalog(subArgs);
+  }
+  if (sub === 'start-project') {
+    return runDesignLibraryStartProject(subArgs);
+  }
+  console.error(`unknown subcommand: od design-library ${sub}`);
+  printDesignLibraryHelp();
+  process.exit(1);
 }
 
 async function runDesignLibraryCatalog(rawArgs) {
@@ -8681,6 +8692,42 @@ async function runDesignLibraryCatalog(rawArgs) {
   if (!resp.ok) return structuredHttpFailure(resp);
   const data = await resp.json();
   process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+}
+
+async function runDesignLibraryStartProject(rawArgs) {
+  const stringFlags = new Set([...LIBRARY_STRING_FLAGS, 'rel', 'name']);
+  const flags = parseFlags(rawArgs, { string: stringFlags, boolean: LIBRARY_BOOLEAN_FLAGS });
+  if (flags.help || flags.h) {
+    printDesignLibraryHelp();
+    return;
+  }
+  const rel = typeof flags.rel === 'string' ? flags.rel : positionalArgs(rawArgs, stringFlags)[0];
+  if (!rel) {
+    console.error('Usage: od design-library start-project --rel <rel> [--name <name>]');
+    process.exit(2);
+  }
+  const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
+  const body = { rel, ...(typeof flags.name === 'string' ? { name: flags.name } : {}) };
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/design-library/start-project`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    return exitWithStructuredError({
+      code: 'daemon-not-running',
+      message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+    });
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  const data = await resp.json();
+  if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+  console.log(`Created project ${data.projectId} from ${rel}`);
+  if (data.entryFile) console.log(`Entry file: ${data.entryFile}`);
+  console.log(`Copied ${data.copiedFiles} file(s), skipped ${data.skippedFiles}.`);
+  for (const warning of data.warnings ?? []) console.log(`Warning: ${warning}`);
 }
 
 // ---------------------------------------------------------------------------

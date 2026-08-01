@@ -3306,10 +3306,17 @@ export async function startServer({
   });
 
   // Design Library — local, rights-gated browse of ~/Desktop/Design Assets
-  // (or OD_DESIGN_LIBRARY_DIR). Read-only; nothing here copies bytes into the
-  // project or the repo.
+  // (or OD_DESIGN_LIBRARY_DIR). Browse/open is read-only for every item;
+  // start-project copies bytes into a new managed project, but only for the
+  // `licensed-source-review` / `own-code` allowed_use tiers.
   registerDesignLibraryRoutes(app, {
     http: httpDeps,
+    db,
+    paths: pathDeps,
+    ids: idDeps,
+    projectStore: projectStoreDeps,
+    projectFiles: projectFileDeps,
+    conversations: conversationDeps,
   });
 
   // Storyboard — Seedance keyframe-pair workflow. Generated stills/clips

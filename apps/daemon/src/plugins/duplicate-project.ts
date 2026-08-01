@@ -1,4 +1,4 @@
-import { copyFile, lstat, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { lstat, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   InstalledPluginRecord,
@@ -6,6 +6,7 @@ import type {
 } from '@open-design/contracts';
 import { load } from 'cheerio';
 import { ensureProject } from '../projects.js';
+import { copyDirectoryContents, type CopyDirectoryState } from '../copy-directory.js';
 
 const MAX_ENTRY_BYTES = 20 * 1024 * 1024;
 const MAX_COPY_BYTES = 160 * 1024 * 1024;
@@ -31,17 +32,6 @@ interface DuplicateEntry {
   sourceRel: string;
   contentPath: string;
   html: string;
-}
-
-interface CopyState {
-  copiedFiles: number;
-  copiedBytes: number;
-  skippedFiles: number;
-  warnings: string[];
-}
-
-interface CopyOptions {
-  skipSourcePath?: string;
 }
 
 export interface DuplicatePluginExampleInput {
@@ -95,7 +85,7 @@ export async function duplicatePluginExampleIntoProject(
 
   const projectRoot = await ensureProject(input.projectsRoot, input.projectId, input.metadata);
   const entryBytes = Buffer.byteLength(entry.html, 'utf8');
-  const state: CopyState = {
+  const state: CopyDirectoryState = {
     copiedFiles: 1,
     copiedBytes: entryBytes,
     skippedFiles: 0,
@@ -105,7 +95,13 @@ export async function duplicatePluginExampleIntoProject(
     ? path.resolve(entry.contentPath)
     : null;
 
-  await copyDirectoryContents(copyRoot, projectRoot, state, skipSourcePath ? { skipSourcePath } : {});
+  await copyDirectoryContents(copyRoot, projectRoot, state, {
+    excludedDirNames: EXCLUDED_DIR_NAMES,
+    excludedFileNames: EXCLUDED_FILE_NAMES,
+    limits: { maxFiles: MAX_COPY_FILES, maxBytes: MAX_COPY_BYTES },
+    onIncomplete: throwIncompleteDuplicate,
+    ...(skipSourcePath ? { skipSourcePath } : {}),
+  });
   await writeFile(path.join(projectRoot, 'index.html'), entry.html, 'utf8');
 
   return {
@@ -408,58 +404,12 @@ function localReferencePath(value: string): string | null {
   return pathOnly && pathOnly !== '.' ? pathOnly : null;
 }
 
-async function copyDirectoryContents(
-  sourceDir: string,
-  destDir: string,
-  state: CopyState,
-  options: CopyOptions,
-): Promise<void> {
-  const entries = await readdir(sourceDir, { withFileTypes: true });
-  await mkdir(destDir, { recursive: true });
-  for (const entry of entries) {
-    if (shouldSkipEntry(entry.name, entry.isDirectory())) {
-      state.skippedFiles += 1;
-      continue;
-    }
-    const source = path.join(sourceDir, entry.name);
-    const destination = path.join(destDir, entry.name);
-    if (options.skipSourcePath && path.resolve(source) === options.skipSourcePath) {
-      continue;
-    }
-    if (entry.isSymbolicLink()) {
-      throwIncompleteDuplicate('symbolic links are not supported', path.relative(sourceDir, source) || entry.name);
-    }
-    if (entry.isDirectory()) {
-      await copyDirectoryContents(source, destination, state, options);
-      continue;
-    }
-    if (!entry.isFile()) {
-      throwIncompleteDuplicate('special files are not supported', path.relative(sourceDir, source) || entry.name);
-    }
-    if (state.copiedFiles >= MAX_COPY_FILES) {
-      throwIncompleteDuplicate('duplicate file limit would skip required files', path.relative(sourceDir, source) || entry.name);
-    }
-    const sourceInfo = await stat(source);
-    if (state.copiedBytes + sourceInfo.size > MAX_COPY_BYTES) {
-      throwIncompleteDuplicate('duplicate size limit would skip a required file', path.relative(sourceDir, source) || entry.name);
-    }
-    await mkdir(path.dirname(destination), { recursive: true });
-    await copyFile(source, destination);
-    state.copiedFiles += 1;
-    state.copiedBytes += sourceInfo.size;
-  }
-}
-
 function throwIncompleteDuplicate(reason: string, relPath: string): never {
   throw new PluginDuplicateProjectError(
     422,
     'DUPLICATE_COPY_INCOMPLETE',
     `This plugin example cannot be duplicated completely: ${reason} (${relPath}).`,
   );
-}
-
-function shouldSkipEntry(name: string, isDirectory: boolean): boolean {
-  return isDirectory ? EXCLUDED_DIR_NAMES.has(name) : EXCLUDED_FILE_NAMES.has(name);
 }
 
 function isInsidePath(root: string, candidate: string): boolean {

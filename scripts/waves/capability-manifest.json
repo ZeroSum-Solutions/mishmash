@@ -912,7 +912,8 @@
     "knownNamespaceRoutes": [
       "GET /api/design-library/catalog",
       "GET /api/design-library/thumb/:param",
-      "POST /api/design-library/open"
+      "POST /api/design-library/open",
+      "POST /api/design-library/start-project"
     ]
   },
   {

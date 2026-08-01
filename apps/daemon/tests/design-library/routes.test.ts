@@ -58,12 +58,80 @@ const canSymlink = (() => {
   }
 })();
 
+// A second synthetic catalog, used by the start-project tests below: one
+// permitted kit (licensed-source-review, two files) and one restricted item
+// (human-local-only) that must never be copyable.
+const START_PROJECT_CATALOG = {
+  library: 'Synthetic Test Library',
+  rights_ledger: 'synthetic-ledger-fixture',
+  note: 'allowed_use per collection mirrors a synthetic RIGHTS.md fixture',
+  total_collections: 2,
+  groups: [
+    {
+      title: 'Synthetic Kits',
+      folder: '01 Kits',
+      blurb: 'Synthetic kits for start-project tests.',
+      items: [
+        {
+          id: 'permitted-kit-1',
+          label: 'Permitted Kit',
+          rel: '01 Kits/permitted-kit',
+          thumb: null,
+          kind: 'HTML kit',
+          files: 2,
+          size: '1 KB',
+          category: '01 Kits',
+          domains: ['test-domain'],
+          allowed_use: 'licensed-source-review',
+        },
+        {
+          id: 'restricted-kit-1',
+          label: 'Restricted Kit',
+          rel: '01 Kits/restricted-kit',
+          thumb: null,
+          kind: 'HTML kit',
+          files: 1,
+          size: '1 KB',
+          category: '01 Kits',
+          domains: ['test-domain'],
+          allowed_use: 'human-local-only',
+        },
+        {
+          id: 'escape-kit-1',
+          label: 'Escape Kit',
+          rel: '01 Kits/escape-kit',
+          thumb: null,
+          kind: 'HTML kit',
+          files: 1,
+          size: '1 KB',
+          category: '01 Kits',
+          domains: ['test-domain'],
+          allowed_use: 'licensed-source-review',
+        },
+        {
+          id: 'symlinked-kit-1',
+          label: 'Symlinked Kit',
+          rel: '01 Kits/symlinked-kit',
+          thumb: null,
+          kind: 'HTML kit',
+          files: 2,
+          size: '1 KB',
+          category: '01 Kits',
+          domains: ['test-domain'],
+          allowed_use: 'licensed-source-review',
+        },
+      ],
+    },
+  ],
+};
+
 describe('design library routes', () => {
   let server: http.Server | null = null;
   let shutdown: (() => Promise<void> | void) | undefined;
   let fixtureDir: string | null = null;
   let outsideDir: string | null = null;
   const PREV_ROOT = process.env.OD_DESIGN_LIBRARY_DIR;
+  const PREV_MAX_FILES = process.env.OD_DESIGN_LIBRARY_COPY_MAX_FILES;
 
   afterEach(async () => {
     await Promise.resolve(shutdown?.());
@@ -82,6 +150,8 @@ describe('design library routes', () => {
     }
     if (PREV_ROOT === undefined) delete process.env.OD_DESIGN_LIBRARY_DIR;
     else process.env.OD_DESIGN_LIBRARY_DIR = PREV_ROOT;
+    if (PREV_MAX_FILES === undefined) delete process.env.OD_DESIGN_LIBRARY_COPY_MAX_FILES;
+    else process.env.OD_DESIGN_LIBRARY_COPY_MAX_FILES = PREV_MAX_FILES;
   });
 
   async function start(): Promise<string> {
@@ -102,6 +172,42 @@ describe('design library routes', () => {
     mkdirSync(thumbsDir, { recursive: true });
     writeFileSync(path.join(thumbsDir, 'synthetic-item-1.png'), Buffer.from(TINY_PNG_BASE64, 'base64'));
     return dir;
+  }
+
+  // Backs START_PROJECT_CATALOG above with real files on disk: a permitted
+  // two-file kit, a restricted one-file kit, an escape kit whose own
+  // directory entry is a symlink pointing outside the root, and a permitted
+  // kit whose contents include an internal symlinked file.
+  function makeStartProjectFixture(): { dir: string; outside: string } {
+    const dir = mkdtempSync(path.join(tmpdir(), 'od-design-library-start-project-'));
+    const outside = mkdtempSync(path.join(tmpdir(), 'od-design-library-start-project-outside-'));
+    writeFileSync(path.join(dir, 'catalog.json'), JSON.stringify(START_PROJECT_CATALOG, null, 2), 'utf8');
+
+    const kitsRoot = path.join(dir, '01 Kits');
+    mkdirSync(kitsRoot, { recursive: true });
+
+    const permittedKit = path.join(kitsRoot, 'permitted-kit');
+    mkdirSync(path.join(permittedKit, 'assets'), { recursive: true });
+    writeFileSync(path.join(permittedKit, 'index.html'), '<!doctype html><title>Permitted</title>', 'utf8');
+    writeFileSync(path.join(permittedKit, 'assets', 'app.js'), 'console.log("kit");', 'utf8');
+
+    const restrictedKit = path.join(kitsRoot, 'restricted-kit');
+    mkdirSync(restrictedKit, { recursive: true });
+    writeFileSync(path.join(restrictedKit, 'index.html'), '<!doctype html><title>Restricted</title>', 'utf8');
+
+    writeFileSync(path.join(outside, 'secret.txt'), 'secret', 'utf8');
+
+    if (canSymlink) {
+      symlinkSync(outside, path.join(kitsRoot, 'escape-kit'));
+
+      const symlinkedKit = path.join(kitsRoot, 'symlinked-kit');
+      mkdirSync(symlinkedKit, { recursive: true });
+      writeFileSync(path.join(symlinkedKit, 'index.html'), '<!doctype html><title>Symlinked</title>', 'utf8');
+      writeFileSync(path.join(outside, 'linked-target.txt'), 'asset', 'utf8');
+      symlinkSync(path.join(outside, 'linked-target.txt'), path.join(symlinkedKit, 'linked.txt'));
+    }
+
+    return { dir, outside };
   }
 
   it('round-trips the synthetic catalog with its resolved root', async () => {
@@ -247,5 +353,155 @@ describe('design library routes', () => {
       body: JSON.stringify({ rel: 'escape' }),
     });
     expect(res.status).toBe(400);
+  });
+
+  it('starts a project from a permitted kit and copies its files', async () => {
+    const fixture = makeStartProjectFixture();
+    fixtureDir = fixture.dir;
+    outsideDir = fixture.outside;
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel: '01 Kits/permitted-kit' }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as any;
+    expect(body.ok).toBe(true);
+    expect(typeof body.projectId).toBe('string');
+    expect(typeof body.conversationId).toBe('string');
+    expect(body.entryFile).toBe('index.html');
+    expect(body.copiedFiles).toBe(2);
+    expect(body.skippedFiles).toBe(0);
+    expect(body.warnings).toEqual([]);
+    expect(body.project?.id).toBe(body.projectId);
+    expect(body.project?.name).toBe('Permitted Kit');
+
+    // Confirm the files actually landed in the new project, not just that
+    // the response counters say so.
+    const filesRes = await fetch(`${daemonUrl}/api/projects/${body.projectId}/files`);
+    expect(filesRes.status).toBe(200);
+    const filesBody = await filesRes.json();
+    const filesJson = JSON.stringify(filesBody);
+    expect(filesJson).toContain('index.html');
+    expect(filesJson).toContain('app.js');
+  });
+
+  it('honors a custom project name on start-project', async () => {
+    const fixture = makeStartProjectFixture();
+    fixtureDir = fixture.dir;
+    outsideDir = fixture.outside;
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel: '01 Kits/permitted-kit', name: 'My Custom Name' }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as any;
+    expect(body.project?.name).toBe('My Custom Name');
+  });
+
+  it('403s a start-project request for a restricted allowed_use tier', async () => {
+    const fixture = makeStartProjectFixture();
+    fixtureDir = fixture.dir;
+    outsideDir = fixture.outside;
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel: '01 Kits/restricted-kit' }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('404s a start-project request for a rel unknown in the catalog', async () => {
+    const fixture = makeStartProjectFixture();
+    fixtureDir = fixture.dir;
+    outsideDir = fixture.outside;
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel: '01 Kits/does-not-exist' }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects a path-traversal start-project request with 400', async () => {
+    const fixture = makeStartProjectFixture();
+    fixtureDir = fixture.dir;
+    outsideDir = fixture.outside;
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel: '../../../../etc' }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it.runIf(canSymlink)(
+    'rejects a start-project request whose catalog item symlinks outside the root with 400',
+    async () => {
+      const fixture = makeStartProjectFixture();
+      fixtureDir = fixture.dir;
+      outsideDir = fixture.outside;
+      process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+      const daemonUrl = await start();
+
+      const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rel: '01 Kits/escape-kit' }),
+      });
+      expect(res.status).toBe(400);
+    },
+  );
+
+  it.runIf(canSymlink)(
+    'rejects a start-project copy that would skip an internal symlinked file with 422',
+    async () => {
+      const fixture = makeStartProjectFixture();
+      fixtureDir = fixture.dir;
+      outsideDir = fixture.outside;
+      process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+      const daemonUrl = await start();
+
+      const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rel: '01 Kits/symlinked-kit' }),
+      });
+      expect(res.status).toBe(422);
+    },
+  );
+
+  it('enforces the copy file cap during start-project', async () => {
+    const fixture = makeStartProjectFixture();
+    fixtureDir = fixture.dir;
+    outsideDir = fixture.outside;
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    // The permitted-kit fixture has two files; capping at one forces the
+    // copy engine's onIncomplete path without needing a 6000-file fixture.
+    process.env.OD_DESIGN_LIBRARY_COPY_MAX_FILES = '1';
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel: '01 Kits/permitted-kit' }),
+    });
+    expect(res.status).toBe(422);
   });
 });

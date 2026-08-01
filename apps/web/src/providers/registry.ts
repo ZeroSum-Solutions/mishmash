@@ -2855,7 +2855,7 @@ export async function fetchLibraryConnection(): Promise<LibraryConnectionStatus 
 
 // --- Design Library ----------------------------------------------------------
 
-import type { DesignLibraryCatalog } from '@open-design/contracts';
+import type { DesignLibraryCatalog, DesignLibraryStartProjectResponse } from '@open-design/contracts';
 
 // Read-only browse of the local curated reference-asset library
 // (apps/daemon/src/routes/design-library.ts). Discriminated result (not a
@@ -2898,6 +2898,38 @@ export async function openDesignLibraryPath(rel: string): Promise<boolean> {
     return resp.ok;
   } catch {
     return false;
+  }
+}
+
+// Copies a licensed kit's files into a new managed project (only the
+// `licensed-source-review` / `own-code` allowed_use tiers reach a "Use as
+// template" affordance that calls this — see DesignLibrarySection.tsx).
+// Discriminated result mirrors fetchDesignLibraryCatalog above.
+export type StartDesignLibraryProjectResult =
+  | { ok: true; response: DesignLibraryStartProjectResponse }
+  | { ok: false; message: string };
+
+export async function startDesignLibraryProject(
+  rel: string,
+  name?: string,
+): Promise<StartDesignLibraryProjectResult> {
+  try {
+    const resp = await fetch('/api/design-library/start-project', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(name ? { rel, name } : { rel }),
+    });
+    if (!resp.ok) {
+      const payload = (await resp.json().catch(() => null)) as { error?: string } | null;
+      return { ok: false, message: payload?.error || `Request failed (${resp.status})` };
+    }
+    const response = (await resp.json()) as DesignLibraryStartProjectResponse;
+    if (!response?.ok || !response.projectId) {
+      return { ok: false, message: 'Could not start a project from this kit.' };
+    }
+    return { ok: true, response };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
   }
 }
 

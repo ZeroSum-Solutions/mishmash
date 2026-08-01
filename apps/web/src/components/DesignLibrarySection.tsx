@@ -1,9 +1,11 @@
-// Design Library tab — read-only browse of the local curated reference-asset
-// library (apps/daemon/src/routes/design-library.ts serves it from
+// Design Library tab — browse of the local curated reference-asset library
+// (apps/daemon/src/routes/design-library.ts serves it from
 // ~/Desktop/Design Assets, or OD_DESIGN_LIBRARY_DIR). Every collection is
-// rights-gated via `allowed_use`; the only action ever offered is "Open
-// folder" in Finder — no attach/insert/copy affordance exists for any
-// category, so a restricted item can never leak into a project this way.
+// rights-gated via `allowed_use`; "Open folder" in Finder is always offered,
+// and "Use as template" (copies the kit's files into a new project) is
+// offered ONLY for the two copyable tiers, own-code and
+// licensed-source-review — every other tier stays browse/open-only, so a
+// restricted item can never leak into a project this way.
 //
 // The catalog is fetched once, lazily, the first time this tab becomes
 // active — not on app mount.
@@ -14,6 +16,7 @@ import {
   designLibraryThumbUrl,
   fetchDesignLibraryCatalog,
   openDesignLibraryPath,
+  startDesignLibraryProject,
   type DesignLibraryCatalogResult,
 } from '../providers/registry';
 import { Icon } from './Icon';
@@ -22,7 +25,13 @@ import styles from './DesignLibrarySection.module.css';
 
 interface Props {
   active: boolean;
+  /** Omit to hide "Use as template" entirely (e.g. no project-navigation host). */
+  onOpenProject?: (projectId: string, conversationId?: string) => void;
 }
+
+// Only these allowed_use tiers may be copied into a new project — mirrors
+// COPYABLE_ALLOWED_USE in apps/daemon/src/routes/design-library.ts.
+const COPYABLE_ALLOWED_USE = new Set<DesignLibraryAllowedUse>(['own-code', 'licensed-source-review']);
 
 const ALLOWED_USE_TOOLTIP_KEY = {
   'own-code': 'designLibrary.allowedUse.ownCode',
@@ -38,7 +47,7 @@ function allowedUseLabel(value: DesignLibraryAllowedUse): string {
     .join(' ');
 }
 
-export function DesignLibrarySection({ active }: Props) {
+export function DesignLibrarySection({ active, onOpenProject }: Props) {
   const t = useT();
   const [result, setResult] = useState<DesignLibraryCatalogResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -175,7 +184,7 @@ export function DesignLibrarySection({ active }: Props) {
                 </header>
                 <div className={styles.grid}>
                   {group.items.map((item) => (
-                    <DesignLibraryCard key={item.id} item={item} t={t} />
+                    <DesignLibraryCard key={item.id} item={item} t={t} onOpenProject={onOpenProject} />
                   ))}
                 </div>
               </section>
@@ -190,12 +199,30 @@ export function DesignLibrarySection({ active }: Props) {
 function DesignLibraryCard({
   item,
   t,
+  onOpenProject,
 }: {
   item: DesignLibraryItem;
   t: ReturnType<typeof useT>;
+  onOpenProject?: (projectId: string, conversationId?: string) => void;
 }) {
   const [thumbError, setThumbError] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
   const tooltip = t(ALLOWED_USE_TOOLTIP_KEY[item.allowed_use]);
+  const canUseAsTemplate = Boolean(onOpenProject) && COPYABLE_ALLOWED_USE.has(item.allowed_use);
+
+  async function handleUseAsTemplate() {
+    if (starting) return;
+    setStartError(null);
+    setStarting(true);
+    const result = await startDesignLibraryProject(item.rel);
+    setStarting(false);
+    if (!result.ok) {
+      setStartError(result.message || t('designLibrary.useAsTemplateError'));
+      return;
+    }
+    onOpenProject?.(result.response.projectId, result.response.conversationId);
+  }
 
   return (
     <article className={styles.card} data-testid="design-library-card" data-allowed-use={item.allowed_use}>
@@ -240,7 +267,19 @@ function DesignLibraryCard({
           <Icon name="folder" size={14} />
           {t('designLibrary.openFolder')}
         </button>
+        {canUseAsTemplate ? (
+          <button
+            type="button"
+            className={styles.useAsTemplateBtn}
+            onClick={handleUseAsTemplate}
+            disabled={starting}
+          >
+            <Icon name="sparkles" size={14} />
+            {starting ? t('designLibrary.useAsTemplateBusy') : t('designLibrary.useAsTemplate')}
+          </button>
+        ) : null}
       </div>
+      {startError ? <p className={styles.startError}>{startError}</p> : null}
     </article>
   );
 }
