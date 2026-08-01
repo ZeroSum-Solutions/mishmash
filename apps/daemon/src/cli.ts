@@ -195,8 +195,21 @@ const LIBRARY_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 // `od storyboard …` mirrors the Storyboard section against /api/storyboards.
 // Hoisted so the top-of-file SUBCOMMAND_MAP dispatch (which runs during
 // module evaluation) doesn't hit a temporal-dead-zone on these sets.
-const STORYBOARD_STRING_FLAGS = new Set(['daemon-url', 'title', 'file', 'shot', 'slot']);
-const STORYBOARD_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
+const STORYBOARD_STRING_FLAGS = new Set(['daemon-url', 'title', 'file', 'shot', 'slot', 'finish', 'audio']);
+// Only the negative forms are real flags — titles/transitions both default
+// to on (assemble.ts: `finish.titles ?? true`, `finish.transitions ?? true`),
+// so a positive --titles/--transitions would have nothing to override and
+// was previously accepted-but-silently-ignored. Keep --help matching this
+// set exactly: only --no-titles/--no-transitions are documented below.
+const STORYBOARD_BOOLEAN_FLAGS = new Set([
+  'help',
+  'h',
+  'json',
+  'no-titles',
+  'no-transitions',
+  'captions',
+  'no-captions',
+]);
 // `od usage …` (NM-20 cost & usage meter). Hoisted up here for the same
 // reason as LIBRARY_STRING_FLAGS above: the top-level `await
 // SUBCOMMAND_MAP[first](rest)` dispatcher runs long before the module
@@ -8689,7 +8702,8 @@ function printStoryboardHelp() {
   od storyboard get <id> [--json]
   od storyboard upload <id> --file <path> [--shot <shotId>] [--slot start|end] [--json]
   od storyboard render-shot <id> <shotId> [--json]
-  od storyboard assemble <id> [--json]
+  od storyboard assemble <id> [--finish remotion [--title "<text>"] [--no-titles]
+                               [--no-transitions] [--captions|--no-captions] [--audio <path>]] [--json]
 
 Reads/writes the same /api/storyboards contract the web Storyboard section
 uses. \`upload\` posts an image file into the hidden storyboard-media
@@ -8701,11 +8715,28 @@ the final status/output/error before printing the result. Shot creation/
 editing beyond upload (motion prompts, model/resolution/duration) is a
 web-UI flow; this CLI covers list/create/upload/render/assemble only.
 
+\`assemble\` defaults to an ffmpeg hard-cut concat of the ordered done-shot
+outputs into final.mp4 (unchanged). Pass --finish remotion to opt into the
+Remotion finishing pass instead: a title card + crossfade transitions
+between shots, and (with --audio) captions burned in from a local whisper.cpp
+transcription of the narration track — no cloud calls. --finish remotion
+defaults to titles on, transitions on, captions on only when --audio is set.
+
 Options:
-  --title <text>       Storyboard title (create only; defaults to "Untitled storyboard").
-  --file <path>        Image file to upload (upload only; .png/.jpg/.jpeg/.webp).
+  --title <text>        Storyboard title (create only; defaults to "Untitled storyboard").
+                         Also the finish title card text (assemble --finish remotion only;
+                         defaults to the storyboard's own title).
+  --file <path>         Image file to upload (upload only; .png/.jpg/.jpeg/.webp).
   --shot <shotId>       Shot to attach the uploaded frame to (upload only).
   --slot <start|end>   Which frame slot to PATCH (upload --shot only; default start).
+  --finish <remotion>   Opt into the Remotion finishing pass (assemble only; omit for the
+                         default ffmpeg concat).
+  --no-titles           Skip the title card (assemble --finish remotion only).
+  --no-transitions      Hard cuts instead of crossfades (assemble --finish remotion only).
+  --captions            Force captions on (assemble --finish remotion only; requires --audio).
+  --no-captions         Force captions off even when --audio is set (assemble --finish remotion only).
+  --audio <path>        Narration/voiceover file to burn captions from (assemble --finish remotion
+                         only; .wav/.mp3/.m4a/.aac). Not persisted as a storyboard asset.
   --json                Print the raw response envelope.
   --daemon-url <url>   Override daemon URL`);
 }
@@ -8978,12 +9009,58 @@ async function runStoryboard(args) {
   if (sub === 'assemble') {
     const id = positionals[0];
     if (!id) {
-      console.error('Usage: od storyboard assemble <id>');
+      console.error('Usage: od storyboard assemble <id> [--finish remotion ...]');
       process.exit(2);
     }
+
+    let body;
+    if (flags.finish === 'remotion') {
+      const finish = { mode: 'remotion' };
+      if (typeof flags.title === 'string') finish.title = flags.title;
+      if (flags['no-titles']) finish.titles = false;
+      if (flags['no-transitions']) finish.transitions = false;
+      if (flags.captions) finish.captions = true;
+      if (flags['no-captions']) finish.captions = false;
+      if (flags.audio) {
+        const extMatch = /\.([a-z0-9]+)$/i.exec(flags.audio);
+        const ext = extMatch ? extMatch[1].toLowerCase() : '';
+        // Same allowlist as the daemon route (STORYBOARD_FINISH_AUDIO_MIME_TYPES)
+        // — mapped from the file's OWN extension, never trusted from elsewhere.
+        const mime = ext === 'wav' ? 'audio/wav'
+          : ext === 'mp3' ? 'audio/mpeg'
+          : (ext === 'm4a' || ext === 'mp4') ? 'audio/mp4'
+          : ext === 'aac' ? 'audio/aac'
+          : null;
+        if (!mime) {
+          console.error(`unsupported --audio file extension "${ext || '(none)'}" — use .wav, .mp3, .m4a, or .aac`);
+          process.exit(2);
+        }
+        const { readFile } = await import('node:fs/promises');
+        let bytes;
+        try {
+          bytes = await readFile(flags.audio);
+        } catch (err) {
+          console.error(`could not read ${flags.audio}: ${err?.message ?? err}`);
+          process.exit(2);
+        }
+        finish.audioDataUrl = `data:${mime};base64,${bytes.toString('base64')}`;
+      }
+      body = { finish };
+    } else if (flags.finish !== undefined) {
+      console.error(
+        `unsupported --finish value "${flags.finish}" — only "remotion" is supported (omit --finish for the default ffmpeg concat)`,
+      );
+      process.exit(2);
+    }
+
     let resp;
     try {
-      resp = await fetch(`${base}/api/storyboards/${encodeURIComponent(id)}/assemble`, { method: 'POST' });
+      resp = await fetch(`${base}/api/storyboards/${encodeURIComponent(id)}/assemble`, {
+        method: 'POST',
+        ...(body
+          ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
+          : {}),
+      });
     } catch (err) {
       surfaceFetchError(err, base);
       process.exit(3);
@@ -8991,7 +9068,7 @@ async function runStoryboard(args) {
     if (!resp.ok) return structuredHttpFailure(resp);
     const data = await resp.json();
     if (flags.json) return writeJson(data);
-    console.log(`[storyboard] assembled ${data.output}`);
+    console.log(`[storyboard] assembled ${data.output} (finish: ${data.finish || 'concat'})`);
     return;
   }
 }

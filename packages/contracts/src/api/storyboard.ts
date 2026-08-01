@@ -191,9 +191,72 @@ export interface RenderStoryboardShotResponse {
   taskId: string;
 }
 
+// --- Assemble finishing pipeline (Remotion opt-in) --------------------------
+
+/**
+ * Largest narration/voiceover audio payload POST /api/storyboards/:id/assemble
+ * accepts via `finish.audioDataUrl`, in bytes. It rides the same JSON body as
+ * the rest of the assemble request (server.ts's body-size limit), so this
+ * stays well under that — a short narration track for a finishing pass has no
+ * need to approach it. Not persisted as a storyboard asset (see
+ * AssembleStoryboardFinishOptions.audioDataUrl) — used only for the one
+ * assemble call it's attached to.
+ */
+export const STORYBOARD_FINISH_AUDIO_MAX_BYTES = 32 * 1024 * 1024;
+
+/**
+ * Exact MIME types `finish.audioDataUrl` accepts. wav/mpeg/mp4(m4a)/aac cover
+ * the common narration export formats; whisper.cpp transcription re-encodes
+ * to 16kHz mono internally regardless of the source format.
+ */
+export const STORYBOARD_FINISH_AUDIO_MIME_TYPES = ['audio/wav', 'audio/x-wav', 'audio/mpeg', 'audio/mp4', 'audio/aac'] as const;
+
+export function isStoryboardFinishAudioMimeAllowed(mime: string | undefined): boolean {
+  return typeof mime === 'string' && (STORYBOARD_FINISH_AUDIO_MIME_TYPES as readonly string[]).includes(mime);
+}
+
+/**
+ * Opt-in Remotion finishing pass for POST /api/storyboards/:id/assemble.
+ * Omitting `finish` entirely (the default) keeps today's behavior: an ffmpeg
+ * hard-cut concat of the ordered done-shot outputs into final.mp4. Passing
+ * `{ mode: 'remotion', ... }` instead renders through Remotion: a title card,
+ * crossfade transitions between shots, and (when `audioDataUrl` is supplied)
+ * captions burned in from a local whisper.cpp transcription — no cloud calls.
+ */
+export interface AssembleStoryboardFinishOptions {
+  mode: 'remotion';
+  /** Show a title card at the start of the assembled video. Defaults to true. */
+  titles?: boolean;
+  /** Title card text; defaults to the storyboard's own title. */
+  title?: string;
+  /** Crossfade transitions between shots instead of hard cuts. Defaults to true. */
+  transitions?: boolean;
+  /**
+   * Burn in captions transcribed locally (whisper.cpp) from `audioDataUrl`.
+   * Requires `audioDataUrl` to be set — the request 400s otherwise. Defaults
+   * to true when `audioDataUrl` is present.
+   */
+  captions?: boolean;
+  /**
+   * `data:<mime>;base64,<payload>` narration/voiceover track — see
+   * STORYBOARD_FINISH_AUDIO_MIME_TYPES. Laid under the assembled video and,
+   * when `captions` is true, transcribed locally for the burned-in captions.
+   * Not persisted as a storyboard asset; scoped to this one assemble call.
+   */
+  audioDataUrl?: string;
+}
+
+/** POST /api/storyboards/:id/assemble request body. */
+export interface AssembleStoryboardRequest {
+  /** Omit for the existing ffmpeg concat (default, unchanged). See AssembleStoryboardFinishOptions. */
+  finish?: AssembleStoryboardFinishOptions;
+}
+
 export interface AssembleStoryboardResponse {
   /** Storyboard-project-relative path to the assembled video. */
   output: string;
+  /** Which pipeline produced `output` — 'concat' unless `finish` was set. */
+  finish: 'concat' | 'remotion';
 }
 
 export interface ExportStoryboardSliderResponse {

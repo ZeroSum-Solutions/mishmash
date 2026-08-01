@@ -2112,6 +2112,12 @@ export async function startServer({
   // image cap) by ~33%, so 48mb covers it with plenty of headroom
   // (registered before the global parser so it claims the body first).
   app.use('/api/storyboards/:id/uploads', express.json({ limit: '48mb' }));
+  // Assemble's opt-in Remotion finishing pass carries an optional narration
+  // track inline as a base64 `data:` URI (finish.audioDataUrl) — same
+  // base64-inflation math as the uploads route above
+  // (STORYBOARD_FINISH_AUDIO_MAX_BYTES, 32MiB raw), same 48mb headroom
+  // (registered before the global parser so it claims the body first).
+  app.use('/api/storyboards/:id/assemble', express.json({ limit: '48mb' }));
   app.use(express.json({ limit: '4mb' }));
   const projectPreviewScopes = createProjectPreviewScopeRegistry();
 

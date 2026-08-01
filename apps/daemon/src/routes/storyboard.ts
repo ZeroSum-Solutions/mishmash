@@ -22,6 +22,7 @@ import { lstat, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/
 import path from 'node:path';
 import type { Express } from 'express';
 import type {
+  AssembleStoryboardFinishOptions,
   Storyboard,
   StoryboardFrameRef,
   StoryboardMoodDraft,
@@ -33,6 +34,7 @@ import type {
 import { isStoryboardUploadMimeAllowed, STORYBOARD_UPLOAD_MAX_BYTES } from '@open-design/contracts';
 import type { RouteDeps } from '../server-context.js';
 import { isSafeId, mimeFor } from '../projects.js';
+import { assembleStoryboard, getDoneShots } from '../storyboards/assemble.js';
 import {
   deleteStoryboard,
   listStoryboards,
@@ -288,6 +290,53 @@ function validateMoodDraft(raw: unknown, index: number): { ok: true; value: Stor
     ...(typeof raw.output === 'string' ? { output: raw.output } : {}),
     status: raw.status as StoryboardMoodDraft['status'],
     ...(typeof raw.error === 'string' ? { error: raw.error } : {}),
+  };
+  return { ok: true, value };
+}
+
+/**
+ * Validates the optional `finish` field of POST /api/storyboards/:id/assemble.
+ * `undefined` keeps today's default ffmpeg concat behavior unchanged; any
+ * other shape must be `{ mode: 'remotion', ... }` — see
+ * AssembleStoryboardFinishOptions. Default application (titles/transitions
+ * default true, captions defaults to whether audioDataUrl is set) happens in
+ * storyboards/assemble.ts, not here — this only checks the wire shape, plus
+ * one cross-field rule enforced eagerly: `captions: true` requires
+ * `audioDataUrl` to be set on the SAME request (checked again, defensively,
+ * in storyboards/assemble.ts's runRemotionAssemble for any caller that
+ * bypasses this validator).
+ */
+function validateAssembleFinish(
+  raw: unknown,
+): { ok: true; value: AssembleStoryboardFinishOptions | undefined } | { ok: false; error: string } {
+  if (raw === undefined) return { ok: true, value: undefined };
+  if (!isPlainObject(raw)) return { ok: false, error: 'finish must be an object' };
+  if (raw.mode !== 'remotion') return { ok: false, error: 'finish.mode must be "remotion"' };
+  if (raw.titles !== undefined && typeof raw.titles !== 'boolean') {
+    return { ok: false, error: 'finish.titles must be a boolean' };
+  }
+  if (raw.title !== undefined && typeof raw.title !== 'string') {
+    return { ok: false, error: 'finish.title must be a string' };
+  }
+  if (raw.transitions !== undefined && typeof raw.transitions !== 'boolean') {
+    return { ok: false, error: 'finish.transitions must be a boolean' };
+  }
+  if (raw.captions !== undefined && typeof raw.captions !== 'boolean') {
+    return { ok: false, error: 'finish.captions must be a boolean' };
+  }
+  if (raw.audioDataUrl !== undefined && typeof raw.audioDataUrl !== 'string') {
+    return { ok: false, error: 'finish.audioDataUrl must be a string' };
+  }
+  if (raw.captions === true && !raw.audioDataUrl) {
+    return { ok: false, error: 'finish.captions requires finish.audioDataUrl' };
+  }
+  const value: AssembleStoryboardFinishOptions = {
+    mode: 'remotion',
+    ...(typeof raw.titles === 'boolean' ? { titles: raw.titles } : {}),
+    ...(typeof raw.title === 'string' ? { title: raw.title } : {}),
+    ...(typeof raw.transitions === 'boolean' ? { transitions: raw.transitions } : {}),
+    ...(typeof raw.captions === 'boolean' ? { captions: raw.captions } : {}),
+    ...(typeof raw.audioDataUrl === 'string' ? { audioDataUrl: raw.audioDataUrl } : {}),
   };
   return { ok: true, value };
 }
@@ -706,92 +755,44 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
     res.status(202).json({ taskId });
   });
 
-  // ffmpeg concat of ordered done-shot outputs -> final.mp4. Detects a
-  // missing ffmpeg binary via the same spawn call (ENOENT) rather than a
-  // separate probe.
+  // Delegates to storyboards/assemble.ts, which owns both finishing modes:
+  // the default ffmpeg hard-cut concat, and the opt-in Remotion finishing
+  // pass (title card + crossfade transitions + burned-in captions) selected
+  // via `finish: { mode: 'remotion', ... }`. This route owns request
+  // validation and the storyboard-media containment checks (the same
+  // resolveWithinStoryboardMediaDirReal/assertSafeStoryboardWriteTarget
+  // helpers every other route in this file uses) and turns the module's
+  // structured outcome into an HTTP response.
   app.post('/api/storyboards/:id/assemble', async (req, res) => {
     if (!requireLocal(req, res)) return;
     if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
     const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
     if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
 
-    const doneShots = [...storyboard.shots]
-      .sort((a, b) => a.order - b.order)
-      .filter((shot) => shot.status === 'done' && shot.output);
-    if (doneShots.length === 0) {
+    const parsedFinish = validateAssembleFinish((req.body as { finish?: unknown } | undefined)?.finish);
+    if (!parsedFinish.ok) return sendApiError(res, 400, 'BAD_REQUEST', parsedFinish.error);
+
+    // Fail fast BEFORE ensureStoryboardMediaProject — a zero-shot assemble
+    // must 400 without provisioning the hidden storyboard-media project
+    // (DB row + directory) as a side effect.
+    if (getDoneShots(storyboard).length === 0) {
       return sendApiError(res, 400, 'BAD_REQUEST', 'no rendered shots to assemble — render at least one shot first');
     }
 
     await ensureStoryboardMediaProject();
     const projectDir = resolveProjectDir(PROJECTS_DIR, STORYBOARD_MEDIA_PROJECT_ID);
 
-    // Re-validate every shot.output against the storyboard-media project
-    // dir before it ever reaches the ffmpeg concat list — PATCH's own
-    // validateShot already rejects unsafe values going forward, but this
-    // re-check covers any shot written before that validation existed and
-    // is the only containment check this route has of its own.
-    const resolvedOutputs: string[] = [];
-    for (const shot of doneShots) {
-      const resolved = await resolveWithinStoryboardMediaDirReal(projectDir, shot.output);
-      if (!resolved) {
-        return sendApiError(res, 400, 'BAD_REQUEST', `shot ${shot.id}.output escapes the storyboard project directory`);
-      }
-      resolvedOutputs.push(resolved);
-    }
+    const outcome = await assembleStoryboard({
+      storyboard,
+      projectDir,
+      runtimeDataDir: RUNTIME_DATA_DIR,
+      ...(parsedFinish.value ? { finish: parsedFinish.value } : {}),
+      resolveWithinProjectDirReal: resolveWithinStoryboardMediaDirReal,
+      assertSafeWriteTarget: assertSafeStoryboardWriteTarget,
+    });
+    if (!outcome.ok) return sendApiError(res, outcome.status, outcome.code, outcome.message);
 
-    const listFile = path.join(projectDir, `.storyboard-concat-${storyboard.id}.txt`);
-    const outputName = 'final.mp4';
-    const outputFile = path.join(projectDir, outputName);
-
-    // Both are write targets ffmpeg or this route itself will write through
-    // — refuse if either has been replaced by a symlink (never follow one),
-    // and re-validate the parent dir hasn't been symlinked out from under us.
-    if (!(await assertSafeStoryboardWriteTarget(projectDir, listFile))) {
-      return sendApiError(res, 400, 'BAD_REQUEST', 'concat list target is unsafe');
-    }
-    if (!(await assertSafeStoryboardWriteTarget(projectDir, outputFile))) {
-      return sendApiError(res, 400, 'BAD_REQUEST', 'output target is unsafe');
-    }
-
-    // ffmpeg's concat demuxer needs a text file of `file '<absolute path>'`
-    // lines; single quotes in a path must be escaped per its own grammar.
-    const listBody = resolvedOutputs
-      .map((resolved) => `file '${resolved.replace(/'/g, "'\\''")}'`)
-      .join('\n');
-    await writeFile(listFile, listBody, 'utf8');
-
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const child = spawn('ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', outputFile]);
-        let stderr = '';
-        child.stderr?.on('data', (chunk) => { stderr += String(chunk); });
-        child.on('error', (err: any) => {
-          if (err?.code === 'ENOENT') {
-            reject(Object.assign(new Error('ffmpeg-not-found'), { code: 'ENOENT' }));
-          } else {
-            reject(err);
-          }
-        });
-        child.on('close', (code) => {
-          if (code === 0) resolve();
-          else reject(new Error(stderr.trim() || `ffmpeg exited with code ${code}`));
-        });
-      });
-    } catch (err: any) {
-      if (err?.code === 'ENOENT') {
-        return sendApiError(
-          res,
-          501,
-          'INTERNAL_ERROR',
-          'ffmpeg not found on this machine. Install it (e.g. `brew install ffmpeg` on macOS) and retry.',
-        );
-      }
-      return sendApiError(res, 500, 'INTERNAL_ERROR', String(err && err.message ? err.message : err));
-    } finally {
-      await rm(listFile, { force: true });
-    }
-
-    res.json({ output: outputName });
+    res.json({ output: outcome.output, finish: outcome.finish });
   });
 
   // Writes a self-contained slider.html: the ordered shot start/end frames
