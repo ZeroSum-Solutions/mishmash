@@ -5,13 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DesignLibraryCatalog } from '@open-design/contracts';
 
 const fetchDesignLibraryCatalog = vi.fn();
+const startDesignLibraryProject = vi.fn();
 vi.mock('../../src/providers/registry', () => ({
   fetchDesignLibraryCatalog: (...args: unknown[]) => fetchDesignLibraryCatalog(...(args as [])),
   designLibraryThumbUrl: (thumb: string) => `/api/design-library/thumb/${thumb.split('/').pop()}`,
-}));
-
-const startDesignLibraryProject = vi.fn();
-vi.mock('../../src/components/home-featured/api', () => ({
   startDesignLibraryProject: (...args: unknown[]) => startDesignLibraryProject(...(args as [])),
 }));
 
@@ -129,8 +126,7 @@ describe('FeaturedTemplatesRow', () => {
   it('starts a project from a template card and opens it on success', async () => {
     startDesignLibraryProject.mockResolvedValue({
       ok: true,
-      projectId: 'proj-123',
-      conversationId: 'conv-1',
+      response: { ok: true, projectId: 'proj-123', conversationId: 'conv-1' },
     });
     const onOpenProject = vi.fn();
     render(<FeaturedTemplatesRow onOpenProject={onOpenProject} onToolAction={vi.fn()} />);
@@ -143,7 +139,7 @@ describe('FeaturedTemplatesRow', () => {
   });
 
   it('shows an error toast and does not navigate when starting a template project fails', async () => {
-    startDesignLibraryProject.mockResolvedValue({ ok: false, status: 500, message: 'boom' });
+    startDesignLibraryProject.mockResolvedValue({ ok: false, message: 'boom' });
     const onOpenProject = vi.fn();
     render(<FeaturedTemplatesRow onOpenProject={onOpenProject} onToolAction={vi.fn()} />);
 

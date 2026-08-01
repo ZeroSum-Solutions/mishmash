@@ -4,8 +4,8 @@
 // Two groups in one row:
 //   1. Four UI8 kit template cards. Thumbs + rights metadata come from the
 //      design-library catalog; clicking a card copies the kit into a new
-//      project via `startDesignLibraryProject` (home-featured/api.ts — see
-//      its MERGE NOTE) and opens it.
+//      project via `startDesignLibraryProject` (providers/registry) and
+//      opens it.
 //   2. Four tool cards that seed the Home composer with a plugin + prompt
 //      brief, the same bind mechanism the HomeHero chip rail uses
 //      (`usePlugin`/`requestActivePlugin` in HomeView) — dispatched here
@@ -17,8 +17,7 @@
 
 import { useEffect, useState } from 'react';
 import type { DesignLibraryItem } from '@open-design/contracts';
-import { designLibraryThumbUrl, fetchDesignLibraryCatalog } from '../providers/registry';
-import { startDesignLibraryProject } from './home-featured/api';
+import { designLibraryThumbUrl, fetchDesignLibraryCatalog, startDesignLibraryProject } from '../providers/registry';
 import { Icon, type IconName } from './Icon';
 import { Toast } from './Toast';
 import { useT } from '../i18n';
@@ -157,7 +156,7 @@ export function FeaturedTemplatesRow({ onOpenProject, onToolAction }: Props) {
         setError(t('home.featured.startError'));
         return;
       }
-      onOpenProject(result.projectId);
+      onOpenProject(result.response.projectId);
     } catch {
       setError(t('home.featured.startError'));
     } finally {
