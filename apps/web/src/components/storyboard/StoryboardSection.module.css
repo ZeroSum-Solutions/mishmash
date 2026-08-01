@@ -101,7 +101,9 @@
   background: var(--bg-panel);
 }
 .moodLaneToggle {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   padding: 12px 16px;
   text-align: left;
@@ -111,6 +113,23 @@
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
+}
+.moodLaneTeaser {
+  flex: 1;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.moodLaneChevron {
+  margin-left: auto;
+  color: var(--text-soft);
+  transition: transform var(--dur-quick, 120ms) var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1));
+}
+.moodLaneToggle[aria-expanded='true'] .moodLaneChevron {
+  transform: rotate(180deg);
 }
 .moodLaneBody {
   padding: 0 16px 16px;
@@ -156,58 +175,75 @@
   white-space: nowrap;
 }
 
-/* --- shot lane --- */
+/* --- shots section (compact rows + details drawer; PRD C4 outcome 1) --- */
 
-.shotLane {
-  display: flex;
-  gap: 16px;
-  overflow-x: auto;
-  padding-bottom: 8px;
-}
-
-.shotCard {
-  flex: 0 0 300px;
+.shotsSection {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--bg-panel);
+  gap: 12px;
 }
-.shotCardHead {
+.shotsSectionHead {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-.shotCardIndex {
-  font-size: 12px;
+.shotsHeading {
+  margin: 0;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--text-muted);
-}
-.shotCardHeadActions {
-  display: flex;
-  gap: 4px;
-}
-.shotCardHeadActions button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-soft);
-  cursor: pointer;
-}
-.shotCardHeadActions button:hover {
-  background: var(--border);
   color: var(--text);
 }
-.shotCardHeadActions button:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
+/* Grok design critique G8: lives inline with the "+ Add shot" /
+   "Add shots from images" controls (in .shotQuickAdd) now, not opposite the
+   section heading — same dashed-outline treatment so the whole "blank vs.
+   template vs. brief" choice reads as one group. */
+.moreStartOptionsToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius, 8px);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.moreStartOptionsToggle:hover {
+  color: var(--text);
+  border-color: var(--text-soft);
+}
+.emptyShotsHelper {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+/* Grok design critique G1: the quiet "1 · 2 · 3" flow line shown only on a
+   genuinely empty storyboard. */
+.flowHint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.shotList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shotQuickAdd {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* --- shot editor (ShotCard.tsx, rendered inside ShotDetailsDrawer) --- */
+
+.shotCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .shotFrames {
@@ -228,12 +264,27 @@
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
-.shotFrameThumb {
+/* Grok design critique G6: each frame column gets a 16:9 "well" FIRST —
+   real thumbnail, dashed-empty box, or a spinner while generating into it —
+   with Generate/Upload/Derive as secondary actions underneath, instead of a
+   bare button stack with no preview surface. */
+.frameWell {
   width: 100%;
-  aspect-ratio: 1;
+  aspect-ratio: 16 / 9;
   object-fit: cover;
   border-radius: 8px;
   background: #000;
+}
+.frameWellEmpty {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--bg-muted);
+  color: var(--text-faint);
 }
 .shotFrameActions {
   display: flex;
@@ -297,20 +348,39 @@
   resize: vertical;
 }
 
+/* Grok design critique e3: model used to sit next to duration in one row
+   and truncated mid-token ("seedance-2.0 1080p |") — it now gets its own
+   full-width row, with duration + Render on a second row underneath. */
 .renderControls {
   display: flex;
-  gap: 6px;
-  align-items: center;
+  flex-direction: column;
+  gap: 8px;
 }
-.renderControls select {
-  flex: 1;
-  min-width: 0;
+.modelSelect {
+  width: 100%;
   height: 30px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--bg-panel);
   color: var(--text);
   font-size: 11px;
+}
+.durationRenderRow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.durationRenderRow select {
+  flex: 0 0 72px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 11px;
+}
+.durationRenderRow button {
+  flex: 1;
 }
 
 .shotStatusLine {
@@ -328,17 +398,15 @@
 }
 
 .addShotButton {
-  flex: 0 0 140px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  min-height: 200px;
+  padding: 10px 14px;
   border: 1px dashed var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius, 8px);
   background: transparent;
   color: var(--text-muted);
+  font-size: 12px;
   cursor: pointer;
 }
 .addShotButton:hover {
@@ -347,20 +415,16 @@
 }
 
 .addShotsButton {
-  flex: 0 0 140px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  min-height: 200px;
-  padding: 8px;
+  padding: 10px 14px;
   border: 1px dashed var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius, 8px);
   background: transparent;
   color: var(--text-muted);
-  font-size: 11px;
-  text-align: center;
+  font-size: 12px;
+  text-align: left;
   cursor: pointer;
 }
 .addShotsButton:hover,

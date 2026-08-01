@@ -1,13 +1,16 @@
-// One storyboard shot: start/end keyframe slots, a motion-only prompt, and
-// render controls. Data fetching/persistence lives in the parent
-// (StoryboardEditor) — this component only renders state and calls back up,
-// which keeps the enablement/gating state machine (see shot-editor-state.ts)
-// testable without mocking network calls.
+// One storyboard shot's full editor: start/end keyframe slots, a
+// motion-only prompt, and render controls. Rendered as the body of
+// ShotDetailsDrawer.tsx (opened per shot from its compact ShotRow.tsx summary
+// row) — shot-level actions that don't need the full editor (move,
+// duplicate, delete) live on ShotRow instead, not here. Data
+// fetching/persistence lives in the parent (StoryboardEditor) — this
+// component only renders state and calls back up, which keeps the
+// enablement/gating state machine (see shot-editor-state.ts) testable
+// without mocking network calls.
 
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
-import type { StoryboardFrameRef, StoryboardShot } from '@open-design/contracts';
+import type { StoryboardShot } from '@open-design/contracts';
 import { Button } from '@open-design/components';
-import { Icon } from '../Icon';
 import { useT } from '../../i18n';
 import { findMediaModel, type MediaModel } from '../../media/models';
 import {
@@ -17,12 +20,12 @@ import {
   isModelConfigured,
   resolutionForModelId,
 } from './model-defaults';
-import { computeShotEditorState } from './shot-editor-state';
+import { Icon } from '../Icon';
+import { computeRenderButtonMode, computeShotDisplayStatus, computeShotEditorState } from './shot-editor-state';
 import styles from './StoryboardSection.module.css';
 
 export interface ShotCardProps {
   shot: StoryboardShot;
-  index: number;
   previousShot: StoryboardShot | null;
   imageModels: MediaModel[];
   i2iImageModels: MediaModel[];
@@ -37,26 +40,31 @@ export interface ShotCardProps {
   onUploadFile: (slot: 'start' | 'end', file: File) => void;
   onFieldChange: (patch: Partial<StoryboardShot>) => void;
   onRender: () => void;
-  onDuplicate: () => void;
-  onDelete: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  canMoveUp: boolean;
-  canMoveDown: boolean;
 }
 
 function modelLabel(model: MediaModel, configured: ConfiguredProviderMap, t: ReturnType<typeof useT>): string {
   return isModelConfigured(model, configured) ? model.label : `${model.label} ${t('storyboard.needsApiKey')}`;
 }
 
-function FrameThumb({ frame, url }: { frame: StoryboardFrameRef; url: string }) {
-  return <img className={styles.shotFrameThumb} src={url} alt="" />;
+/**
+ * A 16:9 "well" for a frame slot (grok design critique G6): the real
+ * thumbnail once a frame exists, a dashed empty box otherwise, or a spinner
+ * in that same box while a frame is being generated into this specific
+ * slot. `busy` here is already slot-scoped by the caller (busy && no frame
+ * in THIS slot) — see the two call sites below.
+ */
+function FrameWell({ url, generating }: { url: string | null; generating: boolean }) {
+  if (url) return <img className={styles.frameWell} src={url} alt="" />;
+  return (
+    <div className={styles.frameWellEmpty} aria-hidden>
+      {generating ? <Icon name="spinner" size={18} /> : null}
+    </div>
+  );
 }
 
 export function ShotCard(props: ShotCardProps) {
   const {
     shot,
-    index,
     previousShot,
     imageModels,
     i2iImageModels,
@@ -71,15 +79,14 @@ export function ShotCard(props: ShotCardProps) {
     onUploadFile,
     onFieldChange,
     onRender,
-    onDuplicate,
-    onDelete,
-    onMoveUp,
-    onMoveDown,
-    canMoveUp,
-    canMoveDown,
   } = props;
   const t = useT();
   const state = computeShotEditorState(shot, previousShot);
+  // Shared with ShotRow.tsx (react review R5) so the two never disagree on
+  // when the primary action reads "Render" vs "Rendering…" vs "Retry".
+  const renderMode = computeRenderButtonMode(state, computeShotDisplayStatus(shot, busy));
+  const renderLabel =
+    renderMode === 'retry' ? t('storyboard.retry') : renderMode === 'rendering' ? t('storyboard.rendering') : t('storyboard.render');
   // Keyframe pairs (start + end frame) only render through the Volcengine /
   // OpenRouter Seedance 2.0 models that declare 'kf' — the daemon 400s an
   // endImage sent against any other model (apps/daemon/src/media/index.ts).
@@ -139,24 +146,6 @@ export function ShotCard(props: ShotCardProps) {
 
   return (
     <article className={styles.shotCard} data-testid="shot-card" data-shot-status={shot.status}>
-      <header className={styles.shotCardHead}>
-        <span className={styles.shotCardIndex}>{t('storyboard.shotLabel', { number: index + 1 })}</span>
-        <div className={styles.shotCardHeadActions}>
-          <button type="button" onClick={onMoveUp} disabled={!canMoveUp} aria-label={t('storyboard.moveShotUp')}>
-            <Icon name="chevron-left" size={14} />
-          </button>
-          <button type="button" onClick={onMoveDown} disabled={!canMoveDown} aria-label={t('storyboard.moveShotDown')}>
-            <Icon name="chevron-right" size={14} />
-          </button>
-          <button type="button" onClick={onDuplicate} aria-label={t('storyboard.duplicateShot')}>
-            <Icon name="copy" size={14} />
-          </button>
-          <button type="button" onClick={onDelete} aria-label={t('storyboard.deleteShot')}>
-            <Icon name="trash" size={14} />
-          </button>
-        </div>
-      </header>
-
       <div className={styles.shotFrames}>
         <div
           className={`${styles.shotFrameSlot}${dragOverSlot === 'start' ? ` ${styles.shotFrameSlotDragOver}` : ''}`}
@@ -166,42 +155,40 @@ export function ShotCard(props: ShotCardProps) {
           onDrop={(e) => handleSlotDrop('start', e)}
         >
           <span className={styles.shotFrameSlotLabel}>{t('storyboard.startFrame')}</span>
+          <FrameWell url={shot.startFrame ? frameUrl(shot.startFrame.path) : null} generating={busy && !shot.startFrame} />
           {shot.startFrame ? (
-            <>
-              <FrameThumb frame={shot.startFrame} url={frameUrl(shot.startFrame.path)} />
-              <div className={styles.shotFrameActions}>
-                <Button
-                  type="button"
-                  variant="subtle"
-                  disabled={busy}
-                  onClick={() => { setStartDialog('iterate'); setStartModel(i2iImageModels[0]?.id ?? ''); }}
-                >
-                  {t('storyboard.iterate')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="subtle"
-                  disabled={busy}
-                  onClick={() => { setStartDialog('replace'); setStartModel(imageModels[0]?.id ?? ''); }}
-                >
-                  {t('storyboard.replace')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="subtle"
-                  disabled={busy}
-                  data-testid="start-frame-upload-button"
-                  onClick={() => startFileInputRef.current?.click()}
-                >
-                  {t('storyboard.uploadImage')}
-                </Button>
-              </div>
-            </>
+            <div className={styles.shotFrameActions}>
+              <Button
+                type="button"
+                variant="subtle"
+                disabled={busy}
+                onClick={() => { setStartDialog('iterate'); setStartModel(i2iImageModels[0]?.id ?? ''); }}
+              >
+                {t('storyboard.iterate')}
+              </Button>
+              <Button
+                type="button"
+                variant="subtle"
+                disabled={busy}
+                onClick={() => { setStartDialog('replace'); setStartModel(imageModels[0]?.id ?? ''); }}
+              >
+                {t('storyboard.replace')}
+              </Button>
+              <Button
+                type="button"
+                variant="subtle"
+                disabled={busy}
+                data-testid="start-frame-upload-button"
+                onClick={() => startFileInputRef.current?.click()}
+              >
+                {t('storyboard.uploadImage')}
+              </Button>
+            </div>
           ) : (
             <div className={styles.shotFrameActions}>
               <Button
                 type="button"
-                variant="primary-ghost"
+                variant="subtle"
                 disabled={busy}
                 onClick={() => { setStartDialog('generate'); setStartModel(imageModels[0]?.id ?? ''); }}
               >
@@ -227,6 +214,7 @@ export function ShotCard(props: ShotCardProps) {
           <input
             ref={startFileInputRef}
             type="file"
+            tabIndex={-1}
             accept={STORYBOARD_UPLOAD_ACCEPT}
             className={styles.hiddenFileInput}
             data-testid="start-frame-file-input"
@@ -263,19 +251,17 @@ export function ShotCard(props: ShotCardProps) {
           onDrop={(e) => handleSlotDrop('end', e)}
         >
           <span className={styles.shotFrameSlotLabel}>{t('storyboard.endFrame')}</span>
+          <FrameWell url={shot.endFrame ? frameUrl(shot.endFrame.path) : null} generating={busy && !shot.endFrame} />
           {shot.endFrame ? (
-            <>
-              <FrameThumb frame={shot.endFrame} url={frameUrl(shot.endFrame.path)} />
-              <Button
-                type="button"
-                variant="subtle"
-                disabled={busy}
-                data-testid="end-frame-upload-button"
-                onClick={() => endFileInputRef.current?.click()}
-              >
-                {t('storyboard.uploadImage')}
-              </Button>
-            </>
+            <Button
+              type="button"
+              variant="subtle"
+              disabled={busy}
+              data-testid="end-frame-upload-button"
+              onClick={() => endFileInputRef.current?.click()}
+            >
+              {t('storyboard.uploadImage')}
+            </Button>
           ) : (
             <div className={styles.shotFrameActions}>
               {supportsKeyframePairs ? (
@@ -307,6 +293,7 @@ export function ShotCard(props: ShotCardProps) {
           <input
             ref={endFileInputRef}
             type="file"
+            tabIndex={-1}
             accept={STORYBOARD_UPLOAD_ACCEPT}
             className={styles.hiddenFileInput}
             data-testid="end-frame-file-input"
@@ -346,7 +333,11 @@ export function ShotCard(props: ShotCardProps) {
       />
 
       <div className={styles.renderControls}>
+        {/* Model gets its own full-width row — squeezed next to duration it
+            was truncating mid-token (grok design critique e3); labels like
+            "seedance-2.0 1080p (OR) (needs API key)" need the room. */}
         <select
+          className={styles.modelSelect}
           value={shot.model}
           onChange={(e) => {
             const model = e.target.value;
@@ -371,25 +362,27 @@ export function ShotCard(props: ShotCardProps) {
             <option key={m.id} value={m.id}>{modelLabel(m, configured, t)}</option>
           ))}
         </select>
-        <select
-          value={shot.durationSec}
-          onChange={(e) => onFieldChange({ durationSec: Number(e.target.value) })}
-          aria-label={t('storyboard.duration')}
-        >
-          {STORYBOARD_DURATION_OPTIONS.map((sec) => (
-            <option key={sec} value={sec}>{sec}s</option>
-          ))}
-        </select>
-        <Button
-          type="button"
-          variant="primary"
-          disabled={!state.canRender || busy}
-          onClick={onRender}
-          data-testid="render-shot-button"
-          title={state.renderDisabledReason ?? undefined}
-        >
-          {state.isRendering ? t('storyboard.rendering') : t('storyboard.render')}
-        </Button>
+        <div className={styles.durationRenderRow}>
+          <select
+            value={shot.durationSec}
+            onChange={(e) => onFieldChange({ durationSec: Number(e.target.value) })}
+            aria-label={t('storyboard.duration')}
+          >
+            {STORYBOARD_DURATION_OPTIONS.map((sec) => (
+              <option key={sec} value={sec}>{sec}s</option>
+            ))}
+          </select>
+          <Button
+            type="button"
+            variant="primary"
+            disabled={!state.canRender || busy}
+            onClick={onRender}
+            data-testid="render-shot-button"
+            title={state.renderDisabledReason ?? undefined}
+          >
+            {renderLabel}
+          </Button>
+        </div>
       </div>
 
       {shot.status === 'rendering' ? (

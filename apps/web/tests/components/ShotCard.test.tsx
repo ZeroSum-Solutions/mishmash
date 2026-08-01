@@ -45,15 +45,10 @@ function renderShotCard(shot: StoryboardShot, overrides: Partial<React.Component
     onUploadFile: vi.fn(),
     onFieldChange: vi.fn(),
     onRender: vi.fn(),
-    onDuplicate: vi.fn(),
-    onDelete: vi.fn(),
-    onMoveUp: vi.fn(),
-    onMoveDown: vi.fn(),
   };
   render(
     <ShotCard
       shot={shot}
-      index={0}
       previousShot={null}
       imageModels={IMAGE_MODELS}
       i2iImageModels={I2I_MODELS}
@@ -64,8 +59,6 @@ function renderShotCard(shot: StoryboardShot, overrides: Partial<React.Component
       }}
       frameUrl={(p) => `/frame/${p}`}
       busy={false}
-      canMoveUp={false}
-      canMoveDown={false}
       {...handlers}
       {...overrides}
     />,
@@ -139,6 +132,30 @@ describe('ShotCard editor state machine', () => {
     );
     fireEvent.click(screen.getByTestId('render-shot-button'));
     expect(handlers.onRender).toHaveBeenCalledTimes(1);
+  });
+
+  // React review R5: the Render/Retry label is shared with ShotRow.tsx via
+  // computeRenderButtonMode — a failed shot that still has everything it
+  // needs to re-render reads "Retry", not "Render".
+  it('shows "Retry" (not "Render") on a failed shot that can still render', () => {
+    renderShotCard(
+      baseShot({
+        startFrame: { path: 'start.png', origin: 'generated' },
+        motionPrompt: 'motion',
+        status: 'failed',
+        error: 'daemon rejected the render',
+      }),
+    );
+    const button = screen.getByTestId('render-shot-button');
+    expect(button.textContent).toBe('Retry');
+    expect(button).not.toBeDisabled();
+  });
+
+  it('shows "Render" (not a misleading "Retry") on a failed shot missing a prerequisite', () => {
+    renderShotCard(baseShot({ status: 'failed', error: 'no start frame yet' }));
+    const button = screen.getByTestId('render-shot-button');
+    expect(button.textContent).toBe('Render');
+    expect(button).toBeDisabled();
   });
 
   it("shows 'Use previous shot's end frame' only when there is no start frame and the previous shot has an end frame", () => {

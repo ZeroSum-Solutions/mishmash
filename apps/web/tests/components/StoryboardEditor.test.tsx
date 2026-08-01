@@ -55,6 +55,17 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+/**
+ * Shot editing (frame slots, dialogs, motion prompt) now lives in
+ * ShotDetailsDrawer, opened per shot from ShotRow's "Details" toggle (PRD C4
+ * outcome 1) — tests that used to find those elements inline on the page
+ * must open the drawer first. `nth` selects which shot's row to open when a
+ * test has more than one.
+ */
+function openShotDetails(nth = 0) {
+  fireEvent.click(screen.getAllByTestId('shot-details-toggle')[nth]!);
+}
+
 describe('StoryboardEditor upload flows', () => {
   it('uploading a file into the start-frame slot PATCHes the shot with an origin: uploaded frame ref (no prompt/model fields)', async () => {
     mockReadFileAsDataUrl.mockResolvedValue('data:image/png;base64,AAAA');
@@ -65,6 +76,7 @@ describe('StoryboardEditor upload flows', () => {
     }));
 
     render(<StoryboardEditor storyboard={baseDoc()} configured={{}} onBack={() => {}} />);
+    openShotDetails();
 
     const file = new File(['abc'], 'photo.png', { type: 'image/png' });
     const input = screen.getByTestId('start-frame-file-input') as HTMLInputElement;
@@ -83,6 +95,7 @@ describe('StoryboardEditor upload flows', () => {
       value: { ...baseDoc(), ...patch, updatedAt: '2026-01-01T00:01:00.000Z' },
     }));
     render(<StoryboardEditor storyboard={baseDoc()} configured={{}} onBack={() => {}} />);
+    openShotDetails();
 
     const oversizeFile = new File(['x'], 'huge.png', { type: 'image/png' });
     Object.defineProperty(oversizeFile, 'size', { value: 33 * 1024 * 1024 });
@@ -116,8 +129,11 @@ describe('StoryboardEditor upload flows', () => {
     const input = screen.getByTestId('add-shots-from-images-input') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [fileA, fileB] } });
 
+    // One compact row per shot (ShotCard/the drawer only mounts for
+    // whichever single shot has its details open, if any — see
+    // ShotRow.tsx/ShotDetailsDrawer.tsx).
     await waitFor(() => {
-      expect(screen.getAllByTestId('shot-card')).toHaveLength(2);
+      expect(screen.getAllByTestId('shot-row')).toHaveLength(2);
     });
     expect(mockUploadStoryboardFrame).toHaveBeenCalledTimes(2);
   });
@@ -147,7 +163,7 @@ describe('StoryboardEditor upload flows', () => {
     // breaks on file B's throw, so file C's readFileAsDataUrl/upload never
     // fire at all.
     await waitFor(() => {
-      expect(screen.getAllByTestId('shot-card')).toHaveLength(1);
+      expect(screen.getAllByTestId('shot-row')).toHaveLength(1);
     });
     expect(mockReadFileAsDataUrl).toHaveBeenCalledTimes(2);
     expect(mockUploadStoryboardFrame).toHaveBeenCalledTimes(2);
@@ -164,6 +180,7 @@ describe('StoryboardEditor frame-generation failure (review finding #7)', () => 
     }));
 
     render(<StoryboardEditor storyboard={baseDoc()} configured={{}} onBack={() => {}} />);
+    openShotDetails();
 
     fireEvent.click(screen.getByText('Generate'));
     const dialog = within(screen.getByTestId('start-frame-dialog'));
@@ -172,9 +189,11 @@ describe('StoryboardEditor frame-generation failure (review finding #7)', () => 
 
     // Before the fix, this path set only `error` — status stayed 'draft'
     // and ShotCard's status==='failed' gate (see its `shot.status ===
-    // 'failed'` render branch) never rendered the message at all.
+    // 'failed'` render branch) never rendered the message at all. The row's
+    // own status badge (ShotRow.tsx, PRD C4 outcome 3) shows the same error
+    // text too, so scope the lookup to ShotCard's drawer content specifically.
     await waitFor(() => expect(screen.getByTestId('shot-card')).toHaveAttribute('data-shot-status', 'failed'));
-    expect(screen.getByText('daemon rejected the prompt')).toBeTruthy();
+    expect(within(screen.getByTestId('shot-card')).getByText('daemon rejected the prompt')).toBeTruthy();
   });
 
   it('a failed start-frame generation task (waitForMediaTask snap.status !== done) sets status:failed the same way', async () => {
@@ -190,6 +209,7 @@ describe('StoryboardEditor frame-generation failure (review finding #7)', () => 
     }));
 
     render(<StoryboardEditor storyboard={baseDoc()} configured={{}} onBack={() => {}} />);
+    openShotDetails();
 
     fireEvent.click(screen.getByText('Generate'));
     const dialog = within(screen.getByTestId('start-frame-dialog'));
@@ -197,6 +217,125 @@ describe('StoryboardEditor frame-generation failure (review finding #7)', () => 
     fireEvent.click(dialog.getByText('Generate'));
 
     await waitFor(() => expect(screen.getByTestId('shot-card')).toHaveAttribute('data-shot-status', 'failed'));
-    expect(screen.getByText('provider timed out')).toBeTruthy();
+    expect(within(screen.getByTestId('shot-card')).getByText('provider timed out')).toBeTruthy();
+  });
+});
+
+describe('StoryboardEditor shot details drawer (PRD C4 outcome 1)', () => {
+  it('opens ShotCard inside the drawer on Details, and closes it on the close button', async () => {
+    render(<StoryboardEditor storyboard={baseDoc()} configured={{}} onBack={() => {}} />);
+    expect(screen.queryByTestId('shot-card')).toBeNull();
+
+    openShotDetails();
+    expect(screen.getByTestId('shot-details-drawer')).toBeTruthy();
+    expect(screen.getByTestId('shot-card')).toBeTruthy();
+    expect(screen.getByTestId('shot-details-toggle')).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(screen.getByTestId('shot-details-close'));
+    // aria-expanded flips immediately (openShotId clears synchronously);
+    // the drawer itself stays mounted a little longer to play its exit
+    // animation (react review R8/R9) before it actually unmounts.
+    expect(screen.getByTestId('shot-details-toggle')).toHaveAttribute('aria-expanded', 'false');
+    await waitFor(() => expect(screen.queryByTestId('shot-card')).toBeNull());
+  });
+
+  // React review R7: deleting the shot whose drawer is open must not leave
+  // openShotId pointing at a shot that no longer exists.
+  it('self-heals and closes the drawer if its shot is deleted while open', async () => {
+    render(<StoryboardEditor storyboard={baseDoc()} configured={{}} onBack={() => {}} />);
+    openShotDetails();
+    expect(screen.getByTestId('shot-card')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('row-actions-trigger'));
+    fireEvent.click(within(screen.getByTestId('row-actions-menu')).getByText('Delete shot'));
+
+    await waitFor(() => expect(screen.queryByTestId('shot-card')).toBeNull());
+    expect(screen.queryAllByTestId('shot-row')).toHaveLength(0);
+  });
+});
+
+describe('StoryboardEditor page heading (react review R10)', () => {
+  it('exposes an h1-equivalent heading with the storyboard title; Shots stays an h2', () => {
+    render(<StoryboardEditor storyboard={baseDoc({ title: 'My Launch Video' })} configured={{}} onBack={() => {}} />);
+    expect(screen.getByRole('heading', { level: 1, name: 'My Launch Video' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'Shots' })).toBeTruthy();
+  });
+});
+
+describe('StoryboardEditor aria-controls wiring (react review R12)', () => {
+  it('points the "More ways to start" toggle at the actual starters panel', () => {
+    render(<StoryboardEditor storyboard={baseDoc()} configured={{}} onBack={() => {}} />);
+    const toggle = screen.getByTestId('toggle-start-options');
+    const targetId = toggle.getAttribute('aria-controls');
+    expect(targetId).toBeTruthy();
+    expect(document.getElementById(targetId!)).toBeTruthy();
+  });
+});
+
+describe('StoryboardEditor footer Assemble weight (grok design critique e6)', () => {
+  it('stays secondary (subtle) until at least one shot has rendered successfully', () => {
+    render(<StoryboardEditor storyboard={baseDoc()} configured={{}} onBack={() => {}} />);
+    const assembleButton = screen.getByText('Assemble video').closest('button')!;
+    expect(assembleButton).toHaveClass('subtle');
+    expect(assembleButton).not.toHaveClass('primary');
+    expect(assembleButton).toBeDisabled();
+  });
+
+  it('promotes to primary once a shot has a done render with output', () => {
+    render(
+      <StoryboardEditor
+        storyboard={baseDoc({ shots: [baseShot({ status: 'done', output: 'out.mp4' })] })}
+        configured={{}}
+        onBack={() => {}}
+      />,
+    );
+    const assembleButton = screen.getByText('Assemble video').closest('button')!;
+    expect(assembleButton).toHaveClass('primary');
+    expect(assembleButton).not.toBeDisabled();
+  });
+});
+
+describe('StoryboardEditor shots empty state (PRD C4 outcome 2)', () => {
+  it('creates a shot pre-filled with a template motion prompt from the empty state', () => {
+    mockPatchStoryboard.mockImplementation(async (id: string, patch: Record<string, unknown>) => ({
+      ok: true,
+      value: { ...baseDoc({ shots: [] }), ...patch, updatedAt: '2026-01-01T00:01:00.000Z' },
+    }));
+
+    render(<StoryboardEditor storyboard={baseDoc({ shots: [] })} configured={{}} onBack={() => {}} />);
+    expect(screen.queryAllByTestId('shot-row')).toHaveLength(0);
+
+    fireEvent.click(screen.getByTestId('shot-template-pan-left'));
+
+    const rows = screen.getAllByTestId('shot-row');
+    expect(rows).toHaveLength(1);
+    expect(within(rows[0]!).getByText(/pans left/)).toBeTruthy();
+  });
+
+  it('creates a shot pre-filled with the typed brief from the empty state', () => {
+    mockPatchStoryboard.mockImplementation(async (id: string, patch: Record<string, unknown>) => ({
+      ok: true,
+      value: { ...baseDoc({ shots: [] }), ...patch, updatedAt: '2026-01-01T00:01:00.000Z' },
+    }));
+
+    render(<StoryboardEditor storyboard={baseDoc({ shots: [] })} configured={{}} onBack={() => {}} />);
+
+    fireEvent.change(screen.getByTestId('shot-brief-input'), { target: { value: 'a slow push-in on the product' } });
+    fireEvent.click(screen.getByTestId('shot-brief-submit'));
+
+    const rows = screen.getAllByTestId('shot-row');
+    expect(rows).toHaveLength(1);
+    expect(within(rows[0]!).getByText('a slow push-in on the product')).toBeTruthy();
+  });
+
+  it('collapses the template/brief starters behind a toggle once a shot already exists', () => {
+    render(<StoryboardEditor storyboard={baseDoc()} configured={{}} onBack={() => {}} />);
+    const toggle = screen.getByTestId('toggle-start-options');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    // Still mounted (keep-mounted + class toggle), just collapsed.
+    expect(screen.getByTestId('shot-template-pan-left')).toBeTruthy();
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
   });
 });

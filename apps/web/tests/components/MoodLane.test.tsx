@@ -80,3 +80,57 @@ describe('MoodLane defaultModelId adoption (review finding #16)', () => {
     expect(picker().value).toBe(HIGGSFIELD_MODEL.id);
   });
 });
+
+// PRD C4 outcome 4: "collapsible inspiration strip... collapses out of the
+// way once shots exist." `hasShots` defaults to false above so the two
+// tests already passing above are unaffected.
+describe('MoodLane collapses once the storyboard has shots (PRD C4 outcome 4)', () => {
+  const toggle = () => screen.getByTestId('mood-lane-toggle');
+
+  it('starts collapsed when the storyboard already has shots at mount', () => {
+    render(<MoodLane {...baseProps({ hasShots: true })} />);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('auto-collapses once shots appear after mount', () => {
+    const { rerender } = render(<MoodLane {...baseProps({ hasShots: false })} />);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+
+    rerender(<MoodLane {...baseProps({ hasShots: true })} />);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('does not force-close a lane the user has manually reopened', () => {
+    const { rerender } = render(<MoodLane {...baseProps({ hasShots: true })} />);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(toggle());
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+
+    // hasShots staying true (e.g. an unrelated re-render) must not
+    // silently re-collapse a lane the user just reopened themselves.
+    rerender(<MoodLane {...baseProps({ hasShots: true })} />);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('keeps the mood picker mounted while collapsed (keep-mounted + class toggle, per AGENTS.md animation philosophy)', () => {
+    render(<MoodLane {...baseProps({ hasShots: true })} />);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    // Still present in the DOM, just visually collapsed — not unmounted.
+    expect(screen.getByLabelText('Model')).toBeTruthy();
+  });
+});
+
+// Grok design critique G9: the collapsed bar used to be a bare title —
+// an "empty dead slab" that still looked interactive but showed nothing.
+describe('MoodLane collapsed bar (grok design critique G9)', () => {
+  it('shows a one-line teaser only while collapsed', () => {
+    render(<MoodLane {...baseProps({ hasShots: true })} />);
+    expect(screen.getByTestId('mood-lane-toggle')).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByText('Cheap 480p sketches')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('mood-lane-toggle'));
+    expect(screen.getByTestId('mood-lane-toggle')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.queryByText('Cheap 480p sketches')).toBeNull();
+  });
+});

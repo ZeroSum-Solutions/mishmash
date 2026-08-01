@@ -4,9 +4,9 @@
 // /api/storyboards/:id; individual shot cards stay presentational (see
 // ShotCard.tsx).
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import type { Storyboard, StoryboardFrameRef, StoryboardShot } from '@open-design/contracts';
-import { Button } from '@open-design/components';
+import { Button, VisuallyHidden } from '@open-design/components';
 import { Icon } from '../Icon';
 import { useT } from '../../i18n';
 import { IMAGE_MODELS, MEDIA_ASPECTS, VIDEO_MODELS, type MediaModel } from '../../media/models';
@@ -34,7 +34,9 @@ import {
   validateStoryboardUploadFile,
 } from './model-defaults';
 import { MoodLane } from './MoodLane';
-import { ShotCard } from './ShotCard';
+import { ShotDetailsDrawer } from './ShotDetailsDrawer';
+import { ShotRow } from './ShotRow';
+import { ShotStartOptions } from './ShotStartOptions';
 import { appendShotIfAbsent, persistStoryboardMutation, type StoryboardMutator } from './storyboard-persist';
 import styles from './StoryboardSection.module.css';
 
@@ -86,6 +88,20 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
   const [shotsDragOver, setShotsDragOver] = useState(false);
   const multiFileInputRef = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Which shot's full editor should be OPEN in the ShotDetailsDrawer — at
+  // most one at a time (PRD C4 outcome 1). `showMoreStartOptions` is the
+  // "collapsed to a small menu" state for the template/brief starters once
+  // shots already exist (outcome 2) — always shown, uncollapsed, on a
+  // genuinely empty storyboard instead.
+  const [openShotId, setOpenShotId] = useState<string | null>(null);
+  // Which shot's drawer is actually RENDERED — lags openShotId by one exit
+  // animation (react review R8/R9) so ShotDetailsDrawer gets to play its
+  // exit transition instead of being unmounted synchronously the instant
+  // openShotId clears (AGENTS.md "keep mounted, toggle a class"). Synced to
+  // openShotId immediately on open (see the effect below); on close it stays
+  // put until ShotDetailsDrawer's own onExited fires.
+  const [renderedShotId, setRenderedShotId] = useState<string | null>(null);
+  const [showMoreStartOptions, setShowMoreStartOptions] = useState(false);
 
   // Always-current storyboard doc, independent of React's render/commit
   // timing. Every mutation reads/writes this ref (not the `storyboard`
@@ -110,6 +126,16 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
   }, []);
+
+  // Sync renderedShotId to openShotId immediately when OPENING (or
+  // switching directly from one shot's drawer to another's) — only closing
+  // lags, driven by ShotDetailsDrawer's own onExited once its exit
+  // animation finishes (see the state's doc comment above).
+  useEffect(() => {
+    if (openShotId) setRenderedShotId(openShotId);
+  }, [openShotId]);
+
+  const handleDrawerExited = useCallback(() => setRenderedShotId(null), []);
 
   // Every i2v-capable model from a provider the daemon can actually dispatch
   // to — not just the narrower 'kf' (Seedance keyframe-pair) subset. A
@@ -215,7 +241,60 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
     runMutation((prev) => withShots(prev, appendShotIfAbsent(prev.shots, { ...shot, order: prev.shots.length })));
   }
 
-  function duplicateShot(shot: StoryboardShot) {
+  /**
+   * Shared by ShotStartOptions' "from a template" tiles and its "from a
+   * brief" box (PRD C4 outcome 2) — both just seed a new shot's
+   * motionPrompt up front instead of leaving it blank, then reuse the exact
+   * same append mutator `addShot` above does. No daemon/provider change:
+   * the frame still gets attached afterward via the normal generate/upload
+   * flow in the shot's details drawer.
+   */
+  function addShotFromPrompt(motionPrompt: string) {
+    const model = defaultVideoModel?.id ?? '';
+    const shot = { ...newShot(0, model), motionPrompt };
+    runMutation((prev) => withShots(prev, appendShotIfAbsent(prev.shots, { ...shot, order: prev.shots.length })));
+  }
+
+  /**
+   * At most one shot's details drawer is open at a time; toggling the
+   * already-open shot closes it. Focus capture/restore on open/close now
+   * lives in ShotDetailsDrawer itself (react review R6), not here.
+   *
+   * Wrapped in useCallback with a stable identity (react review R3): passed
+   * straight through as ShotRow's onToggleDetails prop, so every row shares
+   * the SAME function reference across renders instead of each row getting
+   * a fresh per-render closure — a prerequisite for React.memo(ShotRow) to
+   * actually skip re-rendering rows a status flip didn't touch. Uses the
+   * functional setState form (not a read of `openShotId` from the closure)
+   * so it never goes stale despite the empty dependency array.
+   */
+  const toggleShotDetails = useCallback((shotId: string) => {
+    setOpenShotId((current) => (current === shotId ? null : shotId));
+  }, []);
+
+  const closeShotDetails = useCallback(() => setOpenShotId(null), []);
+
+  /**
+   * React review R7: if the shot the drawer is currently open for stops
+   * existing (deleted while its details were open), close the drawer
+   * instead of leaving openShotId pointing at nothing.
+   */
+  useEffect(() => {
+    if (openShotId && !orderedShots.some((s) => s.id === openShotId)) {
+      closeShotDetails();
+    }
+  }, [openShotId, orderedShots, closeShotDetails]);
+
+  // The three mutators below all take a shotId and resolve the CURRENT shot
+  // (if needed) from storyboardRef.current rather than closing over a shot
+  // object captured at render time — same reasoning as runMutation's own
+  // "always the latest doc" doc comment above. That's what lets them be
+  // wrapped in useCallback with an empty dependency array and stay
+  // reference-stable forever (react review R3), which is what lets
+  // React.memo(ShotRow) actually skip untouched rows.
+  const duplicateShot = useCallback((shotId: string) => {
+    const shot = storyboardRef.current.shots.find((s) => s.id === shotId);
+    if (!shot) return;
     const newId = crypto.randomUUID();
     runMutation((prev) =>
       withShots(
@@ -231,9 +310,9 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
         }),
       ),
     );
-  }
+  }, []);
 
-  function deleteShot(shotId: string) {
+  const deleteShot = useCallback((shotId: string) => {
     runMutation((prev) => {
       const remaining = prev.shots
         .filter((s) => s.id !== shotId)
@@ -241,9 +320,9 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
         .map((s, i) => ({ ...s, order: i }));
       return { ...prev, shots: remaining };
     });
-  }
+  }, []);
 
-  function moveShot(shotId: string, direction: -1 | 1) {
+  const moveShot = useCallback((shotId: string, direction: -1 | 1) => {
     runMutation((prev) => {
       const sorted = [...prev.shots].sort((a, b) => a.order - b.order);
       const index = sorted.findIndex((s) => s.id === shotId);
@@ -253,7 +332,9 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
       const reordered = sorted.map((s, i) => ({ ...s, order: i }));
       return { ...prev, shots: reordered };
     });
-  }
+  }, []);
+  const moveShotUp = useCallback((shotId: string) => moveShot(shotId, -1), [moveShot]);
+  const moveShotDown = useCallback((shotId: string) => moveShot(shotId, 1), [moveShot]);
 
   async function runFrameGeneration(
     shotId: string,
@@ -328,9 +409,9 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
       if (!aliveRef.current) return;
       // status:'failed' is what actually makes ShotCard render `error` (see
       // its status==='failed' gate) — same shape runFrameGeneration and
-      // handleRender's own failure branch below use, since an upload is a
-      // discrete pass/fail action a user needs to see and can retry, same as
-      // a render.
+      // handleRenderShot's own failure branch below use, since an upload is
+      // a discrete pass/fail action a user needs to see and can retry, same
+      // as a render.
       updateShot(shotId, { status: 'failed', error: err instanceof Error ? err.message : t('storyboard.uploadFailed') });
     } finally {
       setShotBusy(shotId, false);
@@ -396,27 +477,33 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
     if (files.length > 0) void handleAddShotsFromImages(files);
   }
 
-  async function handleRender(shot: StoryboardShot) {
-    setShotBusy(shot.id, true);
+  /**
+   * Takes a shotId (not a shot object) and useCallback-wrapped with an
+   * empty dependency array so it stays reference-stable forever (react
+   * review R3) — passed directly as ShotRow's onRender prop instead of a
+   * fresh `() => handleRender(shot)` closure built per row per render.
+   */
+  const handleRenderShot = useCallback(async (shotId: string) => {
+    setShotBusy(shotId, true);
     try {
-      const result = await renderStoryboardShot(storyboardRef.current.id, shot.id);
+      const result = await renderStoryboardShot(storyboardRef.current.id, shotId);
       if (!aliveRef.current) return;
       if (!result.ok) {
-        updateShot(shot.id, { status: 'failed', error: result.message });
+        updateShot(shotId, { status: 'failed', error: result.message });
         return;
       }
-      updateShot(shot.id, { status: 'rendering', taskId: result.value.taskId, error: undefined });
+      updateShot(shotId, { status: 'rendering', taskId: result.value.taskId, error: undefined });
       const snap = await waitForMediaTask(result.value.taskId);
       if (!aliveRef.current) return;
       if (snap.status === 'done') {
-        updateShot(shot.id, { status: 'done', output: snap.file?.name, error: undefined });
+        updateShot(shotId, { status: 'done', output: snap.file?.name, error: undefined });
       } else {
-        updateShot(shot.id, { status: 'failed', error: snap.error?.message || t('storyboard.renderFailed') });
+        updateShot(shotId, { status: 'failed', error: snap.error?.message || t('storyboard.renderFailed') });
       }
     } finally {
-      setShotBusy(shot.id, false);
+      setShotBusy(shotId, false);
     }
-  }
+  }, []);
 
   function updateMoodDraft(draftId: string, patch: Partial<Storyboard['moodDrafts'][number]>) {
     runMutation((prev) => ({
@@ -471,9 +558,71 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
     setFooterBusy(null);
   }
 
+  // Rendered in two places depending on whether the storyboard has any
+  // shots yet (see the empty-state vs. populated branches below) — computed
+  // once so neither branch duplicates this JSX. Grok design critique G8:
+  // the "More ways to start" toggle now sits beside "+ Add shot" (not
+  // opposite the section heading), so the whole "blank vs. template vs.
+  // brief" choice reads as one group instead of two disconnected controls.
+  const quickAddControls = (
+    <div className={styles.shotQuickAdd}>
+      <button type="button" className={styles.addShotButton} onClick={addShot}>
+        <Icon name="plus" size={16} />
+        {t('storyboard.addShot')}
+      </button>
+      <button
+        type="button"
+        className={`${styles.addShotsButton}${shotsDragOver ? ` ${styles.addShotsButtonDragOver}` : ''}`}
+        data-testid="add-shots-from-images"
+        disabled={shotsUploadBusy}
+        onClick={() => multiFileInputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); if (!shotsUploadBusy) setShotsDragOver(true); }}
+        onDragLeave={() => setShotsDragOver(false)}
+        onDrop={handleShotsDrop}
+      >
+        <Icon name="upload" size={16} />
+        {t('storyboard.addShotsFromImages')}
+        <span className={styles.addShotsButtonHint}>{t('storyboard.dropImageHint')}</span>
+      </button>
+      <input
+        ref={multiFileInputRef}
+        type="file"
+        accept={STORYBOARD_UPLOAD_ACCEPT}
+        multiple
+        className={styles.hiddenFileInput}
+        data-testid="add-shots-from-images-input"
+        onChange={handleMultiFileInputChange}
+      />
+      {orderedShots.length > 0 ? (
+        <button
+          type="button"
+          className={styles.moreStartOptionsToggle}
+          aria-expanded={showMoreStartOptions}
+          aria-controls="shot-start-options-panel"
+          onClick={() => setShowMoreStartOptions((v) => !v)}
+          data-testid="toggle-start-options"
+        >
+          {t('storyboard.moreWaysToStart')}
+          <Icon name="chevron-down" size={12} />
+        </button>
+      ) : null}
+    </div>
+  );
+
+  // React review R8/R9: the drawer stays RENDERED (renderedShotId) through
+  // its own exit animation even after openShotId clears — `open` tells it
+  // which of those two states it's currently in.
+  const drawerShot = renderedShotId ? orderedShots.find((s) => s.id === renderedShotId) ?? null : null;
+  const drawerShotIndex = drawerShot ? orderedShots.indexOf(drawerShot) : -1;
+  const drawerOpen = drawerShot !== null && openShotId === drawerShot.id;
+
   return (
     <div className={styles.editor}>
       <header className={styles.editorHead}>
+        {/* React review R10: a real page-level heading — the visible title
+            control below stays an editable input, so this stays
+            screen-reader/document-outline only. */}
+        <VisuallyHidden role="heading" aria-level={1}>{storyboard.title || t('storyboard.title')}</VisuallyHidden>
         <button type="button" className={styles.backButton} onClick={onBack} aria-label={t('storyboard.back')}>
           <Icon name="arrow-left" size={16} />
         </button>
@@ -499,70 +648,97 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
         defaultModelId={defaultMoodModel?.id}
         configured={configured}
         busy={false}
+        hasShots={orderedShots.length > 0}
         frameUrl={storyboardFrameUrl}
         onGenerate={(prompt, model) => void handleMoodGenerate(prompt, model || defaultMoodModel?.id || '')}
       />
 
-      <div className={styles.shotLane}>
-        {orderedShots.map((shot, index) => (
-          <ShotCard
-            key={shot.id}
-            shot={shot}
-            index={index}
-            previousShot={index > 0 ? orderedShots[index - 1]! : null}
-            imageModels={IMAGE_MODELS}
-            i2iImageModels={i2iModels.length > 0 ? i2iModels : [defaultImageModel!].filter(Boolean)}
-            videoModels={videoModels}
-            configured={configured}
-            frameUrl={storyboardFrameUrl}
-            busy={busyShotIds.has(shot.id)}
-            onGenerateStart={(prompt, model) => handleGenerateStart(shot, prompt, model)}
-            onIterateStart={(prompt, model) => handleIterateStart(shot, prompt, model)}
-            onDeriveEnd={(prompt, model) => handleDeriveEnd(shot, prompt, model)}
-            onUsePreviousEndFrame={() => index > 0 && handleUsePreviousEndFrame(shot, orderedShots[index - 1]!)}
-            onUploadFile={(slot, file) => handleUploadFile(shot.id, slot, file)}
-            onFieldChange={(patch) => updateShot(shot.id, patch)}
-            onRender={() => void handleRender(shot)}
-            onDuplicate={() => duplicateShot(shot)}
-            onDelete={() => deleteShot(shot.id)}
-            onMoveUp={() => moveShot(shot.id, -1)}
-            onMoveDown={() => moveShot(shot.id, 1)}
-            canMoveUp={index > 0}
-            canMoveDown={index < orderedShots.length - 1}
-          />
-        ))}
-        <button type="button" className={styles.addShotButton} onClick={addShot}>
-          <Icon name="plus" size={16} />
-          {t('storyboard.addShot')}
-        </button>
-        <button
-          type="button"
-          className={`${styles.addShotsButton}${shotsDragOver ? ` ${styles.addShotsButtonDragOver}` : ''}`}
-          data-testid="add-shots-from-images"
-          disabled={shotsUploadBusy}
-          onClick={() => multiFileInputRef.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); if (!shotsUploadBusy) setShotsDragOver(true); }}
-          onDragLeave={() => setShotsDragOver(false)}
-          onDrop={handleShotsDrop}
-        >
-          <Icon name="upload" size={16} />
-          {t('storyboard.addShotsFromImages')}
-          <span className={styles.addShotsButtonHint}>{t('storyboard.dropImageHint')}</span>
-        </button>
-        <input
-          ref={multiFileInputRef}
-          type="file"
-          accept={STORYBOARD_UPLOAD_ACCEPT}
-          multiple
-          className={styles.hiddenFileInput}
-          data-testid="add-shots-from-images-input"
-          onChange={handleMultiFileInputChange}
-        />
+      <div className={styles.shotsSection}>
+        <div className={styles.shotsSectionHead}>
+          <h2 className={styles.shotsHeading}>{t('storyboard.shotsHeading')}</h2>
+        </div>
+
+        {orderedShots.length === 0 ? (
+          <>
+            <p className={styles.emptyShotsHelper}>{t('storyboard.emptyShotsHelper')}</p>
+            {/* Grok design critique G1: the quiet 1-2-3 flow line teaching
+                the shot lifecycle before any shot exists. */}
+            <p className={styles.flowHint}>{t('storyboard.flowHint')}</p>
+            <ShotStartOptions onSelectTemplate={addShotFromPrompt} onCreateFromBrief={addShotFromPrompt}>
+              {quickAddControls}
+            </ShotStartOptions>
+          </>
+        ) : (
+          <>
+            <div className={styles.shotList}>
+              {orderedShots.map((shot, index) => (
+                <ShotRow
+                  key={shot.id}
+                  shot={shot}
+                  index={index}
+                  previousShot={index > 0 ? orderedShots[index - 1]! : null}
+                  videoModels={videoModels}
+                  configured={configured}
+                  frameUrl={storyboardFrameUrl}
+                  busy={busyShotIds.has(shot.id)}
+                  detailsOpen={openShotId === shot.id}
+                  onToggleDetails={toggleShotDetails}
+                  onRender={handleRenderShot}
+                  onDuplicate={duplicateShot}
+                  onDelete={deleteShot}
+                  onMoveUp={moveShotUp}
+                  onMoveDown={moveShotDown}
+                  canMoveUp={index > 0}
+                  canMoveDown={index < orderedShots.length - 1}
+                />
+              ))}
+            </div>
+            {quickAddControls}
+            <div id="shot-start-options-panel" className={`accordion-collapsible${showMoreStartOptions ? ' open' : ''}`}>
+              <div className="accordion-collapsible-inner">
+                <ShotStartOptions onSelectTemplate={addShotFromPrompt} onCreateFromBrief={addShotFromPrompt} />
+              </div>
+            </div>
+          </>
+        )}
       </div>
       {shotsUploadError ? <p className={`${styles.shotStatusLine} ${styles.shotStatusError}`}>{shotsUploadError}</p> : null}
 
+      {drawerShot ? (
+        <ShotDetailsDrawer
+          key={drawerShot.id}
+          shot={drawerShot}
+          index={drawerShotIndex}
+          open={drawerOpen}
+          onExited={handleDrawerExited}
+          previousShot={drawerShotIndex > 0 ? orderedShots[drawerShotIndex - 1]! : null}
+          imageModels={IMAGE_MODELS}
+          i2iImageModels={i2iModels.length > 0 ? i2iModels : [defaultImageModel!].filter(Boolean)}
+          videoModels={videoModels}
+          configured={configured}
+          frameUrl={storyboardFrameUrl}
+          busy={busyShotIds.has(drawerShot.id)}
+          onGenerateStart={(prompt, model) => handleGenerateStart(drawerShot, prompt, model)}
+          onIterateStart={(prompt, model) => handleIterateStart(drawerShot, prompt, model)}
+          onDeriveEnd={(prompt, model) => handleDeriveEnd(drawerShot, prompt, model)}
+          onUsePreviousEndFrame={() => drawerShotIndex > 0 && handleUsePreviousEndFrame(drawerShot, orderedShots[drawerShotIndex - 1]!)}
+          onUploadFile={(slot, file) => handleUploadFile(drawerShot.id, slot, file)}
+          onFieldChange={(patch) => updateShot(drawerShot.id, patch)}
+          onRender={() => void handleRenderShot(drawerShot.id)}
+          onClose={closeShotDetails}
+        />
+      ) : null}
+
       <footer className={styles.footerBar}>
-        <Button type="button" variant="primary" disabled={!hasDoneShot || footerBusy !== null} onClick={() => void handleAssemble()}>
+        {/* Grok design critique e6: Assemble reads as the same-weight
+            climax as Create/Render even with zero renders yet — secondary
+            until there's actually something to assemble. */}
+        <Button
+          type="button"
+          variant={hasDoneShot ? 'primary' : 'subtle'}
+          disabled={!hasDoneShot || footerBusy !== null}
+          onClick={() => void handleAssemble()}
+        >
           {footerBusy === 'assemble' ? t('storyboard.assembling') : t('storyboard.assemble')}
         </Button>
         <Button type="button" variant="subtle" disabled={footerBusy !== null} onClick={() => void handleExportSlider()}>
