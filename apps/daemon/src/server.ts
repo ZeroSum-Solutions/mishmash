@@ -614,6 +614,8 @@ import { registerLiveArtifactRoutes } from './routes/live-artifact.js';
 import { registerDesignSystemToolRoutes } from './routes/design-system-tool.js';
 import { registerDeployRoutes, registerDeploymentCheckRoutes } from './routes/deploy.js';
 import { registerMediaRoutes } from './routes/media.js';
+import { registerDesignLibraryRoutes } from './routes/design-library.js';
+import { registerStoryboardRoutes } from './routes/storyboard.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes } from './routes/project/index.js';
 import { registerVelaRoutes } from './routes/vela.js';
 import { registerFinalizeRoutes, registerImportRoutes, registerProjectExportRoutes } from './import-export-routes.js';
@@ -2104,6 +2106,18 @@ export async function startServer({
   // wall — well past 4mb for image/markup-heavy sites. Give it a dedicated limit
   // (registered before the global parser so it claims the body first).
   app.use('/api/brands/:id/extract-from-html', express.json({ limit: '32mb' }));
+  // Storyboard uploads carry an external image inline as a base64 `data:` URI
+  // (POST /api/storyboards/:id/uploads) — base64 inflates the raw ~16MiB cap
+  // (STORYBOARD_UPLOAD_MAX_BYTES, capped to match the media pipeline's own
+  // image cap) by ~33%, so 48mb covers it with plenty of headroom
+  // (registered before the global parser so it claims the body first).
+  app.use('/api/storyboards/:id/uploads', express.json({ limit: '48mb' }));
+  // Assemble's opt-in Remotion finishing pass carries an optional narration
+  // track inline as a base64 `data:` URI (finish.audioDataUrl) — same
+  // base64-inflation math as the uploads route above
+  // (STORYBOARD_FINISH_AUDIO_MAX_BYTES, 32MiB raw), same 48mb headroom
+  // (registered before the global parser so it claims the body first).
+  app.use('/api/storyboards/:id/assemble', express.json({ limit: '48mb' }));
   app.use(express.json({ limit: '4mb' }));
   const projectPreviewScopes = createProjectPreviewScopeRegistry();
 
@@ -3289,6 +3303,26 @@ export async function startServer({
     appConfig: { readAppConfig },
     http: { getPublicBaseUrl },
     env: process.env,
+  });
+
+  // Design Library — local, rights-gated browse of ~/Desktop/Design Assets
+  // (or OD_DESIGN_LIBRARY_DIR). Read-only; nothing here copies bytes into the
+  // project or the repo.
+  registerDesignLibraryRoutes(app, {
+    http: httpDeps,
+  });
+
+  // Storyboard — Seedance keyframe-pair workflow. Generated stills/clips
+  // live in the hidden `storyboard-media` project, auto-created on first
+  // use, so the existing media generate + task machinery works untouched.
+  registerStoryboardRoutes(app, {
+    http: httpDeps,
+    paths: pathDeps,
+    ids: idDeps,
+    db,
+    projectStore: projectStoreDeps,
+    projectFiles: projectFileDeps,
+    media: mediaDeps,
   });
 
   const pluginRouteHelpers = {

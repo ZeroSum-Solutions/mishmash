@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Current Atlas — Curl Field Hero</title>
+<!--
+  Self-contained canvas2D generative hero. No frameworks, no external
+  requests, no fetch/storage — safe inside <iframe sandbox="allow-scripts">.
+
+  Techniques used (original vanilla-JS implementations; math patterns are
+  public/unencumbered, no source copied from any repo):
+  - Curl-noise divergence-free flow field: pattern inspired by Robert
+    Bridson's public curl-noise technique (SIGGRAPH 2007 course notes).
+    Velocity = curl of a 3-octave scalar noise potential ψ(x,y,t), taken via
+    central finite differences. Because v = (∂ψ/∂y, -∂ψ/∂x) is an exact
+    identity for any smooth scalar field, the resulting flow is divergence-
+    free everywhere by construction — particles braid and re-converge, they
+    never pool at a point.
+  - Cosine-gradient palette: formula pattern by Inigo Quilez (iquilezles.org,
+    public-domain math), color(t) = a + b*cos(2π(c·t+d)).
+  - Additive point-sprite glow: falloff/blending approach inspired by
+    pmndrs/drei's Sparkles shader (MIT) — reimplemented on canvas2D as
+    pre-rendered radial-gradient sprites composited with 'lighter'.
+  - Synthetic orbiting attractor: original adaptation — a slow 3:2 Lissajous
+    point whose point-vortex term (also exactly divergence-free) locally
+    organizes the flow, standing in for real cursor input.
+  - Fluid vw-based type scale: structure inspired by darkroomengineering/satus
+    (MIT), used for the editorial kicker / numeral overlay.
+-->
+<style>
+  :root { color-scheme: dark; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #04090b;
+    overflow: hidden;
+    color: #f5efe3;
+  }
+
+  #field {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .vignette {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at 50% 55%, transparent 38%, rgba(1,4,5,0.62) 100%);
+  }
+
+  .grain {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.05;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 6vw;
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, 'Liberation Mono', monospace;
+  }
+
+  .kicker {
+    margin: 0 0 clamp(14px, 1.6vw, 20px);
+    font-size: clamp(11px, 1vw, 13px);
+    font-weight: 500;
+    letter-spacing: 0.42em;
+    text-transform: uppercase;
+    color: rgba(245, 239, 227, 0.72);
+  }
+
+  .rule {
+    width: clamp(48px, 5vw, 72px);
+    height: 1px;
+    margin-bottom: clamp(16px, 2vw, 24px);
+    background: rgba(245, 239, 227, 0.38);
+  }
+
+  .numeral {
+    margin: 0;
+    font-size: clamp(88px, 16vw, 240px);
+    line-height: 0.84;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    color: #f5efe3;
+    text-shadow: 0 2px 44px rgba(0,0,0,0.5);
+  }
+
+  .caption {
+    margin: clamp(14px, 1.8vw, 20px) 0 0;
+    max-width: 36ch;
+    font-size: clamp(12px, 1.05vw, 15px);
+    line-height: 1.55;
+    color: rgba(245, 239, 227, 0.58);
+  }
+
+  .fig-mark {
+    position: fixed;
+    top: 6vw;
+    right: 6vw;
+    z-index: 2;
+    pointer-events: none;
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+    font-size: clamp(10px, 0.85vw, 12px);
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: rgba(245, 239, 227, 0.4);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .grain { opacity: 0.035; }
+  }
+</style>
+</head>
+<body>
+<canvas id="field"></canvas>
+<div class="vignette"></div>
+<div class="grain"></div>
+<div class="fig-mark">Fig. VII &mdash; curl(&psi;) observed</div>
+<div class="overlay">
+  <p class="kicker">Deep Current Atlas</p>
+  <div class="rule"></div>
+  <h1 class="numeral">07</h1>
+  <p class="caption">Plate seven. A divergence-free current, still finding its shape.</p>
+</div>
+<script>
+(() => {
+  'use strict';
+
+  var canvas = document.getElementById('field');
+  var ctx = canvas.getContext('2d', { alpha: false });
+  var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  // ---------------------------------------------------------------------
+  // Sizing
+  // ---------------------------------------------------------------------
+  var W = 0, H = 0, DPR = 1;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = Math.max(1, Math.floor(canvas.clientWidth * DPR));
+    H = Math.max(1, Math.floor(canvas.clientHeight * DPR));
+    canvas.width = W;
+    canvas.height = H;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------------------------------------------------------------------
+  // IQ cosine-gradient palette: color(t) = a + b*cos(2*PI*(c*t+d))
+  // Tuned to stay in a cyan -> deep-indigo band (never a pure/acid green).
+  // ---------------------------------------------------------------------
+  var PAL_A = [0.12, 0.45, 0.65];
+  var PAL_B = [0.12, 0.35, 0.35];
+  var PAL_D = [0.00, 0.15, 0.30];
+  var TWO_PI = Math.PI * 2;
+  function paletteColor(t) {
+    var r = PAL_A[0] + PAL_B[0] * Math.cos(TWO_PI * (t + PAL_D[0]));
+    var g = PAL_A[1] + PAL_B[1] * Math.cos(TWO_PI * (t + PAL_D[1]));
+    var b = PAL_A[2] + PAL_B[2] * Math.cos(TWO_PI * (t + PAL_D[2]));
+    return [
+      Math.max(0, Math.min(255, Math.round(r * 255))),
+      Math.max(0, Math.min(255, Math.round(g * 255))),
+      Math.max(0, Math.min(255, Math.round(b * 255)))
+    ];
+  }
+
+  // ---------------------------------------------------------------------
+  // Pre-rendered additive glow sprites, one per palette bucket. Avoids
+  // creating a radial gradient per particle per frame.
+  // ---------------------------------------------------------------------
+  var BUCKETS = 40;
+  var SPRITE_PX = 30;
+  var sprites = new Array(BUCKETS);
+  (function buildSprites() {
+    for (var i = 0; i < BUCKETS; i++) {
+      var t = i / BUCKETS;
+      var c = paletteColor(t);
+      var off = document.createElement('canvas');
+      off.width = off.height = SPRITE_PX;
+      var octx = off.getContext('2d');
+      var cx = SPRITE_PX / 2, cy = SPRITE_PX / 2, rad = SPRITE_PX / 2;
+      var grad = octx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+      // Soft falloff approximating drei Sparkles' 0.05/d - 0.1 glow curve.
+      grad.addColorStop(0.00, 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',0.95)');
+      grad.addColorStop(0.18, 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',0.82)');
+      grad.addColorStop(0.45, 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',0.32)');
+      grad.addColorStop(1.00, 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',0)');
+      octx.fillStyle = grad;
+      octx.fillRect(0, 0, SPRITE_PX, SPRITE_PX);
+      sprites[i] = off;
+    }
+  })();
+
+  // ---------------------------------------------------------------------
+  // Value noise (2D) + a 3-octave scalar potential ψ(x,y,t).
+  // ---------------------------------------------------------------------
+  function hash2(x, y) {
+    var n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453123;
+    return n - Math.floor(n);
+  }
+  function noise2(x, y) {
+    var xi = Math.floor(x), yi = Math.floor(y);
+    var xf = x - xi, yf = y - yi;
+    var u = xf * xf * (3 - 2 * xf);
+    var v = yf * yf * (3 - 2 * yf);
+    var a = hash2(xi, yi), b = hash2(xi + 1, yi), c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+  }
+  // Three offset octaves summed into one potential: each is its own noise
+  // channel (own frequency, domain offset and drift speed) so the field
+  // reads as richly layered turbulence rather than a single smooth wave.
+  function potential(fx, fy, ts) {
+    var v = 0;
+    v += 1.00 * noise2(fx * 0.90 + ts * 0.050, fy * 0.90 + ts * 0.035);
+    v += 0.52 * noise2(fx * 2.15 + 31.7 + ts * 0.085, fy * 2.15 + 47.3 + ts * 0.060);
+    v += 0.28 * noise2(fx * 4.35 + 91.1 + ts * 0.130, fy * 4.35 + 12.9 + ts * 0.090);
+    return v;
+  }
+
+  var FIELD_SCALE_CSS = 230; // feature size, CSS px
+  var EPS = 0.22;            // finite-difference step, field-space units
+  var SPEED_CAP = 1.6;       // clamp on raw curl+vortex velocity magnitude
+  var PIXEL_SPEED = 190;     // device-px/sec per unit velocity
+  var VORTEX_STRENGTH = 30;  // attractor swirl gain
+
+  // Slow 3:2 Lissajous orbit for the synthetic "ghost cursor" attractor.
+  var OMEGA = 0.12; // rad/sec, base
+  function attractorPos(ts) {
+    var cx = W * 0.5, cy = H * 0.5;
+    var rx = Math.min(W, H) * 0.24;
+    var ry = Math.min(W, H) * 0.20;
+    return [
+      cx + rx * Math.sin(OMEGA * 3 * ts + 0.6),
+      cy + ry * Math.sin(OMEGA * 2 * ts)
+    ];
+  }
+
+  // ---------------------------------------------------------------------
+  // Particles
+  // ---------------------------------------------------------------------
+  var particles = [];
+  var count = 0;
+  function seedParticles() {
+    var cssArea = (canvas.clientWidth || window.innerWidth) * (canvas.clientHeight || window.innerHeight);
+    count = Math.max(1400, Math.min(3200, Math.round(cssArea / 650)));
+    particles = new Array(count);
+    for (var i = 0; i < count; i++) {
+      var maxAge = 4 + Math.random() * 6;
+      particles[i] = {
+        x: Math.random() * W,
+        y: Math.random() * H,
+        age: Math.random() * maxAge,
+        maxAge: maxAge,
+        seed: Math.random()
+      };
+    }
+  }
+  seedParticles();
+
+  function respawn(p) {
+    p.x = Math.random() * W;
+    p.y = Math.random() * H;
+    p.age = 0;
+    p.maxAge = 4 + Math.random() * 6;
+    p.seed = Math.random();
+  }
+
+  // One simulate + draw step, shared by the live rAF loop and the
+  // synchronous warm-up / static-fallback bake below (single source of
+  // truth for the physics + rendering).
+  function tick(dt, nowMs) {
+    var ts = nowMs / 1000;
+    var fieldScale = FIELD_SCALE_CSS * DPR;
+    var attractor = attractorPos(ts);
+    var ax = attractor[0], ay = attractor[1];
+    var soften2 = (60 * DPR) * (60 * DPR);
+    var margin = 40 * DPR;
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(4,9,11,0.12)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.globalCompositeOperation = 'lighter';
+    var coronaR = 150 * DPR;
+    var corona = ctx.createRadialGradient(ax, ay, 0, ax, ay, coronaR);
+    corona.addColorStop(0, 'rgba(180,225,255,0.055)');
+    corona.addColorStop(1, 'rgba(180,225,255,0)');
+    ctx.fillStyle = corona;
+    ctx.fillRect(ax - coronaR, ay - coronaR, coronaR * 2, coronaR * 2);
+
+    for (var i = 0; i < count; i++) {
+      var p = particles[i];
+
+      var fx = p.x / fieldScale, fy = p.y / fieldScale;
+      var n1 = potential(fx, fy + EPS, ts);
+      var n2 = potential(fx, fy - EPS, ts);
+      var n3 = potential(fx + EPS, fy, ts);
+      var n4 = potential(fx - EPS, fy, ts);
+      var vx = (n1 - n2) / (2 * EPS);       //  ∂ψ/∂y
+      var vy = -(n3 - n4) / (2 * EPS);      // -∂ψ/∂x  -> (vx,vy) is exactly div-free
+
+      // Synthetic cursor attractor: a point-vortex bias (also exactly
+      // divergence-free) that organizes flow locally around the ghost point.
+      var dx = p.x - ax, dy = p.y - ay;
+      var d2 = dx * dx + dy * dy + soften2;
+      var d = Math.sqrt(d2);
+      var vort = Math.min(2.6, (VORTEX_STRENGTH * DPR) / d);
+      vx += (-dy / d) * vort;
+      vy += (dx / d) * vort;
+
+      var sp = Math.sqrt(vx * vx + vy * vy);
+      if (sp > SPEED_CAP) { var k = SPEED_CAP / sp; vx *= k; vy *= k; sp = SPEED_CAP; }
+
+      p.x += vx * PIXEL_SPEED * DPR * dt;
+      p.y += vy * PIXEL_SPEED * DPR * dt;
+      p.age += dt;
+
+      if (p.age > p.maxAge || p.x < -margin || p.x > W + margin || p.y < -margin || p.y > H + margin) {
+        respawn(p);
+        continue;
+      }
+
+      var lifeT = p.age / p.maxAge;
+      var alphaIn = Math.min(1, p.age / (p.maxAge * 0.10));
+      var alphaOut = Math.min(1, (p.maxAge - p.age) / (p.maxAge * 0.28));
+      var alpha = alphaIn * alphaOut;
+      if (alpha <= 0.003) continue;
+
+      var speedNorm = Math.min(1, sp / SPEED_CAP);
+      var colorT = lifeT * 0.55 + speedNorm * 0.55 + p.seed;
+      colorT -= Math.floor(colorT);
+      var bi = (colorT * BUCKETS) | 0;
+      if (bi >= BUCKETS) bi = BUCKETS - 1;
+
+      var size = (SPRITE_PX * DPR * 0.6) * (0.75 + 0.55 * speedNorm);
+      ctx.globalAlpha = alpha * 0.9;
+      ctx.drawImage(sprites[bi], p.x - size / 2, p.y - size / 2, size, size);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Bake a short synchronous history into the canvas so the very first
+  // painted frame already shows established, braided trails and varied
+  // particle phases — never a "big bang" burst from a blank canvas.
+  function warmup(steps) {
+    var fakeNow = 0, dt = 1 / 60;
+    for (var s = 0; s < steps; s++) {
+      fakeNow += 1000 / 60;
+      tick(dt, fakeNow);
+    }
+  }
+
+  warmup(reduceMotion ? 110 : 40);
+
+  if (!reduceMotion) {
+    var lastNow = null;
+    function raf(now) {
+      if (lastNow === null) lastNow = now;
+      var dt = (now - lastNow) / 1000;
+      if (dt > 0.05) dt = 0.05;
+      lastNow = now;
+      tick(dt, now);
+      requestAnimationFrame(raf);
+    }
+    requestAnimationFrame(raf);
+  }
+  // else: prefers-reduced-motion — the warm-up above already produced one
+  // fully composed static frame; no further frames are scheduled.
+})();
+</script>
+</body>
+</html>

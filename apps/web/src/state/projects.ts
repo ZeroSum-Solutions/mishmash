@@ -508,12 +508,12 @@ export async function saveMessage(
   conversationId: string,
   message: ChatMessage,
   options: SaveMessageOptions = {},
-): Promise<void> {
+): Promise<boolean> {
+  const body = options.telemetryFinalized
+    ? { ...message, telemetryFinalized: true }
+    : message;
   try {
-    const body = options.telemetryFinalized
-      ? { ...message, telemetryFinalized: true }
-      : message;
-    await fetch(
+    const resp = await fetch(
       `/api/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(message.id)}`,
       {
         method: 'PUT',
@@ -522,8 +522,29 @@ export async function saveMessage(
         ...(options.keepalive ? { keepalive: true } : {}),
       },
     );
-  } catch {
-    // best-effort persistence — UI keeps the message in-memory either way
+    // Best-effort persistence — the UI keeps the message in-memory either
+    // way — but a failed write must not look identical to a successful one:
+    // log it the same way fetchProjectFileText does, and return a success
+    // flag so callers can react instead of assuming the write landed.
+    if (!resp.ok) {
+      console.warn('[saveMessage] failed:', {
+        projectId,
+        conversationId,
+        messageId: message.id,
+        status: resp.status,
+        statusText: resp.statusText,
+      });
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[saveMessage] failed:', {
+      error: err,
+      projectId,
+      conversationId,
+      messageId: message.id,
+    });
+    return false;
   }
 }
 

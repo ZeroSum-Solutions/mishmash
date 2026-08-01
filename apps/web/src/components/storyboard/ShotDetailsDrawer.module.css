@@ -1,0 +1,121 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(21, 23, 27, 0.42);
+  animation: shot-drawer-backdrop-in 160ms ease-out;
+}
+/* React review R8/R9: exit animation, ~140ms, the same ease-out curve the
+   entrance uses (AGENTS.md UI animation philosophy). Requires keep-mounted +
+   class toggle (see ShotDetailsDrawer.tsx's `mounted` state) — an
+   unconditionally-unmounted node never gets to play this. */
+.backdrop.closing {
+  animation: shot-drawer-backdrop-out var(--dur-exit, 140ms) ease-out forwards;
+}
+/* Don't let a fading-out backdrop keep intercepting clicks. */
+.closing {
+  pointer-events: none;
+}
+
+.drawer {
+  display: flex;
+  flex-direction: column;
+  width: min(440px, 100vw);
+  max-width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  animation: shot-drawer-slide-in var(--dur-enter, 200ms) var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1));
+}
+.drawer.closing {
+  animation: shot-drawer-slide-out var(--dur-exit, 140ms) var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)) forwards;
+}
+
+@keyframes shot-drawer-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes shot-drawer-backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes shot-drawer-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes shot-drawer-slide-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+
+/* Grok design critique G5/e1: container is the flex column that makes the
+   header a true pinned bar (flex: 0 0 auto) with only .body scrolling
+   underneath it — the old single-scroll-region drawer let the header
+   (and "SHOT 1"'s own top padding) scroll away/clip. */
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.closeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.closeButton:hover {
+  border-color: var(--text-soft);
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 20px 20px;
+}

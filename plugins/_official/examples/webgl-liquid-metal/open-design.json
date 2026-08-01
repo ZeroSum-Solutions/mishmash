@@ -8,7 +8,7 @@
   "description": "Build a full-screen liquid-metal shader — molten chrome ripples with a sweeping specular highlight over an iridescent thin-film palette — rendered at 60fps as a single self-contained index.html.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/webgl-liquid-metal",

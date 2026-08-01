@@ -66,9 +66,10 @@ const brandSizzleReel = make({
   scenario: 'video',
 });
 
-// Mirrors plugins/_official/examples/audio-jingle.
+// Synthetic audio template shaped like the retired bundled audio-jingle
+// example (removed by the 2026-07-30 gallery curation).
 const audioJingle = make({
-  id: 'example-audio-jingle',
+  id: 'sample-audio-jingle',
   title: 'Audio Jingle',
   tags: ['example', 'first-party', 'audio', 'marketing', 'music', 'jingle'],
   mode: 'audio',
@@ -81,6 +82,20 @@ const mediaGeneration = make({
   id: 'od-media-generation',
   title: 'Media generation (default scenario)',
   tags: ['scenario', 'first-party', 'media-generation', 'image', 'video', 'audio'],
+});
+
+// Mirrors plugins/_official/examples/simple-deck: a `scenario`-tagged flow
+// plugin dispatched by id, never rendered as a tile in the Workflows-and-Assets
+// grid (see galleryVisibility.ts / bundled-roster.test.ts's HIDDEN_FLOW_ROSTER).
+// It is NOT in EXAMPLE_PRESET_HIDDEN_PLUGIN_IDS, so only the shared
+// isGalleryVisiblePlugin predicate keeps it out of the example-prompt rail too.
+const simpleDeckFlow = make({
+  id: 'example-simple-deck',
+  title: 'Write an Operating Review like a Disciplined COO',
+  tags: ['scenario', 'example', 'first-party', 'deck', 'slides'],
+  mode: 'deck',
+  surface: 'web',
+  scenario: 'strategy',
 });
 
 describe('pluginMatchesExampleChip — audio chip', () => {
@@ -102,8 +117,15 @@ describe('homeHeroExamplePluginsForChip — audio chip', () => {
 
   it('shows the audio jingle but neither the HyperFrames reel nor the media-generation default', () => {
     const ids = homeHeroExamplePluginsForChip('audio', installed, 'en').map((p) => p.id);
-    expect(ids).toContain('example-audio-jingle');
+    expect(ids).toContain('sample-audio-jingle');
     expect(ids).not.toContain('video-template-hyperframes-brand-sizzle-reel');
     expect(ids).not.toContain('od-media-generation');
+  });
+});
+
+describe('homeHeroExamplePluginsForChip — gallery visibility parity', () => {
+  it('hides a scenario-tagged flow plugin from the deck chip rail, matching the Workflows-and-Assets grid', () => {
+    const ids = homeHeroExamplePluginsForChip('deck', [simpleDeckFlow], 'en').map((p) => p.id);
+    expect(ids).not.toContain('example-simple-deck');
   });
 });

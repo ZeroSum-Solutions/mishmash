@@ -154,6 +154,14 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
     if (!model) {
       return sendApiError(res, 400, 'BAD_REQUEST', 'model is required');
     }
+    // Seedance start/end keyframe pairs: Ark requires first_frame whenever
+    // last_frame is present, so an end frame with no start frame is
+    // rejected up front here rather than surfacing as an async task
+    // failure. generateMedia (media/index.ts) re-checks this as defense in
+    // depth for any other caller.
+    if (typeof req.body?.endImage === 'string' && req.body.endImage && !req.body?.image) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'end frame requires start frame — pass image alongside endImage');
+    }
 
     const policy = mediaPolicyForGrant(options.grant);
     if (!policy.ok) {
@@ -212,6 +220,7 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
           : undefined,
         compositionDir: req.body?.compositionDir,
         image: req.body?.image,
+        endImage: typeof req.body?.endImage === 'string' ? req.body.endImage : undefined,
         images: Array.isArray(req.body?.images) ? req.body.images : undefined,
         onProgress: (line: any) => appendTaskProgress(task, line),
         requestInit: proxyDispatcher.requestInit,

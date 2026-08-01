@@ -19,8 +19,10 @@ bottom of their facet rather than topping it by default-usage.
 | `HomeHero.tsx` → `comparePluginPresetOrder` | source | Home rail sort (per-chip) — calls the comparator |
 
 Both sort sites call `comparePluginGalleryOrder(aId, bId, aCurationGoverned, bCurationGoverned)`
-first, then fall back to their existing keys (curated priority → featured →
-visual score → title). The comparator applies, in order:
+first, then fall back to their own keys — the facet grid to curated
+priority → featured → visual score → title, the Home rail
+(`comparePluginPresetOrder`) to per-chip curated priority → preset rank →
+title. The comparator applies, in order:
 
 1. **`ALWAYS_PINNED`** — curator force-front (empty by default).
 2. **Sink** — the default mode-seeds (`ALWAYS_LAST` = Web Prototype, Simple Deck)
@@ -84,10 +86,12 @@ facet (they stay visible, so facet counts match production):
 - **false**: usage has no effect anywhere; the whole gallery falls back to the
   curated/visual order.
 
-Which facets are curation-governed is decided by the caller, not this knob:
-`visualScore.ts` marks `byMode('prototype')` tiles (minus the Live Artifact
-picks) as governed, and `HomeHero.tsx` marks the `prototype` chip. Extend that
-if another facet should also stay editorially curated.
+Which facets are curation-governed is decided independently by each caller, not
+this knob: `usePluginFacets.ts` (`selection.category === 'prototype' ||
+selection.category === 'hyperframes'`) and `HomeHero.tsx`'s
+`comparePluginPresetOrder` (`chipId === 'prototype' || chipId === 'hyperframes'`)
+each hardcode the same check. Extend both if another facet should also stay
+editorially curated.
 
 ## Curator override — `ALWAYS_PINNED`
 

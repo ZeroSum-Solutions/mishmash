@@ -22,6 +22,8 @@ export type EntryView =
   | 'plugins'
   | 'design-systems'
   | 'library'
+  | 'design-library'
+  | 'storyboard'
   | 'brands'
   | 'integrations';
 
@@ -179,6 +181,24 @@ export function EntryNavRail({
             <Icon name="layers-filled" size={18} />
           </NavButton>
         ) : null}
+        <NavButton
+          active={view === 'design-library'}
+          ariaLabel={t('entry.navDesignLibrary')}
+          tooltip={t('entry.navDesignLibrary')}
+          onClick={() => selectView('design-library')}
+          testId="entry-nav-design-library"
+        >
+          <Icon name="swatchbook" size={18} />
+        </NavButton>
+        <NavButton
+          active={view === 'storyboard'}
+          ariaLabel={t('entry.navStoryboard')}
+          tooltip={t('entry.navStoryboard')}
+          onClick={() => selectView('storyboard')}
+          testId="entry-nav-storyboard"
+        >
+          <Icon name="film" size={18} />
+        </NavButton>
         <NavButton
           active={view === 'tasks'}
           ariaLabel={t('entry.navTasks')}

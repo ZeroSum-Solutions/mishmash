@@ -789,6 +789,238 @@ describe('media-config Grok / xAI OAuth fallback', () => {
   });
 });
 
+describe('media-config Codex subscription readiness', () => {
+  let projectRoot: string;
+  let codexHomeDir: string;
+  const originalCodexHome = process.env.CODEX_HOME;
+
+  beforeEach(async () => {
+    projectRoot = await mkdtemp(path.join(tmpdir(), 'od-media-codex-project-'));
+    codexHomeDir = await mkdtemp(path.join(tmpdir(), 'od-media-codex-home-'));
+    // resolveCodexSubscriptionStatus falls back to the REAL ~/.codex/auth.json
+    // when CODEX_HOME is unset (codexHomeFromEnv) — point it at an isolated
+    // temp dir per test so the outcome doesn't depend on whether THIS
+    // machine happens to have a real, live Codex ChatGPT subscription logged
+    // in. Same gotcha/precedent as image-edit-fixes.test.ts's beforeEach.
+    process.env.CODEX_HOME = codexHomeDir;
+  });
+
+  afterEach(async () => {
+    if (originalCodexHome == null) {
+      delete process.env.CODEX_HOME;
+    } else {
+      process.env.CODEX_HOME = originalCodexHome;
+    }
+    await rm(projectRoot, { recursive: true, force: true });
+    await rm(codexHomeDir, { recursive: true, force: true });
+  });
+
+  function codexProvider(masked: { providers: unknown }) {
+    return (masked.providers as Record<string, unknown>).codex;
+  }
+
+  it('reports codex as configured via subscription when auth_mode is chatgpt', async () => {
+    await writeFile(
+      path.join(codexHomeDir, 'auth.json'),
+      JSON.stringify({ auth_mode: 'chatgpt' }),
+      'utf8',
+    );
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(codexProvider(masked)).toMatchObject({
+      configured: true,
+      source: 'codex-subscription',
+    });
+  });
+
+  it('reports codex as unconfigured when CODEX_HOME has no auth.json', async () => {
+    const masked = await readMaskedConfig(projectRoot);
+    expect(codexProvider(masked)).toMatchObject({
+      configured: false,
+      source: 'unset',
+    });
+  });
+
+  it('resolveProviderConfig also reflects codex subscription availability', async () => {
+    await writeFile(
+      path.join(codexHomeDir, 'auth.json'),
+      JSON.stringify({ auth_mode: 'chatgpt' }),
+      'utf8',
+    );
+
+    const resolved = await resolveProviderConfig(projectRoot, 'codex');
+    expect(resolved.apiKey).not.toBe('');
+
+    await rm(path.join(codexHomeDir, 'auth.json'));
+    const resolvedAfterLogout = await resolveProviderConfig(projectRoot, 'codex');
+    expect(resolvedAfterLogout.apiKey).toBe('');
+  });
+});
+
+describe('media-config Higgsfield MCP OAuth readiness', () => {
+  let projectRoot: string;
+  const originalDataDir = process.env.OD_DATA_DIR;
+  const originalMediaConfigDir = process.env.OD_MEDIA_CONFIG_DIR;
+
+  const HIGGSFIELD_SERVER = {
+    id: 'higgsfield-openclaw',
+    label: 'Higgsfield (OpenClaw)',
+    transport: 'http',
+    enabled: true,
+    url: 'https://mcp.higgsfield.ai/mcp',
+  };
+
+  beforeEach(async () => {
+    // Isolated per-test dataDir — mediaConfigDir(projectRoot) falls back to
+    // <projectRoot>/.od by default, same idiom as the CODEX_HOME isolation
+    // above (a fresh temp dir per test so nothing bleeds across runs).
+    projectRoot = await mkdtemp(path.join(tmpdir(), 'od-media-higgsfield-project-'));
+    delete process.env.OD_DATA_DIR;
+    delete process.env.OD_MEDIA_CONFIG_DIR;
+  });
+
+  afterEach(async () => {
+    if (originalDataDir == null) delete process.env.OD_DATA_DIR;
+    else process.env.OD_DATA_DIR = originalDataDir;
+    if (originalMediaConfigDir == null) delete process.env.OD_MEDIA_CONFIG_DIR;
+    else process.env.OD_MEDIA_CONFIG_DIR = originalMediaConfigDir;
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  async function writeMcpConfigFixture(servers: unknown[]) {
+    const file = path.join(projectRoot, '.od', 'mcp-config.json');
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, JSON.stringify({ servers }), 'utf8');
+  }
+
+  async function writeMcpTokenFixture(serverId: string, token: Record<string, unknown>) {
+    const file = path.join(projectRoot, '.od', 'mcp-tokens.json');
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, JSON.stringify({ servers: { [serverId]: token } }), 'utf8');
+  }
+
+  function higgsfieldProvider(masked: { providers: unknown }) {
+    return (masked.providers as Record<string, unknown>).higgsfield;
+  }
+
+  it('reports higgsfield as configured when an enabled mcp.higgsfield.ai server has a stored token', async () => {
+    await writeMcpConfigFixture([HIGGSFIELD_SERVER]);
+    await writeMcpTokenFixture('higgsfield-openclaw', {
+      accessToken: 'hf-access-1',
+      tokenType: 'Bearer',
+      savedAt: Date.now(),
+    });
+
+    const resolved = await resolveProviderConfig(projectRoot, 'higgsfield');
+    const masked = await readMaskedConfig(projectRoot);
+
+    expect(resolved.apiKey).toBe('hf-access-1');
+    // resolveProviderConfig (unlike readMaskedConfig) surfaces the
+    // registered server's own url as baseUrl, so the renderer's MCP calls
+    // route to a hand-edited endpoint instead of a hardcoded default
+    // (review finding #20).
+    expect(resolved.baseUrl).toBe(HIGGSFIELD_SERVER.url);
+    expect(higgsfieldProvider(masked)).toMatchObject({
+      configured: true,
+      source: 'higgsfield-mcp-oauth',
+      // The real access token must never route into the masked fields the
+      // Settings UI renders — apiKeyTail is stored-key-only (higgsfield has
+      // none) and baseUrl only ever reflects a manually-stored entry, never
+      // the OAuth-resolved MCP endpoint (review finding #22).
+      apiKeyTail: '',
+      baseUrl: '',
+    });
+  });
+
+  it('still counts as configured when the access token is expired but a refresh_token is on file', async () => {
+    await writeMcpConfigFixture([HIGGSFIELD_SERVER]);
+    await writeMcpTokenFixture('higgsfield-openclaw', {
+      accessToken: 'hf-access-expired',
+      refreshToken: 'hf-refresh-1',
+      tokenType: 'Bearer',
+      savedAt: Date.now(),
+      expiresAt: Date.now() - 1000,
+    });
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(higgsfieldProvider(masked)).toMatchObject({
+      configured: true,
+      source: 'higgsfield-mcp-oauth',
+      apiKeyTail: '',
+      baseUrl: '',
+    });
+  });
+
+  it('reports higgsfield as unconfigured when no mcp.higgsfield.ai server is registered', async () => {
+    const masked = await readMaskedConfig(projectRoot);
+    expect(higgsfieldProvider(masked)).toMatchObject({
+      configured: false,
+      source: 'unset',
+    });
+  });
+
+  it('reports higgsfield as unconfigured when the registered server is disabled', async () => {
+    await writeMcpConfigFixture([{ ...HIGGSFIELD_SERVER, enabled: false }]);
+    await writeMcpTokenFixture('higgsfield-openclaw', {
+      accessToken: 'hf-access-2',
+      tokenType: 'Bearer',
+      savedAt: Date.now(),
+    });
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(higgsfieldProvider(masked)).toMatchObject({
+      configured: false,
+      source: 'unset',
+    });
+  });
+
+  it('reports higgsfield as unconfigured when the server is enabled but has no stored token', async () => {
+    await writeMcpConfigFixture([HIGGSFIELD_SERVER]);
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(higgsfieldProvider(masked)).toMatchObject({
+      configured: false,
+      source: 'unset',
+    });
+  });
+
+  it('treats an expired token with no refresh_token as unconfigured', async () => {
+    await writeMcpConfigFixture([HIGGSFIELD_SERVER]);
+    await writeMcpTokenFixture('higgsfield-openclaw', {
+      accessToken: 'hf-access-expired-2',
+      tokenType: 'Bearer',
+      savedAt: Date.now(),
+      expiresAt: Date.now() - 1000,
+    });
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(higgsfieldProvider(masked)).toMatchObject({
+      configured: false,
+      source: 'unset',
+    });
+  });
+
+  it('ignores a same-host server of an unsupported transport (stdio) and reports unconfigured', async () => {
+    await writeMcpConfigFixture([{
+      id: 'higgsfield-openclaw',
+      transport: 'stdio',
+      enabled: true,
+      command: 'higgsfield-mcp',
+    }]);
+    await writeMcpTokenFixture('higgsfield-openclaw', {
+      accessToken: 'hf-access-3',
+      tokenType: 'Bearer',
+      savedAt: Date.now(),
+    });
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(higgsfieldProvider(masked)).toMatchObject({
+      configured: false,
+      source: 'unset',
+    });
+  });
+});
+
 describe('media-config model alias resolution (issue #1277)', () => {
   let projectRoot: string;
   const originalEnvAliases = process.env.OD_MEDIA_MODEL_ALIASES;
@@ -1135,6 +1367,137 @@ describe('seedProviderIfMissing', () => {
     expect(resolved).toEqual({
       apiKey: 'sa-final',
       baseUrl: 'https://api.senseaudio.cn',
+    });
+  });
+});
+
+describe('media-config Higgsfield MCP protocol guard', () => {
+  let projectRoot: string;
+  const originalMediaConfigDir = process.env.OD_MEDIA_CONFIG_DIR;
+  const originalDataDir = process.env.OD_DATA_DIR;
+
+  beforeEach(async () => {
+    projectRoot = await mkdtemp(path.join(tmpdir(), 'od-media-higgsfield-'));
+    delete process.env.OD_MEDIA_CONFIG_DIR;
+    delete process.env.OD_DATA_DIR;
+  });
+
+  afterEach(async () => {
+    if (originalMediaConfigDir == null) {
+      delete process.env.OD_MEDIA_CONFIG_DIR;
+    } else {
+      process.env.OD_MEDIA_CONFIG_DIR = originalMediaConfigDir;
+    }
+    if (originalDataDir == null) {
+      delete process.env.OD_DATA_DIR;
+    } else {
+      process.env.OD_DATA_DIR = originalDataDir;
+    }
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  async function writeHiggsfieldMcpFixture(url: string) {
+    const configFile = path.join(projectRoot, '.od', 'mcp-config.json');
+    await mkdir(path.dirname(configFile), { recursive: true });
+    await writeFile(configFile, JSON.stringify({
+      servers: [{
+        id: 'higgsfield-openclaw',
+        label: 'Higgsfield (OpenClaw)',
+        transport: 'http',
+        enabled: true,
+        url,
+      }],
+    }), 'utf8');
+    const tokensFile = path.join(projectRoot, '.od', 'mcp-tokens.json');
+    await writeFile(tokensFile, JSON.stringify({
+      servers: { 'higgsfield-openclaw': { accessToken: 'hf-plaintext-token', tokenType: 'Bearer', savedAt: Date.now() } },
+    }), 'utf8');
+  }
+
+  function higgsfieldProvider(masked: Awaited<ReturnType<typeof readMaskedConfig>>) {
+    return masked.providers.higgsfield;
+  }
+
+  // Red-spec for the http:// bearer-downgrade finding: an enabled server
+  // entry whose url host matches mcp.higgsfield.ai but whose protocol is
+  // plain http:// must NOT be treated as a configured Higgsfield connection —
+  // otherwise the renderer would send the OAuth Bearer token to a cleartext
+  // endpoint.
+  it('an enabled http://mcp.higgsfield.ai/mcp server with a stored token is NOT configured', async () => {
+    await writeHiggsfieldMcpFixture('http://mcp.higgsfield.ai/mcp');
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(higgsfieldProvider(masked)?.configured).toBe(false);
+
+    const resolved = await resolveProviderConfig(projectRoot, 'higgsfield');
+    expect(resolved.apiKey).toBe('');
+  });
+
+  it('the same server over https://mcp.higgsfield.ai/mcp IS configured (control case)', async () => {
+    await writeHiggsfieldMcpFixture('https://mcp.higgsfield.ai/mcp');
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(higgsfieldProvider(masked)?.configured).toBe(true);
+
+    const resolved = await resolveProviderConfig(projectRoot, 'higgsfield');
+    expect(resolved.apiKey).toBe('hf-plaintext-token');
+  });
+});
+
+// stable-diffusion.cpp is a baseUrl-only local provider with no bearer
+// token at all (loopback server, MEDIA_PROVIDERS entry has no ENV_KEYS
+// slot and no external-credential branch in resolveProviderConfig /
+// readMaskedConfig — same generic path every un-special-cased provider
+// gets). This section proves that generic path is enough: no code in
+// config.ts needed to be touched for sdcpp specifically.
+describe('media-config stable-diffusion.cpp (sdcpp) — baseUrl-only local provider', () => {
+  let projectRoot: string;
+
+  beforeEach(async () => {
+    projectRoot = await mkdtemp(path.join(tmpdir(), 'od-media-sdcpp-project-'));
+  });
+
+  afterEach(async () => {
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  function sdcppProvider(masked: Awaited<ReturnType<typeof readMaskedConfig>>) {
+    return (masked.providers as Record<string, unknown>).sdcpp as
+      | { configured: boolean; source: string; baseUrl: string }
+      | undefined;
+  }
+
+  it('resolveProviderConfig returns an empty apiKey and empty baseUrl with nothing stored (renderer supplies its own default)', async () => {
+    const resolved = await resolveProviderConfig(projectRoot, 'sdcpp');
+    expect(resolved.apiKey).toBe('');
+    expect(resolved.baseUrl).toBe('');
+  });
+
+  it('readMaskedConfig reports sdcpp as unconfigured (no apiKey, no external-credential branch) when nothing is stored — a local provider with defaultBaseUrl + credentialsRequired:false is still allowed to show "unset" here, the frontend picker readiness check ignores it', async () => {
+    const masked = await readMaskedConfig(projectRoot);
+    expect(sdcppProvider(masked)).toMatchObject({
+      configured: false,
+      source: 'unset',
+      baseUrl: '',
+    });
+  });
+
+  it('a stored baseUrl override (e.g. a non-default port) round-trips through writeConfig -> resolveProviderConfig / readMaskedConfig with no apiKey required', async () => {
+    await writeConfig(projectRoot, {
+      providers: { sdcpp: { baseUrl: 'http://127.0.0.1:9234' } },
+    });
+
+    const resolved = await resolveProviderConfig(projectRoot, 'sdcpp');
+    expect(resolved.apiKey).toBe('');
+    expect(resolved.baseUrl).toBe('http://127.0.0.1:9234');
+
+    const masked = await readMaskedConfig(projectRoot);
+    expect(sdcppProvider(masked)).toMatchObject({
+      // Still "unset"/unconfigured by readMaskedConfig's apiKey-only
+      // configured flag — sdcpp never has an apiKey to store. The stored
+      // baseUrl override itself is what resolveProviderConfig honors.
+      configured: false,
+      baseUrl: 'http://127.0.0.1:9234',
     });
   });
 });

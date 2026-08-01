@@ -9,14 +9,17 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import { migratePlugins } from '../src/plugins/persistence.js';
+import { createMarketplaceSeedHelpers } from '../src/plugins/marketplace-seed.js';
 import {
   addMarketplace,
   ensureMarketplaceManifest,
   getMarketplace,
   listMarketplaces,
   marketplaceManifestUrlForRegistry,
+  marketplaceRegistryIdFromUrl,
   refreshMarketplace,
   removeMarketplace,
   resolvePluginInMarketplaces,
@@ -301,7 +304,7 @@ describe('marketplaces', () => {
     );
   });
 
-  it('keeps the checked-in official registry populated from bundled plugins', async () => {
+  it('keeps the checked-in official registry curated from bundled plugins', async () => {
     const officialManifestText = await readFile(
       new URL('../../../plugins/registry/official/open-design-marketplace.json', import.meta.url),
       'utf8',
@@ -313,11 +316,11 @@ describe('marketplaces', () => {
     };
 
     expect(officialManifest.trust).toBe('official');
-    expect(officialManifest.plugins?.length).toBeGreaterThan(100);
+    expect(officialManifest.plugins?.length).toBe(70);
     expect(officialManifest.metadata?.bundledPreinstallCount).toBe(
       officialManifest.plugins?.length,
     );
-    expect(officialManifest.plugins?.some((plugin) => plugin.name === 'open-design/build-test')).toBe(true);
+    expect(officialManifest.plugins?.some((plugin) => plugin.name === 'open-design/design-system-airbnb')).toBe(true);
     expect(officialManifest.plugins?.every((plugin) =>
       /^github:nexu-io\/open-design(?:@[^/]+)?\/plugins\/_official\//.test(plugin.source ?? ''),
     )).toBe(true);
@@ -331,9 +334,51 @@ describe('marketplaces', () => {
     });
     if (!seeded.ok) throw new Error('official seed failed');
 
-    const resolved = resolvePluginInMarketplaces(db, 'open-design/build-test');
+    const resolved = resolvePluginInMarketplaces(db, 'open-design/design-system-airbnb');
     expect(resolved?.marketplaceId).toBe('official');
     expect(resolved?.marketplaceTrust).toBe('official');
+  });
+
+  it('merges the bundled roster into the official seed manifest without duplicating checked-in rows', async () => {
+    const projectRoot = fileURLToPath(new URL('../../..', import.meta.url));
+    const { marketplaceSeedManifestText } = createMarketplaceSeedHelpers({
+      bundledPluginsDir: path.join(projectRoot, 'plugins/_official'),
+      projectRoot,
+      pluginRegistryDir: path.join(projectRoot, 'plugins/registry'),
+      marketplaceManifestUrlForRegistry,
+      marketplaceRegistryIdFromUrl,
+    });
+
+    const checkedIn = JSON.parse(await readFile(
+      new URL('../../../plugins/registry/official/open-design-marketplace.json', import.meta.url),
+      'utf8',
+    )) as { plugins?: Array<{ name?: string }> };
+    const checkedInNames = (checkedIn.plugins ?? []).map((plugin) => plugin.name);
+    expect(checkedInNames).toContain('open-design/design-system-airbnb');
+
+    // One entry duplicating a checked-in row, one that exists only in the
+    // bundled tree (its checked-in row was removed by the gallery curation).
+    const bundledEntries = [
+      {
+        name: 'open-design/design-system-airbnb',
+        source: 'github:nexu-io/open-design@main/plugins/_official/design-systems/airbnb',
+      },
+      {
+        name: 'open-design/build-test',
+        source: 'github:nexu-io/open-design@main/plugins/_official/atoms/build-test',
+      },
+    ];
+    const merged = await marketplaceSeedManifestText('official', bundledEntries);
+    expect(merged).not.toBeNull();
+    const parsed = JSON.parse(merged!) as {
+      metadata?: { bundledPreinstallCount?: number };
+      plugins?: Array<{ name?: string }>;
+    };
+    const mergedNames = (parsed.plugins ?? []).map((plugin) => plugin.name);
+    for (const name of checkedInNames) expect(mergedNames).toContain(name);
+    expect(mergedNames.filter((name) => name === 'open-design/design-system-airbnb')).toHaveLength(1);
+    expect(mergedNames).toContain('open-design/build-test');
+    expect(parsed.metadata?.bundledPreinstallCount).toBe(bundledEntries.length);
   });
 
   it('keeps checked-in community registry entries pointed at source folders that can pack', async () => {

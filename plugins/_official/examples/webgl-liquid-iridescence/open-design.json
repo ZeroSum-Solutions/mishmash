@@ -8,7 +8,7 @@
   "description": "A self-contained WebGL2 hero: a living oil-on-water field brightened into iridescent caustic filaments; move the cursor to bend the flow.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/webgl-liquid-iridescence",

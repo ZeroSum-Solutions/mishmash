@@ -23,7 +23,7 @@ import type { HtmlPreviewSpec } from '../../src/components/plugins-home/preview'
 
 const PREVIEW: HtmlPreviewSpec = {
   kind: 'html',
-  src: '/api/plugins/example-html-ppt/preview',
+  src: '/api/plugins/sample-html-ppt/preview',
   label: 'index.html',
   source: 'preview',
 };
@@ -50,7 +50,7 @@ describe('HtmlSurface reachability probe', () => {
     const { container } = render(
       <HtmlSurface
         preview={PREVIEW}
-        pluginId="example-html-ppt"
+        pluginId="sample-html-ppt"
         pluginTitle="Html Ppt"
         inView
       />,
@@ -73,7 +73,7 @@ describe('HtmlSurface reachability probe', () => {
     const { container } = render(
       <HtmlSurface
         preview={PREVIEW}
-        pluginId="example-html-ppt"
+        pluginId="sample-html-ppt"
         pluginTitle="Html Ppt"
         inView
       />,

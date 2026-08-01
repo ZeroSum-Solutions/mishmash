@@ -161,7 +161,7 @@
     "method": "POST",
     "path": "/api/plugins/:id/duplicate-project",
     "file": "apps/daemon/src/routes/plugins/index.ts",
-    "probePath": "/api/plugins/example-article-magazine/duplicate-project",
+    "probePath": "/api/plugins/example-simple-deck/duplicate-project",
     "probeBody": {}
   },
   {

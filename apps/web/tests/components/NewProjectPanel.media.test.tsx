@@ -143,11 +143,15 @@ describe('NewProjectPanel media provider badges', () => {
         promptTemplates={[]}
         onCreate={vi.fn()}
         mediaProviders={{
+          // 'codex-auth' is the real source string
+          // resolveOpenAIAuthFileCredential (apps/daemon/src/media/config.ts)
+          // emits for a borrowed Codex auth-file token that isn't proof the
+          // Images API can be called.
           openai: {
             apiKey: '',
             apiKeyConfigured: true,
             apiKeyTail: '',
-            source: 'oauth-codex',
+            source: 'codex-auth',
             baseUrl: '',
           },
         }}

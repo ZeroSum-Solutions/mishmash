@@ -8,7 +8,7 @@
   "description": "Team-management dashboard skill in the FlowAI aesthetic — three tabs (Team Members, Team Details, Activity Log), KPI stat row, member table, role distribution bar chart, online presence and activity sparklines, and a top-contributors panel, all in a single self-contained HTML file with light/dark theming, hoverable chart tooltips, click-to-zoom panels, and CSV export. Use when the brief asks for a team / workspace admin dashboard, an interactive admin dashboard with charts, or names FlowAI.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/flowai-live-dashboard-template",

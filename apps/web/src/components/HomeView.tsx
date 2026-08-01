@@ -2242,6 +2242,7 @@ export function HomeView({
         enabled={!projectsLoading && projects.length === 0}
       >
         <PluginsHomeSection
+          title={t('home.workflowsAndAssetsTitle')}
           plugins={plugins}
           loading={pluginsLoading}
           activePluginId={active?.record.id ?? null}

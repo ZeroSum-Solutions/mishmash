@@ -8,7 +8,7 @@
   "description": "A lo-fi mobile app flow wireframe — three to four phone frames in a row (onboarding → home feed → item detail → confirm), greybox content inside each device, dashed connector arrows with numbered step labels, and sticky-note annotations. Use when the brief asks for \"mobile wireframe\", \"app flow\", \"user flow\", \"lo-fi mobile\", \"low fidelity\", \"mobile wireframe\", or \"app flow diagram\".",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/wireframe-mobile-flow",

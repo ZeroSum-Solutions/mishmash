@@ -24,6 +24,7 @@ export type IconName =
   | 'file'
   | 'file-code'
   | 'file-text'
+  | 'film'
   | 'folder'
   | 'folder-filled'
   | 'fork'
@@ -284,6 +285,19 @@ export function Icon({ name, size = 14, strokeWidth = 1.6, ...rest }: Props) {
           <path d="M14 2v6h6" />
           <path d="m10 13-2 2 2 2" />
           <path d="m14 17 2-2-2-2" />
+        </svg>
+      );
+    case 'film':
+      return (
+        <svg {...common}>
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M7 3v18" />
+          <path d="M3 7.5h4" />
+          <path d="M3 12h18" />
+          <path d="M3 16.5h4" />
+          <path d="M17 3v18" />
+          <path d="M17 7.5h4" />
+          <path d="M17 16.5h4" />
         </svg>
       );
     case 'folder':

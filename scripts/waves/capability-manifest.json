@@ -898,6 +898,50 @@
     "reason": "CLI vs HTTP determination (C0-10, confirmed live): \"od config list\" (apps/daemon/src/cli.ts runConfig, case 'list') calls GET /api/app-config (this row's declared endpoint, confirmed the correct and only HTTP call it makes), then unwraps the daemon's `{ config }` envelope and prints only the inner settings object. Confirmed live: CLI stdout is `{\"telemetry\":{\"metrics\":true,\"content\":true}}` while the raw HTTP response for the same request is `{\"config\":{\"telemetry\":{\"metrics\":true,\"content\":true}}}`. This is a legitimate, permanent one-level unwrap for CLI ergonomics (the same settings object, not a different capability's data), not a parity bug -- but it is a wrapper-key mismatch none of the four supported valueComparison modes (exact/unordered-array/composite/binary) can express: composite requires every declared field to be present and non-empty in BOTH payloads at the top level, and no single field name is ever present in both (the CLI's top-level keys are the real setting names; the HTTP response's only top-level key is the literal \"config\" wrapper). No valueComparison is declared: this row is left at the strict default (which will legitimately fail if sample-selected) and reported here as a real, understood gate-comparator-vocabulary gap, the same category as the \"mcp\" row above."
   },
   {
+    "capability": "design-library",
+    "uiEntryPoint": "Design Library section (Entry nav rail)",
+    "cliArgs": [
+      "design-library",
+      "catalog",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/design-library/catalog",
+    "outputSchema": "DesignLibraryCatalog (groups of collections with allowed_use rights states)",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/design-library/catalog",
+      "GET /api/design-library/thumb/:param",
+      "POST /api/design-library/open"
+    ]
+  },
+  {
+    "capability": "storyboard",
+    "uiEntryPoint": "Storyboard section (Entry nav rail)",
+    "cliArgs": [
+      "storyboard",
+      "list",
+      "--json"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/storyboards",
+    "outputSchema": "ListStoryboardsResponse (storyboard summaries)",
+    "parityApplicable": true,
+    "knownNamespaceRoutes": [
+      "GET /api/storyboards",
+      "POST /api/storyboards",
+      "GET /api/storyboards/:param",
+      "PATCH /api/storyboards/:param",
+      "DELETE /api/storyboards/:param",
+      "POST /api/storyboards/:param/open-folder",
+      "POST /api/storyboards/:param/frames",
+      "POST /api/storyboards/:param/uploads",
+      "POST /api/storyboards/:param/shots/:param/render",
+      "POST /api/storyboards/:param/assemble",
+      "POST /api/storyboards/:param/export-slider"
+    ]
+  },
+  {
     "capability": "library",
     "uiEntryPoint": "OD Library grid",
     "cliArgs": [

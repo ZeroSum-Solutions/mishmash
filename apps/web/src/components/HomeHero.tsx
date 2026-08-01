@@ -85,6 +85,7 @@ import { curatedPluginPriorityForChip } from './plugins-home/curatedPriority';
 import { comparePluginGalleryOrder } from './plugins-home/pluginPopularity';
 import { sortByVisualAppeal } from './plugins-home/visualScore';
 import { applyFacetSelection } from './plugins-home/facets';
+import { isGalleryVisiblePlugin } from './plugins-home/galleryVisibility';
 import { inferPluginPreview } from './plugins-home/preview';
 import { pluginSubfacetLabel } from './plugins-home/subfacetLabel';
 import { useDeckPreviewScale } from '../lib/use-deck-preview-scale';
@@ -692,13 +693,14 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
   // set, in the same visual-appeal order — rather than the small curated
   // example showcase. This keeps the example-prompt count consistent with the
   // Community count badge (e.g. Brand / design shows all 16, not just 1).
-  // Atoms are excluded to match Community's `visiblePlugins` derivation, and
-  // `applyFacetSelection` is the exact filter Community uses — it requires the
-  // plugin's primary category to be this chip AND match the sub-category, so a
-  // deck/image plugin that merely carries a "brand" tag is not pulled in.
+  // `isGalleryVisiblePlugin` is used to match Community's `visiblePlugins`
+  // derivation exactly (atoms and `scenario`-tagged flow plugins excluded),
+  // and `applyFacetSelection` is the exact filter Community uses — it requires
+  // the plugin's primary category to be this chip AND match the sub-category,
+  // so a deck/image plugin that merely carries a "brand" tag is not pulled in.
   const filteredExamplePlugins = useMemo(() => {
     if (!selectedSubcategory || !isSubChipParent(activeChipId)) return activeExamplePlugins;
-    const pool = pluginOptions.filter((plugin) => plugin.manifest?.od?.kind !== 'atom');
+    const pool = pluginOptions.filter(isGalleryVisiblePlugin);
     return sortByVisualAppeal(
       applyFacetSelection(pool, { category: activeChipId, subcategory: selectedSubcategory }),
     );
@@ -3854,6 +3856,7 @@ export function homeHeroExamplePluginsForChip(
   // section's "Slides" count.
   const showcaseLimit = chipId === 'deck' ? Number.POSITIVE_INFINITY : 18;
   const presets = plugins
+    .filter(isGalleryVisiblePlugin)
     .filter((plugin) => !EXAMPLE_PRESET_HIDDEN_PLUGIN_IDS.has(plugin.id))
     .filter((plugin) => (
       pluginMatchesExampleChip(plugin, chipId) ||
@@ -3865,9 +3868,6 @@ export function homeHeroExamplePluginsForChip(
     ))
     .sort((a, b) => comparePluginPresetOrder(a, b, chipId))
     .slice(0, showcaseLimit);
-  if (chipId === 'image') {
-    return movePluginPresetToEnd(presets, 'example-hatch-pet');
-  }
   return presets;
 }
 
@@ -3877,10 +3877,11 @@ function comparePluginPresetOrder(
   chipId: string,
 ): number {
   // Gallery order (OPEND-449): pins first, default seeds + no-preview tiles sunk
-  // to the bottom, then usage popularity for non-prototype chips. The prototype
-  // chip stays curation-governed, so popularity is skipped and it keeps its
-  // curated order.
-  const curationGoverned = chipId === 'prototype';
+  // to the bottom, then usage popularity for non-curated chips. The prototype
+  // and hyperframes chips stay curation-governed, so popularity is skipped and
+  // they keep their curated order (the curated hyperframes ship HTML previews
+  // with no usage history, so popularity would bury them).
+  const curationGoverned = chipId === 'prototype' || chipId === 'hyperframes';
   const gallery = comparePluginGalleryOrder(a.id, b.id, curationGoverned, curationGoverned);
   if (gallery !== 0) return gallery;
   const aCurated = curatedPluginPriorityForChip(a, chipId);
@@ -3893,20 +3894,6 @@ function comparePluginPresetOrder(
   const rankDelta = pluginPresetRank(b, chipId) - pluginPresetRank(a, chipId);
   if (rankDelta !== 0) return rankDelta;
   return (a.title || a.id).localeCompare(b.title || b.id);
-}
-
-function movePluginPresetToEnd(
-  records: InstalledPluginRecord[],
-  pluginId: string,
-): InstalledPluginRecord[] {
-  const index = records.findIndex((record) => record.id === pluginId);
-  if (index < 0 || index === records.length - 1) return records;
-  const record = records[index]!;
-  return [
-    ...records.slice(0, index),
-    ...records.slice(index + 1),
-    record,
-  ];
 }
 
 export function pluginMatchesExampleChip(record: InstalledPluginRecord, chipId: string): boolean {

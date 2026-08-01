@@ -64,6 +64,7 @@ import {
   type MediaProvider,
   type MediaSurface,
   VIDEO_LENGTHS_SEC,
+  VIDEO_MODELS,
   findMediaModel,
   findProvider,
   modelsForSurface,
@@ -71,6 +72,7 @@ import {
 import { assertAndFetchExternalAsset } from '../connectionTest.js';
 import { normalizeCodexConfigFile } from '../codex-config-normalize.js';
 import {
+  refreshHiggsfieldMcpToken,
   resolveCodexImagegenEnv,
   resolveCodexSubscriptionStatus,
   resolveModelAlias,
@@ -91,10 +93,15 @@ import {
   AIHUBMIX_DEFAULT_BASE_URL,
   aihubmixHeaders,
   aihubmixWireModel,
-  aihubmixVideoSeconds,
   aihubmixGeminiImageBytes,
   classifyAIHubMixModel,
 } from '../integrations/aihubmix.js';
+import {
+  aihubmixMediaRegistry,
+  buildVideoRequest,
+  deriveVideoFamily,
+  type ModelCapability,
+} from '../media-adapters/index.js';
 
 const execFile = promisify(execFileCb);
 type ProviderConfig = { apiKey?: string; baseUrl?: string; model?: string };
@@ -139,6 +146,13 @@ type MediaContext = {
   promptInfluence: number | undefined;
   compositionDir: string | null;
   imageRef: ImageRef | null;
+  /**
+   * Resolved end (last) keyframe for Seedance-style start/end keyframe-pair
+   * i2v. `null` when the caller didn't pass `endImage`. Only Volcengine and
+   * OpenRouter Seedance 2.0 models (the ones carrying the `kf` capability)
+   * consume this — see the capability guard in `generateMedia` below.
+   */
+  endImageRef: ImageRef | null;
   requestInit: MediaRequestInit;
   /** Additional reference images for multi-image i2v / style reference flows. */
   imageRefs: ImageRef[];
@@ -324,7 +338,7 @@ export async function generateMedia(args: {
   projectRoot: string; projectsRoot: string; projectId: string; surface: MediaSurface; model: string;
   prompt?: string; output?: string; aspect?: string; length?: number; duration?: number; voice?: string;
   audioKind?: AudioKind; language?: string; loop?: boolean; promptInfluence?: number;
-  compositionDir?: string; image?: string; images?: string[]; onProgress?: ProgressFn; requestInit?: MediaRequestInit;
+  compositionDir?: string; image?: string; endImage?: string; images?: string[]; onProgress?: ProgressFn; requestInit?: MediaRequestInit;
   onProviderRequestSettled?: (summary: ImageGenerationRequestSummary & { providerId: string }) => void;
 }) {
   const {
@@ -460,6 +474,59 @@ export async function generateMedia(args: {
   // and decide how to splice the data URL into their request.
   const imageRef = await resolveProjectImage(image, dir);
 
+  // Reject a reference image for a video model whose declared caps don't
+  // include i2v. Without this, renderVolcengineVideo / renderGrokVideo /
+  // renderFalVideo splice ctx.imageRef into the wire request gated only on
+  // truthiness — so a t2v-only catalog model (e.g.
+  // doubao-seedance-1-0-lite-t2v-250428, wan-2.1-t2v) silently gets an image
+  // attached that the model never declared support for, instead of a clear
+  // error. Scoped to registered catalog models only — the Fal custom-path and
+  // AIHubMix catch-all defs above don't carry reliable per-model capability
+  // data, so they're left to the provider/family-aware builder to enforce.
+  if (
+    surface === 'video'
+    && imageRef
+    && !isFalCustomPath
+    && !isCatalogBypass
+    && !def.caps.includes('i2v')
+  ) {
+    throw new Error(
+      `${model} is a text-to-video model (caps: ${def.caps.join(', ') || 'none'}) and can't take a `
+      + 'reference image. Remove --image, or switch to an i2v-capable model.',
+    );
+  }
+
+  // End (last) keyframe for the Seedance start/end keyframe-pair workflow.
+  // Resolved the same way as the start frame; Ark requires first_frame
+  // whenever last_frame is present, so an end frame with no start frame is
+  // rejected up front at the route (routes/media.ts) — this is a defense in
+  // depth check for any other caller of generateMedia directly.
+  const endImageRef = await resolveProjectImage(args.endImage, dir);
+  if (endImageRef && !imageRef) {
+    throw new Error('endImage requires image (Ark requires first_frame whenever last_frame is present).');
+  }
+  // Keyframe pairs are a narrow capability: only the Volcengine, OpenRouter,
+  // and Higgsfield Seedance 2.0 catalog models declare `kf` (see
+  // apps/daemon/src/media/models.ts). Gate by provider id here too, not just
+  // caps, so a mis-catalogued model can't silently have its end frame
+  // dropped by a renderer that never looks at ctx.endImageRef.
+  if (
+    surface === 'video'
+    && endImageRef
+    && !isFalCustomPath
+    && !isCatalogBypass
+    && (
+      (def.provider !== 'volcengine' && def.provider !== 'openrouter' && def.provider !== 'higgsfield')
+      || !def.caps.includes('i2v')
+      || !def.caps.includes('kf')
+    )
+  ) {
+    const supported = VIDEO_MODELS.filter((m) => m.caps.includes('kf')).map((m) => m.id).join(', ');
+    throw new Error(
+      `${model} does not support an end (last) keyframe. Supported models: ${supported || 'none configured'}.`,
+    );
+  }
+
   // Multi-image support: resolve additional images from the `images`
   // array param. The first resolved image (imageRef) is the primary
   // reference; additional images flow as style/content references.
@@ -506,6 +573,9 @@ export async function generateMedia(args: {
     // Resolved reference image for i2v / image-edit flows. `null` when
     // the agent didn't pass --image. See resolveProjectImage below.
     imageRef,
+    // Resolved end (last) keyframe for the Seedance start/end keyframe-pair
+    // workflow. `null` when the agent didn't pass --end-image.
+    endImageRef,
     requestInit: requestInit || {},
     imageRefs,
     projectRoot,
@@ -742,6 +812,31 @@ export async function generateMedia(args: {
       bytes = result.bytes;
       providerNote = result.providerNote;
       suggestedExt = result.suggestedExt;
+    } else if (def.provider === 'kie' && surface === 'image') {
+      const result = await renderKieImage(ctx, credentials);
+      bytes = result.bytes;
+      providerNote = result.providerNote;
+      suggestedExt = result.suggestedExt;
+    } else if (def.provider === 'kie' && surface === 'video') {
+      const result = await renderKieVideo(ctx, credentials, args.onProgress);
+      bytes = result.bytes;
+      providerNote = result.providerNote;
+      suggestedExt = result.suggestedExt;
+    } else if (def.provider === 'higgsfield' && surface === 'image') {
+      const result = await renderHiggsfieldImage(ctx, credentials);
+      bytes = result.bytes;
+      providerNote = result.providerNote;
+      suggestedExt = result.suggestedExt;
+    } else if (def.provider === 'higgsfield' && surface === 'video') {
+      const result = await renderHiggsfieldVideo(ctx, credentials, args.onProgress);
+      bytes = result.bytes;
+      providerNote = result.providerNote;
+      suggestedExt = result.suggestedExt;
+    } else if (def.provider === 'sdcpp' && surface === 'image') {
+      const result = await renderSdcppImage(ctx, credentials, args.onProgress);
+      bytes = result.bytes;
+      providerNote = result.providerNote;
+      suggestedExt = result.suggestedExt;
     } else {
       // No real renderer wired up for this (provider, surface). Gate the
       // stub fallback behind OD_MEDIA_ALLOW_STUBS so release builds don't
@@ -892,9 +987,18 @@ async function renderOpenAIImage(ctx: MediaContext, credentials: ProviderConfig)
   }
   const rawBase = credentials.baseUrl || 'https://api.openai.com/v1';
   const azure = detectAzureEndpoint(rawBase);
-  const url = buildOpenAIImageUrl(rawBase, azure);
+  // gpt-image-2 (and the other gpt-image-*/dall-e-* models tagged `i2i` in
+  // the catalog) route through the images/edits shape when a reference
+  // image is supplied — mirrors renderCustomOpenAIImage's edit branch.
+  // Without this, ctx.imageRef was silently dropped: the request still went
+  // to images/generations and produced an unrelated fresh image instead of
+  // an edit.
+  const isEdit = Boolean(ctx.imageRef?.dataUrl);
+  const url = isEdit
+    ? buildOpenAIImageEditUrl(rawBase, azure)
+    : buildOpenAIImageUrl(rawBase, azure);
 
-  const body: Record<string, unknown> = {
+  const fields: Record<string, string | number> = {
     prompt: ctx.prompt || 'A high-quality reference image.',
     n: 1,
     size: openaiSizeFor(ctx.model, ctx.aspect),
@@ -904,23 +1008,22 @@ async function renderOpenAIImage(ctx: MediaContext, credentials: ProviderConfig)
   // compatible across both flavors. The wire-name (post-alias) goes
   // on the body so the user's alias from issue #1277 reaches the API.
   if (!azure) {
-    body.model = ctx.wireModel;
+    fields.model = ctx.wireModel;
   }
   // Capability branches key off the CATALOG id (not the alias) so a
   // user who aliased `dall-e-3` to a custom Azure / proxy deployment
   // still gets the DALL-E-specific quality + response_format flags
   // (lefarcen + codex P2 on PR #1309).
   if (ctx.model.startsWith('dall-e-')) {
-    body.response_format = 'b64_json';
-    body.quality = ctx.model === 'dall-e-3' ? 'hd' : 'standard';
+    fields.response_format = 'b64_json';
+    fields.quality = ctx.model === 'dall-e-3' ? 'hd' : 'standard';
   } else {
     // gpt-image-* accepts quality 'high' | 'medium' | 'low'.
-    body.quality = 'high';
+    fields.quality = 'high';
   }
 
   const headers: Record<string, string> = {
     'authorization': `Bearer ${credentials.apiKey}`,
-    'content-type': 'application/json',
   };
   if (azure) {
     // Azure's canonical auth header. Some deployments accept Bearer
@@ -930,10 +1033,30 @@ async function renderOpenAIImage(ctx: MediaContext, credentials: ProviderConfig)
     headers['api-key'] = credentials.apiKey;
   }
 
+  // The real OpenAI /v1/images/edits endpoint requires multipart/form-data
+  // with the image sent as an uploaded file — the JSON {images:[{image_url}]}
+  // shape this used to send 400s against the actual API (it only worked
+  // against OpenAI-compatible aggregators, which is what renderCustomOpenAIImage
+  // still targets). Never set content-type manually for the multipart request;
+  // fetch derives the boundary from the FormData instance itself.
+  let requestBody: RequestInit['body'];
+  if (isEdit) {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(fields)) form.append(key, String(value));
+    const { mime, dataUrl, path: refPath } = ctx.imageRef!;
+    const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    const ext = path.extname(refPath) || '.png';
+    form.append('image', new Blob([Buffer.from(base64, 'base64')], { type: mime }), `image${ext}`);
+    requestBody = form;
+  } else {
+    headers['content-type'] = 'application/json';
+    requestBody = JSON.stringify(fields);
+  }
+
   const resp = await fetch(url, withMediaRequestInit(ctx, {
     method: 'POST',
     headers,
-    body: JSON.stringify(body),
+    body: requestBody,
     dispatcher: ctx.requestInit.dispatcher
       ?? openAIImageDispatcher as unknown as NonNullable<RequestInit['dispatcher']>,
     signal: AbortSignal.timeout(Math.max(OPENAI_IMAGE_HEADERS_TIMEOUT_MS, OPENAI_IMAGE_BODY_TIMEOUT_MS)),
@@ -1410,7 +1533,7 @@ function buildOpenAIImageUrl(baseUrl: string, isAzure: boolean): string {
   return parsed.toString();
 }
 
-function buildOpenAIImageEditUrl(baseUrl: string): string {
+function buildOpenAIImageEditUrl(baseUrl: string, isAzure = false): string {
   let parsed;
   try {
     parsed = new URL(baseUrl);
@@ -1419,6 +1542,9 @@ function buildOpenAIImageEditUrl(baseUrl: string): string {
     return normalizeOpenAICompatiblePath(stripped, 'images', 'edits');
   }
   parsed.pathname = normalizeOpenAICompatiblePath(parsed.pathname, 'images', 'edits');
+  if (isAzure && !parsed.searchParams.has('api-version')) {
+    parsed.searchParams.set('api-version', AZURE_DEFAULT_API_VERSION);
+  }
   return parsed.toString();
 }
 
@@ -1593,12 +1719,33 @@ async function renderVolcengineVideo(ctx: MediaContext, credentials: ProviderCon
   // it as the first frame and animates from there. We pass the data
   // URL directly; the API does not require a public URL. When no
   // image is provided, this is a regular t2v call.
+  //
+  // Start/end keyframe pairs (Seedance 2.0's `kf` capability): when an end
+  // frame is also supplied, both entries carry an explicit `role` so Ark
+  // knows which is the first vs. last frame (`role: 'last_frame'` requires
+  // `role: 'first_frame'` on the same request). Image-only requests keep the
+  // original role-less shape exactly as before — generateMedia's guard
+  // above already rejects an end frame without a start frame, so `role` is
+  // only ever added in the pair case.
   const content: Array<Record<string, unknown>> = [{ type: 'text', text: fullText }];
   if (ctx.imageRef && ctx.imageRef.dataUrl) {
-    content.push({
-      type: 'image_url',
-      image_url: { url: ctx.imageRef.dataUrl },
-    });
+    if (ctx.endImageRef && ctx.endImageRef.dataUrl) {
+      content.push({
+        type: 'image_url',
+        image_url: { url: ctx.imageRef.dataUrl },
+        role: 'first_frame',
+      });
+      content.push({
+        type: 'image_url',
+        image_url: { url: ctx.endImageRef.dataUrl },
+        role: 'last_frame',
+      });
+    } else {
+      content.push({
+        type: 'image_url',
+        image_url: { url: ctx.imageRef.dataUrl },
+      });
+    }
   }
 
   const taskBody = {
@@ -1715,7 +1862,7 @@ async function renderVolcengineImage(ctx: MediaContext, credentials: ProviderCon
   }
   const baseUrl = (credentials.baseUrl || 'https://ark.cn-beijing.volces.com/api/v3').replace(/\/$/, '');
 
-  const body = {
+  const body: Record<string, unknown> = {
     model: ctx.wireModel,
     prompt: ctx.prompt || 'A high-quality reference image.',
     response_format: 'b64_json',
@@ -1724,6 +1871,14 @@ async function renderVolcengineImage(ctx: MediaContext, credentials: ProviderCon
     // wire name. lefarcen + codex P2 on PR #1309.
     size: openaiSizeFor(ctx.model, ctx.aspect),
   };
+  // Ark's image API unifies generate + edit behind the same
+  // /images/generations endpoint: passing `image` (a URL or base64 data
+  // URL) switches doubao-seededit-3.0 (catalogued `i2i`) into edit mode.
+  // Without this, ctx.imageRef was silently dropped and every request —
+  // edit or not — produced a fresh t2i image.
+  if (ctx.imageRef?.dataUrl) {
+    body.image = ctx.imageRef.dataUrl;
+  }
   const resp = await fetch(`${baseUrl}/images/generations`, withMediaRequestInit(ctx, {
     method: 'POST',
     headers: {
@@ -2179,6 +2334,18 @@ async function renderOpenRouterVideo(
         frame_type: 'first_frame',
       },
     ];
+  }
+
+  // Start/end keyframe pairs (Seedance 2.0's `kf` capability): append the
+  // end (last) frame to `frame_images` alongside the first_frame entry built
+  // above. generateMedia's guard already requires a start frame whenever an
+  // end frame is supplied, so `frame_images` is always populated here too.
+  if (ctx.endImageRef && ctx.endImageRef.dataUrl && Array.isArray(body.frame_images)) {
+    (body.frame_images as Array<Record<string, unknown>>).push({
+      type: 'image_url',
+      image_url: { url: ctx.endImageRef.dataUrl },
+      frame_type: 'last_frame',
+    });
   }
 
   // ── Step 1: Submit the generation request ──────────────────────────
@@ -3473,6 +3640,40 @@ function aihubmixVideoSizeFor(aspect: string | undefined): string {
   }
 }
 
+// Resolve a model's capability from the shared media-adapters registry; for
+// catalogue models not in the seed, synthesize a sensible default (family +
+// duration set derived from the wire name). Mirrors byok-tools.ts's
+// aihubmixVideoCapabilityFor (duplicated here rather than imported — that
+// function isn't exported, and this module doesn't reach into byok-tools.ts's
+// private helpers). Phase 2 replaces the registry's seed with a live AIHubMix
+// /api/v1/models fetch.
+function aihubmixVideoCapabilityFor(catalogModel: string): ModelCapability {
+  const existing = aihubmixMediaRegistry.get(catalogModel);
+  if (existing) return existing;
+  const wire = aihubmixWireModel(catalogModel);
+  const lower = wire.toLowerCase();
+  const isVeo = lower.startsWith('veo');
+  const supportedDurations = isVeo
+    ? [4, 6, 8]
+    : lower.startsWith('sora')
+      ? [4, 8, 12]
+      : lower.startsWith('wan')
+        ? [5, 10]
+        : undefined;
+  // Veo is text-to-video only on the gateway (every reference form is rejected),
+  // so never grant it an i2v cap even if a future wire name contained "i2v".
+  const i2v = !isVeo && lower.includes('i2v');
+  return {
+    id: wire,
+    apiModel: wire,
+    mediaType: 'video',
+    family: deriveVideoFamily(wire),
+    caps: i2v ? ['i2v'] : ['t2v'],
+    ...(i2v ? { supportedFrameImages: ['first_frame'] } : {}),
+    ...(supportedDurations ? { supportedDurations } : {}),
+  };
+}
+
 async function renderAIHubMixVideo(
   ctx: MediaContext,
   credentials: ProviderConfig,
@@ -3482,22 +3683,30 @@ async function renderAIHubMixVideo(
     throw new Error('no AIHubMix API key — configure it in Settings or set OD_AIHUBMIX_API_KEY');
   }
   const baseUrl = (credentials.baseUrl || AIHUBMIX_DEFAULT_BASE_URL).replace(/\/$/, '');
-  const wireModel = aihubmixWireModel(credentials.model || ctx.wireModel);
+  const catalogModel = credentials.model || ctx.wireModel;
   const size = aihubmixVideoSizeFor(ctx.aspect);
-  // Snap to the model family's allowed duration set (Veo: 4/6/8, Sora: 4/8/12,
-  // wan: 5/10) so an out-of-set value isn't rejected upstream.
-  const seconds = aihubmixVideoSeconds(wireModel, ctx.length || 5);
 
-  const body: Record<string, unknown> = {
-    model: wireModel,
+  // Build the family-aware wire body (wan/veo/seedance/generic all shape the
+  // request differently — see media-adapters/video.ts). This mirrors the BYOK
+  // chat-tool path (byok-tools.ts's executeAIHubMixGenerateVideo), which was
+  // fixed to use the same builder after probing proved the flat
+  // {model,prompt,size,seconds,input_reference?} body wrong for wan/veo — wan
+  // needs {input:{prompt,media:[...]},parameters:{...}} and veo needs a
+  // NUMERIC seconds with no reference field at all. This renderer, the
+  // primary `od media generate` / NewProjectPanel path, was still building
+  // that stale flat shape.
+  const cap = aihubmixVideoCapabilityFor(catalogModel);
+  if (ctx.imageRef?.dataUrl && !cap.caps.includes('i2v')) {
+    throw new Error(`${cap.apiModel} is a text-to-video model and can't take a reference image. Remove the image, or switch to an i2v-capable model.`);
+  }
+  const built = buildVideoRequest(cap, {
     prompt: ctx.prompt || 'A short cinematic clip.',
     size,
-    seconds,
-  };
-  // First-frame reference for i2v flows; AIHubMix accepts a data URL.
-  if (ctx.imageRef?.dataUrl) {
-    body.input_reference = ctx.imageRef.dataUrl;
-  }
+    ...(typeof ctx.length === 'number' ? { durationSeconds: ctx.length } : {}),
+    ...(ctx.aspect ? { aspectRatio: ctx.aspect } : {}),
+    ...(ctx.imageRef?.dataUrl ? { imageRef: { dataUrl: ctx.imageRef.dataUrl } } : {}),
+  });
+  const body = built.body;
 
   const submitResp = await fetch(`${baseUrl}/videos`, withMediaRequestInit(ctx, {
     method: 'POST',
@@ -3614,7 +3823,7 @@ async function renderAIHubMixVideo(
 
   return {
     bytes,
-    providerNote: `aihubmix/${wireModel} · ${size} · ${seconds}s · ${bytes.length} bytes`,
+    providerNote: `aihubmix/${built.wireModel} · ${built.family} · ${size} · ${bytes.length} bytes`,
     suggestedExt: '.mp4',
   };
 }
@@ -3716,8 +3925,8 @@ const FAL_ENDPOINTS: Record<string, string> = {
   'flux-schnell-fal':    'fal-ai/flux/schnell',
   'ideogram-v3-fal':     'fal-ai/ideogram/v3',
   'recraft-v3-fal':      'fal-ai/recraft-v3',
-  'sora-2':              'fal-ai/sora',
-  'sora-2-pro':          'fal-ai/sora',
+  'sora-2':              'fal-ai/sora-2/text-to-video',
+  'sora-2-pro':          'fal-ai/sora-2/text-to-video/pro',
   'veo-3-fal':           'fal-ai/veo3',
   'veo-2-fal':           'fal-ai/veo2',
   'wan-2.1-t2v':         'fal-ai/wan-t2v',
@@ -3955,6 +4164,1083 @@ async function renderFalVideo(ctx: MediaContext, credentials: ProviderConfig, on
     providerNote: `fal/${endpoint} · ${aspectRatio}${durationPart} · ${bytes.length} bytes`,
     suggestedExt: '.mp4',
   };
+}
+
+// ---------------------------------------------------------------------------
+// Provider: Kie.ai — unified createTask/recordInfo async-jobs API fronting
+// Kling / Seedance 2.0 / Flux-2 / Qwen / Grok Imagine on one prepaid credit
+// pool. Every model goes through the same envelope (docs.kie.ai):
+//
+//   Create: POST /api/v1/jobs/createTask
+//           { model, input } -> { code: 200, msg, data: { taskId } }
+//   Poll:   GET  /api/v1/jobs/recordInfo?taskId=<id>
+//           -> { code, msg, data: { taskId, model, state, resultJson, failCode, failMsg } }
+//           state ∈ waiting | queuing | generating | success | fail
+//           resultJson is a JSON-encoded STRING; parse -> { resultUrls: [...] }
+//   Upload: POST /api/file-base64-upload (for i2i/i2v reference images —
+//           every per-model input schema below wants a URL, not an inline
+//           data URL, so a local --image/--images file must round-trip
+//           through this endpoint first)
+//           { base64Data, uploadPath, fileName? } -> { data: { downloadUrl } }
+//
+// Per-model slugs + input param names verified against these docs.kie.ai
+// pages (2026-07):
+//   kling-2.6/text-to-video   — docs.kie.ai/market/kling/text-to-video
+//   kling-2.6/image-to-video  — docs.kie.ai/market/kling/image-to-video
+//   bytedance/seedance-2      — docs.kie.ai/market/bytedance/seedance-2
+//   bytedance/seedance-2-fast — docs.kie.ai/market/bytedance/seedance-2-fast
+//   flux-2/pro-text-to-image  — docs.kie.ai/market/flux2/pro-text-to-image
+//   flux-2/pro-image-to-image — docs.kie.ai/market/flux2/pro-image-to-image
+//   qwen/image-to-image       — docs.kie.ai/market/qwen/image-to-image
+//   grok-imagine/text-to-image— docs.kie.ai/market/grok-imagine/text-to-image
+//
+// Veo 3.1 is deliberately NOT in the catalog: Kie serves it through a
+// dedicated POST /api/v1/veo/generate endpoint (docs.kie.ai/veo3-api/*),
+// not this createTask/recordInfo envelope — a second, incompatible request/
+// poll shape that's out of scope for this integration.
+// ---------------------------------------------------------------------------
+
+const KIE_DEFAULT_BASE_URL = 'https://api.kie.ai';
+const KIE_UPLOAD_PATH = 'mishmash/media-refs';
+const KIE_NO_API_KEY_MESSAGE =
+  'no Kie.ai API key — configure it in Settings or set KIE_AI_API_KEY';
+
+function kieAspectFor(aspect: string | undefined, allowed: readonly string[], fallback: string): string {
+  return aspect && allowed.includes(aspect) ? aspect : fallback;
+}
+
+function kieDurationEnumString(length: number | undefined, allowed: number[], fallback: number): string {
+  const value = typeof length === 'number' && Number.isFinite(length) ? length : fallback;
+  const closest = allowed.reduce((a, b) => (Math.abs(b - value) < Math.abs(a - value) ? b : a));
+  return String(closest);
+}
+
+function kieDurationIntClamped(length: number | undefined, min: number, max: number, fallback: number): number {
+  const value = typeof length === 'number' && Number.isFinite(length) ? length : fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+/**
+ * Push a local reference image (already resolved to a base64 data URL by
+ * resolveProjectImage) through Kie's base64 upload endpoint and return the
+ * resulting public download URL. Every Kie i2i/i2v input schema wants a URL
+ * string, not an inline data URL, so this round-trip is mandatory before the
+ * image can be spliced into a createTask input.
+ */
+async function kieUploadImage(
+  ref: ImageRef,
+  baseUrl: string,
+  apiKey: string,
+  ctx: Pick<MediaContext, 'requestInit'>,
+  index = 0,
+): Promise<string> {
+  const ext = path.extname(ref.path) || '.png';
+  const fileName = `${Date.now().toString(36)}-${index}${ext}`;
+  const resp = await fetch(`${baseUrl}/api/file-base64-upload`, withMediaRequestInit(ctx, {
+    method: 'POST',
+    headers: {
+      'authorization': `Bearer ${apiKey}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      base64Data: ref.dataUrl,
+      uploadPath: KIE_UPLOAD_PATH,
+      fileName,
+    }),
+  }));
+  const text = await resp.text();
+  if (!resp.ok) {
+    throw new Error(`kie upload ${resp.status}: ${truncate(text, 240)}`);
+  }
+  let data: any;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`kie upload non-JSON: ${truncate(text, 200)}`);
+  }
+  const url = data?.data?.downloadUrl;
+  if (typeof url !== 'string' || !url) {
+    throw new Error(`kie upload response missing data.downloadUrl: ${truncate(text, 200)}`);
+  }
+  return url;
+}
+
+/**
+ * Upload every ref in order and return the resulting URLs, preserving
+ * order. Used by flux-2/pro-image-to-image's `input_urls` (1-8 images).
+ */
+async function kieUploadRefs(
+  refs: ImageRef[],
+  baseUrl: string,
+  apiKey: string,
+  ctx: Pick<MediaContext, 'requestInit'>,
+): Promise<string[]> {
+  return Promise.all(refs.map((ref, i) => kieUploadImage(ref, baseUrl, apiKey, ctx, i)));
+}
+
+function kieMaxPollMs(defaultMs: number): number {
+  const v = Number(process.env.OD_KIE_MAX_POLL_MS);
+  return Number.isFinite(v) && v >= 30_000 ? v : defaultMs;
+}
+
+/**
+ * createTask + poll recordInfo until state=success/fail, returning the
+ * parsed resultUrls array. Shared by both renderKieImage and renderKieVideo
+ * since every Kie model rides the same envelope regardless of surface.
+ */
+async function kieCreateAndPoll(
+  wireModel: string,
+  input: Record<string, unknown>,
+  baseUrl: string,
+  apiKey: string,
+  maxMs: number,
+  ctx: Pick<MediaContext, 'requestInit'>,
+  onProgress?: ProgressFn,
+): Promise<string[]> {
+  const createResp = await fetch(`${baseUrl}/api/v1/jobs/createTask`, withMediaRequestInit(ctx, {
+    method: 'POST',
+    headers: {
+      'authorization': `Bearer ${apiKey}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ model: wireModel, input }),
+  }));
+  const createText = await createResp.text();
+  if (!createResp.ok) {
+    throw new Error(`kie createTask ${createResp.status}: ${truncate(createText, 240)}`);
+  }
+  let createData: any;
+  try {
+    createData = JSON.parse(createText);
+  } catch {
+    throw new Error(`kie createTask non-JSON: ${truncate(createText, 200)}`);
+  }
+  if (createData?.code !== 200) {
+    throw new Error(`kie createTask failed: ${createData?.msg || truncate(createText, 200)}`);
+  }
+  const taskId = createData?.data?.taskId;
+  if (!taskId) {
+    throw new Error(`kie createTask response missing data.taskId: ${truncate(createText, 200)}`);
+  }
+
+  const startedAt = Date.now();
+  let lastState = '';
+  if (typeof onProgress === 'function') {
+    onProgress(`kie ${wireModel} task ${taskId} accepted; polling status…`);
+  }
+  while (Date.now() - startedAt < maxMs) {
+    await sleep(3000);
+    const pollResp = await fetch(
+      `${baseUrl}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`,
+      withMediaRequestInit(ctx, { headers: { 'authorization': `Bearer ${apiKey}` } }),
+    );
+    const pollText = await pollResp.text();
+    if (!pollResp.ok) {
+      throw new Error(`kie poll ${pollResp.status}: ${truncate(pollText, 240)}`);
+    }
+    let pollData: any;
+    try {
+      pollData = JSON.parse(pollText);
+    } catch {
+      throw new Error(`kie poll non-JSON: ${truncate(pollText, 200)}`);
+    }
+    if (pollData?.code !== 200) {
+      throw new Error(`kie poll failed: ${pollData?.msg || truncate(pollText, 200)}`);
+    }
+    const data = pollData?.data;
+    lastState = data?.state || '';
+    if (typeof onProgress === 'function') {
+      const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+      onProgress(`kie task ${taskId} state=${lastState || 'pending'} (elapsed ${elapsedSec}s)`);
+    }
+    if (lastState === 'success') {
+      const resultJsonRaw = data?.resultJson;
+      let resultJson: any;
+      try {
+        resultJson = typeof resultJsonRaw === 'string' ? JSON.parse(resultJsonRaw) : resultJsonRaw;
+      } catch {
+        throw new Error(`kie task succeeded but resultJson is not valid JSON: ${truncate(String(resultJsonRaw), 200)}`);
+      }
+      const urls = resultJson?.resultUrls;
+      if (!Array.isArray(urls) || urls.length === 0 || typeof urls[0] !== 'string') {
+        throw new Error(`kie task succeeded but resultJson had no resultUrls: ${truncate(JSON.stringify(resultJson), 200)}`);
+      }
+      return urls;
+    }
+    if (lastState === 'fail') {
+      const reason = data?.failMsg || data?.failCode || 'unknown error';
+      throw new Error(`kie task failed: ${reason}`);
+    }
+  }
+  const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+  const ceilSec = Math.round(maxMs / 1000);
+  throw new Error(
+    `kie task timed out after ${elapsedSec}s waiting for state=success `
+    + `(last state: ${lastState || 'unknown'}, ceiling ${ceilSec}s). `
+    + `Raise OD_KIE_MAX_POLL_MS to extend the ceiling.`,
+  );
+}
+
+const KIE_FLUX2_ASPECTS = ['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3'] as const;
+const KIE_GROK_IMAGE_ASPECTS = ['2:3', '3:2', '1:1', '16:9', '9:16'] as const;
+const KIE_KLING_T2V_ASPECTS = ['1:1', '16:9', '9:16'] as const;
+const KIE_SEEDANCE_ASPECTS = ['1:1', '4:3', '3:4', '16:9', '9:16', '21:9', 'adaptive'] as const;
+
+async function renderKieImage(ctx: MediaContext, credentials: ProviderConfig): Promise<RenderResult> {
+  if (!credentials.apiKey) {
+    throw new Error(KIE_NO_API_KEY_MESSAGE);
+  }
+  const baseUrl = (credentials.baseUrl || KIE_DEFAULT_BASE_URL).replace(/\/$/, '');
+  const wireModel = ctx.wireModel;
+  const prompt = ctx.prompt || 'A high-quality reference image.';
+
+  // Branch on ctx.model (the registered catalog id), NOT wireModel — an
+  // aliased model (OD_MEDIA_MODEL_ALIASES / media-config.json, issue #1277)
+  // carries a different value on wireModel, and this input-mapping decision
+  // has to keep firing for the catalog id the user actually picked. wireModel
+  // stays reserved for body.model and providerNote below. Same precedent as
+  // renderMinimaxTTS / renderFishAudioTTS above.
+  let input: Record<string, unknown>;
+  if (ctx.model === 'flux-2/pro-text-to-image') {
+    input = {
+      prompt,
+      aspect_ratio: kieAspectFor(ctx.aspect, KIE_FLUX2_ASPECTS, '1:1'),
+      resolution: '1K',
+    };
+  } else if (ctx.model === 'flux-2/pro-image-to-image') {
+    if (!ctx.imageRef?.dataUrl) {
+      throw new Error(`${ctx.model} is an image-to-image model and requires --image.`);
+    }
+    // Docs allow up to 8 reference images via input_urls; splice in every
+    // resolved --image/--images ref (imageRef is always imageRefs[0]).
+    const urls = await kieUploadRefs(ctx.imageRefs.slice(0, 8), baseUrl, credentials.apiKey, ctx);
+    input = {
+      input_urls: urls,
+      prompt,
+      aspect_ratio: kieAspectFor(ctx.aspect, KIE_FLUX2_ASPECTS, '1:1'),
+      resolution: '1K',
+    };
+  } else if (ctx.model === 'qwen/image-to-image') {
+    if (!ctx.imageRef?.dataUrl) {
+      throw new Error(`${ctx.model} is an image-to-image model and requires --image.`);
+    }
+    const imageUrl = await kieUploadImage(ctx.imageRef, baseUrl, credentials.apiKey, ctx);
+    input = {
+      prompt,
+      image_url: imageUrl,
+    };
+  } else if (ctx.model === 'grok-imagine/text-to-image') {
+    input = {
+      prompt,
+      aspect_ratio: kieAspectFor(ctx.aspect, KIE_GROK_IMAGE_ASPECTS, '1:1'),
+    };
+  } else {
+    throw new Error(`kie: no input mapping registered for model "${ctx.model}"`);
+  }
+
+  const urls = await kieCreateAndPoll(wireModel, input, baseUrl, credentials.apiKey, kieMaxPollMs(5 * 60 * 1000), ctx);
+  const dlResp = await fetch(urls[0]!, withMediaRequestInit(ctx));
+  if (!dlResp.ok) throw new Error(`kie image download ${dlResp.status}`);
+  const bytes = Buffer.from(await dlResp.arrayBuffer());
+  // qwen/image-to-image's input has no aspect_ratio field (see the branch
+  // above) — omit the aspect from providerNote there so it never implies an
+  // aspect ratio the request didn't actually carry.
+  const consumedAspect = ctx.model !== 'qwen/image-to-image';
+  return {
+    bytes,
+    providerNote: `kie/${wireModel}${consumedAspect ? ` · ${ctx.aspect}` : ''} · ${bytes.length} bytes`,
+    suggestedExt: sniffImageExt(bytes),
+  };
+}
+
+async function renderKieVideo(ctx: MediaContext, credentials: ProviderConfig, onProgress?: ProgressFn): Promise<RenderResult> {
+  if (!credentials.apiKey) {
+    throw new Error(KIE_NO_API_KEY_MESSAGE);
+  }
+  const baseUrl = (credentials.baseUrl || KIE_DEFAULT_BASE_URL).replace(/\/$/, '');
+  const wireModel = ctx.wireModel;
+  const prompt = ctx.prompt || 'A short cinematic clip.';
+
+  // Branch on ctx.model, NOT wireModel — see renderKieImage's matching
+  // comment above; the same alias-vs-capability split applies here.
+  let input: Record<string, unknown>;
+  if (ctx.model === 'kling-2.6/text-to-video') {
+    input = {
+      prompt,
+      aspect_ratio: kieAspectFor(ctx.aspect, KIE_KLING_T2V_ASPECTS, '1:1'),
+      duration: kieDurationEnumString(ctx.length, [5, 10], 5),
+    };
+  } else if (ctx.model === 'kling-2.6/image-to-video') {
+    if (!ctx.imageRef?.dataUrl) {
+      throw new Error(`${ctx.model} is an image-to-video model and requires --image.`);
+    }
+    const imageUrl = await kieUploadImage(ctx.imageRef, baseUrl, credentials.apiKey, ctx);
+    input = {
+      prompt,
+      image_urls: [imageUrl],
+      duration: kieDurationEnumString(ctx.length, [5, 10], 5),
+    };
+  } else if (ctx.model === 'bytedance/seedance-2' || ctx.model === 'bytedance/seedance-2-fast') {
+    input = {
+      prompt,
+      aspect_ratio: kieAspectFor(ctx.aspect, KIE_SEEDANCE_ASPECTS, '16:9'),
+      resolution: '720p',
+      duration: kieDurationIntClamped(ctx.length, 4, 15, 5),
+    };
+    if (ctx.imageRef?.dataUrl) {
+      input.first_frame_url = await kieUploadImage(ctx.imageRef, baseUrl, credentials.apiKey, ctx, 0);
+    }
+  } else {
+    throw new Error(`kie: no input mapping registered for model "${ctx.model}"`);
+  }
+
+  const urls = await kieCreateAndPoll(
+    wireModel, input, baseUrl, credentials.apiKey,
+    kieMaxPollMs(10 * 60 * 1000), ctx, onProgress,
+  );
+  const dlResp = await fetch(urls[0]!, withMediaRequestInit(ctx));
+  if (!dlResp.ok) throw new Error(`kie video download ${dlResp.status}`);
+  const bytes = Buffer.from(await dlResp.arrayBuffer());
+  return {
+    bytes,
+    providerNote: `kie/${wireModel} · ${ctx.aspect} · ${bytes.length} bytes`,
+    suggestedExt: '.mp4',
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Provider: Higgsfield — bridged over the daemon-stored MCP OAuth token for
+// the `higgsfield-openclaw` server (mcp-config.ts's built-in template +
+// mcp-tokens.ts). Unlike every provider above, there is no pasted API key:
+// credentials come from resolveProviderConfig's 'higgsfield' branch
+// (media/config.ts resolveHiggsfieldMcpCredential), which reads the same
+// enabled http/sse MCP server config + stored OAuth token the daemon
+// already uses to wire external MCP servers into agent spawns.
+//
+// Wire protocol (live-verified 2026-07-31 against a real 1-credit job;
+// saved catalogs at scratchpad/hf-models-image.txt + hf-models-video.txt):
+// streamable-HTTP MCP JSON-RPC at POST https://mcp.higgsfield.ai/mcp.
+// Responses may be SSE-framed (`data: ...` lines) even though we send
+// `Accept: application/json, text/event-stream` — parse the LAST `data:`
+// line as JSON when present. The session id comes back as the
+// `mcp-session-id` response header and is echoed on every subsequent call
+// in the same session. Sequence per generation:
+//   initialize (protocolVersion '2025-03-26') -> notifications/initialized
+//   -> tools/call generate_image | generate_video -> tools/call job_status
+//   (sync:true, looped until terminal) -> download results.rawUrl.
+// i2i / i2v source frames go through tools/call media_upload (returns a
+// presigned PUT url + media_id) -> PUT the bytes -> tools/call
+// media_confirm -> pass medias:[{value: media_id, role}] on the generate_*
+// call. nano_banana_pro and gpt_image_2 both use role 'image' for their
+// single reference-image input (NOT 'image_references' — verified against
+// the saved catalog); seedance_2_0 / seedance_2_0_mini use start_image (+
+// end_image for seedance_2_0's keyframe-pair workflow).
+//
+// generate_image / generate_video wrap their tool arguments in a nested
+// `{params: {...}}` object; job_status / media_upload / media_confirm take
+// FLAT argument objects (no params wrapper) — this asymmetry is exactly
+// what the saved probe transcripts show, not an inconsistency to "fix".
+// ---------------------------------------------------------------------------
+
+const HIGGSFIELD_MCP_URL = 'https://mcp.higgsfield.ai/mcp';
+
+/**
+ * Resolve the MCP endpoint the renderer will send the OAuth bearer to.
+ * credentials.baseUrl is honored (a hand-edited server.url, or a stored
+ * providers.higgsfield.baseUrl override from media-config) but MUST be
+ * https: — the bearer token never travels cleartext. Mirrors the https
+ * requirement findHiggsfieldMcpServer applies to registered MCP servers.
+ */
+function higgsfieldMcpEndpoint(credentials: ProviderConfig): string {
+  const url = credentials.baseUrl || HIGGSFIELD_MCP_URL;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Higgsfield MCP URL is not a valid URL: ${url}`);
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`Higgsfield MCP URL must use https:// (refusing to send the OAuth token over ${parsed.protocol}//): ${url}`);
+  }
+  return url;
+}
+
+const HIGGSFIELD_PROTOCOL_VERSION = '2025-03-26';
+const HIGGSFIELD_IMAGE_REF_ROLE = 'image';
+const HIGGSFIELD_VIDEO_START_ROLE = 'start_image';
+const HIGGSFIELD_VIDEO_END_ROLE = 'end_image';
+// The roster models are pinned to a 5s duration today (seedance_2_0's own
+// range is 4-15s, but every higgsfield video entry MishMash exposes is
+// scoped to 5s only — see models.ts's roster comment) so we just send a
+// fixed value rather than threading ctx.length through a clamp table.
+const HIGGSFIELD_FIXED_VIDEO_DURATION_SEC = 5;
+const HIGGSFIELD_NO_CREDENTIAL_MESSAGE =
+  'no Higgsfield MCP connection — connect it under Settings -> MCP servers (the higgsfield-openclaw template).';
+
+// Allowed aspect_ratios per wire model id (post `higgsfield/` strip),
+// copied verbatim from the saved catalog files. Anything not in this table
+// (e.g. a supportsCustomModel override) passes ctx.aspect straight through.
+const HIGGSFIELD_IMAGE_ASPECTS: Record<string, readonly string[]> = {
+  soul_2: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'],
+  nano_banana_pro: ['1:1', '3:2', '2:3', '4:3', '3:4', '4:5', '5:4', '9:16', '16:9', '21:9'],
+  gpt_image_2: ['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3'],
+};
+const HIGGSFIELD_VIDEO_ASPECTS: Record<string, readonly string[]> = {
+  seedance_2_0: ['auto', '16:9', '9:16', '4:3', '3:4', '1:1', '21:9'],
+  seedance_2_0_mini: ['auto', '16:9', '9:16', '4:3', '3:4', '1:1', '21:9'],
+  kling3_0_turbo: ['16:9', '9:16', '1:1'],
+};
+
+function higgsfieldWireModel(id: string): string {
+  return id.replace(/^higgsfield\//, '');
+}
+
+function higgsfieldAspectFor(aspect: string | undefined, allowed: readonly string[]): string | undefined {
+  if (aspect && allowed.includes(aspect)) return aspect;
+  return allowed[0];
+}
+
+/**
+ * Thrown only for a 401 from the Higgsfield MCP endpoint. This is the ONLY
+ * error withHiggsfieldAuth catches to trigger a refresh-then-retry; every
+ * other error (4xx/5xx, malformed payload, terminal job failure) propagates
+ * as a plain Error so generateMedia's single try/catch surfaces it as-is.
+ */
+class HiggsfieldAuthError extends Error {}
+
+/** Parse a Higgsfield MCP response body — plain JSON, or SSE-framed
+ * (`data: {...}` lines), taking the LAST `data:` line when framed. */
+function parseHiggsfieldPayload(text: string): any {
+  if (!text) return null;
+  let payload = text;
+  if (text.startsWith('event:') || text.includes('\ndata:') || text.startsWith('data:')) {
+    const lines = text.split('\n').filter((l) => l.startsWith('data:'));
+    payload = lines[lines.length - 1]?.slice(5).trim() ?? '';
+  }
+  if (!payload) return null;
+  try {
+    return JSON.parse(payload);
+  } catch {
+    throw new Error(`higgsfield MCP non-JSON response: ${truncate(text, 200)}`);
+  }
+}
+
+async function higgsfieldRpc(
+  mcpUrl: string,
+  bearer: string,
+  body: Record<string, unknown>,
+  sessionId: string | undefined,
+  ctx: Pick<MediaContext, 'requestInit'>,
+): Promise<{ json: any; sessionId: string | undefined }> {
+  const resp = await fetch(mcpUrl, withMediaRequestInit(ctx, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'accept': 'application/json, text/event-stream',
+      'authorization': `Bearer ${bearer}`,
+      ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
+    },
+    body: JSON.stringify(body),
+  }));
+  const sid = resp.headers.get('mcp-session-id') ?? sessionId;
+  const text = await resp.text();
+  if (resp.status === 401) {
+    throw new HiggsfieldAuthError(`higgsfield MCP 401: ${truncate(text, 200)}`);
+  }
+  if (!resp.ok) {
+    throw new Error(`higgsfield MCP ${resp.status}: ${truncate(text, 240)}`);
+  }
+  return { json: parseHiggsfieldPayload(text), sessionId: sid };
+}
+
+/** Fire-and-forget notification — no `id`, so no JSON-RPC response is
+ * expected; mirrors the reference probe client (scratchpad/hf-call.mjs),
+ * which doesn't check this call's status either. */
+async function higgsfieldNotifyInitialized(
+  mcpUrl: string,
+  bearer: string,
+  sessionId: string | undefined,
+  ctx: Pick<MediaContext, 'requestInit'>,
+): Promise<void> {
+  await fetch(mcpUrl, withMediaRequestInit(ctx, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'accept': 'application/json, text/event-stream',
+      'authorization': `Bearer ${bearer}`,
+      ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+  }));
+}
+
+async function higgsfieldInitSession(
+  mcpUrl: string,
+  bearer: string,
+  ctx: Pick<MediaContext, 'requestInit'>,
+): Promise<string | undefined> {
+  const init = await higgsfieldRpc(mcpUrl, bearer, {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'initialize',
+    params: {
+      protocolVersion: HIGGSFIELD_PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: 'mishmash-daemon', version: '0.0.1' },
+    },
+  }, undefined, ctx);
+  if (init.json?.error) {
+    throw new Error(`higgsfield MCP handshake failed: ${init.json.error.message || JSON.stringify(init.json.error)}`);
+  }
+  await higgsfieldNotifyInitialized(mcpUrl, bearer, init.sessionId, ctx);
+  return init.sessionId;
+}
+
+async function higgsfieldToolCall(
+  mcpUrl: string,
+  bearer: string,
+  sessionId: string | undefined,
+  id: number,
+  name: string,
+  toolArguments: Record<string, unknown>,
+  ctx: Pick<MediaContext, 'requestInit'>,
+): Promise<any> {
+  const { json } = await higgsfieldRpc(mcpUrl, bearer, {
+    jsonrpc: '2.0',
+    id,
+    method: 'tools/call',
+    params: { name, arguments: toolArguments },
+  }, sessionId, ctx);
+  if (json?.error) {
+    throw new Error(`higgsfield ${name} error: ${json.error.message || JSON.stringify(json.error)}`);
+  }
+  const result = json?.result;
+  if (result?.isError) {
+    const text = (result.content ?? [])
+      .map((block: any) => (typeof block?.text === 'string' ? block.text : ''))
+      .filter(Boolean)
+      .join(' ');
+    throw new Error(`higgsfield ${name} error: ${text || 'unknown tool error'}`);
+  }
+  return result;
+}
+
+/**
+ * Push a local reference image (already resolved to a base64 data URL by
+ * resolveProjectImage) through the media_upload / PUT / media_confirm
+ * three-step dance and return the resulting media_id — what `medias[].value`
+ * expects on the generate_* call.
+ */
+async function higgsfieldUploadMedia(
+  mcpUrl: string,
+  bearer: string,
+  sessionId: string | undefined,
+  nextId: () => number,
+  ref: ImageRef,
+  ctx: Pick<MediaContext, 'requestInit'>,
+): Promise<string> {
+  const uploadResult = await higgsfieldToolCall(mcpUrl, bearer, sessionId, nextId(), 'media_upload', {
+    filename: path.basename(ref.path) || `upload${path.extname(ref.abs) || '.png'}`,
+    content_type: ref.mime,
+  }, ctx);
+  const upload = uploadResult?.structuredContent?.uploads?.[0];
+  if (!upload?.upload_url || !upload?.media_id) {
+    throw new Error(`higgsfield media_upload response missing uploads[0]: ${truncate(JSON.stringify(uploadResult ?? {}), 200)}`);
+  }
+  const base64 = ref.dataUrl.slice(ref.dataUrl.indexOf(',') + 1);
+  const putResp = await fetch(upload.upload_url, withMediaRequestInit(ctx, {
+    method: 'PUT',
+    headers: { 'content-type': upload.content_type || ref.mime },
+    body: Buffer.from(base64, 'base64'),
+  }));
+  if (!putResp.ok) {
+    throw new Error(`higgsfield media upload PUT ${putResp.status}`);
+  }
+  await higgsfieldToolCall(mcpUrl, bearer, sessionId, nextId(), 'media_confirm', {
+    type: 'image',
+    media_id: upload.media_id,
+  }, ctx);
+  return upload.media_id;
+}
+
+function higgsfieldMaxPollMs(defaultMs: number): number {
+  const v = Number(process.env.OD_HIGGSFIELD_MAX_POLL_MS);
+  return Number.isFinite(v) && v >= 30_000 ? v : defaultMs;
+}
+
+// Upstream status-name drift insurance: any of these mean "still working",
+// not just 'pending'. Everything else (including an empty/missing status)
+// is treated as terminal and fails loud — that catch-all stays intentional,
+// this only widens what counts as "keep polling."
+const HIGGSFIELD_NON_TERMINAL_STATUSES = new Set([
+  'pending', 'queuing', 'generating', 'processing', 'queued',
+]);
+
+/**
+ * tools/call the given generate_* tool (arguments wrapped in `{params}`),
+ * then poll job_status(sync:true) until a terminal status, returning the
+ * completed job's results.rawUrl. sync:true long-polls server-side up to
+ * ~25s per call, so this loop adds no client-side sleep between iterations
+ * — it just re-issues job_status until the overall `maxMs` ceiling trips.
+ * Any status not in HIGGSFIELD_NON_TERMINAL_STATUSES (and not 'completed')
+ * is treated as a terminal failure and throws with the raw generation
+ * payload for detail.
+ */
+async function higgsfieldGenerateAndPoll(
+  mcpUrl: string,
+  bearer: string,
+  sessionId: string | undefined,
+  nextId: () => number,
+  toolName: 'generate_image' | 'generate_video',
+  params: Record<string, unknown>,
+  maxMs: number,
+  ctx: Pick<MediaContext, 'requestInit'>,
+  onProgress?: ProgressFn,
+): Promise<string> {
+  const genResult = await higgsfieldToolCall(mcpUrl, bearer, sessionId, nextId(), toolName, { params }, ctx);
+  const results = genResult?.structuredContent?.results;
+  const jobId = Array.isArray(results) ? results[0]?.id : undefined;
+  if (typeof jobId !== 'string' || !jobId) {
+    const rawText = (genResult?.content ?? [])
+      .map((block: any) => (typeof block?.text === 'string' ? block.text : ''))
+      .filter(Boolean)
+      .join(' ');
+    throw new Error(
+      `higgsfield ${toolName} response missing results[0].id: ${truncate(rawText || JSON.stringify(genResult ?? {}), 200)}`,
+    );
+  }
+
+  const startedAt = Date.now();
+  let lastStatus = '';
+  if (typeof onProgress === 'function') {
+    onProgress(`higgsfield ${toolName} job ${jobId} accepted; polling status…`);
+  }
+  while (Date.now() - startedAt < maxMs) {
+    const pollResult = await higgsfieldToolCall(mcpUrl, bearer, sessionId, nextId(), 'job_status', {
+      jobId,
+      sync: true,
+    }, ctx);
+    const generation = pollResult?.structuredContent?.generation;
+    lastStatus = typeof generation?.status === 'string' ? generation.status : '';
+    if (typeof onProgress === 'function') {
+      const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+      onProgress(`higgsfield job ${jobId} status=${lastStatus || 'pending'} (elapsed ${elapsedSec}s)`);
+    }
+    if (lastStatus === 'completed') {
+      const rawUrl = generation?.results?.rawUrl;
+      if (typeof rawUrl !== 'string' || !rawUrl) {
+        throw new Error(`higgsfield job completed but had no results.rawUrl: ${truncate(JSON.stringify(generation ?? {}), 200)}`);
+      }
+      return rawUrl;
+    }
+    if (!HIGGSFIELD_NON_TERMINAL_STATUSES.has(lastStatus)) {
+      throw new Error(`higgsfield job ${jobId} ${lastStatus || 'failed'}: ${truncate(JSON.stringify(generation ?? {}), 240)}`);
+    }
+  }
+  const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+  const ceilSec = Math.round(maxMs / 1000);
+  throw new Error(
+    `higgsfield job ${jobId} timed out after ${elapsedSec}s waiting for status=completed `
+    + `(last status: ${lastStatus || 'unknown'}, ceiling ${ceilSec}s). `
+    + `Raise OD_HIGGSFIELD_MAX_POLL_MS to extend the ceiling.`,
+  );
+}
+
+const HIGGSFIELD_REAUTH_MESSAGE =
+  'Higgsfield MCP session expired and could not be refreshed — reconnect it under Settings -> MCP servers (the higgsfield-openclaw template).';
+
+/**
+ * Run `attempt` with `bearer`; on a 401 (HiggsfieldAuthError) anywhere in
+ * the flow, refresh the daemon-stored MCP token once and re-run the ENTIRE
+ * attempt from scratch with the fresh bearer (a new session, since the old
+ * one may be tied to the now-invalid token). Both a refresh that comes back
+ * empty (no refresh_token / tokenEndpoint on file) AND a refresh that throws
+ * (e.g. a revoked refresh token rejected by the token endpoint) surface the
+ * same actionable HIGGSFIELD_REAUTH_MESSAGE instead of either the original
+ * raw 401 or the token endpoint's raw error text.
+ */
+async function withHiggsfieldAuth<T>(
+  ctx: Pick<MediaContext, 'projectRoot'>,
+  bearer: string,
+  attempt: (bearer: string) => Promise<T>,
+): Promise<T> {
+  try {
+    return await attempt(bearer);
+  } catch (err) {
+    if (!(err instanceof HiggsfieldAuthError)) throw err;
+    let refreshed: string | null;
+    try {
+      refreshed = await refreshHiggsfieldMcpToken(ctx.projectRoot);
+    } catch {
+      throw new Error(HIGGSFIELD_REAUTH_MESSAGE);
+    }
+    if (!refreshed) throw new Error(HIGGSFIELD_REAUTH_MESSAGE);
+    return await attempt(refreshed);
+  }
+}
+
+async function renderHiggsfieldImage(ctx: MediaContext, credentials: ProviderConfig): Promise<RenderResult> {
+  if (!credentials.apiKey) {
+    throw new Error(HIGGSFIELD_NO_CREDENTIAL_MESSAGE);
+  }
+  // credentials.baseUrl is the actually-registered server.url from Settings
+  // -> MCP servers (resolveHiggsfieldMcpCredential) — a hand-edited path on
+  // the same host must be honored, not silently overridden by the default.
+  const mcpUrl = higgsfieldMcpEndpoint(credentials);
+  const wireModel = higgsfieldWireModel(credentials.model || ctx.wireModel);
+  const prompt = ctx.prompt || 'A high-quality reference image.';
+  const allowedAspects = HIGGSFIELD_IMAGE_ASPECTS[wireModel];
+  const aspectRatio = allowedAspects ? higgsfieldAspectFor(ctx.aspect, allowedAspects) : ctx.aspect;
+
+  const attempt = async (bearer: string): Promise<RenderResult> => {
+    let id = 1;
+    const nextId = () => ++id;
+    const sessionId = await higgsfieldInitSession(mcpUrl, bearer, ctx);
+    let medias: Array<{ value: string; role: string }> | undefined;
+    if (ctx.imageRef?.dataUrl) {
+      const mediaId = await higgsfieldUploadMedia(mcpUrl, bearer, sessionId, nextId, ctx.imageRef, ctx);
+      medias = [{ value: mediaId, role: HIGGSFIELD_IMAGE_REF_ROLE }];
+    }
+    const rawUrl = await higgsfieldGenerateAndPoll(mcpUrl, bearer, sessionId, nextId, 'generate_image', {
+      model: wireModel,
+      prompt,
+      ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
+      count: 1,
+      ...(medias ? { medias } : {}),
+    }, higgsfieldMaxPollMs(5 * 60 * 1000), ctx);
+    const dlResp = await fetch(rawUrl, withMediaRequestInit(ctx));
+    if (!dlResp.ok) throw new Error(`higgsfield image download ${dlResp.status}`);
+    const bytes = Buffer.from(await dlResp.arrayBuffer());
+    return {
+      bytes,
+      providerNote: `higgsfield/${wireModel} · ${aspectRatio ?? ctx.aspect} · ${bytes.length} bytes`,
+      suggestedExt: sniffImageExt(bytes),
+    };
+  };
+
+  return withHiggsfieldAuth(ctx, credentials.apiKey, attempt);
+}
+
+async function renderHiggsfieldVideo(ctx: MediaContext, credentials: ProviderConfig, onProgress?: ProgressFn): Promise<RenderResult> {
+  if (!credentials.apiKey) {
+    throw new Error(HIGGSFIELD_NO_CREDENTIAL_MESSAGE);
+  }
+  // See renderHiggsfieldImage's matching comment above.
+  const mcpUrl = higgsfieldMcpEndpoint(credentials);
+  const wireModel = higgsfieldWireModel(credentials.model || ctx.wireModel);
+  const prompt = ctx.prompt || 'A short cinematic clip.';
+  const allowedAspects = HIGGSFIELD_VIDEO_ASPECTS[wireModel];
+  const aspectRatio = allowedAspects ? higgsfieldAspectFor(ctx.aspect, allowedAspects) : ctx.aspect;
+
+  const attempt = async (bearer: string): Promise<RenderResult> => {
+    let id = 1;
+    const nextId = () => ++id;
+    const sessionId = await higgsfieldInitSession(mcpUrl, bearer, ctx);
+    const medias: Array<{ value: string; role: string }> = [];
+    if (ctx.imageRef?.dataUrl) {
+      const mediaId = await higgsfieldUploadMedia(mcpUrl, bearer, sessionId, nextId, ctx.imageRef, ctx);
+      medias.push({ value: mediaId, role: HIGGSFIELD_VIDEO_START_ROLE });
+    }
+    if (ctx.endImageRef?.dataUrl) {
+      const endMediaId = await higgsfieldUploadMedia(mcpUrl, bearer, sessionId, nextId, ctx.endImageRef, ctx);
+      medias.push({ value: endMediaId, role: HIGGSFIELD_VIDEO_END_ROLE });
+    }
+    const rawUrl = await higgsfieldGenerateAndPoll(mcpUrl, bearer, sessionId, nextId, 'generate_video', {
+      model: wireModel,
+      prompt,
+      ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
+      duration: HIGGSFIELD_FIXED_VIDEO_DURATION_SEC,
+      ...(medias.length > 0 ? { medias } : {}),
+    }, higgsfieldMaxPollMs(10 * 60 * 1000), ctx, onProgress);
+    const dlResp = await fetch(rawUrl, withMediaRequestInit(ctx));
+    if (!dlResp.ok) throw new Error(`higgsfield video download ${dlResp.status}`);
+    const bytes = Buffer.from(await dlResp.arrayBuffer());
+    return {
+      bytes,
+      providerNote: `higgsfield/${wireModel} · ${aspectRatio ?? ctx.aspect} · ${bytes.length} bytes`,
+      suggestedExt: '.mp4',
+    };
+  };
+
+  return withHiggsfieldAuth(ctx, credentials.apiKey, attempt);
+}
+
+// ---------------------------------------------------------------------------
+// Provider: stable-diffusion.cpp — native async job API exposed by the
+// upstream project's examples/server (docs: examples/server/api.md /
+// docs.kie.ai-style but self-hosted). A single local process serves ONE
+// baked-in checkpoint chosen at server-launch time via --diffusion-model /
+// --llm / --vae flags, NOT per-request — there is no `model` field on the
+// wire at all, so credentials.model / supportsCustomModel have nothing to
+// plumb into the request body. The server listens on 127.0.0.1 by default
+// with no bearer token (loopback-only, no auth surface) — `sdcpp`'s
+// provider entry is `credentialsRequired: false`, same as hyperframes/codex.
+//
+//   Submit: POST {baseUrl}/sdcpp/v1/img_gen
+//           { prompt, width, height, sample_params: {...}, output_format:
+//             "png", init_image?, strength? } -> 202 Accepted
+//           { id, kind: "img_gen", status: "queued", created, poll_url }
+//   Poll:   GET {baseUrl}{poll_url}
+//           -> { id, kind, status, created, started, completed,
+//                queue_position, result, error }
+//           status ∈ queued | generating | completed | failed | cancelled.
+//           A non-null `error` ({code, message}) is ALWAYS the failure
+//           signal (covers both failed and cancelled) — check it before
+//           branching on status. On completion, result.images[0].b64_json
+//           is the PNG bytes, base64-encoded — there is no CDN URL to
+//           download (unlike kie/higgsfield), so the poll loop itself
+//           produces the final bytes.
+//   i2i: the native img_gen schema documents `init_image` (data URL or raw
+//        base64, 3-channel) + `strength` — a real, documented field, not a
+//        guess (examples/server/api.md, confirmed against
+//        routes_sdcpp.cpp's make_img_gen_features_json: init_image: true).
+//
+// Verified 2026-07 against a live spike (scratchpad/sdcpp-spike/):
+// job_submit_response.json / job_final_response.json are real captured
+// envelopes matching the shapes above byte-for-byte. The spike's server.log
+// shows the loaded checkpoint (diffusion_model=z_image_turbo-Q4_K.gguf,
+// llm=Qwen3-4B-Instruct-2507-Q4_K_M.gguf, vae=ae.safetensors) and its CLI
+// runs (cli_cold_run.log / cli_warm_run.log / cli_sample3.log) show the
+// model's own tuned recipe (sample_steps=8, txt_cfg=1.0,
+// distilled_guidance=3.5 — Z-Image Turbo is a distilled/few-step model),
+// which this renderer reuses as its request defaults. Single-flight queue:
+// 1024² took ~145-223s on the spike's M4 Max; smaller sizes are much
+// faster. Poll ceiling is env-overridable (OD_SDCPP_MAX_POLL_MS) per the
+// same pattern as OD_KIE_MAX_POLL_MS / OD_HIGGSFIELD_MAX_POLL_MS.
+// ---------------------------------------------------------------------------
+
+const SDCPP_DEFAULT_BASE_URL = 'http://127.0.0.1:1234';
+const SDCPP_DEFAULT_STEPS = 8;
+const SDCPP_DEFAULT_TXT_CFG = 1.0;
+const SDCPP_DEFAULT_DISTILLED_GUIDANCE = 3.5;
+const SDCPP_DEFAULT_I2I_STRENGTH = 0.75;
+// Generous cap for a SINGLE submit/poll HTTP round-trip. Both are meant to
+// be near-instant per the wire contract (job submission/status lookup, not
+// the generation itself) — this only bounds a server that accepts the TCP
+// connection but never sends headers/body, which would otherwise hang
+// `fetch()` forever. The while-loop's own `Date.now() - startedAt < maxMs`
+// ceiling only re-evaluates BETWEEN iterations and never gets a chance to
+// fire while a single fetch call is stuck in flight.
+const SDCPP_PER_REQUEST_TIMEOUT_MS = 30_000;
+
+// Same precedent as higgsfieldWireModel(): catalog ids carry a
+// `sdcpp/` provider prefix for readability in the picker, but the wire
+// protocol has no `model` field at all — this only trims the prefix for a
+// clean providerNote (e.g. "sdcpp/z-image-turbo", not
+// "sdcpp/sdcpp/z-image-turbo").
+function sdcppWireModel(id: string): string {
+  return id.replace(/^sdcpp\//, '');
+}
+
+function sdcppSizeFor(aspect: string | undefined): { width: number; height: number } {
+  // The native API wants explicit width/height (no aspect-ratio enum like
+  // kie/higgsfield). Long edge pinned to 1024 — matches the spike's
+  // verified-good 1024² recipe; callers needing a faster/cheaper
+  // generation get there via a smaller --aspect-driven box already, not a
+  // separate size knob (no such knob exists on this provider/model pair).
+  switch (aspect) {
+    case '16:9': return { width: 1024, height: 576 };
+    case '9:16': return { width: 576, height: 1024 };
+    case '4:3': return { width: 1024, height: 768 };
+    case '3:4': return { width: 768, height: 1024 };
+    default: return { width: 1024, height: 1024 };
+  }
+}
+
+function sdcppMaxPollMs(defaultMs: number): number {
+  const v = Number(process.env.OD_SDCPP_MAX_POLL_MS);
+  return Number.isFinite(v) && v >= 30_000 ? v : defaultMs;
+}
+
+/**
+ * Per-request AbortSignal for a single sdcpp fetch (submit or poll),
+ * bounded by whichever is SMALLER: the fixed SDCPP_PER_REQUEST_TIMEOUT_MS
+ * cap or the time remaining until the overall OD_SDCPP_MAX_POLL_MS
+ * deadline. Composes with any externally-supplied `requestInit.signal`
+ * (e.g. chat.ts's stop-generation signal, threaded through at runtime even
+ * though MediaRequestInit's TYPE only names `dispatcher`) via
+ * AbortSignal.any so aborting from either source works — neither cancel
+ * path replaces the other. Same composition precedent as
+ * brands/prefetch.ts / design/handoff-design.ts.
+ */
+function sdcppRequestSignal(
+  requestInit: MediaRequestInit,
+  startedAt: number,
+  maxMs: number,
+): { signal: AbortSignal; perRequestMs: number } {
+  const remainingMs = maxMs - (Date.now() - startedAt);
+  const perRequestMs = Math.max(0, Math.min(SDCPP_PER_REQUEST_TIMEOUT_MS, remainingMs));
+  const timeout = AbortSignal.timeout(perRequestMs);
+  const existing = (requestInit as RequestInit).signal;
+  return { signal: existing ? AbortSignal.any([existing, timeout]) : timeout, perRequestMs };
+}
+
+/**
+ * True when `err` is the DOMException AbortSignal.timeout() itself
+ * produces (name 'TimeoutError'), as opposed to an externally-supplied
+ * cancellation (name 'AbortError', e.g. the user hitting stop mid-chat) or
+ * an unrelated network error. Only this renderer's OWN timeout gets
+ * relabeled with a friendly, actionable message; everything else
+ * propagates as-is so external cancellation keeps behaving like every
+ * other provider.
+ */
+function isSdcppRequestTimeout(err: unknown): boolean {
+  return Boolean(err && typeof err === 'object' && (err as { name?: unknown }).name === 'TimeoutError');
+}
+
+async function renderSdcppImage(
+  ctx: MediaContext,
+  credentials: ProviderConfig,
+  onProgress?: ProgressFn,
+): Promise<RenderResult> {
+  const baseUrl = (credentials.baseUrl || SDCPP_DEFAULT_BASE_URL).replace(/\/$/, '');
+  const prompt = ctx.prompt || 'A high-quality reference image.';
+  const { width, height } = sdcppSizeFor(ctx.aspect);
+
+  const body: Record<string, unknown> = {
+    prompt,
+    width,
+    height,
+    sample_params: {
+      sample_steps: SDCPP_DEFAULT_STEPS,
+      guidance: {
+        txt_cfg: SDCPP_DEFAULT_TXT_CFG,
+        distilled_guidance: SDCPP_DEFAULT_DISTILLED_GUIDANCE,
+      },
+    },
+    output_format: 'png',
+  };
+  if (ctx.imageRef?.dataUrl) {
+    body.init_image = ctx.imageRef.dataUrl;
+    body.strength = SDCPP_DEFAULT_I2I_STRENGTH;
+  }
+
+  // The overall deadline covers submission AND every poll — a hung TCP
+  // connection during submit counts against the same OD_SDCPP_MAX_POLL_MS
+  // ceiling as a stalled poll, rather than getting an unbounded grace
+  // period before the ceiling clock even starts.
+  const maxMs = sdcppMaxPollMs(5 * 60 * 1000);
+  const startedAt = Date.now();
+
+  let createResp: Response;
+  try {
+    const { signal } = sdcppRequestSignal(ctx.requestInit, startedAt, maxMs);
+    createResp = await fetch(`${baseUrl}/sdcpp/v1/img_gen`, withMediaRequestInit(ctx, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal,
+    }));
+  } catch (err) {
+    if (isSdcppRequestTimeout(err)) {
+      const ceilSec = Math.round(maxMs / 1000);
+      throw new Error(
+        `sdcpp img_gen request timed out — ${baseUrl} accepted the connection but never responded `
+        + `(ceiling ${ceilSec}s from OD_SDCPP_MAX_POLL_MS/default). `
+        + `Raise OD_SDCPP_MAX_POLL_MS to extend the ceiling, or confirm sd-server is actually listening.`,
+      );
+    }
+    throw err;
+  }
+  const createText = await createResp.text();
+  // The native surface returns 202 on success (not 200) — checked
+  // explicitly rather than resp.ok so a 200 from some future/hand-edited
+  // baseUrl proxy doesn't get treated as a valid submission.
+  if (createResp.status !== 202) {
+    throw new Error(`sdcpp img_gen ${createResp.status}: ${truncate(createText, 240)}`);
+  }
+  let createData: any;
+  try {
+    createData = JSON.parse(createText);
+  } catch {
+    throw new Error(`sdcpp img_gen non-JSON: ${truncate(createText, 200)}`);
+  }
+  const pollUrl = createData?.poll_url;
+  if (typeof pollUrl !== 'string' || !pollUrl) {
+    throw new Error(`sdcpp img_gen response missing poll_url: ${truncate(createText, 200)}`);
+  }
+  // poll_url is always documented as a same-origin path (e.g.
+  // "/sdcpp/v1/jobs/job_…"), spliced straight onto baseUrl below. An
+  // absolute or otherwise malformed value would either silently redirect
+  // polling to a different host or blow up as an opaque `fetch` TypeError
+  // ("Failed to parse URL") instead of this renderer's usual labeled
+  // error — reject it up front with a clear message instead.
+  if (!pollUrl.startsWith('/')) {
+    throw new Error(`sdcpp img_gen response has a malformed poll_url (expected a path starting with "/"): ${truncate(pollUrl, 200)}`);
+  }
+  const jobId = typeof createData?.id === 'string' ? createData.id : '';
+
+  let lastStatus = '';
+  if (typeof onProgress === 'function') {
+    onProgress(`sdcpp job ${jobId} accepted; polling status…`);
+  }
+  while (Date.now() - startedAt < maxMs) {
+    await sleep(2000);
+    let pollResp: Response;
+    try {
+      const { signal } = sdcppRequestSignal(ctx.requestInit, startedAt, maxMs);
+      pollResp = await fetch(`${baseUrl}${pollUrl}`, withMediaRequestInit(ctx, { signal }));
+    } catch (err) {
+      if (isSdcppRequestTimeout(err)) {
+        const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+        const ceilSec = Math.round(maxMs / 1000);
+        throw new Error(
+          `sdcpp poll request for job ${jobId} timed out — the server accepted the connection but never `
+          + `responded (elapsed ${elapsedSec}s, ceiling ${ceilSec}s from OD_SDCPP_MAX_POLL_MS/default). `
+          + `Raise OD_SDCPP_MAX_POLL_MS to extend the ceiling.`,
+        );
+      }
+      throw err;
+    }
+    const pollText = await pollResp.text();
+    if (!pollResp.ok) {
+      throw new Error(`sdcpp poll ${pollResp.status}: ${truncate(pollText, 240)}`);
+    }
+    let pollData: any;
+    try {
+      pollData = JSON.parse(pollText);
+    } catch {
+      throw new Error(`sdcpp poll non-JSON: ${truncate(pollText, 200)}`);
+    }
+    lastStatus = typeof pollData?.status === 'string' ? pollData.status : '';
+    if (typeof onProgress === 'function') {
+      const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+      const qp = typeof pollData?.queue_position === 'number'
+        ? ` queue_position=${pollData.queue_position}`
+        : '';
+      onProgress(`sdcpp job ${jobId} status=${lastStatus || 'pending'}${qp} (elapsed ${elapsedSec}s)`);
+    }
+    // Non-null error is ALWAYS the failure signal (covers both `failed` and
+    // `cancelled` — both carry a populated {code, message} per the upstream
+    // contract), checked ahead of the status switch so neither terminal
+    // failure mode can fall through to the timeout branch below.
+    if (pollData?.error != null) {
+      const reason = pollData.error?.message || pollData.error?.code || 'unknown error';
+      throw new Error(`sdcpp job ${lastStatus || 'failed'}: ${reason}`);
+    }
+    if (lastStatus === 'completed') {
+      const images = pollData?.result?.images;
+      const b64 = Array.isArray(images) ? images[0]?.b64_json : undefined;
+      if (typeof b64 !== 'string' || !b64) {
+        throw new Error(
+          `sdcpp job completed but result had no images[0].b64_json: ${truncate(JSON.stringify(pollData?.result ?? {}), 200)}`,
+        );
+      }
+      const bytes = Buffer.from(b64, 'base64');
+      return {
+        bytes,
+        providerNote: `sdcpp/${sdcppWireModel(ctx.wireModel)} · ${width}x${height} · ${bytes.length} bytes`,
+        suggestedExt: sniffImageExt(bytes),
+      };
+    }
+  }
+  const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+  const ceilSec = Math.round(maxMs / 1000);
+  throw new Error(
+    `sdcpp job ${jobId} timed out after ${elapsedSec}s waiting for status=completed `
+    + `(last status: ${lastStatus || 'unknown'}, ceiling ${ceilSec}s). `
+    + `Raise OD_SDCPP_MAX_POLL_MS to extend the ceiling.`,
+  );
 }
 
 // ---------------------------------------------------------------------------

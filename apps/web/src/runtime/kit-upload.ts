@@ -87,7 +87,15 @@ export function useKitModuleUpload(opts: {
             file: storedBase,
             format: fontFormat(storedBase),
           });
-          await writeProjectTextFile(projectId, 'fonts/manifest.json', JSON.stringify(manifest, null, 2));
+          const wroteManifest = await writeProjectTextFile(
+            projectId,
+            'fonts/manifest.json',
+            JSON.stringify(manifest, null, 2),
+          );
+          if (!wroteManifest) {
+            onError?.(module, 'write-failed');
+            return;
+          }
         }
         onUploaded?.(module);
       } catch {

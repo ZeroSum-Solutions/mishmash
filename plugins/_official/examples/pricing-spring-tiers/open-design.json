@@ -1,0 +1,94 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-pricing-spring-tiers",
+  "title": "Spring Tiers Pricing",
+  "version": "0.1.0",
+  "publishedAt": "2026-07-31T00:07:01Z",
+  "description": "A pricing page with a breathing first viewport — staggered tier-card reveals loop gently forever, a real spring-damped monthly/yearly toggle self-flips on a timer, and the recommended tier pulses with a velocity-driven skew — while staying a fully scannable SaaS pricing template with a comparison table and FAQ.",
+  "license": "MIT",
+  "credits": [
+    "Reveal-stagger contract and named easing tokens structurally inspired by darkroomengineering/satus (MIT); original vanilla JS/CSS motion, no GSAP/Lenis source."
+  ],
+  "author": {
+    "name": "MishMash",
+    "url": "https://github.com/nexu-io"
+  },
+  "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/pricing-spring-tiers",
+  "tags": [
+    "example",
+    "first-party",
+    "prototype",
+    "sales",
+    "web",
+    "desktop",
+    "pricing",
+    "pricing-spring-tiers",
+    "plans",
+    "subscription",
+    "compare-plans",
+    "motion",
+    "spring-physics",
+    "interactive",
+    "untitled"
+  ],
+  "compat": {
+    "agentSkills": [
+      {
+        "path": "./SKILL.md"
+      }
+    ]
+  },
+  "od": {
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "prototype",
+    "platform": "desktop",
+    "scenario": "sales",
+    "surface": "web",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html"
+    },
+    "useCase": {
+      "query": "A pricing page whose first viewport breathes: staggered tier-card reveals loop as a slow breathing cycle, a real spring-damped monthly/yearly toggle self-flips on a timer, and the recommended tier pulses with a velocity-driven skew — full comparison table and FAQ included. Use when the brief asks for \"pricing\", \"plans\", \"subscription tiers\", a \"compare plans\" page, or wants continuous, tasteful motion on a pricing screen instead of a static layout.",
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Spring Tiers Pricing"
+        }
+      ]
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        }
+      ],
+      "designSystem": {
+        "primary": true
+      },
+      "craft": [
+        "laws-of-ux"
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "pipeline": {
+      "stages": [
+        {
+          "id": "generate",
+          "atoms": [
+            "file-write",
+            "live-artifact"
+          ]
+        }
+      ]
+    },
+    "capabilities": [
+      "prompt:inject",
+      "fs:write"
+    ]
+  }
+}

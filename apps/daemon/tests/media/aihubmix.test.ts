@@ -11,7 +11,7 @@
 //      not an integrator has filled it in).
 //   4. aihubmixWireModel() catalogue-id → wire-name mapping.
 
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -270,5 +270,118 @@ describe('aihubmix media generation', () => {
 
     const bytes = await readFile(path.join(projectsRoot, 'project-1', 'vo.mp3'));
     expect(bytes.length).toBeGreaterThan(0);
+  });
+
+  // Regression coverage for the primary `od media generate` / NewProjectPanel
+  // video path: renderAIHubMixVideo used to always build one flat
+  // {model,prompt,size,seconds,input_reference?} body regardless of model
+  // family, even though media-adapters/video.ts's buildVideoRequest (already
+  // used by the BYOK chat-tool path) proved that shape wrong for wan/veo.
+  // These assert the family-aware shapes now reach the wire from THIS path.
+  it('builds the DashScope wan wire shape (input.media + parameters) for a wan i2v model, not the flat shape', async () => {
+    const projectDir = path.join(projectsRoot, 'project-1');
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(path.join(projectDir, 'ref.png'), FAKE_PNG);
+
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResp({ error: 'nope' }, 400));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(generateMedia({
+      surface: 'video',
+      model: 'aihubmix-wan2.5-i2v-preview',
+      prompt: 'a paper boat drifting down a stream',
+      aspect: '16:9',
+      length: 5,
+      image: 'ref.png',
+      output: 'wan.mp4',
+      projectRoot,
+      projectsRoot,
+      projectId: 'project-1',
+    })).rejects.toThrow(/aihubmix video submit 400/);
+
+    const [url, opts] = fetchMock.mock.calls[0]!;
+    expect(String(url)).toBe('https://aihubmix.com/v1/videos');
+    const body = JSON.parse(opts.body);
+    expect(body.model).toBe('wan2.5-i2v-preview');
+    expect(body.input).toEqual({
+      prompt: 'a paper boat drifting down a stream',
+      media: [{ type: 'first_frame', url: expect.stringMatching(/^data:image\/png;base64,/) }],
+    });
+    expect(body.parameters).toMatchObject({
+      resolution: '720P',
+      duration: 5,
+      prompt_extend: true,
+      watermark: false,
+    });
+    // The old flat shape must be gone — no top-level input_reference/seconds/size.
+    expect(body.input_reference).toBeUndefined();
+    expect(body.seconds).toBeUndefined();
+    expect(body.size).toBeUndefined();
+  });
+
+  // Regression coverage for the missing i2v capability guard: renderAIHubMixVideo
+  // used to splice ctx.imageRef straight into buildVideoRequest without checking
+  // whether the resolved model actually accepts a reference image, so a t2v-only
+  // model (wire name has no "i2v") plus an image silently produced
+  // input.media:[{type:'first_frame',...}] instead of being rejected up front —
+  // mirroring byok-tools.ts's acceptsReference check.
+  it('rejects a t2v-only AIHubMix model when an image reference is supplied, before any fetch', async () => {
+    const projectDir = path.join(projectsRoot, 'project-1');
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(path.join(projectDir, 'ref.png'), FAKE_PNG);
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(generateMedia({
+      surface: 'video',
+      model: 'aihubmix-wan2.5-t2v-preview',
+      prompt: 'a paper boat drifting down a stream',
+      aspect: '16:9',
+      length: 5,
+      image: 'ref.png',
+      output: 'wan-t2v.mp4',
+      projectRoot,
+      projectsRoot,
+      projectId: 'project-1',
+    })).rejects.toThrow(/text-to-video model and can't take a reference image/);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // Counterpart control: an i2v-capable AIHubMix model with an image reference
+  // must still pass the guard and reach the wire (covered end-to-end by the
+  // "builds the DashScope wan wire shape" test above, which supplies
+  // aihubmix-wan2.5-i2v-preview + an image and asserts the request reaches
+  // fetch with input.media populated).
+
+  it('builds the veo wire shape (numeric seconds, size only, no reference field) for a veo t2v model', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResp({ error: 'nope' }, 400));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(generateMedia({
+      surface: 'video',
+      model: 'aihubmix-veo-3.1-lite-generate-preview',
+      prompt: 'a slow pan across a foggy harbor',
+      aspect: '16:9',
+      length: 8,
+      output: 'veo.mp4',
+      projectRoot,
+      projectsRoot,
+      projectId: 'project-1',
+    })).rejects.toThrow(/aihubmix video submit 400/);
+
+    const [url, opts] = fetchMock.mock.calls[0]!;
+    expect(String(url)).toBe('https://aihubmix.com/v1/videos');
+    const body = JSON.parse(opts.body);
+    expect(body.model).toBe('veo-3.1-lite-generate-preview');
+    expect(typeof body.seconds).toBe('number');
+    expect(body.seconds).toBe(8);
+    expect(body.size).toBe('1280x720');
+    // Veo rejects every reference form on the gateway — no input_reference,
+    // no aspect_ratio, no resolution field.
+    expect(body.input_reference).toBeUndefined();
+    expect(body.aspect_ratio).toBeUndefined();
+    expect(body.resolution).toBeUndefined();
   });
 });

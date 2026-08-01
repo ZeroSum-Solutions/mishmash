@@ -41,8 +41,11 @@ export const MEDIA_PROVIDERS: MediaProvider[] = [
   { id: 'openrouter', label: 'OpenRouter', hint: 'Unified gateway for image + video models', integrated: true, credentialsRequired: true, settingsVisible: true, defaultBaseUrl: 'https://openrouter.ai/api/v1', docsUrl: 'https://openrouter.ai/settings/keys' },
   { id: 'custom-image', label: 'Custom Image API', hint: 'OpenAI-compatible images/generations + images/edits (local or cloud)', integrated: true, docsUrl: 'https://platform.openai.com/docs/api-reference/images', supportsCustomModel: true, customModelPlaceholder: 'my-image-model' },
   { id: 'comfyui', label: 'ComfyUI', hint: 'Local JSON workflow server (planned adapter)', integrated: false, defaultBaseUrl: 'http://127.0.0.1:8188', docsUrl: 'https://docs.comfy.org/development/core-concepts/workflow' },
+  { id: 'sdcpp', label: 'stable-diffusion.cpp', hint: 'Local native async server · loopback, no API key', integrated: true, credentialsRequired: false, defaultBaseUrl: 'http://127.0.0.1:1234', docsUrl: 'https://github.com/leejet/stable-diffusion.cpp/blob/master/examples/server/api.md' },
   { id: 'bfl', label: 'Black Forest Labs', hint: 'FLUX 1.1 Pro / FLUX Pro / Dev', integrated: false, defaultBaseUrl: 'https://api.bfl.ai' },
   { id: 'fal', label: 'Fal.ai', hint: 'FLUX / Sora / Veo / Wan / Ideogram / Recraft and any fal-ai/* model', integrated: true, defaultBaseUrl: 'https://fal.run', supportsCustomModel: true },
+  { id: 'kie', label: 'Kie.ai', hint: 'Kling / Seedance / Flux / Qwen / Grok Imagine via one prepaid credit pool', integrated: true, defaultBaseUrl: 'https://api.kie.ai' },
+  { id: 'higgsfield', label: 'Higgsfield', hint: 'Uses your Higgsfield subscription credits via the connected MCP — connect it under Settings → MCP servers', integrated: true, supportsCustomModel: true },
   { id: 'leonardo', label: 'Leonardo.ai', hint: 'Phoenix / Kino XL / FLUX', integrated: true, credentialsRequired: true, settingsVisible: true, defaultBaseUrl: 'https://cloud.leonardo.ai/api/rest/v1' },
   { id: 'replicate', label: 'Replicate', hint: 'FLUX / SDXL / Ideogram', integrated: false, defaultBaseUrl: 'https://api.replicate.com' },
   { id: 'google', label: 'Google AI / Vertex', hint: 'Imagen 4 / Veo 3 / Lyria', integrated: false },
@@ -122,6 +125,14 @@ export const IMAGE_MODELS: MediaModel[] = [
 
   { id: 'custom-image', label: 'custom-image', hint: 'Custom · OpenAI-compatible endpoint', provider: 'custom-image', caps: ['t2i', 'i2i'] },
 
+  // stable-diffusion.cpp — native async /sdcpp/v1 server, one baked-in
+  // checkpoint per running process (chosen at server launch, not per
+  // request). Locally-loaded checkpoint verified against a live spike:
+  // diffusion_model=z_image_turbo-Q4_K.gguf, llm(text encoder)=
+  // Qwen3-4B-Instruct-2507-Q4_K_M.gguf, vae=ae.safetensors (see
+  // media/index.ts provider comment for the full wire contract).
+  { id: 'sdcpp/z-image-turbo', label: 'Z-Image Turbo (sd.cpp)', hint: 'stable-diffusion.cpp · local loopback · Z-Image Turbo (Qwen3 text encoder)', provider: 'sdcpp', caps: ['t2i', 'i2i'] },
+
   { id: 'flux-1.1-pro', label: 'flux-1.1-pro', hint: 'BFL · flagship', provider: 'bfl', caps: ['t2i', 'i2i'] },
   { id: 'flux-pro', label: 'flux-pro', hint: 'BFL', provider: 'bfl', caps: ['t2i'] },
   { id: 'flux-dev', label: 'flux-dev', hint: 'BFL · open weights', provider: 'bfl', caps: ['t2i'] },
@@ -142,6 +153,23 @@ export const IMAGE_MODELS: MediaModel[] = [
   { id: 'recraft-v3-fal', label: 'recraft-v3', hint: 'Fal · Recraft v3 · vector + illustration (~15–30s)', provider: 'fal', caps: ['t2i'] },
   { id: 'sd-3.5', label: 'stable-diffusion-3.5', hint: 'Fal · SD 3.5 (~20–40s)', provider: 'fal', caps: ['t2i'] },
 
+  // Kie.ai — unified createTask/recordInfo jobs API. Docs verified against
+  // docs.kie.ai/market/<family>/<variant> (see media/index.ts provider
+  // comment for the full envelope + per-model source URLs).
+  { id: 'flux-2/pro-text-to-image', label: 'flux-2-pro (Kie)', hint: 'Kie.ai · Flux 2 Pro text-to-image', provider: 'kie', caps: ['t2i'] },
+  { id: 'flux-2/pro-image-to-image', label: 'flux-2-pro-edit (Kie)', hint: 'Kie.ai · Flux 2 Pro image-to-image', provider: 'kie', caps: ['i2i'] },
+  { id: 'qwen/image-to-image', label: 'qwen-edit (Kie)', hint: 'Kie.ai · Qwen image-to-image', provider: 'kie', caps: ['i2i'] },
+  { id: 'grok-imagine/text-to-image', label: 'grok-imagine (Kie)', hint: 'Kie.ai · Grok Imagine text-to-image', provider: 'kie', caps: ['t2i'] },
+
+  // Higgsfield — bridged over the daemon-stored MCP OAuth token for the
+  // `higgsfield-openclaw` server (mcp-config.ts). Wire contract + per-model
+  // media roles verified 2026-07-31 against a live 1-credit probe; saved
+  // catalogs at scratchpad/hf-models-image.txt + hf-models-video.txt.
+  // nano_banana_pro / gpt_image_2 i2i role is 'image' (NOT 'image_references').
+  { id: 'higgsfield/soul_2', label: 'Soul 2.0 (Higgsfield)', hint: 'Higgsfield · flagship aesthetic model', provider: 'higgsfield', caps: ['t2i'] },
+  { id: 'higgsfield/nano_banana_pro', label: 'Nano Banana Pro (Higgsfield)', hint: 'Higgsfield · Google Nano Banana Pro, text + i2i', provider: 'higgsfield', caps: ['t2i', 'i2i'] },
+  { id: 'higgsfield/gpt_image_2', label: 'GPT Image 2 (Higgsfield)', hint: 'Higgsfield · OpenAI GPT Image 2, text + i2i', provider: 'higgsfield', caps: ['t2i', 'i2i'] },
+
   { id: 'leonardo-phoenix', label: 'Phoenix', hint: 'Leonardo · versatile', provider: 'leonardo', caps: ['t2i'] },
   { id: 'leonardo-kino-xl', label: 'Kino XL', hint: 'Leonardo · cinematic', provider: 'leonardo', caps: ['t2i'] },
   { id: 'leonardo-flux-dev', label: 'FLUX Dev', hint: 'Leonardo · FLUX', provider: 'leonardo', caps: ['t2i'] },
@@ -152,8 +180,8 @@ export const IMAGE_MODELS: MediaModel[] = [
 ];
 
 export const VIDEO_MODELS: MediaModel[] = [
-  { id: 'doubao-seedance-2-0-260128', label: 'seedance-2.0', hint: 'ByteDance · t2v + i2v + audio', provider: 'volcengine', caps: ['t2v', 'i2v', 'audio'], default: true },
-  { id: 'doubao-seedance-2-0-fast-260128', label: 'seedance-2.0-fast', hint: 'ByteDance · faster, cheaper', provider: 'volcengine', caps: ['t2v', 'i2v', 'audio'] },
+  { id: 'doubao-seedance-2-0-260128', label: 'seedance-2.0', hint: 'ByteDance · t2v + i2v + audio', provider: 'volcengine', caps: ['t2v', 'i2v', 'audio', 'kf'], default: true },
+  { id: 'doubao-seedance-2-0-fast-260128', label: 'seedance-2.0-fast', hint: 'ByteDance · faster, cheaper', provider: 'volcengine', caps: ['t2v', 'i2v', 'audio', 'kf'] },
   { id: 'doubao-seedance-1-0-pro-250528', label: 'seedance-1.0-pro', hint: 'ByteDance · 1.0', provider: 'volcengine', caps: ['t2v', 'i2v'] },
   { id: 'doubao-seedance-1-0-lite-i2v-250428', label: 'seedance-1.0-lite-i2v', hint: 'ByteDance · image-to-video', provider: 'volcengine', caps: ['i2v'] },
   { id: 'doubao-seedance-1-0-lite-t2v-250428', label: 'seedance-1.0-lite-t2v', hint: 'ByteDance · text-to-video', provider: 'volcengine', caps: ['t2v'] },
@@ -161,9 +189,9 @@ export const VIDEO_MODELS: MediaModel[] = [
   { id: 'grok-imagine-video', label: 'grok-imagine-video', hint: 'xAI · 720p t2v + i2v + native audio', provider: 'grok', caps: ['t2v', 'i2v', 'audio'] },
 
   // OpenRouter video models.
-  { id: 'openrouter/bytedance/seedance-2.0:1080p', label: 'seedance-2.0 1080p (OR)', hint: 'OpenRouter · ByteDance · 1080p', provider: 'openrouter', caps: ['t2v', 'i2v'], default: true },
-  { id: 'openrouter/bytedance/seedance-2.0', label: 'seedance-2.0 720p (OR)', hint: 'OpenRouter · ByteDance · 720p', provider: 'openrouter', caps: ['t2v', 'i2v'] },
-  { id: 'openrouter/bytedance/seedance-2.0:480p', label: 'seedance-2.0 480p (OR)', hint: 'OpenRouter · ByteDance · 480p', provider: 'openrouter', caps: ['t2v', 'i2v'] },
+  { id: 'openrouter/bytedance/seedance-2.0:1080p', label: 'seedance-2.0 1080p (OR)', hint: 'OpenRouter · ByteDance · 1080p', provider: 'openrouter', caps: ['t2v', 'i2v', 'kf'], default: true },
+  { id: 'openrouter/bytedance/seedance-2.0', label: 'seedance-2.0 720p (OR)', hint: 'OpenRouter · ByteDance · 720p', provider: 'openrouter', caps: ['t2v', 'i2v', 'kf'] },
+  { id: 'openrouter/bytedance/seedance-2.0:480p', label: 'seedance-2.0 480p (OR)', hint: 'OpenRouter · ByteDance · 480p', provider: 'openrouter', caps: ['t2v', 'i2v', 'kf'] },
   { id: 'openrouter/google/veo-3.1', label: 'veo-3.1 (OR)', hint: 'OpenRouter · Google', provider: 'openrouter', caps: ['t2v', 'i2v', 'audio'] },
   { id: 'openrouter/alibaba/wan-2.7', label: 'wan-2.7 (OR)', hint: 'OpenRouter · Alibaba', provider: 'openrouter', caps: ['t2v', 'i2v'] },
   { id: 'openrouter/kwaivgi/kling-v3.0-pro', label: 'kling-v3.0-pro (OR)', hint: 'OpenRouter · Kuaishou', provider: 'openrouter', caps: ['t2v', 'i2v'] },
@@ -188,6 +216,26 @@ export const VIDEO_MODELS: MediaModel[] = [
   { id: 'sora-2', label: 'sora-2', hint: 'Fal · OpenAI Sora 2', provider: 'fal', caps: ['t2v'] },
   { id: 'sora-2-pro', label: 'sora-2-pro', hint: 'Fal · OpenAI Sora 2 Pro', provider: 'fal', caps: ['t2v'] },
 
+  // Kie.ai video models — same createTask/recordInfo envelope as the image
+  // entries above. seedance-2-fast is the cheap/fast tier (storyboard mood
+  // lane sorts cheap-first on /480p|fast|lite|mini/i model-id patterns).
+  { id: 'kling-2.6/text-to-video', label: 'kling-2.6 (Kie)', hint: 'Kie.ai · Kling 2.6 text-to-video', provider: 'kie', caps: ['t2v'] },
+  { id: 'kling-2.6/image-to-video', label: 'kling-2.6-i2v (Kie)', hint: 'Kie.ai · Kling 2.6 image-to-video', provider: 'kie', caps: ['i2v'] },
+  { id: 'bytedance/seedance-2', label: 'seedance-2.0 (Kie)', hint: 'Kie.ai · ByteDance · t2v + i2v + audio', provider: 'kie', caps: ['t2v', 'i2v', 'audio'] },
+  { id: 'bytedance/seedance-2-fast', label: 'seedance-2.0-fast (Kie)', hint: 'Kie.ai · ByteDance · faster, cheaper', provider: 'kie', caps: ['t2v', 'i2v', 'audio'] },
+
+  // Higgsfield video — same MCP bridge as the image entries above.
+  // seedance_2_0 and seedance_2_0_mini both declare `kf` (start_image/
+  // end_image roles verified in the saved catalog) — seedance_2_0_mini is
+  // the cheap mood-sketch lane the storyboard mood lane defaults to when
+  // higgsfield is configured (see
+  // apps/web/src/components/storyboard/model-defaults.ts). kling3_0_turbo's
+  // catalog entry documents a start_image role + image-to-video tag too, so
+  // it declares `i2v` here as well (no end_image role, so no `kf`).
+  { id: 'higgsfield/seedance_2_0', label: 'Seedance 2.0 (Higgsfield)', hint: 'Higgsfield · ByteDance · t2v + i2v + keyframe pairs', provider: 'higgsfield', caps: ['t2v', 'i2v', 'kf'] },
+  { id: 'higgsfield/seedance_2_0_mini', label: 'Seedance 2.0 Mini (Higgsfield)', hint: 'Higgsfield · cheap/fast mood-sketch lane', provider: 'higgsfield', caps: ['t2v', 'i2v', 'kf'] },
+  { id: 'higgsfield/kling3_0_turbo', label: 'Kling 3.0 Turbo (Higgsfield)', hint: 'Higgsfield · Kling · fast text-to-video', provider: 'higgsfield', caps: ['t2v', 'i2v'] },
+
   { id: 'minimax-video-01', label: 'video-01', hint: 'MiniMax · Hailuo', provider: 'minimax', caps: ['t2v', 'i2v'] },
   { id: 'hyperframes-html', label: 'hyperframes-html', hint: 'HyperFrames · local HTML renderer', provider: 'hyperframes', caps: ['t2v'] },
 ];
@@ -204,7 +252,6 @@ export const AUDIO_MODELS_BY_KIND: Record<AudioKind, MediaModel[]> = {
     { id: 'fish-speech-2', label: 'fish-speech-2', hint: 'FishAudio', provider: 'fishaudio', caps: ['tts', 'voice-clone'] },
     { id: 'elevenlabs-v3', label: 'elevenlabs-v3', hint: 'ElevenLabs', provider: 'elevenlabs', caps: ['tts', 'voice-clone'] },
     { id: 'senseaudio-tts', label: 'senseaudio-tts', hint: 'SenseAudio', provider: 'senseaudio', caps: ['tts', 'voice-clone'] },
-    { id: 'doubao-tts', label: 'doubao-tts', hint: 'Volcengine', provider: 'volcengine', caps: ['tts'] },
     { id: 'gpt-4o-mini-tts', label: 'gpt-4o-mini-tts', hint: 'OpenAI', provider: 'openai', caps: ['tts'] },
     { id: 'aihubmix-tts-1', label: 'tts-1 (AIHubMix)', hint: 'AIHubMix · OpenAI tts-1', provider: 'aihubmix', caps: ['tts'] },
     // xAI TTS — multilingual; uses the same SuperGrok OAuth as image / video.

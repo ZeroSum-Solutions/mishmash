@@ -8,7 +8,7 @@
   "description": "A self-contained WebGL2 hero: animated water caustics woven from domain-warped ripples; click the water to drop a ripple. No meshes, no textures.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/webgl-caustic-pool",

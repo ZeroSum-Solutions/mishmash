@@ -765,6 +765,10 @@ export function LibrarySection({ active, onOpenProject }: Props) {
       const files = (await Promise.all(chosen.map((a) => fetchLibraryAssetAsFile(a)))).filter(
         (f): f is File => f !== null,
       );
+      // All fetches failed: don't ferry the user into a design-system-create
+      // flow seeded with zero files, which looks identical to never having
+      // selected anything. Leave the selection in place so they can retry.
+      if (!files.length) return;
       setDesignSystemAssetSeed({ files });
       setDsMenuOpen(false);
       setSelectedIds(new Set());
@@ -816,9 +820,15 @@ export function LibrarySection({ active, onOpenProject }: Props) {
           return;
         }
         const attachments: ChatAttachment[] = [];
+        // Track how many assets actually landed, not `chosen.length` — some
+        // `applyLibraryAsset` calls can fail (transient error, an asset
+        // deleted mid-flight), and the auto-sent message must not claim more
+        // references were added than actually were.
+        let appliedCount = 0;
         for (const a of chosen) {
           const res = await applyLibraryAsset(a.id, projectId, undefined, { includeElement: true });
           if (res?.relPath) {
+            appliedCount += 1;
             attachments.push({
               path: res.relPath,
               name: res.relPath.split('/').pop() || res.relPath,
@@ -836,10 +846,12 @@ export function LibrarySection({ active, onOpenProject }: Props) {
             });
           }
         }
-        const n = chosen.length;
+        const n = appliedCount;
         const text =
-          `Use ${n} reference${n > 1 ? 's' : ''} I just added from my Library to refine this design ` +
-          `system — pull the palette, typography, and component patterns that fit and update the design tokens.`;
+          n > 0
+            ? `Use ${n} reference${n > 1 ? 's' : ''} I just added from my Library to refine this design ` +
+              `system — pull the palette, typography, and component patterns that fit and update the design tokens.`
+            : 'Refine this design system — pull the palette, typography, and component patterns that fit and update the design tokens.';
         setComposerSeed({ projectId, text, attachments });
         setDsMenuOpen(false);
         setSelectedIds(new Set());

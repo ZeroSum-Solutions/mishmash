@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aurora Launch — AURELIA Private Beta</title>
+<!--
+  Self-contained, sandbox-safe waitlist hero. No external requests, no
+  storage APIs, no build step — everything below is inline.
+
+  Technique credits (math/patterns only — no source copied):
+  - Magnetic CTA: frame-rate-independent exponential damping,
+    pos += (target - pos) * (1 - exp(-lambda*dt)), in the spirit of
+    darkroomengineering/lenis (MIT). The button chases a synthetic
+    Lissajous idle target when the pointer is away, so it settles
+    continuously instead of ever resting.
+  - Aurora backdrop: a curl-noise vector field (Robert Bridson's
+    "Curl-noise for procedural fluid flow" — public-domain technique,
+    reimplemented from scratch in 2D canvas) drives three soft radial
+    blobs so they drift and fold around each other without clumping.
+  - Palette: Inigo Quilez's public cosine-gradient formula,
+    a + b*cos(2*pi*(c*t+d)), fitted to three brand anchors (indigo,
+    rose-gold, champagne) so the sweep never drifts into magenta.
+  - Glow dust: additive point-sprite sprites with a soft 1/d-style
+    radial falloff, in the spirit of pmndrs/drei's Sparkles shader
+    (MIT), reimplemented as canvas 2D radial gradients on desynced
+    per-particle sine offsets.
+  - Countdown digit flip: a discrete exponential ease-out arrival
+    curve, 1.001 - 2^(-10t), in the spirit of darkroomengineering/lenis
+    defaultEasing (MIT) — a fast-start/slow-settle arrival distinct
+    from the aurora's continuous ambient drift.
+-->
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #120f24;
+    --ivory: #f4ecd8;
+    --ivory-dim: rgba(244, 236, 216, 0.68);
+    --card-bg: rgba(23, 19, 42, 0.46);
+    --card-border: rgba(244, 236, 216, 0.16);
+    --gold-1: #f0dcae;
+    --gold-2: #d9a25c;
+    --ink: #221b38;
+    --font-display: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: radial-gradient(120% 90% at 50% 15%, #241b3d 0%, #120f24 55%, #0b091a 100%);
+    color: var(--ivory);
+    font-family: var(--font-body);
+    overflow: hidden;
+  }
+
+  #aurora {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .brand {
+    position: fixed;
+    top: 32px;
+    left: 40px;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-display);
+    font-size: 18px;
+    letter-spacing: 0.06em;
+    color: var(--ivory);
+  }
+  .brand-mark {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold-1), var(--gold-2));
+    box-shadow: 0 0 12px rgba(240, 220, 174, 0.55);
+  }
+
+  .stage {
+    position: relative;
+    z-index: 2;
+    min-height: 100svh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+  }
+
+  .card {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    padding: 52px 44px 40px;
+    text-align: center;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 26px;
+    backdrop-filter: blur(28px) saturate(150%);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+    box-shadow:
+      0 30px 80px rgba(5, 4, 14, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  }
+
+  .kicker {
+    margin: 0 0 18px;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--gold-1);
+  }
+
+  h1 {
+    margin: 0 0 16px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(30px, 5vw, 42px);
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+    color: var(--ivory);
+  }
+
+  .sub {
+    margin: 0 auto 30px;
+    max-width: 38ch;
+    font-size: 14.5px;
+    line-height: 1.65;
+    color: var(--ivory-dim);
+  }
+
+  .countdown {
+    margin-bottom: 30px;
+  }
+  .countdown-label {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ivory-dim);
+    margin-bottom: 12px;
+  }
+  .flip-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 10px;
+  }
+  .flip-unit { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+  .flip-colon {
+    align-self: center;
+    margin-top: -6px;
+    font-family: var(--font-display);
+    font-size: 20px;
+    color: var(--ivory-dim);
+  }
+  .flip-card {
+    position: relative;
+    width: 46px;
+    height: 50px;
+    perspective: 220px;
+  }
+  .flip-card-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+  .flip-face {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 21px;
+    color: var(--ivory);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02));
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+  .flip-back { transform: rotateX(180deg); }
+  .flip-label {
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ivory-dim);
+  }
+
+  .signup {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .signup input {
+    flex: 1;
+    min-width: 0;
+    padding: 13px 16px;
+    font-family: var(--font-body);
+    font-size: 14px;
+    color: var(--ivory);
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid rgba(244, 236, 216, 0.22);
+    border-radius: 10px;
+    outline: none;
+    transition: border-color 0.2s ease;
+  }
+  .signup input::placeholder { color: rgba(244, 236, 216, 0.4); }
+  .signup input:focus {
+    border-color: var(--gold-1);
+    outline: 2px solid rgba(240, 220, 174, 0.45);
+    outline-offset: 2px;
+  }
+
+  .magnetic-wrap {
+    display: inline-block;
+    will-change: transform;
+  }
+  .signup button {
+    flex-shrink: 0;
+    padding: 13px 20px;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    background: linear-gradient(135deg, var(--gold-1), var(--gold-2));
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 8px 24px rgba(217, 162, 92, 0.35);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .signup button:active { transform: scale(0.96); }
+
+  .success {
+    display: none;
+    margin: 0 0 16px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--gold-1);
+  }
+  .success.visible { display: block; }
+
+  .footnote {
+    margin: 0;
+    font-size: 11.5px;
+    color: rgba(244, 236, 216, 0.42);
+    letter-spacing: 0.02em;
+  }
+
+  @media (max-width: 420px) {
+    .card { padding: 40px 26px 32px; }
+    .flip-card { width: 38px; height: 44px; }
+    .flip-face { font-size: 17px; }
+    .signup { flex-direction: column; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flip-card-inner { transition: none !important; }
+    .magnetic-wrap { transform: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="aurora" aria-hidden="true"></canvas>
+
+<div class="brand" aria-hidden="true">
+  <span class="brand-mark"></span>
+  AURELIA
+</div>
+
+<div class="stage">
+  <div class="card">
+    <p class="kicker">Private Beta &middot; Founding Cohort</p>
+    <h1>Arrive before<br>everyone else.</h1>
+    <p class="sub">AURELIA is an invitation-only studio for collectors, curators, and the quietly obsessed — opening this autumn to a founding cohort of 500.</p>
+
+    <div class="countdown">
+      <div class="countdown-label">Founding access closes in</div>
+      <div class="flip-row" id="flip-row">
+        <div class="flip-unit" data-unit="d">
+          <div class="flip-card"><div class="flip-card-inner">
+            <div class="flip-face flip-front">00</div>
+            <div class="flip-face flip-back">00</div>
+          </div></div>
+          <span class="flip-label">Days</span>
+        </div>
+        <span class="flip-colon">:</span>
+        <div class="flip-unit" data-unit="h">
+          <div class="flip-card"><div class="flip-card-inner">
+            <div class="flip-face flip-front">00</div>
+            <div class="flip-face flip-back">00</div>
+          </div></div>
+          <span class="flip-label">Hrs</span>
+        </div>
+        <span class="flip-colon">:</span>
+        <div class="flip-unit" data-unit="m">
+          <div class="flip-card"><div class="flip-card-inner">
+            <div class="flip-face flip-front">00</div>
+            <div class="flip-face flip-back">00</div>
+          </div></div>
+          <span class="flip-label">Min</span>
+        </div>
+        <span class="flip-colon">:</span>
+        <div class="flip-unit" data-unit="s">
+          <div class="flip-card"><div class="flip-card-inner">
+            <div class="flip-face flip-front">00</div>
+            <div class="flip-face flip-back">00</div>
+          </div></div>
+          <span class="flip-label">Sec</span>
+        </div>
+      </div>
+    </div>
+
+    <form class="signup" id="signup-form">
+      <input type="email" name="email" placeholder="you@domain.com" autocomplete="email" required aria-label="Email address">
+      <span class="magnetic-wrap" id="magnetic-wrap">
+        <button type="submit">Request Invitation</button>
+      </span>
+    </form>
+    <p class="success" id="success-msg" role="status">You're on the list — we read every request personally.</p>
+    <p class="footnote">500 founding seats &middot; No spam, ever.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var reduceMotion = false;
+  try {
+    reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch (e) { reduceMotion = false; }
+
+  /* ---------------------------------------------------------------
+   * Form: plain client-side capture, no network calls (sandbox-safe)
+   * ------------------------------------------------------------- */
+  var form = document.getElementById("signup-form");
+  var successMsg = document.getElementById("success-msg");
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!form.checkValidity()) { form.reportValidity(); return; }
+    form.style.display = "none";
+    successMsg.classList.add("visible");
+  });
+
+  /* ---------------------------------------------------------------
+   * IQ cosine-gradient palette, fitted to indigo / rose-gold /
+   * champagne anchors so the sweep stays in-key (no magenta).
+   *   color(t) = a + b * cos(2*pi*(c*t + d))
+   * ------------------------------------------------------------- */
+  var PAL_A = [0.6575, 0.5294, 0.5124];
+  var PAL_B = [0.4800, 0.4062, 0.1798];
+  var PAL_D = [0.4827, 0.4274, 0.3575];
+  function palette(t) {
+    var out = [0, 0, 0];
+    for (var i = 0; i < 3; i++) {
+      var v = PAL_A[i] + PAL_B[i] * Math.cos(2 * Math.PI * (t + PAL_D[i]));
+      out[i] = v < 0 ? 0 : v > 1 ? 1 : v;
+    }
+    return out;
+  }
+
+  /* ---------------------------------------------------------------
+   * Curl-noise vector field (Bridson technique): velocity is the
+   * curl of a scalar noise potential, so the flow is
+   * divergence-free-feeling by construction — blobs fold around
+   * each other rather than pooling into one clump.
+   * ------------------------------------------------------------- */
+  function hash(x, y) {
+    var s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453123;
+    return s - Math.floor(s);
+  }
+  function noise2d(x, y) {
+    var xi = Math.floor(x), yi = Math.floor(y);
+    var xf = x - xi, yf = y - yi;
+    var u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    var a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+  }
+  function potential(x, y, t, seed) {
+    var dx = t * 0.05, dy = -t * 0.035;
+    return noise2d(x * 0.8 + seed * 4.1 + dx, y * 0.8 - seed * 2.7 + dy)
+       + 0.5 * noise2d(x * 1.6 - seed * 1.3 - dx * 1.4, y * 1.6 + seed * 3.3 + dy * 1.4);
+  }
+  function curl(x, y, t, seed) {
+    var e = 0.06;
+    var dPsiDy = (potential(x, y + e, t, seed) - potential(x, y - e, t, seed)) / (2 * e);
+    var dPsiDx = (potential(x + e, y, t, seed) - potential(x - e, y, t, seed)) / (2 * e);
+    return { vx: dPsiDy, vy: -dPsiDx };
+  }
+
+  var blobs = [
+    { home: { x: -0.42, y: -0.22 }, seed: 0, phase: 0.00 },
+    { home: { x: 0.50, y: 0.08 }, seed: 1, phase: 0.34 },
+    { home: { x: 0.02, y: 0.48 }, seed: 2, phase: 0.68 }
+  ];
+  blobs.forEach(function (b) {
+    b.x = b.home.x; b.y = b.home.y; b.vx = 0; b.vy = 0;
+  });
+
+  function updateBlobs(dt, t) {
+    for (var i = 0; i < blobs.length; i++) {
+      var b = blobs[i];
+      var c = curl(b.x * 1.3, b.y * 1.3, t, b.seed);
+      var springX = -(b.x - b.home.x) * 0.8;
+      var springY = -(b.y - b.home.y) * 0.8;
+      b.vx = (b.vx + (c.vx * 0.9 + springX) * dt) * 0.96;
+      b.vy = (b.vy + (c.vy * 0.9 + springY) * dt) * 0.96;
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+    }
+  }
+
+  /* ---------------------------------------------------------------
+   * Glow dust: additive point sprites drifting on desynced sine
+   * offsets, soft 1/d-style falloff approximated via gradient stops.
+   * ------------------------------------------------------------- */
+  var DUST_N = 46;
+  var dust = [];
+  for (var i = 0; i < DUST_N; i++) {
+    dust.push({
+      x: Math.random(),
+      y: Math.random(),
+      r: 1.1 + Math.random() * 2.4,
+      phase: Math.random() * Math.PI * 2,
+      bob: 0.5 + Math.random() * 0.6,
+      rise: 6 + Math.random() * 10
+    });
+  }
+
+  var canvas = document.getElementById("aurora");
+  var ctx = canvas.getContext("2d");
+  var W = 0, H = 0, DPR = 1;
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = Math.floor(window.innerWidth);
+    H = Math.floor(window.innerHeight);
+    canvas.width = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  function drawDust(t) {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (var i = 0; i < dust.length; i++) {
+      var p = dust[i];
+      var yy = (p.y * H - (t * p.rise) % (H + 60) + H + 60) % (H + 60) - 30;
+      var xx = p.x * W + Math.sin(t * 0.08 + p.phase) * 12;
+      var bobY = Math.sin(t * p.bob + p.phase) * 8;
+      var cx = xx, cy = yy + bobY;
+      var rad = p.r * 11;
+      var grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+      grad.addColorStop(0.0, "rgba(246,233,205,0.55)");
+      grad.addColorStop(0.35, "rgba(246,233,205,0.20)");
+      grad.addColorStop(1.0, "rgba(246,233,205,0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawAuroraFrame(t, dt) {
+    ctx.fillStyle = "#120f24";
+    ctx.fillRect(0, 0, W, H);
+
+    if (dt > 0) updateBlobs(dt, t);
+
+    ctx.globalCompositeOperation = "screen";
+    var paletteT = (t * 0.018) % 1;
+    var maxDim = Math.max(W, H);
+    for (var i = 0; i < blobs.length; i++) {
+      var b = blobs[i];
+      var col = palette((paletteT + b.phase + 1) % 1);
+      var R = (col[0] * 255) | 0, G = (col[1] * 255) | 0, Bc = (col[2] * 255) | 0;
+      var cx = (b.x * 0.5 + 0.5) * W;
+      var cy = (b.y * 0.5 + 0.5) * H;
+      var radius = maxDim * 0.55;
+      var grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+      grad.addColorStop(0, "rgba(" + R + "," + G + "," + Bc + ",0.5)");
+      grad.addColorStop(0.5, "rgba(" + R + "," + G + "," + Bc + ",0.20)");
+      grad.addColorStop(1, "rgba(" + R + "," + G + "," + Bc + ",0)");
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(1, 1.55);
+      ctx.translate(-cx, -cy);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalCompositeOperation = "source-over";
+
+    drawDust(t);
+
+    var vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.15, W / 2, H / 2, maxDim * 0.8);
+    vg.addColorStop(0, "rgba(0,0,0,0)");
+    vg.addColorStop(1, "rgba(5,4,13,0.58)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  /* ---------------------------------------------------------------
+   * Magnetic CTA: exponential damping toward a synthetic idle
+   * Lissajous target (or the live pointer when it is near), in the
+   * spirit of darkroomengineering/lenis — pos settles, never snaps.
+   * ------------------------------------------------------------- */
+  var magWrap = document.getElementById("magnetic-wrap");
+  var magPos = { x: 0, y: 0 };
+  var pointerActive = false, pointerX = 0, pointerY = 0;
+
+  magWrap.addEventListener("pointermove", function (e) {
+    var rect = magWrap.getBoundingClientRect();
+    pointerX = e.clientX - (rect.left + rect.width / 2);
+    pointerY = e.clientY - (rect.top + rect.height / 2);
+    pointerActive = true;
+  });
+  magWrap.addEventListener("pointerleave", function () { pointerActive = false; });
+
+  function idleTarget(t) {
+    return {
+      x: 13 * Math.sin(t * 0.62),
+      y: 8 * Math.sin(t * 0.91 + 1.3)
+    };
+  }
+
+  function updateMagnetic(dt, t) {
+    var target = pointerActive
+      ? { x: pointerX * 0.32, y: pointerY * 0.32 }
+      : idleTarget(t);
+    var damp = 1 - Math.exp(-6 * dt);
+    magPos.x += (target.x - magPos.x) * damp;
+    magPos.y += (target.y - magPos.y) * damp;
+    magWrap.style.transform = "translate(" + magPos.x.toFixed(2) + "px, " + magPos.y.toFixed(2) + "px)";
+  }
+
+  /* ---------------------------------------------------------------
+   * Countdown: live decrement, digits flip via a discrete
+   * exponential ease-out arrival curve, 1.001 - 2^(-10t) — a fast
+   * start / slow settle distinct from the ambient aurora drift.
+   * ------------------------------------------------------------- */
+  var COUNTDOWN_START = 4 * 86400 + 6 * 3600 + 22 * 60 + 47;
+  var countdownStart = null;
+
+  function easeArrival(p) {
+    var v = 1.001 - Math.pow(2, -10 * p);
+    return v < 0 ? 0 : v > 1 ? 1 : v;
+  }
+
+  var units = {};
+  ["d", "h", "m", "s"].forEach(function (key) {
+    var root = document.querySelector('.flip-unit[data-unit="' + key + '"]');
+    units[key] = {
+      inner: root.querySelector(".flip-card-inner"),
+      front: root.querySelector(".flip-front"),
+      back: root.querySelector(".flip-back"),
+      last: null,
+      raf: null
+    };
+  });
+
+  function flipTo(unit, newVal) {
+    if (reduceMotion) {
+      unit.front.textContent = newVal;
+      return;
+    }
+    if (unit.raf) cancelAnimationFrame(unit.raf);
+    unit.back.textContent = newVal;
+    var start = null;
+    var dur = 460;
+    function step(now) {
+      if (start === null) start = now;
+      var p = Math.min(1, (now - start) / dur);
+      var eased = easeArrival(p);
+      unit.inner.style.transform = "rotateX(" + (-180 * eased) + "deg)";
+      if (p < 1) {
+        unit.raf = requestAnimationFrame(step);
+      } else {
+        unit.front.textContent = newVal;
+        unit.inner.style.transform = "rotateX(0deg)";
+        unit.raf = null;
+      }
+    }
+    unit.raf = requestAnimationFrame(step);
+  }
+
+  function updateCountdown(now) {
+    if (countdownStart === null) countdownStart = now;
+    var elapsed = Math.floor((now - countdownStart) / 1000);
+    var remaining = Math.max(0, COUNTDOWN_START - elapsed);
+    var d = Math.floor(remaining / 86400);
+    var h = Math.floor((remaining % 86400) / 3600);
+    var m = Math.floor((remaining % 3600) / 60);
+    var s = remaining % 60;
+    var vals = { d: d, h: h, m: m, s: s };
+    ["d", "h", "m", "s"].forEach(function (key) {
+      var text = (vals[key] < 10 ? "0" : "") + vals[key];
+      var u = units[key];
+      if (u.last !== text) {
+        flipTo(u, text);
+        u.last = text;
+      }
+    });
+  }
+
+  /* ---------------------------------------------------------------
+   * Main loop / reduced-motion fallback
+   * ------------------------------------------------------------- */
+  if (reduceMotion) {
+    drawAuroraFrame(0, 0);
+    magWrap.style.transform = "translate(0px, 0px)";
+    updateCountdown(performance.now());
+  } else {
+    var prev = performance.now();
+    function frame(now) {
+      var dt = Math.min(0.05, (now - prev) / 1000);
+      prev = now;
+      var t = now / 1000;
+      drawAuroraFrame(t, dt);
+      updateMagnetic(dt, t);
+      updateCountdown(now);
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+})();
+</script>
+</body>
+</html>

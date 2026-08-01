@@ -1,0 +1,57 @@
+/* Grok design critique e4: a grid of equal fractions keeps the three lanes
+   (template / brief / blank) the same width at any wrap point — flex-wrap
+   with a flex-basis let one lane end up wider than its neighbors. */
+.root {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--bg-panel);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.columnLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.templateRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.templateTile {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--dur-quick, 120ms) var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1));
+}
+.templateTile:hover {
+  border-color: var(--text-soft);
+}
+
+.briefForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.briefTextarea {
+  min-height: 56px;
+  font-size: 12px;
+}

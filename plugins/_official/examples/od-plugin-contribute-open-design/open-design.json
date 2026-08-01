@@ -8,11 +8,12 @@
   "description": "Opens a pull request that adds a local Northwind Design plugin to the Northwind Design community catalog using the GitHub CLI.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/od-plugin-contribute-open-design",
   "tags": [
+    "scenario",
     "share",
     "github",
     "github-pr",
@@ -37,7 +38,7 @@
     "scenario": "plugin-sharing",
     "surface": "github",
     "useCase": {
-      "query": "Open a pull request to add the staged Open Design plugin to nexu-io/open-design using gh CLI."
+      "query": "Open a pull request to add the staged MishMash plugin to nexu-io/open-design using gh CLI."
     },
     "inputs": [
       {

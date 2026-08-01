@@ -44,13 +44,16 @@ import { expandHomePrefix } from '../home-expansion.js';
 import { spawnEnvForAgent } from '../runtimes/env.js';
 import { resolveXAIBearer } from '../integrations/xai-credentials.js';
 import { isSandboxModeEnabled } from '../sandbox-mode.js';
+import { readMcpConfig, type McpServerConfig } from '../mcp-config.js';
+import { getToken, isTokenExpired, setToken, type StoredMcpToken } from '../mcp-tokens.js';
+import { refreshAccessToken } from '../mcp-oauth.js';
 
 const PROVIDER_IDS = MEDIA_PROVIDERS.map((p) => p.id);
 type ProviderEntry = { apiKey?: string; baseUrl?: string; model?: string };
 type ProviderMap = Record<string, ProviderEntry>;
 type ModelAliasMap = Record<string, string>;
 type JsonRecord = Record<string, unknown>;
-type OAuthCredential = { apiKey: string; source: string };
+type OAuthCredential = { apiKey: string; source: string; baseUrl?: string };
 export type CodexSubscriptionStatus = { available: boolean };
 
 // Single env var carries the full alias map as JSON so we don't have
@@ -95,6 +98,7 @@ const ENV_KEYS: Record<string, string[]> = {
   'custom-image': ['OD_CUSTOM_IMAGE_API_KEY', 'CUSTOM_IMAGE_API_KEY'],
   bfl: ['OD_BFL_API_KEY', 'BFL_API_KEY'],
   fal: ['OD_FAL_KEY', 'FAL_KEY'],
+  kie: ['OD_KIE_API_KEY', 'KIE_AI_API_KEY'],
   replicate: ['OD_REPLICATE_API_TOKEN', 'REPLICATE_API_TOKEN'],
   google: ['OD_GOOGLE_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'],
   kling: ['OD_KLING_API_KEY', 'KLING_API_KEY'],
@@ -345,6 +349,24 @@ async function resolveOpenAIAuthFileCredential(): Promise<OAuthCredential | null
   return null;
 }
 
+/**
+ * Codex's provider entry is `credentialsRequired: false` — it's a local CLI
+ * subscription, not a pasted API key — so there is no bearer token to
+ * return. The sentinel apiKey below only makes `Boolean(apiKey)` true for
+ * any generic caller; the actual codex dispatch (renderCodexImage) ignores
+ * `resolveProviderConfig`'s return value entirely and resolves its own CLI
+ * env via resolveCodexImagegenEnv. `source: 'codex-subscription'` is what
+ * readMaskedConfig actually surfaces to the Settings/Storyboard UI.
+ */
+async function resolveCodexOAuthCredential(
+  projectRoot: string,
+): Promise<OAuthCredential | null> {
+  const status = await resolveCodexSubscriptionStatus(projectRoot);
+  return status.available
+    ? { apiKey: 'codex-subscription-active', source: 'codex-subscription' }
+    : null;
+}
+
 async function resolveXAIOAuthCredential(
   projectRoot: string,
 ): Promise<OAuthCredential | null> {
@@ -384,6 +406,144 @@ async function resolveXAIOAuthCredential(
   return null;
 }
 
+const HIGGSFIELD_MCP_HOST = 'mcp.higgsfield.ai';
+
+/**
+ * Find the enabled http/sse external-MCP server pointing at Higgsfield's
+ * hosted MCP endpoint (registered via the built-in `higgsfield-openclaw`
+ * template — see mcp-config.ts). Matches on url host rather than a
+ * hardcoded server id since a user could in principle register a second,
+ * custom server against the same host.
+ */
+async function findHiggsfieldMcpServer(dataDir: string): Promise<McpServerConfig | null> {
+  const config = await readMcpConfig(dataDir);
+  for (const server of config.servers) {
+    if (!server.enabled) continue;
+    if (server.transport !== 'http' && server.transport !== 'sse') continue;
+    if (!server.url) continue;
+    try {
+      const parsed = new URL(server.url);
+      // Require https: — matching on hostname alone would let a
+      // hand-edited (or malicious) http://mcp.higgsfield.ai server pass
+      // this check, and the renderer would then send the OAuth Bearer
+      // token to a cleartext endpoint.
+      if (parsed.protocol === 'https:' && parsed.hostname === HIGGSFIELD_MCP_HOST) return server;
+    } catch {
+      // Malformed URLs are already filtered out by sanitizeMcpServer at
+      // write time; be defensive on read anyway.
+    }
+  }
+  return null;
+}
+
+/**
+ * Higgsfield's provider entry has no pasted API key at all — the daemon
+ * already holds an OAuth Bearer for it via the external-MCP flow (the same
+ * token mcp-config.ts's buildClaudeMcpJson injects into agent spawns; see
+ * mcp-tokens.ts). This mirrors resolveCodexOAuthCredential /
+ * resolveXAIOAuthCredential's shape so resolveProviderConfig and
+ * readMaskedConfig's external-credential branches below can treat it the
+ * same way. `mediaConfigDir(projectRoot)` is reused as the dataDir — it
+ * already resolves to the SAME directory mcp-config.json / mcp-tokens.json
+ * live in by default (both fall back to `<projectRoot>/.od` unless
+ * OD_DATA_DIR/OD_MEDIA_CONFIG_DIR override it) — config.ts had no separate
+ * dataDir plumbing before this, so this reuses the existing resolution
+ * instead of inventing a second one.
+ *
+ * An expired access token still counts as "configured" as long as a
+ * refresh_token is on file — the actual refresh happens lazily at render
+ * time (see refreshHiggsfieldMcpToken), not here; this only answers
+ * "is there something worth trying."
+ */
+async function resolveHiggsfieldMcpCredential(
+  projectRoot: string,
+): Promise<OAuthCredential | null> {
+  const dataDir = mediaConfigDir(projectRoot);
+  const server = await findHiggsfieldMcpServer(dataDir);
+  if (!server) return null;
+  const token = await getToken(dataDir, server.id);
+  if (!token?.accessToken) return null;
+  if (isTokenExpired(token) && !token.refreshToken) return null;
+  // server.url is the endpoint actually registered under Settings -> MCP
+  // servers — a user could hand-edit it to a non-default path on the same
+  // host. Surfacing it here (rather than the hardcoded HIGGSFIELD_MCP_URL
+  // default) is what lets the renderer's RPCs hit the real configured
+  // endpoint instead of silently ignoring it.
+  return { apiKey: token.accessToken, source: 'higgsfield-mcp-oauth', baseUrl: (server.url ?? '').trim() };
+}
+
+/**
+ * In-memory dedupe for concurrent Higgsfield token refreshes, keyed by
+ * dataDir. The stored refresh token is single-use (rotation), so two
+ * callers racing a 401 for the same connection must await the SAME
+ * in-flight refresh rather than each firing their own — a second
+ * concurrent refresh against an already-rotated token fails invalid_grant.
+ * Mirrors mcp-tokens.ts's writeLocks map. Keyed on dataDir alone (not also
+ * serverId): resolving the matching server is itself async (reads
+ * mcp-config.json), and gating the cache lookup on that async resolution
+ * first would reopen the exact race this cache exists to close, since two
+ * concurrent callers would both miss the cache before either had a chance
+ * to populate it. A dataDir can only ever match one enabled Higgsfield MCP
+ * server (findHiggsfieldMcpServer takes the first hit), so this is
+ * equivalent to keying on (dataDir, serverId) in practice.
+ */
+const higgsfieldRefreshInFlight = new Map<string, Promise<string | null>>();
+
+async function performHiggsfieldTokenRefresh(dataDir: string): Promise<string | null> {
+  const server = await findHiggsfieldMcpServer(dataDir);
+  if (!server) return null;
+  const token = await getToken(dataDir, server.id);
+  if (!token?.refreshToken || !token.tokenEndpoint || !token.clientId) return null;
+  const refreshed = await refreshAccessToken({
+    tokenEndpoint: token.tokenEndpoint,
+    clientId: token.clientId,
+    ...(token.clientSecret !== undefined ? { clientSecret: token.clientSecret } : {}),
+    refreshToken: token.refreshToken,
+    ...(token.scope !== undefined ? { scope: token.scope } : {}),
+    ...(token.resourceUrl !== undefined ? { resource: token.resourceUrl } : {}),
+  });
+  const refreshedScope = refreshed.scope ?? token.scope;
+  const next: StoredMcpToken = {
+    accessToken: refreshed.access_token,
+    refreshToken: refreshed.refresh_token ?? token.refreshToken,
+    tokenType: refreshed.token_type ?? 'Bearer',
+    savedAt: Date.now(),
+    tokenEndpoint: token.tokenEndpoint,
+    clientId: token.clientId,
+    ...(token.clientSecret !== undefined ? { clientSecret: token.clientSecret } : {}),
+    ...(token.authServerIssuer !== undefined ? { authServerIssuer: token.authServerIssuer } : {}),
+    ...(token.redirectUri !== undefined ? { redirectUri: token.redirectUri } : {}),
+    ...(token.resourceUrl !== undefined ? { resourceUrl: token.resourceUrl } : {}),
+    ...(refreshedScope !== undefined ? { scope: refreshedScope } : {}),
+    ...(typeof refreshed.expires_in === 'number'
+      ? { expiresAt: Date.now() + refreshed.expires_in * 1000 }
+      : {}),
+  };
+  await setToken(dataDir, server.id, next);
+  return next.accessToken;
+}
+
+/**
+ * Refresh the stored Higgsfield MCP token in place and persist the result.
+ * Mirrors server.ts's private refreshAndPersistToken (unreachable from here
+ * without a circular import — server.ts imports generateMedia from this
+ * module's sibling index.ts). Returns the new access token, or null when
+ * there's nothing usable to refresh with (no matching server/token, or a
+ * token persisted before tokenEndpoint/clientId were recorded) — the
+ * renderer treats null (and a thrown refresh failure) as "surface an
+ * actionable reconnect message."
+ */
+export async function refreshHiggsfieldMcpToken(projectRoot: string): Promise<string | null> {
+  const dataDir = mediaConfigDir(projectRoot);
+  const inFlight = higgsfieldRefreshInFlight.get(dataDir);
+  if (inFlight) return inFlight;
+  const task = performHiggsfieldTokenRefresh(dataDir).finally(() => {
+    if (higgsfieldRefreshInFlight.get(dataDir) === task) higgsfieldRefreshInFlight.delete(dataDir);
+  });
+  higgsfieldRefreshInFlight.set(dataDir, task);
+  return task;
+}
+
 /**
  * Resolve credentials for a provider. Env vars win, then stored config,
  * then provider-specific external credential stores. OpenAI only trusts
@@ -401,11 +561,18 @@ export async function resolveProviderConfig(projectRoot: string, providerId: str
       ? await resolveOpenAIAuthFileCredential()
       : providerId === 'grok'
         ? await resolveXAIOAuthCredential(projectRoot)
-        : null
+        : providerId === 'codex'
+          ? await resolveCodexOAuthCredential(projectRoot)
+          : providerId === 'higgsfield'
+            ? await resolveHiggsfieldMcpCredential(projectRoot)
+            : null
     : null;
   return {
     apiKey: envKey || entry.apiKey || externalCredential?.apiKey || '',
-    baseUrl: entry.baseUrl || '',
+    // externalCredential.baseUrl only ever comes from
+    // resolveHiggsfieldMcpCredential today (the registered MCP server's own
+    // url) — an explicit stored entry.baseUrl still wins over it.
+    baseUrl: entry.baseUrl || externalCredential?.baseUrl || '',
     ...(typeof entry.model === 'string' && entry.model.trim()
       ? { model: entry.model.trim() }
       : {}),
@@ -441,7 +608,11 @@ export async function readMaskedConfig(projectRoot: string): Promise<MaskedConfi
         ? await resolveOpenAIAuthFileCredential()
         : id === 'grok'
           ? await resolveXAIOAuthCredential(projectRoot)
-          : null
+          : id === 'codex'
+            ? await resolveCodexOAuthCredential(projectRoot)
+            : id === 'higgsfield'
+              ? await resolveHiggsfieldMcpCredential(projectRoot)
+              : null
       : null;
     providers[id] = {
       configured: Boolean(envKey || hasStoredKey || externalCredential?.apiKey),

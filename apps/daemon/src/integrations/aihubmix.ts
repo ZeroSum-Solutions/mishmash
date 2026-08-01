@@ -172,35 +172,6 @@ export function aihubmixWireModel(catalogId: string): string {
   return AIHUBMIX_WIRE_MODELS[catalogId] ?? catalogId.replace(/^aihubmix-/, '');
 }
 
-// AIHubMix's unified /videos API uses a single `seconds` (string) field for
-// every model family, but the *valid values* differ per family — an
-// out-of-set duration 400s (e.g. Veo rejects 5; only 4/6/8 are allowed, which
-// AIHubMix forwards to Google's native `durationSeconds`). Snap the requested
-// duration to the family's nearest allowed value (ties prefer the shorter one).
-//   veo:  4, 6, 8   (default 8)
-//   sora: 4, 8, 12  (default 4)
-//   wan:  5, 10     (default 5)
-//   seedance/doubao + unknown: accepts a range — clamp to 3–12.
-// `wireModel` is the upstream name (prefix already stripped).
-export function aihubmixVideoSeconds(wireModel: string, requested: number): string {
-  const m = (wireModel || '').toLowerCase();
-  const req = Number.isFinite(requested) ? requested : 5;
-  let allowed: number[] | null = null;
-  if (m.startsWith('veo')) allowed = [4, 6, 8];
-  else if (m.startsWith('sora')) allowed = [4, 8, 12];
-  else if (m.startsWith('wan')) allowed = [5, 10];
-  if (!allowed) {
-    // Seedance/doubao and unknown families take a continuous range.
-    return String(Math.min(12, Math.max(3, Math.round(req))));
-  }
-  // Nearest allowed value; strict `<` keeps the first (smaller) on a tie.
-  const snapped = allowed.reduce(
-    (best, v) => (Math.abs(v - req) < Math.abs(best - req) ? v : best),
-    allowed[0]!,
-  );
-  return String(snapped);
-}
-
 // AIHubMix publishes its catalogue on a NON-OpenAI endpoint:
 //   GET https://aihubmix.com/api/v1/models?type=llm
 //   GET https://aihubmix.com/api/v1/models?type=image_generation

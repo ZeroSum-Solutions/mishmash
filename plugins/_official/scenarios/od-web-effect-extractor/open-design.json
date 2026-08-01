@@ -8,7 +8,7 @@
   "description": "Extract visual effects, Canvas/WebGL/Shader behavior, and interaction details from a reference website, then rebuild them as an editable Northwind Design artifact.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/scenarios/od-web-effect-extractor",
@@ -74,7 +74,7 @@
       "subprocess"
     ],
     "useCase": {
-      "query": "Extract the visual effect from {{url}} and rebuild it as an editable Open Design web artifact. Focus on {{effectFocus}}.",
+      "query": "Extract the visual effect from {{url}} and rebuild it as an editable MishMash web artifact. Focus on {{effectFocus}}.",
       "exampleOutputs": []
     },
     "inputs": [

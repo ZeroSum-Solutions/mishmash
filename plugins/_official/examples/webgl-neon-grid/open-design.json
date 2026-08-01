@@ -8,7 +8,7 @@
   "description": "Build a synthwave neon-grid scene — a perspective floor grid scrolling toward a banded retro sun under a neon starfield — rendered at 60fps as a single self-contained index.html.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/webgl-neon-grid",

@@ -8,7 +8,7 @@
   "description": "Build a full-screen, real-time WebGL/WebGL2 experience — animated shaders, 3D scenes, generative visuals, particle fields — that runs live on the GPU. Trigger when the user asks for a WebGL, shader, 3D, generative, GPU, or real-time visual experience.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/webgl-experience",

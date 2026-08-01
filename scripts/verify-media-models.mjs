@@ -46,6 +46,32 @@ function extractIds(source, name) {
   return ids;
 }
 
+// Find the array literal following `<kind>: [` and return its contents, using
+// a balanced-bracket scan rather than a regex — each model entry nests its own
+// `caps: [...]` array, so a naive `\[([\s\S]*?)\]` non-greedy match stops at
+// the FIRST `]` (the first entry's caps array) instead of the bucket's real
+// closing bracket, silently truncating every bucket to its first id.
+function extractBalancedArray(body, kind) {
+  const keyRe = new RegExp(`\\b${kind}\\s*:\\s*\\[`, 'm');
+  const km = keyRe.exec(body);
+  if (!km) return null;
+  const openIdx = km.index + km[0].length - 1;
+  let depth = 0;
+  let closeIdx = -1;
+  for (let i = openIdx; i < body.length; i++) {
+    if (body[i] === '[') depth++;
+    else if (body[i] === ']') {
+      depth--;
+      if (depth === 0) {
+        closeIdx = i;
+        break;
+      }
+    }
+  }
+  if (closeIdx === -1) return null;
+  return body.slice(openIdx + 1, closeIdx);
+}
+
 function extractAudioIds(source) {
   const re = /export const AUDIO_MODELS_BY_KIND[^=]*=\s*\{([\s\S]*?)\n\};/m;
   const m = source.match(re);
@@ -53,13 +79,12 @@ function extractAudioIds(source) {
   const body = m[1];
   const out = {};
   for (const kind of ['music', 'speech', 'sfx']) {
-    const kre = new RegExp(`${kind}\\s*:\\s*\\[([\\s\\S]*?)\\]`, 'm');
-    const km = body.match(kre);
-    if (!km) return null;
+    const arrText = extractBalancedArray(body, kind);
+    if (arrText == null) return null;
     const ids = [];
     const idRe = /\bid:\s*['\"]([^'\"]+)['\"]/g;
     let id;
-    while ((id = idRe.exec(km[1])) != null) ids.push(id[1]);
+    while ((id = idRe.exec(arrText)) != null) ids.push(id[1]);
     out[kind] = ids;
   }
   return out;

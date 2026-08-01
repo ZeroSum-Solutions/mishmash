@@ -2757,7 +2757,7 @@ export function supportedModels(surface: 'image' | 'video' | 'audio', models: Me
   const supportedProviders: Record<'image' | 'video' | 'audio', Set<string>> = {
     image: new Set(['openai', 'codex', 'volcengine', 'grok', 'nanobanana', 'openrouter', 'imagerouter', 'leonardo', 'custom-image', 'aihubmix', 'minimax']),
     video: new Set(['volcengine', 'hyperframes', 'grok', 'openrouter', 'imagerouter', 'aihubmix']),
-    audio: new Set(['minimax', 'fishaudio', 'senseaudio', 'elevenlabs', 'openai', 'volcengine', 'aihubmix']),
+    audio: new Set(['minimax', 'fishaudio', 'senseaudio', 'elevenlabs', 'openai', 'volcengine', 'grok', 'aihubmix']),
   };
   return models.filter((model) => {
     const provider = findProvider(model.provider);

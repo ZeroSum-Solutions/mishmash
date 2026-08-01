@@ -22,6 +22,7 @@ import {
   type FacetSelection,
 } from './facets';
 import { sortByVisualAppeal } from './visualScore';
+import { isGalleryVisiblePlugin } from './galleryVisibility';
 import { comparePluginGalleryOrder, isSunkToBottom } from './pluginPopularity';
 import {
   readStoredSortOrder,
@@ -94,18 +95,17 @@ export function usePluginFacets({
   // empty at first paint and arrives a tick later.
   const [bootstrapped, setBootstrapped] = useState(false);
 
-  // Atoms are infrastructure pieces (`code-import`, `patch-edit`) that
-  // are not user-facing on the home grid; the original section already
-  // filtered them out and we preserve that contract. We immediately
-  // sort by visual-appeal score so the first viewport leads with the
-  // cinematic decks / image / video templates rather than alphabetical
-  // bundled noise. Featured plugins get a +1000 score boost inside the
-  // sort so curator picks stay anchored to the front of every category view.
+  // Visibility contract lives in galleryVisibility.ts (atoms and
+  // `scenario`-tagged flow plugins never render as tiles; the roster
+  // regression in tests/plugins-home/bundled-roster.test.ts pins the
+  // curated count against it).
+  // We immediately sort by visual-appeal score so the first viewport leads
+  // with the cinematic decks / image / video templates rather than
+  // alphabetical bundled noise. Featured plugins get a +1000 score boost
+  // inside the sort so curator picks stay anchored to the front of every
+  // category view.
   const visiblePlugins = useMemo(
-    () =>
-      sortByVisualAppeal(
-        plugins.filter((p) => p.manifest?.od?.kind !== 'atom'),
-      ),
+    () => sortByVisualAppeal(plugins.filter(isGalleryVisiblePlugin)),
     [plugins],
   );
 
@@ -149,16 +149,25 @@ export function usePluginFacets({
     if (mode === 'saved') return filterByQuery(savedList, query, locale);
     // Facet selection runs on `orderedPlugins` so the user's hot/newest sort
     // choice flows through. OPEND-449 usage ordering is the default ("hot")
-    // experience: non-prototype facets lead by real usage, the Prototype facet
-    // keeps its curated order, and the default mode-seeds + no-preview tiles
-    // sink to the bottom. When the user explicitly switches to "newest",
-    // respect that chronological order and skip the usage re-sort.
+    // experience: non-curation facets lead by real usage, the Prototype and
+    // HyperFrames facets keep their curated order (their curated picks ship
+    // HTML previews with no usage history, so popularity would bury the
+    // curator's intended leads), and the default mode-seeds + no-preview
+    // tiles sink to the bottom. When the user explicitly switches to
+    // "newest", respect that chronological order and skip the usage re-sort.
     const slice = applyFacetSelection(orderedPlugins, selection);
     let base: InstalledPluginRecord[];
     if (sortOrder === 'newest') {
-      base = slice;
+      // Newest still owes the sink guarantee: default mode-seeds and
+      // no-preview tiles must never surface mid-grid just because their
+      // publishedAt lands among real content (see pluginPopularity.ts's
+      // isSunkToBottom / SINK set). sinkToBottom preserves the incoming
+      // (newest) order within each partition, so chronological order is
+      // unaffected — only the sunk tiles move to the tail.
+      base = sinkToBottom(slice);
     } else if (selection.category) {
-      const curationGoverned = selection.category === 'prototype';
+      const curationGoverned =
+        selection.category === 'prototype' || selection.category === 'hyperframes';
       base = [...slice].sort((a, b) =>
         comparePluginGalleryOrder(a.id, b.id, curationGoverned, curationGoverned),
       );

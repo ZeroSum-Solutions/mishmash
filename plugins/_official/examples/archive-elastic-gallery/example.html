@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Archive Elastic Gallery — Perpetual Archive, Cabinet IX</title>
+<!--
+  Original vanilla implementation. No GSAP or Lenis source is used anywhere
+  in this file — only the FEEL of the following is reimplemented from scratch:
+
+  - Playhead damping lineage: darkroomengineering/lenis (MIT). A self-driven
+    boomerang 0→1→0 synthetic scroll target (smooth sine, not real scrollY)
+    replaces user scroll input; every pattern below reads from this one value.
+  - Differential column lag: codrops/ElasticGridScroll (MIT). Items are
+    bucketed by index % columnCount into column wrappers; each column
+    exponentially smooths toward the shared target with its own time
+    constant, so edge columns visibly lag the center.
+  - Perspective depth-shuffle: codrops/Scroll3DGrid (MIT). Each tile carries
+    a fixed random z/rotation/brightness seed, lerped by its own column's
+    smoothed progress through one of two named recipes, swapped once per loop.
+  - Sliced-band hover-distortion + caption scramble: codrops/ClipHoverEffect
+    (MIT). One tile per cycle is chosen on a timer (never a real :hover) and
+    its image is split into bands that reassemble from random offsets while
+    its caption resolves out of a random-glyph scramble.
+  - Imagery: original, canvas-generated tonal plates. No remote assets, no
+    network requests of any kind.
+
+  Runs unmodified inside <iframe sandbox="allow-scripts">: no WebGL, no
+  fetch/storage/cookies, nothing that needs allow-same-origin.
+-->
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root {
+    color-scheme: light;
+    --bone: #f2ede4;
+    --ink: #1c2333;
+    --ink-rgb: 28, 35, 51;
+    --ink-soft: rgba(28, 35, 51, 0.58);
+    --ink-faint: rgba(28, 35, 51, 0.22);
+  }
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--bone);
+    overflow: hidden;
+    font-family: Georgia, 'Iowan Old Style', 'Times New Roman', ui-serif, serif;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono {
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+  }
+  .stage {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: var(--bone);
+    perspective: 1400px;
+    perspective-origin: 50% 36%;
+  }
+
+  /* ---- ambient paper texture + vignette (static, cheap) ---- */
+  .grain {
+    position: absolute;
+    inset: -20%;
+    z-index: 6;
+    pointer-events: none;
+    background-repeat: repeat;
+    background-size: 340px 340px;
+    opacity: 0.05;
+    mix-blend-mode: multiply;
+    animation: grain-drift 9s ease-in-out infinite alternate;
+  }
+  @keyframes grain-drift {
+    from { transform: translate3d(0, 0, 0); }
+    to   { transform: translate3d(-2.4%, 1.8%, 0); }
+  }
+  .vignette {
+    position: absolute;
+    inset: 0;
+    z-index: 7;
+    pointer-events: none;
+    background: radial-gradient(120% 100% at 50% 38%, rgba(var(--ink-rgb), 0) 55%, rgba(var(--ink-rgb), 0.16) 100%);
+  }
+
+  /* ---- HUD ---- */
+  .hud {
+    position: absolute;
+    left: clamp(18px, 3.4vw, 40px);
+    top: clamp(16px, 3vw, 34px);
+    z-index: 8;
+    pointer-events: none;
+  }
+  .hud-brand {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5em;
+    font-size: clamp(15px, 1.7vw, 20px);
+    letter-spacing: 0.02em;
+    font-weight: 700;
+  }
+  .hud-brand .mark { font-size: 0.85em; color: var(--ink-soft); }
+  .hud-sub {
+    margin: 0.35em 0 0;
+    font-size: clamp(10.5px, 1vw, 12px);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .tally {
+    position: absolute;
+    right: clamp(18px, 3.4vw, 40px);
+    bottom: clamp(16px, 3vw, 32px);
+    z-index: 8;
+    pointer-events: none;
+    font-size: clamp(10px, 0.95vw, 11.5px);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    text-align: right;
+    border-top: 1px solid var(--ink-faint);
+    padding-top: 0.6em;
+  }
+
+  /* ---- grid ---- */
+  .columns {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -10%;
+    height: 120%;
+    display: flex;
+    gap: clamp(8px, 1.4vw, 20px);
+    padding: 0 clamp(16px, 3vw, 40px);
+    transform-style: preserve-3d;
+    z-index: 1;
+  }
+  .col {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(8px, 1.4vw, 20px);
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+  .tile {
+    position: relative;
+    flex: 1 1 0;
+    min-height: 0;
+    margin: 0;
+    border: 1px solid var(--ink);
+    background: var(--bone);
+    overflow: hidden;
+    will-change: transform, filter;
+  }
+  .tile-img {
+    position: absolute;
+    inset: 0;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+  .bands {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .band {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    overflow: hidden;
+    filter: blur(6px);
+    transition: transform 900ms cubic-bezier(0.16, 1, 0.3, 1), filter 900ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .band-inner {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+  }
+  .wash {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    background: var(--ink);
+    opacity: 0;
+  }
+  figcaption.cap {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 4;
+    margin: 0;
+    padding: 0.5em 0.7em;
+    background: var(--bone);
+    color: var(--ink);
+    font-size: clamp(9.5px, 0.95vw, 11.5px);
+    letter-spacing: 0.03em;
+    line-height: 1.3;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15em;
+  }
+  .cap-row { display: flex; gap: 0.55em; align-items: baseline; }
+  .cap-idx { opacity: 0.55; }
+  .cap-name {
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    text-transform: uppercase;
+  }
+  .cap-meta {
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    font-size: 0.92em;
+    opacity: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .grain { animation: none; }
+    .band { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="grain" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+  <header class="hud">
+    <div class="hud-brand"><span class="mark">◈</span>Perpetual Archive</div>
+    <p class="hud-sub">Cabinet IX — Specimens in Continuous Rotation</p>
+  </header>
+  <div class="tally mono" id="tally">Plate 01 · Under Examination</div>
+  <div class="columns" id="columns"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ------------------------------------------------------------------
+   * 1. Museum-label copy (the fictional archive's actual catalog)
+   * ---------------------------------------------------------------- */
+  var DATA = [
+    { n: '01', name: 'Ballast Stone',     meta: 'North Quay Dredging, 1889' },
+    { n: '02', name: 'Compound Lens',     meta: 'Field Optics Division' },
+    { n: '03', name: 'Tide Ledger',       meta: 'Harbor Office, Vol. III' },
+    { n: '04', name: 'Sounding Weight',   meta: 'Brass, Depth Survey' },
+    { n: '05', name: 'Pressed Kelp',      meta: 'Herbarium Sheet 44' },
+    { n: '06', name: 'Bell Clapper',      meta: 'Salvage Lot 12' },
+    { n: '07', name: 'Steel Divider',     meta: "Cartographer's Kit" },
+    { n: '08', name: 'Barometer Tube',    meta: 'Cracked, Retired' },
+    { n: '09', name: 'Rope Splice',       meta: 'Training Sampler' },
+    { n: '10', name: 'Line Insulator',    meta: 'Telegraph Relay' },
+    { n: '11', name: 'Chronometer Key',   meta: 'Hand-Wound' },
+    { n: '12', name: 'Wax Seal',          meta: 'Customs Ledger' },
+    { n: '13', name: 'Diatom Slide',      meta: 'Plate No. 7' },
+    { n: '14', name: 'Chain Link',        meta: 'Forged, Anchor Watch' },
+    { n: '15', name: 'Signal Flag',       meta: 'Fragment, Numeral 9' },
+    { n: '16', name: 'Drift Glass',       meta: 'Tideline Collection' },
+    { n: '17', name: 'Log Excerpt',       meta: 'Watch IV, Illegible' },
+    { n: '18', name: 'Coral Fragment',    meta: 'Bleached Specimen' }
+  ];
+
+  var GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789·#/—'.split('');
+
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ------------------------------------------------------------------
+   * 2. Canvas-generated tonal "photography" — no remote imagery
+   * ---------------------------------------------------------------- */
+  function makeGrain(size) {
+    var cv = document.createElement('canvas');
+    cv.width = size; cv.height = size;
+    var ctx = cv.getContext('2d');
+    var id = ctx.createImageData(size, size);
+    for (var i = 0; i < id.data.length; i += 4) {
+      var v = 110 + ((Math.random() * 90) | 0);
+      id.data[i] = v; id.data[i + 1] = v; id.data[i + 2] = v; id.data[i + 3] = 255;
+    }
+    ctx.putImageData(id, 0, 0);
+    return cv;
+  }
+  var grainCanvas = makeGrain(128);
+  var grainEl = document.querySelector('.grain');
+  if (grainEl) grainEl.style.backgroundImage = 'url(' + grainCanvas.toDataURL('image/png') + ')';
+
+  function makeSwatch(w, h, variant) {
+    var cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    var ctx = cv.getContext('2d');
+    var inkStops = ['#10162a', '#1c2440', '#2b3a5e', '#48577f'];
+    var boneStops = ['#f5f0e7', '#eadfcc', '#d9cdb3', '#c2b393'];
+    var stops = variant === 'ink' ? inkStops : boneStops;
+    var angle = Math.random() * Math.PI * 2;
+    var cx = w / 2, cy = h / 2;
+    var x0 = cx - Math.cos(angle) * w * 0.6, y0 = cy - Math.sin(angle) * h * 0.6;
+    var x1 = cx + Math.cos(angle) * w * 0.6, y1 = cy + Math.sin(angle) * h * 0.6;
+    var grad = ctx.createLinearGradient(x0, y0, x1, y1);
+    var n = 3 + ((Math.random() * 2) | 0);
+    for (var i = 0; i < n; i++) {
+      grad.addColorStop(i / (n - 1), stops[(Math.random() * stops.length) | 0]);
+    }
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    var vg = ctx.createRadialGradient(cx, h * 0.4, h * 0.12, cx, h * 0.52, h * 0.8);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, variant === 'ink' ? 'rgba(0,0,0,0.32)' : 'rgba(20,24,38,0.24)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.globalAlpha = 0.45;
+    ctx.drawImage(grainCanvas, 0, 0, w, h);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+
+    return cv.toDataURL('image/jpeg', 0.86);
+  }
+
+  /* ------------------------------------------------------------------
+   * 3. Responsive grid shape — bucket index % columns into columns
+   * ---------------------------------------------------------------- */
+  var vw = window.innerWidth;
+  var COLS = vw < 640 ? 3 : (vw < 1000 ? 4 : 6);
+  var ROWS = vw < 640 ? 4 : (vw < 1000 ? 4 : 3);
+  var TOTAL = Math.min(COLS * ROWS, DATA.length);
+
+  var stage = document.getElementById('stage');
+  var columnsEl = document.getElementById('columns');
+  var tallyEl = document.getElementById('tally');
+
+  var cols = [];      // { el, tau, amp, tiles: [] }
+  var tiles = [];      // flat list, index-ordered
+  var center = (COLS - 1) / 2;
+
+  for (var c = 0; c < COLS; c++) {
+    var colEl = document.createElement('div');
+    colEl.className = 'col';
+    columnsEl.appendChild(colEl);
+    var dist = Math.abs(c - center);
+    cols.push({
+      el: colEl,
+      dist: dist,
+      tau: 260 + dist * 150,
+      amp: 0,
+      smoothed: 0,
+      tiles: []
+    });
+  }
+
+  for (var i = 0; i < TOTAL; i++) {
+    var d = DATA[i];
+    var c2 = i % COLS;
+    var variant = (Math.floor(i / COLS) + c2) % 2 === 0 ? 'bone' : 'ink';
+    if (Math.random() < 0.18) variant = variant === 'bone' ? 'ink' : 'bone';
+    var imgUrl = makeSwatch(240, 300, variant);
+
+    var tile = document.createElement('figure');
+    tile.className = 'tile';
+
+    var img = document.createElement('div');
+    img.className = 'tile-img';
+    img.style.backgroundImage = 'url(' + imgUrl + ')';
+    tile.appendChild(img);
+
+    var bands = document.createElement('div');
+    bands.className = 'bands';
+    tile.appendChild(bands);
+
+    var wash = document.createElement('div');
+    wash.className = 'wash';
+    tile.appendChild(wash);
+
+    var cap = document.createElement('figcaption');
+    cap.className = 'cap';
+    var row = document.createElement('div');
+    row.className = 'cap-row';
+    var idxSpan = document.createElement('span');
+    idxSpan.className = 'cap-idx mono';
+    idxSpan.textContent = d.n;
+    var nameSpan = document.createElement('span');
+    nameSpan.className = 'cap-name';
+    nameSpan.textContent = d.name;
+    row.appendChild(idxSpan);
+    row.appendChild(nameSpan);
+    var metaSpan = document.createElement('span');
+    metaSpan.className = 'cap-meta';
+    metaSpan.textContent = d.meta;
+    cap.appendChild(row);
+    cap.appendChild(metaSpan);
+    tile.appendChild(cap);
+
+    tile._seed = {
+      rx: 6 + Math.random() * 10,
+      ry: 8 + Math.random() * 12,
+      z: 18 + Math.random() * 28,
+      bri: 0.08 + Math.random() * 0.14
+    };
+    tile._img = imgUrl;
+    tile._name = d.name;
+    tile._n = d.n;
+    tile._washEl = wash;
+    tile._capEl = cap;
+    tile._nameEl = nameSpan;
+    tile._metaEl = metaSpan;
+    tile._bandsEl = bands;
+    tile._resolved = true;
+
+    cols[c2].tiles.push(tile);
+    cols[c2].el.appendChild(tile);
+    tiles.push(tile);
+  }
+
+  /* ------------------------------------------------------------------
+   * 4. Amplitude sizing (keeps oscillation inside the +/-10% buffer)
+   * ---------------------------------------------------------------- */
+  function sizeAmplitudes() {
+    var h = stage.clientHeight || window.innerHeight;
+    for (var c = 0; c < COLS; c++) {
+      cols[c].amp = h * (0.045 + cols[c].dist * 0.014);
+    }
+  }
+  sizeAmplitudes();
+  window.addEventListener('resize', sizeAmplitudes);
+
+  /* ------------------------------------------------------------------
+   * 5. Easing + color helpers
+   * ---------------------------------------------------------------- */
+  function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+  function easeInOutCubic(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+  var BONE = [242, 237, 228], INK = [28, 35, 51];
+  function lerpColor(a, b, t) {
+    t = clamp(t, 0, 1);
+    var r = Math.round(a[0] + (b[0] - a[0]) * t);
+    var g = Math.round(a[1] + (b[1] - a[1]) * t);
+    var bl = Math.round(a[2] + (b[2] - a[2]) * t);
+    return 'rgb(' + r + ',' + g + ',' + bl + ')';
+  }
+
+  /* ------------------------------------------------------------------
+   * 6. Depth-shuffle recipes — both rest at zero when progress -> 0,
+   *    so the swap at each loop boundary is invisible.
+   * ---------------------------------------------------------------- */
+  function recipeA(seed, p, c) {
+    var parity = c % 2 === 0 ? 1 : -1;
+    return {
+      rx: seed.rx * p,
+      ry: seed.ry * p * parity,
+      z: seed.z * p,
+      bri: 1 - seed.bri * p
+    };
+  }
+  function recipeB(seed, p, c) {
+    var parity = c % 2 === 0 ? 1 : -1;
+    var distF = center === 0 ? 0 : (c - center) / center;
+    return {
+      rx: seed.rx * 0.4 * p * parity,
+      ry: seed.ry * distF * p,
+      z: seed.z * Math.abs(distF) * p,
+      bri: 1 + seed.bri * Math.abs(distF) * p
+    };
+  }
+
+  /* ------------------------------------------------------------------
+   * 7. Auto-hover order — shuffled so it never reads as raster order
+   * ---------------------------------------------------------------- */
+  var activeOrder = tiles.map(function (_, i) { return i; });
+  for (var s = activeOrder.length - 1; s > 0; s--) {
+    var j = (Math.random() * (s + 1)) | 0;
+    var tmp = activeOrder[s]; activeOrder[s] = activeOrder[j]; activeOrder[j] = tmp;
+  }
+
+  var PERIOD = 6200;          // full boomerang loop, ms
+  var ACTIVE_PERIOD = 5200;   // per-tile spotlight cycle, ms (deliberately unsynced)
+  var REVEAL_END = 0.28;
+  var HOLD_END = 0.74;
+  var BAND_COUNT = 5;
+
+  var activeTile = null;
+  var activeEnvelope = 0;
+  var activePos = -1;
+
+  function activateTile(tile) {
+    tile._resolved = false;
+    var wrap = tile._bandsEl;
+    wrap.innerHTML = '';
+    var th = tile.clientHeight || 120;
+    for (var b = 0; b < BAND_COUNT; b++) {
+      var outer = document.createElement('div');
+      outer.className = 'band';
+      outer.style.height = (100 / BAND_COUNT) + '%';
+      outer.style.top = (b * 100 / BAND_COUNT) + '%';
+      outer.style.transitionDelay = (b * 26) + 'ms';
+      var inner = document.createElement('div');
+      inner.className = 'band-inner';
+      inner.style.height = (BAND_COUNT * 100) + '%';
+      inner.style.top = (-b * 100) + '%';
+      inner.style.backgroundImage = 'url(' + tile._img + ')';
+      outer.appendChild(inner);
+      wrap.appendChild(outer);
+
+      var offset = (0.55 + Math.random() * 1.1) * th * (Math.random() < 0.5 ? -1 : 1);
+      outer.style.transform = 'translateY(' + offset.toFixed(1) + 'px)';
+      outer.offsetWidth; // force a synchronous reflow so the start offset is committed pre-transition
+      (function (el) {
+        requestAnimationFrame(function () {
+          el.style.transform = 'translateY(0px)';
+          el.style.filter = 'blur(0px)';
+        });
+      })(outer);
+    }
+  }
+
+  function deactivateTile(tile) {
+    tile._bandsEl.innerHTML = '';
+    tile._washEl.style.opacity = '0';
+    tile._capEl.style.background = 'rgb(' + BONE.join(',') + ')';
+    tile._capEl.style.color = 'rgb(' + INK.join(',') + ')';
+    tile._metaEl.style.opacity = '0';
+    tile._nameEl.textContent = tile._name;
+    tile._resolved = true;
+    tile.style.borderColor = 'rgb(' + INK.join(',') + ')';
+  }
+
+  function renderScramble(tile, revealT) {
+    var full = tile._name;
+    var len = full.length;
+    var resolvedCount = Math.floor(revealT * len * 1.15);
+    var out = '';
+    for (var k = 0; k < len; k++) {
+      var ch = full[k];
+      if (ch === ' ') { out += ' '; continue; }
+      out += (k < resolvedCount) ? ch : GLYPHS[(Math.random() * GLYPHS.length) | 0];
+    }
+    tile._nameEl.textContent = out;
+    if (revealT >= 1 && !tile._resolved) {
+      tile._nameEl.textContent = full;
+      tile._resolved = true;
+    }
+  }
+
+  function updateActiveCycle(elapsed) {
+    var idxInOrder = Math.floor(elapsed / ACTIVE_PERIOD) % activeOrder.length;
+    var localT = (elapsed % ACTIVE_PERIOD) / ACTIVE_PERIOD;
+
+    if (idxInOrder !== activePos) {
+      if (activeTile) deactivateTile(activeTile);
+      activePos = idxInOrder;
+      activeTile = tiles[activeOrder[idxInOrder]];
+      activateTile(activeTile);
+      tallyEl.textContent = 'Plate ' + activeTile._n + ' · Under Examination';
+    }
+
+    var env;
+    if (localT < REVEAL_END) {
+      env = easeOutCubic(localT / REVEAL_END);
+      renderScramble(activeTile, localT / REVEAL_END);
+    } else if (localT < HOLD_END) {
+      env = 1;
+    } else {
+      env = 1 - easeInOutCubic((localT - HOLD_END) / (1 - HOLD_END));
+    }
+    activeEnvelope = env;
+
+    var capBg = lerpColor(BONE, INK, env);
+    var capFg = lerpColor(INK, BONE, env);
+    var borderCol = lerpColor(INK, BONE, env * 0.7);
+    activeTile._capEl.style.background = capBg;
+    activeTile._capEl.style.color = capFg;
+    activeTile.style.borderColor = borderCol;
+    activeTile._washEl.style.opacity = (env * 0.14).toFixed(3);
+    activeTile._metaEl.style.opacity = env.toFixed(3);
+  }
+
+  /* ------------------------------------------------------------------
+   * 8. Self-driven boomerang playhead
+   * ---------------------------------------------------------------- */
+  function boomerang(elapsed) {
+    var t = (elapsed % PERIOD) / PERIOD;
+    return (Math.sin((t - 0.25) * Math.PI * 2) + 1) / 2;
+  }
+
+  var startTime = null;
+  var lastTime = null;
+  var ACTIVE_Z_BOOST = 46, ACTIVE_SCALE_BOOST = 0.045, ACTIVE_BRI_BOOST = 0.14;
+  var SKEW_FACTOR = 9, SKEW_MAX = 5.5;
+
+  function tick(now) {
+    if (startTime === null) { startTime = now; lastTime = now; }
+    var dt = Math.min(50, now - lastTime);
+    lastTime = now;
+    var elapsed = now - startTime;
+
+    updateActiveCycle(elapsed);
+
+    var targetVal = boomerang(elapsed);
+    var loopIdx = Math.floor(elapsed / PERIOD);
+    var recipe = (loopIdx % 2 === 0) ? recipeA : recipeB;
+
+    for (var c = 0; c < COLS; c++) {
+      var st = cols[c];
+      var k = 1 - Math.exp(-dt / st.tau);
+      st.smoothed += (targetVal - st.smoothed) * k;
+      var velocity = targetVal - st.smoothed;
+      var dirSign = c % 2 === 0 ? 1 : -1;
+      var colY = st.smoothed * st.amp * dirSign;
+      var skew = clamp(velocity * SKEW_FACTOR, -SKEW_MAX, SKEW_MAX) * dirSign;
+      st.el.style.transform = 'translate3d(0,' + colY.toFixed(2) + 'px,0) skewY(' + skew.toFixed(2) + 'deg)';
+
+      for (var ti = 0; ti < st.tiles.length; ti++) {
+        var tile = st.tiles[ti];
+        var r = recipe(tile._seed, st.smoothed, c);
+        var zTotal = r.z, scaleExtra = 0, briExtra = 0;
+        if (tile === activeTile) {
+          zTotal += activeEnvelope * ACTIVE_Z_BOOST;
+          scaleExtra = activeEnvelope * ACTIVE_SCALE_BOOST;
+          briExtra = activeEnvelope * ACTIVE_BRI_BOOST;
+        }
+        tile.style.transform =
+          'translateZ(' + zTotal.toFixed(2) + 'px) ' +
+          'rotateX(' + r.rx.toFixed(2) + 'deg) ' +
+          'rotateY(' + r.ry.toFixed(2) + 'deg) ' +
+          'scale(' + (1 + scaleExtra).toFixed(4) + ')';
+        tile.style.filter = 'brightness(' + (r.bri + briExtra).toFixed(3) + ')';
+      }
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  /* ------------------------------------------------------------------
+   * 9. Composed static fallback for prefers-reduced-motion
+   * ---------------------------------------------------------------- */
+  function renderStaticFrame() {
+    var p = 0.62;
+    for (var c = 0; c < COLS; c++) {
+      var st = cols[c];
+      var dirSign = c % 2 === 0 ? 1 : -1;
+      var colY = p * st.amp * 0.5 * dirSign;
+      st.el.style.transform = 'translate3d(0,' + colY.toFixed(2) + 'px,0)';
+      for (var ti = 0; ti < st.tiles.length; ti++) {
+        var tile = st.tiles[ti];
+        var r = recipeA(tile._seed, p, c);
+        tile.style.transform =
+          'translateZ(' + r.z.toFixed(2) + 'px) rotateX(' + r.rx.toFixed(2) + 'deg) rotateY(' + r.ry.toFixed(2) + 'deg)';
+        tile.style.filter = 'brightness(' + r.bri.toFixed(3) + ')';
+      }
+    }
+    var spot = tiles[activeOrder[0]];
+    spot._capEl.style.background = 'rgb(' + INK.join(',') + ')';
+    spot._capEl.style.color = 'rgb(' + BONE.join(',') + ')';
+    spot.style.borderColor = 'rgb(' + BONE.join(',') + ')';
+    spot._washEl.style.opacity = '0.14';
+    spot._metaEl.style.opacity = '1';
+    spot._nameEl.textContent = spot._name;
+    tallyEl.textContent = 'Plate ' + spot._n + ' · Under Examination';
+  }
+
+  if (reduceMotion) {
+    renderStaticFrame();
+  } else {
+    requestAnimationFrame(tick);
+  }
+})();
+</script>
+</body>
+</html>

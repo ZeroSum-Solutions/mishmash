@@ -1196,6 +1196,8 @@ function displayTabFor(
     plugins: t('entry.navPlugins'),
     'design-systems': t('entry.navDesignSystems'),
     library: 'Library',
+    'design-library': t('entry.navDesignLibrary'),
+    storyboard: t('entry.navStoryboard'),
     brands: t('entry.navBrands'),
     integrations: t('entry.navIntegrations'),
   };
@@ -1207,6 +1209,8 @@ function displayTabFor(
     plugins: 'grid',
     'design-systems': 'blocks',
     library: 'image',
+    'design-library': 'swatchbook',
+    storyboard: 'film',
     brands: 'blocks',
     integrations: 'link',
   };

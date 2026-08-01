@@ -8,7 +8,7 @@
   "description": "Create refreshable, auditable Northwind Design artifacts backed by connector or local data. Trigger when the user asks for live dashboards, refreshable reports, synced views, or reusable data-backed artifacts.",
   "license": "MIT",
   "author": {
-    "name": "Open Design",
+    "name": "MishMash",
     "url": "https://github.com/nexu-io"
   },
   "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/live-artifact",
@@ -44,7 +44,7 @@
       "entry": "./index.html"
     },
     "useCase": {
-      "query": "Create refreshable, auditable Open Design artifacts backed by connector or local data. Trigger when the user asks for live dashboards, refreshable reports, synced views, or reusable data-backed artifacts."
+      "query": "Create refreshable, auditable MishMash artifacts backed by connector or local data. Trigger when the user asks for live dashboards, refreshable reports, synced views, or reusable data-backed artifacts."
     },
     "context": {
       "skills": [

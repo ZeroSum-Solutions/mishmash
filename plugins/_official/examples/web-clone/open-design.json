@@ -8,11 +8,12 @@
   "description": "Clone or visually recreate a website using source-first reconnaissance, route crawling, interaction probes, asset capture, and post-clone audit notes.",
   "license": "MIT",
   "author": {
-    "name": "Jane xiaoer / Open Design",
+    "name": "Jane xiaoer / MishMash",
     "url": "https://github.com/Jane-xiaoer/claude-skill-web-clone"
   },
   "homepage": "https://github.com/Jane-xiaoer/claude-skill-web-clone",
   "tags": [
+    "scenario",
     "example",
     "first-party",
     "prototype",

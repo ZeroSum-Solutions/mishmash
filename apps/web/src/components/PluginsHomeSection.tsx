@@ -361,7 +361,7 @@ function CategoryRow({
             variant="all"
           />
         ) : null}
-        {options.map((opt) => (
+        {options.filter((opt) => opt.count > 0).map((opt) => (
           <CategoryPill
             key={opt.slug}
             slug={opt.slug}

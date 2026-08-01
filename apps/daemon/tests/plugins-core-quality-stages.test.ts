@@ -107,14 +107,37 @@ describe('core quality-stage floor', () => {
   // — the SAME atom shape as a code artifact. The media `mode` must keep
   // them generate-only; gating on atom shape alone would wrongly rewrite
   // them to plan -> generate -> critique.
+  //
+  // The gallery curation removed the bundled image (`image-poster`) and
+  // audio (`audio-jingle`) templates that shipped this atom shape, and no
+  // retained image/audio template declares it any more, so those two modes
+  // use a synthetic manifest with the exact shipped shape. Video keeps a
+  // real bundled manifest (`video-hyperframes`).
+  function mediaManifestFixture(mode: string): PluginManifest {
+    return {
+      name: `media-${mode}-fixture`,
+      title: `Media ${mode} fixture`,
+      version: '1.0.0',
+      description: 'Fixture mirroring the removed bundled media template shape.',
+      od: {
+        kind: 'scenario',
+        taskKind: 'new-generation',
+        mode,
+        useCase: { query: 'Generate a media asset.' },
+        capabilities: ['prompt:inject', 'fs:write'],
+        pipeline: { stages: [{ id: 'generate', atoms: ['file-write', 'live-artifact'] }] },
+      },
+    } as PluginManifest;
+  }
+
   it.each([
-    ['image', 'plugins/_official/examples/image-poster/open-design.json'],
-    ['video', 'plugins/_official/examples/vfx-text-cursor/open-design.json'],
-    ['audio', 'plugins/_official/examples/audio-jingle/open-design.json'],
+    ['image', null],
+    ['video', 'plugins/_official/examples/video-hyperframes/open-design.json'],
+    ['audio', null],
   ])('leaves the bundled %s media template generate-only despite file-write/live-artifact atoms', (mode, relPath) => {
-    const manifest = JSON.parse(
-      readFileSync(path.join(REPO_ROOT, relPath), 'utf8'),
-    ) as PluginManifest;
+    const manifest = relPath
+      ? (JSON.parse(readFileSync(path.join(REPO_ROOT, relPath), 'utf8')) as PluginManifest)
+      : mediaManifestFixture(mode as string);
     // Sanity: the shipped media template carries the code-artifact atom
     // shape, so this guards the exact false-positive class the reviewer flagged.
     expect(manifest.od?.mode).toBe(mode);

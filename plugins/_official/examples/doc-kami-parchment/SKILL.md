@@ -14,7 +14,7 @@ example_id: sample-kami-parchment
 example_name: "Kami Parchment · One-Pager"
 example_format: markdown
 example_tagline: "Warm parchment + monochrome ink-blue + single serif"
-example_desc: "A single-page Open Design Studio Issue №26 editorial-grade one-pager"
+example_desc: "A single-page MishMash Studio Issue №26 editorial-grade one-pager"
 example_source_url: "https://github.com/tw93/kami"
 example_source_label: "tw93/kami"
 od:

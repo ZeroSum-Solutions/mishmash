@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<title>Coldform — Brand systems, product design, motion engineering.</title>
+<meta name="description" content="Coldform agency landing hero: a self-driven synthetic playhead powers a velocity-reactive marquee, a word-igniting headline, and a sticky fold panel handoff, looping forever with zero scroll." />
+<!--
+  Self-driven scroll-story hero. Nothing here reads real scrollTop — a
+  synthetic playhead (a 0→1→0 ping-pong triangle wave, run through
+  frame-rate-independent exponential damping) stands in for scroll
+  position, so the whole choreography plays on an eternal loop the
+  instant this document mounts.
+
+  Pattern lineage (all MIT, no source copied — feel reimplemented in
+  vanilla JS/CSS):
+  - Damped playhead-follow math: darkroomengineering/lenis.
+  - Velocity-reactive infinite marquee, ProgressText word reveal, the
+    --progress-driven sticky "Fold" panel handoff, and the useReveal
+    data-reveal stagger contract: darkroomengineering/satus.
+-->
+<style>
+:root {
+  /* ----- Surface ----- */
+  --charcoal: #15130f;
+  --charcoal-deep: #0c0a07;
+
+  /* ----- Type colors ----- */
+  --bone: #efe8da;
+  --bone-dim: #6f6656;
+  --stone: #9a927e;
+
+  /* ----- Single chromatic accent ----- */
+  --brass: #c9a227;
+
+  /* ----- Hairlines ----- */
+  --hairline: rgba(239, 232, 218, 0.14);
+  --hairline-brass: rgba(201, 162, 39, 0.5);
+
+  /* ----- Type stacks ----- */
+  --grotesk: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  /* ----- Named easing tokens (the only cubic-beziers used anywhere) ----- */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+
+  /* ----- Fluid vw-based type scale: calc((px * 100vw) / device-width) ----- */
+  --fs-mono-sm: clamp(0.62rem, calc((11 * 100vw) / 1440), 0.78rem);
+  --fs-mono-md: clamp(0.7rem, calc((13 * 100vw) / 1440), 0.92rem);
+  --fs-sub: clamp(0.92rem, calc((19 * 100vw) / 1440), 1.2rem);
+  --fs-marquee: clamp(1.5rem, calc((46 * 100vw) / 1440), 2.9rem);
+  --fs-hero: clamp(2.5rem, calc((128 * 100vw) / 1440), 8.4rem);
+  --fs-fold-title: clamp(1.15rem, calc((30 * 100vw) / 1440), 2.35rem);
+  --fs-fold-sub: clamp(0.82rem, calc((15 * 100vw) / 1440), 1rem);
+
+  --progress: 0;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--charcoal);
+  color: var(--bone);
+  overflow: hidden;
+}
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- stage ---------- */
+.stage {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.grain {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  filter: url(#agc-grain);
+  opacity: 0.5;
+  mix-blend-mode: overlay;
+}
+
+/* ---------- header bar ---------- */
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: clamp(16px, 3svh, 26px) clamp(20px, 5vw, 56px) clamp(10px, 2svh, 16px);
+  position: relative;
+  z-index: 2;
+}
+.wordmark {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: var(--fs-mono-md);
+  letter-spacing: 0.16em;
+  color: var(--bone);
+}
+.meta {
+  font-family: var(--mono);
+  font-size: var(--fs-mono-sm);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--stone);
+}
+
+/* ---------- marquee ---------- */
+.marquee {
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+  border-top: 1px solid var(--hairline-brass);
+  border-bottom: 1px solid var(--hairline-brass);
+  padding: clamp(10px, 2svh, 16px) 0;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  white-space: nowrap;
+  will-change: transform;
+}
+.m-item {
+  font-family: var(--grotesk);
+  font-weight: 700;
+  font-stretch: condensed;
+  text-transform: uppercase;
+  letter-spacing: -0.005em;
+  font-size: var(--fs-marquee);
+  color: var(--bone);
+  padding-right: clamp(18px, 2.6vw, 34px);
+}
+.m-rule {
+  color: var(--brass);
+  font-size: 0.42em;
+  padding: 0 clamp(16px, 2.4vw, 32px);
+  align-self: center;
+}
+
+/* ---------- hero ---------- */
+.hero {
+  position: relative;
+  z-index: 2;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(14px, 2.2svh, 22px);
+  padding: clamp(10px, 2svh, 24px) clamp(20px, 5vw, 56px) clamp(70px, 12svh, 130px);
+  transform: translate3d(0, calc(var(--progress) * -5svh), 0);
+  opacity: calc(1 - (var(--progress) * 0.16));
+  will-change: transform, opacity;
+}
+
+.eyebrow {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 8px;
+  width: fit-content;
+  font-family: var(--mono);
+  font-size: var(--fs-mono-md);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--stone);
+}
+.eyebrow-rule {
+  width: 34px;
+  height: 2px;
+  background: var(--brass);
+}
+
+.headline {
+  margin: 0;
+  max-width: 20ch;
+  font-family: var(--grotesk);
+  font-weight: 800;
+  font-stretch: condensed;
+  letter-spacing: -0.01em;
+  line-height: 0.98;
+  font-size: var(--fs-hero);
+  text-wrap: balance;
+}
+.words { display: inline; }
+.word {
+  display: inline-block;
+  color: rgb(111, 102, 86);
+}
+.word--accent { position: relative; }
+.word--accent::after {
+  content: '';
+  position: absolute;
+  left: 2px; right: 6px; bottom: -0.07em;
+  height: 0.055em;
+  background: var(--brass);
+  opacity: 0.92;
+}
+
+.sub {
+  margin: 0;
+  max-width: 54ch;
+  font-family: var(--sans);
+  font-weight: 400;
+  font-size: var(--fs-sub);
+  line-height: 1.5;
+  color: var(--stone);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(8px, 1.2vw, 14px);
+  margin-top: clamp(4px, 1svh, 10px);
+}
+.tag {
+  font-family: var(--mono);
+  font-size: var(--fs-mono-sm);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bone);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  padding: 6px 14px;
+  background: rgba(239, 232, 218, 0.03);
+}
+
+/* ---------- entrance stagger (useReveal data-reveal contract) ---------- */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(14px);
+  animation: agc-reveal-in 0.85s var(--ease-out-expo) forwards;
+  animation-delay: calc((var(--reveal-index, 0) * 90ms) + 260ms);
+}
+@keyframes agc-reveal-in {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- fold panel (sticky-style section handoff) ---------- */
+.fold {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 3;
+  height: 42svh;
+  background: var(--charcoal-deep);
+  border-top: 1px solid var(--hairline-brass);
+  overflow: hidden;
+  transform: translate3d(0, calc((1 - var(--progress)) * 34svh), 0);
+  will-change: transform;
+}
+.fold-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: clamp(18px, 3svh, 30px) clamp(20px, 5vw, 56px) 0;
+}
+.fold-eyebrow {
+  font-family: var(--mono);
+  font-size: var(--fs-mono-md);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--stone);
+}
+.fold-title {
+  margin: 0;
+  max-width: 34ch;
+  font-family: var(--grotesk);
+  font-weight: 600;
+  font-stretch: condensed;
+  letter-spacing: -0.005em;
+  line-height: 1.12;
+  font-size: var(--fs-fold-title);
+  color: var(--bone);
+}
+.fold-sub {
+  margin: 0;
+  max-width: 48ch;
+  font-family: var(--sans);
+  font-size: var(--fs-fold-sub);
+  line-height: 1.5;
+  color: var(--stone);
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 640px) {
+  .meta { display: none; }
+  .headline { max-width: 15ch; }
+  .fold { height: 38svh; }
+}
+
+/* ---------- reduced motion: composed static fallback ---------- */
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] { animation: none !important; opacity: 1 !important; transform: none !important; }
+  .hero, .fold, .marquee-track { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="agc-grain" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" seed="7" result="agc-noise" />
+    <feColorMatrix in="agc-noise" type="saturate" values="0" />
+    <feComponentTransfer>
+      <feFuncA type="linear" slope="0.12" intercept="0" />
+    </feComponentTransfer>
+  </filter>
+</svg>
+
+<main class="stage" id="stage">
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="bar" data-reveal>
+    <span class="wordmark">COLDFORM</span>
+    <span class="meta">Global — remote-first · Vol. 04 — 2026</span>
+  </header>
+
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-track" id="marqueeTrack">
+      <span class="m-item">Brand Systems</span><span class="m-rule">◆</span>
+      <span class="m-item">Product Design</span><span class="m-rule">◆</span>
+      <span class="m-item">Motion Engineering</span><span class="m-rule">◆</span>
+      <span class="m-item">Growth Architecture</span><span class="m-rule">◆</span>
+      <span class="m-item">Spatial Computing</span><span class="m-rule">◆</span>
+      <span class="m-item">Creative Technology</span><span class="m-rule">◆</span>
+      <span class="m-item">Brand Systems</span><span class="m-rule">◆</span>
+      <span class="m-item">Product Design</span><span class="m-rule">◆</span>
+      <span class="m-item">Motion Engineering</span><span class="m-rule">◆</span>
+      <span class="m-item">Growth Architecture</span><span class="m-rule">◆</span>
+      <span class="m-item">Spatial Computing</span><span class="m-rule">◆</span>
+      <span class="m-item">Creative Technology</span><span class="m-rule">◆</span>
+    </div>
+  </div>
+
+  <section class="hero" id="hero">
+    <p class="eyebrow" data-reveal>
+      Coldform — Independent Agency
+      <span class="eyebrow-rule" aria-hidden="true"></span>
+    </p>
+    <h1 class="headline">
+      <span class="sr-only">We engineer momentum for brands that refuse to coast.</span>
+      <span class="words" id="words" aria-hidden="true"><span class="word">We</span> <span class="word">engineer</span> <span class="word word--accent">momentum</span> <span class="word">for</span> <span class="word">brands</span> <span class="word">that</span> <span class="word">refuse</span> <span class="word">to</span> <span class="word">coast.</span></span>
+    </h1>
+    <p class="sub" data-reveal>Brand systems, product design, and motion engineering for teams building the next default.</p>
+    <div class="tags">
+      <span class="tag" data-reveal>Est. 2016</span>
+      <span class="tag" data-reveal>Partners · 24</span>
+      <span class="tag" data-reveal>Ships launched · 118</span>
+      <span class="tag" data-reveal>SOTD × 12</span>
+    </div>
+  </section>
+
+  <section class="fold" id="fold">
+    <div class="fold-inner">
+      <p class="fold-eyebrow">II — The Method</p>
+      <h2 class="fold-title">Research. System. Motion. Launch. Repeat.</h2>
+      <p class="fold-sub">A five-stage loop we run for every partner, every release.</p>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var root = document.documentElement;
+
+  /* Auto-index every [data-reveal] element — the useReveal stagger contract. */
+  var revealEls = Array.prototype.slice.call(document.querySelectorAll('[data-reveal]'));
+  revealEls.forEach(function (el, i) {
+    el.style.setProperty('--reveal-index', i);
+  });
+
+  var wordEls = Array.prototype.slice.call(document.querySelectorAll('.word'));
+  var marqueeTrack = document.getElementById('marqueeTrack');
+
+  var BONE = [239, 232, 218];
+  var DIM = [111, 102, 86];
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function clamp01(v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+
+  function setProgress(p) {
+    root.style.setProperty('--progress', p.toFixed(4));
+  }
+
+  function applyWords(p) {
+    var n = wordEls.length;
+    for (var i = 0; i < n; i++) {
+      var start = i / n;
+      var span = 1 / n;
+      var wp = clamp01((p - start) / span);
+      var flare = Math.sin(wp * Math.PI); /* peaks mid-ignition, settles at both ends */
+      var r = Math.round(lerp(DIM[0], BONE[0], wp));
+      var g = Math.round(lerp(DIM[1], BONE[1], wp));
+      var b = Math.round(lerp(DIM[2], BONE[2], wp));
+      var el = wordEls[i];
+      el.style.color = 'rgb(' + r + ',' + g + ',' + b + ')';
+      el.style.textShadow = flare > 0.02
+        ? '0 0 ' + (flare * 20).toFixed(1) + 'px rgba(201,162,39,' + (flare * 0.8).toFixed(3) + ')'
+        : 'none';
+    }
+  }
+
+  /* ---------- reduced motion: one composed, still frame ---------- */
+  var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  if (reduceMotion) {
+    var staticP = 0.68;
+    setProgress(staticP);
+    applyWords(staticP);
+    marqueeTrack.style.transform = 'translate3d(-120px,0,0)';
+    return;
+  }
+
+  /* ---------- velocity-reactive infinite marquee ---------- */
+  var marqueeGroupWidth = 0;
+  function measureMarquee() {
+    marqueeGroupWidth = marqueeTrack.scrollWidth / 2;
+  }
+  window.addEventListener('resize', measureMarquee);
+  requestAnimationFrame(measureMarquee);
+
+  /*
+   * The damped playhead tracks a constant-speed triangle wave, so its own
+   * velocity (d(pos)/dt) is roughly CONSTANT through most of each ramp and
+   * dips toward zero only briefly at each ping-pong turn (a direction
+   * reversal has to pass through zero velocity). VELOCITY_GAIN rescales
+   * that into a legible speed multiplier: the marquee surges through the
+   * body of each ramp and eases to a graceful crawl right at the turn —
+   * a breathing rhythm driven entirely by the playhead, not a fixed tween.
+   */
+  var VELOCITY_GAIN = 55;
+  var marqueeOffset = 0;
+  function applyMarquee(dt, velocity) {
+    var baseSpeed = 42; /* px/s floor, so the ticker never fully stops */
+    var mult = 1 + Math.min(Math.abs(velocity * VELOCITY_GAIN) / 5, 3);
+    marqueeOffset -= baseSpeed * mult * dt;
+    if (marqueeGroupWidth > 0) marqueeOffset = marqueeOffset % marqueeGroupWidth;
+    marqueeTrack.style.transform = 'translate3d(' + marqueeOffset.toFixed(2) + 'px,0,0)';
+  }
+
+  /* ---------- self-driven synthetic playhead ---------- */
+  var PERIOD = 11;      /* seconds for a full 0 -> 1 -> 0 cycle */
+  var LAMBDA = 3.2;      /* exponential damping rate (higher = snappier) */
+  var pos = 0;
+  var lastTime = null;
+
+  function tick(now) {
+    if (lastTime === null) lastTime = now;
+    var dt = Math.min((now - lastTime) / 1000, 0.05);
+    lastTime = now;
+
+    var elapsed = now / 1000;
+    var x = (elapsed % PERIOD) / PERIOD;
+    var target = x < 0.5 ? x * 2 : 2 - x * 2; /* ping-pong triangle wave */
+
+    var prevPos = pos;
+    /* Frame-rate-independent exponential damping: trails the target like real momentum. */
+    pos += (target - pos) * (1 - Math.exp(-LAMBDA * dt));
+
+    var velocity = dt > 0 ? (pos - prevPos) / dt : 0;
+
+    setProgress(pos);
+    applyWords(pos);
+    applyMarquee(dt, velocity);
+
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

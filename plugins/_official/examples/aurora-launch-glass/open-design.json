@@ -1,0 +1,90 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-aurora-launch-glass",
+  "title": "Aurora Launch",
+  "version": "0.1.0",
+  "publishedAt": "2026-07-31T00:07:01Z",
+  "description": "Premium invite-only waitlist hero: a slow-drifting indigo-to-rose-gold aurora mesh breathes behind a frosted-glass signup card, a magnetic CTA settles under exponential damping toward a self-driven idle target, and a digit-flip countdown ticks live — every element self-animated so the card is never static.",
+  "license": "MIT",
+  "credits": [
+    "Magnetic CTA chase damping adapted (formula only) from darkroomengineering/lenis (MIT); reimplemented from scratch in 2D canvas."
+  ],
+  "author": {
+    "name": "MishMash",
+    "url": "https://github.com/nexu-io"
+  },
+  "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/aurora-launch-glass",
+  "tags": [
+    "example",
+    "first-party",
+    "prototype",
+    "marketing",
+    "web",
+    "desktop",
+    "waitlist-page",
+    "coming-soon-page",
+    "pre-launch-landing-page",
+    "email-capture-page",
+    "launch-page",
+    "aurora",
+    "glassmorphism",
+    "curl-noise",
+    "cosine-palette",
+    "magnetic-button",
+    "countdown"
+  ],
+  "compat": {
+    "agentSkills": [
+      {
+        "path": "./SKILL.md"
+      }
+    ]
+  },
+  "od": {
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "prototype",
+    "platform": "desktop",
+    "scenario": "marketing",
+    "surface": "web",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html"
+    },
+    "useCase": {
+      "query": "Make a premium invite-only waitlist page — a slow-drifting aurora gradient mesh behind a frosted-glass signup card, a magnetic call-to-action, and a live countdown — that stays in constant, calm, self-driven motion with no user interaction.",
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Aurora Launch"
+        }
+      ]
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        }
+      ],
+      "designSystem": {
+        "primary": true
+      }
+    },
+    "pipeline": {
+      "stages": [
+        {
+          "id": "generate",
+          "atoms": [
+            "file-write",
+            "live-artifact"
+          ]
+        }
+      ]
+    },
+    "capabilities": [
+      "prompt:inject",
+      "fs:write"
+    ]
+  }
+}

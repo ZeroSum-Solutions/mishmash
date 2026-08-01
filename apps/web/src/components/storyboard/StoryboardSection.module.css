@@ -1,0 +1,454 @@
+.root {
+  display: flex;
+  flex-direction: column;
+}
+
+.status {
+  padding: 32px 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.empty {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 200ms cubic-bezier(0.23, 1, 0.32, 1), transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.card:hover {
+  border-color: var(--text-soft);
+  transform: translateY(-1px);
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.cardMeta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* --- editor --- */
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.editorHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.backButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.titleInput {
+  flex: 1;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+.titleInput:hover,
+.titleInput:focus {
+  border-color: var(--border);
+  background: var(--bg-panel);
+}
+
+/* --- mood lane --- */
+
+.moodLane {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-panel);
+}
+.moodLaneToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 16px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+.moodLaneTeaser {
+  flex: 1;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.moodLaneChevron {
+  margin-left: auto;
+  color: var(--text-soft);
+  transition: transform var(--dur-quick, 120ms) var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1));
+}
+.moodLaneToggle[aria-expanded='true'] .moodLaneChevron {
+  transform: rotate(180deg);
+}
+.moodLaneBody {
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.moodLaneHelper {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.moodLaneForm {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.moodDraftRail {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-top: 8px;
+}
+.moodDraftCard {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.moodDraftVideo {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background: #000;
+}
+.moodDraftPrompt {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- shots section (compact rows + details drawer; PRD C4 outcome 1) --- */
+
+.shotsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.shotsSectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.shotsHeading {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+/* Grok design critique G8: lives inline with the "+ Add shot" /
+   "Add shots from images" controls (in .shotQuickAdd) now, not opposite the
+   section heading — same dashed-outline treatment so the whole "blank vs.
+   template vs. brief" choice reads as one group. */
+.moreStartOptionsToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius, 8px);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.moreStartOptionsToggle:hover {
+  color: var(--text);
+  border-color: var(--text-soft);
+}
+.emptyShotsHelper {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+/* Grok design critique G1: the quiet "1 · 2 · 3" flow line shown only on a
+   genuinely empty storyboard. */
+.flowHint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.shotList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shotQuickAdd {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* --- shot editor (ShotCard.tsx, rendered inside ShotDetailsDrawer) --- */
+
+.shotCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shotFrames {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.shotFrameSlot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 90px;
+}
+.shotFrameSlotLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+/* Grok design critique G6: each frame column gets a 16:9 "well" FIRST —
+   real thumbnail, dashed-empty box, or a spinner while generating into it —
+   with Generate/Upload/Derive as secondary actions underneath, instead of a
+   bare button stack with no preview surface. */
+.frameWell {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #000;
+}
+.frameWellEmpty {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--bg-muted);
+  color: var(--text-faint);
+}
+.shotFrameActions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.shotFrameSlotDragOver {
+  outline: 2px dashed var(--text-soft);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.hiddenFileInput {
+  display: none;
+}
+
+.shotDialog {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  animation: shot-dialog-in 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@keyframes shot-dialog-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+.shotDialogHelper {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.shotDialogTextarea {
+  min-height: 56px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 12px;
+  resize: vertical;
+}
+.shotDialogActions {
+  display: flex;
+  gap: 6px;
+}
+
+.motionPromptInput {
+  min-height: 60px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  resize: vertical;
+}
+
+/* Grok design critique e3: model used to sit next to duration in one row
+   and truncated mid-token ("seedance-2.0 1080p |") — it now gets its own
+   full-width row, with duration + Render on a second row underneath. */
+.renderControls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.modelSelect {
+  width: 100%;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 11px;
+}
+.durationRenderRow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.durationRenderRow select {
+  flex: 0 0 72px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 11px;
+}
+.durationRenderRow button {
+  flex: 1;
+}
+
+.shotStatusLine {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.shotStatusError {
+  color: var(--color-danger, #d33);
+}
+.shotVideoPreview {
+  width: 100%;
+  border-radius: 8px;
+  background: #000;
+}
+
+.addShotButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius, 8px);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.addShotButton:hover {
+  color: var(--text);
+  border-color: var(--text-soft);
+}
+
+.addShotsButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius, 8px);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.addShotsButton:hover,
+.addShotsButtonDragOver {
+  color: var(--text);
+  border-color: var(--text-soft);
+}
+.addShotsButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.addShotsButtonHint {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.footerBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.footerMessage {
+  font-size: 12px;
+  color: var(--text-muted);
+}

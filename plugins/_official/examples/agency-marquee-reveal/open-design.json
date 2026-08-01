@@ -1,0 +1,92 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "example-agency-marquee-reveal",
+  "title": "Agency Marquee Reveal",
+  "version": "0.1.0",
+  "publishedAt": "2026-07-31T00:07:01Z",
+  "description": "Produce a self-contained agency landing hero that never stops moving: a synthetic ping-pong playhead (0→1→0, frame-rate-independent exponential damping) drives a velocity-reactive infinite marquee, a word-by-word igniting headline, and a sticky fold-style panel handoff — all playing on loop with zero scrolling or user input, from the first frame. One self-contained HTML file, 60fps, zero dependencies.",
+  "license": "MIT",
+  "credits": [
+    "Page structure, reveal-stagger contract, and fluid vw type scale inspired by darkroomengineering/satus (MIT); no source copied.",
+    "Velocity-reactive marquee feel modeled on darkroomengineering/lenis (MIT); reimplemented in vanilla JS."
+  ],
+  "author": {
+    "name": "MishMash",
+    "url": "https://github.com/nexu-io"
+  },
+  "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/agency-marquee-reveal",
+  "tags": [
+    "example",
+    "first-party",
+    "prototype",
+    "marketing",
+    "web",
+    "desktop",
+    "untitled",
+    "agency-landing",
+    "kinetic-typography",
+    "velocity-marquee",
+    "synthetic-playhead",
+    "fold-transition",
+    "perpetual-loop",
+    "scroll-story"
+  ],
+  "compat": {
+    "agentSkills": [
+      {
+        "path": "./SKILL.md"
+      }
+    ]
+  },
+  "od": {
+    "kind": "scenario",
+    "taskKind": "new-generation",
+    "mode": "prototype",
+    "platform": "desktop",
+    "scenario": "marketing",
+    "surface": "web",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html"
+    },
+    "useCase": {
+      "query": "Build a darkroom.engineering-grade agency landing hero as one perpetual loop: a self-driven synthetic playhead (ping-pong 0→1→0, exponentially damped) stands in for real scroll input, so a velocity-reactive infinite marquee, a word-by-word igniting hero statement, and a sticky Fold-style section handoff all run continuously from frame 0 with zero user interaction.",
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "Agency Marquee Reveal"
+        }
+      ]
+    },
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        }
+      ],
+      "craft": [
+        "animation-discipline",
+        "typographic-rhythm"
+      ],
+      "assets": [
+        "./example.html"
+      ]
+    },
+    "pipeline": {
+      "stages": [
+        {
+          "id": "generate",
+          "atoms": [
+            "file-write",
+            "live-artifact"
+          ]
+        }
+      ]
+    },
+    "capabilities": [
+      "prompt:inject",
+      "fs:write"
+    ]
+  }
+}

@@ -13,9 +13,9 @@
  *   3. Blend distinct-users + runs into one [0,1] score and rewrite the
  *      generated file.
  *
- * Run weekly by .github/workflows/refresh-plugin-popularity.yml, which opens a
- * PR with the regenerated file. The transform is deterministic and creds-free;
- * only the fetch needs a PostHog personal API key, injected as a repo secret.
+ * The upstream weekly refresh workflow is not part of this fork; run this
+ * script manually after catalog changes. The transform is deterministic and
+ * creds-free; only the fetch needs a PostHog personal API key.
  *
  *   pnpm exec tsx scripts/refresh-plugin-popularity.ts            # dry run
  *   pnpm exec tsx scripts/refresh-plugin-popularity.ts --write    # rewrite file
@@ -100,6 +100,18 @@ function liveCatalog(): Map<string, CatalogEntry> {
   const officialRoot = join(OD_REPO, 'plugins/_official');
   if (!existsSync(officialRoot)) return catalog;
   for (const bucket of readdirSync(officialRoot)) {
+    // Direct manifest folder at the top level (the daemon walker registers
+    // these without recursing — see apps/daemon/src/plugins/bundled.ts).
+    const bucketManifest = join(officialRoot, bucket, 'open-design.json');
+    if (existsSync(bucketManifest)) {
+      try {
+        const j = JSON.parse(readFileSync(bucketManifest, 'utf8')) as { name?: string; od?: Record<string, unknown> };
+        if (j.name) catalog.set(j.name, { dir: join(officialRoot, bucket), od: j.od ?? {} });
+      } catch {
+        /* skip unreadable manifest */
+      }
+      continue;
+    }
     let entries: string[];
     try {
       entries = readdirSync(join(officialRoot, bucket));
@@ -214,8 +226,9 @@ function render(
 //     tail templates keep their curated/visual fallback order
 //
 // Regenerate with: pnpm exec tsx scripts/refresh-plugin-popularity.ts --write
-// Refreshed weekly by .github/workflows/refresh-plugin-popularity.yml.
-// See pluginPopularity.RUNBOOK.md here.
+// (needs a PostHog personal API key in the environment). The upstream
+// weekly refresh workflow is not part of this fork — refresh manually
+// after catalog changes. See pluginPopularity.RUNBOOK.md here.
 
 export interface PluginPopularityMeta {
   readonly generatedAt: string;
