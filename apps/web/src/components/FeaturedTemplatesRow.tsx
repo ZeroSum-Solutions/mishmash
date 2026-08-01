@@ -128,22 +128,31 @@ export function FeaturedTemplatesRow({ onOpenProject, onToolAction }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    void fetchDesignLibraryCatalog().then((result) => {
-      if (cancelled) return;
-      if (!result.ok) {
+    void fetchDesignLibraryCatalog()
+      .then((result) => {
+        if (cancelled) return;
+        if (!result.ok) {
+          setCatalogAvailable(false);
+          setItems(new Map());
+          return;
+        }
+        const byRel = new Map<string, DesignLibraryItem>();
+        for (const group of result.catalog.groups) {
+          for (const item of group.items) {
+            byRel.set(item.rel, item);
+          }
+        }
+        setCatalogAvailable(true);
+        setItems(byRel);
+      })
+      // This row is an optional garnish on Home — any failure (including an
+      // unexpectedly-shaped catalog slipping past the registry gate) must
+      // degrade to "catalog unavailable", never an unhandled rejection.
+      .catch(() => {
+        if (cancelled) return;
         setCatalogAvailable(false);
         setItems(new Map());
-        return;
-      }
-      const byRel = new Map<string, DesignLibraryItem>();
-      for (const group of result.catalog.groups) {
-        for (const item of group.items) {
-          byRel.set(item.rel, item);
-        }
-      }
-      setCatalogAvailable(true);
-      setItems(byRel);
-    });
+      });
     return () => {
       cancelled = true;
     };

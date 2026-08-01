@@ -13,6 +13,7 @@ import {
   fetchAppVersionInfo,
   fetchConnectorDetail,
   fetchConnectorDiscovery,
+  fetchDesignLibraryCatalog,
   fetchPluginExampleHtml,
   fetchPluginPreviewHtml,
   fetchProjectDesignSystemPackageAudit,
@@ -1065,5 +1066,46 @@ describe('deploy provider registry helpers', () => {
       () => { throw new Error('expected deploy to reject'); },
       (err: unknown) => expect((err as { code?: string }).code).toBe('HTTP_404'),
     );
+  });
+});
+
+describe('fetchDesignLibraryCatalog', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('returns ok:false for a 200 response whose body is not a catalog shape', async () => {
+    // Red spec for the HomeView unhandled-rejection wave: generic test/fetch
+    // stubs answer every URL with `{}`, and a blind cast let that reach
+    // consumers as `{ ok: true, catalog: {} }` — iterating `catalog.groups`
+    // then threw. A malformed body must resolve to the unavailable state.
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({}), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })));
+    const result = await fetchDesignLibraryCatalog();
+    expect(result).toEqual({ ok: false, notFound: false, message: 'Malformed design-library catalog response' });
+  });
+
+  it('returns ok:false when groups items are not arrays', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({ groups: [{ title: 'x', folder: 'x', blurb: '', items: 'nope' }] }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )));
+    const result = await fetchDesignLibraryCatalog();
+    expect(result.ok).toBe(false);
+  });
+
+  it('returns the catalog for a well-formed body', async () => {
+    const catalog = {
+      library: 'L', rights_ledger: 'r', note: 'n', total_collections: 0, root: '/tmp/x', groups: [],
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(catalog), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })));
+    const result = await fetchDesignLibraryCatalog();
+    expect(result).toEqual({ ok: true, catalog });
   });
 });

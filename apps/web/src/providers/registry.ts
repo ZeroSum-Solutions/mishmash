@@ -2865,6 +2865,25 @@ export type DesignLibraryCatalogResult =
   | { ok: true; catalog: DesignLibraryCatalog }
   | { ok: false; notFound: boolean; message: string };
 
+// A 200 body must actually look like a catalog before consumers iterate it —
+// `groups` an array of groups whose `items` are arrays. Without this gate a
+// generic 200 stub (or a proxy answering `{}` for every route) reaches
+// consumers as `ok: true` and the first `for (const group of catalog.groups)`
+// throws.
+function isDesignLibraryCatalogShape(payload: unknown): payload is DesignLibraryCatalog {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const groups = (payload as { groups?: unknown }).groups;
+  return (
+    Array.isArray(groups) &&
+    groups.every(
+      (group) =>
+        typeof group === 'object' &&
+        group !== null &&
+        Array.isArray((group as { items?: unknown }).items),
+    )
+  );
+}
+
 export async function fetchDesignLibraryCatalog(): Promise<DesignLibraryCatalogResult> {
   try {
     const resp = await fetch('/api/design-library/catalog');
@@ -2876,7 +2895,11 @@ export async function fetchDesignLibraryCatalog(): Promise<DesignLibraryCatalogR
         message: payload?.error || `Request failed (${resp.status})`,
       };
     }
-    return { ok: true, catalog: (await resp.json()) as DesignLibraryCatalog };
+    const payload: unknown = await resp.json();
+    if (!isDesignLibraryCatalogShape(payload)) {
+      return { ok: false, notFound: false, message: 'Malformed design-library catalog response' };
+    }
+    return { ok: true, catalog: payload };
   } catch (err) {
     return { ok: false, notFound: false, message: err instanceof Error ? err.message : 'Network error' };
   }

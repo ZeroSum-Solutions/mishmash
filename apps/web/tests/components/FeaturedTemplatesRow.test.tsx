@@ -175,6 +175,18 @@ describe('FeaturedTemplatesRow', () => {
     expect(screen.getByText('Core 2')).toBeTruthy();
   });
 
+  it('degrades to the tools-only row when the catalog result is malformed, without an unhandled rejection', async () => {
+    // Reproduces the HomeView test-suite failure wave: a blind-cast catalog
+    // (`{ ok: true, catalog: {} }`) used to throw inside the fetch .then and
+    // surface as 14 unhandled rejections across suites.
+    fetchDesignLibraryCatalog.mockResolvedValue({ ok: true, catalog: {} as DesignLibraryCatalog });
+    render(<FeaturedTemplatesRow onOpenProject={vi.fn()} onToolAction={vi.fn()} />);
+
+    await waitFor(() => expect(fetchDesignLibraryCatalog).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId('featured-template-card')).toBeNull();
+    expect(screen.getAllByTestId('featured-tool-card')).toHaveLength(4);
+  });
+
   it('fires onToolAction with the right tool id for each tool card', async () => {
     const onToolAction = vi.fn();
     render(<FeaturedTemplatesRow onOpenProject={vi.fn()} onToolAction={onToolAction} />);
