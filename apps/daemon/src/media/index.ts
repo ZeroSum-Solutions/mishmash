@@ -811,6 +811,16 @@ export async function generateMedia(args: {
       bytes = result.bytes;
       providerNote = result.providerNote;
       suggestedExt = result.suggestedExt;
+    } else if (def.provider === 'kie' && surface === 'image') {
+      const result = await renderKieImage(ctx, credentials);
+      bytes = result.bytes;
+      providerNote = result.providerNote;
+      suggestedExt = result.suggestedExt;
+    } else if (def.provider === 'kie' && surface === 'video') {
+      const result = await renderKieVideo(ctx, credentials, args.onProgress);
+      bytes = result.bytes;
+      providerNote = result.providerNote;
+      suggestedExt = result.suggestedExt;
     } else {
       // No real renderer wired up for this (provider, surface). Gate the
       // stub fallback behind OD_MEDIA_ALLOW_STUBS so release builds don't
@@ -4136,6 +4146,348 @@ async function renderFalVideo(ctx: MediaContext, credentials: ProviderConfig, on
   return {
     bytes,
     providerNote: `fal/${endpoint} · ${aspectRatio}${durationPart} · ${bytes.length} bytes`,
+    suggestedExt: '.mp4',
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Provider: Kie.ai — unified createTask/recordInfo async-jobs API fronting
+// Kling / Seedance 2.0 / Flux-2 / Qwen / Grok Imagine on one prepaid credit
+// pool. Every model goes through the same envelope (docs.kie.ai):
+//
+//   Create: POST /api/v1/jobs/createTask
+//           { model, input } -> { code: 200, msg, data: { taskId } }
+//   Poll:   GET  /api/v1/jobs/recordInfo?taskId=<id>
+//           -> { code, msg, data: { taskId, model, state, resultJson, failCode, failMsg } }
+//           state ∈ waiting | queuing | generating | success | fail
+//           resultJson is a JSON-encoded STRING; parse -> { resultUrls: [...] }
+//   Upload: POST /api/file-base64-upload (for i2i/i2v reference images —
+//           every per-model input schema below wants a URL, not an inline
+//           data URL, so a local --image/--images file must round-trip
+//           through this endpoint first)
+//           { base64Data, uploadPath, fileName? } -> { data: { downloadUrl } }
+//
+// Per-model slugs + input param names verified against these docs.kie.ai
+// pages (2026-07):
+//   kling-2.6/text-to-video   — docs.kie.ai/market/kling/text-to-video
+//   kling-2.6/image-to-video  — docs.kie.ai/market/kling/image-to-video
+//   bytedance/seedance-2      — docs.kie.ai/market/bytedance/seedance-2
+//   bytedance/seedance-2-fast — docs.kie.ai/market/bytedance/seedance-2-fast
+//   flux-2/pro-text-to-image  — docs.kie.ai/market/flux2/pro-text-to-image
+//   flux-2/pro-image-to-image — docs.kie.ai/market/flux2/pro-image-to-image
+//   qwen/image-to-image       — docs.kie.ai/market/qwen/image-to-image
+//   grok-imagine/text-to-image— docs.kie.ai/market/grok-imagine/text-to-image
+//
+// Veo 3.1 is deliberately NOT in the catalog: Kie serves it through a
+// dedicated POST /api/v1/veo/generate endpoint (docs.kie.ai/veo3-api/*),
+// not this createTask/recordInfo envelope — a second, incompatible request/
+// poll shape that's out of scope for this integration.
+// ---------------------------------------------------------------------------
+
+const KIE_DEFAULT_BASE_URL = 'https://api.kie.ai';
+const KIE_UPLOAD_PATH = 'mishmash/media-refs';
+const KIE_NO_API_KEY_MESSAGE =
+  'no Kie.ai API key — configure it in Settings or set KIE_AI_API_KEY';
+
+function kieAspectFor(aspect: string | undefined, allowed: readonly string[], fallback: string): string {
+  return aspect && allowed.includes(aspect) ? aspect : fallback;
+}
+
+function kieDurationEnumString(length: number | undefined, allowed: number[], fallback: number): string {
+  const value = typeof length === 'number' && Number.isFinite(length) ? length : fallback;
+  const closest = allowed.reduce((a, b) => (Math.abs(b - value) < Math.abs(a - value) ? b : a));
+  return String(closest);
+}
+
+function kieDurationIntClamped(length: number | undefined, min: number, max: number, fallback: number): number {
+  const value = typeof length === 'number' && Number.isFinite(length) ? length : fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+/**
+ * Push a local reference image (already resolved to a base64 data URL by
+ * resolveProjectImage) through Kie's base64 upload endpoint and return the
+ * resulting public download URL. Every Kie i2i/i2v input schema wants a URL
+ * string, not an inline data URL, so this round-trip is mandatory before the
+ * image can be spliced into a createTask input.
+ */
+async function kieUploadImage(
+  ref: ImageRef,
+  baseUrl: string,
+  apiKey: string,
+  ctx: Pick<MediaContext, 'requestInit'>,
+  index = 0,
+): Promise<string> {
+  const ext = path.extname(ref.path) || '.png';
+  const fileName = `${Date.now().toString(36)}-${index}${ext}`;
+  const resp = await fetch(`${baseUrl}/api/file-base64-upload`, withMediaRequestInit(ctx, {
+    method: 'POST',
+    headers: {
+      'authorization': `Bearer ${apiKey}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      base64Data: ref.dataUrl,
+      uploadPath: KIE_UPLOAD_PATH,
+      fileName,
+    }),
+  }));
+  const text = await resp.text();
+  if (!resp.ok) {
+    throw new Error(`kie upload ${resp.status}: ${truncate(text, 240)}`);
+  }
+  let data: any;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`kie upload non-JSON: ${truncate(text, 200)}`);
+  }
+  const url = data?.data?.downloadUrl;
+  if (typeof url !== 'string' || !url) {
+    throw new Error(`kie upload response missing data.downloadUrl: ${truncate(text, 200)}`);
+  }
+  return url;
+}
+
+/**
+ * Upload every ref in order and return the resulting URLs, preserving
+ * order. Used by flux-2/pro-image-to-image's `input_urls` (1-8 images).
+ */
+async function kieUploadRefs(
+  refs: ImageRef[],
+  baseUrl: string,
+  apiKey: string,
+  ctx: Pick<MediaContext, 'requestInit'>,
+): Promise<string[]> {
+  return Promise.all(refs.map((ref, i) => kieUploadImage(ref, baseUrl, apiKey, ctx, i)));
+}
+
+function kieMaxPollMs(defaultMs: number): number {
+  const v = Number(process.env.OD_KIE_MAX_POLL_MS);
+  return Number.isFinite(v) && v >= 30_000 ? v : defaultMs;
+}
+
+/**
+ * createTask + poll recordInfo until state=success/fail, returning the
+ * parsed resultUrls array. Shared by both renderKieImage and renderKieVideo
+ * since every Kie model rides the same envelope regardless of surface.
+ */
+async function kieCreateAndPoll(
+  wireModel: string,
+  input: Record<string, unknown>,
+  baseUrl: string,
+  apiKey: string,
+  maxMs: number,
+  ctx: Pick<MediaContext, 'requestInit'>,
+  onProgress?: ProgressFn,
+): Promise<string[]> {
+  const createResp = await fetch(`${baseUrl}/api/v1/jobs/createTask`, withMediaRequestInit(ctx, {
+    method: 'POST',
+    headers: {
+      'authorization': `Bearer ${apiKey}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ model: wireModel, input }),
+  }));
+  const createText = await createResp.text();
+  if (!createResp.ok) {
+    throw new Error(`kie createTask ${createResp.status}: ${truncate(createText, 240)}`);
+  }
+  let createData: any;
+  try {
+    createData = JSON.parse(createText);
+  } catch {
+    throw new Error(`kie createTask non-JSON: ${truncate(createText, 200)}`);
+  }
+  if (createData?.code !== 200) {
+    throw new Error(`kie createTask failed: ${createData?.msg || truncate(createText, 200)}`);
+  }
+  const taskId = createData?.data?.taskId;
+  if (!taskId) {
+    throw new Error(`kie createTask response missing data.taskId: ${truncate(createText, 200)}`);
+  }
+
+  const startedAt = Date.now();
+  let lastState = '';
+  if (typeof onProgress === 'function') {
+    onProgress(`kie ${wireModel} task ${taskId} accepted; polling status…`);
+  }
+  while (Date.now() - startedAt < maxMs) {
+    await sleep(3000);
+    const pollResp = await fetch(
+      `${baseUrl}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`,
+      withMediaRequestInit(ctx, { headers: { 'authorization': `Bearer ${apiKey}` } }),
+    );
+    const pollText = await pollResp.text();
+    if (!pollResp.ok) {
+      throw new Error(`kie poll ${pollResp.status}: ${truncate(pollText, 240)}`);
+    }
+    let pollData: any;
+    try {
+      pollData = JSON.parse(pollText);
+    } catch {
+      throw new Error(`kie poll non-JSON: ${truncate(pollText, 200)}`);
+    }
+    if (pollData?.code !== 200) {
+      throw new Error(`kie poll failed: ${pollData?.msg || truncate(pollText, 200)}`);
+    }
+    const data = pollData?.data;
+    lastState = data?.state || '';
+    if (typeof onProgress === 'function') {
+      const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+      onProgress(`kie task ${taskId} state=${lastState || 'pending'} (elapsed ${elapsedSec}s)`);
+    }
+    if (lastState === 'success') {
+      const resultJsonRaw = data?.resultJson;
+      let resultJson: any;
+      try {
+        resultJson = typeof resultJsonRaw === 'string' ? JSON.parse(resultJsonRaw) : resultJsonRaw;
+      } catch {
+        throw new Error(`kie task succeeded but resultJson is not valid JSON: ${truncate(String(resultJsonRaw), 200)}`);
+      }
+      const urls = resultJson?.resultUrls;
+      if (!Array.isArray(urls) || urls.length === 0 || typeof urls[0] !== 'string') {
+        throw new Error(`kie task succeeded but resultJson had no resultUrls: ${truncate(JSON.stringify(resultJson), 200)}`);
+      }
+      return urls;
+    }
+    if (lastState === 'fail') {
+      const reason = data?.failMsg || data?.failCode || 'unknown error';
+      throw new Error(`kie task failed: ${reason}`);
+    }
+  }
+  const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+  const ceilSec = Math.round(maxMs / 1000);
+  throw new Error(
+    `kie task timed out after ${elapsedSec}s waiting for state=success `
+    + `(last state: ${lastState || 'unknown'}, ceiling ${ceilSec}s). `
+    + `Raise OD_KIE_MAX_POLL_MS to extend the ceiling.`,
+  );
+}
+
+const KIE_FLUX2_ASPECTS = ['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3'] as const;
+const KIE_GROK_IMAGE_ASPECTS = ['2:3', '3:2', '1:1', '16:9', '9:16'] as const;
+const KIE_KLING_T2V_ASPECTS = ['1:1', '16:9', '9:16'] as const;
+const KIE_SEEDANCE_ASPECTS = ['1:1', '4:3', '3:4', '16:9', '9:16', '21:9', 'adaptive'] as const;
+
+async function renderKieImage(ctx: MediaContext, credentials: ProviderConfig): Promise<RenderResult> {
+  if (!credentials.apiKey) {
+    throw new Error(KIE_NO_API_KEY_MESSAGE);
+  }
+  const baseUrl = (credentials.baseUrl || KIE_DEFAULT_BASE_URL).replace(/\/$/, '');
+  const wireModel = ctx.wireModel;
+  const prompt = ctx.prompt || 'A high-quality reference image.';
+
+  // Branch on ctx.model (the registered catalog id), NOT wireModel — an
+  // aliased model (OD_MEDIA_MODEL_ALIASES / media-config.json, issue #1277)
+  // carries a different value on wireModel, and this input-mapping decision
+  // has to keep firing for the catalog id the user actually picked. wireModel
+  // stays reserved for body.model and providerNote below. Same precedent as
+  // renderMinimaxTTS / renderFishAudioTTS above.
+  let input: Record<string, unknown>;
+  if (ctx.model === 'flux-2/pro-text-to-image') {
+    input = {
+      prompt,
+      aspect_ratio: kieAspectFor(ctx.aspect, KIE_FLUX2_ASPECTS, '1:1'),
+      resolution: '1K',
+    };
+  } else if (ctx.model === 'flux-2/pro-image-to-image') {
+    if (!ctx.imageRef?.dataUrl) {
+      throw new Error(`${ctx.model} is an image-to-image model and requires --image.`);
+    }
+    // Docs allow up to 8 reference images via input_urls; splice in every
+    // resolved --image/--images ref (imageRef is always imageRefs[0]).
+    const urls = await kieUploadRefs(ctx.imageRefs.slice(0, 8), baseUrl, credentials.apiKey, ctx);
+    input = {
+      input_urls: urls,
+      prompt,
+      aspect_ratio: kieAspectFor(ctx.aspect, KIE_FLUX2_ASPECTS, '1:1'),
+      resolution: '1K',
+    };
+  } else if (ctx.model === 'qwen/image-to-image') {
+    if (!ctx.imageRef?.dataUrl) {
+      throw new Error(`${ctx.model} is an image-to-image model and requires --image.`);
+    }
+    const imageUrl = await kieUploadImage(ctx.imageRef, baseUrl, credentials.apiKey, ctx);
+    input = {
+      prompt,
+      image_url: imageUrl,
+    };
+  } else if (ctx.model === 'grok-imagine/text-to-image') {
+    input = {
+      prompt,
+      aspect_ratio: kieAspectFor(ctx.aspect, KIE_GROK_IMAGE_ASPECTS, '1:1'),
+    };
+  } else {
+    throw new Error(`kie: no input mapping registered for model "${ctx.model}"`);
+  }
+
+  const urls = await kieCreateAndPoll(wireModel, input, baseUrl, credentials.apiKey, kieMaxPollMs(5 * 60 * 1000), ctx);
+  const dlResp = await fetch(urls[0]!, withMediaRequestInit(ctx));
+  if (!dlResp.ok) throw new Error(`kie image download ${dlResp.status}`);
+  const bytes = Buffer.from(await dlResp.arrayBuffer());
+  // qwen/image-to-image's input has no aspect_ratio field (see the branch
+  // above) — omit the aspect from providerNote there so it never implies an
+  // aspect ratio the request didn't actually carry.
+  const consumedAspect = ctx.model !== 'qwen/image-to-image';
+  return {
+    bytes,
+    providerNote: `kie/${wireModel}${consumedAspect ? ` · ${ctx.aspect}` : ''} · ${bytes.length} bytes`,
+    suggestedExt: sniffImageExt(bytes),
+  };
+}
+
+async function renderKieVideo(ctx: MediaContext, credentials: ProviderConfig, onProgress?: ProgressFn): Promise<RenderResult> {
+  if (!credentials.apiKey) {
+    throw new Error(KIE_NO_API_KEY_MESSAGE);
+  }
+  const baseUrl = (credentials.baseUrl || KIE_DEFAULT_BASE_URL).replace(/\/$/, '');
+  const wireModel = ctx.wireModel;
+  const prompt = ctx.prompt || 'A short cinematic clip.';
+
+  // Branch on ctx.model, NOT wireModel — see renderKieImage's matching
+  // comment above; the same alias-vs-capability split applies here.
+  let input: Record<string, unknown>;
+  if (ctx.model === 'kling-2.6/text-to-video') {
+    input = {
+      prompt,
+      aspect_ratio: kieAspectFor(ctx.aspect, KIE_KLING_T2V_ASPECTS, '1:1'),
+      duration: kieDurationEnumString(ctx.length, [5, 10], 5),
+    };
+  } else if (ctx.model === 'kling-2.6/image-to-video') {
+    if (!ctx.imageRef?.dataUrl) {
+      throw new Error(`${ctx.model} is an image-to-video model and requires --image.`);
+    }
+    const imageUrl = await kieUploadImage(ctx.imageRef, baseUrl, credentials.apiKey, ctx);
+    input = {
+      prompt,
+      image_urls: [imageUrl],
+      duration: kieDurationEnumString(ctx.length, [5, 10], 5),
+    };
+  } else if (ctx.model === 'bytedance/seedance-2' || ctx.model === 'bytedance/seedance-2-fast') {
+    input = {
+      prompt,
+      aspect_ratio: kieAspectFor(ctx.aspect, KIE_SEEDANCE_ASPECTS, '16:9'),
+      resolution: '720p',
+      duration: kieDurationIntClamped(ctx.length, 4, 15, 5),
+    };
+    if (ctx.imageRef?.dataUrl) {
+      input.first_frame_url = await kieUploadImage(ctx.imageRef, baseUrl, credentials.apiKey, ctx, 0);
+    }
+  } else {
+    throw new Error(`kie: no input mapping registered for model "${ctx.model}"`);
+  }
+
+  const urls = await kieCreateAndPoll(
+    wireModel, input, baseUrl, credentials.apiKey,
+    kieMaxPollMs(10 * 60 * 1000), ctx, onProgress,
+  );
+  const dlResp = await fetch(urls[0]!, withMediaRequestInit(ctx));
+  if (!dlResp.ok) throw new Error(`kie video download ${dlResp.status}`);
+  const bytes = Buffer.from(await dlResp.arrayBuffer());
+  return {
+    bytes,
+    providerNote: `kie/${wireModel} · ${ctx.aspect} · ${bytes.length} bytes`,
     suggestedExt: '.mp4',
   };
 }

@@ -95,6 +95,7 @@ const ENV_KEYS: Record<string, string[]> = {
   'custom-image': ['OD_CUSTOM_IMAGE_API_KEY', 'CUSTOM_IMAGE_API_KEY'],
   bfl: ['OD_BFL_API_KEY', 'BFL_API_KEY'],
   fal: ['OD_FAL_KEY', 'FAL_KEY'],
+  kie: ['OD_KIE_API_KEY', 'KIE_AI_API_KEY'],
   replicate: ['OD_REPLICATE_API_TOKEN', 'REPLICATE_API_TOKEN'],
   google: ['OD_GOOGLE_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY'],
   kling: ['OD_KLING_API_KEY', 'KLING_API_KEY'],

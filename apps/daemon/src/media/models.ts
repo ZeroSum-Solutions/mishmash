@@ -43,6 +43,7 @@ export const MEDIA_PROVIDERS: MediaProvider[] = [
   { id: 'comfyui', label: 'ComfyUI', hint: 'Local JSON workflow server (planned adapter)', integrated: false, defaultBaseUrl: 'http://127.0.0.1:8188', docsUrl: 'https://docs.comfy.org/development/core-concepts/workflow' },
   { id: 'bfl', label: 'Black Forest Labs', hint: 'FLUX 1.1 Pro / FLUX Pro / Dev', integrated: false, defaultBaseUrl: 'https://api.bfl.ai' },
   { id: 'fal', label: 'Fal.ai', hint: 'FLUX / Sora / Veo / Wan / Ideogram / Recraft and any fal-ai/* model', integrated: true, defaultBaseUrl: 'https://fal.run', supportsCustomModel: true },
+  { id: 'kie', label: 'Kie.ai', hint: 'Kling / Seedance / Flux / Qwen / Grok Imagine via one prepaid credit pool', integrated: true, defaultBaseUrl: 'https://api.kie.ai' },
   { id: 'leonardo', label: 'Leonardo.ai', hint: 'Phoenix / Kino XL / FLUX', integrated: true, credentialsRequired: true, settingsVisible: true, defaultBaseUrl: 'https://cloud.leonardo.ai/api/rest/v1' },
   { id: 'replicate', label: 'Replicate', hint: 'FLUX / SDXL / Ideogram', integrated: false, defaultBaseUrl: 'https://api.replicate.com' },
   { id: 'google', label: 'Google AI / Vertex', hint: 'Imagen 4 / Veo 3 / Lyria', integrated: false },
@@ -142,6 +143,14 @@ export const IMAGE_MODELS: MediaModel[] = [
   { id: 'recraft-v3-fal', label: 'recraft-v3', hint: 'Fal · Recraft v3 · vector + illustration (~15–30s)', provider: 'fal', caps: ['t2i'] },
   { id: 'sd-3.5', label: 'stable-diffusion-3.5', hint: 'Fal · SD 3.5 (~20–40s)', provider: 'fal', caps: ['t2i'] },
 
+  // Kie.ai — unified createTask/recordInfo jobs API. Docs verified against
+  // docs.kie.ai/market/<family>/<variant> (see media/index.ts provider
+  // comment for the full envelope + per-model source URLs).
+  { id: 'flux-2/pro-text-to-image', label: 'flux-2-pro (Kie)', hint: 'Kie.ai · Flux 2 Pro text-to-image', provider: 'kie', caps: ['t2i'] },
+  { id: 'flux-2/pro-image-to-image', label: 'flux-2-pro-edit (Kie)', hint: 'Kie.ai · Flux 2 Pro image-to-image', provider: 'kie', caps: ['i2i'] },
+  { id: 'qwen/image-to-image', label: 'qwen-edit (Kie)', hint: 'Kie.ai · Qwen image-to-image', provider: 'kie', caps: ['i2i'] },
+  { id: 'grok-imagine/text-to-image', label: 'grok-imagine (Kie)', hint: 'Kie.ai · Grok Imagine text-to-image', provider: 'kie', caps: ['t2i'] },
+
   { id: 'leonardo-phoenix', label: 'Phoenix', hint: 'Leonardo · versatile', provider: 'leonardo', caps: ['t2i'] },
   { id: 'leonardo-kino-xl', label: 'Kino XL', hint: 'Leonardo · cinematic', provider: 'leonardo', caps: ['t2i'] },
   { id: 'leonardo-flux-dev', label: 'FLUX Dev', hint: 'Leonardo · FLUX', provider: 'leonardo', caps: ['t2i'] },
@@ -187,6 +196,14 @@ export const VIDEO_MODELS: MediaModel[] = [
   { id: 'kling-2.1-t2v-fal', label: 'kling-2.1 (fal)', hint: 'Fal · Kling 2.1 Pro text-to-video', provider: 'fal', caps: ['t2v'] },
   { id: 'sora-2', label: 'sora-2', hint: 'Fal · OpenAI Sora 2', provider: 'fal', caps: ['t2v'] },
   { id: 'sora-2-pro', label: 'sora-2-pro', hint: 'Fal · OpenAI Sora 2 Pro', provider: 'fal', caps: ['t2v'] },
+
+  // Kie.ai video models — same createTask/recordInfo envelope as the image
+  // entries above. seedance-2-fast is the cheap/fast tier (storyboard mood
+  // lane sorts cheap-first on /480p|fast|lite|mini/i model-id patterns).
+  { id: 'kling-2.6/text-to-video', label: 'kling-2.6 (Kie)', hint: 'Kie.ai · Kling 2.6 text-to-video', provider: 'kie', caps: ['t2v'] },
+  { id: 'kling-2.6/image-to-video', label: 'kling-2.6-i2v (Kie)', hint: 'Kie.ai · Kling 2.6 image-to-video', provider: 'kie', caps: ['i2v'] },
+  { id: 'bytedance/seedance-2', label: 'seedance-2.0 (Kie)', hint: 'Kie.ai · ByteDance · t2v + i2v + audio', provider: 'kie', caps: ['t2v', 'i2v', 'audio'] },
+  { id: 'bytedance/seedance-2-fast', label: 'seedance-2.0-fast (Kie)', hint: 'Kie.ai · ByteDance · faster, cheaper', provider: 'kie', caps: ['t2v', 'i2v', 'audio'] },
 
   { id: 'minimax-video-01', label: 'video-01', hint: 'MiniMax · Hailuo', provider: 'minimax', caps: ['t2v', 'i2v'] },
   { id: 'hyperframes-html', label: 'hyperframes-html', hint: 'HyperFrames · local HTML renderer', provider: 'hyperframes', caps: ['t2v'] },
