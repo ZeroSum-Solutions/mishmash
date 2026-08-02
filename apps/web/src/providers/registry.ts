@@ -2855,7 +2855,12 @@ export async function fetchLibraryConnection(): Promise<LibraryConnectionStatus 
 
 // --- Design Library ----------------------------------------------------------
 
-import type { DesignLibraryCatalog } from '@open-design/contracts';
+import type {
+  DesignLibraryCatalog,
+  DesignLibraryGroup,
+  DesignLibraryItem,
+  DesignLibraryStartProjectResponse,
+} from '@open-design/contracts';
 
 // Read-only browse of the local curated reference-asset library
 // (apps/daemon/src/routes/design-library.ts). Discriminated result (not a
@@ -2864,6 +2869,63 @@ import type { DesignLibraryCatalog } from '@open-design/contracts';
 export type DesignLibraryCatalogResult =
   | { ok: true; catalog: DesignLibraryCatalog }
   | { ok: false; notFound: boolean; message: string };
+
+// A 200 body must actually look like a catalog before consumers use it.
+// Without this gate a generic 200 stub (or a proxy answering `{}` for every
+// route) reaches consumers as `ok: true` and the first
+// `for (const group of catalog.groups)` throws. The gate validates the FULL
+// `DesignLibraryCatalog` contract — every field, at every level — so the
+// predicate genuinely means what its type claims; per-field spot checks kept
+// leaving render paths that threw (objects as React children,
+// `thumb.split is not a function`). One deliberate loosening: `allowed_use`
+// is validated as `string`, not the four-tier union, because an unknown tier
+// must fail CLOSED downstream (it is not in any COPYABLE_ALLOWED_USE set, so
+// it gets zero copy affordances) rather than reject the whole catalog when
+// the daemon learns a new tier.
+function isDesignLibraryItemShape(item: unknown): boolean {
+  if (typeof item !== 'object' || item === null) return false;
+  const candidate = item as Record<keyof DesignLibraryItem, unknown>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.label === 'string' &&
+    typeof candidate.rel === 'string' &&
+    (candidate.thumb === null || typeof candidate.thumb === 'string') &&
+    typeof candidate.kind === 'string' &&
+    typeof candidate.files === 'number' &&
+    typeof candidate.size === 'string' &&
+    typeof candidate.category === 'string' &&
+    Array.isArray(candidate.domains) &&
+    candidate.domains.every((domain) => typeof domain === 'string') &&
+    typeof candidate.allowed_use === 'string' &&
+    (candidate.duplicate_of === undefined || typeof candidate.duplicate_of === 'string')
+  );
+}
+
+function isDesignLibraryGroupShape(group: unknown): boolean {
+  if (typeof group !== 'object' || group === null) return false;
+  const candidate = group as Record<keyof DesignLibraryGroup, unknown>;
+  return (
+    typeof candidate.title === 'string' &&
+    typeof candidate.folder === 'string' &&
+    typeof candidate.blurb === 'string' &&
+    Array.isArray(candidate.items) &&
+    candidate.items.every(isDesignLibraryItemShape)
+  );
+}
+
+function isDesignLibraryCatalogShape(payload: unknown): payload is DesignLibraryCatalog {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const candidate = payload as Record<keyof DesignLibraryCatalog, unknown>;
+  return (
+    typeof candidate.library === 'string' &&
+    typeof candidate.rights_ledger === 'string' &&
+    typeof candidate.note === 'string' &&
+    typeof candidate.total_collections === 'number' &&
+    typeof candidate.root === 'string' &&
+    Array.isArray(candidate.groups) &&
+    candidate.groups.every(isDesignLibraryGroupShape)
+  );
+}
 
 export async function fetchDesignLibraryCatalog(): Promise<DesignLibraryCatalogResult> {
   try {
@@ -2876,7 +2938,11 @@ export async function fetchDesignLibraryCatalog(): Promise<DesignLibraryCatalogR
         message: payload?.error || `Request failed (${resp.status})`,
       };
     }
-    return { ok: true, catalog: (await resp.json()) as DesignLibraryCatalog };
+    const payload: unknown = await resp.json();
+    if (!isDesignLibraryCatalogShape(payload)) {
+      return { ok: false, notFound: false, message: 'Malformed design-library catalog response' };
+    }
+    return { ok: true, catalog: payload };
   } catch (err) {
     return { ok: false, notFound: false, message: err instanceof Error ? err.message : 'Network error' };
   }
@@ -2901,9 +2967,43 @@ export async function openDesignLibraryPath(rel: string): Promise<boolean> {
   }
 }
 
+// Copies a licensed kit's files into a new managed project (only the
+// `licensed-source-review` / `own-code` allowed_use tiers reach a "Use as
+// template" affordance that calls this — see DesignLibrarySection.tsx).
+// Discriminated result mirrors fetchDesignLibraryCatalog above.
+export type StartDesignLibraryProjectResult =
+  | { ok: true; response: DesignLibraryStartProjectResponse }
+  | { ok: false; message: string };
+
+export async function startDesignLibraryProject(
+  rel: string,
+  name?: string,
+): Promise<StartDesignLibraryProjectResult> {
+  try {
+    const resp = await fetch('/api/design-library/start-project', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(name ? { rel, name } : { rel }),
+    });
+    if (!resp.ok) {
+      const payload = (await resp.json().catch(() => null)) as { error?: string } | null;
+      return { ok: false, message: payload?.error || `Request failed (${resp.status})` };
+    }
+    const response = (await resp.json()) as DesignLibraryStartProjectResponse;
+    if (!response?.ok || !response.projectId) {
+      return { ok: false, message: 'Could not start a project from this kit.' };
+    }
+    return { ok: true, response };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
 // --- Storyboard ---------------------------------------------------------
 
 import type {
+  DraftStoryboardShotsRequest,
+  DraftStoryboardShotsResponse,
   GenerateStoryboardFrameRequest,
   GenerateStoryboardFrameResponse,
   PatchStoryboardRequest,
@@ -3001,6 +3101,41 @@ export async function patchStoryboard(
     if (!resp.ok) return { ok: false, status: resp.status, message: await readStoryboardApiError(resp) };
     const data = (await resp.json()) as { storyboard: Storyboard };
     return { ok: true, value: data.storyboard };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
+/**
+ * POST /api/storyboards/:id/draft-shots — drafts several shots at once from
+ * a brief (as opposed to the single-shot addShotFromPrompt client-only
+ * path). Same 409/expectedUpdatedAt optimistic-concurrency shape as
+ * patchStoryboard above, since a draft also appends to and replaces the
+ * server's shots array.
+ */
+export async function draftStoryboardShots(
+  id: string,
+  body: DraftStoryboardShotsRequest,
+): Promise<StoryboardApiResult<DraftStoryboardShotsResponse>> {
+  try {
+    const resp = await fetch(`/api/storyboards/${encodeURIComponent(id)}/draft-shots`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (resp.status === 409) {
+      // Same conflict envelope as patchStoryboard's 409 branch (see its
+      // comment above): {error:'storyboard changed', storyboard:<current doc>}.
+      const payload = (await resp.json().catch(() => null)) as { error?: string; storyboard?: Storyboard } | null;
+      return {
+        ok: false,
+        status: 409,
+        message: (payload && typeof payload.error === 'string' && payload.error) || 'storyboard changed',
+        conflict: payload?.storyboard,
+      };
+    }
+    if (!resp.ok) return { ok: false, status: resp.status, message: await readStoryboardApiError(resp) };
+    return { ok: true, value: (await resp.json()) as DraftStoryboardShotsResponse };
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
   }

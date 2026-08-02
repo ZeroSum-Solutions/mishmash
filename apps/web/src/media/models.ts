@@ -722,8 +722,14 @@ export const VIDEO_MODELS: MediaModel[] = [
 ];
 
 export const AUDIO_MODELS_BY_KIND: Record<AudioKind, MediaModel[]> = {
+  // The default must name a model the daemon can actually fulfil. suno, udio
+  // and google are all `integrated: false` and have no renderer, so defaulting
+  // to one of them hands the user a model the picker filters out and that
+  // generation cannot serve. minimax-music is the only music model with a
+  // renderer, so it is the default.
   music: [
-    { id: 'suno-v5', label: 'suno-v5', hint: 'Suno · default', provider: 'suno', caps: ['music'], default: true },
+    { id: 'minimax-music', label: 'minimax-music', hint: 'MiniMax · Music 3.0', provider: 'minimax', caps: ['music'], default: true },
+    { id: 'suno-v5', label: 'suno-v5', hint: 'Suno', provider: 'suno', caps: ['music'] },
     { id: 'suno-v4-5', label: 'suno-v4.5', hint: 'Suno', provider: 'suno', caps: ['music'] },
     { id: 'udio-v2', label: 'udio-v2', hint: 'Udio', provider: 'udio', caps: ['music'] },
     { id: 'lyria-2', label: 'lyria-2', hint: 'Google', provider: 'google', caps: ['music'] },

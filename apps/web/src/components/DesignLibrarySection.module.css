@@ -245,6 +245,8 @@
 }
 
 .cardActions {
+  display: flex;
+  gap: 8px;
   padding: 8px 12px 12px;
   margin-top: auto;
 }
@@ -252,7 +254,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  width: 100%;
+  flex: 1;
   justify-content: center;
   height: 30px;
   padding: 0 12px;
@@ -268,4 +270,37 @@
 .openFolderBtn:hover {
   border-color: var(--border-strong);
   background: var(--bg-panel);
+}
+
+.useAsTemplateBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  justify-content: center;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 140ms var(--ease-out), background-color 140ms var(--ease-out);
+}
+.useAsTemplateBtn:hover:not(:disabled) {
+  border-color: var(--accent-hover);
+  background: color-mix(in srgb, var(--accent-tint) 68%, var(--bg-panel));
+}
+.useAsTemplateBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.startError {
+  margin: 0;
+  padding: 0 12px 10px;
+  color: var(--danger, #c0392b);
+  font-size: 11px;
 }

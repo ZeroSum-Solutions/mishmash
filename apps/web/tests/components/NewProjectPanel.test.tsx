@@ -574,6 +574,57 @@ describe('NewProjectPanel design system defaults', () => {
     );
   });
 
+  it('exposes music audio projects and defaults to the one music model that can render', () => {
+    // The daemon has had a working music renderer since `renderMinimaxMusic`
+    // landed, `AudioKind` includes 'music', `od --audio-kind music` accepts it,
+    // and the 'Music' label already ships in the dictionary — but the toggle
+    // never offered the option, so the whole lane was CLI-only.
+    //
+    // The default matters as much as the option: suno/udio/google are all
+    // `integrated: false` with no renderer, so a default pointing at one of
+    // them would hand the user a model the picker hides and the daemon cannot
+    // fulfil.
+    const onCreate = vi.fn();
+    render(
+      <NewProjectPanel
+        skills={skills}
+        designSystems={designSystems}
+        defaultDesignSystemId="clay"
+        templates={[]}
+        onDeleteTemplate={vi.fn()}
+        promptTemplates={[]}
+        onCreate={onCreate}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Media' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Audio' }));
+    expect(screen.getByRole('button', { name: 'Music' })).toBeTruthy();
+
+    fireEvent.change(screen.getByTestId('new-project-name'), {
+      target: { value: 'Title theme payload' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Music' }));
+
+    expect(screen.getByTestId('model-picker-trigger').textContent).toContain('minimax-music');
+    // Speech-only affordance must not leak into music.
+    expect(screen.queryByPlaceholderText('Provider voice id, optional')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('create-project'));
+
+    expect(onCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Title theme payload',
+        metadata: expect.objectContaining({
+          kind: 'audio',
+          audioKind: 'music',
+          audioModel: 'minimax-music',
+        }),
+      }),
+    );
+    expect(onCreate.mock.calls[0]?.[0].metadata).not.toHaveProperty('voice');
+  });
+
   it('exposes sound effects audio projects and switches to the ElevenLabs SFX model', () => {
     const onCreate = vi.fn();
     render(

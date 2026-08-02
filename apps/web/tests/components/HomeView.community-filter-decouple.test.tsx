@@ -1,14 +1,13 @@
 // @vitest-environment jsdom
 
-// Red spec for the example-chip ↔ Community filter decoupling.
-//
-// The hero chip rail (Prototype / Slide deck / ...) and the Community
-// grid expose the same artifact taxonomy, but they are independent
-// surfaces: picking a chip drives what the composer will generate,
-// while the Community pills only filter the gallery the user is
-// browsing. Binding them means any chip interaction (including the
-// default active chip on first paint) silently rewrites the user's
-// browsing filter — so the gallery must stay on its own selection.
+// Duplicate-example flow on the restructured Home (docs/plans/2026-08-01-
+// home-studio-entrance-restructure.md): the Community gallery left the Home
+// view, so the chip↔filter decoupling spec that lived here is obsolete —
+// the gallery's own facet behavior stays covered by
+// plugins-home-section.test.tsx on its surviving surface (PluginsView).
+// What remains Home's own is `duplicateExamplePlugin`: remixing an example
+// must open the copied project at its entry file. That flow's surviving
+// Home surface is the preset-card remix button under an active type chip.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -46,73 +45,26 @@ function makeHomePlugin(
   };
 }
 
-const PLUGINS = [
-  makeHomePlugin('example-web-prototype', 'prototype'),
-  makeHomePlugin('example-simple-deck', 'deck'),
-];
-
 const DUPLICABLE_PLUGINS = [
+  // The Prototype chip's own default plugin — pickChip aborts (with the
+  // "bundled scenario not installed" error) if the chip's action.pluginId is
+  // missing from the catalog, and no preset tiles render without an active chip.
+  makeHomePlugin('example-web-prototype', 'prototype'),
   makeHomePlugin('example-html-prototype', 'prototype', {
     type: 'html',
     entry: './example.html',
   }),
 ];
-
-function ariaSelected(testId: string): string | null {
-  return screen.getByTestId(testId).getAttribute('aria-selected');
+// Preset tiles require a seedable query (`pluginPresetQuery`); without one the
+// example never renders on the rail and the remix button cannot exist.
+for (const plugin of DUPLICABLE_PLUGINS) {
+  (plugin.manifest.od as Record<string, unknown>).useCase = { query: 'Recreate this example.' };
 }
 
-describe('HomeView community filter decoupling', () => {
+describe('HomeView duplicate example flow', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     cleanup();
-  });
-
-  it('keeps the Community category selection independent from the hero type chips', async () => {
-    const fetchMock = vi.fn<typeof fetch>(async (url) => {
-      if (typeof url === 'string' && url === '/api/plugins') {
-        return new Response(JSON.stringify({ plugins: PLUGINS }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        });
-      }
-      throw new Error(`unexpected fetch ${url}`);
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    render(
-      <I18nProvider initial="en">
-        <HomeView
-          projects={[]}
-          onSubmit={() => undefined}
-          onOpenProject={() => undefined}
-          onViewAllProjects={() => undefined}
-        />
-      </I18nProvider>,
-    );
-
-    // Home boots with a default active type chip, but the Community grid starts
-    // from its own All selection so users can browse the full catalog first.
-    // Wait for the selected state, not just the pill mount, so the assertion
-    // stays stable under full-suite CI load.
-    await waitFor(() => {
-      expect(ariaSelected('plugins-home-pill-category-all')).toBe('true');
-    });
-    expect(ariaSelected('plugins-home-pill-category-deck')).toBe('false');
-    expect(ariaSelected('plugins-home-pill-category-prototype')).toBe('false');
-
-    // Picking another chip drives the composer, not the gallery filter.
-    fireEvent.click(await screen.findByTestId('home-hero-rail-deck'));
-    await waitFor(() => {
-      expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Slide deck');
-    });
-    expect(ariaSelected('plugins-home-pill-category-all')).toBe('true');
-    expect(ariaSelected('plugins-home-pill-category-deck')).toBe('false');
-
-    // And the gallery's own pills still work locally.
-    fireEvent.click(screen.getByTestId('plugins-home-pill-category-prototype'));
-    expect(ariaSelected('plugins-home-pill-category-all')).toBe('false');
-    expect(ariaSelected('plugins-home-pill-category-prototype')).toBe('true');
   });
 
   it('opens duplicated gallery examples at the copied entry file', async () => {
@@ -160,7 +112,22 @@ describe('HomeView community filter decoupling', () => {
       </I18nProvider>,
     );
 
-    fireEvent.click(await screen.findByTestId('plugins-home-duplicate-example-html-prototype'));
+    // Preset cards render under the active type chip; the fixture's
+    // mode: 'prototype' + html preview places it on the Prototype rail. The
+    // rail disables its chips until the plugin list loads, and a disabled
+    // button swallows the click — wait for enablement first.
+    const prototypeChip = (await screen.findByTestId('home-hero-rail-prototype')) as HTMLButtonElement;
+    await waitFor(() => expect(prototypeChip.disabled).toBe(false));
+    fireEvent.click(prototypeChip);
+    fireEvent.click(
+      await screen.findByTestId(
+        'home-hero-plugin-preset-duplicate-example-html-prototype',
+        undefined,
+        // The preset tiles mount behind the chip's deferred bind + entrance
+        // transition; the default 1s findBy window races that settle.
+        { timeout: 5_000 },
+      ),
+    );
 
     await waitFor(() => {
       expect(onOpenProject).toHaveBeenCalledWith('duplicated-project', 'index.html');

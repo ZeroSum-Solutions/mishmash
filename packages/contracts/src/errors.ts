@@ -79,6 +79,12 @@ export const API_ERROR_CODES = [
   // `tools live-artifacts create` path) as a 422.
   'ARTIFACT_PUBLICATION_BLOCKED',
   'UPSTREAM_UNAVAILABLE',
+  // A capability that needs a text model found none it could use: no
+  // caller-supplied credentials and no text-capable provider configured.
+  // Distinct from UNAUTHORIZED (a credential exists but was rejected) —
+  // the caller's fix is to configure a provider, not to re-authenticate.
+  // Returned by `POST /api/storyboards/:id/draft-shots` as a 400.
+  'NO_TEXT_PROVIDER',
   'RATE_LIMITED',
   // PR #974 round-4: desktop-paired daemon received an import request
   // but the desktop main process has not yet registered its HMAC secret

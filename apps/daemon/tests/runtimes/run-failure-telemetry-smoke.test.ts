@@ -191,7 +191,11 @@ describe('run failure telemetry smoke', () => {
         expect(trace.body.metadata.stderr).toBeUndefined();
       }
     }
-  });
+  // 5 sequential real daemon spawns plus Langfuse trace waits (each up to
+  // 3s) and assistant-message PUTs — raised from the suite-wide 20s default
+  // because that much sequential real subprocess/HTTP round-tripping can
+  // exceed 20s on a loaded machine even though no single step is stuck.
+  }, 60_000);
 
   it('reclassifies upstream + install/env failures end-to-end through a real daemon run (#3408 P1)', async () => {
     // End-to-end proof for the reclassification: a real agent process emits the
@@ -291,7 +295,13 @@ describe('run failure telemetry smoke', () => {
       expect(failure?.failure_category, item.bin).toBe(item.category);
       expect(failure?.failure_detail, item.bin).toBe(item.detail);
     }
-  });
+  // 10 sequential real daemon spawns (double the case count of the smoke
+  // test above) — observed failing at the suite-wide 20s default under
+  // machine load (duration ~20.0s, i.e. the testTimeout itself firing, not
+  // any single case hanging); each case's own work is fast (fakes exit
+  // within ~100ms), it's the cumulative real-process/HTTP round-trip count
+  // that needs more wall clock when the machine is contended.
+  }, 90_000);
 
   it('reports the terminal Langfuse fallback for headerless run requests', async () => {
     binDir = await mkdtemp(path.join(os.tmpdir(), 'od-run-failure-fallback-bin-'));
@@ -322,7 +332,7 @@ describe('run failure telemetry smoke', () => {
     const trace = await ingestion.waitForTrace(run.id);
     expect(trace.body.id).toBe(run.id);
     expect(trace.body.metadata.error_code).toBe(deriveRunErrorCode(run));
-  });
+  }, 30_000);
 
   it('reports terminal fallback with buffered content when final telemetry never arrives', async () => {
     binDir = await mkdtemp(path.join(os.tmpdir(), 'od-run-failure-buffered-fallback-bin-'));
@@ -357,7 +367,7 @@ describe('run failure telemetry smoke', () => {
     });
     const trace = await ingestion.waitForTrace(run.id);
     expect(trace.body.output).toBe(bufferedContent);
-  });
+  }, 30_000);
 });
 
 function snapshotEnv(): Record<string, string | undefined> {
@@ -518,7 +528,12 @@ async function createAndWaitForRun(url: string, input: {
 
 async function waitForRun(url: string, runId: string): Promise<RunStatus> {
   const started = Date.now();
-  while (Date.now() - started < 10_000) {
+  // 4x the largest legitimate per-case timer in this file (the 5000ms
+  // inactivity timeout used by the hang/reclassify cases) rather than the
+  // previous 2x — a loaded machine can stretch scheduling of the fake CLI's
+  // own exit and the daemon's inactivity watchdog past a tight margin even
+  // though nothing is actually stuck.
+  while (Date.now() - started < 20_000) {
     const response = await fetch(`${url}/api/runs/${encodeURIComponent(runId)}`);
     expect(response.status).toBe(200);
     const run = await response.json() as RunStatus;

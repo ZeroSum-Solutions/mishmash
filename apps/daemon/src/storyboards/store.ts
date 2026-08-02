@@ -16,6 +16,41 @@ function storyboardFilePath(dataDir: string, id: string): string {
   return path.join(storyboardsDir(dataDir), `${id}.json`);
 }
 
+// Per-storyboard-id async mutex. The daemon is the single writer process for
+// storyboard files, so serializing same-id read-modify-write cycles
+// in-process is sufficient to make every route's readStoryboard() ->
+// writeStoryboard() critical section atomic with respect to every other
+// route touching the same id — closing the lost-update window no per-route
+// re-read/expectedUpdatedAt check can close on its own (see routes/storyboard.ts).
+// Keyed by id (not one global lock) so unrelated storyboards never wait on
+// each other. Same promise-chaining idiom as project-file-versions.ts's
+// withVersionLockKey.
+const storyboardLocks = new Map<string, Promise<void>>();
+
+export async function withStoryboardLock<T>(id: string, fn: () => Promise<T>): Promise<T> {
+  const previous = storyboardLocks.get(id) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const chained = previous.then(() => current, () => current);
+  storyboardLocks.set(id, chained);
+
+  await previous.catch(() => undefined);
+  try {
+    return await fn();
+  } finally {
+    release();
+    // Only the last-enqueued waiter's chain is still the map's current
+    // value once it drains — an earlier waiter deleting the entry would
+    // erase a later waiter's still-pending registration. This is what keeps
+    // the map from growing without bound across many storyboards.
+    if (storyboardLocks.get(id) === chained) {
+      storyboardLocks.delete(id);
+    }
+  }
+}
+
 export async function readStoryboard(dataDir: string, id: string): Promise<Storyboard | null> {
   try {
     const raw = await readFile(storyboardFilePath(dataDir, id), 'utf8');

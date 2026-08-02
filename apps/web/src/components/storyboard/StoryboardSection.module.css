@@ -27,6 +27,10 @@
   flex-direction: column;
   gap: 6px;
   padding: 16px;
+  /* A grid item defaults to min-width:auto, so it refuses to shrink below its
+     content — one unbreakable title token (a pasted URL, a hash, CJK) widens
+     the track and paints over its neighbours. */
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--bg-panel);
@@ -44,6 +48,8 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
+  /* Titles are user-supplied and may contain no break opportunity at all. */
+  overflow-wrap: anywhere;
 }
 .cardMeta {
   margin: 0;
@@ -64,6 +70,14 @@
   align-items: center;
   gap: 10px;
 }
+/* The global `input, textarea, select { width: 100% }` primitive makes this
+   row's ratio select claim the entire line, collapsing the title input beside
+   it to a few unusable pixels. The select only ever shows an aspect ratio, so
+   size it to its content and let the title take the remaining space. */
+.editorHead select {
+  flex: 0 0 auto;
+  width: auto;
+}
 .backButton {
   display: flex;
   align-items: center;
@@ -78,6 +92,7 @@
 }
 .titleInput {
   flex: 1;
+  min-width: 0;
   height: 36px;
   padding: 0 12px;
   border: 1px solid transparent;

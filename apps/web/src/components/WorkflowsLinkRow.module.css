@@ -1,0 +1,17 @@
+.root {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 24px;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.link:hover {
+  color: var(--text);
+}

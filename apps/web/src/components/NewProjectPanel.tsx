@@ -2719,6 +2719,7 @@ function MediaProjectOptions(props:
         label={t('newproj.audioKindLabel')}
         options={[
           { value: 'speech' as const, title: t('newproj.audioKindSpeech') },
+          { value: 'music' as const, title: t('newproj.audioKindMusic') },
           { value: 'sfx' as const, title: t('newproj.audioKindSfx') },
         ]}
         value={props.audioKind}

@@ -29,7 +29,6 @@ import {
   trackPageView,
   trackPluginDetailModalClick,
   trackPluginDetailModalSharePopoverClick,
-  trackPluginDetailModalSurfaceView,
   trackPluginReplacementModalClick,
   trackPluginReplacementModalSurfaceView,
   trackPluginReplacementResult,
@@ -101,7 +100,8 @@ import {
 import { PluginDetailsModal } from './PluginDetailsModal';
 import { SkillDetailsModal } from './SkillDetailsModal';
 import { HomeTemplatesReveal } from './HomeTemplatesReveal';
-import { PluginsHomeSection } from './PluginsHomeSection';
+import { WorkflowsLinkRow } from './WorkflowsLinkRow';
+import { FeaturedTemplatesRow, type FeaturedToolId } from './FeaturedTemplatesRow';
 import type { PluginLoopSubmit } from './PluginLoopHome';
 import { localizePluginTitle } from './plugins-home/localization';
 import type { PluginUseAction } from './plugins-home/useActions';
@@ -112,6 +112,16 @@ import { RecommendedStartRegion } from './RecommendedStartRegion';
 import type { Recommendation } from '../onboarding/recommendation';
 import type { OnboardingEntry } from '../onboarding/onboarding-entry';
 import { AnimatePresence } from 'motion/react';
+
+// Plugin id each plugin-backed FeaturedTemplatesRow tool card binds — see
+// `handleFeaturedToolAction` below. `clone-rebrand` is deliberately absent:
+// it drives the web-clone type chip through `pickChip`, not a plugin bind.
+// `example-curl-field-hero` ships today; `od-scroll-film` is a bundled
+// scenario and may not exist on a daemon that predates its merge.
+const FEATURED_TOOL_PLUGIN_ID: Record<Exclude<FeaturedToolId, 'clone-rebrand'>, string> = {
+  'scroll-film': 'od-scroll-film',
+  'hero-creation': 'example-curl-field-hero',
+};
 
 export interface ActivePlugin {
   record: InstalledPluginRecord;
@@ -484,33 +494,6 @@ export function HomeView({
       area: 'plugin_replacement_modal',
     });
   }, [pendingReplacement, analytics.track]);
-  // Community gallery analytics. Opening a tile fires both a ui_click on
-  // the card (the funnel's denominator) and a surface_view on the detail
-  // modal it reveals (the numerator); the ↗ that jumps straight to the
-  // real example page is its own ui_click so "go to the finished thing"
-  // stays distinct from "open the detail modal". plugin_id / plugin_type
-  // mirror PluginsView so the two surfaces join on the same keys.
-  const handleCommunityOpenDetails = useCallback(
-    (record: InstalledPluginRecord) => {
-      const pluginId = record.sourceMarketplaceEntryName ?? record.id;
-      const pluginType = record.marketplaceTrust ?? 'official';
-      trackCommunityGalleryClick(analytics.track, {
-        page_name: 'home',
-        area: 'community_gallery',
-        element: 'card',
-        plugin_id: pluginId,
-        plugin_type: pluginType,
-      });
-      trackPluginDetailModalSurfaceView(analytics.track, {
-        page_name: 'home',
-        area: 'plugin_detail_modal',
-        plugin_id: pluginId,
-        plugin_type: pluginType,
-      });
-      setDetailsRecord(record);
-    },
-    [analytics.track],
-  );
   const inputRef = useRef<HomeHeroHandle | null>(null);
   const homeViewRef = useRef<HTMLDivElement | null>(null);
   const consumedHandoffIdRef = useRef<number | null>(null);
@@ -1785,6 +1768,40 @@ export function HomeView({
     }
   }
 
+  // Home featured row tool cards (FeaturedTemplatesRow) — same seed
+  // mechanism pickChip's 'create' group uses (usePlugin with deferApply),
+  // dispatched through a plain id → plugin-id table instead of the chip
+  // rail's own ChipAction union so the chip rail stays untouched. Each of
+  // these plugins may be missing on a given daemon (od-scroll-animations and
+  // od-scroll-film ship as bundled scenarios and may land after this row on
+  // an older daemon) — that surfaces the same "bundled scenario not
+  // installed" message pickChip already shows rather than throwing.
+  function handleFeaturedToolAction(toolId: FeaturedToolId) {
+    setError(null);
+    if (pluginsLoading) return;
+    // Clone + rebrand is a chip activation, not a plugin bind: drive the
+    // existing web-clone type chip through the exact path the rail uses, so
+    // the composer shows the same clone examples/placeholder state.
+    if (toolId === 'clone-rebrand') {
+      const chip = findChip('web-clone');
+      if (chip) pickChip(chip);
+      return;
+    }
+    const pluginId = FEATURED_TOOL_PLUGIN_ID[toolId];
+    const record = plugins.find((p) => p.id === pluginId);
+    if (!record) {
+      setError(
+        `Bundled scenario "${pluginId}" is not installed. Reinstall the daemon to restore the default plugin set.`,
+      );
+      return;
+    }
+    void usePlugin(record, undefined, {
+      projectKind: 'prototype',
+      chipId: `featured-${toolId}`,
+      deferApply: true,
+    });
+  }
+
   // Consume a one-shot Home composer chip intent (e.g. "Use in new chat" on the
   // Brands tab requesting the Prototype scenario). The entry shell keeps
   // HomeView mounted across view switches, so we react to the intent event
@@ -2241,20 +2258,12 @@ export function HomeView({
       <HomeTemplatesReveal
         enabled={!projectsLoading && projects.length === 0}
       >
-        <PluginsHomeSection
-          title={t('home.workflowsAndAssetsTitle')}
-          plugins={plugins}
-          loading={pluginsLoading}
-          activePluginId={active?.record.id ?? null}
-          pendingApplyId={pendingApplyId}
-          pendingDuplicateId={pendingDuplicatePluginId}
-          onUse={(record, action) => void routePluginUse(record, action)}
-          onDuplicate={(record) => void duplicateExamplePlugin(record)}
-          onOpenDetails={handleCommunityOpenDetails}
-          onBrowseRegistry={onBrowseRegistry}
-          preferDefaultFacet
-          cardLayout="gallery"
+        <FeaturedTemplatesRow
+          onOpenProject={onOpenProject}
+          onToolAction={handleFeaturedToolAction}
+          onBrowseLibrary={() => navigate({ kind: 'home', view: 'design-library' })}
         />
+        {onBrowseRegistry ? <WorkflowsLinkRow onBrowse={onBrowseRegistry} /> : null}
       </HomeTemplatesReveal>
 
       <AnimatePresence>

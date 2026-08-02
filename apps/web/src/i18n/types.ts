@@ -1233,7 +1233,7 @@ export interface Dict {
   'recentProjects.viewAll': string;
   'recentProjects.empty': string;
   'pluginsHome.title': string;
-  'home.workflowsAndAssetsTitle': string;
+  'home.workflowsLink.label': string;
   'pluginsHome.subtitle': string;
   'pluginsHome.browseRegistry': string;
   'pluginsHome.count': string;
@@ -1317,14 +1317,17 @@ export interface Dict {
   'pluginsView.summaryAria': string;
   'pluginsView.areasAria': string;
   'pluginsView.loading': string;
+  'pluginsView.tab.gallery': string;
   'pluginsView.tab.installed': string;
   'pluginsView.tab.available': string;
   'pluginsView.tab.sources': string;
   'pluginsView.tab.team': string;
+  'pluginsView.tabHint.gallery': string;
   'pluginsView.tabHint.installed': string;
   'pluginsView.tabHint.available': string;
   'pluginsView.tabHint.sources': string;
   'pluginsView.tabHint.team': string;
+  'pluginsView.galleryTitle': string;
   'pluginsView.installedTitle': string;
   'pluginsView.installedSubtitle': string;
   'pluginsView.installedEmpty': string;
@@ -3103,6 +3106,29 @@ export interface Dict {
   'home.recommendation.browseAll': string;
   'home.recommendation.defaultProjectName': string;
   'home.recommendation.startFailed': string;
+
+  // Home featured row — UI8 template starters + tool starter cards
+  // (docs/plans/2026-08-01-ui8-kit-starters-and-home-restructure.md §Stream B)
+  'home.featured.title': string;
+  'home.featured.badge': string;
+  'home.featured.startError': string;
+  'home.featured.starting': string;
+  'home.featured.template.dwell.label': string;
+  'home.featured.template.dwell.descriptor': string;
+  'home.featured.template.morrow.label': string;
+  'home.featured.template.morrow.descriptor': string;
+  'home.featured.template.azurio.label': string;
+  'home.featured.template.azurio.descriptor': string;
+  'home.featured.template.core2.label': string;
+  'home.featured.template.core2.descriptor': string;
+  'home.featured.tool.heroCreation.label': string;
+  'home.featured.tool.heroCreation.descriptor': string;
+  'home.featured.tool.cloneRebrand.label': string;
+  'home.featured.tool.cloneRebrand.descriptor': string;
+  'home.featured.library.label': string;
+  'home.featured.library.descriptor': string;
+  'home.featured.tool.scrollFilm.label': string;
+  'home.featured.tool.scrollFilm.descriptor': string;
   'studio.firstArtifactHint.title': string;
   'studio.firstArtifactHint.body': string;
   'studio.firstArtifactHint.dismiss': string;
@@ -4368,6 +4394,11 @@ export interface Dict {
   'designLibrary.allowedUse.licensedSourceReview': string;
   'designLibrary.allowedUse.humanLocalOnly': string;
   'designLibrary.allowedUse.blockedPendingLicense': string;
+  // Kit starter (Stream A) — "Use as template" card action, shown only for
+  // the two copyable allowed_use tiers (own-code, licensed-source-review).
+  'designLibrary.useAsTemplate': string;
+  'designLibrary.useAsTemplateBusy': string;
+  'designLibrary.useAsTemplateError': string;
   // Storyboard — Seedance 2.0 image-first keyframe workflow.
   'storyboard.title': string;
   'storyboard.newStoryboard': string;
@@ -4375,6 +4406,7 @@ export interface Dict {
   'storyboard.emptyState': string;
   'storyboard.shotCount': string;
   'storyboard.back': string;
+  'storyboard.titleLabel': string;
   'storyboard.ratio': string;
   'storyboard.addShot': string;
   'storyboard.assemble': string;
@@ -4430,6 +4462,10 @@ export interface Dict {
   'storyboard.briefSectionLabel': string;
   'storyboard.briefPlaceholder': string;
   'storyboard.briefCreateShot': string;
+  'storyboard.draftShotCountLabel': string;
+  'storyboard.draftStoryboard': string;
+  'storyboard.draftingStoryboard': string;
+  'storyboard.draftPartial': string;
   'storyboard.blankSectionLabel': string;
   'storyboard.noMotionPromptYet': string;
   'storyboard.retry': string;

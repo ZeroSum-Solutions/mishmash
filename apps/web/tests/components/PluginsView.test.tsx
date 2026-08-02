@@ -208,6 +208,9 @@ describe('PluginsView', () => {
   it('shows installed plugins and available registry entries', async () => {
     render(<PluginsView />);
 
+    // The gallery tab is the landing surface (studio-entrance restructure);
+    // this test exercises the installed tab, so switch to it first.
+    fireEvent.click(await screen.findByTestId('plugins-tab-installed'));
     expect(await screen.findByText('Installed plugins')).toBeTruthy();
     expect(screen.getAllByText('User Plugin').length).toBeGreaterThan(0);
     expect(screen.queryByText('Official Plugin')).toBeNull();
@@ -357,6 +360,7 @@ describe('PluginsView', () => {
 
     render(<PluginsView onUsePlugin={onUsePlugin} />);
 
+    fireEvent.click(await screen.findByTestId('plugins-tab-installed'));
     fireEvent.click(await screen.findByTestId('plugins-home-use-menu-query-plugin'));
     fireEvent.click(screen.getByTestId('plugins-home-use-with-query-query-plugin'));
 
@@ -758,6 +762,7 @@ describe('PluginsView', () => {
         onCreatePluginShareProject={onCreatePluginShareProject}
       />,
     );
+    fireEvent.click(await screen.findByTestId('plugins-tab-installed'));
 
     const publish = await screen.findByTestId('plugins-home-publish-github-user-plugin');
     expect(publish.textContent).toContain('Publish');

@@ -410,6 +410,7 @@ export interface PluginsTopClickProps {
   element:
     | 'create_plugin'
     | 'import_plugin'
+    | 'gallery_tab'
     | 'installed_tab'
     | 'available_tab'
     | 'sources_tab'
@@ -494,7 +495,10 @@ export interface PluginLoopClickProps {
 // is the ↗ that opens the real example page in a new tab, bypassing the
 // modal — a strong "go straight to the finished thing" intent signal.
 export interface CommunityGalleryClickProps {
-  page_name: 'home';
+  // 'plugins' since the studio-entrance restructure moved the gallery grid
+  // off Home onto the Plugins view; 'home' remains for the composer-side
+  // use_plugin events HomeView still fires.
+  page_name: 'home' | 'plugins';
   area: 'community_gallery';
   // `use_plugin` is the user actually applying a community plugin into the
   // composer (from the gallery card's Use button or its detail modal), as

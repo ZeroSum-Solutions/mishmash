@@ -1252,7 +1252,9 @@ test('[P1] first-run home template reveal opens from wheel gesture', async ({ pa
   await page.mouse.wheel(0, 500);
 
   await expect(revealBody).toHaveAttribute('aria-hidden', 'false');
-  await expect(page.getByTestId('entry-view-home').getByTestId('plugins-home-section')).toBeVisible();
+  // Studio-entrance restructure: the reveal now uncovers the Featured
+  // starters row (the gallery grid lives only on the Plugins view).
+  await expect(page.getByTestId('entry-view-home').getByTestId('featured-templates-row')).toBeVisible();
 });
 
 test('[P1] blank project entry remains retryable after create failures', async ({ page }) => {
@@ -1319,25 +1321,25 @@ test('[P1] home template picker selects a starter template and can clear it', as
   await expect(page.getByTestId('home-hero-template-trigger')).toContainText(/None/i);
 });
 
-test('[P1] first-run home keeps community templates collapsed until the hint is used', async ({ page }) => {
+test('[P1] first-run home keeps the starters shelf collapsed until the hint is used', async ({ page }) => {
   await gotoEntryHome(page);
 
   const home = page.getByTestId('entry-view-home');
   const revealBody = page.locator('.home-templates-reveal__body');
   await expect(page.getByTestId('recent-projects-strip')).toHaveCount(0);
   await expect(page.getByTestId('home-templates-hint')).toBeVisible();
-  await expect(home.getByTestId('plugins-home-section')).toBeAttached();
+  await expect(home.getByTestId('featured-templates-row')).toBeAttached();
   await expect(revealBody).toHaveAttribute('aria-hidden', 'true');
 
   await page.getByTestId('home-templates-hint').click();
 
   await expect(revealBody).toHaveAttribute('aria-hidden', 'false');
-  await expect(home.getByTestId('plugins-home-section')).toBeVisible();
-  await expect(home.getByTestId('plugins-home-browse-registry')).toBeVisible();
-  // The Community gallery defaults to the All slice (#5759).
-  await expect(home.getByTestId('plugins-home-pill-category-all')).toHaveAttribute('aria-selected', 'true');
-  await expect(home.getByTestId('plugins-home-pill-category-live-artifact')).toHaveAttribute('aria-selected', 'false');
-  await expect(home.locator('article.plugins-home__card[data-plugin-id="example-live-artifact"]')).toBeVisible();
+  // Studio-entrance restructure: the reveal uncovers the Featured starters
+  // row and the workflows link-out; the gallery grid (search, category
+  // pills, cards) lives only on the Plugins view now.
+  await expect(home.getByTestId('featured-templates-row')).toBeVisible();
+  await expect(home.getByTestId('home-workflows-linkrow')).toBeVisible();
+  await expect(home.getByTestId('plugins-home-section')).toHaveCount(0);
 });
 
 test('[P1] blank project entry creates an empty project without prompt or template metadata', async ({ page }) => {

@@ -195,7 +195,10 @@ const LIBRARY_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 // `od storyboard …` mirrors the Storyboard section against /api/storyboards.
 // Hoisted so the top-of-file SUBCOMMAND_MAP dispatch (which runs during
 // module evaluation) doesn't hit a temporal-dead-zone on these sets.
-const STORYBOARD_STRING_FLAGS = new Set(['daemon-url', 'title', 'file', 'shot', 'slot', 'finish', 'audio']);
+const STORYBOARD_STRING_FLAGS = new Set([
+  'daemon-url', 'title', 'file', 'shot', 'slot', 'finish', 'audio',
+  'brief', 'prompt-file', 'shot-count',
+]);
 // Only the negative forms are real flags — titles/transitions both default
 // to on (assemble.ts: `finish.titles ?? true`, `finish.transitions ?? true`),
 // so a positive --titles/--transitions would have nothing to override and
@@ -8632,18 +8635,26 @@ async function runWhatsNew(args) {
 function printDesignLibraryHelp() {
   console.log(`Usage:
   od design-library catalog [--json]
+  od design-library start-project --rel <rel> [--name <name>] [--json]
 
 Reads the local Design Library catalog (~/Desktop/Design Assets/catalog.json
 by default, or OD_DESIGN_LIBRARY_DIR) over the same GET
 /api/design-library/catalog contract the web Design Library tab reads.
-Read-only — this command never uploads or copies library bytes.
+\`catalog\` is read-only — it never uploads or copies library bytes.
+
+\`start-project\` copies a licensed kit's files into a new managed project
+over the same POST /api/design-library/start-project contract as the web
+"Use as template" card action. Only catalog items whose allowed_use is
+licensed-source-review or own-code can be copied; every other tier 403s.
 
 Options:
+  --rel <rel>          Catalog item's rel path (e.g. "01 UI8 Kits/dwell")
+  --name <name>        Project name override (defaults to the item's label)
   --json               Print the raw response envelope
   --daemon-url <url>   Override daemon URL`);
 }
 
-// `od design-library catalog` — AGENTS.md's UI/CLI dual-track rule: every
+// `od design-library <sub>` — AGENTS.md's UI/CLI dual-track rule: every
 // capability reachable through the web UI also gets a CLI mirror, same
 // contract, same API. Mirrors the `od media <sub>` dispatch shape.
 async function runDesignLibrary(args) {
@@ -8652,14 +8663,17 @@ async function runDesignLibrary(args) {
     printDesignLibraryHelp();
     return;
   }
-  if (sub !== 'catalog') {
-    console.error(`unknown subcommand: od design-library ${sub}`);
-    printDesignLibraryHelp();
-    process.exit(1);
-  }
   const idx = args.indexOf(sub);
   const subArgs = [...args.slice(0, idx), ...args.slice(idx + 1)];
-  return runDesignLibraryCatalog(subArgs);
+  if (sub === 'catalog') {
+    return runDesignLibraryCatalog(subArgs);
+  }
+  if (sub === 'start-project') {
+    return runDesignLibraryStartProject(subArgs);
+  }
+  console.error(`unknown subcommand: od design-library ${sub}`);
+  printDesignLibraryHelp();
+  process.exit(1);
 }
 
 async function runDesignLibraryCatalog(rawArgs) {
@@ -8683,6 +8697,42 @@ async function runDesignLibraryCatalog(rawArgs) {
   process.stdout.write(JSON.stringify(data, null, 2) + '\n');
 }
 
+async function runDesignLibraryStartProject(rawArgs) {
+  const stringFlags = new Set([...LIBRARY_STRING_FLAGS, 'rel', 'name']);
+  const flags = parseFlags(rawArgs, { string: stringFlags, boolean: LIBRARY_BOOLEAN_FLAGS });
+  if (flags.help || flags.h) {
+    printDesignLibraryHelp();
+    return;
+  }
+  const rel = typeof flags.rel === 'string' ? flags.rel : positionalArgs(rawArgs, stringFlags)[0];
+  if (!rel) {
+    console.error('Usage: od design-library start-project --rel <rel> [--name <name>]');
+    process.exit(2);
+  }
+  const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
+  const body = { rel, ...(typeof flags.name === 'string' ? { name: flags.name } : {}) };
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/design-library/start-project`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    return exitWithStructuredError({
+      code: 'daemon-not-running',
+      message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+    });
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  const data = await resp.json();
+  if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+  console.log(`Created project ${data.projectId} from ${rel}`);
+  if (data.entryFile) console.log(`Entry file: ${data.entryFile}`);
+  console.log(`Copied ${data.copiedFiles} file(s), skipped ${data.skippedFiles}.`);
+  for (const warning of data.warnings ?? []) console.log(`Warning: ${warning}`);
+}
+
 // ---------------------------------------------------------------------------
 // Subcommand: od storyboard (Seedance start/end keyframe-pair workflow).
 //
@@ -8704,6 +8754,8 @@ function printStoryboardHelp() {
   od storyboard render-shot <id> <shotId> [--json]
   od storyboard assemble <id> [--finish remotion [--title "<text>"] [--no-titles]
                                [--no-transitions] [--captions|--no-captions] [--audio <path>]] [--json]
+  od storyboard draft <id> --brief "<text>" [--shot-count <n>] [--json]
+  od storyboard draft <id> --prompt-file <path|-> [--shot-count <n>] [--json]
 
 Reads/writes the same /api/storyboards contract the web Storyboard section
 uses. \`upload\` posts an image file into the hidden storyboard-media
@@ -8711,9 +8763,11 @@ project the same way the web UI's drag-and-drop upload does; pass --shot to
 also PATCH that shot's start (default) or end frame to the uploaded path.
 \`render-shot\` dispatches the shot's video render, polls it to completion
 the same way \`od media generate\` does, then PATCHes the storyboard with
-the final status/output/error before printing the result. Shot creation/
-editing beyond upload (motion prompts, model/resolution/duration) is a
-web-UI flow; this CLI covers list/create/upload/render/assemble only.
+the final status/output/error before printing the result. \`draft\` posts a
+free-text brief to draft-shots, which appends up to --shot-count generated
+shots to the storyboard. Shot creation/editing beyond upload/draft (motion
+prompts, model/resolution/duration) is a web-UI flow; this CLI covers
+list/create/upload/render/assemble/draft only.
 
 \`assemble\` defaults to an ffmpeg hard-cut concat of the ordered done-shot
 outputs into final.mp4 (unchanged). Pass --finish remotion to opt into the
@@ -8737,6 +8791,9 @@ Options:
   --no-captions         Force captions off even when --audio is set (assemble --finish remotion only).
   --audio <path>        Narration/voiceover file to burn captions from (assemble --finish remotion
                          only; .wav/.mp3/.m4a/.aac). Not persisted as a storyboard asset.
+  --brief <text>         Creative brief to draft shots from (draft only; or use --prompt-file).
+  --prompt-file <path|-> Read the brief from a file, or - for stdin (draft only; long-form input).
+  --shot-count <n>       How many shots to draft, 1-12 (draft only; defaults to 4).
   --json                Print the raw response envelope.
   --daemon-url <url>   Override daemon URL`);
 }
@@ -8747,7 +8804,7 @@ async function runStoryboard(args) {
     printStoryboardHelp();
     return;
   }
-  const known = ['list', 'create', 'get', 'upload', 'render-shot', 'assemble'];
+  const known = ['list', 'create', 'get', 'upload', 'render-shot', 'assemble', 'draft'];
   if (!known.includes(sub)) {
     console.error(`unknown subcommand: od storyboard ${sub}`);
     printStoryboardHelp();
@@ -9069,6 +9126,52 @@ async function runStoryboard(args) {
     const data = await resp.json();
     if (flags.json) return writeJson(data);
     console.log(`[storyboard] assembled ${data.output} (finish: ${data.finish || 'concat'})`);
+    return;
+  }
+
+  if (sub === 'draft') {
+    const id = positionals[0];
+    const usage = 'Usage: od storyboard draft <id> --brief "<text>" [--shot-count <n>] [--json]\n' +
+      '       od storyboard draft <id> --prompt-file <path|-> [--shot-count <n>] [--json]';
+    if (!id) {
+      console.error(usage);
+      process.exit(2);
+    }
+    // Long-form brief input: --brief "<text>" or --prompt-file <path|-> (- for
+    // stdin), so a brief can be piped in via heredoc per AGENTS.md's CLI
+    // dual-track requirement. Reuses the same reader every other prompt-taking
+    // subcommand uses rather than a second stdin-reading implementation.
+    let brief = await readPromptFromFlags({ prompt: flags.brief, 'prompt-file': flags['prompt-file'] });
+    if (typeof brief === 'string') brief = brief.trim();
+    if (!brief) {
+      console.error(usage);
+      process.exit(2);
+    }
+    const body = { brief };
+    if (flags['shot-count'] !== undefined) {
+      const shotCount = Number(flags['shot-count']);
+      if (!Number.isFinite(shotCount)) {
+        console.error(`--shot-count must be a number (got "${flags['shot-count']}")`);
+        process.exit(2);
+      }
+      body.shotCount = shotCount;
+    }
+
+    let draftResp;
+    try {
+      draftResp = await fetch(`${base}/api/storyboards/${encodeURIComponent(id)}/draft-shots`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!draftResp.ok) return structuredHttpFailure(draftResp);
+    const draftData = await draftResp.json();
+    if (flags.json) return writeJson(draftData);
+    console.log(`[storyboard] drafted ${draftData.drafted} shot(s) for ${draftData.storyboard?.id}`);
     return;
   }
 }

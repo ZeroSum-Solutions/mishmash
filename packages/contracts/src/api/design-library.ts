@@ -1,10 +1,14 @@
-// Design Library — read-only contract for browsing the local curated
-// reference-asset library (a Devin-machine `~/Desktop/Design Assets` tree,
-// see apps/daemon/src/routes/design-library.ts). Every item is rights-gated
-// via `allowed_use`; the web UI must not offer attach/insert/copy affordances
-// for anything other than `own-code` / `licensed-source-review`.
+// Design Library — contract for browsing the local curated reference-asset
+// library (a Devin-machine `~/Desktop/Design Assets` tree, see
+// apps/daemon/src/routes/design-library.ts). Every item is rights-gated via
+// `allowed_use`; the web UI must not offer attach/insert/copy affordances for
+// anything other than `own-code` / `licensed-source-review` — those two tiers
+// may be copied into a new managed project via `start-project` below, every
+// other tier stays browse/open-only.
 //
 // Keep this file pure TypeScript — no Node, browser, or daemon imports.
+
+import type { Project } from './projects.js';
 
 export type DesignLibraryAllowedUse =
   | 'own-code'
@@ -44,4 +48,22 @@ export interface DesignLibraryCatalog {
   groups: DesignLibraryGroup[];
   /** Absolute path the daemon read the catalog from (UI provenance label). */
   root: string;
+}
+
+export interface DesignLibraryStartProjectRequest {
+  /** Path relative to the library root of the catalog item to start from. */
+  rel: string;
+  name?: string;
+}
+
+export interface DesignLibraryStartProjectResponse {
+  ok: true;
+  projectId: string;
+  conversationId: string;
+  project: Project;
+  /** Detected preview entry point relative to the project root, when found. */
+  entryFile?: string;
+  copiedFiles: number;
+  skippedFiles: number;
+  warnings: string[];
 }

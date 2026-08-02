@@ -6,10 +6,12 @@ import type { DesignLibraryCatalog } from '@open-design/contracts';
 
 const fetchDesignLibraryCatalog = vi.fn();
 const openDesignLibraryPath = vi.fn(async () => true);
+const startDesignLibraryProject = vi.fn();
 vi.mock('../../src/providers/registry', () => ({
   fetchDesignLibraryCatalog: (...args: unknown[]) => fetchDesignLibraryCatalog(...(args as [])),
   designLibraryThumbUrl: (thumb: string) => `/api/design-library/thumb/${thumb.split('/').pop()}`,
   openDesignLibraryPath: (...args: unknown[]) => openDesignLibraryPath(...(args as [])),
+  startDesignLibraryProject: (...args: unknown[]) => startDesignLibraryProject(...(args as [])),
 }));
 
 import { DesignLibrarySection } from '../../src/components/DesignLibrarySection';
@@ -65,6 +67,7 @@ const CATALOG: DesignLibraryCatalog = {
 beforeEach(() => {
   fetchDesignLibraryCatalog.mockReset().mockResolvedValue({ ok: true, catalog: CATALOG });
   openDesignLibraryPath.mockReset().mockResolvedValue(true);
+  startDesignLibraryProject.mockReset();
 });
 
 afterEach(() => {
@@ -114,6 +117,54 @@ describe('DesignLibrarySection', () => {
 
     fireEvent.click(openFolderBtn!);
     await waitFor(() => expect(openDesignLibraryPath).toHaveBeenCalledWith('02 App Captures/fintune'));
+  });
+
+  it('offers Use as template only on copyable tiers when onOpenProject is provided', async () => {
+    const onOpenProject = vi.fn();
+    render(<DesignLibrarySection active onOpenProject={onOpenProject} />);
+
+    const licensedLabel = await screen.findByText('Neon Dashboard Kit');
+    const licensedCard = licensedLabel.closest('article') as HTMLElement;
+    expect(licensedCard.getAttribute('data-allowed-use')).toBe('licensed-source-review');
+    const licensedButtons = within(licensedCard).getAllByRole('button');
+    expect(licensedButtons).toHaveLength(2);
+    expect(within(licensedCard).getByText('Use as template')).toBeTruthy();
+
+    const restrictedLabel = screen.getByText('Fintune (iOS)');
+    const restrictedCard = restrictedLabel.closest('article') as HTMLElement;
+    expect(restrictedCard.getAttribute('data-allowed-use')).toBe('human-local-only');
+    const restrictedButtons = within(restrictedCard).getAllByRole('button');
+    expect(restrictedButtons).toHaveLength(1);
+    expect(within(restrictedCard).queryByText('Use as template')).toBeNull();
+  });
+
+  it('starts a project and navigates via onOpenProject when Use as template succeeds', async () => {
+    startDesignLibraryProject.mockResolvedValue({
+      ok: true,
+      response: { ok: true, projectId: 'proj-1', conversationId: 'conv-1', copiedFiles: 12, skippedFiles: 0, warnings: [] },
+    });
+    const onOpenProject = vi.fn();
+    render(<DesignLibrarySection active onOpenProject={onOpenProject} />);
+
+    const label = await screen.findByText('Neon Dashboard Kit');
+    const card = label.closest('article') as HTMLElement;
+    fireEvent.click(within(card).getByText('Use as template'));
+
+    await waitFor(() => expect(startDesignLibraryProject).toHaveBeenCalledWith('01 UI Kits/neon-dashboard'));
+    await waitFor(() => expect(onOpenProject).toHaveBeenCalledWith('proj-1', 'conv-1'));
+  });
+
+  it('shows an inline error and does not navigate when Use as template fails', async () => {
+    startDesignLibraryProject.mockResolvedValue({ ok: false, message: 'items with allowed_use cannot start a project' });
+    const onOpenProject = vi.fn();
+    render(<DesignLibrarySection active onOpenProject={onOpenProject} />);
+
+    const label = await screen.findByText('Neon Dashboard Kit');
+    const card = label.closest('article') as HTMLElement;
+    fireEvent.click(within(card).getByText('Use as template'));
+
+    await screen.findByText('items with allowed_use cannot start a project');
+    expect(onOpenProject).not.toHaveBeenCalled();
   });
 
   it('shows a friendly empty state when the daemon reports the library missing', async () => {

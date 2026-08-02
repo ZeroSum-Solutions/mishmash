@@ -23,6 +23,7 @@ import path from 'node:path';
 import type { Express } from 'express';
 import type {
   AssembleStoryboardFinishOptions,
+  DraftStoryboardShotsRequest,
   Storyboard,
   StoryboardFrameRef,
   StoryboardMoodDraft,
@@ -31,19 +32,35 @@ import type {
   StoryboardShotStatus,
   StoryboardSummary,
 } from '@open-design/contracts';
-import { isStoryboardUploadMimeAllowed, STORYBOARD_UPLOAD_MAX_BYTES } from '@open-design/contracts';
+import {
+  isStoryboardUploadMimeAllowed,
+  STORYBOARD_DRAFT_BRIEF_MAX_CHARS,
+  STORYBOARD_DRAFT_SHOT_COUNT_DEFAULT,
+  STORYBOARD_DRAFT_SHOT_COUNT_MAX,
+  STORYBOARD_DRAFT_SHOT_COUNT_MIN,
+  STORYBOARD_UPLOAD_MAX_BYTES,
+} from '@open-design/contracts';
 import type { RouteDeps } from '../server-context.js';
+import { isFinalizeProviderProtocol } from '../design/finalize-design.js';
+import { resolveProviderConfig } from '../media/config.js';
+import { modelsForSurface } from '../media/models.js';
 import { isSafeId, mimeFor } from '../projects.js';
 import { assembleStoryboard, getDoneShots } from '../storyboards/assemble.js';
+import {
+  DRAFT_TEXT_PROVIDER_IDS,
+  draftShotsFromBrief,
+  resolveDraftTextProvider,
+} from '../storyboards/draft-from-brief.js';
 import {
   deleteStoryboard,
   listStoryboards,
   readStoryboard,
+  withStoryboardLock,
   writeStoryboard,
 } from '../storyboards/store.js';
 
 export interface RegisterStoryboardRoutesDeps
-  extends RouteDeps<'http' | 'paths' | 'ids' | 'db' | 'projectStore' | 'projectFiles' | 'media'> {}
+  extends RouteDeps<'http' | 'paths' | 'ids' | 'db' | 'projectStore' | 'projectFiles' | 'media' | 'validation'> {}
 
 /** Hidden project every generated storyboard still/clip lives under. Auto-created on first use. */
 const STORYBOARD_MEDIA_PROJECT_ID = 'storyboard-media';
@@ -154,6 +171,22 @@ async function assertSafeStoryboardWriteTarget(projectDir: string, absoluteTarge
     return false;
   }
   return true;
+}
+
+/**
+ * Per-shot duration for a drafted shot when the storyboard has no existing
+ * shot to inherit one from. Inside the MIN/MAX shot duration range.
+ */
+const DEFAULT_DRAFT_SHOT_DURATION_SEC = 5;
+
+/**
+ * The media catalog's own default video model. Drafting into an empty
+ * storyboard needs a model id, and reading it from the catalog avoids
+ * planting a second, drifting opinion about which model is the default.
+ */
+function defaultVideoModelId(): string {
+  const videoModels = modelsForSurface('video');
+  return videoModels.find((entry) => entry.default)?.id ?? videoModels[0]?.id ?? '';
 }
 
 function nowIso(): string {
@@ -343,6 +376,7 @@ function validateAssembleFinish(
 
 export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRoutesDeps) {
   const { isLocalSameOrigin, resolvedPortRef, sendApiError } = ctx.http;
+  const { validateExternalApiBaseUrl } = ctx.validation;
   const { PROJECT_ROOT, PROJECTS_DIR, RUNTIME_DATA_DIR } = ctx.paths;
   const { randomUUID } = ctx.ids;
   const db = ctx.db;
@@ -470,86 +504,96 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
   app.patch('/api/storyboards/:id', async (req, res) => {
     if (!requireLocal(req, res)) return;
     if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
-    const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
-    if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+    // The whole read-validate-write cycle is the critical section: two
+    // concurrent PATCHes must not both read the same snapshot and have the
+    // second writer's whole-document write silently erase the first's.
+    await withStoryboardLock(req.params.id, async () => {
+      const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+      if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
 
-    const patch = req.body ?? {};
-    // Optimistic concurrency: when the caller passes the updatedAt it last
-    // read, reject a PATCH built from a stale snapshot instead of silently
-    // last-write-wins clobbering concurrent edits made by another client in
-    // the meantime. Omitting the field keeps the previous behavior.
-    if (patch.expectedUpdatedAt !== undefined) {
-      if (typeof patch.expectedUpdatedAt !== 'string') {
-        return sendApiError(res, 400, 'BAD_REQUEST', 'expectedUpdatedAt must be a string');
-      }
-      if (patch.expectedUpdatedAt !== storyboard.updatedAt) {
-        return res.status(409).json({ error: 'storyboard changed', storyboard });
-      }
-    }
-    if (patch.title !== undefined) {
-      if (typeof patch.title !== 'string' || !patch.title.trim()) {
-        return sendApiError(res, 400, 'BAD_REQUEST', 'title must be a non-empty string');
-      }
-    }
-    if (patch.ratio !== undefined && (typeof patch.ratio !== 'string' || !patch.ratio.trim())) {
-      return sendApiError(res, 400, 'BAD_REQUEST', 'ratio must be a non-empty string');
-    }
-    let nextMoodDrafts: StoryboardMoodDraft[] | undefined;
-    if (patch.moodDrafts !== undefined) {
-      if (!Array.isArray(patch.moodDrafts)) {
-        return sendApiError(res, 400, 'BAD_REQUEST', 'moodDrafts must be an array');
-      }
-      const parsed: StoryboardMoodDraft[] = [];
-      for (let i = 0; i < patch.moodDrafts.length; i++) {
-        const result = validateMoodDraft(patch.moodDrafts[i], i);
-        if (!result.ok) return sendApiError(res, 400, 'BAD_REQUEST', result.error);
-        parsed.push(result.value);
-      }
-      nextMoodDrafts = parsed;
-    }
-    let nextShots: StoryboardShot[] | undefined;
-    if (patch.shots !== undefined) {
-      if (!Array.isArray(patch.shots)) {
-        return sendApiError(res, 400, 'BAD_REQUEST', 'shots must be an array');
-      }
-      const parsed: StoryboardShot[] = [];
-      // Guards against a duplicated shot id reaching storage — e.g. a
-      // client-side 409 retry that re-applies an append mutator onto a doc
-      // that (for whatever reason) already contains the shot it was trying
-      // to add. The client-side fix (storyboard-persist.ts's
-      // appendShotIfAbsent) makes this unreachable from the shipped UI, but
-      // the server is the actual boundary: any other caller (CLI, a future
-      // integration, a hallucinated agent PATCH) must not be able to
-      // persist two shots sharing an id.
-      const seenShotIds = new Set<string>();
-      for (let i = 0; i < patch.shots.length; i++) {
-        const result = validateShot(patch.shots[i], i);
-        if (!result.ok) return sendApiError(res, 400, 'BAD_REQUEST', result.error);
-        if (seenShotIds.has(result.value.id)) {
-          return sendApiError(res, 400, 'BAD_REQUEST', 'duplicate shot id');
+      const patch = req.body ?? {};
+      // Optimistic concurrency: when the caller passes the updatedAt it last
+      // read, reject a PATCH built from a stale snapshot instead of silently
+      // last-write-wins clobbering concurrent edits made by another client in
+      // the meantime. Omitting the field keeps the previous behavior.
+      if (patch.expectedUpdatedAt !== undefined) {
+        if (typeof patch.expectedUpdatedAt !== 'string') {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'expectedUpdatedAt must be a string');
         }
-        seenShotIds.add(result.value.id);
-        parsed.push(result.value);
+        if (patch.expectedUpdatedAt !== storyboard.updatedAt) {
+          return res.status(409).json({ error: 'storyboard changed', storyboard });
+        }
       }
-      nextShots = parsed;
-    }
+      if (patch.title !== undefined) {
+        if (typeof patch.title !== 'string' || !patch.title.trim()) {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'title must be a non-empty string');
+        }
+      }
+      if (patch.ratio !== undefined && (typeof patch.ratio !== 'string' || !patch.ratio.trim())) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'ratio must be a non-empty string');
+      }
+      let nextMoodDrafts: StoryboardMoodDraft[] | undefined;
+      if (patch.moodDrafts !== undefined) {
+        if (!Array.isArray(patch.moodDrafts)) {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'moodDrafts must be an array');
+        }
+        const parsed: StoryboardMoodDraft[] = [];
+        for (let i = 0; i < patch.moodDrafts.length; i++) {
+          const result = validateMoodDraft(patch.moodDrafts[i], i);
+          if (!result.ok) return sendApiError(res, 400, 'BAD_REQUEST', result.error);
+          parsed.push(result.value);
+        }
+        nextMoodDrafts = parsed;
+      }
+      let nextShots: StoryboardShot[] | undefined;
+      if (patch.shots !== undefined) {
+        if (!Array.isArray(patch.shots)) {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'shots must be an array');
+        }
+        const parsed: StoryboardShot[] = [];
+        // Guards against a duplicated shot id reaching storage — e.g. a
+        // client-side 409 retry that re-applies an append mutator onto a doc
+        // that (for whatever reason) already contains the shot it was trying
+        // to add. The client-side fix (storyboard-persist.ts's
+        // appendShotIfAbsent) makes this unreachable from the shipped UI, but
+        // the server is the actual boundary: any other caller (CLI, a future
+        // integration, a hallucinated agent PATCH) must not be able to
+        // persist two shots sharing an id.
+        const seenShotIds = new Set<string>();
+        for (let i = 0; i < patch.shots.length; i++) {
+          const result = validateShot(patch.shots[i], i);
+          if (!result.ok) return sendApiError(res, 400, 'BAD_REQUEST', result.error);
+          if (seenShotIds.has(result.value.id)) {
+            return sendApiError(res, 400, 'BAD_REQUEST', 'duplicate shot id');
+          }
+          seenShotIds.add(result.value.id);
+          parsed.push(result.value);
+        }
+        nextShots = parsed;
+      }
 
-    if (typeof patch.title === 'string' && patch.title.trim()) storyboard.title = patch.title.trim();
-    if (typeof patch.ratio === 'string' && patch.ratio.trim()) storyboard.ratio = patch.ratio.trim();
-    if (nextMoodDrafts) storyboard.moodDrafts = nextMoodDrafts;
-    if (nextShots) storyboard.shots = nextShots;
-    storyboard.updatedAt = nowIso();
+      if (typeof patch.title === 'string' && patch.title.trim()) storyboard.title = patch.title.trim();
+      if (typeof patch.ratio === 'string' && patch.ratio.trim()) storyboard.ratio = patch.ratio.trim();
+      if (nextMoodDrafts) storyboard.moodDrafts = nextMoodDrafts;
+      if (nextShots) storyboard.shots = nextShots;
+      storyboard.updatedAt = nowIso();
 
-    await writeStoryboard(RUNTIME_DATA_DIR, storyboard);
-    res.json({ storyboard });
+      await writeStoryboard(RUNTIME_DATA_DIR, storyboard);
+      res.json({ storyboard });
+    });
   });
 
   app.delete('/api/storyboards/:id', async (req, res) => {
     if (!requireLocal(req, res)) return;
     if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
-    const deleted = await deleteStoryboard(RUNTIME_DATA_DIR, req.params.id);
-    if (!deleted) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
-    res.status(204).end();
+    // Same lock as every writer for this id: a delete racing a concurrent
+    // PATCH/render/draft-shots write must not let the write resurrect a
+    // file the delete already removed (or vice versa).
+    await withStoryboardLock(req.params.id, async () => {
+      const deleted = await deleteStoryboard(RUNTIME_DATA_DIR, req.params.id);
+      if (!deleted) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+      res.status(204).end();
+    });
   });
 
   // Reveals the hidden storyboard-media project folder in the OS file
@@ -570,6 +614,218 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
     child.on('error', () => {});
     child.unref();
     res.status(204).end();
+  });
+
+  /**
+   * Turn a free-text creative brief into several draft shots appended to this
+   * storyboard.
+   *
+   * Every validation and the optimistic-concurrency check run BEFORE the text
+   * provider is resolved or called, so a malformed or stale request can never
+   * reach — or bill — a provider. Drafted shots land as `draft` status with no
+   * frames: they are a starting point the user then edits and renders, exactly
+   * like a hand-added shot.
+   */
+  app.post('/api/storyboards/:id/draft-shots', async (req, res) => {
+    if (!requireLocal(req, res)) return;
+    if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
+    const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+    if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+
+    const body = (req.body ?? {}) as DraftStoryboardShotsRequest;
+
+    const brief = typeof body.brief === 'string' ? body.brief.trim() : '';
+    if (!brief) return sendApiError(res, 400, 'BAD_REQUEST', 'brief must be a non-empty string');
+    if (brief.length > STORYBOARD_DRAFT_BRIEF_MAX_CHARS) {
+      return sendApiError(
+        res,
+        400,
+        'BAD_REQUEST',
+        `brief must be at most ${STORYBOARD_DRAFT_BRIEF_MAX_CHARS} characters`,
+      );
+    }
+
+    let shotCount = STORYBOARD_DRAFT_SHOT_COUNT_DEFAULT;
+    if (body.shotCount !== undefined) {
+      if (
+        typeof body.shotCount !== 'number' ||
+        !Number.isInteger(body.shotCount) ||
+        body.shotCount < STORYBOARD_DRAFT_SHOT_COUNT_MIN ||
+        body.shotCount > STORYBOARD_DRAFT_SHOT_COUNT_MAX
+      ) {
+        return sendApiError(
+          res,
+          400,
+          'BAD_REQUEST',
+          `shotCount must be an integer between ${STORYBOARD_DRAFT_SHOT_COUNT_MIN} and ${STORYBOARD_DRAFT_SHOT_COUNT_MAX}`,
+        );
+      }
+      shotCount = body.shotCount;
+    }
+
+    // Per-shot settings inherit from the storyboard's last shot so a draft
+    // appended to work in progress matches what is already on the board; an
+    // empty storyboard falls back to the catalog's own default video model
+    // rather than a hardcoded id.
+    const lastShot = storyboard.shots.length ? storyboard.shots[storyboard.shots.length - 1] : undefined;
+
+    let durationSec = lastShot?.durationSec ?? DEFAULT_DRAFT_SHOT_DURATION_SEC;
+    if (body.durationSec !== undefined) {
+      if (
+        typeof body.durationSec !== 'number' ||
+        body.durationSec < MIN_SHOT_DURATION_SEC ||
+        body.durationSec > MAX_SHOT_DURATION_SEC
+      ) {
+        return sendApiError(
+          res,
+          400,
+          'BAD_REQUEST',
+          `durationSec must be a number between ${MIN_SHOT_DURATION_SEC} and ${MAX_SHOT_DURATION_SEC}`,
+        );
+      }
+      durationSec = body.durationSec;
+    }
+
+    let resolution: StoryboardResolution = lastShot?.resolution ?? '720p';
+    if (body.resolution !== undefined) {
+      if (typeof body.resolution !== 'string' || !STORYBOARD_RESOLUTIONS.has(body.resolution as any)) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'resolution must be one of 480p|720p|1080p');
+      }
+      resolution = body.resolution;
+    }
+
+    let model = lastShot?.model ?? defaultVideoModelId();
+    if (body.model !== undefined) {
+      if (typeof body.model !== 'string' || !body.model.trim()) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'model must be a non-empty string');
+      }
+      model = body.model.trim();
+    }
+    if (!model) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'model is required: no existing shot to inherit one from');
+    }
+
+    if (body.expectedUpdatedAt !== undefined) {
+      if (typeof body.expectedUpdatedAt !== 'string') {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'expectedUpdatedAt must be a string');
+      }
+      if (body.expectedUpdatedAt !== storyboard.updatedAt) {
+        return res.status(409).json({ error: 'storyboard changed', storyboard });
+      }
+    }
+
+    // BYOK credentials, when supplied, are used for this one call and never
+    // stored — same posture as the finalize route.
+    let override;
+    if (body.textProvider !== undefined) {
+      const supplied = body.textProvider as Partial<DraftStoryboardShotsRequest['textProvider']>;
+      if (!supplied || typeof supplied !== 'object') {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'textProvider must be an object');
+      }
+      if (!isFinalizeProviderProtocol(supplied.protocol)) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'textProvider.protocol is not a supported protocol');
+      }
+      if (typeof supplied.apiKey !== 'string' || !supplied.apiKey.trim()) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'textProvider.apiKey must be a non-empty string');
+      }
+      if (typeof supplied.model !== 'string' || !supplied.model.trim()) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'textProvider.model must be a non-empty string');
+      }
+      if (supplied.baseUrl !== undefined && typeof supplied.baseUrl !== 'string') {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'textProvider.baseUrl must be a string');
+      }
+      // A caller-supplied baseUrl makes the DAEMON issue an outbound request
+      // on the caller's behalf, so it must clear the same DNS-aware SSRF
+      // guard the finalize route applies to the identical field. requireLocal
+      // is not a substitute: it constrains who may call us, not where we may
+      // then connect — loopback ports and RFC1918 hosts the browser could
+      // never reach directly are reachable from here.
+      if (supplied.baseUrl) {
+        const validated = await validateExternalApiBaseUrl(supplied.baseUrl);
+        if (validated.error) {
+          return sendApiError(
+            res,
+            validated.forbidden ? 403 : 400,
+            validated.forbidden ? 'FORBIDDEN' : 'BAD_REQUEST',
+            validated.error,
+          );
+        }
+      }
+      override = {
+        protocol: supplied.protocol,
+        apiKey: supplied.apiKey.trim(),
+        model: supplied.model.trim(),
+        ...(supplied.baseUrl ? { baseUrl: supplied.baseUrl } : {}),
+      };
+    }
+
+    const provider = await resolveDraftTextProvider(
+      (providerId) => resolveProviderConfig(PROJECT_ROOT, providerId),
+      override,
+    );
+    if (!provider) {
+      return sendApiError(
+        res,
+        400,
+        'NO_TEXT_PROVIDER',
+        `drafting from a brief needs a text-capable provider: add an API key for one of ${DRAFT_TEXT_PROVIDER_IDS.join(', ')} under Settings, or send textProvider with this request`,
+      );
+    }
+
+    // Abort the provider call if the client goes away, so a browser tab that
+    // closes mid-draft stops the outbound request instead of leaving the
+    // daemon holding it (and paying for it) to completion.
+    const clientGone = new AbortController();
+    const abortOnClose = () => clientGone.abort();
+    req.on('close', abortOnClose);
+
+    let drafted;
+    try {
+      drafted = await draftShotsFromBrief({ brief, shotCount, provider, signal: clientGone.signal });
+    } catch (err) {
+      // Deliberately surfaces only the error's own message — never the raw
+      // upstream body, which can echo request content back.
+      const message = err instanceof Error ? err.message : 'text provider call failed';
+      return sendApiError(res, 502, 'UPSTREAM_UNAVAILABLE', message);
+    } finally {
+      req.off('close', abortOnClose);
+    }
+
+    // Re-read before writing, INSIDE the per-storyboard lock. The provider
+    // call above is a multi-second network round-trip and must stay outside
+    // the lock — holding it here would serialize every other write to this
+    // storyboard (and, on a hung provider, block them indefinitely). The
+    // lock instead wraps only this tail: re-read the current doc, apply the
+    // drafted shots on top of it, and write — the same atomic
+    // read-modify-write guarantee every other mutating route gets, closing
+    // the residual event-loop-width race a re-read alone cannot (a second
+    // writer's own full read-modify-write cycle landing inside this window).
+    await withStoryboardLock(req.params.id, async () => {
+      const current = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+      if (!current) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard was deleted while drafting');
+      if (body.expectedUpdatedAt !== undefined && current.updatedAt !== storyboard.updatedAt) {
+        // The caller asked for optimistic concurrency explicitly, so a write
+        // that landed mid-draft is reported rather than silently merged.
+        return res.status(409).json({ error: 'storyboard changed', storyboard: current });
+      }
+
+      const nextOrder = current.shots.reduce((max, shot) => Math.max(max, shot.order), -1) + 1;
+      const appended: StoryboardShot[] = drafted.map((spec, index) => ({
+        id: randomUUID(),
+        order: nextOrder + index,
+        title: spec.title,
+        motionPrompt: spec.motionPrompt,
+        model,
+        resolution,
+        durationSec,
+        status: 'draft',
+      }));
+
+      current.shots = [...current.shots, ...appended];
+      current.updatedAt = nowIso();
+      await writeStoryboard(RUNTIME_DATA_DIR, current);
+      res.json({ storyboard: current, drafted: appended.length });
+    });
   });
 
   // Generates a still (or, for the mood-exploration lane, a cheap t2v clip)
@@ -720,39 +976,91 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
     if (!shot.startFrame?.path) {
       return sendApiError(res, 400, 'BAD_REQUEST', 'shot needs a start frame before it can render');
     }
-    const motionPrompt = typeof shot.motionPrompt === 'string' ? shot.motionPrompt.trim() : '';
-    if (!motionPrompt) {
+    // Early rejection only. The prompt actually dispatched is re-derived from
+    // the locked re-read below, for the same reason the model and frames are:
+    // a concurrent edit to the motion prompt must not leave the stored shot
+    // showing new text while the encode runs on the old.
+    if (!(typeof shot.motionPrompt === 'string' && shot.motionPrompt.trim())) {
       return sendApiError(res, 400, 'BAD_REQUEST', 'motion prompt is required');
+    }
+
+    const body = (req.body ?? {}) as { expectedUpdatedAt?: unknown };
+    if (body.expectedUpdatedAt !== undefined) {
+      if (typeof body.expectedUpdatedAt !== 'string') {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'expectedUpdatedAt must be a string');
+      }
+      if (body.expectedUpdatedAt !== storyboard.updatedAt) {
+        return res.status(409).json({ error: 'storyboard changed', storyboard });
+      }
     }
 
     await ensureStoryboardMediaProject();
     const mediaProjectDir = resolveProjectDir(PROJECTS_DIR, STORYBOARD_MEDIA_PROJECT_ID);
-    if (!(await resolveWithinStoryboardMediaDirReal(mediaProjectDir, shot.startFrame.path))) {
-      return sendApiError(res, 400, 'BAD_REQUEST', 'shot startFrame.path escapes the storyboard project directory');
-    }
-    if (shot.endFrame?.path && !(await resolveWithinStoryboardMediaDirReal(mediaProjectDir, shot.endFrame.path))) {
-      return sendApiError(res, 400, 'BAD_REQUEST', 'shot endFrame.path escapes the storyboard project directory');
-    }
 
-    const outputPath = `shot-${shot.id}.mp4`;
-    const { taskId } = dispatchMediaTask({
-      surface: 'video',
-      model: shot.model,
-      prompt: motionPrompt,
-      output: outputPath,
-      aspect: storyboard.ratio,
-      length: shot.durationSec,
-      image: shot.startFrame.path,
-      endImage: shot.endFrame?.path,
+    // Everything the render is BUILT from is read inside the lock, and the
+    // containment checks run against those same freshly-read values.
+    //
+    // Validating the entry-time snapshot and then dispatching from it looks
+    // safe — those are the paths that passed containment — but it silently
+    // reintroduces the staleness this lock exists to remove: a PATCH landing
+    // during `ensureStoryboardMediaProject()` can change the shot's frames,
+    // model, duration or the storyboard's ratio, and the job would then encode
+    // the OLD values while the stored shot (and the UI) shows the new ones.
+    // Reading and validating together inside the lock keeps the dispatched job
+    // and the persisted record describing the same thing. Containment is two
+    // local `realpath` calls, so holding the lock across them is cheap; the
+    // provider/network work happens later, outside, in the task runner.
+    //
+    // Dispatch fires only after every rejection (missing shot, escaping path,
+    // stale expectedUpdatedAt) has been decided against this fresh read, so a
+    // rejected request never leaves an abandoned media task behind.
+    await withStoryboardLock(req.params.id, async () => {
+      const current = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+      if (!current) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard was deleted while rendering');
+      const currentShot = current.shots.find((s) => s.id === shot.id);
+      if (!currentShot) return sendApiError(res, 404, 'NOT_FOUND', 'shot not found');
+      if (body.expectedUpdatedAt !== undefined && current.updatedAt !== storyboard.updatedAt) {
+        // The caller asked for optimistic concurrency explicitly, so a write
+        // that landed mid-request is reported rather than silently merged.
+        return res.status(409).json({ error: 'storyboard changed', storyboard: current });
+      }
+      const motionPrompt =
+        typeof currentShot.motionPrompt === 'string' ? currentShot.motionPrompt.trim() : '';
+      if (!motionPrompt) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'motion prompt is required');
+      }
+      const startFramePath = currentShot.startFrame?.path;
+      if (!startFramePath) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'shot needs a start frame before it can render');
+      }
+      if (!(await resolveWithinStoryboardMediaDirReal(mediaProjectDir, startFramePath))) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'shot startFrame.path escapes the storyboard project directory');
+      }
+      const endFramePath = currentShot.endFrame?.path;
+      if (endFramePath && !(await resolveWithinStoryboardMediaDirReal(mediaProjectDir, endFramePath))) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'shot endFrame.path escapes the storyboard project directory');
+      }
+
+      const outputPath = `shot-${currentShot.id}.mp4`;
+      const { taskId } = dispatchMediaTask({
+        surface: 'video',
+        model: currentShot.model,
+        prompt: motionPrompt,
+        output: outputPath,
+        aspect: current.ratio,
+        length: currentShot.durationSec,
+        image: startFramePath,
+        endImage: endFramePath,
+      });
+
+      currentShot.status = 'rendering';
+      currentShot.taskId = taskId;
+      delete currentShot.error;
+      current.updatedAt = nowIso();
+      await writeStoryboard(RUNTIME_DATA_DIR, current);
+
+      res.status(202).json({ taskId });
     });
-
-    shot.status = 'rendering';
-    shot.taskId = taskId;
-    delete shot.error;
-    storyboard.updatedAt = nowIso();
-    await writeStoryboard(RUNTIME_DATA_DIR, storyboard);
-
-    res.status(202).json({ taskId });
   });
 
   // Delegates to storyboards/assemble.ts, which owns both finishing modes:

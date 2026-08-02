@@ -55,3 +55,37 @@
   min-height: 56px;
   font-size: 12px;
 }
+
+.briefDraftRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.draftCountField {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.draftCountLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.draftCountInput {
+  flex: 0 0 52px;
+  height: 30px;
+  padding: 4px 6px;
+  font-size: 11px;
+  text-align: center;
+}
+.draftError {
+  margin: 0;
+  font-size: 11px;
+  color: var(--color-danger, #d33);
+}
+.draftStatus {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}

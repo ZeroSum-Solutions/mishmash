@@ -912,7 +912,8 @@
     "knownNamespaceRoutes": [
       "GET /api/design-library/catalog",
       "GET /api/design-library/thumb/:param",
-      "POST /api/design-library/open"
+      "POST /api/design-library/open",
+      "POST /api/design-library/start-project"
     ]
   },
   {
@@ -938,7 +939,8 @@
       "POST /api/storyboards/:param/uploads",
       "POST /api/storyboards/:param/shots/:param/render",
       "POST /api/storyboards/:param/assemble",
-      "POST /api/storyboards/:param/export-slider"
+      "POST /api/storyboards/:param/export-slider",
+      "POST /api/storyboards/:param/draft-shots"
     ]
   },
   {
