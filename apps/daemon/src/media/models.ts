@@ -31,27 +31,27 @@ export type MediaModel = {
 };
 
 export const MEDIA_PROVIDERS: MediaProvider[] = [
-  { id: 'openai', label: 'OpenAI', hint: 'gpt-image-2 / dall-e-3', integrated: true, defaultBaseUrl: 'https://api.openai.com/v1' },
+  { id: 'openai', label: 'OpenAI', hint: 'gpt-image-2 / dall-e-3', integrated: true, defaultBaseUrl: 'https://api.openai.com/v1', docsUrl: 'https://platform.openai.com/api-keys' },
   { id: 'codex', label: 'Codex Subscription', hint: 'gpt-image-2 via local Codex CLI login', integrated: true, credentialsRequired: false, docsUrl: 'https://developers.openai.com/codex' },
-  { id: 'volcengine', label: 'Volcengine Ark (Doubao)', hint: 'Seedance 2.0 / Seedream', integrated: true, defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3' },
-  { id: 'grok', label: 'xAI Grok Imagine', hint: 'grok-imagine — image + video with native audio', integrated: true, defaultBaseUrl: 'https://api.x.ai/v1' },
-  { id: 'hyperframes', label: 'HyperFrames', hint: 'Local HTML -> MP4 renderer', integrated: true, credentialsRequired: false, settingsVisible: false },
-  { id: 'nanobanana', label: 'Nano Banana', hint: 'Google official by default; custom gateway configurable', integrated: true, defaultBaseUrl: 'https://generativelanguage.googleapis.com', supportsCustomModel: true },
+  { id: 'volcengine', label: 'Volcengine Ark (Doubao)', hint: 'Seedance 2.0 / Seedream', integrated: true, defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3', docsUrl: 'https://console.volcengine.com/ark' },
+  { id: 'grok', label: 'xAI Grok Imagine', hint: 'grok-imagine — image + video with native audio', integrated: true, defaultBaseUrl: 'https://api.x.ai/v1', docsUrl: 'https://docs.x.ai/developers/model-capabilities/video/generation' },
+  { id: 'hyperframes', label: 'HyperFrames', hint: 'Local HTML -> MP4 renderer', integrated: true, credentialsRequired: false, settingsVisible: false, docsUrl: 'https://hyperframes.heygen.com' },
+  { id: 'nanobanana', label: 'Nano Banana', hint: 'Google official by default; custom gateway configurable', integrated: true, defaultBaseUrl: 'https://generativelanguage.googleapis.com', docsUrl: 'https://ai.google.dev/gemini-api/docs/api-key', supportsCustomModel: true },
   { id: 'imagerouter', label: 'ImageRouter', hint: 'OpenAI-compatible image + video routing', integrated: true, defaultBaseUrl: 'https://api.imagerouter.io/v1/openai', docsUrl: 'https://docs.imagerouter.io/api-reference/image-generation/', supportsCustomModel: true, customModelPlaceholder: 'openai/gpt-image-2 or xAI/grok-imagine-video' },
   { id: 'openrouter', label: 'OpenRouter', hint: 'Unified gateway for image + video models', integrated: true, credentialsRequired: true, settingsVisible: true, defaultBaseUrl: 'https://openrouter.ai/api/v1', docsUrl: 'https://openrouter.ai/settings/keys' },
   { id: 'custom-image', label: 'Custom Image API', hint: 'OpenAI-compatible images/generations + images/edits (local or cloud)', integrated: true, docsUrl: 'https://platform.openai.com/docs/api-reference/images', supportsCustomModel: true, customModelPlaceholder: 'my-image-model' },
   { id: 'comfyui', label: 'ComfyUI', hint: 'Local JSON workflow server (planned adapter)', integrated: false, defaultBaseUrl: 'http://127.0.0.1:8188', docsUrl: 'https://docs.comfy.org/development/core-concepts/workflow' },
   { id: 'sdcpp', label: 'stable-diffusion.cpp', hint: 'Local native async server · loopback, no API key', integrated: true, credentialsRequired: false, defaultBaseUrl: 'http://127.0.0.1:1234', docsUrl: 'https://github.com/leejet/stable-diffusion.cpp/blob/master/examples/server/api.md' },
-  { id: 'bfl', label: 'Black Forest Labs', hint: 'FLUX 1.1 Pro / FLUX Pro / Dev', integrated: false, defaultBaseUrl: 'https://api.bfl.ai' },
-  { id: 'fal', label: 'Fal.ai', hint: 'FLUX / Sora / Veo / Wan / Ideogram / Recraft and any fal-ai/* model', integrated: true, defaultBaseUrl: 'https://fal.run', supportsCustomModel: true },
+  { id: 'bfl', label: 'Black Forest Labs', hint: 'FLUX 1.1 Pro / FLUX Pro / Dev', integrated: false, defaultBaseUrl: 'https://api.bfl.ai', docsUrl: 'https://docs.bfl.ai/quick_start/create_account' },
+  { id: 'fal', label: 'Fal.ai', hint: 'FLUX / Sora / Veo / Wan / Ideogram / Recraft and any fal-ai/* model', integrated: true, defaultBaseUrl: 'https://fal.run', docsUrl: 'https://fal.ai/dashboard/keys', supportsCustomModel: true },
   { id: 'kie', label: 'Kie.ai', hint: 'Kling / Seedance / Flux / Qwen / Grok Imagine via one prepaid credit pool', integrated: true, defaultBaseUrl: 'https://api.kie.ai' },
   { id: 'higgsfield', label: 'Higgsfield', hint: 'Uses your Higgsfield subscription credits via the connected MCP — connect it under Settings → MCP servers', integrated: true, supportsCustomModel: true },
-  { id: 'leonardo', label: 'Leonardo.ai', hint: 'Phoenix / Kino XL / FLUX', integrated: true, credentialsRequired: true, settingsVisible: true, defaultBaseUrl: 'https://cloud.leonardo.ai/api/rest/v1' },
-  { id: 'replicate', label: 'Replicate', hint: 'FLUX / SDXL / Ideogram', integrated: false, defaultBaseUrl: 'https://api.replicate.com' },
-  { id: 'google', label: 'Google AI / Vertex', hint: 'Imagen 4 / Veo 3 / Lyria', integrated: false },
-  { id: 'kling', label: 'Kuaishou Kling', hint: 'Kling 1.6 / 2.0 video', integrated: false },
+  { id: 'leonardo', label: 'Leonardo.ai', hint: 'Phoenix / Kino XL / FLUX', integrated: true, credentialsRequired: true, settingsVisible: true, defaultBaseUrl: 'https://cloud.leonardo.ai/api/rest/v1', docsUrl: 'https://docs.leonardo.ai/docs/create-an-api-key' },
+  { id: 'replicate', label: 'Replicate', hint: 'FLUX / SDXL / Ideogram', integrated: false, defaultBaseUrl: 'https://api.replicate.com/v1', docsUrl: 'https://replicate.com/account/api-tokens' },
+  { id: 'google', label: 'Google AI / Vertex', hint: 'Imagen 4 / Veo 3 / Lyria', integrated: false, docsUrl: 'https://ai.google.dev/gemini-api/docs/api-key' },
+  { id: 'kling', label: 'Kuaishou Kling', hint: 'Kling 1.6 / 2.0 video', integrated: false, docsUrl: 'https://klingai.com/dev-center' },
   { id: 'midjourney', label: 'Midjourney (proxy)', hint: 'midjourney-v7', integrated: false },
-  { id: 'minimax', label: 'MiniMax', hint: 'TTS / image-01 / video-01', integrated: true, defaultBaseUrl: 'https://api.minimaxi.chat/v1' },
+  { id: 'minimax', label: 'MiniMax', hint: 'TTS / image-01 / video-01', integrated: true, defaultBaseUrl: 'https://api.minimaxi.chat/v1', docsUrl: 'https://platform.minimaxi.com' },
   { id: 'suno', label: 'Suno', hint: 'Music generation', integrated: false },
   { id: 'udio', label: 'Udio', hint: 'Music generation', integrated: false },
   {
@@ -62,7 +62,7 @@ export const MEDIA_PROVIDERS: MediaProvider[] = [
     defaultBaseUrl: 'https://api.elevenlabs.io',
     docsUrl: 'https://elevenlabs.io/app/settings/api-keys',
   },
-  { id: 'fishaudio', label: 'FishAudio', hint: 'Speech / voice clone', integrated: true, defaultBaseUrl: 'https://api.fish.audio' },
+  { id: 'fishaudio', label: 'FishAudio', hint: 'Speech / voice clone', integrated: true, defaultBaseUrl: 'https://api.fish.audio', docsUrl: 'https://fish.audio' },
   {
     id: 'senseaudio',
     label: 'SenseAudio',
@@ -81,10 +81,10 @@ export const MEDIA_PROVIDERS: MediaProvider[] = [
     defaultBaseUrl: 'https://aihubmix.com/v1',
     docsUrl: 'https://docs.aihubmix.com',
     supportsCustomModel: true,
-    customModelPlaceholder: 'gpt-image-2 or dall-e-3',
+    customModelPlaceholder: 'gpt-image-1 or dall-e-3',
   },
-  { id: 'tavily', label: 'Tavily Search', hint: 'Agent-callable web research', integrated: true, defaultBaseUrl: 'https://api.tavily.com' },
-  { id: 'stub', label: 'Stub (placeholder)', hint: 'Deterministic local placeholder bytes', integrated: true },
+  { id: 'tavily', label: 'Tavily Search', hint: 'Agent-callable web research', integrated: true, defaultBaseUrl: 'https://api.tavily.com', docsUrl: 'https://app.tavily.com/home' },
+  { id: 'stub', label: 'Stub (placeholder)', hint: 'Deterministic local placeholder bytes', integrated: true, settingsVisible: false },
 ];
 
 export const IMAGE_MODELS: MediaModel[] = [
@@ -146,12 +146,12 @@ export const IMAGE_MODELS: MediaModel[] = [
   { id: 'ideogram-v2', label: 'ideogram-v2', hint: 'Replicate · typography', provider: 'replicate', caps: ['t2i'] },
   { id: 'sdxl', label: 'stable-diffusion-xl', hint: 'Replicate · SDXL', provider: 'replicate', caps: ['t2i'] },
 
-  { id: 'flux-pro-ultra', label: 'flux-pro-ultra', hint: 'Fal · FLUX 1.1 Pro Ultra · highest quality (~60–180s)', provider: 'fal', caps: ['t2i'] },
-  { id: 'flux-dev-fal', label: 'flux-dev (fal)', hint: 'Fal · FLUX Dev · balanced quality/speed (~15–40s)', provider: 'fal', caps: ['t2i'] },
-  { id: 'flux-schnell-fal', label: 'flux-schnell (fal)', hint: 'Fal · FLUX Schnell · fastest (~3–8s)', provider: 'fal', caps: ['t2i'] },
-  { id: 'ideogram-v3-fal', label: 'ideogram-v3', hint: 'Fal · Ideogram v3 · typography + design (~15–30s)', provider: 'fal', caps: ['t2i'] },
-  { id: 'recraft-v3-fal', label: 'recraft-v3', hint: 'Fal · Recraft v3 · vector + illustration (~15–30s)', provider: 'fal', caps: ['t2i'] },
-  { id: 'sd-3.5', label: 'stable-diffusion-3.5', hint: 'Fal · SD 3.5 (~20–40s)', provider: 'fal', caps: ['t2i'] },
+  { id: 'flux-pro-ultra', label: 'flux-pro-ultra', hint: 'Fal · FLUX 1.1 Pro Ultra · highest quality', provider: 'fal', caps: ['t2i'] },
+  { id: 'flux-dev-fal', label: 'flux-dev (fal)', hint: 'Fal · FLUX Dev · open weights', provider: 'fal', caps: ['t2i'] },
+  { id: 'flux-schnell-fal', label: 'flux-schnell (fal)', hint: 'Fal · FLUX Schnell · fastest / cheapest', provider: 'fal', caps: ['t2i'] },
+  { id: 'ideogram-v3-fal', label: 'ideogram-v3', hint: 'Fal · Ideogram v3 · typography + design', provider: 'fal', caps: ['t2i'] },
+  { id: 'recraft-v3-fal', label: 'recraft-v3', hint: 'Fal · Recraft v3 · vector + illustration', provider: 'fal', caps: ['t2i'] },
+  { id: 'sd-3.5', label: 'stable-diffusion-3.5', hint: 'Fal · SD 3.5', provider: 'fal', caps: ['t2i'] },
 
   // Kie.ai — unified createTask/recordInfo jobs API. Docs verified against
   // docs.kie.ai/market/<family>/<variant> (see media/index.ts provider
@@ -241,12 +241,17 @@ export const VIDEO_MODELS: MediaModel[] = [
 ];
 
 export const AUDIO_MODELS_BY_KIND: Record<AudioKind, MediaModel[]> = {
+  // The default must name a model the daemon can actually fulfil. suno, udio
+  // and google are all `integrated: false` and have no renderer, so defaulting
+  // to one of them hands the user a model the picker filters out and that
+  // generation cannot serve. minimax-music is the only music model with a
+  // renderer, so it is the default.
   music: [
-    { id: 'suno-v5', label: 'suno-v5', hint: 'Suno · default', provider: 'suno', caps: ['music'], default: true },
+    { id: 'minimax-music', label: 'minimax-music', hint: 'MiniMax · Music 3.0', provider: 'minimax', caps: ['music'], default: true },
+    { id: 'suno-v5', label: 'suno-v5', hint: 'Suno', provider: 'suno', caps: ['music'] },
     { id: 'suno-v4-5', label: 'suno-v4.5', hint: 'Suno', provider: 'suno', caps: ['music'] },
     { id: 'udio-v2', label: 'udio-v2', hint: 'Udio', provider: 'udio', caps: ['music'] },
     { id: 'lyria-2', label: 'lyria-2', hint: 'Google', provider: 'google', caps: ['music'] },
-    { id: 'minimax-music', label: 'minimax-music', hint: 'MiniMax · Music 3.0', provider: 'minimax', caps: ['music'] },
   ],
   speech: [
     { id: 'minimax-tts', label: 'minimax-tts', hint: 'MiniMax', provider: 'minimax', caps: ['tts'], default: true },
