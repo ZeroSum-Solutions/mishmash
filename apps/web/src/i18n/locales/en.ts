@@ -665,7 +665,6 @@ export const en: Dict = {
   'entry.navDesignSystems': 'Design systems',
   'entry.navDesignLibrary': 'Design Library',
   'entry.navStoryboard': 'Storyboard',
-  'entry.navBrands': 'Design System',
   'entry.navIntegrations': 'Integrations',
   'messageCenter.openAria': 'Open message center',
   'messageCenter.unreadCount': '{count} unread',

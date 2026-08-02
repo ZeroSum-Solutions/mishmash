@@ -1003,7 +1003,6 @@ export interface Dict {
   'entry.navDesignSystems': string;
   'entry.navDesignLibrary': string;
   'entry.navStoryboard': string;
-  'entry.navBrands': string;
   'entry.navIntegrations': string;
   // Client message center
   'messageCenter.openAria': string;
