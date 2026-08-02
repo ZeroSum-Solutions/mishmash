@@ -58,6 +58,21 @@ describe('computeModelRoutingDisplayState', () => {
       computeModelRoutingDisplayState('claude-sonnet-4-5', 'claude-sonnet-4-5', 'some-other-model'),
     ).toBe('unverified');
   });
+
+  // The 'default' sentinel means "no explicit model was named" -- resolving it
+  // to the lane's actual model is normal resolution, not a substitution. The
+  // amber "Model substituted" banner used to fire on every default-lane run
+  // (requested "default", ran "claude-opus-5[1m]"), which teaches users to
+  // ignore it on the one run where it matters.
+  it('never reports "substituted" when the request was the default sentinel', () => {
+    expect(
+      computeModelRoutingDisplayState('default', 'claude-opus-5[1m]', 'claude-opus-5[1m]'),
+    ).toBe('verified');
+    expect(computeModelRoutingDisplayState('default', 'claude-opus-5[1m]', null)).toBe('unverified');
+    expect(
+      computeModelRoutingDisplayState('default', 'claude-opus-5[1m]', 'some-other-model'),
+    ).toBe('unverified');
+  });
 });
 
 describe('buildModelRouting', () => {

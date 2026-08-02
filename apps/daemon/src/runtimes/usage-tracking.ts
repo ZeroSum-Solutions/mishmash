@@ -69,9 +69,23 @@ export interface ProjectUsageSummary {
 export const KNOWN_MODEL_PRICING_USD_PER_MILLION: Readonly<
   Record<string, { input: number; output: number }>
 > = {
+  // Claude rows verified 2026-08-02 against
+  // platform.claude.com/docs/en/about-claude/pricing. Two corrections from
+  // that pass: opus-4-5 carried Opus 4.1's $15/$75 and haiku-4-5 carried
+  // Haiku 3.5's $0.80/$4. Sonnet 5 uses the standard $3/$15 rate — an intro
+  // $2/$10 runs through 2026-08-31 only, so this slightly overestimates
+  // until then rather than silently undercounting after.
+  'claude-fable-5': { input: 10, output: 50 },
+  'claude-opus-5': { input: 5, output: 25 },
+  'claude-sonnet-5': { input: 3, output: 15 },
   'claude-sonnet-4-5': { input: 3, output: 15 },
-  'claude-opus-4-5': { input: 15, output: 75 },
-  'claude-haiku-4-5': { input: 0.8, output: 4 },
+  'claude-opus-4-5': { input: 5, output: 25 },
+  'claude-haiku-4-5': { input: 1, output: 5 },
+  // GPT-5.6 tiers under the slugs `codex debug models` actually reports
+  // (gpt-5.6-sol/-terra/-luna), at the published post-2026-07-30 rates.
+  'gpt-5.6-sol': { input: 5, output: 30 },
+  'gpt-5.6-terra': { input: 2, output: 12 },
+  'gpt-5.6-luna': { input: 0.2, output: 1.2 },
   'gpt-5': { input: 2.5, output: 10 },
   'gpt-5-codex': { input: 2.5, output: 10 },
   'gpt-5.1': { input: 2.5, output: 10 },
@@ -108,7 +122,17 @@ export function priceForModel(
     return { input: live.inputPriceUsdPerMillion, output: live.outputPriceUsdPerMillion };
   }
   const known = KNOWN_MODEL_PRICING_USD_PER_MILLION[model];
-  return known ? { ...known } : null;
+  if (known) return { ...known };
+  // Claude CLIs report context-window variants as `<model>[1m]`-style ids.
+  // "Claude 4.6 and later models include the full 1M token context window at
+  // standard pricing" (pricing docs, read 2026-08-02), so the bracket suffix
+  // is a window flag on the same SKU — price it as the base model.
+  const baseModel = model.replace(/\[[^\]]*\]$/, '');
+  if (baseModel !== model) {
+    const base = KNOWN_MODEL_PRICING_USD_PER_MILLION[baseModel];
+    if (base) return { ...base };
+  }
+  return null;
 }
 
 interface RunEventLike {
