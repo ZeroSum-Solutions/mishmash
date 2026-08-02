@@ -4461,6 +4461,10 @@ export interface Dict {
   'storyboard.briefSectionLabel': string;
   'storyboard.briefPlaceholder': string;
   'storyboard.briefCreateShot': string;
+  'storyboard.draftShotCountLabel': string;
+  'storyboard.draftStoryboard': string;
+  'storyboard.draftingStoryboard': string;
+  'storyboard.draftPartial': string;
   'storyboard.blankSectionLabel': string;
   'storyboard.noMotionPromptYet': string;
   'storyboard.retry': string;

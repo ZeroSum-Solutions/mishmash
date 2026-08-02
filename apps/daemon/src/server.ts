@@ -3330,6 +3330,7 @@ export async function startServer({
     projectStore: projectStoreDeps,
     projectFiles: projectFileDeps,
     media: mediaDeps,
+    validation: validationDeps,
   });
 
   const pluginRouteHelpers = {

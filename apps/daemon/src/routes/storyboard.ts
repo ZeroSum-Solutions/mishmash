@@ -23,6 +23,7 @@ import path from 'node:path';
 import type { Express } from 'express';
 import type {
   AssembleStoryboardFinishOptions,
+  DraftStoryboardShotsRequest,
   Storyboard,
   StoryboardFrameRef,
   StoryboardMoodDraft,
@@ -31,10 +32,25 @@ import type {
   StoryboardShotStatus,
   StoryboardSummary,
 } from '@open-design/contracts';
-import { isStoryboardUploadMimeAllowed, STORYBOARD_UPLOAD_MAX_BYTES } from '@open-design/contracts';
+import {
+  isStoryboardUploadMimeAllowed,
+  STORYBOARD_DRAFT_BRIEF_MAX_CHARS,
+  STORYBOARD_DRAFT_SHOT_COUNT_DEFAULT,
+  STORYBOARD_DRAFT_SHOT_COUNT_MAX,
+  STORYBOARD_DRAFT_SHOT_COUNT_MIN,
+  STORYBOARD_UPLOAD_MAX_BYTES,
+} from '@open-design/contracts';
 import type { RouteDeps } from '../server-context.js';
+import { isFinalizeProviderProtocol } from '../design/finalize-design.js';
+import { resolveProviderConfig } from '../media/config.js';
+import { modelsForSurface } from '../media/models.js';
 import { isSafeId, mimeFor } from '../projects.js';
 import { assembleStoryboard, getDoneShots } from '../storyboards/assemble.js';
+import {
+  DRAFT_TEXT_PROVIDER_IDS,
+  draftShotsFromBrief,
+  resolveDraftTextProvider,
+} from '../storyboards/draft-from-brief.js';
 import {
   deleteStoryboard,
   listStoryboards,
@@ -43,7 +59,7 @@ import {
 } from '../storyboards/store.js';
 
 export interface RegisterStoryboardRoutesDeps
-  extends RouteDeps<'http' | 'paths' | 'ids' | 'db' | 'projectStore' | 'projectFiles' | 'media'> {}
+  extends RouteDeps<'http' | 'paths' | 'ids' | 'db' | 'projectStore' | 'projectFiles' | 'media' | 'validation'> {}
 
 /** Hidden project every generated storyboard still/clip lives under. Auto-created on first use. */
 const STORYBOARD_MEDIA_PROJECT_ID = 'storyboard-media';
@@ -154,6 +170,22 @@ async function assertSafeStoryboardWriteTarget(projectDir: string, absoluteTarge
     return false;
   }
   return true;
+}
+
+/**
+ * Per-shot duration for a drafted shot when the storyboard has no existing
+ * shot to inherit one from. Inside the MIN/MAX shot duration range.
+ */
+const DEFAULT_DRAFT_SHOT_DURATION_SEC = 5;
+
+/**
+ * The media catalog's own default video model. Drafting into an empty
+ * storyboard needs a model id, and reading it from the catalog avoids
+ * planting a second, drifting opinion about which model is the default.
+ */
+function defaultVideoModelId(): string {
+  const videoModels = modelsForSurface('video');
+  return videoModels.find((entry) => entry.default)?.id ?? videoModels[0]?.id ?? '';
 }
 
 function nowIso(): string {
@@ -343,6 +375,7 @@ function validateAssembleFinish(
 
 export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRoutesDeps) {
   const { isLocalSameOrigin, resolvedPortRef, sendApiError } = ctx.http;
+  const { validateExternalApiBaseUrl } = ctx.validation;
   const { PROJECT_ROOT, PROJECTS_DIR, RUNTIME_DATA_DIR } = ctx.paths;
   const { randomUUID } = ctx.ids;
   const db = ctx.db;
@@ -570,6 +603,225 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
     child.on('error', () => {});
     child.unref();
     res.status(204).end();
+  });
+
+  /**
+   * Turn a free-text creative brief into several draft shots appended to this
+   * storyboard.
+   *
+   * Every validation and the optimistic-concurrency check run BEFORE the text
+   * provider is resolved or called, so a malformed or stale request can never
+   * reach — or bill — a provider. Drafted shots land as `draft` status with no
+   * frames: they are a starting point the user then edits and renders, exactly
+   * like a hand-added shot.
+   */
+  app.post('/api/storyboards/:id/draft-shots', async (req, res) => {
+    if (!requireLocal(req, res)) return;
+    if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
+    const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+    if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+
+    const body = (req.body ?? {}) as DraftStoryboardShotsRequest;
+
+    const brief = typeof body.brief === 'string' ? body.brief.trim() : '';
+    if (!brief) return sendApiError(res, 400, 'BAD_REQUEST', 'brief must be a non-empty string');
+    if (brief.length > STORYBOARD_DRAFT_BRIEF_MAX_CHARS) {
+      return sendApiError(
+        res,
+        400,
+        'BAD_REQUEST',
+        `brief must be at most ${STORYBOARD_DRAFT_BRIEF_MAX_CHARS} characters`,
+      );
+    }
+
+    let shotCount = STORYBOARD_DRAFT_SHOT_COUNT_DEFAULT;
+    if (body.shotCount !== undefined) {
+      if (
+        typeof body.shotCount !== 'number' ||
+        !Number.isInteger(body.shotCount) ||
+        body.shotCount < STORYBOARD_DRAFT_SHOT_COUNT_MIN ||
+        body.shotCount > STORYBOARD_DRAFT_SHOT_COUNT_MAX
+      ) {
+        return sendApiError(
+          res,
+          400,
+          'BAD_REQUEST',
+          `shotCount must be an integer between ${STORYBOARD_DRAFT_SHOT_COUNT_MIN} and ${STORYBOARD_DRAFT_SHOT_COUNT_MAX}`,
+        );
+      }
+      shotCount = body.shotCount;
+    }
+
+    // Per-shot settings inherit from the storyboard's last shot so a draft
+    // appended to work in progress matches what is already on the board; an
+    // empty storyboard falls back to the catalog's own default video model
+    // rather than a hardcoded id.
+    const lastShot = storyboard.shots.length ? storyboard.shots[storyboard.shots.length - 1] : undefined;
+
+    let durationSec = lastShot?.durationSec ?? DEFAULT_DRAFT_SHOT_DURATION_SEC;
+    if (body.durationSec !== undefined) {
+      if (
+        typeof body.durationSec !== 'number' ||
+        body.durationSec < MIN_SHOT_DURATION_SEC ||
+        body.durationSec > MAX_SHOT_DURATION_SEC
+      ) {
+        return sendApiError(
+          res,
+          400,
+          'BAD_REQUEST',
+          `durationSec must be a number between ${MIN_SHOT_DURATION_SEC} and ${MAX_SHOT_DURATION_SEC}`,
+        );
+      }
+      durationSec = body.durationSec;
+    }
+
+    let resolution: StoryboardResolution = lastShot?.resolution ?? '720p';
+    if (body.resolution !== undefined) {
+      if (typeof body.resolution !== 'string' || !STORYBOARD_RESOLUTIONS.has(body.resolution as any)) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'resolution must be one of 480p|720p|1080p');
+      }
+      resolution = body.resolution;
+    }
+
+    let model = lastShot?.model ?? defaultVideoModelId();
+    if (body.model !== undefined) {
+      if (typeof body.model !== 'string' || !body.model.trim()) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'model must be a non-empty string');
+      }
+      model = body.model.trim();
+    }
+    if (!model) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'model is required: no existing shot to inherit one from');
+    }
+
+    if (body.expectedUpdatedAt !== undefined) {
+      if (typeof body.expectedUpdatedAt !== 'string') {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'expectedUpdatedAt must be a string');
+      }
+      if (body.expectedUpdatedAt !== storyboard.updatedAt) {
+        return res.status(409).json({ error: 'storyboard changed', storyboard });
+      }
+    }
+
+    // BYOK credentials, when supplied, are used for this one call and never
+    // stored — same posture as the finalize route.
+    let override;
+    if (body.textProvider !== undefined) {
+      const supplied = body.textProvider as Partial<DraftStoryboardShotsRequest['textProvider']>;
+      if (!supplied || typeof supplied !== 'object') {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'textProvider must be an object');
+      }
+      if (!isFinalizeProviderProtocol(supplied.protocol)) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'textProvider.protocol is not a supported protocol');
+      }
+      if (typeof supplied.apiKey !== 'string' || !supplied.apiKey.trim()) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'textProvider.apiKey must be a non-empty string');
+      }
+      if (typeof supplied.model !== 'string' || !supplied.model.trim()) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'textProvider.model must be a non-empty string');
+      }
+      if (supplied.baseUrl !== undefined && typeof supplied.baseUrl !== 'string') {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'textProvider.baseUrl must be a string');
+      }
+      // A caller-supplied baseUrl makes the DAEMON issue an outbound request
+      // on the caller's behalf, so it must clear the same DNS-aware SSRF
+      // guard the finalize route applies to the identical field. requireLocal
+      // is not a substitute: it constrains who may call us, not where we may
+      // then connect — loopback ports and RFC1918 hosts the browser could
+      // never reach directly are reachable from here.
+      if (supplied.baseUrl) {
+        const validated = await validateExternalApiBaseUrl(supplied.baseUrl);
+        if (validated.error) {
+          return sendApiError(
+            res,
+            validated.forbidden ? 403 : 400,
+            validated.forbidden ? 'FORBIDDEN' : 'BAD_REQUEST',
+            validated.error,
+          );
+        }
+      }
+      override = {
+        protocol: supplied.protocol,
+        apiKey: supplied.apiKey.trim(),
+        model: supplied.model.trim(),
+        ...(supplied.baseUrl ? { baseUrl: supplied.baseUrl } : {}),
+      };
+    }
+
+    const provider = await resolveDraftTextProvider(
+      (providerId) => resolveProviderConfig(PROJECT_ROOT, providerId),
+      override,
+    );
+    if (!provider) {
+      return sendApiError(
+        res,
+        400,
+        'NO_TEXT_PROVIDER',
+        `drafting from a brief needs a text-capable provider: add an API key for one of ${DRAFT_TEXT_PROVIDER_IDS.join(', ')} under Settings, or send textProvider with this request`,
+      );
+    }
+
+    // Abort the provider call if the client goes away, so a browser tab that
+    // closes mid-draft stops the outbound request instead of leaving the
+    // daemon holding it (and paying for it) to completion.
+    const clientGone = new AbortController();
+    const abortOnClose = () => clientGone.abort();
+    req.on('close', abortOnClose);
+
+    let drafted;
+    try {
+      drafted = await draftShotsFromBrief({ brief, shotCount, provider, signal: clientGone.signal });
+    } catch (err) {
+      // Deliberately surfaces only the error's own message — never the raw
+      // upstream body, which can echo request content back.
+      const message = err instanceof Error ? err.message : 'text provider call failed';
+      return sendApiError(res, 502, 'UPSTREAM_UNAVAILABLE', message);
+    } finally {
+      req.off('close', abortOnClose);
+    }
+
+    // Re-read before writing. The provider call above is a multi-second
+    // network round-trip, and `writeStoryboard` replaces the whole file — so
+    // persisting the snapshot taken before that call would silently discard
+    // any edit that landed while it was in flight (a PATCH from the editor, a
+    // completed render, a second draft). The entry-time expectedUpdatedAt
+    // check cannot cover that window; only a re-check against the current doc
+    // can. Appending to the CURRENT doc, rather than 409-ing, keeps the
+    // expensive draft result usable while still never clobbering a
+    // concurrent write.
+    //
+    // Scope of the guarantee, precisely: this closes the SECONDS-WIDE window
+    // spanning the provider call. It does not serialize the remaining
+    // read-modify-write against a writer that commits between this re-read
+    // and the write below — that residual window is the same event-loop-width
+    // race every other storyboard writer already has (PATCH, uploads,
+    // render-shot completion), and closing it properly needs a per-storyboard
+    // CAS/lock primitive in the store that all of them adopt together. Tracked
+    // as a follow-up rather than half-solved here for one route.
+    const current = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+    if (!current) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard was deleted while drafting');
+    if (body.expectedUpdatedAt !== undefined && current.updatedAt !== storyboard.updatedAt) {
+      // The caller asked for optimistic concurrency explicitly, so a write
+      // that landed mid-draft is reported rather than silently merged.
+      return res.status(409).json({ error: 'storyboard changed', storyboard: current });
+    }
+
+    const nextOrder = current.shots.reduce((max, shot) => Math.max(max, shot.order), -1) + 1;
+    const appended: StoryboardShot[] = drafted.map((spec, index) => ({
+      id: randomUUID(),
+      order: nextOrder + index,
+      title: spec.title,
+      motionPrompt: spec.motionPrompt,
+      model,
+      resolution,
+      durationSec,
+      status: 'draft',
+    }));
+
+    current.shots = [...current.shots, ...appended];
+    current.updatedAt = nowIso();
+    await writeStoryboard(RUNTIME_DATA_DIR, current);
+    res.json({ storyboard: current, drafted: appended.length });
   });
 
   // Generates a still (or, for the mood-exploration lane, a cheap t2v clip)

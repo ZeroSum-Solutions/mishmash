@@ -3002,6 +3002,8 @@ export async function startDesignLibraryProject(
 // --- Storyboard ---------------------------------------------------------
 
 import type {
+  DraftStoryboardShotsRequest,
+  DraftStoryboardShotsResponse,
   GenerateStoryboardFrameRequest,
   GenerateStoryboardFrameResponse,
   PatchStoryboardRequest,
@@ -3099,6 +3101,41 @@ export async function patchStoryboard(
     if (!resp.ok) return { ok: false, status: resp.status, message: await readStoryboardApiError(resp) };
     const data = (await resp.json()) as { storyboard: Storyboard };
     return { ok: true, value: data.storyboard };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
+/**
+ * POST /api/storyboards/:id/draft-shots — drafts several shots at once from
+ * a brief (as opposed to the single-shot addShotFromPrompt client-only
+ * path). Same 409/expectedUpdatedAt optimistic-concurrency shape as
+ * patchStoryboard above, since a draft also appends to and replaces the
+ * server's shots array.
+ */
+export async function draftStoryboardShots(
+  id: string,
+  body: DraftStoryboardShotsRequest,
+): Promise<StoryboardApiResult<DraftStoryboardShotsResponse>> {
+  try {
+    const resp = await fetch(`/api/storyboards/${encodeURIComponent(id)}/draft-shots`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (resp.status === 409) {
+      // Same conflict envelope as patchStoryboard's 409 branch (see its
+      // comment above): {error:'storyboard changed', storyboard:<current doc>}.
+      const payload = (await resp.json().catch(() => null)) as { error?: string; storyboard?: Storyboard } | null;
+      return {
+        ok: false,
+        status: 409,
+        message: (payload && typeof payload.error === 'string' && payload.error) || 'storyboard changed',
+        conflict: payload?.storyboard,
+      };
+    }
+    if (!resp.ok) return { ok: false, status: resp.status, message: await readStoryboardApiError(resp) };
+    return { ok: true, value: (await resp.json()) as DraftStoryboardShotsResponse };
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
   }

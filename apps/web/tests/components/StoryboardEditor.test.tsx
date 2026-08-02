@@ -8,9 +8,11 @@ const mockPatchStoryboard = vi.fn();
 const mockUploadStoryboardFrame = vi.fn();
 const mockReadFileAsDataUrl = vi.fn();
 const mockGenerateStoryboardFrame = vi.fn();
+const mockDraftStoryboardShots = vi.fn();
 
 vi.mock('../../src/providers/registry', () => ({
   assembleStoryboard: vi.fn(),
+  draftStoryboardShots: (...args: unknown[]) => mockDraftStoryboardShots(...args),
   exportStoryboardSlider: vi.fn(),
   generateStoryboardFrame: (...args: unknown[]) => mockGenerateStoryboardFrame(...args),
   openStoryboardFolder: vi.fn(),
@@ -337,5 +339,119 @@ describe('StoryboardEditor shots empty state (PRD C4 outcome 2)', () => {
 
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  });
+});
+
+describe('StoryboardEditor draft-the-whole-storyboard-from-a-brief', () => {
+  it('calls draftStoryboardShots with the brief, shot count, and expectedUpdatedAt, and applies the returned storyboard', async () => {
+    const draftedDoc = baseDoc({
+      shots: [baseShot(), baseShot({ id: 'shot-2', order: 1, motionPrompt: 'a slow pan across the skyline' })],
+      updatedAt: '2026-01-01T00:05:00.000Z',
+    });
+    mockDraftStoryboardShots.mockResolvedValue({ ok: true, value: { storyboard: draftedDoc, drafted: 1 } });
+
+    render(<StoryboardEditor storyboard={baseDoc({ shots: [] })} configured={{}} onBack={() => {}} />);
+
+    fireEvent.change(screen.getByTestId('shot-brief-input'), { target: { value: 'a 2-shot city teaser' } });
+    fireEvent.click(screen.getByTestId('shot-draft-submit'));
+
+    await waitFor(() => expect(mockDraftStoryboardShots).toHaveBeenCalledTimes(1));
+    expect(mockDraftStoryboardShots).toHaveBeenCalledWith('sb-1', {
+      brief: 'a 2-shot city teaser',
+      shotCount: 4,
+      expectedUpdatedAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('shot-row')).toHaveLength(2);
+    });
+  });
+
+  it('surfaces the daemon error message as-is when draftStoryboardShots fails (e.g. NO_TEXT_PROVIDER)', async () => {
+    mockDraftStoryboardShots.mockResolvedValue({
+      ok: false,
+      message: 'Add a text-capable provider under Settings to draft a storyboard.',
+    });
+
+    render(<StoryboardEditor storyboard={baseDoc({ shots: [] })} configured={{}} onBack={() => {}} />);
+
+    fireEvent.change(screen.getByTestId('shot-brief-input'), { target: { value: 'a 2-shot city teaser' } });
+    fireEvent.click(screen.getByTestId('shot-draft-submit'));
+
+    await waitFor(() =>
+      expect(screen.getByText('Add a text-capable provider under Settings to draft a storyboard.')).toBeTruthy(),
+    );
+    expect(screen.queryAllByTestId('shot-row')).toHaveLength(0);
+  });
+
+  // FIX 3 (MEDIUM): result.value.drafted (how many shots the daemon
+  // actually appended) was ignored entirely — a user asking for 6 shots who
+  // got 2 back had no way to know without counting rows by hand.
+  it('surfaces a partial-fulfillment message when drafted is fewer than the requested shot count (FIX 3)', async () => {
+    const draftedDoc = baseDoc({
+      shots: [baseShot()],
+      updatedAt: '2026-01-01T00:05:00.000Z',
+    });
+    mockDraftStoryboardShots.mockResolvedValue({ ok: true, value: { storyboard: draftedDoc, drafted: 1 } });
+
+    render(<StoryboardEditor storyboard={baseDoc({ shots: [] })} configured={{}} onBack={() => {}} />);
+
+    fireEvent.change(screen.getByTestId('shot-brief-input'), { target: { value: 'a 4-shot product launch teaser' } });
+    fireEvent.click(screen.getByTestId('shot-draft-submit'));
+
+    await waitFor(() => expect(mockDraftStoryboardShots).toHaveBeenCalledTimes(1));
+    // Requested the default shot count (4, per the earlier test in this
+    // file) but the daemon only drafted 1.
+    await waitFor(() => {
+      const notice = screen.getByTestId('shot-draft-notice');
+      expect(notice.textContent).toBe('Drafted 1 of 4 shots. Try a more detailed brief to fill in the rest.');
+      // The draft SUCCEEDED — a shortfall is informational, so it is
+      // announced politely as a status and must not render through the
+      // error surface in danger styling.
+      expect(notice.getAttribute('role')).toBe('status');
+      expect(screen.queryByTestId('shot-draft-error')).toBeNull();
+    });
+  });
+
+  it('does not surface a partial-fulfillment message when drafted meets the requested shot count', async () => {
+    const draftedDoc = baseDoc({
+      shots: [baseShot(), baseShot({ id: 'shot-2', order: 1 }), baseShot({ id: 'shot-3', order: 2 }), baseShot({ id: 'shot-4', order: 3 })],
+      updatedAt: '2026-01-01T00:05:00.000Z',
+    });
+    mockDraftStoryboardShots.mockResolvedValue({ ok: true, value: { storyboard: draftedDoc, drafted: 4 } });
+
+    render(<StoryboardEditor storyboard={baseDoc({ shots: [] })} configured={{}} onBack={() => {}} />);
+
+    fireEvent.change(screen.getByTestId('shot-brief-input'), { target: { value: 'a 4-shot product launch teaser' } });
+    fireEvent.click(screen.getByTestId('shot-draft-submit'));
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('shot-row')).toHaveLength(4);
+    });
+    expect(screen.queryByText(/Drafted \d+ of \d+ shots/)).toBeNull();
+  });
+
+  it('on a 409 conflict, resyncs local state to the server-supplied storyboard and surfaces the conflict message', async () => {
+    const serverDoc = baseDoc({
+      shots: [baseShot({ id: 'shot-server', motionPrompt: 'someone else already added this' })],
+      updatedAt: '2026-01-01T00:02:00.000Z',
+    });
+    mockDraftStoryboardShots.mockResolvedValue({
+      ok: false,
+      status: 409,
+      message: 'storyboard changed',
+      conflict: serverDoc,
+    });
+
+    render(<StoryboardEditor storyboard={baseDoc({ shots: [] })} configured={{}} onBack={() => {}} />);
+
+    fireEvent.change(screen.getByTestId('shot-brief-input'), { target: { value: 'a 2-shot city teaser' } });
+    fireEvent.click(screen.getByTestId('shot-draft-submit'));
+
+    await waitFor(() => expect(screen.getByText('storyboard changed')).toBeTruthy());
+    await waitFor(() => {
+      expect(screen.getAllByTestId('shot-row')).toHaveLength(1);
+    });
+    expect(screen.getByText('someone else already added this')).toBeTruthy();
   });
 });

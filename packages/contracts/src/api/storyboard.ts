@@ -13,6 +13,10 @@
 //
 // Keep this file pure TypeScript — no Node, browser, or daemon imports.
 
+// Draft-from-brief reuses the finalize provider protocol union rather than
+// declaring a second, drifting copy of "which text APIs we can speak to".
+import type { FinalizeProviderProtocol } from './finalize.js';
+
 export type StoryboardFrameOrigin = 'generated' | 'derived' | 'uploaded' | 'previous-shot';
 
 export interface StoryboardFrameRef {
@@ -116,6 +120,63 @@ export interface PatchStoryboardRequest {
 export interface StoryboardConflictResponse {
   error: 'storyboard changed';
   storyboard: Storyboard;
+}
+
+// --- Draft shots from a brief ----------------------------------------------
+
+/**
+ * Bounds for POST /api/storyboards/:id/draft-shots. A brief drafts a handful
+ * of shots, not a feature film: the ceiling keeps one request's provider cost
+ * and the resulting editor scroll bounded, and the floor makes "draft" mean
+ * at least one shot. Shared so the web input and the daemon validate the same
+ * numbers instead of drifting.
+ */
+export const STORYBOARD_DRAFT_SHOT_COUNT_MIN = 1;
+export const STORYBOARD_DRAFT_SHOT_COUNT_MAX = 12;
+export const STORYBOARD_DRAFT_SHOT_COUNT_DEFAULT = 4;
+
+/**
+ * Largest brief accepted. A creative brief is a paragraph or two; anything
+ * longer is almost certainly a paste of unrelated material, and sending it
+ * would burn provider tokens for a worse draft.
+ */
+export const STORYBOARD_DRAFT_BRIEF_MAX_CHARS = 4000;
+
+/**
+ * Caller-supplied text-provider credentials for a draft request (BYOK), the
+ * same shape POST /api/projects/:id/finalize/:provider already accepts. Omit
+ * to let the daemon fall back to a text-capable provider already configured
+ * under Settings → Media providers.
+ */
+export interface DraftStoryboardTextProvider {
+  protocol: FinalizeProviderProtocol;
+  apiKey: string;
+  /** Defaults to the protocol's standard host when omitted. */
+  baseUrl?: string;
+  model: string;
+}
+
+/** Body of POST /api/storyboards/:id/draft-shots. */
+export interface DraftStoryboardShotsRequest {
+  /** The creative brief, in the user's own words. See STORYBOARD_DRAFT_BRIEF_MAX_CHARS. */
+  brief: string;
+  /** Defaults to STORYBOARD_DRAFT_SHOT_COUNT_DEFAULT; clamped to the MIN/MAX above. */
+  shotCount?: number;
+  /** Per-shot duration for the drafted shots. Defaults to the storyboard's existing shots, else 5. */
+  durationSec?: number;
+  /** Defaults to the storyboard's existing shots, else '720p'. */
+  resolution?: StoryboardResolution;
+  /** Video model id for the drafted shots. Defaults to the storyboard's existing shots. */
+  model?: string;
+  /** Optimistic concurrency, same semantics as PatchStoryboardRequest. */
+  expectedUpdatedAt?: string;
+  textProvider?: DraftStoryboardTextProvider;
+}
+
+export interface DraftStoryboardShotsResponse {
+  storyboard: Storyboard;
+  /** How many shots the draft appended — never more than the requested count. */
+  drafted: number;
 }
 
 export interface GenerateStoryboardFrameRequest {

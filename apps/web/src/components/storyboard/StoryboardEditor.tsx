@@ -13,6 +13,7 @@ import { IMAGE_MODELS, MEDIA_ASPECTS, VIDEO_MODELS, type MediaModel } from '../.
 import { isMediaProviderPickerReady } from '../../media/provider-readiness';
 import {
   assembleStoryboard,
+  draftStoryboardShots,
   exportStoryboardSlider,
   generateStoryboardFrame,
   openStoryboardFolder,
@@ -86,6 +87,13 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
   const [shotsUploadBusy, setShotsUploadBusy] = useState(false);
   const [shotsUploadError, setShotsUploadError] = useState<string | null>(null);
   const [shotsDragOver, setShotsDragOver] = useState(false);
+  // "Draft the whole storyboard from a brief" (ShotStartOptions'
+  // onDraftStoryboard) — its own busy/error pair, same shape as
+  // shotsUploadBusy/shotsUploadError above, since it's a distinct daemon
+  // round trip (POST .../draft-shots) unrelated to footer assemble/export.
+  const [draftBriefBusy, setDraftBriefBusy] = useState(false);
+  const [draftBriefError, setDraftBriefError] = useState<string | null>(null);
+  const [draftBriefNotice, setDraftBriefNotice] = useState<string | null>(null);
   const multiFileInputRef = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Which shot's full editor should be OPEN in the ShotDetailsDrawer — at
@@ -253,6 +261,57 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
     const model = defaultVideoModel?.id ?? '';
     const shot = { ...newShot(0, model), motionPrompt };
     runMutation((prev) => withShots(prev, appendShotIfAbsent(prev.shots, { ...shot, order: prev.shots.length })));
+  }
+
+  /**
+   * ShotStartOptions' "draft the whole storyboard" action — a distinct
+   * daemon round trip (POST /api/storyboards/:id/draft-shots) that drafts
+   * several shots from the brief, unlike addShotFromPrompt above (purely
+   * client-side, exactly one shot). Not routed through runMutation: the
+   * daemon returns the full post-draft doc directly, so this only needs to
+   * sync storyboardRef + state to it (same "ref and state together" shape
+   * runMutation's own 409-retry .then callback uses), not apply a local
+   * mutator and PATCH it back.
+   *
+   * Returns whether the draft actually applied (true) or not (false) —
+   * ShotStartOptions awaits this and only clears the typed brief on `true`
+   * (FIX 1), since this is an async daemon round trip and not the
+   * synchronous client-only mutation addShotFromPrompt is.
+   */
+  async function handleDraftStoryboard(brief: string, shotCount: number): Promise<boolean> {
+    setDraftBriefBusy(true);
+    setDraftBriefError(null);
+    setDraftBriefNotice(null);
+    const base = storyboardRef.current;
+    const result = await draftStoryboardShots(base.id, {
+      brief,
+      shotCount,
+      expectedUpdatedAt: base.updatedAt,
+    });
+    if (!aliveRef.current) return false;
+    if (!result.ok) {
+      // On a 409 (see StoryboardApiResult's conflict field), the server's
+      // current doc is attached — resync local state to it so the view
+      // isn't left stale even though the draft itself didn't apply.
+      if (result.status === 409 && result.conflict) {
+        storyboardRef.current = result.conflict;
+        setStoryboard(result.conflict);
+      }
+      setDraftBriefError(result.message);
+      setDraftBriefBusy(false);
+      return false;
+    }
+    storyboardRef.current = result.value.storyboard;
+    setStoryboard(result.value.storyboard);
+    // The daemon can draft fewer shots than requested. That is a successful
+    // outcome, so it goes to the informational notice channel — routing it
+    // through draftBriefError would render a completed draft in danger
+    // styling under an assertive role="alert".
+    if (result.value.drafted < shotCount) {
+      setDraftBriefNotice(t('storyboard.draftPartial', { drafted: result.value.drafted, requested: shotCount }));
+    }
+    setDraftBriefBusy(false);
+    return true;
   }
 
   /**
@@ -664,7 +723,14 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
             {/* Grok design critique G1: the quiet 1-2-3 flow line teaching
                 the shot lifecycle before any shot exists. */}
             <p className={styles.flowHint}>{t('storyboard.flowHint')}</p>
-            <ShotStartOptions onSelectTemplate={addShotFromPrompt} onCreateFromBrief={addShotFromPrompt}>
+            <ShotStartOptions
+              onSelectTemplate={addShotFromPrompt}
+              onCreateFromBrief={addShotFromPrompt}
+              onDraftStoryboard={handleDraftStoryboard}
+              draftBusy={draftBriefBusy}
+              draftError={draftBriefError}
+              draftNotice={draftBriefNotice}
+            >
               {quickAddControls}
             </ShotStartOptions>
           </>
@@ -696,7 +762,14 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
             {quickAddControls}
             <div id="shot-start-options-panel" className={`accordion-collapsible${showMoreStartOptions ? ' open' : ''}`}>
               <div className="accordion-collapsible-inner">
-                <ShotStartOptions onSelectTemplate={addShotFromPrompt} onCreateFromBrief={addShotFromPrompt} />
+                <ShotStartOptions
+                  onSelectTemplate={addShotFromPrompt}
+                  onCreateFromBrief={addShotFromPrompt}
+                  onDraftStoryboard={handleDraftStoryboard}
+                  draftBusy={draftBriefBusy}
+                  draftError={draftBriefError}
+                  draftNotice={draftBriefNotice}
+                />
               </div>
             </div>
           </>
