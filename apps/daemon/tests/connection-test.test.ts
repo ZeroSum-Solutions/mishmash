@@ -4784,3 +4784,50 @@ describe('validateUserProviderBaseUrl: OD_ALLOWED_INTERNAL_HOSTS opt-in (issue #
     expect(result).toMatchObject({ error: 'Internal IPs blocked', forbidden: true });
   });
 });
+
+// Regression spec pinning the guard's intentional split, not describing a
+// bug: loopback is a deliberate carve-out (see the rationale comment on
+// `isLoopbackApiHost` in packages/contracts/src/api/connectionTest.ts) so
+// locally-run model servers (Ollama, a local sd-server) keep working, while
+// RFC1918 private ranges and link-local addresses stay blocked. If either
+// half of this spec goes red, the guard's behavior changed — do not "fix"
+// the loopback assertions to make them block.
+describe('loopback carve-out vs. RFC1918/link-local block (intentional split)', () => {
+  it('accepts loopback base URLs — local model servers are a supported deployment', async () => {
+    const lookup = vi.fn(async (): Promise<DnsLookupAddress[]> => {
+      throw new Error('DNS should never be consulted for a loopback literal');
+    });
+    for (const baseUrl of [
+      'http://127.0.0.1:11434/v1',
+      'http://localhost:11434/v1',
+      'http://[::1]:11434/v1',
+    ]) {
+      const result = await validateBaseUrlResolved(baseUrl, lookup);
+      expect(result.error).toBeUndefined();
+      expect(result.forbidden).toBeUndefined();
+    }
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it('rejects RFC1918 private-range base URLs', async () => {
+    const lookup = vi.fn(async (): Promise<DnsLookupAddress[]> => []);
+    for (const baseUrl of [
+      'http://10.0.0.5:11434/v1',
+      'http://192.168.1.5:8080/v1',
+      'http://172.16.0.1:8080/v1',
+      'http://172.31.255.254:8080/v1',
+    ]) {
+      const result = await validateBaseUrlResolved(baseUrl, lookup);
+      expect(result).toMatchObject({ error: 'Internal IPs blocked', forbidden: true });
+    }
+  });
+
+  it('rejects link-local base URLs (169.254.x, incl. the cloud metadata address)', async () => {
+    const lookup = vi.fn(async (): Promise<DnsLookupAddress[]> => []);
+    const result = await validateBaseUrlResolved(
+      'http://169.254.169.254/latest/meta-data',
+      lookup,
+    );
+    expect(result).toMatchObject({ error: 'Internal IPs blocked', forbidden: true });
+  });
+});

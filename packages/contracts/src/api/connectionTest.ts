@@ -90,6 +90,19 @@ function ipv4MappedToDotted(hostname: string): string | null {
   ].join('.');
 }
 
+// Deliberate carve-out, not an oversight. `validateBaseUrl` /
+// `validateBaseUrlResolved` let loopback hosts through even though they sit
+// outside the public internet, because loopback is the standard way to
+// reach a model server the user is running locally (Ollama, a local
+// stable-diffusion server, etc.) — a supported deployment, not an attack
+// surface. RFC1918 private ranges and link-local addresses are NOT part of
+// this exemption; see `isBlockedExternalApiHostname` below, which still
+// rejects them (they point at other hosts on the operator's network, not
+// the machine running the daemon). If you are here to "harden" this
+// function by removing the loopback allowance, don't — that breaks every
+// local model server integration this guard exists to allow. See the
+// regression spec pinning both halves of this behavior in
+// apps/daemon/tests/connection-test.test.ts.
 export function isLoopbackApiHost(hostname: string): boolean {
   const host = normalizeBracketedIpv6(hostname);
   if (host === 'localhost' || host === '::1') return true;
