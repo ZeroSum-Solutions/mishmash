@@ -777,8 +777,28 @@ export async function generateMedia(args: {
       bytes = result.bytes;
       providerNote = result.providerNote;
       suggestedExt = result.suggestedExt;
-    } else if (def.provider === 'minimax' && surface === 'audio') {
+    // MiniMax is the only provider serving BOTH speech and music, so unlike
+    // its single-kind siblings this branch pair MUST gate on audioKind: an
+    // un-narrowed `provider === 'minimax' && surface === 'audio'` would match
+    // a music request first and render it through the TTS endpoint. A
+    // model/kind mismatch (e.g. minimax-tts asked for as music) never reaches
+    // here — the catalog lookup above rejects it with an explicit
+    // "not registered for surface" error first.
+    } else if (
+      def.provider === 'minimax'
+      && surface === 'audio'
+      && ctx.audioKind === 'speech'
+    ) {
       const result = await renderMinimaxTTS(ctx, credentials);
+      bytes = result.bytes;
+      providerNote = result.providerNote;
+      suggestedExt = result.suggestedExt;
+    } else if (
+      def.provider === 'minimax'
+      && surface === 'audio'
+      && ctx.audioKind === 'music'
+    ) {
+      const result = await renderMinimaxMusic(ctx, credentials);
       bytes = result.bytes;
       providerNote = result.providerNote;
       suggestedExt = result.suggestedExt;
@@ -3235,6 +3255,145 @@ async function renderMinimaxImage(ctx: MediaContext, credentials: ProviderConfig
     bytes,
     providerNote: `minimax/${wireModel} · ${aspectRatio || '1:1'} · ${bytes.length} bytes`,
     suggestedExt: sniffImageExt(bytes),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Provider: MiniMax — Music 3.0 text-to-music generation (synchronous).
+//
+// Docs verified 2026-08-01: https://platform.minimax.io/docs/guides/music-generation
+// (guide) and https://platform.minimax.io/docs/api-reference/music-generation
+// (reference) — POST /v1/music_generation with a JSON body describing the
+// music's style/mood (`prompt`) and optional `lyrics`. Response mirrors the
+// TTS envelope exactly: audio bytes hex-encoded under `data.audio`, wrapped
+// in the same `base_resp` status envelope that distinguishes HTTP-level from
+// API-level failures. The catalog id `minimax-music` resolves to their
+// flagship `music-3.0` model.
+//
+// We request `output_format: 'hex'` (the non-default explicit choice,
+// matching `stream: false` in renderMinimaxTTS) rather than `'url'` because
+// MiniMax's URL responses expire after 24 hours — hex persists at write time
+// and never goes stale, the same reasoning renderMinimaxImage documents for
+// preferring base64 over a signed URL.
+//
+// This lives on the SAME host as image generation (api.minimax.io), NOT the
+// legacy TTS host (api.minimaxi.chat) — see MINIMAX_IMAGE_DEFAULT_BASE_URL's
+// comment above for why credentials.baseUrl is ignored here too: the
+// 'minimax' provider slot is shared across TTS/image/music, and TTS's stored
+// baseUrl is the legacy api.minimaxi.chat/v1 host.
+//
+// DESIGN DECISION (no spec guidance): MediaContext has no dedicated lyrics
+// input slot, and MiniMax's music-3.0 requires `lyrics` unless
+// `is_instrumental: true`. We default every request to instrumental
+// (`is_instrumental: true`) so a plain --prompt call always succeeds without
+// requiring lyrics text the current pipeline has nowhere to plumb through.
+// Revisit if/when the storyboard media pipeline grows a lyrics input.
+// ---------------------------------------------------------------------------
+
+const MINIMAX_MUSIC_DEFAULT_BASE_URL = 'https://api.minimax.io';
+
+/**
+ * Ceiling on decoded music audio. The response carries audio as a hex string
+ * the provider controls, and decoding allocates half its length in bytes — so
+ * this bounds that allocation. A generous multiple of any real generated
+ * track, small enough that a malformed or hostile payload cannot exhaust the
+ * daemon.
+ */
+const MINIMAX_MUSIC_MAX_AUDIO_BYTES = 64 * 1024 * 1024;
+
+// Map our generic catalogue id onto MiniMax's actual wire model name, mirroring
+// MINIMAX_TTS_MODEL_MAP / MINIMAX_IMAGE_MODEL_MAP above.
+const MINIMAX_MUSIC_MODEL_MAP = {
+  'minimax-music': 'music-3.0',
+} as Record<string, string>;
+
+async function renderMinimaxMusic(ctx: MediaContext, credentials: ProviderConfig): Promise<RenderResult> {
+  if (!credentials.apiKey) {
+    throw new Error(
+      'no MiniMax API key — configure it in Settings or set OD_MINIMAX_API_KEY',
+    );
+  }
+  // Base URL precedence mirrors renderMinimaxImage: an env override, else
+  // the api.minimax.io default. credentials.baseUrl is deliberately ignored
+  // (see provider-block comment above).
+  const baseUrl = (
+    process.env.OD_MINIMAX_MUSIC_BASE_URL?.trim() || MINIMAX_MUSIC_DEFAULT_BASE_URL
+  ).replace(/\/+$/, '');
+  const wireModel = ctx.wireModel !== ctx.model
+    ? ctx.wireModel
+    : (MINIMAX_MUSIC_MODEL_MAP[ctx.model] || ctx.model);
+  const prompt = (ctx.prompt && ctx.prompt.trim()) || 'Ambient instrumental background music.';
+
+  const body: Record<string, unknown> = {
+    model: wireModel,
+    prompt,
+    // See DESIGN DECISION above: no lyrics input slot exists yet, so every
+    // request is instrumental-only.
+    is_instrumental: true,
+    output_format: 'hex',
+    audio_setting: {
+      sample_rate: 44100,
+      bitrate: 256000,
+      format: 'mp3',
+    },
+  };
+
+  const resp = await fetch(`${baseUrl}/v1/music_generation`, withMediaRequestInit(ctx, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${credentials.apiKey}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  }));
+  const respText = await resp.text();
+  if (!resp.ok) {
+    throw new Error(`minimax music ${resp.status}: ${truncate(respText, 240)}`);
+  }
+  let data: any;
+  try {
+    data = JSON.parse(respText);
+  } catch {
+    throw new Error(`minimax music non-JSON: ${truncate(respText, 200)}`);
+  }
+  // MiniMax wraps every response in `base_resp`; even an HTTP 200 can
+  // be a logical failure (`status_code !== 0`).
+  if (data?.base_resp && data.base_resp.status_code !== 0) {
+    // status_msg is provider-controlled text that ends up persisted in the
+    // media task's error field and returned by task polling, so it is
+    // truncated like every other upstream body this file surfaces.
+    throw new Error(
+      `minimax music api error ${data.base_resp.status_code}: ${truncate(String(data.base_resp.status_msg || 'unknown'), 240)}`,
+    );
+  }
+  const hex = data?.data?.audio;
+  if (typeof hex !== 'string' || !hex) {
+    throw new Error('minimax music response missing data.audio');
+  }
+  // Bound the decode: `hex` is provider-controlled and Buffer.from allocates
+  // proportionally to it, so an oversized (or malformed odd-length) payload
+  // is rejected before it can be turned into memory.
+  if (hex.length % 2 !== 0) {
+    throw new Error('minimax music returned malformed hex audio');
+  }
+  if (hex.length / 2 > MINIMAX_MUSIC_MAX_AUDIO_BYTES) {
+    throw new Error(
+      `minimax music audio exceeds the ${Math.floor(MINIMAX_MUSIC_MAX_AUDIO_BYTES / (1024 * 1024))} MiB ceiling`,
+    );
+  }
+  const bytes = Buffer.from(hex, 'hex');
+  if (bytes.length === 0) {
+    throw new Error('minimax music decoded zero bytes');
+  }
+  // Pull the duration out of extra_info for the providerNote, mirroring
+  // renderMinimaxTTS's extra_info.audio_length handling above.
+  const xi = data?.extra_info || {};
+  const seconds = xi.music_duration ? Math.round(xi.music_duration / 100) / 10 : '?';
+
+  return {
+    bytes,
+    providerNote: `minimax/${wireModel} · ${seconds}s · ${bytes.length} bytes`,
+    suggestedExt: '.mp3',
   };
 }
 
