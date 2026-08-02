@@ -3042,6 +3042,16 @@ const MINIMAX_TTS_MODEL_MAP = {
   'minimax-tts': 'speech-02-turbo',
 } as Record<string, string>;
 
+/**
+ * Ceiling on decoded TTS audio. The response carries audio as a hex string
+ * the provider controls, and decoding allocates half its length in bytes — so
+ * this bounds that allocation. A generous multiple of any real generated
+ * speech clip, small enough that a malformed or hostile payload cannot
+ * exhaust the daemon. Mirrors MINIMAX_MUSIC_MAX_AUDIO_BYTES on the sibling
+ * music renderer.
+ */
+const MINIMAX_TTS_MAX_AUDIO_BYTES = 64 * 1024 * 1024;
+
 // Image generation lives on a different host than the legacy TTS endpoint
 // (api.minimax.io vs api.minimaxi.chat). Keeping the two constants
 // separate lets existing TTS users keep their api.minimaxi.chat/v1
@@ -3126,13 +3136,32 @@ async function renderMinimaxTTS(ctx: MediaContext, credentials: ProviderConfig):
   // class of error so the user knows it's an auth / params issue, not
   // a network blip.
   if (data?.base_resp && data.base_resp.status_code !== 0) {
+    // status_msg is provider-controlled text that ends up persisted in the
+    // media task's error field and returned by task polling, so it is
+    // truncated like every other upstream body this file surfaces.
     throw new Error(
-      `minimax tts api error ${data.base_resp.status_code}: ${data.base_resp.status_msg || 'unknown'}`,
+      `minimax tts api error ${data.base_resp.status_code}: ${truncate(String(data.base_resp.status_msg || 'unknown'), 240)}`,
     );
   }
   const hex = data?.data?.audio;
   if (typeof hex !== 'string' || !hex) {
     throw new Error('minimax tts response missing data.audio');
+  }
+  // Bound the decode: `hex` is provider-controlled and Buffer.from allocates
+  // proportionally to it, so an oversized (or malformed odd-length) payload
+  // is rejected before it can be turned into memory. The charset check
+  // matters independently of the length check: Buffer.from('00zz', 'hex')
+  // has even length but stops decoding at the first invalid character 'z',
+  // silently returning a single 0x00 byte instead of throwing — that would
+  // pass both the odd-length and zero-byte guards and write corrupted audio
+  // while reporting success.
+  if (hex.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(hex)) {
+    throw new Error('minimax tts returned malformed hex audio');
+  }
+  if (hex.length / 2 > MINIMAX_TTS_MAX_AUDIO_BYTES) {
+    throw new Error(
+      `minimax tts audio exceeds the ${Math.floor(MINIMAX_TTS_MAX_AUDIO_BYTES / (1024 * 1024))} MiB ceiling`,
+    );
   }
   const bytes = Buffer.from(hex, 'hex');
   if (bytes.length === 0) {
@@ -3372,8 +3401,13 @@ async function renderMinimaxMusic(ctx: MediaContext, credentials: ProviderConfig
   }
   // Bound the decode: `hex` is provider-controlled and Buffer.from allocates
   // proportionally to it, so an oversized (or malformed odd-length) payload
-  // is rejected before it can be turned into memory.
-  if (hex.length % 2 !== 0) {
+  // is rejected before it can be turned into memory. The charset check
+  // matters independently of the length check: Buffer.from('00zz', 'hex')
+  // has even length but stops decoding at the first invalid character 'z',
+  // silently returning a single 0x00 byte instead of throwing — that would
+  // pass both the odd-length and zero-byte guards and write corrupted audio
+  // while reporting success.
+  if (hex.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(hex)) {
     throw new Error('minimax music returned malformed hex audio');
   }
   if (hex.length / 2 > MINIMAX_MUSIC_MAX_AUDIO_BYTES) {

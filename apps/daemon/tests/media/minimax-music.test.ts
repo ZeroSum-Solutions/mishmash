@@ -185,6 +185,30 @@ describe('minimax music media provider', () => {
     }))).rejects.toThrow(/data\.audio/);
   });
 
+  // ─── malformed hex: non-hex characters bypass the odd-length check ───
+
+  it('renderMinimaxMusic: rejects a hex payload with non-hex characters despite passing the even-length check', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResp({
+      // '00zz' has even length (4 chars) so it sails past the odd-length
+      // guard, but 'zz' is not valid hex. Buffer.from('00zz', 'hex') stops
+      // decoding at the first invalid character and silently returns a
+      // single 0x00 byte instead of throwing — one non-zero-length byte, so
+      // the zero-byte guard doesn't catch it either. Without an explicit
+      // charset check this writes corrupted audio while reporting success.
+      data: { audio: '00zz' },
+      base_resp: { status_code: 0, status_msg: 'success' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(generateMedia(baseArgs({
+      surface: 'audio',
+      model: 'minimax-music',
+      audioKind: 'music',
+      prompt: 'malformed-nonhex',
+      output: 'malformed-nonhex.mp3',
+    }))).rejects.toThrow(/malformed hex/);
+  });
+
   // ─── HTTP-level failure ──────────────────────────────────────────────
 
   it('renderMinimaxMusic: HTTP error (non-ok) surfaces the status and body', async () => {
