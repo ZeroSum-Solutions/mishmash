@@ -29,7 +29,29 @@ export interface StoryboardFrameRef {
   derivedFrom?: string;
 }
 
-export type StoryboardMoodDraftStatus = 'idle' | 'rendering' | 'done' | 'failed';
+/**
+ * OBS-1 — storyboards carry TWO status vocabularies that differ only in
+ * their first member, and the difference is semantic, not accidental:
+ *
+ *   - a SHOT begins as `'draft'`: it exists as an editable plan row (title,
+ *     frames, motion prompt) before anything renders.
+ *   - a MOOD DRAFT begins as `'idle'`: it is a prompt that has not been
+ *     dispatched yet; there is nothing to edit besides the prompt itself.
+ *
+ * These const tuples are the single runtime source for both lists.
+ * Validators (daemon routes, seeders, CLIs) must derive from them — a
+ * hand-relisted copy is exactly how a caller ends up posting one
+ * vocabulary's first member to the other's endpoint.
+ */
+export const STORYBOARD_MOOD_DRAFT_STATUSES = ['idle', 'rendering', 'done', 'failed'] as const;
+export type StoryboardMoodDraftStatus = (typeof STORYBOARD_MOOD_DRAFT_STATUSES)[number];
+
+export function isStoryboardMoodDraftStatus(value: unknown): value is StoryboardMoodDraftStatus {
+  return (
+    typeof value === 'string' &&
+    (STORYBOARD_MOOD_DRAFT_STATUSES as readonly string[]).includes(value)
+  );
+}
 
 /** A cheap 480p one-shot t2v "mood exploration" render — not final quality. */
 export interface StoryboardMoodDraft {
@@ -43,7 +65,16 @@ export interface StoryboardMoodDraft {
   error?: string;
 }
 
-export type StoryboardShotStatus = 'draft' | 'rendering' | 'done' | 'failed';
+/** See the OBS-1 note on STORYBOARD_MOOD_DRAFT_STATUSES: shots start as
+ * `'draft'` (editable plan row), NOT `'idle'`. */
+export const STORYBOARD_SHOT_STATUSES = ['draft', 'rendering', 'done', 'failed'] as const;
+export type StoryboardShotStatus = (typeof STORYBOARD_SHOT_STATUSES)[number];
+
+export function isStoryboardShotStatus(value: unknown): value is StoryboardShotStatus {
+  return (
+    typeof value === 'string' && (STORYBOARD_SHOT_STATUSES as readonly string[]).includes(value)
+  );
+}
 export type StoryboardResolution = '480p' | '720p' | '1080p';
 
 export interface StoryboardShot {

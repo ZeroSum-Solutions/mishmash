@@ -424,6 +424,7 @@ import {
   FinalizePackageLockedError,
   FinalizeUpstreamError,
   isFinalizeProviderProtocol,
+  isProviderCredentialRejection,
 } from './design/index.js';
 import { buildDocumentPreview } from './document-preview.js';
 import { lintArtifact, renderFindingsForAgent } from './lint-artifact.js';
@@ -2983,6 +2984,7 @@ export async function startServer({
     FinalizePackageLockedError,
     FinalizeUpstreamError,
     isFinalizeProviderProtocol,
+    isProviderCredentialRejection,
     redactSecrets,
   };
   const handoffDeps = {
