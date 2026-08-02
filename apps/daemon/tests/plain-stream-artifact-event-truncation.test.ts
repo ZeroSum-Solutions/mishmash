@@ -227,7 +227,7 @@ describe('plain-stream artifact persistence vs run.events ring-buffer truncation
         `accumulator; the finalizer must fall back to run.events (where the tag ` +
         `still lives) rather than trusting the capped buffer's absence of it`,
     ).toContain(ARTIFACT_FILE_NAME);
-  });
+  }, 90_000);
 
   // Regression guard #2 for the accumulator cap (raised by review on #5850): two
   // artifacts split across the cap boundary — `A -> >8 MiB prose -> B`. The
@@ -277,7 +277,7 @@ describe('plain-stream artifact persistence vs run.events ring-buffer truncation
       'the late artifact B (past the cap, only in the tail ring) must ALSO persist — ' +
         'the finalizer must union head and tail artifact sets, not stop at A',
     ).toContain('split-b.html');
-  });
+  }, 90_000);
 
   // Regression guard #3 for the accumulator merge (raised by review on #5850):
   // two DISTINCT artifacts that happen to share the same identifier AND the same
@@ -325,7 +325,7 @@ describe('plain-stream artifact persistence vs run.events ring-buffer truncation
       `both same-identifier same-body artifacts must persist as distinct files ` +
         `(got ${JSON.stringify(dupFiles)}) — a value-level dedup would keep only one`,
     ).toBe(2);
-  });
+  }, 90_000);
 
   // Control: identical run WITHOUT the flood — the artifact tag stays inside
   // the ring buffer and persistence works. This passes on origin/main and
@@ -546,7 +546,11 @@ async function waitForRunTerminal(url: string, runId: string, timeoutMs = 20_000
 
 async function createAndWaitForRun(url: string): Promise<{ run: RunStatus; projectId: string }> {
   const { runId, projectId } = await createRun(url);
-  const run = await waitForRunTerminal(url, runId);
+  // These runs push >8 MiB through a real subprocess pipe before terminating.
+  // The default 20s cap here is a poll budget, not an assertion about speed —
+  // on slower CI hardware the run legitimately needs longer, and cutting it
+  // short reports "did not finish" for a run that was merely still going.
+  const run = await waitForRunTerminal(url, runId, 55_000);
   return { run, projectId };
 }
 
