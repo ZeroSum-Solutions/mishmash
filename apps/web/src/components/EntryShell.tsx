@@ -92,7 +92,6 @@ import type {
 import { CenteredLoader } from './Loading';
 import { DesignsTab } from './DesignsTab';
 import { DesignSystemsTab } from './DesignSystemsTab';
-import { BrandsTab } from './BrandsTab';
 import { EntryNavRail, type EntryView as EntryViewKind } from './EntryNavRail';
 import { LibrarySection } from './LibrarySection';
 import { DesignLibrarySection } from './DesignLibrarySection';
@@ -517,10 +516,6 @@ function navElementForView(
     case 'plugins':
       return 'plugins';
     case 'design-systems':
-      return 'design_systems';
-    case 'brands':
-      // No dedicated brands analytics element yet; reuse the design_systems
-      // slot since Brands replaces that nav destination.
       return 'design_systems';
     case 'integrations':
       return 'integrations';
@@ -1290,13 +1285,6 @@ export function EntryShell({
             <div data-testid="entry-view-storyboard" data-active={view === 'storyboard' ? 'true' : 'false'} {...inactiveViewProps(view === 'storyboard')}>
               <StoryboardSection active={view === 'storyboard'} />
             </div>
-            <div data-testid="entry-view-brands" data-active={view === 'brands' ? 'true' : 'false'} {...inactiveViewProps(view === 'brands')}>
-              <BrandsTab
-                onApplyDesignSystem={onChangeDefaultDesignSystem}
-                onOpenProject={onOpenProject}
-                onDesignSystemsRefresh={onDesignSystemsRefresh}
-              />
-            </div>
             {view === 'integrations' ? (
               <IntegrationsView
                 config={config}
@@ -1355,7 +1343,13 @@ export function EntryShell({
             aria-label="Project usage"
             className="entry-usage-panel"
             style={{
-              background: 'var(--od-surface, #fff)',
+              // Real theme tokens (tokens.css) — the previous
+              // `var(--od-surface, #fff)` referenced a token that exists
+              // nowhere, so the card was always white while its text
+              // inherited the dark theme's near-white --text (SS-3).
+              background: 'var(--bg-panel)',
+              color: 'var(--text)',
+              border: '1px solid var(--border)',
               borderRadius: '12px',
               padding: '20px',
               minWidth: '280px',

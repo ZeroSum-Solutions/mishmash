@@ -20,7 +20,6 @@ export type EntryHomeView =
   | 'library'
   | 'design-library'
   | 'storyboard'
-  | 'brands'
   | 'integrations';
 
 export type Route =
@@ -28,13 +27,13 @@ export type Route =
       kind: 'home';
       view: EntryHomeView;
       /**
-       * Optional preselected brand for the Brands tab. The tab renders
-       * everything inline in its preview panel (there is no separate detail
-       * view), so a `/brands/:id` deep-link simply drives which brand the
-       * inline preview shows. Lets external surfaces (the rail, a chat link)
-       * select a specific brand without leaving the tab.
+       * Open storyboard on the Storyboard tab (`/storyboard/:id`). The editor
+       * renders inside the tab rather than as a separate page, so — like a
+       * preselected item on any other tab — the id rides on the home route.
+       * Present only when `view` is `'storyboard'`. Gives the open editor a
+       * real URL so reload/bookmark/share keep the user's place (OBS-2).
        */
-      brandId?: string;
+      storyboardId?: string;
     }
   | { kind: 'design-system-create' }
   | { kind: 'design-system-detail'; designSystemId: string }
@@ -102,6 +101,8 @@ export function parseRoute(pathname: string): Route {
     // Brands merged into Design systems: a brand is a `user:<id>` design system
     // and extraction now starts from the design-system create wizard. Legacy
     // `/brands` and `/brands/:id` deep-links redirect onto the unified tab.
+    // The `brands` EntryHomeView itself is gone (BUG-7) — this redirect is
+    // the only thing the word still means to the router.
     return { kind: 'home', view: 'design-systems' };
   }
   if (parts[0] === 'automations' || parts[0] === 'tasks') {
@@ -116,7 +117,10 @@ export function parseRoute(pathname: string): Route {
   if (parts[0] === 'design-library' && !parts[1]) {
     return { kind: 'home', view: 'design-library' };
   }
-  if (parts[0] === 'storyboard' && !parts[1]) {
+  if (parts[0] === 'storyboard') {
+    if (parts[1]) {
+      return { kind: 'home', view: 'storyboard', storyboardId: decodeURIComponent(parts[1]) };
+    }
     return { kind: 'home', view: 'storyboard' };
   }
   if (parts[0] === 'integrations') {
@@ -145,9 +149,10 @@ export function buildPath(route: Route): string {
     if (route.view === 'design-systems') return '/design-systems';
     if (route.view === 'library') return LIBRARY_UI_VISIBLE ? '/library' : '/';
     if (route.view === 'design-library') return '/design-library';
-    if (route.view === 'storyboard') return '/storyboard';
-    if (route.view === 'brands') {
-      return route.brandId ? `/brands/${encodeURIComponent(route.brandId)}` : '/brands';
+    if (route.view === 'storyboard') {
+      return route.storyboardId
+        ? `/storyboard/${encodeURIComponent(route.storyboardId)}`
+        : '/storyboard';
     }
     if (route.view === 'integrations') return '/integrations';
     return '/';
