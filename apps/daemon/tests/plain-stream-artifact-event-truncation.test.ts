@@ -77,17 +77,22 @@ describe('plain-stream artifact persistence vs run.events ring-buffer truncation
 
   it('persists an artifact the agent streamed early, even after >2000 later stdout events truncate the ring buffer', async () => {
     binDir = await mkdtemp(path.join(os.tmpdir(), 'od-plain-trunc-bin-'));
-    // 6x maxEvents with a full event-loop turn per chunk (setTimeout) so the
-    // daemon reads each chunk as its own pipe 'data' event => one run event
-    // per chunk, truncating the early artifact tag out of the ring buffer.
-    // 6x, not 2x: a loaded runner coalesces multiple pending chunks into one
-    // pipe read (observed ~2.25x on CI ubuntu — 4000 chunks became 1780
-    // events, so the buffer never even filled and the mechanism never armed).
-    // The flood must exceed maxEvents in EVENTS under worst-case coalescing.
+    const stopFilePath = path.join(binDir, 'stop-flood');
+    // A full event-loop turn per chunk (setTimeout) so the daemon reads each
+    // chunk as its own pipe 'data' event => one run event per chunk,
+    // truncating the early artifact tag out of the ring buffer. The flood
+    // count below is a generous hard cap, not a guess at how many chunks are
+    // needed (previously tuned 2x -> 6x maxEvents after CI-observed pipe-read
+    // coalescing of ~2.25x): a loaded reader can coalesce arbitrarily many
+    // pending writes into one 'data' read, so no fixed multiplier is
+    // reliable under unknown machine load. waitForRingBufferTruncation below
+    // instead watches the live SSE replay and signals the child (via
+    // stopFilePath) the instant truncation is directly observed.
     const fakeDeepseek = await writeArtifactThenFloodDeepseek(
       binDir,
       'deepseek-trunc',
-      PROD_DEFAULT_MAX_EVENTS * 6,
+      PROD_DEFAULT_MAX_EVENTS * 25,
+      stopFilePath,
     );
 
     delete process.env.POSTHOG_KEY;
@@ -105,7 +110,17 @@ describe('plain-stream artifact persistence vs run.events ring-buffer truncation
       privacyDecisionAt: Date.now(),
     });
 
-    const { run, projectId } = await createAndWaitForRun(started.url);
+    const { runId, projectId } = await createRun(started.url);
+    // Wait for genuine truncation (observed, not assumed) before letting the
+    // child stop, then wait out the (now potentially longer, under load)
+    // remainder of the run — see the 90s test timeout below for why.
+    await waitForRingBufferTruncation(
+      started.url,
+      runId,
+      PROD_DEFAULT_MAX_EVENTS + 50,
+      stopFilePath,
+    );
+    const run = await waitForRunTerminal(started.url, runId, 55_000);
 
     // Sanity: the run itself completed cleanly — the loss is silent, not a
     // side effect of a failed run.
@@ -145,7 +160,15 @@ describe('plain-stream artifact persistence vs run.events ring-buffer truncation
         `of the 2000-event run.events ring buffer before the plain-stream ` +
         `finalizer re-scanned it, so the artifact was silently never persisted`,
     ).toContain(ARTIFACT_FILE_NAME);
-  });
+  // Raised from the suite-wide 20s default: this test's correctness no
+  // longer depends on wall-clock timing (waitForRingBufferTruncation above
+  // waits on a direct observation, not a guessed chunk count), but the
+  // REAL time it takes to observe >2000 discrete pipe reads still scales
+  // with how loaded the machine is — the daemon's own event loop has to
+  // actually get scheduled often enough to drain the pipe in small pieces.
+  // 90s gives headroom for that under heavy contention (observed hitting
+  // the 20s default even in isolation on a machine with load average > 150).
+  }, 90_000);
 
   // Regression guard for the accumulator cap (raised by review on #5850): the
   // truncation-proof stdout accumulator is head-biased (keeps the first CAP
@@ -355,6 +378,7 @@ async function writeArtifactThenFloodDeepseek(
   dir: string,
   name: string,
   flood: number,
+  stopFilePath: string | null = null,
 ): Promise<string> {
   const bin = path.join(dir, name);
   await writeFile(bin, `#!/usr/bin/env node
@@ -369,9 +393,15 @@ W('<!doctype html><html><body>ring-buffer truncation repro</body></html>\\n');
 W('</artifact>\\n');
 // Flood: each chunk is flushed and the loop yields a full event-loop turn
 // (setTimeout, not setImmediate) so the daemon wakes and reads each chunk as
-// a separate pipe 'data' event => one run event per chunk.
+// a separate pipe 'data' event => one run event per chunk. When a stop file
+// is supplied the loop also breaks the instant it appears — the caller
+// writes it only once it has directly OBSERVED (via the live SSE replay)
+// that the ring buffer has genuinely truncated, so the flood count below is
+// a hard safety cap, not the thing that decides when to stop.
+const STOP_FILE = ${stopFilePath ? JSON.stringify(stopFilePath) : 'null'};
 (async () => {
   for (let i = 0; i < ${flood}; i++) {
+    if (STOP_FILE && fs.existsSync(STOP_FILE)) break;
     W('flood-' + i + ' ');
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
@@ -465,7 +495,7 @@ async function putConfig(url: string, patch: Record<string, unknown>): Promise<v
   expect(response.status).toBe(200);
 }
 
-async function createAndWaitForRun(url: string): Promise<{ run: RunStatus; projectId: string }> {
+async function createRun(url: string): Promise<{ runId: string; projectId: string }> {
   const projectId = `plain_trunc_${randomUUID()}`;
   const projectResponse = await fetch(`${url}/api/projects`, {
     method: 'POST',
@@ -499,15 +529,64 @@ async function createAndWaitForRun(url: string): Promise<{ run: RunStatus; proje
   });
   expect(runResponse.status).toBe(202);
   const body = await runResponse.json() as { runId: string };
+  return { runId: body.runId, projectId };
+}
+
+async function waitForRunTerminal(url: string, runId: string, timeoutMs = 20_000): Promise<RunStatus> {
   const startedAt = Date.now();
-  while (Date.now() - startedAt < 20_000) {
-    const response = await fetch(`${url}/api/runs/${encodeURIComponent(body.runId)}`);
+  while (Date.now() - startedAt < timeoutMs) {
+    const response = await fetch(`${url}/api/runs/${encodeURIComponent(runId)}`);
     expect(response.status).toBe(200);
     const run = await response.json() as RunStatus;
-    if (['failed', 'succeeded', 'canceled'].includes(run.status)) return { run, projectId };
+    if (['failed', 'succeeded', 'canceled'].includes(run.status)) return run;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`run ${body.runId} did not finish`);
+  throw new Error(`run ${runId} did not finish`);
+}
+
+async function createAndWaitForRun(url: string): Promise<{ run: RunStatus; projectId: string }> {
+  const { runId, projectId } = await createRun(url);
+  const run = await waitForRunTerminal(url, runId);
+  return { run, projectId };
+}
+
+// Watches the live SSE replay of run.events and flips `stopFilePath` into
+// existence the instant the ring buffer has genuinely accumulated more than
+// `thresholdEventCount` events — i.e. once real truncation has occurred —
+// rather than flooding a fixed, blindly guessed number of chunks and hoping
+// OS-level pipe-read coalescing doesn't outrun that guess on a loaded
+// machine (a loaded reader can coalesce arbitrarily many pending writes into
+// a single 'data' read, so no fixed multiplier is reliable under unknown
+// load; see the header comment on writeArtifactThenFloodDeepseek). If the
+// run reaches a terminal status before the threshold is hit, the stream
+// simply ends and this returns without signaling — the caller's own
+// assertions then surface that truncation never actually happened.
+async function waitForRingBufferTruncation(
+  url: string,
+  runId: string,
+  thresholdEventCount: number,
+  stopFilePath: string,
+): Promise<void> {
+  const response = await fetch(`${url}/api/runs/${encodeURIComponent(runId)}/events`);
+  expect(response.status).toBe(200);
+  if (!response.body) throw new Error('events stream had no body');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) return;
+      buffer += decoder.decode(value, { stream: true });
+      const eventCount = (buffer.match(/^event:/gm) ?? []).length;
+      if (eventCount >= thresholdEventCount) {
+        await writeFile(stopFilePath, 'stop');
+        return;
+      }
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
 }
 
 // GET /api/runs/:id/events is an SSE replay of run.events — i.e. of the

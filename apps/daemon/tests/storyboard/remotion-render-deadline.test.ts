@@ -9,6 +9,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Deadline } from '../../src/storyboards/remotion/deadline.js';
 
 const bundleMock = vi.fn();
 const selectCompositionMock = vi.fn();
@@ -34,6 +35,58 @@ const { renderStoryboardFinish, resetBundleCacheForTests } = await import(
   '../../src/storyboards/remotion/render.js'
 );
 const { createDeadline, RemotionFinishTimeoutError } = await import('../../src/storyboards/remotion/deadline.js');
+
+// renderStoryboardFinish threads ONE Deadline through every stage
+// (bundle -> selectComposition -> renderMedia), each consuming from the same
+// remaining-time pool (render.ts). A single small real budget shared across
+// all of them (the original createDeadline(80) for every "stage hangs" test)
+// makes the LATER-stage tests — "selectComposition() hangs" and especially
+// "renderMedia() hangs", which must first pass through 1-2 EARLIER,
+// non-hanging stages — flaky under load for a reason that has nothing to do
+// with what they're testing: ensureBundled() does two real fs calls (rm,
+// mkdir) before it ever reaches the mocked bundle(), and each `await` hop
+// needs the JS thread rescheduled, which a loaded machine can delay far
+// enough to consume the whole shared budget before the target stage is even
+// reached — deadline.assertNotExpired(targetStage) then throws BEFORE the
+// code under test reaches makeCancelSignal(), so cancel() is never called.
+// That's a real gap in the original design, not something this fix
+// introduces — larger fixed shared budgets (500ms, 3s) still hit it
+// intermittently in practice, because it's the CUMULATIVE scheduling
+// latency of the preceding stages that's unbounded under load, not the
+// hang-detection window itself.
+//
+// hangDeadline() below fixes the actual dependency: every stage OTHER than
+// the one under test gets a generous real budget (30s — the same value the
+// "resolves normally"/"memoizes" tests already use safely below), so
+// incidental setup for earlier stages can never plausibly exhaust it: only
+// once assertNotExpired() reports the TARGET stage does the budget collapse
+// to a small window. That window then only has to outlast the time between
+// "the mocked hang is invoked" and "its setTimeout fires" — no preceding
+// real work competes with it anymore.
+function hangDeadline(targetStage: string, hangBudgetMs = 300): Deadline {
+  let currentStage: string | null = null;
+  const before = createDeadline(30_000);
+  // Constructed lazily, on the target stage's first assertNotExpired() call
+  // — NOT eagerly here at hangDeadline()'s own construction time. Building
+  // it up front would start the 300ms clock before the code under test has
+  // even reached the target stage, so any scheduling/setup latency in the
+  // preceding (generously-budgeted) stages eats into the small window before
+  // the target stage's own assertNotExpired() ever runs — reintroducing the
+  // exact load-flake this helper exists to fix.
+  let atTarget: Deadline | null = null;
+  return {
+    remainingMs: () => (currentStage === targetStage ? (atTarget ?? before).remainingMs() : before.remainingMs()),
+    assertNotExpired(stage: string) {
+      currentStage = stage;
+      if (stage === targetStage) {
+        if (!atTarget) atTarget = createDeadline(hangBudgetMs);
+        atTarget.assertNotExpired(stage);
+      } else {
+        before.assertNotExpired(stage);
+      }
+    },
+  };
+}
 
 describe('renderStoryboardFinish deadline handling', () => {
   let scratchDir = '';
@@ -77,7 +130,7 @@ describe('renderStoryboardFinish deadline handling', () => {
         captions: null,
         ratio: '16:9',
         outputPath: path.join(scratchDir, 'final.mp4'),
-        deadline: createDeadline(80),
+        deadline: hangDeadline('bundle'),
       });
     } catch (err) {
       caught = err;
@@ -108,7 +161,7 @@ describe('renderStoryboardFinish deadline handling', () => {
         captions: null,
         ratio: '16:9',
         outputPath: path.join(scratchDir, 'final.mp4'),
-        deadline: createDeadline(80),
+        deadline: hangDeadline('bundle'),
       });
 
     let firstCaught: unknown;
@@ -148,7 +201,7 @@ describe('renderStoryboardFinish deadline handling', () => {
         captions: null,
         ratio: '16:9',
         outputPath: path.join(scratchDir, 'final.mp4'),
-        deadline: createDeadline(80),
+        deadline: hangDeadline('selectComposition'),
       });
     } catch (err) {
       caught = err;
@@ -177,7 +230,7 @@ describe('renderStoryboardFinish deadline handling', () => {
         captions: null,
         ratio: '16:9',
         outputPath: path.join(scratchDir, 'final.mp4'),
-        deadline: createDeadline(80),
+        deadline: hangDeadline('renderMedia'),
       });
     } catch (err) {
       caught = err;
