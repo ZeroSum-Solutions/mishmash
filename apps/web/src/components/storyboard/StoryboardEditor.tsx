@@ -687,6 +687,7 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
         </button>
         <input
           className={styles.titleInput}
+          aria-label={t('storyboard.titleLabel')}
           value={title}
           onChange={(e) => scheduleTitleSave(e.target.value)}
         />

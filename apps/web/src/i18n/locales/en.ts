@@ -4289,6 +4289,7 @@ export const en: Dict = {
   'storyboard.emptyState': 'No storyboards yet. Start one to sketch a shot list with Seedance keyframe pairs.',
   'storyboard.shotCount': '{count} shots',
   'storyboard.back': 'Back to storyboards',
+  'storyboard.titleLabel': 'Storyboard name',
   'storyboard.ratio': 'Ratio',
   'storyboard.addShot': 'Add shot',
   'storyboard.assemble': 'Assemble video',

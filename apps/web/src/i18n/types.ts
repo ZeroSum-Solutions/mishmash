@@ -4406,6 +4406,7 @@ export interface Dict {
   'storyboard.emptyState': string;
   'storyboard.shotCount': string;
   'storyboard.back': string;
+  'storyboard.titleLabel': string;
   'storyboard.ratio': string;
   'storyboard.addShot': string;
   'storyboard.assemble': string;
