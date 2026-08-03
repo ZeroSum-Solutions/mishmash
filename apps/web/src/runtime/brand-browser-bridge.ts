@@ -5,7 +5,7 @@
 //
 // The browser tab lives deep inside FileWorkspace → DesignBrowserPanel and holds
 // its <webview> node only in local state. We expose a tiny module-level registry
-// (the same module-latch shape as `brand-intent.ts`) keyed by project + tab id:
+// (a module-latch: setter registers, consumer looks up) keyed by project + tab id:
 // DesignBrowserPanel registers an imperative handle whenever its webview mounts,
 // and the confirm handler looks it up to serialize the unblocked DOM and re-run
 // extraction from it.

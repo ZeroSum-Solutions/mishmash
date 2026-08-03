@@ -92,6 +92,72 @@ describe('StoryboardSection routing (OBS-2)', () => {
     expect(screen.getByDisplayValue('Routed board')).toBeTruthy();
   });
 
+  it('restores the open editor when the user rail-switches away and back', async () => {
+    // EntryShell's changeView navigates to the bare view path — it cannot
+    // know about sub-routes — so returning to the Storyboard tab arrives as
+    // routedId: null while the editor state is still cached. The section
+    // must re-assert the open storyboard (and its URL) instead of dumping
+    // the user back on the list; keep-mounted tabs preserve state.
+    window.history.replaceState(null, '', '/storyboard');
+    const view = renderSection();
+    const card = await waitFor(() => screen.getByTestId('storyboard-card'));
+    await act(async () => {
+      card.click();
+    });
+    await waitFor(() => expect(window.location.pathname).toBe('/storyboard/sb-1'));
+
+    // Rail switch to another tab. In the real app EntryShell and this
+    // section subscribe to the same route store, so the URL change and the
+    // active-prop flip land in ONE commit — batch them here the same way.
+    await act(async () => {
+      window.history.pushState(null, '', '/projects');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      view.rerender(
+        <I18nProvider initial="en">
+          <StoryboardSection active={false} />
+        </I18nProvider>,
+      );
+    });
+
+    // Rail switch back: generic navigate to /storyboard, no id.
+    await act(async () => {
+      window.history.pushState(null, '', '/storyboard');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      view.rerender(
+        <I18nProvider initial="en">
+          <StoryboardSection active />
+        </I18nProvider>,
+      );
+    });
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/storyboard/sb-1');
+    });
+    expect(screen.getByDisplayValue('Routed board')).toBeTruthy();
+  });
+
+  it('browser back from the editor still lands on the list, not a redirect trap', async () => {
+    window.history.replaceState(null, '', '/storyboard');
+    renderSection();
+    const card = await waitFor(() => screen.getByTestId('storyboard-card'));
+    await act(async () => {
+      card.click();
+    });
+    await waitFor(() => expect(window.location.pathname).toBe('/storyboard/sb-1'));
+
+    // Browser back: the tab stays active the whole time — this must CLEAR
+    // the editor, never bounce the URL back to the detail entry.
+    await act(async () => {
+      window.history.pushState(null, '', '/storyboard');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('storyboard-card')).toBeTruthy();
+    });
+    expect(window.location.pathname).toBe('/storyboard');
+  });
+
   it('falls back to the list with a clean URL when the deep-linked id is gone', async () => {
     registryMocks.fetchStoryboard.mockResolvedValue({ ok: false, message: 'not found' });
     window.history.replaceState(null, '', '/storyboard/deleted-id');

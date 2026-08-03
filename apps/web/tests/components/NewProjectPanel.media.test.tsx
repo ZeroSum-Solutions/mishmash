@@ -177,6 +177,39 @@ describe('NewProjectPanel media provider badges', () => {
     expect(openaiGroup?.textContent).not.toContain('Configured');
   });
 
+  it('keeps a model the user picked by hand even when its provider has no key', async () => {
+    // The auto-default steers an *unpicked* not-ready selection onto a ready
+    // model — but an explicit pick must stick: the user may be about to go
+    // configure that provider. Regression guard on the userPickedRef branch.
+    render(
+      <NewProjectPanel
+        skills={[]}
+        designSystems={[]}
+        defaultDesignSystemId={null}
+        templates={[]}
+        onDeleteTemplate={vi.fn()}
+        promptTemplates={[]}
+        onCreate={vi.fn()}
+        mediaProviders={{}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Media' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Image' }));
+    // Auto-default settles on the no-key Codex lane first.
+    await waitFor(() => {
+      expect(screen.getByTestId('model-picker-trigger').textContent).toContain('gpt-image-2 (Codex)');
+    });
+    // Hand-pick a keyless OpenAI model from the popover.
+    fireEvent.click(screen.getByTestId('model-picker-trigger'));
+    fireEvent.click(screen.getByTestId('model-picker-option-gpt-image-2'));
+    // The effect must not steer the selection back to a ready model.
+    await waitFor(() => {
+      expect(screen.getByTestId('model-picker-trigger').textContent).toContain('gpt-image-2');
+      expect(screen.getByTestId('model-picker-trigger').textContent).not.toContain('(Codex)');
+    });
+  });
+
   it('switches away from the default OpenAI model when only another provider is configured', () => {
     const onCreate = vi.fn();
     render(

@@ -105,7 +105,10 @@ describe('AssistantMessage run pricing status', () => {
     stubFetchWithRunUsage({
       costUsd: null,
       pricingVersion: 'unavailable',
-      model: 'claude-opus-5[1m]',
+      // Deliberately a model the pricing table genuinely does not carry —
+      // the original incident's claude-opus-5[1m] became priceable in the
+      // same change that fixed this banner.
+      model: 'glacier-lane-preview-9',
       inputTokensEffective: 123_456,
       outputTokens: 7_890,
     });
@@ -123,7 +126,7 @@ describe('AssistantMessage run pricing status', () => {
     const status = await waitFor(() => screen.getByRole('status', {
       name: (name) => /unavailable/i.test(name),
     }));
-    expect(status.textContent ?? '').toContain('no price data for claude-opus-5[1m]');
+    expect(status.textContent ?? '').toContain('no price data for glacier-lane-preview-9');
     expect(status.textContent ?? '').not.toMatch(/reported no usage data/i);
   });
 

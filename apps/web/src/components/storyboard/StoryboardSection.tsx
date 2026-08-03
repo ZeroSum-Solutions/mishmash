@@ -52,9 +52,27 @@ export function StoryboardSection({ active }: Props) {
   // Follow the routed id: a pushed detail entry, browser back/forward, or a
   // cold deep link all resolve through this one effect. A dead id (deleted
   // storyboard, mistyped link) falls back to the list with a clean URL.
+  //
+  // The one case that must NOT clear: returning to this tab through the nav
+  // rail. EntryShell's changeView knows nothing about sub-routes, so a rail
+  // switch back arrives as routedId: null — while the editor state is still
+  // cached from the keep-mounted tab. That transition (active false → true)
+  // re-asserts the open storyboard onto the URL instead. Browser back from
+  // the editor keeps `active` true throughout, so it still clears — the URL
+  // never bounces back into a redirect trap.
+  const wasActiveRef = useRef(active);
   useEffect(() => {
+    const wasActive = wasActiveRef.current;
+    wasActiveRef.current = active;
     if (!active) return;
     if (!routedId) {
+      if (!wasActive && activeStoryboard) {
+        navigate(
+          { kind: 'home', view: 'storyboard', storyboardId: activeStoryboard.id },
+          { replace: true },
+        );
+        return;
+      }
       setActiveStoryboard(null);
       return;
     }
@@ -68,7 +86,7 @@ export function StoryboardSection({ active }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [active, routedId, activeStoryboard?.id]);
+  }, [active, routedId, activeStoryboard]);
 
   async function refreshList() {
     const result = await fetchStoryboardList();
