@@ -16,8 +16,10 @@ describe('classifyProviderError', () => {
   });
 
   // BUG-10: Google answers an invalid API key with HTTP 400 (body carries
-  // `API_KEY_INVALID` / "API key not valid"), not 401/403.
-  it('classifies a 400 with Google\'s API_KEY_INVALID body as invalid-credential', () => {
+  // `API_KEY_INVALID` / "API key not valid"), not 401/403. Only classifies
+  // as invalid-credential when the caller marks the call as Google-backed —
+  // see the isGoogleProvider gate tests below.
+  it('classifies a 400 with Google\'s API_KEY_INVALID body as invalid-credential when isGoogleProvider is true', () => {
     const body = JSON.stringify({
       error: {
         code: 400,
@@ -26,15 +28,15 @@ describe('classifyProviderError', () => {
         details: [{ reason: 'API_KEY_INVALID' }],
       },
     });
-    expect(classifyProviderError(400, body)).toBe('invalid-credential');
+    expect(classifyProviderError(400, body, true)).toBe('invalid-credential');
   });
 
-  it('classifies a 400 with the plain "API key not valid" phrase as invalid-credential', () => {
-    expect(classifyProviderError(400, 'API key not valid.')).toBe('invalid-credential');
+  it('classifies a 400 with the plain "API key not valid" phrase as invalid-credential when isGoogleProvider is true', () => {
+    expect(classifyProviderError(400, 'API key not valid.', true)).toBe('invalid-credential');
   });
 
   it('does not classify an unrelated 400 as invalid-credential', () => {
-    expect(classifyProviderError(400, 'Unknown field: shot_count')).toBe('upstream-error');
+    expect(classifyProviderError(400, 'Unknown field: shot_count', true)).toBe('upstream-error');
   });
 
   it('classifies 429 as rate-limited', () => {
@@ -44,6 +46,33 @@ describe('classifyProviderError', () => {
   it('classifies 5xx as upstream-error', () => {
     expect(classifyProviderError(503, 'service unavailable')).toBe('upstream-error');
     expect(classifyProviderError(500, '')).toBe('upstream-error');
+  });
+
+  // Reviewer finding: the Google body-sniff must not run for every provider.
+  // OpenRouter and other aggregators proxy heterogeneous backends and can
+  // pass an unrelated backend's error text through verbatim — a 400 that
+  // happens to contain Google's phrase from a NON-Google provider is not
+  // evidence of a rejected credential and must not override the caller's
+  // real error with a generic "rejected the API key" / forced 401.
+  it('does NOT classify a non-Google 400 with Google\'s exact phrase as invalid-credential when isGoogleProvider is omitted (defaults false)', () => {
+    expect(classifyProviderError(400, 'API key not valid. Please pass a valid API key.')).toBe('upstream-error');
+  });
+
+  it('does NOT classify a non-Google 400 with Google\'s exact phrase as invalid-credential when isGoogleProvider is explicitly false', () => {
+    const body = JSON.stringify({
+      error: {
+        code: 400,
+        message: 'API key not valid. Please pass a valid API key.',
+        status: 'INVALID_ARGUMENT',
+        details: [{ reason: 'API_KEY_INVALID' }],
+      },
+    });
+    expect(classifyProviderError(400, body, false)).toBe('upstream-error');
+  });
+
+  it('still classifies a non-Google 401/403 as invalid-credential — that part is provider-agnostic', () => {
+    expect(classifyProviderError(401, 'unauthorized', false)).toBe('invalid-credential');
+    expect(classifyProviderError(403, 'forbidden', false)).toBe('invalid-credential');
   });
 });
 

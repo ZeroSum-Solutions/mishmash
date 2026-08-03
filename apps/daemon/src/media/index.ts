@@ -2060,8 +2060,10 @@ async function renderNanoBananaImage(ctx: MediaContext, credentials: ProviderCon
     // a generic upstream failure and gave no hint the fix is the stored
     // credential. Classify at this shared boundary instead of a status-only
     // message; the credential-rejection message is composed, never the raw
-    // upstream body (which can echo request content back).
-    const kind = classifyProviderError(resp.status, text);
+    // upstream body (which can echo request content back). Nano Banana is
+    // always Google's own API (never a proxy/aggregator), so the 400-body
+    // sniff is safe to opt into unconditionally here.
+    const kind = classifyProviderError(resp.status, text, true);
     const message =
       kind === 'invalid-credential'
         ? providerCredentialRejectionMessage('Google Gemini')

@@ -9,30 +9,45 @@
 // credential as a broken feature.
 //
 // This module is the one place that turns (status, rawBody) into a
-// `ProviderErrorKind` (packages/contracts/src/errors.ts) so every call
-// site — apps/daemon/src/design/finalize-design.ts's text-provider
-// boundary (storyboard draft-from-brief, finalize, handoff) and
-// apps/daemon/src/media/index.ts's Nano Banana (Google Gemini image)
-// media-generation lane — classifies identically instead of each
-// reimplementing the Google body-sniff regex. Per AGENTS.md's bug
-// follow-up workflow, this deliberately does NOT refactor every provider
-// adapter; only the call sites that already produce the literal
-// "upstream X returned N" message for a Google-backed provider are wired
-// to it.
+// `ProviderErrorKind` (packages/contracts/src/errors.ts). 401/403 mean the
+// same thing for every provider, so that part of the classification is
+// universal. The 400-body sniff is NOT universal — it is Google's specific
+// quirk — so callers must opt in via `isGoogleProvider` before it applies.
+// Two call sites currently opt in: apps/daemon/src/design/finalize-design.ts's
+// text-provider boundary (storyboard draft-from-brief, finalize, handoff),
+// gated on `protocol === 'google'`, and apps/daemon/src/media/index.ts's
+// Nano Banana (Google Gemini image) media-generation lane, which is
+// Google-only and always opts in. Every other provider/protocol on those
+// same call sites (openai, azure, ollama, and draft-from-brief's
+// openrouter/minimax candidates, which are protocol 'openai') only
+// classifies via status — a non-Google 400 whose body happens to contain
+// Google's phrase (e.g. an OpenRouter proxy passing an upstream error
+// through verbatim) must NOT be misread as a credential rejection. Per
+// AGENTS.md's bug follow-up workflow, this deliberately does NOT refactor
+// every provider adapter; only the two call sites above are wired to it.
 import type { ProviderErrorKind } from '@open-design/contracts';
 
 const GOOGLE_INVALID_KEY_BODY_PATTERN = /API_KEY_INVALID|API key not valid/i;
 
 /**
  * Classify a provider HTTP failure by what the caller should DO about it.
- * 401/403 always mean the credential itself was rejected; Google's API
- * additionally answers an invalid key with HTTP 400 carrying
- * `API_KEY_INVALID` / "API key not valid" in the body — recognized here so
- * that quirk doesn't leak into every call site as its own ad hoc check.
+ * 401/403 always mean the credential itself was rejected, for any
+ * provider. Google's API additionally answers an invalid key with HTTP 400
+ * carrying `API_KEY_INVALID` / "API key not valid" in the body — but that
+ * body-content check only applies when the caller passes
+ * `isGoogleProvider: true`, since a 400 with that phrase from a non-Google
+ * provider (e.g. an aggregator proxying an unrelated backend's error text)
+ * is not evidence of a rejected credential.
  */
-export function classifyProviderError(status: number, rawBody: string): ProviderErrorKind {
+export function classifyProviderError(
+  status: number,
+  rawBody: string,
+  isGoogleProvider = false,
+): ProviderErrorKind {
   if (status === 401 || status === 403) return 'invalid-credential';
-  if (status === 400 && GOOGLE_INVALID_KEY_BODY_PATTERN.test(rawBody)) return 'invalid-credential';
+  if (status === 400 && isGoogleProvider && GOOGLE_INVALID_KEY_BODY_PATTERN.test(rawBody)) {
+    return 'invalid-credential';
+  }
   if (status === 429) return 'rate-limited';
   return 'upstream-error';
 }

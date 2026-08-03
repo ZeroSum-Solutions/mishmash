@@ -119,10 +119,14 @@ export class FinalizePackageLockedError extends Error {
  * `kind` is the shared provider-error taxonomy classification
  * (apps/daemon/src/integrations/provider-errors.ts) for this failure. It
  * defaults to deriving itself from `status`/`rawText` via
- * `classifyProviderError`, so every throw site gets a correct
- * classification for free; callers that already know the classification
- * (e.g. the retry loop below, which also composes the message) may pass it
- * explicitly to avoid recomputing it.
+ * `classifyProviderError` with `isGoogleProvider` left at its default
+ * (false) — safe because every OTHER throw site in this file always passes
+ * `status: 502, rawText: ''` (network errors, non-JSON bodies, malformed
+ * response shapes), which classifies as `upstream-error` regardless of that
+ * flag. The one throw site that carries a real upstream HTTP status (the
+ * retry loop below) knows the protocol and passes `kind` explicitly,
+ * gating Google's 400-body sniff on `protocol === 'google'` so a
+ * non-Google 400 is never misread as a credential rejection.
  */
 export class FinalizeUpstreamError extends Error {
   status: number;
@@ -711,7 +715,12 @@ export async function callFinalizeProviderWithRetry(
     if (!transient || attempt === 1) {
       const text = await response.text().catch(() => '');
       const label = providerLabel(params.protocol);
-      const kind = classifyProviderError(response.status, text);
+      // Google's 400-body sniff only applies when this call actually went
+      // to Google — draft-from-brief's openrouter/minimax candidates (and
+      // any other aggregator) use protocol 'openai' too, and can proxy an
+      // unrelated backend's error text through verbatim; misreading that
+      // as a credential rejection would be worse than the generic message.
+      const kind = classifyProviderError(response.status, text, params.protocol === 'google');
       // A rejected credential must say it's the credential, whatever HTTP
       // status carried it (BUG-10) — composed here rather than the generic
       // "upstream X returned N", and never echoing the raw upstream body.

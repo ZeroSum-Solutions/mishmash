@@ -154,6 +154,29 @@ describe('draftShotsFromBrief', () => {
     await expect(pending).rejects.toThrow(/credential/i);
     await expect(pending).rejects.toMatchObject({ status: 401, kind: 'invalid-credential' });
   });
+
+  // Reviewer finding on BUG-10: `provider` here is protocol 'openai', which
+  // is also what draft-from-brief's openrouter/minimax candidates use
+  // (resolveDraftTextProvider's TEXT_PROVIDER_CANDIDATES table). OpenRouter
+  // proxies heterogeneous backends and can pass an upstream error's body
+  // text through verbatim — a 400 whose body happens to contain Google's
+  // exact "API key not valid" phrase from a NON-Google provider must NOT be
+  // misclassified as a credential rejection: that would override the
+  // caller's real error with a generic "rejected the API key" message and
+  // force a 401 the actual failure doesn't warrant.
+  it('does not misclassify a non-Google 400 whose body contains Google\'s phrase as invalid-credential', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse(
+        { error: { message: 'API key not valid. Please pass a valid API key.' } },
+        400,
+      ),
+    ) as unknown as typeof globalThis.fetch;
+
+    const pending = draftShotsFromBrief({ brief: 'brief', shotCount: 2, provider, fetchImpl });
+    await expect(pending).rejects.toMatchObject({ status: 400, kind: 'upstream-error' });
+    // Must NOT get the credential-rejection treatment.
+    await expect(pending).rejects.not.toThrow(/rejected the API key/i);
+  });
 });
 
 describe('resolveDraftTextProvider', () => {
