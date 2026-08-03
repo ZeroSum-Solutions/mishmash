@@ -1065,5 +1065,29 @@
       "GET /api/projects/:param/usage",
       "GET /api/runs/:param/usage"
     ]
+  },
+  {
+    "capability": "design-browser",
+    "uiEntryPoint": "Design Browser workspace tab (+ > New Browser): blocked-embed preflight before the iframe fallback loads a site",
+    "cliArgs": [
+      "design-browser",
+      "frame-check",
+      "--url",
+      "http://127.0.0.1:1/"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/design-browser/frame-check",
+    "outputSchema": "{ verdict: 'embeddable' | 'blocked' | 'unknown' | 'skipped-local', finalUrl: string, blockedBy?: 'x-frame-options' | 'csp-frame-ancestors', header?: string, reason?: 'fetch-failed' }",
+    "parityApplicable": true,
+    "reason": "Read-only response-header preflight; the web panel and `od design-browser frame-check` hit the same POST endpoint with the same body shape. The probe targets a loopback URL, which the route answers deterministically ({verdict:'skipped-local'}) without any outbound network call, so gate runs stay offline.",
+    "knownNamespaceRoutes": [
+      "POST /api/design-browser/frame-check"
+    ],
+    "probeBody": {
+      "url": "http://127.0.0.1:1/"
+    },
+    "valueComparison": {
+      "mode": "exact"
+    }
   }
 ]

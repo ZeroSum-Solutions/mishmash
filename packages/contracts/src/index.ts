@@ -22,6 +22,7 @@ export * from './api/host-tools.js';
 export * from './api/finalize.js';
 export * from './api/github.js';
 export * from './api/handoff.js';
+export * from './api/design-browser.js';
 export * from './api/design-library.js';
 export * from './api/library.js';
 export * from './api/live-artifacts.js';

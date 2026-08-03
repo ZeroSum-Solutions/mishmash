@@ -913,6 +913,29 @@ function popupBlockedMessage(): string {
   return 'Popup blocked. Allow popups for MishMash and try again.';
 }
 
+/**
+ * Preflight whether an external site allows the Design Browser's iframe
+ * fallback to embed it. Returns null on any transport failure so callers
+ * treat "cannot check" exactly like an unknown verdict and embed as-is.
+ */
+export async function checkFrameEmbeddable(
+  url: string,
+  opts: { signal?: AbortSignal } = {},
+): Promise<import('@open-design/contracts').DesignBrowserFrameCheckVerdict | null> {
+  try {
+    const resp = await fetch('/api/design-browser/frame-check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+      signal: opts.signal,
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as import('@open-design/contracts').DesignBrowserFrameCheckVerdict;
+  } catch {
+    return null;
+  }
+}
+
 export async function openExternalUrl(url: string): Promise<boolean> {
   const bridgedUrl = await bridgeFirstPartyUrl(url);
   const targetUrl = bridgedUrl ?? url;
