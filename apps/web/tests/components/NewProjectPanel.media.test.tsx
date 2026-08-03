@@ -210,6 +210,89 @@ describe('NewProjectPanel media provider badges', () => {
     });
   });
 
+  // BUG-3 follow-up: the video allowlist (volcengine/hyperframes/grok/
+  // openrouter/imagerouter/aihubmix) that used to hide kie/higgsfield/fal/
+  // sdcpp/leonardo models is gone — supportedModels() now trusts the
+  // catalog's own integrated flag. This is a regression guard on that,
+  // pinned to the exact model the QA report named as missing.
+  it('lists a kie video model even though it is absent from the old hardcoded surface allowlist', () => {
+    render(
+      <NewProjectPanel
+        skills={[]}
+        designSystems={[]}
+        defaultDesignSystemId={null}
+        templates={[]}
+        onDeleteTemplate={vi.fn()}
+        promptTemplates={[]}
+        onCreate={vi.fn()}
+        mediaProviders={{}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Media' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Video' }));
+    fireEvent.click(screen.getByTestId('model-picker-trigger'));
+
+    expect(screen.getByTestId('model-picker-option-bytedance/seedance-2')).toBeTruthy();
+  });
+
+  // The product decision on BUG-3: unify on the storyboard shot/mood
+  // pickers' own idiom for an integrated-but-unconfigured model — append
+  // the shared `storyboard.needsApiKey` hint to the model's label instead
+  // of only badging the provider group. Red on main (the option only ever
+  // rendered model.label), green once MediaModelCards' option row also
+  // checks group.ready.
+  it('annotates an unconfigured provider\'s model option with the storyboard "(needs API key)" hint', () => {
+    render(
+      <NewProjectPanel
+        skills={[]}
+        designSystems={[]}
+        defaultDesignSystemId={null}
+        templates={[]}
+        onDeleteTemplate={vi.fn()}
+        promptTemplates={[]}
+        onCreate={vi.fn()}
+        mediaProviders={{}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Media' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Video' }));
+    fireEvent.click(screen.getByTestId('model-picker-trigger'));
+
+    const option = screen.getByTestId('model-picker-option-bytedance/seedance-2');
+    expect(option.textContent).toContain('(needs API key)');
+  });
+
+  it('omits the "(needs API key)" hint from a model option once its provider is configured', () => {
+    render(
+      <NewProjectPanel
+        skills={[]}
+        designSystems={[]}
+        defaultDesignSystemId={null}
+        templates={[]}
+        onDeleteTemplate={vi.fn()}
+        promptTemplates={[]}
+        onCreate={vi.fn()}
+        mediaProviders={{
+          kie: {
+            apiKey: '',
+            apiKeyConfigured: true,
+            apiKeyTail: '9012',
+            baseUrl: '',
+          },
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Media' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Video' }));
+    fireEvent.click(screen.getByTestId('model-picker-trigger'));
+
+    const option = screen.getByTestId('model-picker-option-bytedance/seedance-2');
+    expect(option.textContent).not.toContain('(needs API key)');
+  });
+
   it('switches away from the default OpenAI model when only another provider is configured', () => {
     const onCreate = vi.fn();
     render(
