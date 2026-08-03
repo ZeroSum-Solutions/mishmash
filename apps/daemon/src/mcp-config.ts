@@ -143,6 +143,14 @@ function isLoopbackHost(hostname: string): boolean {
   const host = normalizeHost(hostname);
   if (host === 'localhost' || host === '::1') return true;
   if (/^127(?:\.\d{1,3}){3}$/.test(host)) return true;
+  // IPv4-mapped IPv6 loopback, in both spellings a caller might hand us.
+  // `new URL(...).hostname` — every caller of `isLoopbackHost` today goes
+  // through this — canonicalizes `::ffff:127.0.0.1` to the hex-group form
+  // `::ffff:7f00:1` (verified against Node's WHATWG URL implementation), so
+  // that form must match. The dotted-decimal form is kept too, for a
+  // hypothetical future caller that hands this function a raw,
+  // non-URL-parsed hostname string instead.
+  if (/^::ffff:7f00:1$/i.test(host)) return true;
   const mapped = /^::ffff:(127(?:\.\d{1,3}){3})$/i.exec(host)?.[1];
   return Boolean(mapped);
 }
@@ -204,7 +212,12 @@ function resolveSpawnBearer(
   server: McpServerConfig,
   bearer: string | undefined,
 ): string | undefined {
-  if (!bearer || !server.url) return bearer;
+  if (!bearer) return bearer;
+  // Fail closed: no url to evaluate means we can't confirm https-or-loopback,
+  // so withhold rather than inject unchecked. Unreachable via sanitizeMcpServer
+  // today (http/sse servers always carry a url), but a future caller building
+  // McpServerConfig by hand must not get a free pass here.
+  if (!server.url) return undefined;
   if (isHttpsOrLoopbackMcpUrl(server.url)) return bearer;
   console.warn(
     `[mcp-config] refusing to inject the OAuth bearer token for MCP server "${server.id}": ` +

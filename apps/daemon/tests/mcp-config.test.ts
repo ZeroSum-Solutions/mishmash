@@ -355,6 +355,44 @@ describe('buildClaudeMcpJson', () => {
         Authorization: 'Bearer access-tok-xyz',
       });
     });
+
+    // Fail closed, not fail open: a server with no url at all can't be
+    // proven https-or-loopback, so the guard must withhold the Bearer
+    // rather than let it through unchecked. Not reachable via the normal
+    // sanitizeMcpServer path today (http/sse always carries a url there),
+    // but buildClaudeMcpJson takes McpServerConfig[] directly and doesn't
+    // re-validate — a future caller (or a bug elsewhere) could still hand
+    // it a server with a missing/empty url alongside a live token.
+    it('withholds the Bearer when the server has no url (fail closed)', () => {
+      const out = buildClaudeMcpJson(
+        [
+          {
+            id: 'no-url',
+            transport: 'http',
+            enabled: true,
+            authMode: 'oauth',
+          },
+        ],
+        { 'no-url': 'access-tok-xyz' },
+      ) as { mcpServers: Record<string, Record<string, unknown>> };
+      expect(out.mcpServers['no-url']?.headers).toBeUndefined();
+    });
+
+    it('withholds the Bearer when the server url is an empty string (fail closed)', () => {
+      const out = buildClaudeMcpJson(
+        [
+          {
+            id: 'blank-url',
+            transport: 'http',
+            enabled: true,
+            authMode: 'oauth',
+            url: '',
+          },
+        ],
+        { 'blank-url': 'access-tok-xyz' },
+      ) as { mcpServers: Record<string, Record<string, unknown>> };
+      expect(out.mcpServers['blank-url']?.headers).toBeUndefined();
+    });
   });
 });
 
@@ -838,6 +876,16 @@ describe('isHttpsOrLoopbackMcpUrl — https-or-loopback spawn-injection guard', 
     expect(isHttpsOrLoopbackMcpUrl('http://localhost:38451/mcp')).toBe(true);
     expect(isHttpsOrLoopbackMcpUrl('http://127.0.0.1:38451/mcp')).toBe(true);
     expect(isHttpsOrLoopbackMcpUrl('http://[::1]:38451/mcp')).toBe(true);
+  });
+
+  it('allows plain http on an IPv4-mapped IPv6 loopback literal', () => {
+    // WHATWG URL canonicalizes the dotted-decimal spelling to hex groups
+    // (verified against Node's URL impl: `new URL('http://[::ffff:127.0.0.1]/').hostname`
+    // === '::ffff:7f00:1'), so this is the form isLoopbackHost actually sees
+    // from every current caller — pin it directly rather than just the
+    // dotted spelling, which never reaches the URL-parsing callers.
+    expect(isHttpsOrLoopbackMcpUrl('http://[::ffff:127.0.0.1]:9999/mcp')).toBe(true);
+    expect(isHttpsOrLoopbackMcpUrl('http://[::ffff:7f00:1]:9999/mcp')).toBe(true);
   });
 
   it('rejects plain http on a non-loopback host', () => {
