@@ -499,6 +499,18 @@ printf '%s\\n' "\$last"
 
 The command exits \`0\` with one line of JSON: \`{"file":{...}}\` when done within ~25s, or \`{"taskId":"..."}\` as a SUCCESSFUL handoff for slow models. On a handoff, run the exact \`media wait\` command the CLI prints on stderr and repeat it until exit \`0\` (done) or exit \`5\` (failed); exit \`2\` means still running — not a failure. Parse JSON with \`python3\`, never \`jq\`.
 
+## Running a dev/preview server (if the project needs one)
+
+Never start a dev server as a background process of your own shell — it dies the moment your tool call returns, leaving the user with a dead URL (\`ERR_CONNECTION_REFUSED\`). Use the daemon-managed preview lifecycle instead:
+
+\`\`\`bash
+"$OD_NODE_BIN" "$OD_BIN" preview start --project "$OD_PROJECT_ID" --port 3000 --dir <app-subdir> -- npm run dev
+\`\`\`
+
+The command returns ONLY after the port verifiably answers HTTP; its JSON output contains the confirmed \`url\`. Report a preview URL to the user ONLY from that output — never claim a URL is live because the dev server printed a ready banner. \`preview list\` / \`preview stop --id <id>\` manage running previews.
+
+When you scaffold a Next.js app inside a project, pin the workspace root in its config (\`turbopack: { root: __dirname }\` and/or \`outputFileTracingRoot: __dirname\`) so Next cannot infer an enclosing directory as the workspace and exhaust file watchers.
+
 MODEL_SELECTION_GUIDANCE`;
 
 function renderByokMediaDefaultsHint(defaults?: ByokMediaDefaults): string {

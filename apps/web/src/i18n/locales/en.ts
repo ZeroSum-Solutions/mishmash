@@ -1943,6 +1943,8 @@ export const en: Dict = {
   'designBrowser.aria': 'Design Browser',
   'designBrowser.blocked.title': 'This site refuses to be embedded',
   'designBrowser.blocked.body': '{host} sends browser security headers that prevent it from loading inside MishMash. Open it in your browser instead.',
+  'designBrowser.previews.title': 'Running previews',
+  'designBrowser.previews.live': 'Live',
   'designBrowser.goBack': 'Go Back',
   'designBrowser.goForward': 'Go Forward',
   'designBrowser.reload': 'Reload',
