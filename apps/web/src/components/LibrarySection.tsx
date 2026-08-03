@@ -596,6 +596,14 @@ export function LibrarySection({ active, onOpenProject }: Props) {
   // instead of appending old-filter rows onto this fresh grid.
   const load = useCallback(async () => {
     const requestId = ++requestIdRef.current;
+    // A fresh load() invalidates any loadMore() page still in flight from the
+    // previous view. Clear its loading indicator immediately here rather than
+    // relying on that stale request's own `finally` (below, `loadMore()`
+    // unconditionally clears `loadingMore` when ITS fetch settles, but if
+    // this load() fires while that fetch is still pending, the button would
+    // otherwise stay disabled/aria-busy until the stale fetch eventually
+    // resolves — which could be a long time, or never).
+    setLoadingMore(false);
     setLoading(true);
     try {
       const page = await fetchLibraryAssetsPage(query);
@@ -624,14 +632,22 @@ export function LibrarySection({ active, onOpenProject }: Props) {
     setLoadingMore(true);
     try {
       const page = await fetchLibraryAssetsPage({ ...query, offset: fetchedCountRef.current });
-      if (requestIdRef.current !== requestId) return; // superseded by a load() while this page was in flight
+      // Only the DATA-mutating updates are generation-gated — a superseding
+      // load() means this page belongs to a view the user has already left,
+      // so it must not be appended/counted.
+      if (requestIdRef.current !== requestId) return;
       fetchedCountRef.current += page.assets.length;
       const filtered = page.assets.filter((a) => matchesKindFilter(a, kind as KindFilterValue));
       setAssets((prev) => [...prev, ...filtered]);
       setTotal(page.total);
       setHasMore(page.truncated);
     } finally {
-      if (requestIdRef.current === requestId) setLoadingMore(false);
+      // Unconditional: this request's OWN loading indicator must clear when
+      // ITS fetch settles regardless of generation, or a superseded call
+      // would leave "Load more" stuck disabled/aria-busy forever -- nothing
+      // else would ever flip it back (a generation-gated reset here can
+      // never fire once superseded, since the check is permanently false).
+      setLoadingMore(false);
     }
   }, [query, kind, hasMore, loadingMore]);
 

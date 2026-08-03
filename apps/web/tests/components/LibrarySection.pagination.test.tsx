@@ -159,6 +159,64 @@ describe('LibrarySection pagination', () => {
     expect(screen.queryByText('Load more')).toBeNull();
   });
 
+  it('re-enables Load more after a superseding load(), even when the fresh page is also truncated', async () => {
+    // Distinct from the race test above: there the superseding page was
+    // truncated:false, which hides "Load more" entirely and masks whether
+    // its disabled/aria-busy state ever got cleared. Here the fresh page IS
+    // truncated, so "Load more" must reappear -- and, the actual regression,
+    // it must come back ENABLED rather than stuck on "Loading…" from the
+    // still-pending stale request that superseded it.
+    const initialPage = [makeAsset({ id: 'old-1', sourceTitle: 'Old One' })];
+    let resolveLoadMore: ((v: LibraryAssetListResponse) => void) | null = null;
+    const pendingLoadMore = new Promise<LibraryAssetListResponse>((resolve) => {
+      resolveLoadMore = resolve;
+    });
+    const newFilterPage = [makeAsset({ id: 'new-1', sourceTitle: 'New One', kind: 'html' })];
+
+    fetchLibraryAssetsPage
+      .mockResolvedValueOnce(page(initialPage, 5, true)) // initial load()
+      .mockImplementationOnce(() => pendingLoadMore) // loadMore() -- stays pending
+      .mockResolvedValueOnce(page(newFilterPage, 5, true)); // superseding load() -- ALSO truncated
+
+    render(<LibrarySection active onOpenProject={() => {}} />);
+    await screen.findByText('Old One');
+    fireEvent.click(await screen.findByText('Load more'));
+    await waitFor(() => expect(fetchLibraryAssetsPage).toHaveBeenCalledTimes(2));
+
+    // While the loadMore fetch is in flight, the button reads "Loading…"
+    // and is disabled/aria-busy.
+    const loadingButton = (await screen.findByText('Loading…')).closest('button') as HTMLButtonElement;
+    expect(loadingButton.disabled).toBe(true);
+    expect(loadingButton.getAttribute('aria-busy')).toBe('true');
+
+    // A filter change fires a fresh load() while that fetch is STILL
+    // pending (resolveLoadMore has not been called yet).
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by kind' }), {
+      target: { value: 'html' },
+    });
+    await waitFor(() => expect(fetchLibraryAssetsPage).toHaveBeenCalledTimes(3));
+    await screen.findByText('New One');
+
+    // The regression: without clearing loadingMore synchronously in load(),
+    // this button would still read "Loading…" / disabled here, because the
+    // stale loadMore's own fetch (the only other place that used to clear
+    // it) has not settled yet and — pre-fix — never could once superseded.
+    const freshButton = (await screen.findByText('Load more')).closest('button') as HTMLButtonElement;
+    expect(freshButton.disabled).toBe(false);
+    expect(freshButton.getAttribute('aria-busy')).toBe('false');
+
+    // Letting the stale fetch settle afterward must not resurrect its
+    // (discarded) data or re-disable the button.
+    await act(async () => {
+      resolveLoadMore?.(page([makeAsset({ id: 'old-2', sourceTitle: 'Old Two' })], 5, true));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.queryByText('Old Two')).toBeNull();
+    const finalButton = screen.getByText('Load more').closest('button') as HTMLButtonElement;
+    expect(finalButton.disabled).toBe(false);
+  });
+
   it('bumps the paging cursor and total on a live SSE ingest so a later loadMore does not duplicate rows', async () => {
     const initialPage = [makeAsset({ id: 'a1', sourceTitle: 'One' }), makeAsset({ id: 'a2', sourceTitle: 'Two' })];
     const nextPage = [makeAsset({ id: 'a3', sourceTitle: 'Three' })];
