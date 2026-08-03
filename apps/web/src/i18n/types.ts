@@ -1004,6 +1004,7 @@ export interface Dict {
   'entry.navTasks': string;
   'entry.navPlugins': string;
   'entry.navDesignSystems': string;
+  'entry.navLibrary': string;
   'entry.navDesignLibrary': string;
   'entry.navStoryboard': string;
   'entry.navIntegrations': string;

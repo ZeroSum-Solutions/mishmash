@@ -666,6 +666,7 @@ export const en: Dict = {
   'entry.navTasks': 'Automations',
   'entry.navPlugins': 'Plugins',
   'entry.navDesignSystems': 'Design systems',
+  'entry.navLibrary': 'Library',
   'entry.navDesignLibrary': 'Design Library',
   'entry.navStoryboard': 'Storyboard',
   'entry.navIntegrations': 'Integrations',

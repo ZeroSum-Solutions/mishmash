@@ -8130,6 +8130,19 @@ async function runLibrary(args) {
     switch (sub) {
       case 'list':
       case 'search': {
+        // Validate --offset client-side instead of forwarding a bad value to
+        // the daemon: an unparsable or negative offset must fail loudly here
+        // rather than silently falling back to 0 server-side, which would
+        // make `od library list --offset abc` quietly re-list page 1 instead
+        // of erroring.
+        let offsetNum = 0;
+        if (flags.offset !== undefined) {
+          offsetNum = Number(flags.offset);
+          if (!Number.isFinite(offsetNum) || !Number.isInteger(offsetNum) || offsetNum < 0) {
+            console.error(`--offset must be a non-negative integer, got: ${flags.offset}`);
+            process.exit(2);
+          }
+        }
         const params = new URLSearchParams();
         const query = sub === 'search' ? flags.query || pos[0] : flags.query;
         if (query) params.set('q', query);
@@ -8139,7 +8152,7 @@ async function runLibrary(args) {
         if (flags.date) params.set('date', flags.date);
         if (flags.project) params.set('projectId', flags.project);
         if (flags.limit) params.set('limit', flags.limit);
-        if (flags.offset) params.set('offset', flags.offset);
+        if (flags.offset !== undefined) params.set('offset', String(offsetNum));
         const qs = params.toString();
         const resp = await fetch(`${base}/api/library/assets${qs ? `?${qs}` : ''}`);
         if (!resp.ok) return structuredHttpFailure(resp);
@@ -8155,7 +8168,7 @@ async function runLibrary(args) {
         // library. (--json carries total/truncated in the payload itself.)
         if (data.truncated) {
           const shown = (data.assets ?? []).length;
-          const nextOffset = (Number(flags.offset) || 0) + shown;
+          const nextOffset = offsetNum + shown;
           console.error(
             `(showing ${shown} of ${data.total} matching assets — pass --offset ${nextOffset} for the next page, ` +
               `a higher --limit, or narrow the filter)`,

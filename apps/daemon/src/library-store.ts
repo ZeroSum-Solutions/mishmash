@@ -418,22 +418,50 @@ export function countLibraryAssets(db: SqliteDb, filter: LibraryAssetFilter = {}
   return row.n;
 }
 
+/** Clamp a page-size filter value to the [1, 1000] hard cap, defaulting to
+ * 500. Exported so any caller reasoning about the store's effective page
+ * size (not just `listLibraryAssets` itself) applies the exact same rule
+ * instead of re-deriving it and risking drift. */
+export function clampLibraryListLimit(rawLimit: unknown): number {
+  const n = Number(rawLimit);
+  return Number.isFinite(n) ? Math.max(1, Math.min(n, 1000)) : 500;
+}
+
+/** Clamp a page offset to a non-negative integer, defaulting to 0 for
+ * anything non-finite (missing, `NaN` from an unparsable query value, etc).
+ * Exported so a caller reporting on the page (e.g. the HTTP route's
+ * `truncated` flag) uses the exact same *effective* offset `listLibraryAssets`
+ * queried with, rather than the raw, possibly-NaN-or-negative input --
+ * otherwise `offset=abc` silently reports `truncated: false` unconditionally
+ * (NaN comparisons are always false) even though the store fell back to
+ * offset 0 and the page really is truncated (BUG-5 regression). */
+export function clampLibraryListOffset(rawOffset: unknown): number {
+  const n = Number(rawOffset);
+  return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+}
+
 export function listLibraryAssets(db: SqliteDb, filter: LibraryAssetFilter = {}): LibraryAssetRecord[] {
   const { whereSql, args } = buildLibraryAssetWhere(filter);
-  const limit = Number.isFinite(filter.limit) ? Math.max(1, Math.min(Number(filter.limit), 1000)) : 500;
+  const limit = clampLibraryListLimit(filter.limit);
   // Rows to skip before this page, in the same order the query returns --
   // how a caller pages past the `limit` ceiling instead of only being able
   // to detect a truncated page (BUG-5).
-  const offset = Number.isFinite(filter.offset) ? Math.max(0, Math.trunc(Number(filter.offset))) : 0;
+  const offset = clampLibraryListOffset(filter.offset);
   const raws = db
     .prepare(
       // Order by archive date first so the grid/timeline reflect when an
       // artifact was made (synced rows carry the file's own mtime as
-      // archived_date), with created_at as the within-day tiebreak. Matches
-      // idx_library_assets_archived.
+      // archived_date), with created_at as the within-day tiebreak, and `id`
+      // as a final deterministic tiebreak. Without it, rows sharing the same
+      // archived_date + created_at millisecond (routine for a bulk sync or
+      // import batch) have no stable relative order, so OFFSET paging across
+      // two separate requests can duplicate or skip rows inside a tied group.
+      // idx_library_assets_archived still drives the scan for the leading two
+      // columns; only genuinely-tied groups fall back to an in-memory sort by
+      // `id`, and ties are rare outside bulk-insert scenarios.
       `SELECT ${ASSET_COLS} FROM library_assets a
        ${whereSql}
-       ORDER BY a.archived_date DESC, a.created_at DESC
+       ORDER BY a.archived_date DESC, a.created_at DESC, a.id ASC
        LIMIT ${limit} OFFSET ${offset}`,
     )
     .all(...args) as RawAssetRow[];
