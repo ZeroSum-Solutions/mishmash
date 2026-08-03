@@ -629,6 +629,8 @@ import { registerRunRoutes } from './routes/runs.js';
 import { registerUsageRoutes } from './routes/usage.js';
 import { registerTerminalRoutes } from './routes/terminal.js';
 import { createTerminalService } from './terminals.js';
+import { confinePreviewCwd, createPreviewService } from './previews.js';
+import { registerPreviewRoutes } from './routes/preview.js';
 import { registerSocialShareRoutes } from './routes/social-share.js';
 import { registerOpenDesignPublicMetadataRoutes } from './routes/open-design-public-metadata.js';
 import { registerWhatsNewRoutes } from './routes/whats-new.js';
@@ -2631,6 +2633,11 @@ export async function startServer({
   // killed on daemon shutdown — see shutdownDaemonRuns below.
   const terminalService = createTerminalService();
 
+  // Daemon-owned preview servers (issue #38): previews outlive the agent tool
+  // call that started them and are torn down (whole process group, confirmed)
+  // on daemon shutdown alongside terminals.
+  const previewService = createPreviewService();
+
   // Tracks runs whose finalized assistant message has already been forwarded
   // to Langfuse so repeated message updates only emit one final trace per run.
   // Terminal fallback reports intentionally do not claim this set; a delayed
@@ -3111,6 +3118,22 @@ export async function startServer({
     projectStore: projectStoreDeps,
     projectFiles: projectFileDeps,
     terminals: terminalService,
+  });
+  registerPreviewRoutes(app, {
+    previews: previewService,
+    projectStore: { getProject: (id) => projectStoreDeps.getProject(db, id) },
+    // Confine preview working directories to the project's own tree —
+    // realpath-canonicalized on both sides so symlinks cannot escape it.
+    resolvePreviewCwd: (projectId, requestedCwd) => {
+      const project = projectStoreDeps.getProject(db, projectId);
+      if (!project) return null;
+      const baseDir = projectFileDeps.resolveProjectDir(
+        pathDeps.PROJECTS_DIR,
+        projectId,
+        project.metadata,
+      );
+      return confinePreviewCwd(baseDir, requestedCwd);
+    },
   });
   registerImportRoutes(app, {
     db,
@@ -8966,6 +8989,7 @@ export async function startServer({
       daemonShuttingDown = true;
       await design.runs.shutdownActive({ graceMs: resolveChatRunShutdownGraceMs() });
       await terminalService.shutdownActive();
+      await previewService.shutdown();
       await design.analytics.shutdown();
     };
     let server;

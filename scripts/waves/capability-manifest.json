@@ -1089,5 +1089,28 @@
     "valueComparison": {
       "mode": "exact"
     }
+  },
+  {
+    "capability": "preview",
+    "uiEntryPoint": "Project workspace preview lifecycle (issue #38): daemon-owned dev servers behind the file preview / open-in-browser flows",
+    "cliArgs": [
+      "preview",
+      "list",
+      "--project",
+      "<nonceProjectId>"
+    ],
+    "httpMethod": "GET",
+    "httpPath": "/api/projects/:id/previews",
+    "outputSchema": "{ previews: [{ id, projectId, pid, port, url, command, cwd, startedAt, status }] }",
+    "parityApplicable": true,
+    "reason": "CLI and UI drive the same /api/projects/:id/previews surface. The representative row is the side-effect-free GET list (deterministically {previews: []} on a fresh nonce project); start/stop are non-idempotent process-spawning writes and are documented in knownNamespaceRoutes rather than probed, matching the artifacts row's precedent of probing through a safe representative surface.",
+    "knownNamespaceRoutes": [
+      "DELETE /api/projects/:param/previews/:param",
+      "GET /api/projects/:param/previews",
+      "POST /api/projects/:param/previews"
+    ],
+    "valueComparison": {
+      "mode": "exact"
+    }
   }
 ]

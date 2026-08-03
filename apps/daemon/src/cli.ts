@@ -133,6 +133,18 @@ const DESIGN_BROWSER_FRAME_CHECK_BOOLEAN_FLAGS = new Set([
   'h',
 ]);
 
+const PREVIEW_STRING_FLAGS = new Set([
+  'project',
+  'dir',
+  'port',
+  'id',
+  'daemon-url',
+]);
+const PREVIEW_BOOLEAN_FLAGS = new Set([
+  'help',
+  'h',
+]);
+
 const PLUGIN_STRING_FLAGS = new Set([
   'daemon-url',
   'source',
@@ -390,6 +402,7 @@ const SUBCOMMAND_MAP = {
   media: runMedia,
   mcp: runMcp,
   'design-browser': runDesignBrowser,
+  preview: runPreview,
   amr: runAmr,
   'message-center': runMessageCenter,
   research: runResearch,
@@ -728,6 +741,10 @@ function printRootHelp() {
   od design-browser frame-check --url <url> [--daemon-url <url>]
       Preflight whether a site allows the Design Browser iframe to embed it.
 
+  od preview <start|list|stop> --project <id> [args] [-- <command...>]
+      Daemon-managed preview servers that outlive agent tool calls; start
+      returns only after the port verifiably answers HTTP.
+
   od plugin <list|info|install|uninstall|apply|doctor|replay|trust> [args]
       Discover, install, and apply plugins through the local daemon.
   od plugin publish-repo <folder>
@@ -1032,6 +1049,115 @@ function safeJsonParse(text) {
 }
 
 // ---------------------------------------------------------------------------
+// Subcommand: od preview …
+// ---------------------------------------------------------------------------
+
+async function runPreview(args) {
+  const sub = args.find((a) => !a.startsWith('-')) || '';
+  if (!sub || sub === 'help' || args.includes('--help') || args.includes('-h')) {
+    printPreviewHelp();
+    process.exit(sub === 'help' || args.includes('--help') || args.includes('-h') ? 0 : 2);
+  }
+  if (sub !== 'start' && sub !== 'list' && sub !== 'stop') {
+    console.error(`unknown subcommand: od preview ${sub}`);
+    printPreviewHelp();
+    process.exit(2);
+  }
+  // Everything after a literal `--` is the preview command, verbatim — no
+  // shell re-quoting problems: `od preview start ... -- npm run dev`.
+  const separator = args.indexOf('--');
+  const command = separator === -1 ? [] : args.slice(separator + 1);
+  // Remove only the subcommand token at its position — a flag VALUE that
+  // happens to equal the subcommand name (e.g. `--id stop`) must survive.
+  const flagSource = separator === -1 ? args : args.slice(0, separator);
+  const subIndex = flagSource.indexOf(sub);
+  const flagArgs = subIndex === -1
+    ? flagSource
+    : [...flagSource.slice(0, subIndex), ...flagSource.slice(subIndex + 1)];
+  let flags;
+  try {
+    flags = parseFlags(flagArgs, { string: PREVIEW_STRING_FLAGS, boolean: PREVIEW_BOOLEAN_FLAGS });
+  } catch (err) {
+    console.error(err.message);
+    printPreviewHelp();
+    process.exit(2);
+  }
+  const projectId = typeof flags.project === 'string' ? flags.project.trim() : '';
+  if (!projectId) {
+    console.error('--project required');
+    process.exit(2);
+  }
+  const daemonUrl = await cliDaemonUrl(flags);
+  const base = `${daemonUrl.replace(/\/$/, '')}/api/projects/${encodeURIComponent(projectId)}/previews`;
+
+  const send = async (url, init) => {
+    let resp;
+    try {
+      resp = await fetch(url, init);
+    } catch (err) {
+      surfaceFetchError(err, daemonUrl);
+      process.exit(3);
+    }
+    const text = await resp.text();
+    if (!resp.ok) {
+      console.error(`daemon ${resp.status}: ${text}`);
+      process.exit(4);
+    }
+    process.stdout.write(`${text}\n`);
+  };
+
+  if (sub === 'list') {
+    return send(base, { method: 'GET' });
+  }
+  if (sub === 'stop') {
+    const previewId = typeof flags.id === 'string' ? flags.id.trim() : '';
+    if (!previewId) {
+      console.error('--id required');
+      process.exit(2);
+    }
+    return send(`${base}/${encodeURIComponent(previewId)}`, { method: 'DELETE' });
+  }
+  const port = Number(flags.port);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    console.error('--port required (integer 1-65535)');
+    process.exit(2);
+  }
+  if (command.length === 0) {
+    console.error('preview command required after `--`, e.g. od preview start --project <id> --port 3000 -- npm run dev');
+    process.exit(2);
+  }
+  return send(base, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      command,
+      port,
+      ...(typeof flags.dir === 'string' && flags.dir ? { cwd: flags.dir } : {}),
+    }),
+  });
+}
+
+function printPreviewHelp() {
+  console.log(`Usage:
+  od preview start --project <id> --port <n> [--dir <subdir>] [--daemon-url <url>] -- <command...>
+  od preview list --project <id> [--daemon-url <url>]
+  od preview stop --project <id> --id <previewId> [--daemon-url <url>]
+
+Daemon-managed preview servers (issue #38): the daemon owns the process, so it
+survives the agent tool call that started it; \`start\` returns ONLY after the
+port verifiably answers HTTP — never report a preview URL as live any other
+way. \`stop\` succeeds only when the whole process group is confirmed gone.
+Output is JSON on stdout.
+
+Flags:
+  --project     Required project id.
+  --port        start: the port the command will listen on (also passed as $PORT).
+  --dir         start: working directory relative to the project dir (must stay inside it).
+  --id          stop: the preview session id from start/list.
+  --daemon-url  Local daemon URL. Defaults to OD_DAEMON_URL, OD_SIDECAR_IPC_PATH discovery, or http://127.0.0.1:7456.`);
+}
+
+// ---------------------------------------------------------------------------
 // Subcommand: od design-browser …
 // ---------------------------------------------------------------------------
 
@@ -1046,7 +1172,8 @@ async function runDesignBrowser(args) {
     printDesignBrowserHelp();
     process.exit(2);
   }
-  return runDesignBrowserFrameCheck(args.filter((a) => a !== sub));
+  const subIndex = args.indexOf(sub);
+  return runDesignBrowserFrameCheck([...args.slice(0, subIndex), ...args.slice(subIndex + 1)]);
 }
 
 async function runDesignBrowserFrameCheck(rawArgs) {

@@ -23,6 +23,7 @@ import {
 } from '../analytics/events';
 import {
   checkFrameEmbeddable,
+  listProjectPreviews,
   openExternalUrl,
   projectRawUrl,
   writeProjectBase64File,
@@ -3147,6 +3148,7 @@ function DesignBrowserStart({
   const analytics = useAnalytics();
   const [activeCategory, setActiveCategory] = useState<string>(REFERENCE_ALL_CATEGORY);
   const [query, setQuery] = useState('');
+  const [previews, setPreviews] = useState<import('@open-design/contracts').PreviewInfo[]>([]);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -3156,6 +3158,19 @@ function DesignBrowserStart({
       ...(projectId ? { project_id: projectId } : {}),
     });
   }, [analytics.track, projectId]);
+
+  // Daemon-managed preview servers (issue #38): surface running previews on
+  // the start page so their verified URLs are one click away.
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    void listProjectPreviews(projectId).then((list) => {
+      if (!cancelled) setPreviews(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   const visibleGroups = useMemo(
     () => filterReferenceGroups(REFERENCE_GROUPS, activeCategory, query, t),
@@ -3203,6 +3218,26 @@ function DesignBrowserStart({
           </p>
         </div>
       </div>
+
+      {previews.length > 0 ? (
+        <section className="db-previews" aria-label={t('designBrowser.previews.title')}>
+          <h3 className="db-previews-title">{t('designBrowser.previews.title')}</h3>
+          <div className="db-previews-list">
+            {previews.map((preview) => (
+              <button
+                key={preview.id}
+                type="button"
+                className="db-preview-entry"
+                onClick={() => onNavigate(preview.url)}
+              >
+                <Icon name="globe" size={14} />
+                <span className="db-preview-url">{preview.url}</span>
+                <span className="db-preview-live">{t('designBrowser.previews.live')}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <div className="db-reference-toolbar">
         <div

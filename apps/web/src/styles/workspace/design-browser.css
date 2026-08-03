@@ -756,6 +756,52 @@
 .db-blocked-open:hover {
   background: var(--bg-subtle);
 }
+.db-previews {
+  padding: 0 26px;
+  margin-top: 14px;
+}
+.db-previews-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.db-previews-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.db-preview-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.db-preview-entry:hover {
+  background: var(--bg-subtle);
+}
+.db-preview-url {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.db-preview-live {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, #16a34a 14%, transparent);
+  color: #15803d;
+  font-size: 11px;
+  font-weight: 600;
+}
 .db-comment-layer {
   position: absolute;
   inset: 0;

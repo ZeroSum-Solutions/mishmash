@@ -914,6 +914,23 @@ function popupBlockedMessage(): string {
 }
 
 /**
+ * List the project's daemon-managed preview servers (issue #38). Returns an
+ * empty list on any failure — the browser start page simply omits the section.
+ */
+export async function listProjectPreviews(
+  projectId: string,
+): Promise<import('@open-design/contracts').PreviewInfo[]> {
+  try {
+    const resp = await fetch(`/api/projects/${encodeURIComponent(projectId)}/previews`);
+    if (!resp.ok) return [];
+    const json = (await resp.json()) as import('@open-design/contracts').PreviewListResponse;
+    return Array.isArray(json.previews) ? json.previews : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Preflight whether an external site allows the Design Browser's iframe
  * fallback to embed it. Returns null on any transport failure so callers
  * treat "cannot check" exactly like an unknown verdict and embed as-is.

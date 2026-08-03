@@ -2698,6 +2698,8 @@ export interface Dict {
   'designBrowser.aria': string;
   'designBrowser.blocked.title': string;
   'designBrowser.blocked.body': string;
+  'designBrowser.previews.title': string;
+  'designBrowser.previews.live': string;
   'designBrowser.goBack': string;
   'designBrowser.goForward': string;
   'designBrowser.reload': string;

@@ -4,7 +4,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DesignBrowserPanel } from '../../src/components/DesignBrowserPanel';
-import { checkFrameEmbeddable, openExternalUrl } from '../../src/providers/registry';
+import { checkFrameEmbeddable, listProjectPreviews, openExternalUrl } from '../../src/providers/registry';
 
 // The panel reaches the network through the providers registry; stub it so
 // jsdom rendering never fetches. `checkFrameEmbeddable` is re-stubbed per test.
@@ -15,6 +15,7 @@ vi.mock('../../src/providers/registry', async () => {
   return {
     ...actual,
     checkFrameEmbeddable: vi.fn(async () => null),
+    listProjectPreviews: vi.fn(async () => []),
     openExternalUrl: vi.fn(async () => true),
     writeProjectTextFile: vi.fn(async () => null),
     writeProjectBase64File: vi.fn(async () => null),
@@ -24,10 +25,13 @@ vi.mock('../../src/providers/registry', async () => {
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const checkFrameEmbeddableMock = vi.mocked(checkFrameEmbeddable);
+const listProjectPreviewsMock = vi.mocked(listProjectPreviews);
 const openExternalUrlMock = vi.mocked(openExternalUrl);
 
 beforeEach(() => {
   checkFrameEmbeddableMock.mockReset();
+  listProjectPreviewsMock.mockReset();
+  listProjectPreviewsMock.mockResolvedValue([]);
   openExternalUrlMock.mockClear();
 });
 
@@ -173,3 +177,48 @@ describe('DesignBrowserPanel iframe fallback frame-check', () => {
     expect(view.container.querySelector('.db-fallback iframe')).not.toBeNull();
   });
 });
+
+describe('DesignBrowserStart running previews', () => {
+  it('lists daemon-managed previews on the start page and navigates on click', async () => {
+    listProjectPreviewsMock.mockResolvedValue([
+      {
+        id: 'prev-1',
+        projectId: 'proj-frame-check',
+        pid: 4242,
+        port: 3000,
+        url: 'http://127.0.0.1:3000/',
+        command: ['npm', 'run', 'dev'],
+        cwd: '/tmp/app',
+        startedAt: 0,
+        status: 'ready',
+      },
+    ]);
+
+    const view = render(
+      <DesignBrowserPanel
+        projectId="proj-frame-check"
+        onOpenFile={() => {}}
+        onRefreshFiles={() => {}}
+      />,
+    );
+
+    await screen.findByText('Running previews');
+    const entry = screen.getByRole('button', { name: /127\.0\.0\.1:3000/ });
+    entry.click();
+    await waitFor(() =>
+      expect(view.container.querySelector('.db-fallback iframe')).not.toBeNull());
+  });
+
+  it('omits the section when no previews are running', async () => {
+    render(
+      <DesignBrowserPanel
+        projectId="proj-frame-check"
+        onOpenFile={() => {}}
+        onRefreshFiles={() => {}}
+      />,
+    );
+    await waitFor(() => expect(listProjectPreviewsMock).toHaveBeenCalled());
+    expect(screen.queryByText('Running previews')).toBeNull();
+  });
+});
+
