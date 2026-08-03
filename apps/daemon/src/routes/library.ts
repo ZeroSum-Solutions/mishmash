@@ -721,11 +721,15 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
     if (str(q.projectId)) filter.projectId = str(q.projectId)!;
     if (str(q.designSystemId)) filter.designSystemId = str(q.designSystemId)!;
     if (q.limit) filter.limit = Number(q.limit);
+    if (q.offset) filter.offset = Number(q.offset);
     const assets = listLibraryAssets(db, filter).map(toPublicAsset);
-    // The page caps at 500/1000 rows; report the full matching count so no
-    // consumer can mistake a truncated page for the whole library (BUG-5).
+    // Each page caps at 500/1000 rows; report the full matching count so no
+    // consumer can mistake a page for the whole library (BUG-5). `truncated`
+    // reports whether more rows exist PAST this page -- honest under paging,
+    // not just on the first request.
     const total = countLibraryAssets(db, filter);
-    res.json({ assets, total, truncated: assets.length < total });
+    const offset = filter.offset ?? 0;
+    res.json({ assets, total, truncated: offset + assets.length < total });
   });
 
   // Force a full reconcile pass (the web "Sync" button + `od library sync`).

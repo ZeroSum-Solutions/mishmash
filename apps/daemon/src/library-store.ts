@@ -421,6 +421,10 @@ export function countLibraryAssets(db: SqliteDb, filter: LibraryAssetFilter = {}
 export function listLibraryAssets(db: SqliteDb, filter: LibraryAssetFilter = {}): LibraryAssetRecord[] {
   const { whereSql, args } = buildLibraryAssetWhere(filter);
   const limit = Number.isFinite(filter.limit) ? Math.max(1, Math.min(Number(filter.limit), 1000)) : 500;
+  // Rows to skip before this page, in the same order the query returns --
+  // how a caller pages past the `limit` ceiling instead of only being able
+  // to detect a truncated page (BUG-5).
+  const offset = Number.isFinite(filter.offset) ? Math.max(0, Math.trunc(Number(filter.offset))) : 0;
   const raws = db
     .prepare(
       // Order by archive date first so the grid/timeline reflect when an
@@ -430,7 +434,7 @@ export function listLibraryAssets(db: SqliteDb, filter: LibraryAssetFilter = {})
       `SELECT ${ASSET_COLS} FROM library_assets a
        ${whereSql}
        ORDER BY a.archived_date DESC, a.created_at DESC
-       LIMIT ${limit}`,
+       LIMIT ${limit} OFFSET ${offset}`,
     )
     .all(...args) as RawAssetRow[];
   if (raws.length === 0) return [];

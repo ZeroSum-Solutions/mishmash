@@ -2605,22 +2605,51 @@ export interface LibraryAssetQuery {
   q?: string;
   date?: string;
   tag?: string;
+  /** Page size. Server default 500, clamped to the 1000-row hard max. */
+  limit?: number;
+  /** Rows to skip before the page — how a caller pages past the cap (BUG-5). */
+  offset?: number;
 }
 
-export async function fetchLibraryAssets(query: LibraryAssetQuery = {}): Promise<LibraryAsset[]> {
+/**
+ * Fetch one page of Library assets, carrying the full `{ assets, total,
+ * truncated }` response so a caller can page past the daemon's per-request
+ * cap instead of the page silently reading as the whole library (BUG-5).
+ * Falls back to an empty, non-truncated page on any network/HTTP error so
+ * callers never have to null-check.
+ */
+export async function fetchLibraryAssetsPage(
+  query: LibraryAssetQuery = {},
+): Promise<LibraryAssetListResponse> {
+  const empty: LibraryAssetListResponse = { assets: [], total: 0, truncated: false };
   try {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(query)) {
-      if (value) params.set(key, value);
+      if (value) params.set(key, String(value));
     }
     const qs = params.toString();
     const resp = await fetch(`/api/library/assets${qs ? `?${qs}` : ''}`);
-    if (!resp.ok) return [];
+    if (!resp.ok) return empty;
     const json = (await resp.json()) as LibraryAssetListResponse;
-    return json.assets ?? [];
+    return {
+      assets: json.assets ?? [],
+      total: json.total ?? (json.assets?.length ?? 0),
+      truncated: json.truncated ?? false,
+    };
   } catch {
-    return [];
+    return empty;
   }
+}
+
+/**
+ * Fetch a single (first) page of Library assets as a plain array, discarding
+ * paging metadata. Kept for callers that only ever show one bounded page
+ * (e.g. the "Select from library" picker) — the Library grid itself pages
+ * through {@link fetchLibraryAssetsPage} instead so a larger library doesn't
+ * silently read as complete.
+ */
+export async function fetchLibraryAssets(query: LibraryAssetQuery = {}): Promise<LibraryAsset[]> {
+  return (await fetchLibraryAssetsPage(query)).assets;
 }
 
 /**

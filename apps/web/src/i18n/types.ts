@@ -54,6 +54,9 @@ export interface Dict {
   'libraryPicker.allKinds': string;
   'libraryPicker.add': string;
   'libraryPicker.loading': string;
+  'library.assetCount': string;
+  'library.loadMore': string;
+  'library.loadingMore': string;
   'common.save': string;
   'common.close': string;
   'common.clear': string;

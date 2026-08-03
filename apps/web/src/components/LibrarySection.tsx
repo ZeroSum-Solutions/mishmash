@@ -25,7 +25,7 @@ import {
   fetchDesignSystem,
   fetchDesignSystems,
   fetchLibraryAsset,
-  fetchLibraryAssets,
+  fetchLibraryAssetsPage,
   fetchLibraryAssetAsFile,
   libraryAssetRawUrl,
   syncLibrary,
@@ -37,6 +37,7 @@ import { setPendingDesignSystemCreateEntry } from '../analytics/ds-create-entry'
 import { setComposerSeed, setDesignSystemAssetSeed, setHomeComposerAssetSeed } from '../state/libraryHandoff';
 import { Button, Dialog, DialogDescription, DialogFooter, DialogTitle } from '@open-design/components';
 import { Icon } from './Icon';
+import { useT } from '../i18n';
 import {
   KindIcon,
   SOURCE_LABELS,
@@ -489,8 +490,18 @@ const LibraryCard = memo(function LibraryCard({
 });
 
 export function LibrarySection({ active, onOpenProject }: Props) {
+  const t = useT();
   const [assets, setAssets] = useState<LibraryAsset[]>([]);
   const [loading, setLoading] = useState(false);
+  // Pagination (BUG-5): the daemon caps each page at 500/1000 rows, so a
+  // larger library needs more than one request. `total`/`hasMore` come
+  // straight off the server response so the count shown is never a guess,
+  // and `fetchedCountRef` tracks rows fetched so far (pre client-side kind
+  // filter) — the offset the next page continues from.
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const fetchedCountRef = useRef(0);
   const [syncing, setSyncing] = useState(false);
   const [kind, setKind] = useState('');
   const [source, setSource] = useState('');
@@ -557,14 +568,38 @@ export function LibrarySection({ active, onOpenProject }: Props) {
     filtersActiveRef.current = filtersActive;
   }, [filtersActive]);
 
+  // Fresh page 1 — used on mount, on any filter change, and by the manual
+  // Refresh / Sync actions. Resets the paging cursor.
   const load = useCallback(async () => {
     setLoading(true);
-    const next = await fetchLibraryAssets(query);
+    const page = await fetchLibraryAssetsPage(query);
+    fetchedCountRef.current = page.assets.length;
     // Final filtering is badge-aware (shared with the picker) so `image` excludes
     // element captures and `element` keeps only them; other kinds pass through.
-    setAssets(next.filter((a) => matchesKindFilter(a, kind as KindFilterValue)));
+    setAssets(page.assets.filter((a) => matchesKindFilter(a, kind as KindFilterValue)));
+    setTotal(page.total);
+    setHasMore(page.truncated);
     setLoading(false);
   }, [query, kind]);
+
+  // Fetch the next page (BUG-5) and append it — the grid never silently caps
+  // at the first page's rows. `offset` continues from every row fetched so
+  // far, so kind-filtered-out rows on the client don't cause the server page
+  // to be re-requested.
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await fetchLibraryAssetsPage({ ...query, offset: fetchedCountRef.current });
+      fetchedCountRef.current += page.assets.length;
+      const filtered = page.assets.filter((a) => matchesKindFilter(a, kind as KindFilterValue));
+      setAssets((prev) => [...prev, ...filtered]);
+      setTotal(page.total);
+      setHasMore(page.truncated);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [query, kind, hasMore, loadingMore]);
 
   // Force a reconcile (design systems + agent deliverables → referenced Library
   // rows), then reload so the freshly-indexed assets appear. The throttle lives
@@ -1332,6 +1367,17 @@ export function LibrarySection({ active, onOpenProject }: Props) {
           {assets.map((asset, index) => renderCard(asset, index))}
         </div>
       )}
+
+      {hasMore ? (
+        <div className={styles.loadMoreRow}>
+          <span className={styles.loadMoreCount}>
+            {t('library.assetCount', { shown: assets.length, total })}
+          </span>
+          <Button variant="ghost" onClick={() => void loadMore()} disabled={loadingMore} aria-busy={loadingMore}>
+            {loadingMore ? t('library.loadingMore') : t('library.loadMore')}
+          </Button>
+        </div>
+      ) : null}
 
       {band ? (
         <div
