@@ -12,13 +12,12 @@
 //    blackhole host-resolver rule), not interception on one HTTP client
 //    while the browser itself egresses freely.
 //
-// Crop: sharp's built-in `attention` salience strategy (S4-3) picks the
-// TARGET_WIDTH x TARGET_HEIGHT window out of a full-page screenshot in one
-// step -- no bespoke crop-window math needed.
+// Crop (S4-3): see crop.ts -- a sharp-backed hero/salient window selection
+// over the full-page screenshot.
 
 import { pathToFileURL } from 'node:url';
-import sharp from 'sharp';
 import { chromium } from 'playwright';
+import { cropToHeroWindow } from './crop.js';
 import { createLimiter } from './limiter.js';
 import { RenderMemoryLimitError, RenderTimeoutError } from './errors.js';
 import { aggregateProcessTreeRssKb } from './process-rss.js';
@@ -154,12 +153,8 @@ async function renderOnce(entryFileAbsPath: string): Promise<RenderResult> {
     }
     if (memoryExceeded) throw new RenderMemoryLimitError();
 
-    const { data, info } = await sharp(raw)
-      .resize(COVER_TARGET_WIDTH, COVER_TARGET_HEIGHT, { fit: 'cover', position: 'attention' })
-      .png()
-      .toBuffer({ resolveWithObject: true });
-
-    return { imageBytes: data, width: info.width, height: info.height };
+    const cropped = await cropToHeroWindow(raw, COVER_TARGET_WIDTH, COVER_TARGET_HEIGHT);
+    return { imageBytes: cropped.data, width: cropped.width, height: cropped.height };
   } finally {
     if (killTimer) clearTimeout(killTimer);
     if (pollHandle) clearInterval(pollHandle);
