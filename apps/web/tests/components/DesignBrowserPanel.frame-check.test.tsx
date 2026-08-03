@@ -60,7 +60,7 @@ describe('DesignBrowserPanel iframe fallback frame-check', () => {
 
     await screen.findByText('This site refuses to be embedded');
     expect(view.container.querySelector('.db-fallback iframe')).toBeNull();
-    expect(checkFrameEmbeddableMock).toHaveBeenCalledWith('https://gsap.com');
+    expect(checkFrameEmbeddableMock).toHaveBeenCalledWith('https://gsap.com', expect.anything());
   });
 
   it('offers Open in Browser from the blocked state', async () => {
@@ -101,6 +101,75 @@ describe('DesignBrowserPanel iframe fallback frame-check', () => {
     const view = renderPanel('https://flaky.example');
 
     await waitFor(() => expect(checkFrameEmbeddableMock).toHaveBeenCalled());
+    expect(view.container.querySelector('.db-fallback iframe')).not.toBeNull();
+  });
+
+  it('never applies a stale blocked verdict after navigating to a different URL', async () => {
+    let resolveFirst: (v: Awaited<ReturnType<typeof checkFrameEmbeddable>>) => void = () => {};
+    checkFrameEmbeddableMock
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockResolvedValueOnce({ verdict: 'embeddable', finalUrl: 'https://open.example/' });
+
+    const view = render(
+      <DesignBrowserPanel
+        projectId="proj-frame-check-race"
+        initialTitle="Blocked"
+        initialUrl="https://blocked.example"
+        onOpenFile={() => {}}
+        onRefreshFiles={() => {}}
+      />,
+    );
+    await waitFor(() => expect(checkFrameEmbeddableMock).toHaveBeenCalledTimes(1));
+
+    view.rerender(
+      <DesignBrowserPanel
+        projectId="proj-frame-check-race"
+        initialTitle="Blocked"
+        initialUrl="https://blocked.example"
+        navigateRequest={{ url: 'https://open.example', nonce: 1 }}
+        onOpenFile={() => {}}
+        onRefreshFiles={() => {}}
+      />,
+    );
+    await waitFor(() => expect(checkFrameEmbeddableMock).toHaveBeenCalledTimes(2));
+
+    // The first URL's verdict lands late — it must not brand the new URL.
+    resolveFirst({
+      verdict: 'blocked',
+      finalUrl: 'https://blocked.example/',
+      blockedBy: 'x-frame-options',
+      header: 'deny',
+    });
+    await waitFor(() =>
+      expect(view.container.querySelector('.db-fallback iframe')).not.toBeNull());
+    expect(screen.queryByText('This site refuses to be embedded')).toBeNull();
+  });
+
+  it('keeps the blocked state through a reload instead of flashing the refused iframe', async () => {
+    let resolveRecheck: (v: Awaited<ReturnType<typeof checkFrameEmbeddable>>) => void = () => {};
+    checkFrameEmbeddableMock
+      .mockResolvedValueOnce({
+        verdict: 'blocked',
+        finalUrl: 'https://gsap.com/',
+        blockedBy: 'x-frame-options',
+        header: 'sameorigin',
+      })
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveRecheck = resolve; }));
+
+    const view = renderPanel('https://gsap.com');
+    await screen.findByText('This site refuses to be embedded');
+
+    screen.getByRole('button', { name: 'Reload' }).click();
+    await waitFor(() => expect(checkFrameEmbeddableMock).toHaveBeenCalledTimes(2));
+
+    // While the re-check is in flight the blocked panel must stay up.
+    expect(screen.queryByText('This site refuses to be embedded')).not.toBeNull();
+    expect(view.container.querySelector('.db-fallback iframe')).toBeNull();
+
+    // A verdict flip clears it.
+    resolveRecheck({ verdict: 'embeddable', finalUrl: 'https://gsap.com/' });
+    await waitFor(() =>
+      expect(screen.queryByText('This site refuses to be embedded')).toBeNull());
     expect(view.container.querySelector('.db-fallback iframe')).not.toBeNull();
   });
 });

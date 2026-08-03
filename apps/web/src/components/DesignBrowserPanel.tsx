@@ -851,10 +851,14 @@ export function DesignBrowserPanel({
   const [textDraft, setTextDraft] = useState('');
   const [captureChromeHidden, setCaptureChromeHidden] = useState(false);
   const [statusMessage, setStatusMessage] = useState<BrowserStatusMessage | null>(null);
-  // Iframe-fallback only: a confirmed "this site refuses embedding" verdict for
-  // the CURRENT loadUrl. Cleared on every navigation; never set in the desktop
-  // webview branch (webviews are not subject to frame-ancestors).
-  const [frameBlock, setFrameBlock] = useState<{ url: string; blockedBy: string } | null>(null);
+  // Iframe-fallback only: a confirmed "this site refuses embedding" verdict.
+  // `key` is the loadUrl with the reload cache-buster stripped, so a reload of
+  // a blocked page keeps showing the blocked state (instead of flashing the
+  // still-refusing iframe) until the fresh verdict arrives. `host` labels the
+  // daemon-reported post-redirect finalUrl, which may differ from what the
+  // user typed. Never set in the desktop webview branch (webviews are not
+  // subject to frame-ancestors).
+  const [frameBlock, setFrameBlock] = useState<{ key: string; host: string; blockedBy: string } | null>(null);
   const [savingActions, setSavingActions] = useState<Record<BrowserSavingAction, boolean>>({
     archive: false,
     brief: false,
@@ -1124,7 +1128,12 @@ export function DesignBrowserPanel({
   // headers and show an explicit blocked state instead. Desktop webviews are
   // exempt (not subject to frame-ancestors), as are local/non-http targets.
   useEffect(() => {
-    setFrameBlock(null);
+    const key = stripReloadParam(loadUrl);
+    // A reload of a blocked page re-navigates to the same page with only the
+    // cache-buster changed: keep the blocked state up while re-checking, so
+    // the still-refusing iframe never flashes back. A genuinely different URL
+    // clears immediately.
+    setFrameBlock((prev) => (prev && prev.key === key ? prev : null));
     if (desktopHostAvailable || loadUrl === EMPTY_URL) return;
     let target: URL;
     try {
@@ -1133,13 +1142,19 @@ export function DesignBrowserPanel({
       return;
     }
     if (target.protocol !== 'http:' && target.protocol !== 'https:') return;
-    let cancelled = false;
-    void checkFrameEmbeddable(loadUrl).then((verdict) => {
-      if (cancelled || !verdict || verdict.verdict !== 'blocked') return;
-      setFrameBlock({ url: loadUrl, blockedBy: verdict.blockedBy });
+    const controller = new AbortController();
+    void checkFrameEmbeddable(loadUrl, { signal: controller.signal }).then((verdict) => {
+      if (controller.signal.aborted || !verdict) return;
+      if (verdict.verdict === 'blocked') {
+        setFrameBlock({ key, host: labelFromUrl(verdict.finalUrl), blockedBy: verdict.blockedBy });
+      } else {
+        // The fresh verdict cleared an optimistically-kept block (e.g. the
+        // site stopped refusing between reloads).
+        setFrameBlock((prev) => (prev && prev.key === key ? null : prev));
+      }
     });
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [desktopHostAvailable, loadUrl]);
 
@@ -2466,12 +2481,12 @@ export function DesignBrowserPanel({
                 partition={DESIGN_BROWSER_PARTITION}
                 title={pageTitle}
               />
-            ) : frameBlock && frameBlock.url === loadUrl ? (
+            ) : frameBlock && frameBlock.key === stripReloadParam(loadUrl) ? (
               <div className="db-blocked" role="status">
                 <Icon name="globe" className="db-blocked-icon" />
-                <h3 className="db-blocked-title">{t('designBrowser.blocked.title')}</h3>
+                <h2 className="db-blocked-title">{t('designBrowser.blocked.title')}</h2>
                 <p className="db-blocked-body">
-                  {t('designBrowser.blocked.body').replace('{host}', labelFromUrl(loadUrl))}
+                  {t('designBrowser.blocked.body', { host: frameBlock.host })}
                 </p>
                 <button
                   type="button"
@@ -3405,6 +3420,22 @@ export function labelFromUrl(url: string): string {
   try {
     const parsed = new URL(url);
     return parsed.hostname.replace(/^www\./, '') || url;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Identity of a load target ignoring the `odReload` cache-buster that
+ * `reload()` appends: a reload must count as "same page" for the frame-block
+ * state so the blocked panel survives the re-check instead of flashing the
+ * refused iframe.
+ */
+export function stripReloadParam(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.delete('odReload');
+    return parsed.toString();
   } catch {
     return url;
   }

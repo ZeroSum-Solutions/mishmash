@@ -45,21 +45,30 @@ type HeaderVerdict =
  * browser-ignored/invalid one blocks the embed.
  */
 export function frameEmbeddingVerdictFromHeaders(headers: FrameEmbeddingHeaders): HeaderVerdict {
+  // The Fetch API joins multiple response headers of the same name with ", ",
+  // so each comma-separated segment is one delivered policy. CSP directive
+  // values cannot legally contain commas, so this split is unambiguous.
   const cspPolicies = (headers.contentSecurityPolicy ?? '')
     .split(',')
     .map((policy) => policy.trim())
     .filter(Boolean);
   const frameAncestorsDirectives: string[] = [];
   for (const policy of cspPolicies) {
+    // Within one policy, browsers honor only the FIRST occurrence of a
+    // directive name; later duplicates are ignored (CSP3 §parse-a-policy).
     for (const directive of policy.split(';')) {
       const trimmed = directive.trim();
-      if (/^frame-ancestors(\s|$)/i.test(trimmed)) frameAncestorsDirectives.push(trimmed);
+      if (/^frame-ancestors(\s|$)/i.test(trimmed)) {
+        frameAncestorsDirectives.push(trimmed);
+        break;
+      }
     }
   }
 
   if (frameAncestorsDirectives.length > 0) {
-    // Every policy carrying the directive must allow us (CSP composes as an
-    // intersection). `*` is the only source that can match a local origin.
+    // Every delivered policy carrying the directive must allow us (multiple
+    // policies compose as an intersection). `*` is the only source that can
+    // match a local origin.
     const allowsAll = frameAncestorsDirectives.every((directive) => {
       const sources = directive.replace(/^frame-ancestors/i, '').trim().split(/\s+/).filter(Boolean);
       return sources.includes('*');
@@ -75,11 +84,11 @@ export function frameEmbeddingVerdictFromHeaders(headers: FrameEmbeddingHeaders)
   const xfo = (headers.xFrameOptions ?? '').trim();
   if (xfo) {
     // Servers occasionally send a comma-joined list; any recognized blocking
-    // token blocks. Unrecognized values are ignored by browsers.
+    // token blocks. Unrecognized values are ignored by browsers — including
+    // the obsolete `ALLOW-FROM`, which no evergreen browser implements, so a
+    // site sending only that actually embeds fine and must not be flagged.
     const tokens = xfo.split(',').map((token) => token.trim().toUpperCase()).filter(Boolean);
-    const blocksUs = tokens.some(
-      (token) => token === 'DENY' || token === 'SAMEORIGIN' || token.startsWith('ALLOW-FROM'),
-    );
+    const blocksUs = tokens.some((token) => token === 'DENY' || token === 'SAMEORIGIN');
     if (blocksUs) return { blocked: true, blockedBy: 'x-frame-options', header: xfo };
   }
 

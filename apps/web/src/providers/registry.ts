@@ -920,12 +920,14 @@ function popupBlockedMessage(): string {
  */
 export async function checkFrameEmbeddable(
   url: string,
+  opts: { signal?: AbortSignal } = {},
 ): Promise<import('@open-design/contracts').DesignBrowserFrameCheckVerdict | null> {
   try {
     const resp = await fetch('/api/design-browser/frame-check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),
+      signal: opts.signal,
     });
     if (!resp.ok) return null;
     return (await resp.json()) as import('@open-design/contracts').DesignBrowserFrameCheckVerdict;
