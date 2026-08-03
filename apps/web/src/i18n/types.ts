@@ -2142,7 +2142,6 @@ export interface Dict {
   'designs.renameTitle': string;
   'designs.renameSave': string;
   'designs.renameCancel': string;
-  'designs.loadMore': string;
 
   // Examples tab
   'examples.typeLabel': string;
