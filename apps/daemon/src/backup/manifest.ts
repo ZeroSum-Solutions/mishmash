@@ -23,9 +23,10 @@ export type ArchiveClass =
   | 'projects-dir'
   | 'library-assets'
   | 'memory-markdown'
-  | 'app-config';
+  | 'app-config'
+  | 'covers';
 
-export const ARCHIVE_DIR_CLASSES = ['projects-dir', 'library-assets', 'memory-markdown'] as const satisfies readonly ArchiveClass[];
+export const ARCHIVE_DIR_CLASSES = ['projects-dir', 'library-assets', 'memory-markdown', 'covers'] as const satisfies readonly ArchiveClass[];
 
 export const ARCHIVE_FILE_CLASSES = ['sqlite-database', 'app-config'] as const satisfies readonly ArchiveClass[];
 
@@ -36,6 +37,7 @@ export const ALL_ARCHIVE_CLASSES: readonly ArchiveClass[] = [
   'library-assets',
   'memory-markdown',
   'app-config',
+  'covers',
 ];
 
 export interface ArchiveManifestFileEntry {
@@ -65,10 +67,12 @@ export const RELPATH_BY_CLASS: Record<ArchiveClass, string> = {
   'library-assets': 'data/library',
   'memory-markdown': 'data/memory',
   'app-config': 'data/app-config.json',
+  covers: 'data/covers',
 };
 
 export const CHECKSUMS_RELPATH_BY_CLASS: Partial<Record<ArchiveClass, string>> = {
   'projects-dir': 'checksums/projects-dir.json',
   'library-assets': 'checksums/library-assets.json',
   'memory-markdown': 'checksums/memory-markdown.json',
+  covers: 'checksums/covers.json',
 };

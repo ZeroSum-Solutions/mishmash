@@ -397,6 +397,102 @@ async function runRestore(args) {
   if (exitCode !== 0) process.exit(exitCode);
 }
 
+// `od cover generate|show` -- CLI parity for S4-8/C4-12. The daemon HTTP
+// layer is the single source of truth (root AGENTS.md "Capability
+// exposure"): this fetches the SAME frozen `/api/projects/:id/cover*`
+// endpoints the UI calls, it never touches the data dir directly.
+const COVER_STRING_FLAGS = new Set(['daemon-url', 'project', 'out']);
+const COVER_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
+
+function printCoverHelp() {
+  console.log(`Usage: od cover <generate|show> --project <id> [--json] [--out <path>]
+
+Subcommands:
+  generate   POST .../cover/generate -- synchronously (re)render the
+             project's cover, reusing the stored one when its content
+             hash is unchanged.
+  show       GET .../cover -- fetch the currently stored cover bytes.
+
+Options:
+  --project <id>   Project id (required).
+  --json           Print machine-readable JSON instead of a summary line.
+  --out <path>      (show only) Also save the cover bytes to <path>.
+  --daemon-url <url>`);
+}
+
+async function runCover(args) {
+  if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    printCoverHelp();
+    process.exit(args.length === 0 ? 2 : 0);
+  }
+  const sub = args[0];
+  const rest = args.slice(1);
+  let flags;
+  try {
+    flags = parseFlags(rest, { string: COVER_STRING_FLAGS, boolean: COVER_BOOLEAN_FLAGS });
+  } catch (err) {
+    console.error(err.message);
+    process.exit(2);
+  }
+  const projectId = flags.project;
+  if (!projectId) {
+    console.error('Usage: od cover <generate|show> --project <id> [--json]');
+    process.exit(2);
+  }
+  const base = await cliDaemonBaseUrl(flags);
+  const writeJson = (data) => process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+
+  if (sub === 'generate') {
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}/cover/generate`, {
+        method: 'POST',
+      });
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    const body = await resp.json().catch(() => null);
+    if (!resp.ok || !body || body.ok !== true) {
+      if (flags.json) {
+        writeJson(body ?? { ok: false, error: { code: 'daemon-not-running', message: `HTTP ${resp.status}` } });
+      } else {
+        console.error(`cover generate failed: ${body?.error?.message ?? `HTTP ${resp.status}`}`);
+      }
+      process.exit(1);
+    }
+    if (flags.json) return writeJson(body);
+    console.log(`Cover generated for ${projectId}: ${body.cover.path} (${body.cover.width}x${body.cover.height})`);
+    return;
+  }
+
+  if (sub === 'show' || sub === 'inspect') {
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}/cover`);
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (resp.status === 404) {
+      if (flags.json) return writeJson({ ok: false, projectId, exists: false });
+      console.log(`No cover generated yet for ${projectId}.`);
+      return;
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const buf = Buffer.from(await resp.arrayBuffer());
+    const contentType = resp.headers.get('content-type') ?? 'application/octet-stream';
+    if (flags.out) writeFileSync(flags.out, buf);
+    if (flags.json) return writeJson({ ok: true, projectId, contentType, bytes: buf.length, savedTo: flags.out ?? null });
+    console.log(`Cover for ${projectId}: ${contentType}, ${buf.length} bytes${flags.out ? ` (saved to ${flags.out})` : ''}`);
+    return;
+  }
+
+  console.error(`unknown subcommand: od cover ${sub}`);
+  printCoverHelp();
+  process.exit(2);
+}
+
 const SUBCOMMAND_MAP = {
   artifacts: runArtifacts,
   media: runMedia,
@@ -441,6 +537,7 @@ const SUBCOMMAND_MAP = {
   backup: runBackup,
   restore: runRestore,
   usage: runUsage,
+  cover: runCover,
 };
 
 const EXPORT_STRING_FLAGS = new Set([

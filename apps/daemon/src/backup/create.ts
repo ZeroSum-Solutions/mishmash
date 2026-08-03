@@ -80,10 +80,15 @@ export async function createBackupArchive(options: CreateBackupOptions): Promise
   entries.push({ class: 'sqlite-database', relPath: RELPATH_BY_CLASS['sqlite-database'], sha256: sha256File(destDbPath) });
 
   // ---- directory classes: copy + per-file checksum index ----
-  const dirSourceByClass: Record<'projects-dir' | 'library-assets' | 'memory-markdown', string> = {
+  const dirSourceByClass: Record<'projects-dir' | 'library-assets' | 'memory-markdown' | 'covers', string> = {
     'projects-dir': path.join(dataDir, 'projects'),
     'library-assets': path.join(dataDir, 'library'),
     'memory-markdown': path.join(dataDir, 'memory'),
+    // W4 — RUNTIME_DATA_DIR/covers (see apps/daemon/src/covers/store.ts).
+    // A persisted artifact class the archive did not know about before was
+    // a silent recovery gap: nobody would notice until a restore came back
+    // with blank cards (S4-7 / C4-11).
+    covers: path.join(dataDir, 'covers'),
   };
   for (const cls of ARCHIVE_DIR_CLASSES) {
     const destRel = RELPATH_BY_CLASS[cls];

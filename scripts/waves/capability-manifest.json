@@ -1112,5 +1112,26 @@
     "valueComparison": {
       "mode": "exact"
     }
+  },
+  {
+    "capability": "cover",
+    "uiEntryPoint": "Project card thumbnail (Designs grid / Recent projects strip) -- apps/web/src/components/project-cover.tsx",
+    "cliArgs": [
+      "cover",
+      "generate",
+      "--project",
+      "<nonceProjectId>",
+      "--json"
+    ],
+    "httpMethod": "POST",
+    "httpPath": "/api/projects/:id/cover/generate",
+    "outputSchema": "{ ok: true, cover: { path, generatedAt, sourceHash, width, height } } | { ok: false, error: { code, message } }",
+    "parityApplicable": true,
+    "reason": "CLI and UI drive the same synchronous POST /api/projects/:id/cover/generate + GET /api/projects/:id/cover surface (apps/daemon/src/routes/covers.ts). generate is a real render (bounded, local-only) against a fresh nonce project's own index.html, so it is safe and idempotent-enough to probe directly -- a second call on unchanged content reuses the stored cover (content-hash invalidation, C4-4) rather than re-rendering.",
+    "knownNamespaceRoutes": [
+      "POST /api/projects/:param/cover/generate",
+      "GET /api/projects/:param/cover"
+    ],
+    "probeBody": {}
   }
 ]
