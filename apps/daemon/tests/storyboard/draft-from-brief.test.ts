@@ -147,9 +147,12 @@ describe('draftShotsFromBrief', () => {
   it('propagates an upstream auth failure instead of returning empty shots', async () => {
     const fetchImpl = vi.fn(async () => jsonResponse({ error: 'nope' }, 401)) as unknown as typeof globalThis.fetch;
 
-    await expect(
-      draftShotsFromBrief({ brief: 'brief', shotCount: 2, provider, fetchImpl }),
-    ).rejects.toThrow(/401/);
+    // BUG-10: a 401 is a credential rejection, so the propagated error
+    // names the provider and points at the credential rather than just
+    // restating the HTTP status (still asserted separately via `.status`).
+    const pending = draftShotsFromBrief({ brief: 'brief', shotCount: 2, provider, fetchImpl });
+    await expect(pending).rejects.toThrow(/credential/i);
+    await expect(pending).rejects.toMatchObject({ status: 401, kind: 'invalid-credential' });
   });
 });
 

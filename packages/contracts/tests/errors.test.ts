@@ -3,7 +3,10 @@ import {
   API_ERROR_CODES,
   createApiError,
   createApiErrorResponse,
+  PROVIDER_ERROR_KINDS,
   type ApiError,
+  type ApiProviderErrorDetails,
+  type ProviderErrorKind,
 } from '../src/errors.js';
 
 describe('createApiError', () => {
@@ -59,5 +62,28 @@ describe('createApiErrorResponse', () => {
       kind: 'validation',
       issues: [{ path: 'name', message: 'required' }],
     });
+  });
+});
+
+describe('provider-error taxonomy (BUG-10)', () => {
+  it('exposes exactly the minimal invalid-credential / rate-limited / upstream-error kinds', () => {
+    expect(PROVIDER_ERROR_KINDS).toEqual(['invalid-credential', 'rate-limited', 'upstream-error']);
+  });
+
+  it('keeps every kind assignable to ProviderErrorKind', () => {
+    for (const kind of PROVIDER_ERROR_KINDS) {
+      const typed: ProviderErrorKind = kind;
+      expect(typed).toBe(kind);
+    }
+  });
+
+  it('round-trips an ApiProviderErrorDetails payload through createApiError', () => {
+    const details: ApiProviderErrorDetails = {
+      kind: 'provider-error',
+      providerErrorKind: 'invalid-credential',
+      provider: 'Google Gemini',
+    };
+    const err: ApiError = createApiError('UNAUTHORIZED', 'Google Gemini rejected the API key', { details });
+    expect(err.details).toEqual(details);
   });
 });

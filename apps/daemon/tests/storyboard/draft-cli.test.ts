@@ -36,9 +36,19 @@ const DRAFT_RESPONSE = {
 let server: http.Server | undefined;
 let baseUrl = '';
 let seenRequests: Array<{ method: string; url: string; body: string }> = [];
+let respondWithCredentialError = false;
+
+const CREDENTIAL_ERROR_RESPONSE = {
+  error: {
+    code: 'UNAUTHORIZED',
+    message: 'Google Gemini rejected its API key — update the stored credential under Settings → Media providers (or the textProvider sent with this request) and retry',
+    details: { kind: 'provider-error', providerErrorKind: 'invalid-credential', provider: 'Google Gemini' },
+  },
+};
 
 beforeEach(async () => {
   seenRequests = [];
+  respondWithCredentialError = false;
   server = http.createServer((req, res) => {
     let body = '';
     req.setEncoding('utf8');
@@ -48,6 +58,11 @@ beforeEach(async () => {
     req.on('end', () => {
       seenRequests.push({ method: req.method ?? '', url: req.url ?? '', body });
       if (req.method === 'POST' && req.url === '/api/storyboards/sb-1/draft-shots') {
+        if (respondWithCredentialError) {
+          res.writeHead(401, { 'content-type': 'application/json' });
+          res.end(JSON.stringify(CREDENTIAL_ERROR_RESPONSE));
+          return;
+        }
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify(DRAFT_RESPONSE));
         return;
@@ -127,5 +142,30 @@ describe('od storyboard draft CLI', () => {
     expect(seenRequests[0]?.url).toBe('/api/storyboards/sb-1/draft-shots');
     expect(JSON.parse(seenRequests[0]?.body ?? '')).toEqual({ brief: BRIEF });
     expect(JSON.parse(stdout)).toEqual(DRAFT_RESPONSE);
+  });
+
+  // BUG-10: the CLI/--json surface must emit the same typed provider-error
+  // classification the web UI gets, not just a generic non-zero exit.
+  it('emits the typed invalid-credential classification on a rejected API key', async () => {
+    respondWithCredentialError = true;
+
+    const { code, stderr } = await runCli([
+      'storyboard', 'draft', 'sb-1',
+      '--brief', 'A calm ad for a ceramic mug, warm morning light.',
+      '--daemon-url', baseUrl,
+      '--json',
+    ]);
+
+    expect(code).not.toBe(0);
+    const envelope = JSON.parse(stderr.trim().split('\n').pop() ?? '{}') as {
+      error: { code?: string; message?: string; data?: { details?: { providerErrorKind?: string; provider?: string } } };
+    };
+    expect(envelope.error.code).toBe('UNAUTHORIZED');
+    expect(envelope.error.message).toMatch(/google gemini/i);
+    expect(envelope.error.data?.details).toEqual({
+      kind: 'provider-error',
+      providerErrorKind: 'invalid-credential',
+      provider: 'Google Gemini',
+    });
   });
 });

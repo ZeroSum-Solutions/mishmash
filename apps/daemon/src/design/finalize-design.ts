@@ -31,6 +31,7 @@ import type {
   FinalizeArtifactRef,
   FinalizeProviderProtocol,
 } from '@open-design/contracts/api/finalize';
+import type { ProviderErrorKind } from '@open-design/contracts';
 import { getProject } from '../db.js';
 import { readDesignSystem } from '../design-systems/index.js';
 import {
@@ -42,6 +43,10 @@ import {
 } from '../projects.js';
 import { exportProjectTranscript } from '../transcript-export.js';
 import { googleGenerateContentUrl } from '../integrations/google-models.js';
+import {
+  classifyProviderError,
+  providerCredentialRejectionMessage,
+} from '../integrations/provider-errors.js';
 
 // Re-export the request/response types so existing daemon-internal
 // imports (and the route handler) keep their referenced names. The
@@ -110,15 +115,25 @@ export class FinalizePackageLockedError extends Error {
 /**
  * Upstream Anthropic call failure with a meaningful HTTP status the route
  * handler can map to one of the documented error codes (401/429/502).
+ *
+ * `kind` is the shared provider-error taxonomy classification
+ * (apps/daemon/src/integrations/provider-errors.ts) for this failure. It
+ * defaults to deriving itself from `status`/`rawText` via
+ * `classifyProviderError`, so every throw site gets a correct
+ * classification for free; callers that already know the classification
+ * (e.g. the retry loop below, which also composes the message) may pass it
+ * explicitly to avoid recomputing it.
  */
 export class FinalizeUpstreamError extends Error {
   status: number;
   rawText: string;
-  constructor(status: number, rawText: string, message?: string) {
+  kind: ProviderErrorKind;
+  constructor(status: number, rawText: string, message?: string, kind?: ProviderErrorKind) {
     super(message || `upstream Anthropic returned ${status}`);
     this.name = 'FinalizeUpstreamError';
     this.status = status;
     this.rawText = rawText;
+    this.kind = kind ?? classifyProviderError(status, rawText);
   }
 }
 
@@ -134,11 +149,7 @@ export class FinalizeUpstreamError extends Error {
  * The raw body itself must still never be surfaced unredacted.
  */
 export function isProviderCredentialRejection(err: FinalizeUpstreamError): boolean {
-  if (err.status === 401 || err.status === 403) return true;
-  if (err.status === 400) {
-    return /API_KEY_INVALID|API key not valid/i.test(err.rawText);
-  }
-  return false;
+  return err.kind === 'invalid-credential';
 }
 
 type Db = Database.Database;
@@ -654,7 +665,8 @@ function buildFinalizeProviderRequest(params: FinalizeProviderCallParams): Final
   };
 }
 
-function providerLabel(protocol: FinalizeProviderProtocol): string {
+/** Human-readable provider name for a finalize protocol, e.g. for error copy. */
+export function providerLabel(protocol: FinalizeProviderProtocol): string {
   if (protocol === 'google') return 'Google Gemini';
   if (protocol === 'openai') return 'OpenAI';
   if (protocol === 'azure') return 'Azure OpenAI';
@@ -698,11 +710,16 @@ export async function callFinalizeProviderWithRetry(
     const transient = response.status === 429 || response.status >= 500;
     if (!transient || attempt === 1) {
       const text = await response.text().catch(() => '');
-      throw new FinalizeUpstreamError(
-        response.status,
-        text,
-        `upstream ${providerLabel(params.protocol)} returned ${response.status}`,
-      );
+      const label = providerLabel(params.protocol);
+      const kind = classifyProviderError(response.status, text);
+      // A rejected credential must say it's the credential, whatever HTTP
+      // status carried it (BUG-10) — composed here rather than the generic
+      // "upstream X returned N", and never echoing the raw upstream body.
+      const message =
+        kind === 'invalid-credential'
+          ? providerCredentialRejectionMessage(label)
+          : `upstream ${label} returned ${response.status}`;
+      throw new FinalizeUpstreamError(response.status, text, message, kind);
     }
     // Linear backoff: 1s on attempt 0. Two retries would extend to 2s on
     // attempt 1 — kept at one retry to stay within the daemon's blocking-

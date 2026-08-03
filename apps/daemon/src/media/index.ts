@@ -102,6 +102,11 @@ import {
   deriveVideoFamily,
   type ModelCapability,
 } from '../media-adapters/index.js';
+import {
+  classifyProviderError,
+  ProviderCallError,
+  providerCredentialRejectionMessage,
+} from '../integrations/provider-errors.js';
 
 const execFile = promisify(execFileCb);
 type ProviderConfig = { apiKey?: string; baseUrl?: string; model?: string };
@@ -2050,7 +2055,18 @@ async function renderNanoBananaImage(ctx: MediaContext, credentials: ProviderCon
   );
   const text = await resp.text();
   if (!resp.ok) {
-    throw new Error(`nano-banana image ${resp.status}: ${truncate(text, 240)}`);
+    // BUG-10: Google answers an invalid API key with HTTP 400 ("API key not
+    // valid...") rather than 401/403, so a status-only message here read as
+    // a generic upstream failure and gave no hint the fix is the stored
+    // credential. Classify at this shared boundary instead of a status-only
+    // message; the credential-rejection message is composed, never the raw
+    // upstream body (which can echo request content back).
+    const kind = classifyProviderError(resp.status, text);
+    const message =
+      kind === 'invalid-credential'
+        ? providerCredentialRejectionMessage('Google Gemini')
+        : `nano-banana image ${resp.status}: ${truncate(text, 240)}`;
+    throw new ProviderCallError(resp.status, kind, message);
   }
   let data: any;
   try {
