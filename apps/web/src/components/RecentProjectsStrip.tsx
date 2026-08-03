@@ -19,6 +19,7 @@ import {
   HtmlProjectCoverFrame,
   coverFromProjectFile,
   projectCoverUrl,
+  renderedCoverUrl,
   selectProjectFileCover,
   type ProjectCoverOverride,
 } from './project-cover';
@@ -276,7 +277,7 @@ export function RecentProjectsStrip({
                     />
                   ) : cover.kind === 'html' ? (
                     <HtmlProjectCoverFrame
-                      src={cover.src}
+                      src={renderedCoverUrl(project.id)}
                       initial={cover.initial}
                       iframeClassName="recent-projects__thumb-iframe"
                       glyphClassName="recent-projects__card-glyph"

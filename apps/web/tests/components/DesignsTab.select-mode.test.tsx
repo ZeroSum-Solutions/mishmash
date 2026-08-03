@@ -112,17 +112,20 @@ describe('DesignsTab select mode', () => {
       />,
     );
 
+    // S4-5: the not-yet-rendered fallback is a static <img> pointed at the
+    // daemon's persisted cover endpoint (never a live iframe of the raw
+    // file), so no script/network-capable frame is ever created — see
+    // apps/web/src/components/project-cover.tsx's HtmlProjectCoverFrame.
     const thumb = container.querySelector('.project-thumb-html');
     expect(thumb).toBeTruthy();
+    expect(thumb?.querySelector('iframe')).toBeNull();
     await waitFor(() => {
-      expect(thumb?.querySelector('iframe')?.getAttribute('src')).toBe(
-        '/api/projects/project-html/files/index.html?v=700',
-      );
+      expect(thumb?.querySelector('img')?.getAttribute('src')).toBe('/api/projects/project-html/cover');
       expect(thumb?.querySelector('.project-thumb-glyph')).toBeNull();
     });
   });
 
-  it('uses the same HTML cover source as the recent projects strip when scanning files', async () => {
+  it('uses the rendered cover endpoint for HTML entries discovered by scanning files', async () => {
     const htmlProject: Project = {
       ...project,
       id: 'project-html-scan',
@@ -143,9 +146,10 @@ describe('DesignsTab select mode', () => {
     );
 
     await waitFor(() => {
-      const frame = container.querySelector<HTMLIFrameElement>('.project-thumb-html iframe');
-      expect(frame).toBeTruthy();
-      expect(frame?.getAttribute('src')).toBe('/api/projects/project-html-scan/files/index.html?v=300');
+      const img = container.querySelector<HTMLImageElement>('.project-thumb-html img');
+      expect(img).toBeTruthy();
+      expect(img?.getAttribute('src')).toBe('/api/projects/project-html-scan/cover');
+      expect(container.querySelector('.project-thumb-html iframe')).toBeNull();
       expect(container.querySelector('.project-thumb-html .project-thumb-glyph')).toBeNull();
     });
   });

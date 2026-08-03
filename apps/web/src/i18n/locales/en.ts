@@ -1630,6 +1630,7 @@ export const en: Dict = {
   'designs.renameTitle': 'Rename project',
   'designs.renameSave': 'OK',
   'designs.renameCancel': 'Cancel',
+  'designs.loadMore': 'Load {n} more',
   'examples.typeLabel': 'Type',
   'examples.surfaceLabel': 'Surface',
   'examples.surfaceWeb': 'Web',
