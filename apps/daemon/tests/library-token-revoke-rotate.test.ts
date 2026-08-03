@@ -150,4 +150,20 @@ describe('library token revoke / rotate (C0-6)', () => {
     // Token is still alive -- the mismatched-origin revoke attempt did nothing.
     expect(await ingestStatus(origin, token)).toBe(200);
   });
+
+  it('revoke succeeds (200) for a valid token and fails (401) for an invalid one', async () => {
+    const origin = extOrigin();
+    const token = await mintToken(origin);
+    const revokeRes = await fetch(`${baseUrl}/api/library/pair/revoke`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(revokeRes.status).toBe(200);
+
+    const invalidRes = await fetch(`${baseUrl}/api/library/pair/revoke`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer not-a-real-token' },
+    });
+    expect(invalidRes.status).toBe(401);
+  });
 });

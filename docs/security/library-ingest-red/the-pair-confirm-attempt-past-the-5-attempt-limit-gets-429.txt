@@ -1,0 +1,10 @@
+PARENT_SHA: 8c1b6225b54a0ff8471c765c76e772058600cd7d
+COMMAND: vitest run -c vitest.config.ts tests/library-rate-limit-pair-confirm.test.ts
+TEST: the pair confirm attempt past the 5 attempt limit gets 429
+CONTROL_TEST: pair confirm requests accept while at or under the 5 attempt limit
+---
+AssertionError: expected 200 to be 429
+  at tests/library-rate-limit-pair-confirm.test.ts ('the pair confirm attempt past the 5 attempt limit gets 429')
+Before pairConfirmAttemptOk existed, POST /api/library/pair/confirm carried no
+attempt counter of its own -- the 6th confirm attempt in the loop still ran the
+ordinary code-validation path (garbage code -> 400/401), never 429.

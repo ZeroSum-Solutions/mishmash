@@ -1,0 +1,9 @@
+PARENT_SHA: 8c1b6225b54a0ff8471c765c76e772058600cd7d
+COMMAND: vitest run -c vitest.config.ts tests/library-rate-limit-connection.test.ts
+TEST: a library connection status request past the 50 request limit gets 429
+CONTROL_TEST: a library connection status request accepts under the 50 request limit
+---
+AssertionError: expected 200 to be 429
+  at tests/library-rate-limit-connection.test.ts ('a library connection status request past the 50 request limit gets 429')
+Before connectionOk existed, GET /api/library/connection had no rate control
+beyond its loopback gate -- the 51st call in the loop still returned 200.

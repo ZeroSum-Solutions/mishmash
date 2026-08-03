@@ -1,0 +1,10 @@
+PARENT_SHA: 8c1b6225b54a0ff8471c765c76e772058600cd7d
+COMMAND: vitest run -c vitest.config.ts tests/library-loopback-gate-element.test.ts
+TEST: GET library assets element sidecar rejects a non-loopback origin
+CONTROL_TEST: GET library assets element sidecar accepts a loopback request
+---
+AssertionError: expected 200 to be 403
+  at tests/library-loopback-gate-element.test.ts ('GET library assets element sidecar rejects a non-loopback origin')
+Before requireLocalDaemonRequest was added, GET /api/library/assets/:id/element
+carried no route-level gate -- the paired-origin request in this test still
+returned 200 instead of 403.

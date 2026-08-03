@@ -1,0 +1,399 @@
+{
+  "rows": [
+    {
+      "method": "POST",
+      "path": "/api/library/pair",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "Loopback-gated via requireLocalDaemonRequest middleware; non-loopback callers are rejected before the handler runs.",
+      "authz": "No further authorization beyond the loopback gate; mints a short-lived pairing code held only in transient in-memory state.",
+      "inputValidation": "No request body is read; the route accepts only a bare POST.",
+      "sizeRateLimit": "No dedicated volume/rate control on this route; the pairing code itself is single-outstanding and 5-minute TTL (library-tokens.ts).",
+      "testRef": "POST /api/library/pair/confirm — real cross-origin bootstrap transport (C0-5/mint) a genuine not-yet-paired chrome-extension Origin header can mint a token via pair/confirm",
+      "riskScore": {
+        "exposure": 0,
+        "impact": 0,
+        "score": 0,
+        "tier": "P2"
+      }
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/library/pair/confirm",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "No route-level authorization gate; relies on the global /api origin middleware (a zero-config, pairing-code-adjacent surface for this file).",
+      "authz": "CORS preflight only; applies extension CORS headers and returns 204 with no state change.",
+      "inputValidation": "No body is read for an OPTIONS preflight.",
+      "sizeRateLimit": "No volume/rate control; a preflight carries no persisted mutation (impact floor 0).",
+      "testRef": "POST /api/library/pair/confirm — real cross-origin bootstrap transport OPTIONS preflight for pair/confirm succeeds from a genuine extension origin",
+      "riskScore": {
+        "exposure": 3,
+        "impact": 0,
+        "score": 3,
+        "tier": "P2"
+      },
+      "control": {
+        "testRef": "POST /api/library/pair/confirm — real cross-origin bootstrap transport OPTIONS preflight for pair/confirm succeeds from a genuine extension origin"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/library/pair/confirm",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "No route-level authorization gate; relies on the global /api origin middleware (a zero-config, pairing-code-adjacent surface for this file).",
+      "authz": "Gated by the short-lived pairing code (confirmPairing, library-tokens.ts); mints a token row on success.",
+      "inputValidation": "Requires body.code and body.extensionOrigin as non-empty strings; extensionOrigin is normalized to chrome-extension://<host> or moz-extension://<host> before it can be bound to a token.",
+      "sizeRateLimit": "ENFORCED kind=pair-attempt scope=pairing-attempt limit=5 windowMs=60000 overflow=reject-429 (pairConfirmAttemptOk, routes/library.ts) -- closes the pairing-code brute-force window the ground facts identified.",
+      "testRef": "POST /api/library/ingest — capability token identity binding (C0-5/C0-6) (C0-5/accept) accepts a paired extension origin presenting its own bound token",
+      "riskScore": {
+        "exposure": 3,
+        "impact": 2,
+        "score": 5,
+        "tier": "P0"
+      },
+      "control": {
+        "testRef": "the pair confirm attempt past the 5 attempt limit gets 429",
+        "mechanism": "ENFORCED kind=pair-attempt scope=pairing-attempt limit=5 windowMs=60000 overflow=reject-429"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/connection",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "Loopback-gated via requireLocalDaemonRequest middleware; non-loopback callers are rejected before the handler runs.",
+      "authz": "No further authorization beyond the loopback gate; returns pairing/token summary only.",
+      "inputValidation": "No request body or query parameters are read.",
+      "sizeRateLimit": "A bounded, per-process, global fixed-window request-rate limit (50 requests / 10s, connectionOk in routes/library.ts, not partitioned per caller) rejects a caller over the limit with 429.",
+      "testRef": "a library connection status request past the 50 request limit gets 429",
+      "riskScore": {
+        "exposure": 0,
+        "impact": 0,
+        "score": 0,
+        "tier": "P2"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/library/pair/revoke",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "Self-service bearer proof of possession: caller presents the same library token it wants to act on via validateLibraryToken.",
+      "authz": "Self-service bearer: caller must present the SAME token being revoked; an Origin header, if present, must match the token's bound origin.",
+      "inputValidation": "No request body fields are read beyond the Authorization header; the token itself is the only input.",
+      "sizeRateLimit": "No dedicated volume/rate control beyond the token-validity gate itself.",
+      "testRef": "library token revoke / rotate (C0-6) (C0-6/revoke) revocation takes effect immediately: the revoked token is rejected on its very next use",
+      "riskScore": {
+        "exposure": 2,
+        "impact": 2,
+        "score": 4,
+        "tier": "P1"
+      }
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/library/pair/revoke",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "No route-level authorization gate; relies on the global /api origin middleware (a zero-config, pairing-code-adjacent surface for this file).",
+      "authz": "CORS preflight only; applies extension CORS headers and returns 204 with no state change.",
+      "inputValidation": "No body is read for an OPTIONS preflight.",
+      "sizeRateLimit": "No volume/rate control; a preflight carries no persisted mutation (impact floor 0).",
+      "testRef": "library token revoke / rotate (C0-6) (C0-6/route-order) the POST action route is discoverable ahead of its OPTIONS preflight sibling by path pattern alone",
+      "riskScore": {
+        "exposure": 3,
+        "impact": 0,
+        "score": 3,
+        "tier": "P2"
+      },
+      "control": {
+        "testRef": "library token revoke / rotate (C0-6) (C0-6/route-order) the POST action route is discoverable ahead of its OPTIONS preflight sibling by path pattern alone"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/library/pair/rotate",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "Self-service bearer proof of possession: caller presents the same library token it wants to act on via validateLibraryToken.",
+      "authz": "Self-service bearer: caller must present the SAME token being rotated; an Origin header, if present, must match the token's bound origin.",
+      "inputValidation": "No request body fields are read beyond the Authorization header; the token itself is the only input.",
+      "sizeRateLimit": "No dedicated volume/rate control beyond the token-validity gate itself.",
+      "testRef": "library token revoke / rotate (C0-6) (C0-6/rotate) rotation invalidates the prior token AND issues a working new one bound to the same identity",
+      "riskScore": {
+        "exposure": 2,
+        "impact": 2,
+        "score": 4,
+        "tier": "P1"
+      }
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/library/pair/rotate",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "No route-level authorization gate; relies on the global /api origin middleware (a zero-config, pairing-code-adjacent surface for this file).",
+      "authz": "CORS preflight only; applies extension CORS headers and returns 204 with no state change.",
+      "inputValidation": "No body is read for an OPTIONS preflight.",
+      "sizeRateLimit": "No volume/rate control; a preflight carries no persisted mutation (impact floor 0).",
+      "testRef": "library token revoke / rotate (C0-6) a token cannot be revoked or rotated by presenting it from a DIFFERENT origin than it is bound to",
+      "riskScore": {
+        "exposure": 3,
+        "impact": 0,
+        "score": 3,
+        "tier": "P2"
+      },
+      "control": {
+        "testRef": "library token revoke / rotate (C0-6) a token cannot be revoked or rotated by presenting it from a DIFFERENT origin than it is bound to"
+      }
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/library/ingest",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "No route-level authorization gate; relies on the global /api origin middleware (a zero-config, pairing-code-adjacent surface for this file).",
+      "authz": "CORS preflight only; applies extension CORS headers and returns 204 with no state change.",
+      "inputValidation": "No body is read for an OPTIONS preflight.",
+      "sizeRateLimit": "No volume/rate control; a preflight carries no persisted mutation (impact floor 0).",
+      "testRef": "POST /api/library/ingest — capability token identity binding (C0-5/C0-6) rejects an extension origin presenting a token minted for a different origin, even when both are individually valid",
+      "riskScore": {
+        "exposure": 3,
+        "impact": 0,
+        "score": 3,
+        "tier": "P2"
+      },
+      "control": {
+        "testRef": "POST /api/library/ingest — capability token identity binding (C0-5/C0-6) rejects an extension origin presenting a token minted for a different origin, even when both are individually valid"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/library/ingest",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "No route-level authorization gate; relies on the global /api origin middleware (a zero-config, pairing-code-adjacent surface for this file).",
+      "authz": "Three-way branch: extension-shaped Origin + its own bound library token (\"clipper\"), OR isLocalSameOrigin loopback (\"manual-upload\"), OR reject -- see docs/security/daemon-threat-model.md [C0-5]/[C0-6].",
+      "inputValidation": "sourceKind==='manual-upload' bytes are checked against LIBRARY_UPLOAD_MAX_BYTES and an explicit MIME allowlist; a URL body is routed through the SSRF-guarded fetchRemoteBytes.",
+      "sizeRateLimit": "ENFORCED kind=byte-volume scope=token-hash limit=5000000 windowMs=none overflow=reject-413 (CLIPPER_INGEST_MAX_BYTES, routes/library.ts) -- clipperIngestByteVolume sums every field of the parsed request body (so any caller-supplied field that reaches the store is counted by construction, with no per-field list to fall out of date). It is itself a total function: a field it cannot measure (JSON.stringify overflowing the call stack on a deeply-nested value that JSON.parse itself accepted) is treated as Infinity rather than thrown, so it fails CLOSED through this same reject-413, never as an unhandled error. The only exclusions are dataUrl/url, substituted by the resolved bytes actually persisted (dataUrl is base64-decoded before storage; url is a fetch source, not itself stored) -- this bounds PERSISTED bytes only. It does not bound memory used while fetching a url: fetchRemoteBytes fully buffers the response (await resp.arrayBuffer()) before its real length is checked against MAX_REMOTE_BYTES when the origin server's Content-Length is absent or untruthful, so a chunked response can consume memory ahead of any check here; that pre-check-buffering gap is real, out of this route's scope, and tracked as the W9-external-fetch tranche's own control, not closed by this row. Closes the original uncapped-payload gap, the sidecar (figmaCapture/elementHtml/metadata) and registration-field (sourceTitle/sourceUrl/tags) bypass variants, and the byte-volume-counter-crash variant (an unmeasurable deep-nested field reaching Express's generic error handling instead of this 413).",
+      "testRef": "POST /api/library/ingest — capability token identity binding (C0-5/C0-6) (C0-5/reject) rejects an unpaired extension origin with no token",
+      "riskScore": {
+        "exposure": 3,
+        "impact": 3,
+        "score": 6,
+        "tier": "P0"
+      },
+      "control": {
+        "testRef": "a clipper ingest payload past the 5000000 byte limit: reject with 413",
+        "mechanism": "ENFORCED kind=byte-volume scope=token-hash limit=5000000 windowMs=none overflow=reject-413"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/clipper-probe",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "No route-level authorization gate; relies on the global /api origin middleware (a zero-config, pairing-code-adjacent surface for this file).",
+      "authz": "No route-level gate by design: the zero-config, pre-pairing daemon-detection probe the extension calls before any token exists.",
+      "inputValidation": "No request body or query parameters are read.",
+      "sizeRateLimit": "A bounded, per-process, global fixed-window request-rate limit (30 requests / 10s, clipperProbeOk in routes/library.ts, not partitioned per caller -- a pre-pairing probe has no caller identity to key on) rejects a caller over the limit with 429.",
+      "testRef": "the clipper probe request past the 30 request limit gets 429",
+      "riskScore": {
+        "exposure": 3,
+        "impact": 0,
+        "score": 3,
+        "tier": "P2"
+      },
+      "control": {
+        "testRef": "the clipper probe request past the 30 request limit gets 429"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/assets",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "No route-level authorization gate; relies on the global /api origin middleware (a zero-config, pairing-code-adjacent surface for this file).",
+      "authz": "No route-level gate; relies on the global /api origin middleware, which lets any request with no Origin header through.",
+      "inputValidation": "Query filters (kind/tag/domain/date/q/source/projectId/designSystemId/limit) are type-checked before being passed to listLibraryAssets.",
+      "sizeRateLimit": "ENFORCED kind=request-rate scope=origin limit=20 windowMs=10000 overflow=reject-429 (assetsListOk, routes/library.ts) -- closes the per-caller reconcile-trigger gap (runReconcile's own throttle is program-wide, not per-caller).",
+      "testRef": "a library assets list request past the 20 request limit gets 429",
+      "riskScore": {
+        "exposure": 3,
+        "impact": 2,
+        "score": 5,
+        "tier": "P0"
+      },
+      "control": {
+        "testRef": "a library assets list request past the 20 request limit gets 429",
+        "mechanism": "ENFORCED kind=request-rate scope=origin limit=20 windowMs=10000 overflow=reject-429"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/library/sync",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "Loopback-gated via requireLocalDaemonRequest middleware; non-loopback callers are rejected before the handler runs.",
+      "authz": "No further authorization beyond the loopback gate; forces a full reconcile pass, bypassing the program-wide throttle by design (the explicit \"Sync now\" action).",
+      "inputValidation": "No request body fields are read.",
+      "sizeRateLimit": "A bounded, per-process, global fixed-window request-rate limit (10 requests / 60s, syncOk in routes/library.ts, not partitioned per caller) bounds how often the force-bypass itself can be invoked, rejecting a caller over the limit with 429.",
+      "testRef": "a library sync request past the 10 sync limit gets 429",
+      "riskScore": {
+        "exposure": 0,
+        "impact": 2,
+        "score": 2,
+        "tier": "P2"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/assets/:id",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "Loopback-gated via requireLocalDaemonRequest middleware; non-loopback callers are rejected before the handler runs.",
+      "authz": "Loopback-gated via requireLocalDaemonRequest; not a documented extension capability (only /ingest is).",
+      "inputValidation": "req.params.id is passed directly to getLibraryAsset, a parameterized lookup; a missing asset returns 404.",
+      "sizeRateLimit": "No dedicated volume/rate control beyond the loopback gate itself.",
+      "testRef": "GET library assets by id rejects a non-loopback origin",
+      "riskScore": {
+        "exposure": 0,
+        "impact": 0,
+        "score": 0,
+        "tier": "P2"
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/library/assets/:id",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "Loopback-gated via requireLocalDaemonRequest middleware; non-loopback callers are rejected before the handler runs.",
+      "authz": "No further authorization beyond the loopback gate; only unlinks bytes the daemon owns and that live under LIBRARY_DIR.",
+      "inputValidation": "req.params.id is passed directly to getLibraryAsset, a parameterized lookup; a missing asset returns 404.",
+      "sizeRateLimit": "A bounded, per-process, global fixed-window request-rate limit (50 requests / 10s, deleteAssetOk in routes/library.ts, not partitioned per caller) rejects a caller over the limit with 429.",
+      "testRef": "a library assets delete request past the 50 request limit gets 429",
+      "riskScore": {
+        "exposure": 0,
+        "impact": 2,
+        "score": 2,
+        "tier": "P2"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/assets/:id/raw",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "Loopback-gated via requireLocalDaemonRequest middleware; non-loopback callers are rejected before the handler runs.",
+      "authz": "Loopback-gated via requireLocalDaemonRequest; serves previously-stored bytes back to the caller.",
+      "inputValidation": "req.params.id is passed directly to getLibraryAsset; the resolved bytes path is re-derived (resolveAssetBytesPath), never taken from client input.",
+      "sizeRateLimit": "No dedicated volume/rate control beyond the loopback gate itself.",
+      "testRef": "GET library assets raw bytes rejects a non-loopback origin",
+      "riskScore": {
+        "exposure": 0,
+        "impact": 1,
+        "score": 1,
+        "tier": "P2"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/assets/:id/figma",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "Loopback-gated via requireLocalDaemonRequest middleware; non-loopback callers are rejected before the handler runs.",
+      "authz": "Loopback-gated via requireLocalDaemonRequest; serves the stored Figma capture sidecar back to the caller.",
+      "inputValidation": "req.params.id is passed directly to getLibraryAsset; the sidecar path is re-derived (resolveAssetFigmaSidecarPath), never taken from client input.",
+      "sizeRateLimit": "No dedicated volume/rate control beyond the loopback gate itself.",
+      "testRef": "GET library assets figma sidecar rejects a non-loopback origin",
+      "riskScore": {
+        "exposure": 0,
+        "impact": 1,
+        "score": 1,
+        "tier": "P2"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/assets/:id/element",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "Loopback-gated via requireLocalDaemonRequest middleware; non-loopback callers are rejected before the handler runs.",
+      "authz": "Loopback-gated via requireLocalDaemonRequest; serves the stored element-pick markup sidecar back to the caller.",
+      "inputValidation": "req.params.id is passed directly to getLibraryAsset; the sidecar path is re-derived (resolveAssetElementSidecarPath), never taken from client input.",
+      "sizeRateLimit": "No dedicated volume/rate control beyond the loopback gate itself.",
+      "testRef": "GET library assets element sidecar rejects a non-loopback origin",
+      "riskScore": {
+        "exposure": 0,
+        "impact": 1,
+        "score": 1,
+        "tier": "P2"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/library/assets/:id/apply",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "Loopback-gated via requireLocalDaemonRequest middleware; non-loopback callers are rejected before the handler runs.",
+      "authz": "No further authorization beyond the loopback gate; copies stored bytes into a caller-named project directory.",
+      "inputValidation": "req.body.projectId is required and type-checked; req.body.dir is sanitized by ensureProjectSubdir before use as a path segment.",
+      "sizeRateLimit": "A bounded, per-process, global fixed-window request-rate limit (50 requests / 10s, applyAssetOk in routes/library.ts, not partitioned per caller) rejects a caller over the limit with 429.",
+      "testRef": "a library assets apply request past the 50 request limit gets 429",
+      "riskScore": {
+        "exposure": 0,
+        "impact": 2,
+        "score": 2,
+        "tier": "P2"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/library/assets/:id/edit-as-page",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "Loopback-gated via requireLocalDaemonRequest middleware; non-loopback callers are rejected before the handler runs.",
+      "authz": "No further authorization beyond the loopback gate; only html-kind assets are accepted (400 otherwise).",
+      "inputValidation": "req.params.id is passed directly to getLibraryAsset; asset.kind is checked to equal 'html' before any project/file write.",
+      "sizeRateLimit": "No dedicated volume/rate control beyond the loopback gate itself.",
+      "testRef": "library edit-as-page route turns a captured html asset into a new editable project seeded with index.html",
+      "riskScore": {
+        "exposure": 0,
+        "impact": 2,
+        "score": 2,
+        "tier": "P2"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/tools/library/search",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "Gated by authorizeToolRequest; requires a valid run-scoped tool token bound to this endpoint and operation.",
+      "authz": "Gated by authorizeToolRequest('library:search'); read-only, no persisted mutation (impact floor 0).",
+      "inputValidation": "req.body.query/kind/date/limit are individually type-checked before being passed to listLibraryAssets.",
+      "sizeRateLimit": "A bounded, per-process, global fixed-window request-rate limit (50 requests / 10s, toolSearchOk in routes/library.ts, not partitioned per token) rejects a caller over the limit with 429.",
+      "testRef": "a tools library search request past the 50 request limit gets 429",
+      "riskScore": {
+        "exposure": 1,
+        "impact": 0,
+        "score": 1,
+        "tier": "P2"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/tools/library/apply",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "Gated by authorizeToolRequest; requires a valid run-scoped tool token bound to this endpoint and operation.",
+      "authz": "Gated by authorizeToolRequest('library:apply'); copies stored bytes into a project scoped by the grant (or the request body when the grant carries none).",
+      "inputValidation": "req.body.assetId is required and type-checked; req.body.dir is sanitized by ensureProjectSubdir before use as a path segment.",
+      "sizeRateLimit": "A bounded, per-process, global fixed-window request-rate limit (50 requests / 10s, toolApplyOk in routes/library.ts, not partitioned per token) rejects a caller over the limit with 429.",
+      "testRef": "a tools library apply request past the 50 request limit gets 429",
+      "riskScore": {
+        "exposure": 1,
+        "impact": 2,
+        "score": 3,
+        "tier": "P2"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/events",
+      "owner": "daemon:library-ingest (routes/library.ts)",
+      "authn": "Loopback-gated via requireLocalDaemonRequest middleware; non-loopback callers are rejected before the handler runs.",
+      "authz": "Loopback-gated via requireLocalDaemonRequest; subscribes an in-memory, non-persisted SSE listener only (impact floor 0).",
+      "inputValidation": "No request body or query parameters are read.",
+      "sizeRateLimit": "No dedicated volume/rate control beyond the loopback gate itself; each subscription is a bounded in-memory listener removed on socket close.",
+      "testRef": "GET library events rejects a non-loopback origin",
+      "riskScore": {
+        "exposure": 0,
+        "impact": 0,
+        "score": 0,
+        "tier": "P2"
+      }
+    }
+  ]
+}
