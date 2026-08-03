@@ -1038,9 +1038,25 @@ export function DesignsTab({
 					})}
 				</div>
 				{filtered.length > visibleCount ? (
+					// Inline-styled rather than a new global class: the shared
+					// stylesheet that would own a `.design-grid` sibling class
+					// (apps/web/src/styles/workspace/drawer.css) is outside this
+					// wave's write lease (docs/plans/waves/leases.json[W4]).
 					<button
 						type="button"
 						className="design-grid-load-more"
+						style={{
+							marginTop: 14,
+							alignSelf: "center",
+							padding: "8px 16px",
+							background: "var(--bg-panel)",
+							border: "1px solid var(--border)",
+							borderRadius: "var(--radius)",
+							color: "var(--text-strong)",
+							fontSize: 13,
+							fontWeight: 600,
+							cursor: "pointer",
+						}}
 						onClick={() => setVisibleCount((count) => count + GRID_PAGE_SIZE)}
 					>
 						{t("designs.loadMore", { n: filtered.length - visibleCount })}

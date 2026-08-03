@@ -312,18 +312,17 @@ describe('RecentProjectsStrip', () => {
       />,
     );
 
-    let htmlThumb: Element | null = null;
+    const queryThumb = (): Element | null => container.querySelector('.recent-projects__card-thumb-html');
     await waitFor(() => {
-      htmlThumb = container.querySelector('.recent-projects__card-thumb-html');
-      expect(htmlThumb?.querySelector('img')).toBeTruthy();
+      expect(queryThumb()?.querySelector('img')).toBeTruthy();
     });
-    const img = htmlThumb?.querySelector('img');
+    const img = queryThumb()?.querySelector('img');
     expect(img).toBeTruthy();
     if (img) fireEvent.error(img);
 
-    expect(htmlThumb?.querySelector('iframe')).toBeNull();
-    expect(htmlThumb?.querySelector('img')).toBeNull();
-    expect(htmlThumb?.querySelector('.recent-projects__card-glyph')?.textContent).toBe('W');
+    expect(queryThumb()?.querySelector('iframe')).toBeNull();
+    expect(queryThumb()?.querySelector('img')).toBeNull();
+    expect(queryThumb()?.querySelector('.recent-projects__card-glyph')?.textContent).toBe('W');
     expect(warn).toHaveBeenCalledWith(
       '[project-cover] cover image unavailable, showing glyph fallback:',
       'project-html:index.html',
