@@ -9,7 +9,14 @@ import {
   buildDesignSystemCreateSelection,
   defaultDesignSystemSelection,
   NewProjectPanel,
+  supportedModels,
 } from '../../src/components/NewProjectPanel';
+import {
+  AUDIO_MODELS_BY_KIND,
+  findProvider,
+  IMAGE_MODELS,
+  VIDEO_MODELS,
+} from '../../src/media/models';
 import { openFolderDialog } from '../../src/providers/registry';
 import type { DesignSystemSummary, ProjectTemplate, SkillSummary } from '../../src/types';
 
@@ -1161,5 +1168,71 @@ describe('NewProjectPanel start-from rail', () => {
     expect(onCreate).toHaveBeenCalledWith(
       expect.objectContaining({ skillId: 'simple-deck' }),
     );
+  });
+});
+
+describe('NewProjectPanel model catalog exposure', () => {
+  // BUG-3. `supportedModels` used to gate each surface on a hand-maintained
+  // provider allowlist that sat *upstream* of the readiness machinery, so a
+  // provider could be `integrated: true` AND hold a working key and still be
+  // invisible here — while the storyboard shot picker offered it happily.
+  // The catalog's own `integrated` flag is the only gate now, which is what
+  // `isMediaProviderPickerReady(provider)` (no credentials map) already means
+  // everywhere else in the app.
+
+  it('offers every integrated video provider, not a hand-maintained subset', () => {
+    const providers = new Set(supportedModels('video', VIDEO_MODELS).map((m) => m.provider));
+    // Absent from the old allowlist purely because nobody added them.
+    expect(providers).toContain('kie');
+    expect(providers).toContain('higgsfield');
+    expect(providers).toContain('fal');
+    expect(providers).toContain('minimax');
+  });
+
+  it('still hides providers the daemon cannot actually dispatch to', () => {
+    const providers = new Set(supportedModels('video', VIDEO_MODELS).map((m) => m.provider));
+    // integrated: false — catalog placeholders with no dispatcher behind them.
+    expect(providers).not.toContain('kling');
+    expect(providers).not.toContain('google');
+  });
+
+  it('keeps image and audio on the same single gate', () => {
+    for (const model of supportedModels('image', IMAGE_MODELS)) {
+      expect(findProvider(model.provider)?.integrated).toBe(true);
+    }
+    const audioModels = Object.values(AUDIO_MODELS_BY_KIND).flat();
+    for (const model of supportedModels('audio', audioModels)) {
+      expect(findProvider(model.provider)?.integrated).toBe(true);
+    }
+  });
+
+  it('lists an integrated provider that has no key yet, marked as needing one', async () => {
+    // `mediaProviders` present but empty === "we fetched the config and you
+    // have configured nothing". The picker used to drop every such provider,
+    // leaving a user who had not yet added a key staring at an empty list with
+    // no hint about why.
+    render(
+      <NewProjectPanel
+        skills={skills}
+        designTemplates={[]}
+        designSystems={designSystems}
+        defaultDesignSystemId={null}
+        templates={[]}
+        onDeleteTemplate={vi.fn()}
+        promptTemplates={[]}
+        onCreate={vi.fn()}
+        initialTab="media"
+        mediaProviders={{}}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('new-project-media-surface-video'));
+    fireEvent.click(screen.getByTestId('model-picker-trigger'));
+
+    const kieModel = VIDEO_MODELS.find((m) => m.provider === 'kie')!;
+    await waitFor(() => {
+      expect(screen.getByTestId(`model-picker-option-${kieModel.id}`)).toBeTruthy();
+    });
+    expect(screen.getAllByText('Needs API key').length).toBeGreaterThan(0);
   });
 });

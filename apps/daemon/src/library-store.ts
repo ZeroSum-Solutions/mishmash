@@ -363,7 +363,9 @@ export function deleteLibraryAsset(db: SqliteDb, id: string): void {
   db.prepare(`DELETE FROM library_assets WHERE id = ?`).run(id);
 }
 
-export function listLibraryAssets(db: SqliteDb, filter: LibraryAssetFilter = {}): LibraryAssetRecord[] {
+/** Builds the shared WHERE clause for asset list/count so the page and its
+ * total can never disagree about what "matching" means (BUG-5). */
+function buildLibraryAssetWhere(filter: LibraryAssetFilter): { whereSql: string; args: unknown[] } {
   const where: string[] = [];
   const args: unknown[] = [];
   if (filter.kind) {
@@ -403,7 +405,21 @@ export function listLibraryAssets(db: SqliteDb, filter: LibraryAssetFilter = {})
     where.push('EXISTS (SELECT 1 FROM library_asset_sources s WHERE s.asset_id = a.id AND s.design_system_id = ?)');
     args.push(filter.designSystemId);
   }
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', args };
+}
+
+/** The full matching-row count for `filter`, ignoring its page limit — the
+ * honest denominator a truncated list is reported against. */
+export function countLibraryAssets(db: SqliteDb, filter: LibraryAssetFilter = {}): number {
+  const { whereSql, args } = buildLibraryAssetWhere(filter);
+  const row = db
+    .prepare(`SELECT COUNT(*) AS n FROM library_assets a ${whereSql}`)
+    .get(...args) as { n: number };
+  return row.n;
+}
+
+export function listLibraryAssets(db: SqliteDb, filter: LibraryAssetFilter = {}): LibraryAssetRecord[] {
+  const { whereSql, args } = buildLibraryAssetWhere(filter);
   const limit = Number.isFinite(filter.limit) ? Math.max(1, Math.min(Number(filter.limit), 1000)) : 500;
   const raws = db
     .prepare(

@@ -1492,6 +1492,7 @@ export function registerFinalizeRoutes(app: Express, ctx: RegisterFinalizeRoutes
     FinalizePackageLockedError,
     FinalizeUpstreamError,
     isFinalizeProviderProtocol,
+    isProviderCredentialRejection,
     redactSecrets,
   } = ctx.finalize;
   app.post('/api/projects/:id/finalize/:provider', async (req, res) => {
@@ -1610,7 +1611,10 @@ export function registerFinalizeRoutes(app: Express, ctx: RegisterFinalizeRoutes
       if (err instanceof FinalizeUpstreamError) {
         const safeDetails = redactSecrets(err.rawText || '', [apiKey]);
         const init = safeDetails ? { details: safeDetails } : {};
-        if (err.status === 401) {
+        // Credential rejections beyond a literal 401 — Google answers an
+        // invalid API key with 400 (`API_KEY_INVALID`), which a status-only
+        // mapping would misreport as a generic upstream failure (BUG-10).
+        if (isProviderCredentialRejection(err)) {
           return sendApiError(res, 401, 'UNAUTHORIZED', err.message, init);
         }
         if (err.status === 429) {

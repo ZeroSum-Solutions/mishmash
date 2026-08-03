@@ -244,6 +244,13 @@ export interface LibraryAssetFilter {
 
 export interface LibraryAssetListResponse {
   assets: LibraryAsset[];
+  /** Full matching-row count for the filter, independent of the page limit.
+   * The list caps at 500 rows by default (1000 hard max), so without this a
+   * larger library silently rendered as a complete-looking partial set
+   * (BUG-5). */
+  total: number;
+  /** True when `assets` is a truncated page of `total`. */
+  truncated: boolean;
 }
 
 export interface LibraryAssetDetailResponse {

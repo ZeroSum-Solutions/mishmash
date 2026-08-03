@@ -46,6 +46,35 @@ describe('priceForModel', () => {
     const live = [{ id: 'claude-sonnet-4-5', label: 'x', inputPriceUsdPerMillion: 111, outputPriceUsdPerMillion: 222 }];
     expect(priceForModel('amr', 'claude-sonnet-4-5', live)).toEqual({ input: 111, output: 222 });
   });
+
+  // SS-2: the fleet's daily-driver models were absent from the table, so every
+  // claude-5 / gpt-5.6 run rendered "Cost: unavailable". List prices verified
+  // 2026-08-02 against platform.claude.com/docs/en/about-claude/pricing and
+  // the published GPT-5.6 tier rates (post 2026-07-30 price cut).
+  it('prices the current Claude 5 family', () => {
+    expect(priceForModel(null, 'claude-opus-5')).toEqual({ input: 5, output: 25 });
+    expect(priceForModel(null, 'claude-sonnet-5')).toEqual({ input: 3, output: 15 });
+    expect(priceForModel(null, 'claude-fable-5')).toEqual({ input: 10, output: 50 });
+  });
+
+  it('prices a bracketed context-window variant at the base model rate', () => {
+    // "Claude 4.6 and later models include the full 1M token context window
+    // at standard pricing" — the [1m] suffix is a window flag, not a SKU.
+    expect(priceForModel(null, 'claude-opus-5[1m]')).toEqual({ input: 5, output: 25 });
+  });
+
+  it('prices the GPT-5.6 tiers under their real codex catalog slugs', () => {
+    expect(priceForModel(null, 'gpt-5.6-sol')).toEqual({ input: 5, output: 30 });
+    expect(priceForModel(null, 'gpt-5.6-terra')).toEqual({ input: 2, output: 12 });
+    expect(priceForModel(null, 'gpt-5.6-luna')).toEqual({ input: 0.2, output: 1.2 });
+  });
+
+  it('carries the corrected Opus 4.5 and Haiku 4.5 list prices', () => {
+    // The old rows held Opus 4.1 ($15/$75) and Haiku 3.5 ($0.80/$4) rates
+    // under the 4.5 ids — off by 3x/25% against the published table.
+    expect(priceForModel(null, 'claude-opus-4-5')).toEqual({ input: 5, output: 25 });
+    expect(priceForModel(null, 'claude-haiku-4-5')).toEqual({ input: 1, output: 5 });
+  });
 });
 
 describe('computeRunUsageRecord', () => {

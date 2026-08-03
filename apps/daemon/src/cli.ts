@@ -224,7 +224,7 @@ const USAGE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 // `od library …` (OD Library asset registry). Hoisted so the dispatcher can
 // parse flags without hitting a temporal-dead-zone on these sets.
 const LIBRARY_ASSET_STRING_FLAGS = new Set([
-  'daemon-url', 'kind', 'tag', 'source', 'date', 'query', 'project', 'label', 'out', 'dir',
+  'daemon-url', 'kind', 'tag', 'source', 'date', 'query', 'project', 'label', 'out', 'dir', 'limit',
 ]);
 const LIBRARY_ASSET_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const DIAGNOSTICS_STRING_FLAGS = new Set(['daemon-url', 'output']);
@@ -7863,7 +7863,7 @@ function printLibraryHelp() {
   console.log(`Usage: od library <command> [options]
 
 Commands:
-  list                      List library assets. Filters: --kind --tag --source --date
+  list                      List library assets. Filters: --kind --tag --source --date --limit
   get <id>                  Print one asset (JSON).
   rm <id>                   Delete an asset.
   search <query>            Keyword search across captions / tags / titles.
@@ -7884,6 +7884,8 @@ Options:
   --tag <tag>               Filter by / attach a tag.
   --source <kind>           Filter by source (clipper|manual-upload|agent-task|design-system|generated).
   --date <YYYY-MM-DD>       Filter by archive date.
+  --limit <n>               Max rows for list (default 500, max 1000). A
+                            truncated list says so on stderr.
   --project <id>            Target project for apply.
   --dir <subdir>            Subdirectory inside the project for apply (default: library).
   --out <file>              Write the figma export to a file (default: stdout).`);
@@ -7923,6 +7925,7 @@ async function runLibrary(args) {
         if (flags.source) params.set('source', flags.source);
         if (flags.date) params.set('date', flags.date);
         if (flags.project) params.set('projectId', flags.project);
+        if (flags.limit) params.set('limit', flags.limit);
         const qs = params.toString();
         const resp = await fetch(`${base}/api/library/assets${qs ? `?${qs}` : ''}`);
         if (!resp.ok) return structuredHttpFailure(resp);
@@ -7932,6 +7935,14 @@ async function runLibrary(args) {
           const dims = asset.width && asset.height ? `${asset.width}x${asset.height}` : '';
           const label = asset.sourceTitle || asset.sourceUrl || asset.caption || '';
           console.log(`${asset.id}\t${asset.kind}\t${dims}\t${label}`);
+        }
+        // BUG-5: the list caps at 500 rows — say so instead of letting a
+        // partial page read as the whole library. (--json carries
+        // total/truncated in the payload itself.)
+        if (data.truncated) {
+          console.error(
+            `(showing ${(data.assets ?? []).length} of ${data.total} matching assets — pass a higher --limit or narrow the filter)`,
+          );
         }
         return;
       }

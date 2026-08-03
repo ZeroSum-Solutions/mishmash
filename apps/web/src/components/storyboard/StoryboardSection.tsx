@@ -10,6 +10,7 @@ import { Button } from '@open-design/components';
 import { Icon } from '../Icon';
 import { useT } from '../../i18n';
 import { createStoryboard, fetchStoryboard, fetchStoryboardList } from '../../providers/registry';
+import { goBack, navigate, useRoute } from '../../router';
 import { fetchMediaProvidersFromDaemon } from '../../state/config';
 import type { ConfiguredProviderMap } from './model-defaults';
 import { StoryboardEditor } from './StoryboardEditor';
@@ -21,10 +22,15 @@ interface Props {
 
 export function StoryboardSection({ active }: Props) {
   const t = useT();
+  const route = useRoute();
+  // The URL is the source of truth for which storyboard is open (OBS-2):
+  // opening a card pushes /storyboard/:id, the browser back button pops it,
+  // and a reload or shared link lands directly in the editor.
+  const routedId =
+    route.kind === 'home' && route.view === 'storyboard' ? route.storyboardId ?? null : null;
   const [storyboards, setStoryboards] = useState<StoryboardSummary[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [activeStoryboard, setActiveStoryboard] = useState<import('@open-design/contracts').Storyboard | null>(null);
   const [configured, setConfigured] = useState<ConfiguredProviderMap>({});
   const hasFetchedRef = useRef(false);
@@ -43,6 +49,45 @@ export function StoryboardSection({ active }: Props) {
     });
   }, [active]);
 
+  // Follow the routed id: a pushed detail entry, browser back/forward, or a
+  // cold deep link all resolve through this one effect. A dead id (deleted
+  // storyboard, mistyped link) falls back to the list with a clean URL.
+  //
+  // The one case that must NOT clear: returning to this tab through the nav
+  // rail. EntryShell's changeView knows nothing about sub-routes, so a rail
+  // switch back arrives as routedId: null — while the editor state is still
+  // cached from the keep-mounted tab. That transition (active false → true)
+  // re-asserts the open storyboard onto the URL instead. Browser back from
+  // the editor keeps `active` true throughout, so it still clears — the URL
+  // never bounces back into a redirect trap.
+  const wasActiveRef = useRef(active);
+  useEffect(() => {
+    const wasActive = wasActiveRef.current;
+    wasActiveRef.current = active;
+    if (!active) return;
+    if (!routedId) {
+      if (!wasActive && activeStoryboard) {
+        navigate(
+          { kind: 'home', view: 'storyboard', storyboardId: activeStoryboard.id },
+          { replace: true },
+        );
+        return;
+      }
+      setActiveStoryboard(null);
+      return;
+    }
+    if (activeStoryboard?.id === routedId) return;
+    let cancelled = false;
+    void fetchStoryboard(routedId).then((result) => {
+      if (cancelled) return;
+      if (result.ok) setActiveStoryboard(result.value);
+      else navigate({ kind: 'home', view: 'storyboard' }, { replace: true });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [active, routedId, activeStoryboard]);
+
   async function refreshList() {
     const result = await fetchStoryboardList();
     if (result.ok) setStoryboards(result.value);
@@ -52,7 +97,7 @@ export function StoryboardSection({ active }: Props) {
     const result = await fetchStoryboard(id);
     if (result.ok) {
       setActiveStoryboard(result.value);
-      setActiveId(id);
+      navigate({ kind: 'home', view: 'storyboard', storyboardId: id });
     }
   }
 
@@ -60,17 +105,21 @@ export function StoryboardSection({ active }: Props) {
     const result = await createStoryboard('');
     if (result.ok) {
       setActiveStoryboard(result.value);
-      setActiveId(result.value.id);
+      navigate({ kind: 'home', view: 'storyboard', storyboardId: result.value.id });
     }
   }
 
   function handleBack() {
-    setActiveId(null);
-    setActiveStoryboard(null);
+    // Pop the pushed detail entry so browser Back stays coherent; a deep link
+    // with no in-app history behind it lands on the list instead.
+    goBack({ kind: 'home', view: 'storyboard' });
     void refreshList();
   }
 
-  if (activeId && activeStoryboard) {
+  // Strict id match: while a back/forward navigation is mid-fetch the cached
+  // document may still be the previous storyboard — showing it under the new
+  // URL would let an edit land on the wrong board.
+  if (routedId && activeStoryboard?.id === routedId) {
     return (
       <div className={`entry-section ${styles.root}`}>
         <StoryboardEditor storyboard={activeStoryboard} configured={configured} onBack={handleBack} />

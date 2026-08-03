@@ -1603,6 +1603,11 @@ function ModelRoutingStatus({ routing }: { routing: RunModelRouting }) {
 interface RunUsageStatus {
   costUsd: number | null;
   pricingVersion: string | null;
+  /** The model the daemon priced (or failed to price) the run against. */
+  model: string | null;
+  /** Whether the lane reported any token counts at all — this is what
+   * separates "no usage data" from "usage reported, model unpriceable". */
+  reportedTokens: boolean;
 }
 
 function useRunUsageForRun(
@@ -1618,7 +1623,13 @@ function useRunUsageForRun(
       .then((resp) => (resp.ok ? resp.json() : null))
       .then((data: unknown) => {
         if (!data || typeof data !== "object") return;
-        const record = data as { costUsd?: unknown; pricingVersion?: unknown };
+        const record = data as {
+          costUsd?: unknown;
+          pricingVersion?: unknown;
+          model?: unknown;
+          inputTokensEffective?: unknown;
+          outputTokens?: unknown;
+        };
         if (
           (typeof record.costUsd === "number" || record.costUsd === null) &&
           typeof record.pricingVersion === "string"
@@ -1626,6 +1637,10 @@ function useRunUsageForRun(
           setUsageStatus({
             costUsd: typeof record.costUsd === "number" ? record.costUsd : null,
             pricingVersion: record.pricingVersion,
+            model: typeof record.model === "string" ? record.model : null,
+            reportedTokens:
+              typeof record.inputTokensEffective === "number" ||
+              typeof record.outputTokens === "number",
           });
         }
       })
@@ -1639,7 +1654,14 @@ function useRunUsageForRun(
 
 function RunPricingStatus({ usage }: { usage: RunUsageStatus }) {
   if (usage.pricingVersion !== "unavailable") return null;
-  const label = "Cost: unavailable (this run's lane reported no usage data).";
+  // Two different facts share pricingVersion 'unavailable' and must not share
+  // a sentence: a lane that emitted no usage signal at all, and a lane that
+  // reported real token counts for a model the pricing table cannot price
+  // (SS-2 — a claude run was told its lane "reported no usage data" when the
+  // gap was a missing price row for claude-opus-5[1m]).
+  const label = usage.reportedTokens
+    ? `Cost: unavailable (no price data for ${usage.model ?? "this run's model"}).`
+    : "Cost: unavailable (this run's lane reported no usage data).";
   return (
     <span
       className="assistant-run-pricing-status assistant-run-pricing-unavailable"

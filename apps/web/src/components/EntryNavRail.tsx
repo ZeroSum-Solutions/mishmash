@@ -24,7 +24,6 @@ export type EntryView =
   | 'library'
   | 'design-library'
   | 'storyboard'
-  | 'brands'
   | 'integrations';
 
 interface Props {

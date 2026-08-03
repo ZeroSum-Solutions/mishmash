@@ -22,7 +22,6 @@ import { useI18n, useT } from '../i18n';
 import { localizeSkillDescription, localizeSkillName } from '../i18n/content';
 import type { Dict } from '../i18n/types';
 import { fetchPromptTemplate, openFolderDialog } from '../providers/registry';
-import { isStoredMediaProviderEntryPresent } from '../state/config';
 import { isMediaProviderPickerReady } from '../media/provider-readiness';
 import type {
   AudioKind,
@@ -2754,16 +2753,23 @@ function MediaProjectOptions(props:
   );
 }
 
-export function supportedModels(surface: 'image' | 'video' | 'audio', models: MediaModel[]): MediaModel[] {
-  const supportedProviders: Record<'image' | 'video' | 'audio', Set<string>> = {
-    image: new Set(['openai', 'codex', 'volcengine', 'grok', 'nanobanana', 'openrouter', 'imagerouter', 'leonardo', 'custom-image', 'aihubmix', 'minimax']),
-    video: new Set(['volcengine', 'hyperframes', 'grok', 'openrouter', 'imagerouter', 'aihubmix']),
-    audio: new Set(['minimax', 'fishaudio', 'senseaudio', 'elevenlabs', 'openai', 'volcengine', 'grok', 'aihubmix']),
-  };
-  return models.filter((model) => {
-    const provider = findProvider(model.provider);
-    return provider?.integrated === true && supportedProviders[surface].has(model.provider);
-  });
+/**
+ * The models this panel may offer for a surface: everything the catalog says
+ * the daemon can actually dispatch to.
+ *
+ * `isMediaProviderPickerReady(provider)` with no credentials map is the app's
+ * one definition of "integrated" — the storyboard pickers gate on exactly this
+ * call. Passing the map here instead would hide a provider until it had a key,
+ * which is a *readiness* question the picker answers per-group further down.
+ *
+ * This used to carry a second, hand-maintained per-surface provider allowlist
+ * on top. It drifted: kie, higgsfield, fal and minimax were all integrated and
+ * dispatchable but missing from the video set, so the storyboard shot picker
+ * offered models this panel silently refused to show (BUG-3). A catalog
+ * addition should never need a second edit here to become visible.
+ */
+export function supportedModels(_surface: 'image' | 'video' | 'audio', models: MediaModel[]): MediaModel[] {
+  return models.filter((model) => isMediaProviderPickerReady(model.provider));
 }
 
 function MediaModelCards({
@@ -2793,6 +2799,9 @@ function MediaModelCards({
       providerId: string;
       providerLabel: string;
       status: 'configured' | 'integrated' | 'unsupported';
+      /** Selectable as an automatic default: real credentials, a no-key lane,
+       * or an unfetched credentials map (unknown ⇒ don't second-guess). */
+      ready: boolean;
       sortIndex: number;
       sortPriority: number;
       models: MediaModel[];
@@ -2800,9 +2809,18 @@ function MediaModelCards({
     for (const model of models) {
       const provider = findProvider(model.provider);
       const providerId = provider?.id ?? model.provider;
-      if (!isMediaProviderPickerReady(providerId, mediaProviders)) continue;
-      const entry = mediaProviders?.[providerId];
-      const configured = provider?.credentialsRequired !== false && isStoredMediaProviderEntryPresent(entry);
+      // Integrated is the only thing that decides whether a provider is
+      // *listed*. Whether it has a key decides how it is badged and where it
+      // sorts, below — hiding it outright left a user with no keys yet facing
+      // an empty picker that never said why (BUG-3).
+      if (!isMediaProviderPickerReady(providerId)) continue;
+      // The readiness helper — not a bare stored-entry check — is what knows
+      // that an OpenAI OAuth-only marker is NOT a usable credential. The old
+      // list filter applied it, so the badge logic never had to; now that
+      // unready providers are listed, "configured" must apply it too.
+      const ready = isMediaProviderPickerReady(providerId, mediaProviders);
+      const configured =
+        provider?.credentialsRequired !== false && mediaProviders !== undefined && ready;
       let group = out.find((g) => g.providerId === providerId);
       if (!group) {
         group = {
@@ -2813,6 +2831,7 @@ function MediaModelCards({
             : provider?.integrated
               ? 'integrated'
               : 'unsupported',
+          ready,
           sortIndex: out.length,
           sortPriority: configured ? 0 : provider?.credentialsRequired === false ? 1 : 2,
           models: [],
@@ -2831,16 +2850,29 @@ function MediaModelCards({
     }
     return null;
   }, [groups, value]);
-  const firstAvailableModelId = groups[0]?.models[0]?.id ?? null;
+  // Auto-selection must land on something the user can actually run. Groups
+  // sort configured-first, but an unconfigured provider now appears in the
+  // list too — so pick from the ready groups explicitly rather than trusting
+  // position.
+  const firstAvailableModelId = groups.find((g) => g.ready)?.models[0]?.id ?? null;
+
+  // A catalog default (e.g. OpenAI's gpt-image-2) may belong to a provider
+  // with no key. Before BUG-3 that provider was hidden, the default failed to
+  // resolve, and the effect below switched to a configured one. Now the
+  // provider resolves — so the effect must also steer an *unpicked* not-ready
+  // selection onto a ready model. A model the user chose by hand stays put,
+  // even without a key: they may be about to configure it.
+  const userPickedRef = useRef(false);
+  const selectedIsReady = selected != null && selected.group.ready;
 
   useEffect(() => {
-    if (selected) return;
+    if (selected && (selectedIsReady || userPickedRef.current)) return;
     if (firstAvailableModelId) {
-      onChange(firstAvailableModelId);
+      if (value !== firstAvailableModelId) onChange(firstAvailableModelId);
       return;
     }
-    if (value) onChange('');
-  }, [firstAvailableModelId, onChange, selected, value]);
+    if (!selected && value) onChange('');
+  }, [firstAvailableModelId, onChange, selected, selectedIsReady, value]);
 
   const filteredGroups = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -2889,6 +2921,7 @@ function MediaModelCards({
   }, [open]);
 
   function pick(modelId: string) {
+    userPickedRef.current = true;
     onChange(modelId);
     setOpen(false);
     setQuery('');
@@ -2951,7 +2984,9 @@ function MediaModelCards({
                       {group.status === 'configured'
                         ? 'Configured'
                         : group.status === 'integrated'
-                          ? 'Integrated'
+                          ? group.sortPriority === 1
+                            ? 'No key needed'
+                            : 'Needs API key'
                           : 'Unsupported'}
                     </span>
                   </div>

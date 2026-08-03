@@ -246,6 +246,60 @@ describe('POST /api/storyboards/:id/draft-shots', () => {
     expect(storedBody.storyboard.shots).toHaveLength(2);
   });
 
+  // BUG-10. Google answers an invalid API key with HTTP 400 (body: "API key
+  // not valid. Please pass a valid API key."), not 401 — so the route's
+  // status-based mapping surfaced only "upstream Google Gemini returned 400"
+  // and the user read a credential problem as a broken feature. A rejected
+  // credential must say it's the credential, whatever status carried it.
+  it('names the credential when Google rejects the API key with its 400 quirk', async () => {
+    await boot();
+    const created = await createStoryboard();
+    outboundResponder = async () =>
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 400,
+            message: 'API key not valid. Please pass a valid API key.',
+            status: 'INVALID_ARGUMENT',
+            details: [{ reason: 'API_KEY_INVALID' }],
+          },
+        }),
+        { status: 400, headers: { 'content-type': 'application/json' } },
+      );
+
+    const resp = await draft(created.id, {
+      brief: 'a calm ad for a ceramic mug',
+      shotCount: 1,
+      textProvider: { protocol: 'google', apiKey: 'bad-key', model: 'gemini-test' },
+    });
+
+    expect(resp.status).toBe(401);
+    const body = (await resp.json()) as { error: { code?: string; message?: string } };
+    expect(body.error.code).toBe('UNAUTHORIZED');
+    expect(body.error.message).toMatch(/api key/i);
+    expect(body.error.message).not.toMatch(/^upstream .* returned 400$/i);
+  });
+
+  it('still reports a plain 400 that is NOT a credential rejection as an upstream failure', async () => {
+    await boot();
+    const created = await createStoryboard();
+    outboundResponder = async () =>
+      new Response(
+        JSON.stringify({ error: { code: 400, message: 'Unknown field: shot_count' } }),
+        { status: 400, headers: { 'content-type': 'application/json' } },
+      );
+
+    const resp = await draft(created.id, {
+      brief: 'a calm ad for a ceramic mug',
+      shotCount: 1,
+      textProvider: { protocol: 'google', apiKey: 'good-key', model: 'gemini-test' },
+    });
+
+    expect(resp.status).toBe(502);
+    const body = (await resp.json()) as { error: { code?: string } };
+    expect(body.error.code).toBe('UPSTREAM_UNAVAILABLE');
+  });
+
   it('does not discard a write that lands while the provider call is in flight', async () => {
     await boot();
     const created = await createStoryboard();

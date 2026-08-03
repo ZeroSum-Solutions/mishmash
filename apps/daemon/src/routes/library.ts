@@ -28,6 +28,7 @@ import { LIBRARY_UPLOAD_MAX_BYTES, isLibraryUploadMimeAllowed } from '@open-desi
 import type { RouteDeps } from '../server-context.js';
 import {
   addLibraryAssetSource,
+  countLibraryAssets,
   deleteLibraryAsset,
   getLibraryAsset,
   listLibraryAssets,
@@ -554,7 +555,10 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
     if (str(q.designSystemId)) filter.designSystemId = str(q.designSystemId)!;
     if (q.limit) filter.limit = Number(q.limit);
     const assets = listLibraryAssets(db, filter).map(toPublicAsset);
-    res.json({ assets });
+    // The page caps at 500/1000 rows; report the full matching count so no
+    // consumer can mistake a truncated page for the whole library (BUG-5).
+    const total = countLibraryAssets(db, filter);
+    res.json({ assets, total, truncated: assets.length < total });
   });
 
   // Force a full reconcile pass (the web "Sync" button + `od library sync`).

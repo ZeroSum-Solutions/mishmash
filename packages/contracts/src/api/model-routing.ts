@@ -48,9 +48,12 @@ export function normalizeModelForRouting(value: string | null | undefined): stri
  *
  * Precedence (deliberately not a set of independent, possibly-conflicting
  * conditions):
- *   1. `resolved !== requested` -- a substitution happened; that is the most
- *      important thing to tell the user, whether or not it was later
- *      confirmed by an echo.
+ *   1. `resolved !== requested`, for an explicit request -- a substitution
+ *      happened; that is the most important thing to tell the user, whether
+ *      or not it was later confirmed by an echo. A `requested` equal to the
+ *      `'default'` sentinel names no model at all, so nothing can be
+ *      substituted for it: resolving it to the lane's concrete model is the
+ *      requested behavior, not a swap worth an alarm.
  *   2. `reported === resolved` (and non-null) -- what ran matches what the
  *      daemon asked for, and the CLI confirmed it. `verified`.
  *   3. Otherwise -- no substitution occurred, but nothing confirms it either
@@ -64,7 +67,9 @@ export function computeModelRoutingDisplayState(
   resolved: string,
   reported: string | null,
 ): ModelRoutingDisplayState {
-  if (resolved !== requested) return 'substituted';
+  if (requested !== MODEL_ROUTING_DEFAULT_SENTINEL && resolved !== requested) {
+    return 'substituted';
+  }
   if (reported && reported === resolved) return 'verified';
   return 'unverified';
 }

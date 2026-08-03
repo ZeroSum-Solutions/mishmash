@@ -122,6 +122,25 @@ export class FinalizeUpstreamError extends Error {
   }
 }
 
+/**
+ * Whether an upstream failure is the provider rejecting the CREDENTIAL, as
+ * opposed to rejecting the request. 401/403 always mean that; Google's
+ * Generative Language API additionally answers an invalid API key with HTTP
+ * 400 whose body carries `API_KEY_INVALID` / "API key not valid" — a
+ * status-only mapping reads that as a generic upstream failure and the user
+ * concludes the feature is broken rather than the key stale (BUG-10).
+ *
+ * Callers use this to emit an auth-flavored error naming the credential.
+ * The raw body itself must still never be surfaced unredacted.
+ */
+export function isProviderCredentialRejection(err: FinalizeUpstreamError): boolean {
+  if (err.status === 401 || err.status === 403) return true;
+  if (err.status === 400) {
+    return /API_KEY_INVALID|API key not valid/i.test(err.rawText);
+  }
+  return false;
+}
+
 type Db = Database.Database;
 
 interface ResolvedArtifact {

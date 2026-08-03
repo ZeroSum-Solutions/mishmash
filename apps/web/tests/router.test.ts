@@ -111,4 +111,29 @@ describe('parseRoute / buildPath (issue #1505)', () => {
     expect(parseRoute('/something/else')).toEqual({ kind: 'home', view: 'home' });
     expect(parseRoute('/projects')).toEqual({ kind: 'home', view: 'projects' });
   });
+
+  // OBS-2: an open storyboard had no URL — the address bar stayed at
+  // /storyboard, so reload, bookmark, and share all dropped the user back on
+  // the list. Projects and design systems both have detail routes; the
+  // storyboard editor gets the same treatment.
+  describe('storyboard detail deep-link (OBS-2)', () => {
+    it('parses /storyboard/:id onto the storyboard view with the id', () => {
+      expect(parseRoute('/storyboard/sb-1')).toEqual({
+        kind: 'home',
+        view: 'storyboard',
+        storyboardId: 'sb-1',
+      });
+    });
+
+    it('round-trips the detail route and percent-encodes the id', () => {
+      const route: Route = { kind: 'home', view: 'storyboard', storyboardId: 'sb 1/x' };
+      expect(buildPath(route)).toBe('/storyboard/sb%201%2Fx');
+      expect(roundTrip(route)).toEqual(route);
+    });
+
+    it('keeps the bare list route unchanged', () => {
+      expect(parseRoute('/storyboard')).toEqual({ kind: 'home', view: 'storyboard' });
+      expect(buildPath({ kind: 'home', view: 'storyboard' })).toBe('/storyboard');
+    });
+  });
 });

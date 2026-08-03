@@ -51,7 +51,11 @@ describe('NewProjectPanel media provider badges', () => {
     expect(openaiGroup?.textContent).not.toContain('Integrated');
   });
 
-  it('hides provider models until the provider has usable credentials', () => {
+  // BUG-3 changed the listing rule: an integrated provider without usable
+  // credentials stays VISIBLE, badged "Needs API key", instead of vanishing.
+  // What must still hold is that it never reads as configured and never wins
+  // the automatic default (covered by the Codex fallback spec below).
+  it('lists a keyless provider with a Needs API key badge instead of hiding it', () => {
     render(
       <NewProjectPanel
         skills={[]}
@@ -69,8 +73,10 @@ describe('NewProjectPanel media provider badges', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Image' }));
     fireEvent.click(screen.getByTestId('model-picker-trigger'));
 
-    expect(screen.queryByText('OpenAI')).toBeNull();
-    expect(screen.queryByTestId('model-picker-option-gpt-image-2')).toBeNull();
+    const openaiGroup = screen.getByText('OpenAI').closest('.ds-picker-group');
+    expect(openaiGroup?.textContent).toContain('Needs API key');
+    expect(openaiGroup?.textContent).not.toContain('Configured');
+    expect(screen.getByTestId('model-picker-option-gpt-image-2')).toBeTruthy();
   });
 
   it('shows Codex subscription image models without media API credentials', () => {
@@ -92,7 +98,8 @@ describe('NewProjectPanel media provider badges', () => {
     fireEvent.click(screen.getByTestId('model-picker-trigger'));
 
     const codexGroup = screen.getByText('Codex Subscription').closest('.ds-picker-group');
-    expect(codexGroup?.textContent).toContain('Integrated');
+    // credentialsRequired: false — must NOT be badged "Needs API key".
+    expect(codexGroup?.textContent).toContain('No key needed');
     expect(screen.getByTestId('model-picker-option-codex-gpt-image-2')).toBeTruthy();
   });
 
@@ -162,8 +169,45 @@ describe('NewProjectPanel media provider badges', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Image' }));
     fireEvent.click(screen.getByTestId('model-picker-trigger'));
 
-    expect(screen.queryByText('OpenAI')).toBeNull();
-    expect(screen.queryByTestId('model-picker-option-gpt-image-2')).toBeNull();
+    // The invariant: a borrowed codex-auth token is not proof the Images API
+    // can be called, so OpenAI must not read as configured. Post-BUG-3 the
+    // group is listed (that's the new rule) — badged as still needing a key.
+    const openaiGroup = screen.getByText('OpenAI').closest('.ds-picker-group');
+    expect(openaiGroup?.textContent).toContain('Needs API key');
+    expect(openaiGroup?.textContent).not.toContain('Configured');
+  });
+
+  it('keeps a model the user picked by hand even when its provider has no key', async () => {
+    // The auto-default steers an *unpicked* not-ready selection onto a ready
+    // model — but an explicit pick must stick: the user may be about to go
+    // configure that provider. Regression guard on the userPickedRef branch.
+    render(
+      <NewProjectPanel
+        skills={[]}
+        designSystems={[]}
+        defaultDesignSystemId={null}
+        templates={[]}
+        onDeleteTemplate={vi.fn()}
+        promptTemplates={[]}
+        onCreate={vi.fn()}
+        mediaProviders={{}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Media' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Image' }));
+    // Auto-default settles on the no-key Codex lane first.
+    await waitFor(() => {
+      expect(screen.getByTestId('model-picker-trigger').textContent).toContain('gpt-image-2 (Codex)');
+    });
+    // Hand-pick a keyless OpenAI model from the popover.
+    fireEvent.click(screen.getByTestId('model-picker-trigger'));
+    fireEvent.click(screen.getByTestId('model-picker-option-gpt-image-2'));
+    // The effect must not steer the selection back to a ready model.
+    await waitFor(() => {
+      expect(screen.getByTestId('model-picker-trigger').textContent).toContain('gpt-image-2');
+      expect(screen.getByTestId('model-picker-trigger').textContent).not.toContain('(Codex)');
+    });
   });
 
   it('switches away from the default OpenAI model when only another provider is configured', () => {

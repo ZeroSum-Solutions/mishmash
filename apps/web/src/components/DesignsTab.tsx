@@ -1269,9 +1269,8 @@ function projectCover(
 	return { kind: "fallback", style, initial };
 }
 
-// Best-effort hostname for the brand cover's favicon fallback. Mirrors the
-// helper in BrandsTab; brand source URLs are always present in metadata even
-// before extraction finishes.
+// Best-effort hostname for the brand cover's favicon fallback; brand source
+// URLs are always present in metadata even before extraction finishes.
 function brandHostname(rawUrl: string | undefined): string | undefined {
 	if (!rawUrl) return undefined;
 	try {

@@ -50,7 +50,15 @@ function baseMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
 // Both useModelRoutingForRun (GET /api/runs/:id) and useRunUsageForRun
 // (GET /api/runs/:id/usage) fire from the same render; branch on the URL so
 // each hook gets a shape it can actually parse.
-function stubFetchWithRunUsage(usage: { costUsd: number | null; pricingVersion: string } | null) {
+function stubFetchWithRunUsage(
+  usage: {
+    costUsd: number | null;
+    pricingVersion: string;
+    model?: string | null;
+    inputTokensEffective?: number | null;
+    outputTokens?: number | null;
+  } | null,
+) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: unknown) => {
@@ -87,6 +95,39 @@ describe('AssistantMessage run pricing status', () => {
     expect(status.textContent ?? '').toMatch(/unavailable/i);
     // Never a bare confident zero alongside/instead of the qualifier.
     expect(status.textContent ?? '').not.toMatch(/\$\s?0(\.0{1,2})?(?!\d)/);
+  });
+
+  // SS-2. A claude-lane run DOES report tokens; when the model just isn't in
+  // the pricing table the banner used to claim "this run's lane reported no
+  // usage data" — blaming the lane for a gap in the price list. The two
+  // states are different facts and must render as different sentences.
+  it('blames the price table, not the lane, when tokens were reported but the model is unpriceable', async () => {
+    stubFetchWithRunUsage({
+      costUsd: null,
+      pricingVersion: 'unavailable',
+      // Deliberately a model the pricing table genuinely does not carry —
+      // the original incident's claude-opus-5[1m] became priceable in the
+      // same change that fixed this banner.
+      model: 'glacier-lane-preview-9',
+      inputTokensEffective: 123_456,
+      outputTokens: 7_890,
+    });
+
+    render(
+      <AssistantMessage
+        message={baseMessage()}
+        streaming={false}
+        projectId="p1"
+        errorCardOwnerId={null}
+        onFeedback={vi.fn()}
+      />,
+    );
+
+    const status = await waitFor(() => screen.getByRole('status', {
+      name: (name) => /unavailable/i.test(name),
+    }));
+    expect(status.textContent ?? '').toContain('no price data for glacier-lane-preview-9');
+    expect(status.textContent ?? '').not.toMatch(/reported no usage data/i);
   });
 
   it('renders no pricing status for a normally-priced run', async () => {

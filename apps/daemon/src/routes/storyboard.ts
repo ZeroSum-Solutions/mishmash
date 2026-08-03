@@ -38,10 +38,16 @@ import {
   STORYBOARD_DRAFT_SHOT_COUNT_DEFAULT,
   STORYBOARD_DRAFT_SHOT_COUNT_MAX,
   STORYBOARD_DRAFT_SHOT_COUNT_MIN,
+  STORYBOARD_MOOD_DRAFT_STATUSES as MOOD_DRAFT_STATUS_VALUES,
+  STORYBOARD_SHOT_STATUSES as SHOT_STATUS_VALUES,
   STORYBOARD_UPLOAD_MAX_BYTES,
 } from '@open-design/contracts';
 import type { RouteDeps } from '../server-context.js';
-import { isFinalizeProviderProtocol } from '../design/finalize-design.js';
+import {
+  FinalizeUpstreamError,
+  isFinalizeProviderProtocol,
+  isProviderCredentialRejection,
+} from '../design/finalize-design.js';
 import { resolveProviderConfig } from '../media/config.js';
 import { modelsForSurface } from '../media/models.js';
 import { isSafeId, mimeFor } from '../projects.js';
@@ -65,8 +71,10 @@ export interface RegisterStoryboardRoutesDeps
 /** Hidden project every generated storyboard still/clip lives under. Auto-created on first use. */
 const STORYBOARD_MEDIA_PROJECT_ID = 'storyboard-media';
 const STORYBOARD_RESOLUTIONS = new Set<StoryboardResolution>(['480p', '720p', '1080p']);
-const STORYBOARD_SHOT_STATUSES = new Set<StoryboardShotStatus>(['draft', 'rendering', 'done', 'failed']);
-const STORYBOARD_MOOD_STATUSES = new Set(['idle', 'rendering', 'done', 'failed']);
+// Derived from the contract's own tuples (OBS-1) — a hand-relisted copy here
+// is how the two nearly-identical vocabularies get crossed.
+const STORYBOARD_SHOT_STATUSES = new Set<StoryboardShotStatus>(SHOT_STATUS_VALUES);
+const STORYBOARD_MOOD_STATUSES = new Set<string>(MOOD_DRAFT_STATUS_VALUES);
 const STORYBOARD_FRAME_ORIGINS = new Set(['generated', 'derived', 'uploaded', 'previous-shot']);
 const MIN_SHOT_DURATION_SEC = 4;
 const MAX_SHOT_DURATION_SEC = 15;
@@ -783,6 +791,19 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
     try {
       drafted = await draftShotsFromBrief({ brief, shotCount, provider, signal: clientGone.signal });
     } catch (err) {
+      // A rejected credential must say it's the credential — Google answers
+      // an invalid key with 400, so without this classification the user is
+      // told only "upstream Google Gemini returned 400" and reads a stale
+      // key as a broken feature (BUG-10). Message is composed here, never
+      // echoed from the upstream body.
+      if (err instanceof FinalizeUpstreamError && isProviderCredentialRejection(err)) {
+        return sendApiError(
+          res,
+          401,
+          'UNAUTHORIZED',
+          'the text provider rejected its API key — update the stored credential under Settings → Media providers (or the textProvider sent with this request) and retry',
+        );
+      }
       // Deliberately surfaces only the error's own message — never the raw
       // upstream body, which can echo request content back.
       const message = err instanceof Error ? err.message : 'text provider call failed';

@@ -135,7 +135,9 @@ export function BrandPreviewCard({
     setBusy(true);
     try {
       await fetch(`/api/brands/${encodeURIComponent(meta.id)}`, { method: 'DELETE' });
-      navigate({ kind: 'home', view: 'brands' }, { replace: true });
+      // Brands live inside the Design systems tab (the standalone brands
+      // view was removed in BUG-7), so after a delete land the user there.
+      navigate({ kind: 'home', view: 'design-systems' }, { replace: true });
       await onChanged?.();
     } catch {
       setBusy(false);
