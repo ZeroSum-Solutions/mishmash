@@ -158,8 +158,9 @@ async function resolveWithinStoryboardMediaDirReal(projectDir: string, rel: unkn
  * previously-planted symlink. Unlike the read-side helper above, a write
  * NEVER follows an existing symlink at the target — even one that would
  * resolve back inside the project — since following it would let an
- * attacker alias the write onto an arbitrary file (e.g. `final.mp4`
- * replaced with a symlink to some other path before assemble runs). Also
+ * attacker alias the write onto an arbitrary file (e.g. `slider.html`, or
+ * an assemble run's per-storyboard concat-list file, replaced with a
+ * symlink to some other path before the route writes to it). Also
  * realpath-validates the target's parent directory so a symlinked ancestor
  * can't redirect the write outside the project tree. `absoluteTarget` is
  * always built by the route itself (fixed/randomUUID-based names), never
@@ -1120,6 +1121,23 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
       assertSafeWriteTarget: assertSafeStoryboardWriteTarget,
     });
     if (!outcome.ok) return sendApiError(res, outcome.status, outcome.code, outcome.message);
+
+    // Persist which file is now "the" current assembled output for this
+    // storyboard. assembleStoryboard() gives every run its own uniquely
+    // named file (see storyboards/assemble.ts's assembleOutputName), so
+    // without this a caller has no way to find the winning run's output
+    // again after this response — the whole point of per-run naming is
+    // that it can no longer be guessed from a fixed name. Re-read inside
+    // the lock rather than reusing the entry-time snapshot: the encode
+    // above can take a while, and a PATCH landing during it must not be
+    // clobbered by writing back a stale copy of the doc.
+    await withStoryboardLock(req.params.id, async () => {
+      const current = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+      if (!current) return; // storyboard was deleted mid-assemble; nothing to persist onto
+      current.finalOutput = outcome.output;
+      current.updatedAt = nowIso();
+      await writeStoryboard(RUNTIME_DATA_DIR, current);
+    });
 
     res.json({ output: outcome.output, finish: outcome.finish });
   });

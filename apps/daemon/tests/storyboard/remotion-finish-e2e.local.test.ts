@@ -152,10 +152,13 @@ maybe('storyboard assemble --finish remotion (real fixture render)', () => {
           | { error: { message?: string } | string };
         expect(assembleResp.status, JSON.stringify(assembleBody)).toBe(200);
         const data = assembleBody as { output: string; finish: string };
-        expect(data.output).toBe('final.mp4');
+        // Per-run naming (storyboard id + a run discriminator), not the old
+        // shared literal 'final.mp4' — see storyboards/assemble.ts's
+        // assembleOutputName.
+        expect(data.output).toMatch(new RegExp(`^final-${storyboard.id}-.+\\.mp4$`));
         expect(data.finish).toBe('remotion');
 
-        const outputPath = path.join(projectDir, 'final.mp4');
+        const outputPath = path.join(projectDir, data.output);
         const outputStat = await stat(outputPath);
         expect(outputStat.size).toBeGreaterThan(100 * 1024);
 
