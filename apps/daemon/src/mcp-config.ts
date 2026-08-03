@@ -168,6 +168,81 @@ function effectiveMcpAuthMode(server: McpServerConfig): McpAuthMode {
 }
 
 /**
+ * https-or-loopback: the invariant enforced at MCP spawn-injection time
+ * (`buildClaudeMcpJson` / `buildOpenCodeMcpConfigContent`). A daemon-issued
+ * OAuth bearer token (`oauthTokensForSpawn` in server.ts) may only be
+ * injected into a spawned agent's environment alongside a server URL that
+ * is https, or that is http bound to a loopback address — the same
+ * loopback notion `inferMcpAuthModeForUrl` above already uses to default
+ * such servers to `authMode: 'none'`. Plain http to any other host would
+ * put the bearer on the wire in cleartext outside this machine.
+ *
+ * Deliberately narrower than MCP config validation (`sanitizeMcpServer`,
+ * which still accepts a plain http non-loopback URL): a user may save and
+ * run an UNAUTHENTICATED http server pointed at a non-loopback host. The
+ * pairing this guards against is specifically "http, non-loopback, WITH a
+ * bearer token attached" — see `findInsecureMcpSpawnTokenPairings` for the
+ * server-aware version callers use to detect + report a refusal.
+ */
+export function isHttpsOrLoopbackMcpUrl(rawUrl: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return false; // fail closed — an unparsable URL never gets a bearer
+  }
+  return parsed.protocol === 'https:' || isLoopbackHost(parsed.hostname);
+}
+
+/**
+ * Resolve the OAuth bearer to inject for `server`, applying the
+ * https-or-loopback guard above. Returns `undefined` (withholding
+ * injection) when the URL/token pairing is unsafe, and logs a
+ * `[mcp-config]` warning naming the server so the refusal isn't silent.
+ */
+function resolveSpawnBearer(
+  server: McpServerConfig,
+  bearer: string | undefined,
+): string | undefined {
+  if (!bearer || !server.url) return bearer;
+  if (isHttpsOrLoopbackMcpUrl(server.url)) return bearer;
+  console.warn(
+    `[mcp-config] refusing to inject the OAuth bearer token for MCP server "${server.id}": ` +
+      `${server.url} is plain http to a non-loopback host, which would send the token in ` +
+      'cleartext off this machine. Use https, or point the server at a loopback address ' +
+      '(localhost / 127.0.0.1) to keep it eligible for automatic authentication.',
+  );
+  return undefined;
+}
+
+export interface McpSpawnTokenRefusal {
+  serverId: string;
+  url: string;
+}
+
+/**
+ * Enumerates the token-URL pairings `buildClaudeMcpJson` /
+ * `buildOpenCodeMcpConfigContent` will withhold the bearer for (see
+ * `isHttpsOrLoopbackMcpUrl`). Callers (server.ts, at spawn time) use this
+ * to surface an actionable, per-server notice on the run stream / CLI
+ * without re-deriving the https-or-loopback rule themselves.
+ */
+export function findInsecureMcpSpawnTokenPairings(
+  servers: McpServerConfig[],
+  tokens: Record<string, string>,
+): McpSpawnTokenRefusal[] {
+  const out: McpSpawnTokenRefusal[] = [];
+  for (const s of servers) {
+    if (!s.enabled || (s.transport !== 'http' && s.transport !== 'sse')) continue;
+    if (effectiveMcpAuthMode(s) !== 'oauth') continue;
+    const bearer = tokens[s.id];
+    if (!bearer || !s.url) continue;
+    if (!isHttpsOrLoopbackMcpUrl(s.url)) out.push({ serverId: s.id, url: s.url });
+  }
+  return out;
+}
+
+/**
  * Validate a single user-supplied entry. Drops invalid fields so a typo in
  * one server doesn't tank the whole config. Returns null when the entry is
  * unsalvageable (no id, or no transport-required fields).
@@ -329,7 +404,7 @@ export function buildClaudeMcpJson(
       };
       const headers = mergeAuthHeader(
         s.headers,
-        effectiveMcpAuthMode(s) === 'oauth' ? tokens[s.id] : undefined,
+        resolveSpawnBearer(s, effectiveMcpAuthMode(s) === 'oauth' ? tokens[s.id] : undefined),
       );
       if (headers && Object.keys(headers).length > 0) entry.headers = headers;
       out[s.id] = entry;
@@ -482,7 +557,7 @@ export function buildOpenCodeMcpConfigContent(
       };
       const headers = mergeAuthHeader(
         s.headers,
-        effectiveMcpAuthMode(s) === 'oauth' ? tokens[s.id] : undefined,
+        resolveSpawnBearer(s, effectiveMcpAuthMode(s) === 'oauth' ? tokens[s.id] : undefined),
       );
       if (headers && Object.keys(headers).length > 0) entry.headers = headers;
       entry.enabled = true;
