@@ -143,6 +143,14 @@ function isLoopbackHost(hostname: string): boolean {
   const host = normalizeHost(hostname);
   if (host === 'localhost' || host === '::1') return true;
   if (/^127(?:\.\d{1,3}){3}$/.test(host)) return true;
+  // IPv4-mapped IPv6 loopback, in both spellings a caller might hand us.
+  // `new URL(...).hostname` — every caller of `isLoopbackHost` today goes
+  // through this — canonicalizes `::ffff:127.0.0.1` to the hex-group form
+  // `::ffff:7f00:1` (verified against Node's WHATWG URL implementation), so
+  // that form must match. The dotted-decimal form is kept too, for a
+  // hypothetical future caller that hands this function a raw,
+  // non-URL-parsed hostname string instead.
+  if (/^::ffff:7f00:1$/i.test(host)) return true;
   const mapped = /^::ffff:(127(?:\.\d{1,3}){3})$/i.exec(host)?.[1];
   return Boolean(mapped);
 }
@@ -165,6 +173,86 @@ function sanitizeMcpAuthMode(raw: unknown): McpAuthMode | undefined {
 function effectiveMcpAuthMode(server: McpServerConfig): McpAuthMode {
   if (server.transport !== 'http' && server.transport !== 'sse') return 'none';
   return server.authMode ?? inferMcpAuthModeForUrl(server.url);
+}
+
+/**
+ * https-or-loopback: the invariant enforced at MCP spawn-injection time
+ * (`buildClaudeMcpJson` / `buildOpenCodeMcpConfigContent`). A daemon-issued
+ * OAuth bearer token (`oauthTokensForSpawn` in server.ts) may only be
+ * injected into a spawned agent's environment alongside a server URL that
+ * is https, or that is http bound to a loopback address — the same
+ * loopback notion `inferMcpAuthModeForUrl` above already uses to default
+ * such servers to `authMode: 'none'`. Plain http to any other host would
+ * put the bearer on the wire in cleartext outside this machine.
+ *
+ * Deliberately narrower than MCP config validation (`sanitizeMcpServer`,
+ * which still accepts a plain http non-loopback URL): a user may save and
+ * run an UNAUTHENTICATED http server pointed at a non-loopback host. The
+ * pairing this guards against is specifically "http, non-loopback, WITH a
+ * bearer token attached" — see `findInsecureMcpSpawnTokenPairings` for the
+ * server-aware version callers use to detect + report a refusal.
+ */
+export function isHttpsOrLoopbackMcpUrl(rawUrl: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return false; // fail closed — an unparsable URL never gets a bearer
+  }
+  return parsed.protocol === 'https:' || isLoopbackHost(parsed.hostname);
+}
+
+/**
+ * Resolve the OAuth bearer to inject for `server`, applying the
+ * https-or-loopback guard above. Returns `undefined` (withholding
+ * injection) when the URL/token pairing is unsafe, and logs a
+ * `[mcp-config]` warning naming the server so the refusal isn't silent.
+ */
+function resolveSpawnBearer(
+  server: McpServerConfig,
+  bearer: string | undefined,
+): string | undefined {
+  if (!bearer) return bearer;
+  // Fail closed: no url to evaluate means we can't confirm https-or-loopback,
+  // so withhold rather than inject unchecked. Unreachable via sanitizeMcpServer
+  // today (http/sse servers always carry a url), but a future caller building
+  // McpServerConfig by hand must not get a free pass here.
+  if (!server.url) return undefined;
+  if (isHttpsOrLoopbackMcpUrl(server.url)) return bearer;
+  console.warn(
+    `[mcp-config] refusing to inject the OAuth bearer token for MCP server "${server.id}": ` +
+      `${server.url} is plain http to a non-loopback host, which would send the token in ` +
+      'cleartext off this machine. Use https, or point the server at a loopback address ' +
+      '(localhost / 127.0.0.1) to keep it eligible for automatic authentication.',
+  );
+  return undefined;
+}
+
+export interface McpSpawnTokenRefusal {
+  serverId: string;
+  url: string;
+}
+
+/**
+ * Enumerates the token-URL pairings `buildClaudeMcpJson` /
+ * `buildOpenCodeMcpConfigContent` will withhold the bearer for (see
+ * `isHttpsOrLoopbackMcpUrl`). Callers (server.ts, at spawn time) use this
+ * to surface an actionable, per-server notice on the run stream / CLI
+ * without re-deriving the https-or-loopback rule themselves.
+ */
+export function findInsecureMcpSpawnTokenPairings(
+  servers: McpServerConfig[],
+  tokens: Record<string, string>,
+): McpSpawnTokenRefusal[] {
+  const out: McpSpawnTokenRefusal[] = [];
+  for (const s of servers) {
+    if (!s.enabled || (s.transport !== 'http' && s.transport !== 'sse')) continue;
+    if (effectiveMcpAuthMode(s) !== 'oauth') continue;
+    const bearer = tokens[s.id];
+    if (!bearer || !s.url) continue;
+    if (!isHttpsOrLoopbackMcpUrl(s.url)) out.push({ serverId: s.id, url: s.url });
+  }
+  return out;
 }
 
 /**
@@ -329,7 +417,7 @@ export function buildClaudeMcpJson(
       };
       const headers = mergeAuthHeader(
         s.headers,
-        effectiveMcpAuthMode(s) === 'oauth' ? tokens[s.id] : undefined,
+        resolveSpawnBearer(s, effectiveMcpAuthMode(s) === 'oauth' ? tokens[s.id] : undefined),
       );
       if (headers && Object.keys(headers).length > 0) entry.headers = headers;
       out[s.id] = entry;
@@ -482,7 +570,7 @@ export function buildOpenCodeMcpConfigContent(
       };
       const headers = mergeAuthHeader(
         s.headers,
-        effectiveMcpAuthMode(s) === 'oauth' ? tokens[s.id] : undefined,
+        resolveSpawnBearer(s, effectiveMcpAuthMode(s) === 'oauth' ? tokens[s.id] : undefined),
       );
       if (headers && Object.keys(headers).length > 0) entry.headers = headers;
       entry.enabled = true;
