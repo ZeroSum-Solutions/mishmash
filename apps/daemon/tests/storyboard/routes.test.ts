@@ -416,7 +416,16 @@ describe('storyboard routes', () => {
     }
   });
 
-  it.runIf(canSymlink)('assemble 400s when final.mp4 already exists as a symlink (refuses to write through it)', async () => {
+  // The assemble output itself is now a per-run name (storyboard id + a
+  // random run discriminator — see storyboards/assemble.ts's
+  // assembleOutputName), so a test can no longer pre-plant a symlink at the
+  // exact path a future run will write to. The concat list file
+  // (`.storyboard-concat-<storyboard id>.txt`) stays deterministic per
+  // storyboard and is checked through the exact same
+  // assertSafeStoryboardWriteTarget guard, one step earlier in
+  // runConcatAssemble — targeting it still proves the route refuses to
+  // write through a pre-existing symlink.
+  it.runIf(canSymlink)('assemble 400s when its concat list file already exists as a symlink (refuses to write through it)', async () => {
     await boot();
     const created = await createStoryboard();
     const dataDir = process.env.OD_DATA_DIR;
@@ -428,10 +437,11 @@ describe('storyboard routes', () => {
     // never actually runs here because the guard 400s first.
     await writeFile(path.join(projectDir, 'shot-1.mp4'), Buffer.from(PNG_BASE64, 'base64'));
     const outsideDir = mkdtempSync(path.join(tmpdir(), 'od-storyboard-outside-'));
+    const listFile = path.join(projectDir, `.storyboard-concat-${created.id}.txt`);
     try {
-      const secretTarget = path.join(outsideDir, 'clobber-me.mp4');
+      const secretTarget = path.join(outsideDir, 'clobber-me.txt');
       writeFileSync(secretTarget, 'pre-existing file outside the project');
-      symlinkSync(secretTarget, path.join(projectDir, 'final.mp4'));
+      symlinkSync(secretTarget, listFile);
 
       await fetch(`${base}/api/storyboards/${created.id}`, {
         method: 'PATCH',
@@ -456,13 +466,13 @@ describe('storyboard routes', () => {
       expect(resp.status).toBe(400);
       const body = (await resp.json()) as { error?: { message?: string } | string };
       const message = typeof body.error === 'string' ? body.error : body.error?.message;
-      expect(message).toMatch(/output target is unsafe/);
+      expect(message).toMatch(/concat list target is unsafe/);
     } finally {
       // OD_DATA_DIR (and so the storyboard-media project dir) is shared by
       // every test in this vitest worker — clean up the fixed-name symlink
-      // this test plants so later tests writing the same 'final.mp4' name
-      // aren't blocked by it.
-      rmSync(path.join(projectDir, 'final.mp4'), { force: true });
+      // this test plants so later tests using the same storyboard id's
+      // concat list name aren't blocked by it.
+      rmSync(listFile, { force: true });
       rmSync(path.join(projectDir, 'shot-1.mp4'), { force: true });
       rmSync(outsideDir, { recursive: true, force: true });
     }

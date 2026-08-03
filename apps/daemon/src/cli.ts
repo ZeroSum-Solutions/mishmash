@@ -8991,7 +8991,10 @@ prompts, model/resolution/duration) is a web-UI flow; this CLI covers
 list/create/upload/render/assemble/draft only.
 
 \`assemble\` defaults to an ffmpeg hard-cut concat of the ordered done-shot
-outputs into final.mp4 (unchanged). Pass --finish remotion to opt into the
+outputs into a uniquely-named output file per run (so concurrent/repeated
+assembles never overwrite each other) — the exact name is in this command's
+\`output\` field and is also persisted on the storyboard record's
+\`finalOutput\`. Pass --finish remotion to opt into the
 Remotion finishing pass instead: a title card + crossfade transitions
 between shots, and (with --audio) captions burned in from a local whisper.cpp
 transcription of the narration track — no cloud calls. --finish remotion

@@ -4,12 +4,23 @@
 // AssembleOutcome below into an HTTP response). Two finishing modes:
 //
 //   - 'concat' (default, unchanged): ffmpeg concat-demuxer hard cut of the
-//     ordered done-shot outputs into final.mp4. This is the pipeline that
-//     lived inline in the route handler before this module existed.
+//     ordered done-shot outputs into a uniquely-named per-run output (see
+//     assembleOutputName below). This is the pipeline that lived inline in
+//     the route handler before this module existed.
 //   - 'remotion' (opt-in via `finish: { mode: 'remotion', ... }`): title card
 //     + crossfade transitions + burned-in captions transcribed locally via
 //     whisper.cpp — see remotion/index.ts.
+//
+// Both modes used to hardcode the output as a literal `final.mp4` shared by
+// every storyboard in the single storyboard-media project dir — any two
+// assemble runs (the same storyboard racing itself, or two different
+// storyboards assembling close together) silently clobbered each other's
+// output. assembleOutputName gives every run its own file instead; the
+// route persists the winning run's name onto the storyboard record
+// (Storyboard.finalOutput) so a caller can resolve "the current run's
+// output" without guessing a fixed name.
 
+import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -17,6 +28,21 @@ import type { AssembleStoryboardFinishOptions, Storyboard, StoryboardShot } from
 import { isStoryboardFinishAudioMimeAllowed, STORYBOARD_FINISH_AUDIO_MAX_BYTES } from '@open-design/contracts';
 import { RemotionFinishTimeoutError } from './remotion/deadline.js';
 import { finishWithRemotion } from './remotion/index.js';
+
+/**
+ * Per-run output filename for an assemble pass. Both finishing modes below
+ * write into the single shared storyboard-media project dir, so the name
+ * must be unique per RUN, not merely per storyboard — two assemble calls
+ * (the same storyboard racing itself, or two different storyboards
+ * assembling near-simultaneously) must never land on the same path and
+ * silently overwrite each other's output (the deferred final.mp4 clobber
+ * bug). Same `<prefix>-<uuid>` idiom as the frame/upload routes in
+ * routes/storyboard.ts; the storyboard id is folded in too so outputs for
+ * different storyboards stay easy to tell apart on disk.
+ */
+function assembleOutputName(storyboardId: string): string {
+  return `final-${storyboardId}-${randomUUID()}.mp4`;
+}
 
 /**
  * Ordered done-shot outputs to assemble. The route calls this BEFORE
@@ -115,7 +141,7 @@ function decodeFinishAudio(
 
 async function runConcatAssemble(resolvedOutputs: string[], input: AssembleStoryboardInput): Promise<AssembleStoryboardOutcome> {
   const listFile = path.join(input.projectDir, `.storyboard-concat-${input.storyboard.id}.txt`);
-  const outputName = 'final.mp4';
+  const outputName = assembleOutputName(input.storyboard.id);
   const outputFile = path.join(input.projectDir, outputName);
 
   if (!(await input.assertSafeWriteTarget(input.projectDir, listFile))) {
@@ -170,7 +196,7 @@ async function runRemotionAssemble(
   finish: AssembleStoryboardFinishOptions,
   input: AssembleStoryboardInput,
 ): Promise<AssembleStoryboardOutcome> {
-  const outputName = 'final.mp4';
+  const outputName = assembleOutputName(input.storyboard.id);
   const outputFile = path.join(input.projectDir, outputName);
   if (!(await input.assertSafeWriteTarget(input.projectDir, outputFile))) {
     return { ok: false, status: 400, code: 'BAD_REQUEST', message: 'output target is unsafe' };

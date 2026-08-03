@@ -307,6 +307,7 @@ describe('storyboard assemble — finish (Remotion) request validation', () => {
       );
     }
 
+    let data: { output: string; finish: string } | undefined;
     try {
       await fetch(`${base}/api/storyboards/${created.id}`, {
         method: 'PATCH',
@@ -327,14 +328,17 @@ describe('storyboard assemble — finish (Remotion) request validation', () => {
 
       const resp = await fetch(`${base}/api/storyboards/${created.id}/assemble`, { method: 'POST' });
       expect(resp.status).toBe(200);
-      const data = (await resp.json()) as { output: string; finish: string };
-      expect(data.output).toBe('final.mp4');
+      data = (await resp.json()) as { output: string; finish: string };
+      // Per-run naming (storyboard id + a run discriminator), not the old
+      // shared literal 'final.mp4' — see storyboards/assemble.ts's
+      // assembleOutputName.
+      expect(data.output).toMatch(new RegExp(`^final-${created.id}-.+\\.mp4$`));
       expect(data.finish).toBe('concat');
     } finally {
       // OD_DATA_DIR (and so the storyboard-media project dir) is shared by
-      // every test in this vitest worker — clean up the fixed names this
-      // test writes so later tests aren't affected.
-      await rm(path.join(projectDir, 'final.mp4'), { force: true });
+      // every test in this vitest worker — clean up what this test wrote
+      // so later tests aren't affected.
+      if (data) await rm(path.join(projectDir, data.output), { force: true });
       for (const name of shotNames) {
         await rm(path.join(projectDir, name), { force: true });
       }
