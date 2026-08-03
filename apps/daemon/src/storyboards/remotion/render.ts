@@ -46,7 +46,7 @@ import { makeCancelSignal, renderMedia, selectComposition } from '@remotion/rend
 import type { Caption } from '@remotion/captions';
 import type { TimelineClip } from './timeline.js';
 import { probeDurationSec } from './probe.js';
-import { type Deadline, withDeadline } from './deadline.js';
+import { type Deadline, RemotionFinishTimeoutError, withDeadline } from './deadline.js';
 
 const COMPOSITION_ID = 'storyboard-finish';
 
@@ -157,6 +157,51 @@ export function resetBundleCacheForTests(): void {
   bundlePromise = null;
 }
 
+/**
+ * Races renderMedia()'s own settlement against the deadline through ONE
+ * settle-once gate shared with Remotion's cancelSignal — the fix for a
+ * pre-existing tie found (and deferred) while stabilizing the deadline
+ * tests: the previous implementation raced renderMedia() against TWO
+ * independently-scheduled timers (an outer cancelTimer that called cancel(),
+ * plus withDeadline's own internal timeout), each computing
+ * deadline.remainingMs() moments apart. Both are effectively always due at
+ * the same instant once a render genuinely outlives its budget, and nothing
+ * coordinated that with what renderMedia() itself was doing right then — a
+ * render settling in that same tick could still have cancel() fire on it,
+ * purely because cancelTimer happened to be registered (and therefore
+ * processed) first. A render that has already produced its result must
+ * never have cancel() invoked on it, and a render that is genuinely past its
+ * deadline must cancel exactly once: this holds unconditionally here because
+ * "settle" is a single atomic gate that decides whether cancel() is ever
+ * called at all, instead of two uncoordinated clocks.
+ */
+function renderMediaWithCancelableDeadline<T>(
+  renderPromise: Promise<T>,
+  deadline: Deadline,
+  cancel: () => void,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
+    const timer = setTimeout(() => {
+      settle(() => {
+        cancel();
+        reject(new RemotionFinishTimeoutError('renderMedia'));
+      });
+    }, deadline.remainingMs());
+    timer.unref?.();
+    renderPromise.then(
+      (value) => settle(() => resolve(value)),
+      (err: unknown) => settle(() => reject(err)),
+    );
+  });
+}
+
 export async function renderStoryboardFinish(input: RenderStoryboardFinishInput): Promise<void> {
   const { deadline } = input;
 
@@ -218,26 +263,23 @@ export async function renderStoryboardFinish(input: RenderStoryboardFinishInput)
     deadline.assertNotExpired('renderMedia');
     // renderMedia genuinely supports cancellation via cancelSignal — wire it
     // to the same deadline so an expiry actually stops the Chrome render/
-    // encode in progress instead of merely abandoning our await of it.
+    // encode in progress instead of merely abandoning our await of it. See
+    // renderMediaWithCancelableDeadline's doc comment for why this needs its
+    // own settle-once race instead of reusing withDeadline plus a second,
+    // independently-scheduled cancel timer.
     const { cancelSignal, cancel } = makeCancelSignal();
-    const cancelTimer = setTimeout(cancel, deadline.remainingMs());
-    cancelTimer.unref?.();
-    try {
-      await withDeadline(
-        renderMedia({
-          composition,
-          serveUrl: bundleLocation,
-          codec: 'h264',
-          outputLocation: input.outputPath,
-          inputProps,
-          cancelSignal,
-        }),
-        deadline,
-        'renderMedia',
-      );
-    } finally {
-      clearTimeout(cancelTimer);
-    }
+    await renderMediaWithCancelableDeadline(
+      renderMedia({
+        composition,
+        serveUrl: bundleLocation,
+        codec: 'h264',
+        outputLocation: input.outputPath,
+        inputProps,
+        cancelSignal,
+      }),
+      deadline,
+      cancel,
+    );
   } finally {
     // Per-request cleanup only — the stable public root and the bundle
     // output dir are process-lifetime resources, not per-request ones.
