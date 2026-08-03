@@ -1941,6 +1941,8 @@ export const en: Dict = {
   'browserUse.added': 'Added to composer',
   // Design Browser
   'designBrowser.aria': 'Design Browser',
+  'designBrowser.blocked.title': 'This site refuses to be embedded',
+  'designBrowser.blocked.body': '{host} sends browser security headers that prevent it from loading inside MishMash. Open it in your browser instead.',
   'designBrowser.goBack': 'Go Back',
   'designBrowser.goForward': 'Go Forward',
   'designBrowser.reload': 'Reload',

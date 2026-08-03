@@ -22,6 +22,7 @@ import {
   trackReferenceBoardSurfaceView,
 } from '../analytics/events';
 import {
+  checkFrameEmbeddable,
   openExternalUrl,
   projectRawUrl,
   writeProjectBase64File,
@@ -850,6 +851,10 @@ export function DesignBrowserPanel({
   const [textDraft, setTextDraft] = useState('');
   const [captureChromeHidden, setCaptureChromeHidden] = useState(false);
   const [statusMessage, setStatusMessage] = useState<BrowserStatusMessage | null>(null);
+  // Iframe-fallback only: a confirmed "this site refuses embedding" verdict for
+  // the CURRENT loadUrl. Cleared on every navigation; never set in the desktop
+  // webview branch (webviews are not subject to frame-ancestors).
+  const [frameBlock, setFrameBlock] = useState<{ url: string; blockedBy: string } | null>(null);
   const [savingActions, setSavingActions] = useState<Record<BrowserSavingAction, boolean>>({
     archive: false,
     brief: false,
@@ -1112,6 +1117,31 @@ export function DesignBrowserPanel({
     nextStack[index] = { ...currentEntry, title: trimmedTitle };
     setNavigationState(nextStack, index);
   }, [setNavigationState]);
+
+  // Preflight the iframe fallback: cross-origin frames give no scriptable
+  // signal when a site's X-Frame-Options / CSP frame-ancestors refuses the
+  // embed — the pane just stays blank. Ask the daemon to read the response
+  // headers and show an explicit blocked state instead. Desktop webviews are
+  // exempt (not subject to frame-ancestors), as are local/non-http targets.
+  useEffect(() => {
+    setFrameBlock(null);
+    if (desktopHostAvailable || loadUrl === EMPTY_URL) return;
+    let target: URL;
+    try {
+      target = new URL(loadUrl);
+    } catch {
+      return;
+    }
+    if (target.protocol !== 'http:' && target.protocol !== 'https:') return;
+    let cancelled = false;
+    void checkFrameEmbeddable(loadUrl).then((verdict) => {
+      if (cancelled || !verdict || verdict.verdict !== 'blocked') return;
+      setFrameBlock({ url: loadUrl, blockedBy: verdict.blockedBy });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [desktopHostAvailable, loadUrl]);
 
   const loadWebviewUrl = useCallback((url: string) => {
     if (!webviewNode) {
@@ -2436,6 +2466,23 @@ export function DesignBrowserPanel({
                 partition={DESIGN_BROWSER_PARTITION}
                 title={pageTitle}
               />
+            ) : frameBlock && frameBlock.url === loadUrl ? (
+              <div className="db-blocked" role="status">
+                <Icon name="globe" className="db-blocked-icon" />
+                <h3 className="db-blocked-title">{t('designBrowser.blocked.title')}</h3>
+                <p className="db-blocked-body">
+                  {t('designBrowser.blocked.body').replace('{host}', labelFromUrl(loadUrl))}
+                </p>
+                <button
+                  type="button"
+                  className="db-blocked-open"
+                  onClick={() => {
+                    void openExternalUrl(loadUrl);
+                  }}
+                >
+                  {t('designBrowser.openExternal')}
+                </button>
+              </div>
             ) : (
               <div className="db-fallback">
                 <iframe

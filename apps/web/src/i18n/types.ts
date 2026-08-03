@@ -2696,6 +2696,8 @@ export interface Dict {
   'browserUse.added': string;
   // Design Browser
   'designBrowser.aria': string;
+  'designBrowser.blocked.title': string;
+  'designBrowser.blocked.body': string;
   'designBrowser.goBack': string;
   'designBrowser.goForward': string;
   'designBrowser.reload': string;

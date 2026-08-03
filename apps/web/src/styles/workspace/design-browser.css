@@ -711,6 +711,51 @@
 .db-fallback iframe {
   background: #fff;
 }
+.db-blocked {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  padding: 32px;
+  text-align: center;
+  background: var(--bg);
+  color: var(--text);
+}
+.db-blocked-icon {
+  width: 28px;
+  height: 28px;
+  opacity: 0.45;
+}
+.db-blocked-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.db-blocked-body {
+  margin: 0;
+  max-width: 420px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+.db-blocked-open {
+  margin-top: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.db-blocked-open:hover {
+  background: var(--bg-subtle);
+}
 .db-comment-layer {
   position: absolute;
   inset: 0;

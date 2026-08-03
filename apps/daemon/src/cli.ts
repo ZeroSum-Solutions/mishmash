@@ -124,6 +124,15 @@ const RESEARCH_SEARCH_BOOLEAN_FLAGS = new Set([
   'h',
 ]);
 
+const DESIGN_BROWSER_FRAME_CHECK_STRING_FLAGS = new Set([
+  'url',
+  'daemon-url',
+]);
+const DESIGN_BROWSER_FRAME_CHECK_BOOLEAN_FLAGS = new Set([
+  'help',
+  'h',
+]);
+
 const PLUGIN_STRING_FLAGS = new Set([
   'daemon-url',
   'source',
@@ -380,6 +389,7 @@ const SUBCOMMAND_MAP = {
   artifacts: runArtifacts,
   media: runMedia,
   mcp: runMcp,
+  'design-browser': runDesignBrowser,
   amr: runAmr,
   'message-center': runMessageCenter,
   research: runResearch,
@@ -715,6 +725,9 @@ function printRootHelp() {
   od research search --query <text> [--max-sources 5] [--daemon-url <url>]
       Run agent-callable Tavily research through the local daemon.
 
+  od design-browser frame-check --url <url> [--daemon-url <url>]
+      Preflight whether a site allows the Design Browser iframe to embed it.
+
   od plugin <list|info|install|uninstall|apply|doctor|replay|trust> [args]
       Discover, install, and apply plugins through the local daemon.
   od plugin publish-repo <folder>
@@ -1016,6 +1029,76 @@ function safeJsonParse(text) {
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: od design-browser …
+// ---------------------------------------------------------------------------
+
+async function runDesignBrowser(args) {
+  const sub = args.find((a) => !a.startsWith('-')) || '';
+  if (!sub || sub === 'help' || args.includes('--help') || args.includes('-h')) {
+    printDesignBrowserHelp();
+    process.exit(sub === 'help' || args.includes('--help') || args.includes('-h') ? 0 : 2);
+  }
+  if (sub !== 'frame-check') {
+    console.error(`unknown subcommand: od design-browser ${sub}`);
+    printDesignBrowserHelp();
+    process.exit(2);
+  }
+  return runDesignBrowserFrameCheck(args.filter((a) => a !== sub));
+}
+
+async function runDesignBrowserFrameCheck(rawArgs) {
+  let flags;
+  try {
+    flags = parseFlags(rawArgs, {
+      string: DESIGN_BROWSER_FRAME_CHECK_STRING_FLAGS,
+      boolean: DESIGN_BROWSER_FRAME_CHECK_BOOLEAN_FLAGS,
+    });
+  } catch (err) {
+    console.error(err.message);
+    printDesignBrowserHelp();
+    process.exit(2);
+  }
+  const targetUrl = typeof flags.url === 'string' ? flags.url.trim() : '';
+  if (!targetUrl) {
+    console.error('--url required');
+    process.exit(2);
+  }
+  const daemonUrl = await cliDaemonUrl(flags);
+  const url = `${daemonUrl.replace(/\/$/, '')}/api/design-browser/frame-check`;
+  let resp;
+  try {
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: targetUrl }),
+    });
+  } catch (err) {
+    surfaceFetchError(err, daemonUrl);
+    process.exit(3);
+  }
+  if (!resp.ok) {
+    const text = await resp.text();
+    console.error(`daemon ${resp.status}: ${text}`);
+    process.exit(4);
+  }
+  process.stdout.write(`${await resp.text()}\n`);
+}
+
+function printDesignBrowserHelp() {
+  console.log(`Usage:
+  od design-browser frame-check --url <http(s) url> [--daemon-url <url>]
+
+Preflights whether a site allows the Design Browser's iframe fallback to embed
+it, by reading its X-Frame-Options / CSP frame-ancestors response headers
+through the local daemon. Output is JSON only on stdout:
+  { "verdict": "embeddable" | "blocked" | "unknown" | "skipped-local", ... }
+
+Flags:
+  --url          Required target URL to check.
+  --daemon-url   Local daemon URL. Defaults to OD_DAEMON_URL, OD_SIDECAR_IPC_PATH discovery, or http://127.0.0.1:7456.`);
 }
 
 // ---------------------------------------------------------------------------
