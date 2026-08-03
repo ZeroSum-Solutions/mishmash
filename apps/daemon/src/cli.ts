@@ -1067,7 +1067,13 @@ async function runPreview(args) {
   // shell re-quoting problems: `od preview start ... -- npm run dev`.
   const separator = args.indexOf('--');
   const command = separator === -1 ? [] : args.slice(separator + 1);
-  const flagArgs = (separator === -1 ? args : args.slice(0, separator)).filter((a) => a !== sub);
+  // Remove only the subcommand token at its position — a flag VALUE that
+  // happens to equal the subcommand name (e.g. `--id stop`) must survive.
+  const flagSource = separator === -1 ? args : args.slice(0, separator);
+  const subIndex = flagSource.indexOf(sub);
+  const flagArgs = subIndex === -1
+    ? flagSource
+    : [...flagSource.slice(0, subIndex), ...flagSource.slice(subIndex + 1)];
   let flags;
   try {
     flags = parseFlags(flagArgs, { string: PREVIEW_STRING_FLAGS, boolean: PREVIEW_BOOLEAN_FLAGS });
@@ -1166,7 +1172,8 @@ async function runDesignBrowser(args) {
     printDesignBrowserHelp();
     process.exit(2);
   }
-  return runDesignBrowserFrameCheck(args.filter((a) => a !== sub));
+  const subIndex = args.indexOf(sub);
+  return runDesignBrowserFrameCheck([...args.slice(0, subIndex), ...args.slice(subIndex + 1)]);
 }
 
 async function runDesignBrowserFrameCheck(rawArgs) {

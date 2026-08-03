@@ -61,7 +61,8 @@ export function registerPreviewRoutes(app: Express, deps: PreviewRoutesDeps): vo
       res.json(session);
     } catch (error) {
       if (error instanceof PreviewLifecycleError) {
-        res.status(502).json({ error: error.code, message: error.message, logs: error.logs });
+        const status = error.code === 'PREVIEW_PORT_IN_USE' ? 409 : 502;
+        res.status(status).json({ error: error.code, message: error.message, logs: error.logs });
         return;
       }
       res.status(500).json({ error: 'PREVIEW_START_FAILED', message: String(error) });
@@ -80,13 +81,18 @@ export function registerPreviewRoutes(app: Express, deps: PreviewRoutesDeps): vo
       res.status(404).json({ error: 'PREVIEW_NOT_FOUND' });
       return;
     }
-    const result = await previews.stop(String(req.params.previewId));
-    if (!result.confirmed) {
-      // Per the teardown discipline: an unconfirmed group teardown is not a
-      // success, even though the session is deregistered either way.
-      res.status(500).json({ error: 'PREVIEW_STOP_UNCONFIRMED' });
-      return;
+    try {
+      const result = await previews.stop(String(req.params.previewId));
+      if (!result.confirmed) {
+        // Per the teardown discipline: an unconfirmed group teardown is not a
+        // success. The session stays registered so the caller can retry, and
+        // the pid lets an operator intervene out-of-band.
+        res.status(500).json({ error: 'PREVIEW_STOP_UNCONFIRMED', pid: result.pid });
+        return;
+      }
+      res.json({ stopped: true });
+    } catch (error) {
+      res.status(500).json({ error: 'PREVIEW_STOP_FAILED', message: String(error) });
     }
-    res.json({ stopped: true });
   });
 }

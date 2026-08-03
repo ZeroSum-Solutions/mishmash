@@ -629,7 +629,7 @@ import { registerRunRoutes } from './routes/runs.js';
 import { registerUsageRoutes } from './routes/usage.js';
 import { registerTerminalRoutes } from './routes/terminal.js';
 import { createTerminalService } from './terminals.js';
-import { createPreviewService } from './previews.js';
+import { confinePreviewCwd, createPreviewService } from './previews.js';
 import { registerPreviewRoutes } from './routes/preview.js';
 import { registerSocialShareRoutes } from './routes/social-share.js';
 import { registerOpenDesignPublicMetadataRoutes } from './routes/open-design-public-metadata.js';
@@ -3122,8 +3122,8 @@ export async function startServer({
   registerPreviewRoutes(app, {
     previews: previewService,
     projectStore: { getProject: (id) => projectStoreDeps.getProject(db, id) },
-    // Confine preview working directories to the project's own tree: a
-    // relative cwd resolves against the project dir and must stay inside it.
+    // Confine preview working directories to the project's own tree —
+    // realpath-canonicalized on both sides so symlinks cannot escape it.
     resolvePreviewCwd: (projectId, requestedCwd) => {
       const project = projectStoreDeps.getProject(db, projectId);
       if (!project) return null;
@@ -3132,10 +3132,7 @@ export async function startServer({
         projectId,
         project.metadata,
       );
-      if (!requestedCwd) return baseDir;
-      const resolved = path.resolve(baseDir, requestedCwd);
-      if (resolved !== baseDir && !resolved.startsWith(`${baseDir}${path.sep}`)) return null;
-      return resolved;
+      return confinePreviewCwd(baseDir, requestedCwd);
     },
   });
   registerImportRoutes(app, {

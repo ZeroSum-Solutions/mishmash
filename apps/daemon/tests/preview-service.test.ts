@@ -2,12 +2,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import express from 'express';
 import http from 'node:http';
 import net from 'node:net';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 
-import { createPreviewService } from '../src/previews.js';
+import { confinePreviewCwd, createPreviewService, groupAlive, signalGroup } from '../src/previews.js';
 import { registerPreviewRoutes } from '../src/routes/preview.js';
 
 async function freePort(): Promise<number> {
@@ -226,5 +226,95 @@ describe('preview routes', () => {
     expect(stopped.status).toBe(200);
     const after = (await (await fetch(`${base}/api/projects/p1/previews`)).json()) as { previews: unknown[] };
     expect(after.previews).toHaveLength(0);
+  });
+});
+
+describe('group liveness under permission boundaries', () => {
+  const eperm = () => {
+    const err = new Error('kill EPERM') as NodeJS.ErrnoException;
+    err.code = 'EPERM';
+    throw err;
+  };
+  const esrch = () => {
+    const err = new Error('kill ESRCH') as NodeJS.ErrnoException;
+    err.code = 'ESRCH';
+    throw err;
+  };
+
+  it('treats EPERM on the group signal as ALIVE — a permission-blocked survivor exists', () => {
+    expect(groupAlive(1234, eperm)).toBe(true);
+  });
+
+  it('treats EPERM on the leader fallback as ALIVE too', () => {
+    let call = 0;
+    expect(groupAlive(1234, () => {
+      call += 1;
+      if (call === 1) esrch();
+      eperm();
+    })).toBe(true);
+  });
+
+  it('reports gone only when both group and leader are ESRCH', () => {
+    expect(groupAlive(1234, esrch)).toBe(false);
+  });
+
+  it('does not misdeliver a group signal to the dead leader on EPERM', () => {
+    const calls: number[] = [];
+    signalGroup(1234, 'SIGTERM', (pid) => {
+      calls.push(pid);
+      if (pid === -1234) eperm();
+    });
+    // Group call attempted, but NO leader-only fallback: kill(pid) would
+    // misreport delivery the confirmation loop must instead surface.
+    expect(calls).toEqual([-1234]);
+  });
+});
+
+describe('confinePreviewCwd', () => {
+  let dir: string;
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('resolves relative cwds inside the project and rejects escapes', () => {
+    dir = mkdtempSync(path.join(os.tmpdir(), 'od-confine-'));
+    mkdirSync(path.join(dir, 'app'));
+    expect(confinePreviewCwd(dir)).toBe(realpathSync(dir));
+    expect(confinePreviewCwd(dir, 'app')).toBe(path.join(realpathSync(dir), 'app'));
+    expect(confinePreviewCwd(dir, '..')).toBeNull();
+    expect(confinePreviewCwd(dir, '/etc')).toBeNull();
+    expect(confinePreviewCwd(dir, 'missing-subdir')).toBeNull();
+  });
+
+  it('rejects a symlink inside the project that points outside it', () => {
+    dir = mkdtempSync(path.join(os.tmpdir(), 'od-confine-link-'));
+    const outside = mkdtempSync(path.join(os.tmpdir(), 'od-outside-'));
+    try {
+      symlinkSync(outside, path.join(dir, 'escape'));
+      expect(confinePreviewCwd(dir, 'escape')).toBeNull();
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('port ownership preflight', () => {
+  it('refuses to start when the port is already in use instead of verifying a stranger', async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'od-portuse-'));
+    writeFileSync(path.join(dir, 'server.js'), SERVER_FIXTURE);
+    const occupant = net.createServer();
+    const port = await freePort();
+    await new Promise<void>((resolve) => occupant.listen(port, '127.0.0.1', resolve));
+    const svc = createPreviewService();
+    try {
+      await expect(
+        svc.start({ projectId: 'p1', cwd: dir, command: [process.execPath, 'server.js'], port }),
+      ).rejects.toMatchObject({ code: 'PREVIEW_PORT_IN_USE' });
+      expect(svc.list('p1')).toHaveLength(0);
+    } finally {
+      await svc.shutdown().catch(() => {});
+      await new Promise<void>((resolve) => occupant.close(() => resolve()));
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
