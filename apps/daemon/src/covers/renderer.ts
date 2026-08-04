@@ -15,12 +15,15 @@
 // Crop (S4-3): see crop.ts -- a sharp-backed hero/salient window selection
 // over the full-page screenshot.
 
-import { pathToFileURL } from 'node:url';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { chromium } from 'playwright';
 import { cropToHeroWindow } from './crop.js';
 import { createLimiter } from './limiter.js';
 import { RenderMemoryLimitError, RenderTimeoutError } from './errors.js';
 import { aggregateProcessTreeRssKb } from './process-rss.js';
+import { startLocalProjectFileServer } from './local-file-server.js';
+import { registerRenderPid, unregisterRenderPid } from './render-pid-registry.js';
 
 /** Concurrency cap -- a runaway/pathological project must not take the
  * daemon with it, and a fixed cap keeps throughput measurably flat under
@@ -50,10 +53,12 @@ export const COVER_TARGET_HEIGHT = 800;
 // A loopback port nothing listens on. Every HTTP(S)/WS request Chromium's
 // network stack issues is routed through this dead proxy and fails closed
 // immediately -- true process-level denial, not a per-route JS interception
-// that a WebSocket or beacon request could slip past. `file://` navigation
-// and same-directory relative resource loads never go through an HTTP
-// proxy at all, so the project's own local files still render normally.
+// that a WebSocket or beacon request could slip past. The project's own
+// files are served from a project-scoped loopback server (see
+// local-file-server.ts) rather than `file://`; PROXY_BYPASS exempts that
+// server's own origin from the dead proxy without opening up anything else.
 const DEAD_PROXY_SERVER = 'http://127.0.0.1:1';
+const PROXY_BYPASS = '127.0.0.1';
 
 export interface RenderResult {
   imageBytes: Buffer;
@@ -63,14 +68,21 @@ export interface RenderResult {
 
 const limiter = createLimiter<RenderResult>(RENDER_CONCURRENCY);
 
-/** Renders `entryFileAbsPath` (a trusted, on-disk project HTML file) into a
- * cropped COVER_TARGET_WIDTH x COVER_TARGET_HEIGHT PNG. Bounded by the
- * module-level concurrency cap; call sites do not need their own queueing. */
-export async function renderCoverImage(entryFileAbsPath: string): Promise<RenderResult> {
-  return limiter(() => renderOnce(entryFileAbsPath));
+/** Renders `entryRelPath` (a trusted, on-disk project HTML file, relative
+ * to `projectRootAbs`) into a cropped COVER_TARGET_WIDTH x
+ * COVER_TARGET_HEIGHT PNG. Bounded by the module-level concurrency cap;
+ * call sites do not need their own queueing. `runtimeDataDir` scopes the
+ * orphan-reaper PID registry (render-pid-registry.ts, security-review
+ * finding 6) -- never a rendering data path itself. */
+export async function renderCoverImage(
+  runtimeDataDir: string,
+  projectRootAbs: string,
+  entryRelPath: string,
+): Promise<RenderResult> {
+  return limiter(() => renderOnce(runtimeDataDir, projectRootAbs, entryRelPath));
 }
 
-async function renderOnce(entryFileAbsPath: string): Promise<RenderResult> {
+async function renderOnce(runtimeDataDir: string, projectRootAbs: string, entryRelPath: string): Promise<RenderResult> {
   // launchServer() (rather than launch()) is what exposes the browser's
   // real OS process (`.process().pid`) -- the plain `Browser` object
   // `chromium.launch()` returns has no such accessor. The memory-ceiling
@@ -81,11 +93,21 @@ async function renderOnce(entryFileAbsPath: string): Promise<RenderResult> {
   let memoryExceeded = false;
   let pollHandle: ReturnType<typeof setInterval> | undefined;
   let killTimer: ReturnType<typeof setTimeout> | undefined;
+  let fileServer: Awaited<ReturnType<typeof startLocalProjectFileServer>> | undefined;
+  let pollInFlight = false;
+  let registeredPid: number | undefined;
 
   try {
+    // realpath, not just path.resolve: a symlink planted inside the
+    // project dir must not be able to widen what the render is allowed to
+    // read (security-review finding 1).
+    const projectRootReal = await fs.realpath(projectRootAbs);
+    fileServer = await startLocalProjectFileServer(projectRootReal);
+    const entryUrl = `${fileServer.origin}/${entryRelPath.split(path.sep).map(encodeURIComponent).join('/')}`;
+
     server = await chromium.launchServer({
       headless: true,
-      proxy: { server: DEAD_PROXY_SERVER },
+      proxy: { server: DEAD_PROXY_SERVER, bypass: PROXY_BYPASS },
       args: [
         // Defense-in-depth alongside the dead proxy: force every hostname
         // lookup to resolve nowhere, in case anything ever bypasses the
@@ -99,20 +121,35 @@ async function renderOnce(entryFileAbsPath: string): Promise<RenderResult> {
     });
 
     const browserPid = server.process().pid;
-    let baselineRssKb: number | null = browserPid === undefined ? null : aggregateProcessTreeRssKb(browserPid);
+    // Orphan reaper registration (security-review finding 6): if THIS
+    // daemon process is SIGKILL'd between here and the `finally` below
+    // (which unregisters + kills normally), the marker written now is what
+    // lets the NEXT daemon startup's sweepOrphanedRenderProcesses find and
+    // kill the resulting orphaned Chromium tree.
+    if (browserPid !== undefined) {
+      await registerRenderPid(runtimeDataDir, browserPid);
+      registeredPid = browserPid;
+    }
+    let baselineRssKb: number | null = browserPid === undefined ? null : await aggregateProcessTreeRssKb(browserPid);
 
     pollHandle = setInterval(() => {
-      if (browserPid === undefined) return;
-      const rss = aggregateProcessTreeRssKb(browserPid);
-      if (rss === null) return;
-      if (baselineRssKb === null) {
-        baselineRssKb = rss;
-        return;
-      }
-      if (rss - baselineRssKb > MEMORY_GROWTH_CEILING_KB) {
-        memoryExceeded = true;
-        void server?.kill().catch(() => undefined);
-      }
+      if (browserPid === undefined || pollInFlight) return;
+      pollInFlight = true;
+      void aggregateProcessTreeRssKb(browserPid)
+        .then((rss) => {
+          if (rss === null) return;
+          if (baselineRssKb === null) {
+            baselineRssKb = rss;
+            return;
+          }
+          if (rss - baselineRssKb > MEMORY_GROWTH_CEILING_KB) {
+            memoryExceeded = true;
+            void server?.kill().catch(() => undefined);
+          }
+        })
+        .finally(() => {
+          pollInFlight = false;
+        });
     }, MEMORY_POLL_INTERVAL_MS);
 
     const deadline = new Promise<never>((_resolve, reject) => {
@@ -126,11 +163,27 @@ async function renderOnce(entryFileAbsPath: string): Promise<RenderResult> {
       const browser = await chromium.connect(server!.wsEndpoint());
       const context = await browser.newContext({
         viewport: { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT },
-        proxy: { server: DEAD_PROXY_SERVER },
+        proxy: { server: DEAD_PROXY_SERVER, bypass: PROXY_BYPASS },
+      });
+      // Defense in depth beyond the dead proxy + host-resolver-rules
+      // (security-review finding 1): those two govern only the network
+      // stack and do nothing about `file://` or a same-tab self-navigation
+      // during the settle window below. This interceptor is scheme- and
+      // origin-agnostic -- it allow-lists ONLY requests (including
+      // top-frame navigations) that already resolve to this job's own
+      // project-scoped loopback origin, and aborts everything else,
+      // `file://` included.
+      const entryOrigin = fileServer!.origin;
+      await context.route('**/*', (route) => {
+        const url = route.request().url();
+        if (url.startsWith(`${entryOrigin}/`) || url === entryOrigin) {
+          void route.continue();
+        } else {
+          void route.abort('blockedbyclient');
+        }
       });
       const page = await context.newPage();
-      const fileUrl = pathToFileURL(entryFileAbsPath).href;
-      await page.goto(fileUrl, { waitUntil: 'load', timeout: PER_JOB_TIMEOUT_MS });
+      await page.goto(entryUrl, { waitUntil: 'load', timeout: PER_JOB_TIMEOUT_MS });
       // Brief settle window for deferred/async layout. Best-effort only --
       // it races against `deadline` below so it can never itself blow the
       // per-job budget.
@@ -159,5 +212,7 @@ async function renderOnce(entryFileAbsPath: string): Promise<RenderResult> {
     if (killTimer) clearTimeout(killTimer);
     if (pollHandle) clearInterval(pollHandle);
     if (server) await server.kill().catch(() => undefined);
+    if (fileServer) await fileServer.close().catch(() => undefined);
+    if (registeredPid !== undefined) await unregisterRenderPid(runtimeDataDir, registeredPid);
   }
 }

@@ -6,6 +6,7 @@ import fs from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   COVER_TARGET_HEIGHT,
@@ -27,7 +28,7 @@ afterEach(async () => {
 async function writeEntry(html: string): Promise<string> {
   const abs = path.join(dir, 'index.html');
   await fs.writeFile(abs, html);
-  return abs;
+  return 'index.html';
 }
 
 describe('renderCoverImage', () => {
@@ -37,7 +38,7 @@ describe('renderCoverImage', () => {
       const entry = await writeEntry(
         `<!doctype html><html><body style="margin:0;width:1280px;height:1600px;background:linear-gradient(#111,#eee)"></body></html>`,
       );
-      const result = await renderCoverImage(entry);
+      const result = await renderCoverImage(dir, dir, entry);
       expect(result.width).toBe(COVER_TARGET_WIDTH);
       expect(result.height).toBe(COVER_TARGET_HEIGHT);
       expect(result.imageBytes.length).toBeGreaterThan(0);
@@ -52,7 +53,7 @@ describe('renderCoverImage', () => {
     async () => {
       const entry = await writeEntry('<!doctype html><html><body><script>while(true){}</script></body></html>');
       const start = Date.now();
-      await expect(renderCoverImage(entry)).rejects.toBeInstanceOf(RenderTimeoutError);
+      await expect(renderCoverImage(dir, dir, entry)).rejects.toBeInstanceOf(RenderTimeoutError);
       expect(Date.now() - start).toBeLessThan(60_000);
     },
     70_000,
@@ -64,7 +65,7 @@ describe('renderCoverImage', () => {
       const entry = await writeEntry(
         '<!doctype html><html><body><script>let a=[];while(true){a.push(new Array(2000000).fill(7));}</script></body></html>',
       );
-      await expect(renderCoverImage(entry)).rejects.toBeInstanceOf(RenderMemoryLimitError);
+      await expect(renderCoverImage(dir, dir, entry)).rejects.toBeInstanceOf(RenderMemoryLimitError);
     },
     60_000,
   );
@@ -90,12 +91,76 @@ describe('renderCoverImage', () => {
           <img src="${canaryUrl}/pixel.gif">
           <script>fetch(${JSON.stringify(canaryUrl)} + '/xhr').catch(()=>{});</script>
         </body></html>`);
-        const result = await renderCoverImage(entry);
+        const result = await renderCoverImage(dir, dir, entry);
         expect(result.imageBytes.length).toBeGreaterThan(0);
         await new Promise((resolve) => setTimeout(resolve, 1500));
         expect(hits).toEqual([]);
       } finally {
         await new Promise<void>((resolve) => canary.close(() => resolve()));
+      }
+    },
+    30_000,
+  );
+
+  // Security-review finding 1: the renderer used to navigate straight at a
+  // `file://` URL, so a hostile project's own HTML could pull in ANY local
+  // file the daemon process can read -- a plain reference, a symlink
+  // planted inside the project dir, or a same-tab self-navigation during
+  // the render's settle window -- and have it baked into the screenshot
+  // this daemon then serves back over HTTP as that project's cover. Fixed
+  // by navigating through a project-root-scoped loopback server plus a
+  // page.route() allowlist. This test plants a secret file OUTSIDE the
+  // project dir with an unmistakable full-viewport marker color and
+  // attempts to surface it via all three vectors at once; if containment
+  // ever regresses on any of them the marker color would dominate the
+  // frame, so the assertion is a full pixel scan for zero occurrences.
+  it(
+    'containment: a file:// reference outside the project dir, a same-tab file:// self-navigation, and a symlink escaping the project dir never appear in the rendered cover',
+    async () => {
+      const secretDir = await fs.mkdtemp(path.join(os.tmpdir(), 'od-covers-secret-'));
+      const secretHtmlAbs = path.join(secretDir, 'secret.html');
+      const MARKER_RGB = [255, 0, 220] as const; // distinctive magenta, vanishingly unlikely by chance
+      await fs.writeFile(
+        secretHtmlAbs,
+        `<!doctype html><html><body style="margin:0;width:100vw;height:100vh;background:rgb(${MARKER_RGB.join(',')})"></body></html>`,
+      );
+      const secretFileUrl = `file://${secretHtmlAbs}`;
+
+      // A symlink INSIDE the project dir pointing at the secret, referenced
+      // via an ORDINARY relative src (never a file:// literal) -- proves
+      // the loopback server's realpath containment specifically, not just
+      // the page-level route interceptor.
+      const symlinkRel = 'escape-link.html';
+      let symlinkOk = true;
+      try {
+        await fs.symlink(secretHtmlAbs, path.join(dir, symlinkRel));
+      } catch {
+        symlinkOk = false; // e.g. no symlink permission in this environment -- skip that vector only
+      }
+
+      const entry = await writeEntry(`<!doctype html><html><body style="margin:0">
+        <iframe src="${secretFileUrl}" style="position:fixed;inset:0;width:100%;height:100%;border:0"></iframe>
+        ${symlinkOk ? `<iframe src="${symlinkRel}" style="position:fixed;inset:0;width:100%;height:100%;border:0"></iframe>` : ''}
+        <script>
+          try { top.location.href = ${JSON.stringify(secretFileUrl)}; } catch (e) {}
+        </script>
+      </body></html>`);
+
+      try {
+        const result = await renderCoverImage(dir, dir, entry);
+        const { data, info } = await sharp(result.imageBytes)
+          .ensureAlpha()
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+        let markerPixels = 0;
+        for (let i = 0; i + 2 < data.length; i += info.channels) {
+          if (data[i] === MARKER_RGB[0] && data[i + 1] === MARKER_RGB[1] && data[i + 2] === MARKER_RGB[2]) {
+            markerPixels += 1;
+          }
+        }
+        expect(markerPixels).toBe(0);
+      } finally {
+        await fs.rm(secretDir, { recursive: true, force: true });
       }
     },
     30_000,

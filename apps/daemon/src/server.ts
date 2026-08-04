@@ -620,6 +620,7 @@ import { registerDesignLibraryRoutes } from './routes/design-library.js';
 import { registerStoryboardRoutes } from './routes/storyboard.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes } from './routes/project/index.js';
 import { registerCoverRoutes } from './routes/covers.js';
+import { sweepOrphanedRenderProcesses } from './covers/render-pid-registry.js';
 import { registerVelaRoutes } from './routes/vela.js';
 import { registerFinalizeRoutes, registerImportRoutes, registerProjectExportRoutes } from './import-export-routes.js';
 import { registerHandoffRoutes } from './routes/handoff.js';
@@ -3344,6 +3345,12 @@ export async function startServer({
     projectStore: projectStoreDeps,
     projectFiles: projectFileDeps,
   });
+  // Orphan reaper (security-review finding 6): reap any renderer browser
+  // tree a PRIOR daemon process left running (SIGKILL'd between
+  // chromium.launchServer() succeeding and its own per-job cleanup). Never
+  // blocks server startup -- fire-and-forget, errors swallowed, since a
+  // sweep failure must not prevent the daemon from serving traffic.
+  void sweepOrphanedRenderProcesses(RUNTIME_DATA_DIR).catch(() => undefined);
 
   registerMediaRoutes(app, {
     db,

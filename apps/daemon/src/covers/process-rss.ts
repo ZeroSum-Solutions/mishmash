@@ -6,7 +6,10 @@
 // grade this) and kills it once aggregate RSS crosses a real ceiling --
 // never a generic timeout-as-memory-proxy.
 
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 interface PsRow {
   pid: number;
@@ -14,10 +17,15 @@ interface PsRow {
   rssKb: number;
 }
 
-function psSnapshot(): PsRow[] {
+// Async on purpose (Sol/security-review finding, MEDIUM): this poll runs
+// every MEMORY_POLL_INTERVAL_MS per in-flight render job (up to
+// RENDER_CONCURRENCY concurrently), sharing the daemon's single event loop
+// with SSE streams and agent orchestration -- a synchronous execFileSync
+// here blocks ALL of that for however long `ps` takes to run.
+async function psSnapshot(): Promise<PsRow[]> {
   let stdout: string;
   try {
-    stdout = execFileSync('ps', ['-A', '-o', 'pid=,ppid=,rss='], { encoding: 'utf8' });
+    ({ stdout } = await execFileAsync('ps', ['-A', '-o', 'pid=,ppid=,rss=']));
   } catch {
     return [];
   }
@@ -55,8 +63,8 @@ function descendantsOf(rootPid: number, rows: PsRow[]): Set<number> {
 
 /** Aggregate RSS (in KB) of `rootPid` itself plus every descendant. `null`
  * when `ps` itself failed (never conflated with a genuine zero). */
-export function aggregateProcessTreeRssKb(rootPid: number): number | null {
-  const snapshot = psSnapshot();
+export async function aggregateProcessTreeRssKb(rootPid: number): Promise<number | null> {
+  const snapshot = await psSnapshot();
   if (snapshot.length === 0) return null;
   const tree = descendantsOf(rootPid, snapshot);
   tree.add(rootPid);

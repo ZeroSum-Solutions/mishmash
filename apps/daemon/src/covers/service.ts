@@ -87,8 +87,7 @@ export async function generateProjectCover(options: GenerateCoverOptions): Promi
     return existing;
   }
 
-  const entryAbsPath = path.join(projectRoot, entryRelPath);
-  const rendered = await renderCoverImage(entryAbsPath);
+  const rendered = await renderCoverImage(runtimeDataDir, projectRoot, entryRelPath);
 
   return writeCover(runtimeDataDir, projectId, {
     imageBytes: rendered.imageBytes,
