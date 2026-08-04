@@ -2968,7 +2968,24 @@ function isDesignLibraryItemShape(item: unknown): boolean {
     candidate.domains.every((domain) => typeof domain === 'string') &&
     typeof candidate.allowed_use === 'string' &&
     (candidate.duplicate_of === undefined || typeof candidate.duplicate_of === 'string') &&
-    (candidate.description === undefined || typeof candidate.description === 'string')
+    (candidate.description === undefined || typeof candidate.description === 'string') &&
+    (candidate.aspects === undefined ||
+      (Array.isArray(candidate.aspects) && candidate.aspects.every((aspect) => typeof aspect === 'string'))) &&
+    (candidate.stacks === undefined ||
+      (Array.isArray(candidate.stacks) && candidate.stacks.every((stack) => typeof stack === 'string'))) &&
+    (candidate.reference === undefined || isDesignLibraryReferenceShape(candidate.reference))
+  );
+}
+
+function isDesignLibraryReferenceShape(reference: unknown): boolean {
+  if (typeof reference !== 'object' || reference === null) return false;
+  const candidate = reference as Record<string, unknown>;
+  return (
+    typeof candidate.source === 'string' &&
+    (candidate.design === null || typeof candidate.design === 'string') &&
+    (candidate.html === null || typeof candidate.html === 'string') &&
+    (candidate.design_sha256 === undefined || typeof candidate.design_sha256 === 'string') &&
+    (candidate.html_sha256 === undefined || typeof candidate.html_sha256 === 'string')
   );
 }
 
@@ -3049,12 +3066,19 @@ export type StartDesignLibraryProjectResult =
 export async function startDesignLibraryProject(
   rel: string,
   name?: string,
+  options?: { mode?: 'copy' | 'reference'; aspects?: string[] },
 ): Promise<StartDesignLibraryProjectResult> {
   try {
+    const body = {
+      rel,
+      ...(name ? { name } : {}),
+      ...(options?.mode ? { mode: options.mode } : {}),
+      ...(options?.aspects?.length ? { aspects: options.aspects } : {}),
+    };
     const resp = await fetch('/api/design-library/start-project', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(name ? { rel, name } : { rel }),
+      body: JSON.stringify(body),
     });
     if (!resp.ok) {
       const payload = (await resp.json().catch(() => null)) as { error?: string } | null;

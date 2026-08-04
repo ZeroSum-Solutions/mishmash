@@ -9007,7 +9007,7 @@ function printDesignLibraryHelp() {
   console.log(`Usage:
   od design-library catalog [--json]
   od design-library show <rel> [--json]
-  od design-library start-project --rel <rel> [--name <name>] [--json]
+  od design-library start-project --rel <rel> [--name <name>] [--mode copy|reference] [--aspects hero,webgl] [--json]
 
 Reads the local Design Library catalog (~/Desktop/Design Assets/catalog.json
 by default, or OD_DESIGN_LIBRARY_DIR) over the same GET
@@ -9018,14 +9018,16 @@ by default, or OD_DESIGN_LIBRARY_DIR) over the same GET
 description, preview thumb URL) resolved by its rel path — the composable
 "inspect a kit" operation behind the web UI's thumbnail preview dialog.
 
-\`start-project\` copies a licensed kit's files into a new managed project
-over the same POST /api/design-library/start-project contract as the web
-"Use as template" card action. Only catalog items whose allowed_use is
-licensed-source-review or own-code can be copied; every other tier 403s.
+\`start-project\` either copies a licensed kit or prepares a prompt-only
+project from a private local reference over the same POST
+/api/design-library/start-project contract as the web actions. Reference
+mode never copies the source HTML/DESIGN files into the new project.
 
 Options:
   --rel <rel>          Catalog item's rel path (e.g. "01 UI8 Kits/dwell")
   --name <name>        Project name override (defaults to the item's label)
+  --mode <mode>        copy (default) or reference
+  --aspects <list>     Comma-separated reference aspects; omit for full design
   --json               Print the raw response envelope
   --daemon-url <url>   Override daemon URL`);
 }
@@ -9115,6 +9117,9 @@ async function runDesignLibraryShow(rawArgs) {
   console.log(`Kind: ${item.kind} · ${item.files} files · ${item.size}`);
   console.log(`Allowed use: ${item.allowed_use}`);
   if (item.domains?.length) console.log(`Domains: ${item.domains.join(', ')}`);
+  if (item.aspects?.length) console.log(`Aspects: ${item.aspects.join(', ')}`);
+  if (item.stacks?.length) console.log(`Stack: ${item.stacks.join(', ')}`);
+  if (item.reference) console.log(`Reference: ${item.reference.source} (private local)`);
   if (item.description) console.log(`Description: ${item.description}`);
   if (item.thumb) {
     const thumbFile = String(item.thumb).split('/').pop() ?? '';
@@ -9123,7 +9128,7 @@ async function runDesignLibraryShow(rawArgs) {
 }
 
 async function runDesignLibraryStartProject(rawArgs) {
-  const stringFlags = new Set([...LIBRARY_STRING_FLAGS, 'rel', 'name']);
+  const stringFlags = new Set([...LIBRARY_STRING_FLAGS, 'rel', 'name', 'mode', 'aspects']);
   const flags = parseFlags(rawArgs, { string: stringFlags, boolean: LIBRARY_BOOLEAN_FLAGS });
   if (flags.help || flags.h) {
     printDesignLibraryHelp();
@@ -9131,11 +9136,25 @@ async function runDesignLibraryStartProject(rawArgs) {
   }
   const rel = typeof flags.rel === 'string' ? flags.rel : positionalArgs(rawArgs, stringFlags)[0];
   if (!rel) {
-    console.error('Usage: od design-library start-project --rel <rel> [--name <name>]');
+    console.error('Usage: od design-library start-project --rel <rel> [--name <name>] [--mode copy|reference] [--aspects hero,webgl]');
     process.exit(2);
   }
   const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
-  const body = { rel, ...(typeof flags.name === 'string' ? { name: flags.name } : {}) };
+  const mode = typeof flags.mode === 'string' ? flags.mode : undefined;
+  if (mode && mode !== 'copy' && mode !== 'reference') {
+    console.error('--mode must be copy or reference');
+    process.exit(2);
+  }
+  const aspects =
+    typeof flags.aspects === 'string'
+      ? [...new Set(flags.aspects.split(',').map((value) => value.trim()).filter(Boolean))]
+      : undefined;
+  const body = {
+    rel,
+    ...(typeof flags.name === 'string' ? { name: flags.name } : {}),
+    ...(mode ? { mode } : {}),
+    ...(aspects?.length ? { aspects } : {}),
+  };
   let resp;
   try {
     resp = await fetch(`${base}/api/design-library/start-project`, {
@@ -9152,7 +9171,7 @@ async function runDesignLibraryStartProject(rawArgs) {
   if (!resp.ok) return structuredHttpFailure(resp);
   const data = await resp.json();
   if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
-  console.log(`Created project ${data.projectId} from ${rel}`);
+  console.log(`Created project ${data.projectId} from ${rel}${mode === 'reference' ? ' (private reference)' : ''}`);
   if (data.entryFile) console.log(`Entry file: ${data.entryFile}`);
   console.log(`Copied ${data.copiedFiles} file(s), skipped ${data.skippedFiles}.`);
   for (const warning of data.warnings ?? []) console.log(`Warning: ${warning}`);

@@ -157,7 +157,7 @@
 
 .thumb {
   position: relative;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 10;
   background: var(--bg-subtle);
   display: flex;
   align-items: center;
@@ -220,7 +220,7 @@
   background: rgba(0, 0, 0, 0.55);
 }
 .previewDialog {
-  max-width: min(1080px, 92vw);
+  max-width: min(1280px, 94vw);
   max-height: 88vh;
   overflow: auto;
 }
@@ -292,6 +292,52 @@
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 2px;
+}
+.stackLine {
+  margin: 3px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-soft);
+}
+.stackLine span {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.aspectSection {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 5px;
+}
+.aspectLabel {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.aspectOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.aspectChip {
+  appearance: none;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-subtle);
+  color: var(--text-soft);
+  font-size: 10.5px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.aspectChip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.aspectChip[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: var(--accent-tint);
+  color: var(--accent);
 }
 .domainTag {
   font-size: 10.5px;
