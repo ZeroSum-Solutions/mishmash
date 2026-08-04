@@ -3080,6 +3080,7 @@ export async function startServer({
 
         const projectRoot = resolveProjectDir(PROJECTS_DIR, req.params.id, project.metadata);
         const notes = typeof body.notes === 'string' ? body.notes : undefined;
+        const page = typeof body.page === 'string' ? body.page.trim() : undefined;
         const rawSubdir = typeof body.subdir === 'string' ? body.subdir.trim() : '';
         const subdir = rawSubdir ? safeSnapshotSubdir(rawSubdir) : undefined;
         if (rawSubdir && !subdir) {
@@ -3089,6 +3090,7 @@ export async function startServer({
           cwd: projectRoot,
           label: decodeMultipartFilename(req.file.originalname || 'figma-import.fig'),
           notes,
+          ...(page ? { page } : {}),
           ...(subdir ? { subdir } : {}),
         });
         return res.json(result);

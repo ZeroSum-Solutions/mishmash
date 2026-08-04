@@ -11,6 +11,23 @@ export interface FigmaFontFace {
   styles: string[];
 }
 
+/** Tokens lifted from one top-level Figma page. Typography is present even
+ * when a file does not expose page-level font metadata. */
+export interface FigmaPageTokenSet {
+  colors: string[];
+  typography: FigmaFontFace[];
+}
+
+/** A top-level Figma page and its independently lifted style evidence. */
+export interface FigmaPageStyle {
+  name: string;
+  tokens: FigmaPageTokenSet;
+  /** A short, display-ready inventory summary. */
+  summary: string;
+  /** True when this page belongs to a file with materially different styles. */
+  distinct: boolean;
+}
+
 /** A quick, surface-level summary of what the decode recovered. Drives the
  *  import modal's confirmation UI, the design-system provenance card, and the
  *  CLI `--json` output. */
@@ -33,6 +50,12 @@ export interface FigmaInventory {
   hasThumbnail: boolean;
   /** Non-fatal decode notes (degradation reasons, skipped chunks). */
   warnings: string[];
+  /** Per-page token breakdown. The aggregate fields above remain document-wide. */
+  styles: FigmaPageStyle[];
+  /** Conservative signal: pages group into more than one material style. */
+  looksMultiStyle: boolean;
+  /** Number of palette-based style groups detected across the pages. */
+  styleCount: number;
 }
 
 /** Result of a successful import. `snapshotDir` and `files` are relative to
@@ -63,4 +86,6 @@ export interface FigmaImportRequest {
   figmaUrl?: string;
   /** Optional design brief / migration notes folded into `suggestedPrompt`. */
   notes?: string;
+  /** Optional top-level page name to import instead of the whole document. */
+  page?: string;
 }

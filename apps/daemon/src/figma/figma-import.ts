@@ -30,6 +30,8 @@ export interface FigmaImportOptions {
   label?: string;
   /** Optional design brief folded into the suggested reshape prompt. */
   notes?: string;
+  /** Optional top-level CANVAS name to import instead of the whole document. */
+  page?: string;
   /** Per-asset size cap in bytes (default 12 MiB). */
   assetMaxBytes?: number;
 }
@@ -91,8 +93,18 @@ export async function importFigmaFromBytes(
   // and the REST tree are byte-for-byte the same shape on disk.
   const tree: FigmaNode[] = [];
   const unsupported: Array<{ id: string; type: string; reason: string }> = [];
+  const pages = decoded.document?.children?.filter((node) => node.type === 'CANVAS') ?? [];
+  const selectedPage = opts.page?.trim();
+  if (selectedPage && !pages.some((page) => page.name === selectedPage)) {
+    throw new Error(`page not found: ${selectedPage}`);
+  }
   if (decoded.document) {
-    walkNode(decoded.document, undefined, tree, unsupported);
+    if (selectedPage) {
+      const page = pages.find((candidate) => candidate.name === selectedPage);
+      if (page) walkNode(page, undefined, tree, unsupported);
+    } else {
+      walkNode(decoded.document, undefined, tree, unsupported);
+    }
   }
   const tokens = liftTokens(tree);
 
@@ -131,7 +143,8 @@ export async function importFigmaFromBytes(
     written.push(thumbnailPath);
   }
 
-  const inventory = buildInventory(decoded, tree, tokens, assetCount);
+  const inventoryPages = selectedPage ? pages.filter((page) => page.name === selectedPage) : pages;
+  const inventory = buildInventory(decoded, tree, tokens, assetCount, inventoryPages);
 
   const snapshotDirRel = rel(figmaDir);
   const contextMd = renderDesignContext({ label, inventory, tree, tokens, thumbnailPath, notes: opts.notes, snapshotDir: snapshotDirRel });
@@ -178,6 +191,7 @@ function buildInventory(
   tree: FigmaNode[],
   tokens: ReturnType<typeof liftTokens>,
   assetCount: number,
+  pages: FigmaApiNode[],
 ): FigmaInventory {
   let pageCount = 0;
   let frameCount = 0;
@@ -188,6 +202,9 @@ function buildInventory(
     else if (node.type === 'COMPONENT' || node.type === 'INSTANCE') componentCount += 1;
   }
   const colors = tokens.colors.map((c) => c.value).slice(0, MAX_CONTEXT_COLORS);
+  const styles = pages.map((page) => buildPageStyle(page, decoded.pageFonts[page.id] ?? []));
+  const styleGroups = groupPageStyles(styles);
+  const looksMultiStyle = styleGroups.length > 1;
   return {
     decoded: decoded.decoded,
     source: 'fig-file',
@@ -200,7 +217,52 @@ function buildInventory(
     assetCount,
     hasThumbnail: Boolean(decoded.thumbnail),
     warnings: decoded.warnings,
+    styles: styles.map((style, index) => ({ ...style, distinct: looksMultiStyle && styleGroups.some((group) => group.includes(index)) })),
+    looksMultiStyle,
+    styleCount: styleGroups.length,
   };
+}
+
+function buildPageStyle(
+  page: FigmaApiNode,
+  typography: FigmaInventory['fonts'],
+): FigmaInventory['styles'][number] {
+  const pageTree: FigmaNode[] = [];
+  const unsupported: Array<{ id: string; type: string; reason: string }> = [];
+  walkNode(page, undefined, pageTree, unsupported);
+  const tokens = liftTokens(pageTree);
+  const colors = tokens.colors.map((token) => token.value).slice(0, MAX_CONTEXT_COLORS);
+  return {
+    name: page.name,
+    tokens: { colors, typography },
+    summary: `${colors.length} color${colors.length === 1 ? '' : 's'}${typography.length ? `, ${typography.length} font${typography.length === 1 ? '' : 's'}` : ''}`,
+    distinct: false,
+  };
+}
+
+/**
+ * Merge pages only when their palettes materially overlap. Empty or tiny
+ * palettes stay grouped: absence of evidence must never force a split.
+ */
+function groupPageStyles(styles: FigmaInventory['styles']): number[][] {
+  if (styles.length === 0) return [];
+  const groups: number[][] = [];
+  for (const [index, style] of styles.entries()) {
+    const match = groups.find((group) => group.some((other) => {
+      const otherStyle = styles[other];
+      return otherStyle ? palettesOverlap(style.tokens.colors, otherStyle.tokens.colors) : false;
+    }));
+    if (match) match.push(index);
+    else groups.push([index]);
+  }
+  return groups;
+}
+
+function palettesOverlap(a: string[], b: string[]): boolean {
+  if (a.length < 2 || b.length < 2) return true;
+  const other = new Set(b.map((color) => color.toLowerCase()));
+  const shared = a.filter((color) => other.has(color.toLowerCase())).length;
+  return shared / Math.min(a.length, b.length) >= 0.5;
 }
 
 interface ContextArgs {

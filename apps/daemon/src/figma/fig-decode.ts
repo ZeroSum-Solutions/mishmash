@@ -36,6 +36,8 @@ export interface FigDecodeResult {
   meta: Record<string, unknown> | null;
   /** Distinct (family, styles) pairs referenced by TEXT nodes. */
   fonts: Array<{ family: string; styles: string[] }>;
+  /** Font choices, keyed by top-level CANVAS id. */
+  pageFonts: Record<string, Array<{ family: string; styles: string[] }>>;
   /** Non-fatal notes (degradation reasons, skipped chunks). */
   warnings: string[];
   /** True when the kiwi node-tree decoded (Layer 2 succeeded). */
@@ -91,6 +93,7 @@ export async function decodeFigFile(input: Uint8Array): Promise<FigDecodeResult>
 
   let document: FigmaApiNode | null = null;
   let fonts: Array<{ family: string; styles: string[] }> = [];
+  let pageFonts: Record<string, Array<{ family: string; styles: string[] }>> = {};
   let nodeCount = 0;
 
   if (canvas) {
@@ -99,6 +102,7 @@ export async function decodeFigFile(input: Uint8Array): Promise<FigDecodeResult>
       const built = buildDocument(message, images);
       document = built.document;
       fonts = built.fonts;
+      pageFonts = built.pageFonts;
       nodeCount = built.nodeCount;
       for (const w of built.warnings) warnings.push(w);
     } catch (err) {
@@ -112,6 +116,7 @@ export async function decodeFigFile(input: Uint8Array): Promise<FigDecodeResult>
     thumbnail,
     meta,
     fonts,
+    pageFonts,
     warnings,
     decoded: document != null,
     source,
@@ -243,6 +248,7 @@ interface FigNodeChange {
 interface BuiltDocument {
   document: FigmaApiNode | null;
   fonts: Array<{ family: string; styles: string[] }>;
+  pageFonts: Record<string, Array<{ family: string; styles: string[] }>>;
   nodeCount: number;
   warnings: string[];
 }
@@ -260,7 +266,7 @@ function buildDocument(message: FigMessage, images: Map<string, Uint8Array>): Bu
   const warnings: string[] = [];
   const changes = Array.isArray(message.nodeChanges) ? message.nodeChanges : [];
   if (changes.length === 0) {
-    return { document: null, fonts: [], nodeCount: 0, warnings: ['no nodeChanges in message'] };
+    return { document: null, fonts: [], pageFonts: {}, nodeCount: 0, warnings: ['no nodeChanges in message'] };
   }
 
   const byGuid = new Map<string, FigNodeChange>();
@@ -283,14 +289,15 @@ function buildDocument(message: FigMessage, images: Map<string, Uint8Array>): Bu
   }
 
   if (!rootKey) {
-    return { document: null, fonts: [], nodeCount: 0, warnings: ['no root node found'] };
+    return { document: null, fonts: [], pageFonts: {}, nodeCount: 0, warnings: ['no root node found'] };
   }
 
   const fontSet = new Map<string, Set<string>>();
+  const pageFontSets = new Map<string, Map<string, Set<string>>>();
   const counter = { n: 0 };
   const visiting = new Set<string>();
 
-  const build = (key: string, parentMatrix: Required<FigMatrix>): FigmaApiNode | null => {
+  const build = (key: string, parentMatrix: Required<FigMatrix>, pageId?: string): FigmaApiNode | null => {
     if (visiting.has(key)) return null; // cycle guard
     const change = byGuid.get(key);
     if (!change) return null;
@@ -305,6 +312,7 @@ function buildDocument(message: FigMessage, images: Map<string, Uint8Array>): Bu
       name: change.name ?? change.type ?? 'node',
       type: TYPE_MAP[change.type ?? ''] ?? change.type ?? 'FRAME',
     };
+    const nodePageId = node.type === 'CANVAS' ? node.id : pageId;
 
     const size = change.size;
     if (size && (typeof size.x === 'number' || typeof size.y === 'number')) {
@@ -332,6 +340,13 @@ function buildDocument(message: FigMessage, images: Map<string, Uint8Array>): Bu
         const set = fontSet.get(family) ?? new Set<string>();
         set.add(change.fontName?.style ?? 'Regular');
         fontSet.set(family, set);
+        if (nodePageId) {
+          const pageSet = pageFontSets.get(nodePageId) ?? new Map<string, Set<string>>();
+          const pageStyles = pageSet.get(family) ?? new Set<string>();
+          pageStyles.add(change.fontName?.style ?? 'Regular');
+          pageSet.set(family, pageStyles);
+          pageFontSets.set(nodePageId, pageSet);
+        }
       }
     }
 
@@ -340,7 +355,7 @@ function buildDocument(message: FigMessage, images: Map<string, Uint8Array>): Bu
       kids.sort((a, b) => (a.position < b.position ? -1 : a.position > b.position ? 1 : 0));
       const childNodes: FigmaApiNode[] = [];
       for (const kid of kids) {
-        const built = build(kid.key, abs);
+        const built = build(kid.key, abs, nodePageId);
         if (built) childNodes.push(built);
       }
       if (childNodes.length) node.children = childNodes;
@@ -352,7 +367,11 @@ function buildDocument(message: FigMessage, images: Map<string, Uint8Array>): Bu
 
   const document = build(rootKey, IDENTITY);
   const fonts = [...fontSet.entries()].map(([family, styles]) => ({ family, styles: [...styles] }));
-  return { document, fonts, nodeCount: counter.n, warnings };
+  const pageFonts = Object.fromEntries([...pageFontSets.entries()].map(([pageId, families]) => [
+    pageId,
+    [...families.entries()].map(([family, styles]) => ({ family, styles: [...styles] })),
+  ]));
+  return { document, fonts, pageFonts, nodeCount: counter.n, warnings };
 }
 
 function mapPaints(
