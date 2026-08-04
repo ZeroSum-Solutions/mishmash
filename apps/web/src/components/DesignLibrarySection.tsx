@@ -11,6 +11,8 @@
 // active — not on app mount.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Dialog } from '@open-design/components';
 import type { DesignLibraryAllowedUse, DesignLibraryItem } from '@open-design/contracts';
 import {
   designLibraryThumbUrl,
@@ -94,7 +96,13 @@ export function DesignLibrarySection({ active, onOpenProject }: Props) {
         ...group,
         items: group.items.filter((item) => {
           if (domain && !item.domains.includes(domain)) return false;
-          if (query && !item.label.toLowerCase().includes(query)) return false;
+          if (
+            query &&
+            !item.label.toLowerCase().includes(query) &&
+            !(item.description ?? '').toLowerCase().includes(query)
+          ) {
+            return false;
+          }
           return true;
         }),
       }))
@@ -196,19 +204,16 @@ export function DesignLibrarySection({ active, onOpenProject }: Props) {
   );
 }
 
-function DesignLibraryCard({
-  item,
-  t,
-  onOpenProject,
-}: {
-  item: DesignLibraryItem;
-  t: ReturnType<typeof useT>;
-  onOpenProject?: (projectId: string, conversationId?: string) => void;
-}) {
-  const [thumbError, setThumbError] = useState(false);
+// Start-project state shared by the card and the preview dialog — both
+// surfaces offer the identical "Use as template" action against the same
+// endpoint and must fail the same way.
+function useUseAsTemplate(
+  item: DesignLibraryItem,
+  t: ReturnType<typeof useT>,
+  onOpenProject?: (projectId: string, conversationId?: string) => void,
+) {
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
-  const tooltip = t(ALLOWED_USE_TOOLTIP_KEY[item.allowed_use]);
   const canUseAsTemplate = Boolean(onOpenProject) && COPYABLE_ALLOWED_USE.has(item.allowed_use);
 
   async function handleUseAsTemplate() {
@@ -224,6 +229,45 @@ function DesignLibraryCard({
     onOpenProject?.(result.response.projectId, result.response.conversationId);
   }
 
+  return { starting, startError, canUseAsTemplate, handleUseAsTemplate };
+}
+
+function UseAsTemplateButton({
+  starting,
+  onClick,
+  t,
+}: {
+  starting: boolean;
+  onClick: () => void;
+  t: ReturnType<typeof useT>;
+}) {
+  return (
+    <button type="button" className={styles.useAsTemplateBtn} onClick={onClick} disabled={starting}>
+      <Icon name="sparkles" size={14} />
+      {starting ? t('designLibrary.useAsTemplateBusy') : t('designLibrary.useAsTemplate')}
+    </button>
+  );
+}
+
+function DesignLibraryCard({
+  item,
+  t,
+  onOpenProject,
+}: {
+  item: DesignLibraryItem;
+  t: ReturnType<typeof useT>;
+  onOpenProject?: (projectId: string, conversationId?: string) => void;
+}) {
+  const [thumbError, setThumbError] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const tooltip = t(ALLOWED_USE_TOOLTIP_KEY[item.allowed_use]);
+  const { starting, startError, canUseAsTemplate, handleUseAsTemplate } = useUseAsTemplate(
+    item,
+    t,
+    onOpenProject,
+  );
+  const hasPreview = Boolean(item.thumb) && !thumbError;
+
   return (
     <article className={styles.card} data-testid="design-library-card" data-allowed-use={item.allowed_use}>
       <div className={styles.thumb}>
@@ -238,6 +282,19 @@ function DesignLibraryCard({
         ) : (
           <Icon name="image" size={28} className={styles.thumbGlyph} />
         )}
+        {hasPreview ? (
+          <button
+            type="button"
+            className={styles.thumbButton}
+            aria-haspopup="dialog"
+            aria-label={`${t('designLibrary.preview')} ${item.label}`}
+            onClick={() => setPreviewOpen(true)}
+          >
+            <span className={styles.previewOverlay} aria-hidden>
+              <Icon name="search" size={20} />
+            </span>
+          </button>
+        ) : null}
         <span className={styles.badge} data-allowed-use={item.allowed_use} title={tooltip}>
           {allowedUseLabel(item.allowed_use)}
         </span>
@@ -247,6 +304,11 @@ function DesignLibraryCard({
         <p className={styles.detail}>
           {item.kind} · {item.files} {t('designLibrary.filesUnit')} · {item.size}
         </p>
+        {item.description ? (
+          <p className={styles.description} data-testid="design-library-description">
+            {item.description}
+          </p>
+        ) : null}
         {item.domains.length > 0 ? (
           <div className={styles.domains}>
             {item.domains.map((d) => (
@@ -268,18 +330,76 @@ function DesignLibraryCard({
           {t('designLibrary.openFolder')}
         </button>
         {canUseAsTemplate ? (
-          <button
-            type="button"
-            className={styles.useAsTemplateBtn}
-            onClick={handleUseAsTemplate}
-            disabled={starting}
-          >
-            <Icon name="sparkles" size={14} />
-            {starting ? t('designLibrary.useAsTemplateBusy') : t('designLibrary.useAsTemplate')}
-          </button>
+          <UseAsTemplateButton starting={starting} onClick={handleUseAsTemplate} t={t} />
         ) : null}
       </div>
       {startError ? <p className={styles.startError}>{startError}</p> : null}
+      {previewOpen && hasPreview ? (
+        <DesignLibraryPreviewDialog
+          item={item}
+          t={t}
+          onClose={() => setPreviewOpen(false)}
+          onOpenProject={onOpenProject}
+        />
+      ) : null}
     </article>
+  );
+}
+
+// Full-size preview of a kit's composite screenshot — the founder's "open
+// the full design system view" for catalog items whose richest available
+// asset is the tiled screen composite. Rendered through the shared Dialog
+// primitive in a portal so it escapes the card grid's overflow.
+function DesignLibraryPreviewDialog({
+  item,
+  t,
+  onClose,
+  onOpenProject,
+}: {
+  item: DesignLibraryItem;
+  t: ReturnType<typeof useT>;
+  onClose: () => void;
+  onOpenProject?: (projectId: string, conversationId?: string) => void;
+}) {
+  const { starting, startError, canUseAsTemplate, handleUseAsTemplate } = useUseAsTemplate(
+    item,
+    t,
+    onOpenProject,
+  );
+  if (!item.thumb) return null;
+  return createPortal(
+    <div className={styles.previewBackdrop} onClick={onClose}>
+      <Dialog
+        ariaLabel={item.label}
+        onClose={onClose}
+        closeOnEscape
+        className={styles.previewDialog}
+      >
+        <div className={styles.previewImageWrap}>
+          <img className={styles.previewImage} src={designLibraryThumbUrl(item.thumb)} alt={item.label} />
+        </div>
+        <div className={styles.previewMeta}>
+          <h3 className={styles.label}>{item.label}</h3>
+          <p className={styles.detail}>
+            {item.kind} · {item.files} {t('designLibrary.filesUnit')} · {item.size}
+          </p>
+          {item.description ? <p className={styles.description}>{item.description}</p> : null}
+          <div className={styles.cardActions}>
+            <button type="button" className={styles.openFolderBtn} onClick={() => openDesignLibraryPath(item.rel)}>
+              <Icon name="folder" size={14} />
+              {t('designLibrary.openFolder')}
+            </button>
+            {canUseAsTemplate ? (
+              <UseAsTemplateButton starting={starting} onClick={handleUseAsTemplate} t={t} />
+            ) : null}
+            <button type="button" className={styles.openFolderBtn} onClick={onClose}>
+              {t('designLibrary.previewClose')}
+            </button>
+          </div>
+          {startError ? <p className={styles.startError}>{startError}</p> : null}
+        </div>
+      </Dialog>
+    </div>,
+    document.body,
   );
 }

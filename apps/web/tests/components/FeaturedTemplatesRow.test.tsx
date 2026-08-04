@@ -152,6 +152,25 @@ describe('FeaturedTemplatesRow', () => {
     expect(onOpenProject).not.toHaveBeenCalled();
   });
 
+  // Red spec: the daemon's failure reason must reach the user. This row used
+  // to swallow `result.message` in favor of a generic toast while
+  // DesignLibrarySection surfaced it — the two surfaces call the same
+  // endpoint and must fail the same way.
+  it('surfaces the backend failure reason in the error toast', async () => {
+    startDesignLibraryProject.mockResolvedValue({
+      ok: false,
+      message:
+        'This kit cannot be copied completely: size limit would skip a required file (.next/cache/webpack/client-development/29.pack).',
+    });
+    render(<FeaturedTemplatesRow onOpenProject={vi.fn()} onToolAction={vi.fn()} onBrowseLibrary={vi.fn()} />);
+
+    const dwellCard = await screen.findByText('Dwell');
+    fireEvent.click(dwellCard.closest('button')!);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('size limit would skip a required file');
+  });
+
   it('excludes a featured card whose catalog item is not copyable, even when present', async () => {
     const [baseGroup] = CATALOG.groups;
     if (!baseGroup) throw new Error('CATALOG must have at least one group');

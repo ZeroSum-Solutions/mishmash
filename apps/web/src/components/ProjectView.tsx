@@ -2335,9 +2335,17 @@ export function ProjectView({
   }, [project.id]);
 
   const refreshWorkspaceItems = useCallback(async (): Promise<ProjectFile[]> => {
-    const [nextFiles] = await Promise.all([refreshProjectFiles(), refreshLiveArtifacts()]);
+    // projectDetail piggybacks on the same cadence: the daemon-resolved
+    // Canvas file is derived from the file list, so it must refetch
+    // whenever the workspace files do — otherwise the Canvas tab stays
+    // absent (or stale) while the agent writes the first design files.
+    const [nextFiles] = await Promise.all([
+      refreshProjectFiles(),
+      refreshLiveArtifacts(),
+      projectDetail.refresh().catch(() => {}),
+    ]);
     return nextFiles;
-  }, [refreshLiveArtifacts, refreshProjectFiles]);
+  }, [refreshLiveArtifacts, refreshProjectFiles, projectDetail.refresh]);
 
   useEffect(() => {
     if (!currentBrandExtractionId) {
@@ -8770,6 +8778,7 @@ export function ProjectView({
           })()}
           reloading={false}
           resolvedDir={projectDetail.resolvedDir}
+          resolvedCanvasFile={projectDetail.resolvedCanvasFile}
           files={projectFiles}
           liveArtifacts={liveArtifacts}
           filesRefreshKey={filesRefresh}

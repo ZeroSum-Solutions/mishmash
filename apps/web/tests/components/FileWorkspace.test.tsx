@@ -1195,6 +1195,53 @@ describe('FileWorkspace upload input', () => {
     );
   });
 
+  it('pins a persistent Canvas tab that opens the daemon-resolved canvas file', () => {
+    const onTabsStateChange = vi.fn();
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="prototype"
+        files={[workspaceFile('home.html'), workspaceFile('about.html')]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        resolvedCanvasFile="home.html"
+        tabsState={{ tabs: [], active: null }}
+        onTabsStateChange={onTabsStateChange}
+      />,
+    );
+
+    const canvasTab = screen.getByTestId('workspace-canvas-tab');
+    expect(canvasTab.textContent).toContain('Canvas');
+
+    fireEvent.click(canvasTab);
+    expect(onTabsStateChange).toHaveBeenCalled();
+    const lastState = onTabsStateChange.mock.calls.at(-1)?.[0] as {
+      tabs: string[];
+      active: string | null;
+    };
+    expect(lastState.active).toBe('home.html');
+    expect(lastState.tabs).toContain('home.html');
+  });
+
+  it('hides the Canvas tab when the daemon reports no unambiguous canvas', () => {
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="prototype"
+        files={[workspaceFile('one.html'), workspaceFile('two.html')]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        resolvedCanvasFile={null}
+        tabsState={{ tabs: [], active: null }}
+        onTabsStateChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId('workspace-canvas-tab')).toBeNull();
+  });
+
   it('labels the same workspace control as chat restore while focused', () => {
     const markup = renderToStaticMarkup(
       <FileWorkspace

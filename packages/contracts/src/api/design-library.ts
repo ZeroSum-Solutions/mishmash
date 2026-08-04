@@ -31,6 +31,12 @@ export interface DesignLibraryItem {
   allowed_use: DesignLibraryAllowedUse;
   /** Rel path of the collection this item duplicates, when known. */
   duplicate_of?: string;
+  /**
+   * Short curated blurb: the collection's visual style and what it is best
+   * used for. Authored in the external library catalog (not by this repo);
+   * absent for uncurated items.
+   */
+  description?: string;
 }
 
 export interface DesignLibraryGroup {

@@ -1513,9 +1513,32 @@ function resolveEsbuild(): MinimalEsbuild {
   return createRequire(path.join(repoRoot, 'package.json'))(path.join(pnpmDir, dirName, 'node_modules/esbuild')) as MinimalEsbuild;
 }
 interface MinimalPwLocator { count(): Promise<number> }
-interface MinimalPwRequest { url(): string }
-interface MinimalPwResponse { url(): string; status(): number }
+// AMENDED 2026-08-03 (gate-defect ruling r3, DECISIONS.md): C4-10's
+// invalidation and drain rules are scoped to the DesignsTab's own data
+// plane (main-frame fetch/xhr), so the shims now model the Playwright
+// members that scoping needs. Real signatures per installed
+// playwright-core@1.60.0 types.d.ts: Request.method(): string,
+// Request.resourceType(): string, Request.frame(): Frame,
+// Request.failure(): null | { errorText: string },
+// Response.request(): Request, Page.mainFrame(): Frame. Frame is used
+// for identity comparison only, so it is modeled as `unknown`.
+interface MinimalPwRequest { url(): string; method(): string; resourceType(): string; frame(): unknown; failure(): { errorText: string } | null }
+interface MinimalPwResponse { url(): string; status(): number; request(): MinimalPwRequest }
+// Real signature per installed playwright-core@1.60.0 types.d.ts:8422
+// (`on(event: 'serviceworker', listener: (worker: Worker) => any)`) and
+// :2318 (`Page.context(): BrowserContext`).
+interface MinimalPwBrowserContext { on(event: 'serviceworker', cb: (worker: unknown) => void): void }
 interface MinimalPwPage {
+  mainFrame(): unknown;
+  context(): MinimalPwBrowserContext;
+  // Real signatures per installed playwright-core@1.60.0 types.d.ts:316
+  // (`addInitScript<Arg>(script, arg?)` -- evaluated in EVERY frame,
+  // including child frames, after document creation and before its
+  // scripts) and :2670 (`exposeFunction(name, callback): Promise<...>` --
+  // "adds a function called name on the window object of every frame in
+  // this page"; delivered over CDP, so page CSP cannot block it).
+  addInitScript(script: (arg: string) => void, arg: string): Promise<unknown>;
+  exposeFunction(name: string, callback: (msg: string) => void): Promise<unknown>;
   on(event: 'pageerror', cb: (err: Error) => void): void;
   on(event: 'console', cb: (msg: { type(): string; text(): string }) => void): void;
   on(event: 'request' | 'requestfinished' | 'requestfailed', cb: (req: MinimalPwRequest) => void): void;
@@ -2816,9 +2839,124 @@ import { DesignsTab } from './components/DesignsTab';
     for (let i = -1; i < reps; i++) { // i===-1 is a discarded warmup (R8: warmup + >=5 timed reps)
       const page = await browser.newPage();
       try {
+        // Violation channel + every-frame worker wrappers MUST be in place
+        // before any document exists (see the execution-mode guard comment
+        // below). The exposed function is lazily resolved by the wrappers
+        // at violation time; repViolation is read by the same
+        // repInvalidReason flow as everything else.
+        let repViolation: string | undefined;
+        let repAppError: string | undefined;
+        // One CDP-delivered channel for both violation markers and main-
+        // frame app errors. Accumulation happens NODE-side, so no in-page
+        // sink exists to tamper with (round-2 Codex finding 3 killed the
+        // sink design: a non-configurable getter still calls slice/array
+        // machinery the page can patch). Listeners capture the channel
+        // EAGERLY at install; page code overwriting the global later
+        // cannot reach the captured reference.
+        await page.exposeFunction('__c410Report', (msg: string) => {
+          if (msg.startsWith('apperror:')) { if (!repAppError) repAppError = msg.slice('apperror:'.length); }
+          else if (!repViolation) repViolation = msg;
+        });
+        await page.addInitScript((expectedOrigin: string) => {
+          const g = globalThis as unknown as {
+            location?: { origin?: string };
+            navigator?: { serviceWorker?: { register?: (...args: unknown[]) => unknown } };
+            SharedWorker?: unknown;
+            Worker?: unknown;
+            __c410Report?: (msg: string) => void;
+            fetch?: (url: string) => Promise<unknown>;
+          };
+          // AMENDED 2026-08-04 (r3, round-3 Claude finding): the wrapper is
+          // now UNCONDITIONAL -- installed in EVERY frame regardless of
+          // origin -- and fires SYNCHRONOUSLY at worker construction. The
+          // round-2 fix self-scoped this wrapper to the daemon origin,
+          // which meant an about:blank/srcdoc attacker frame (whose
+          // location.origin is the string "null") never got the wrapper;
+          // the frame then constructed a native SharedWorker, ran its
+          // fetch, and DETACHED before the post-settle readability sweep,
+          // escaping all three layers (proven end-to-end with a wire log).
+          // Reporting at construction is detach-immune: the violation
+          // reaches the Node-side channel BEFORE the frame can be removed.
+          // Removing the origin gate is safe against designed content: a
+          // worker-construction census over the frozen corpus (every frame,
+          // every origin, 3s load window, both parent and HEAD) recorded
+          // ZERO constructions -- the designed cover iframes only REFERENCE
+          // worker APIs, they never call them, and sandboxed opaque origins
+          // cannot use serviceWorker/SharedWorker anyway. Dedicated Worker
+          // is wrapped too: its requests are likewise invisible to page-
+          // scoped request events.
+          // Eager capture: Playwright installs exposeFunction bindings at
+          // context creation, before init scripts run, so this reference
+          // exists now and cannot be severed by later page code. The lazy
+          // lookup and the beacon are best-effort fallbacks only; a beacon
+          // from an opaque origin to the daemon fails CORS and surfaces as
+          // a data-plane requestfailed, which also invalidates.
+          const capturedChannel = g.__c410Report;
+          // tsx serialization rules apply here too, and empirically they
+          // are STRICTER for serialized callbacks than the compile lets on:
+          // const-arrows, const-bound function expressions, AND function
+          // declarations all get __name-wrapped inside page.evaluate
+          // (addInitScript's serialization differs, but this code takes no
+          // dependency on that difference). Only member-assigned function
+          // values, call-argument arrows, and method shorthand are used
+          // here; the report logic is member-assigned onto a holder rather
+          // than bound to a name.
+          const holder = { report: undefined as unknown as (msg: string) => void };
+          holder.report = function (this: unknown, msg: string): void {
+            try {
+              const channel = capturedChannel ?? g.__c410Report;
+              if (channel) { channel(msg); return; }
+            } catch { /* fall through to the beacon */ }
+            try { g.fetch?.(`${expectedOrigin}/__c410-violation`); } catch { /* data-plane listeners catch the beacon either way */ }
+          };
+          const sw = g.navigator?.serviceWorker;
+          if (sw?.register) {
+            const originalRegister = sw.register.bind(sw);
+            sw.register = (...args: unknown[]) => { holder.report('serviceworker-register-called (unmeasurable execution mode)'); return originalRegister(...args); };
+          }
+          if (typeof g.SharedWorker === 'function') {
+            const OriginalSharedWorker = g.SharedWorker as new (...args: unknown[]) => unknown;
+            g.SharedWorker = function (this: unknown, ...args: unknown[]) { holder.report('sharedworker-constructed (unmeasurable execution mode)'); return new OriginalSharedWorker(...args); } as unknown;
+          }
+          if (typeof g.Worker === 'function') {
+            const OriginalWorker = g.Worker as new (...args: unknown[]) => unknown;
+            g.Worker = function (this: unknown, ...args: unknown[]) { holder.report('worker-constructed (unmeasurable execution mode)'); return new OriginalWorker(...args); } as unknown;
+          }
+        }, daemonOrigin);
         await page.goto(`${daemonOrigin}/api/projects`, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => undefined);
         await page.setContent('<!doctype html><html><body><div id="root"></div></body></html>', { waitUntil: 'domcontentloaded' });
         await page.evaluate((projects: unknown[]) => { (globalThis as unknown as { __C410_PROJECTS__: unknown[] }).__C410_PROJECTS__ = projects; }, sample);
+        // AMENDED 2026-08-03 (r3): main-frame-scoped error capture,
+        // installed as preparatory work BEFORE the mount so mount-time
+        // errors are caught. Playwright's page.on('pageerror') aggregates
+        // ALL frames with no frame attribution, and the corpus's cover
+        // iframes run arbitrary user content whose scripts throw by DESIGN
+        // (empirically: a sandboxed clone page's localStorage access denial
+        // arrives with an EMPTY stack, defeating stack-based attribution).
+        // Browser error/unhandledrejection events never propagate from a
+        // child frame to the parent window at all (empirically confirmed;
+        // the corpus iframes' sandboxed opaque origins only harden this
+        // further), so these listeners are main-frame-scoped BY
+        // CONSTRUCTION, replacing the r2 pageerror listener that made
+        // every rep fail on embedded content's designed errors. Errors are
+        // delivered through the eagerly-captured __c410Report channel --
+        // accumulation is Node-side, so there is no in-page sink for
+        // application code to tamper with. No `capture` flag: element load
+        // errors (the designed logo <img> 404s) do not bubble and never
+        // reach window-level listeners; only uncaught exceptions and
+        // unhandled rejections do. (globalThis === window in the main
+        // frame; typed structurally -- scripts/tsconfig.json has no DOM
+        // lib. tsx hazard rules apply: call-argument arrows and
+        // const-bound non-literal reads only.)
+        await page.evaluate(() => {
+          const g = globalThis as unknown as {
+            addEventListener(type: string, cb: (ev: { message?: unknown; error?: unknown; reason?: unknown }) => void): void;
+            __c410Report?: (msg: string) => void;
+          };
+          const capturedChannel = g.__c410Report;
+          g.addEventListener('error', (e) => { capturedChannel?.(`apperror:error: ${String(e.message ?? e.error)}`); });
+          g.addEventListener('unhandledrejection', (e) => { capturedChannel?.(`apperror:unhandledrejection: ${String(e.reason)}`); });
+        });
 
         // Listeners armed only now -- after every preparatory step above.
         let inFlight = 0;
@@ -2827,28 +2965,115 @@ import { DesignsTab } from './components/DesignsTab';
         // daemon-origin work FAILS is not a successful activation. The real
         // registry converts fetch failures and non-OK responses into empty
         // arrays, so a broken implementation could fail fast, look faster,
-        // and still read as "started + drained". Any daemon-origin request
-        // failure, non-2xx daemon-origin response, or page error invalidates
-        // the repetition (no sample recorded).
+        // and still read as "started + drained".
+        // AMENDED 2026-08-03 (r3, gate-defect ruling r3, DECISIONS.md): the
+        // r2 rule ("ANY daemon-origin failure/non-2xx/pageerror invalidates")
+        // was structurally unpassable against the frozen corpus, because
+        // DesignsTab activation EMBEDS arbitrary user content by design:
+        //  - brand cards probe /api/brands/:id/logo via <img>; brands
+        //    without an extracted logo 404 by design (ProjectBrandCover's
+        //    documented logo->favicon->monogram error chain);
+        //  - cover iframes of website-clone projects request their absolute
+        //    -path assets against the daemon origin and fail via ORB or 404
+        //    by design (thumbnails degrade, DesignsTab.tsx's own comment);
+        //  - HtmlProjectCoverFrame's HEAD existence probes are aborted by
+        //    the component's OWN AbortController cleanup on re-render
+        //    (empirically: every html-cover project, deterministically);
+        //  - clone-page scripts inside sandboxed iframes throw by design.
+        // Additionally, the r2 drain (ALL daemon-origin traffic) raced
+        // Chromium's parked media requests: a clone page's <video
+        // preload="metadata"> holds its range request open indefinitely, so
+        // whether a rep drained depended on whether machine load stretched
+        // React's data->iframe phase gap past the 250ms stable-streak --
+        // the recorded 14/15 runs' parent reps "drained" only because the
+        // loaded gate machine exited at data quiescence before the iframe
+        // cascade began (idle replications: 100% drain-streak expiry).
+        // r3 therefore scopes BOTH the drain and the invalidation rules to
+        // the DesignsTab's own data plane -- main-frame fetch/xhr requests
+        // to the daemon origin, the same plane the qualifying-mount check
+        // already lives on. Readiness becomes time-to-data-quiescence:
+        // deterministic, load-independent, and identical in meaning on the
+        // parent and HEAD sides. Element-initiated loads (images, media,
+        // iframe subresources) are OUTSIDE the readiness clock entirely, so
+        // a HEAD build that 404s its cover images gains NOTHING on the
+        // measured axis (cover correctness is C4-1..C4-9's job; RSS and
+        // request-concurrency remain as non-regression ceilings). The only
+        // tolerated data-plane failure shapes are the cover existence
+        // probe's own designed outcomes on /api/projects/:id/raw/*: its
+        // cleanup abort (HEAD + net::ERR_ABORTED) and its designed missing-
+        // cover answer (HEAD + 404). Everything else on the data plane
+        // still fails the repetition closed.
         let repInvalidReason: string | undefined;
-        page.on('pageerror', (err) => { if (!repInvalidReason) repInvalidReason = `pageerror: ${err.message}`; });
+        // r3 review round 1, adversarial finding 1: worker creation caught
+        // at the BrowserContext level too (page-scoped events cannot see
+        // service workers at all; this event can). Fail closed -- a service
+        // worker during a measured activation is an unmeasurable execution
+        // mode, not a faster one.
+        page.context().on('serviceworker', () => { if (!repInvalidReason) repInvalidReason = 'service worker created during measured activation (unmeasurable execution mode)'; });
+        const openDataPlaneRequests = new Set<MinimalPwRequest>();
+        // Round-1 Codex finding 3: main-frame-only scoping left a cheap
+        // escape (route registry fetches through a same-origin or
+        // about:blank hidden iframe -- unmeasured and un-invalidated). The
+        // data plane is therefore fetch/xhr from ANY frame. Empirical
+        // basis: the frozen corpus's embedded content issues ZERO
+        // subframe fetch/xhr traffic across all reps (every cover-iframe
+        // request is element-initiated: script/img/css/font/media), so
+        // widening cannot collide with designed embedded-content misses on
+        // this corpus; a future corpus change already requires its own
+        // ceremony and must re-verify this invariant. frame() throwing
+        // (Service-Worker-originated, types.d.ts:20476) stays excluded
+        // here because that whole execution mode is separately failed
+        // closed by the guards above/below.
+        const isDataPlaneRequest = (req: MinimalPwRequest): boolean => {
+          try {
+            req.frame();
+          } catch {
+            return false; // Service-Worker-originated -- mode fails closed via the SW guards
+          }
+          const rt = req.resourceType();
+          return rt === 'fetch' || rt === 'xhr';
+        };
+        const isMainFrame = (req: MinimalPwRequest): boolean => {
+          try {
+            return req.frame() === page.mainFrame();
+          } catch {
+            return false;
+          }
+        };
+        // Round-1 Codex finding 2: the designed-probe carve-outs are bound
+        // to the SAMPLED projects' raw paths, not any project id.
+        const sampledRawProbePath = (rawUrl: string): boolean => {
+          const m = /^\/api\/projects\/([^/]+)\/raw\//.exec(new URL(rawUrl).pathname);
+          return Boolean(m?.[1] && sampleIds.has(decodeURIComponent(m[1])));
+        };
         page.on('request', (req) => {
           const url = req.url();
           if (!url.startsWith(daemonOrigin)) return;
+          if (!isDataPlaneRequest(req)) return;
+          openDataPlaneRequests.add(req);
           inFlight++;
           if (inFlight > peakConcurrentRequests) peakConcurrentRequests = inFlight;
-          if (isQualifyingMountRequestUrl(url, daemonOrigin)) sawQualifyingMountRequest = true;
+          // Round-1 Codex finding 1: a qualifying mount request must be
+          // the real registry's own call shape -- a MAIN-FRAME GET. A
+          // HEAD to the same URL (bodyless, no data) or a decoy from a
+          // hidden frame proves nothing.
+          if (req.method() === 'GET' && isMainFrame(req) && isQualifyingMountRequestUrl(url, daemonOrigin)) sawQualifyingMountRequest = true;
         });
-        page.on('requestfinished', (req) => { if (req.url().startsWith(daemonOrigin)) inFlight = Math.max(0, inFlight - 1); });
+        page.on('requestfinished', (req) => { if (openDataPlaneRequests.delete(req)) inFlight = Math.max(0, inFlight - 1); });
         page.on('requestfailed', (req) => {
-          if (!req.url().startsWith(daemonOrigin)) return;
+          if (!openDataPlaneRequests.delete(req)) return;
           inFlight = Math.max(0, inFlight - 1);
-          if (!repInvalidReason) repInvalidReason = `requestfailed: ${req.url()}`;
+          if (req.method() === 'HEAD' && req.failure()?.errorText === 'net::ERR_ABORTED' && sampledRawProbePath(req.url())) return;
+          if (!repInvalidReason) repInvalidReason = `requestfailed(data-plane ${req.resourceType()}): ${req.url()} (${req.failure()?.errorText ?? 'no errorText'})`;
         });
         page.on('response', (resp) => {
           if (!resp.url().startsWith(daemonOrigin)) return;
           const status = resp.status();
-          if ((status < 200 || status >= 300) && !repInvalidReason) repInvalidReason = `non-2xx daemon response ${status}: ${resp.url()}`;
+          if (status >= 200 && status < 300) return;
+          const req = resp.request();
+          if (!isDataPlaneRequest(req)) return;
+          if (req.method() === 'HEAD' && status === 404 && sampledRawProbePath(resp.url())) return;
+          if (!repInvalidReason) repInvalidReason = `non-2xx daemon response ${status}: ${resp.url()}`;
         });
 
         const t0 = Date.now();
@@ -2878,13 +3103,69 @@ import { DesignsTab } from './components/DesignsTab';
 
         // AMENDED 2026-08-03 (r2, second-audit finding 3): quiescence alone
         // is not success -- the drained traffic must all have SUCCEEDED.
+        // Round-1 Codex finding 4: the drain's stable-streak (5 polls at
+        // 50ms spacing, ~200-250ms of quiet) closes the READINESS clock,
+        // but a data phase scheduled just past it would otherwise vanish
+        // along with its failures. The settle window below keeps every
+        // invalidation listener armed for a further full second AFTER the
+        // clock stops: late data-plane failures, worker creation, and app
+        // errors still invalidate the repetition; only the timing sample
+        // is fixed at first-quiescence (the documented definition).
+        const readinessElapsedMs = Date.now() - t0; // clock stops HERE, before the settle window
+        await sleep(1000);
+        // AMENDED 2026-08-03 (r3): the app's own main-frame uncaught errors
+        // and unhandled rejections (captured by the in-page hook installed
+        // above) also invalidate the repetition -- child-frame errors
+        // never propagate to the parent window's handlers, so this is
+        // exactly the app-plane guard the r2 pageerror rule intended.
+        // Defense-in-depth (round-2): after the settle window, invalidate
+        // if ANY child frame is parent-READABLE. This is a SECONDARY
+        // backstop -- the every-frame construction-time worker wrapper
+        // above is the primary, detach-immune guard (round-3 fix). The
+        // predicate is READABILITY, not origin equality: a same-origin-
+        // capable child lets the parent read its document; a cross-origin
+        // frame throws. Empirically characterized against the frozen
+        // corpus (frame-predicate probe): all designed cover iframes are
+        // sandboxed (opaque origin) and throw on document reads, while
+        // about:blank/srcdoc attacker frames -- whose location.origin is
+        // the string "null", so an origin-equality test would MISS them --
+        // are readable and caught. Designed activation yields zero readable
+        // subframes. (This layer alone was defeated by a detach-before-
+        // sweep race, which is why the wrapper above no longer depends on
+        // it.)
+        if (!repInvalidReason) {
+          const readableSubframes = await page.evaluate(() => {
+            const g = globalThis as unknown as { frames?: { length: number; [i: number]: { document?: unknown } } };
+            const frames = g.frames;
+            let count = 0;
+            if (frames) {
+              for (let fi = 0; fi < frames.length; fi++) {
+                try {
+                  // Reading .document across a cross-origin boundary throws
+                  // (SecurityError); a same-origin-capable child returns it.
+                  if (frames[fi]?.document != null) count++;
+                } catch { /* cross-origin (designed sandboxed cover iframe) -- unreadable, ignored */ }
+              }
+            }
+            return count;
+          });
+          if (readableSubframes > 0) repInvalidReason = `same-origin-capable (parent-readable) subframe(s) present during measured activation (count=${readableSubframes}): unmeasurable execution surface`;
+        }
+        if (!repInvalidReason && repViolation) repInvalidReason = `execution-mode violation: ${repViolation}`;
+        if (!repInvalidReason && repAppError) repInvalidReason = `main-frame app-plane violation: ${repAppError}`;
+        // Round-2 Codex finding 1 + round-3 residual: quiescence at
+        // acceptance is asserted, not assumed, and re-read as the LAST gate
+        // before the sample is taken (after the readability sweep's own
+        // evaluate round-trip) so a request that fired late in the settle
+        // window and is still outstanding cannot slip between an earlier
+        // check and acceptance.
+        if (!repInvalidReason && inFlight > 0) repInvalidReason = `late data-plane request still in flight at acceptance (inFlight=${inFlight})`;
         if (repInvalidReason) {
           repFailures.push(`rep(i=${i}): FAILED -- ${repInvalidReason}; no sample recorded`);
           continue;
         }
 
-        const elapsed = Date.now() - t0;
-        if (i >= 0) readinessMsSamples.push(elapsed);
+        if (i >= 0) readinessMsSamples.push(readinessElapsedMs);
         else warmupValid = true; // i === -1 reached here only via a started+drained warmup
       } finally {
         await page.close().catch(() => undefined);

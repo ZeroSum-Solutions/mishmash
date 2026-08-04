@@ -745,10 +745,22 @@ test('[P2] entry help menu exposes community links and topbar routes Use everywh
   await page.getByTestId('entry-help-trigger').click();
   const menu = page.locator('.entry-help-popover[role="menu"]');
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole('menuitem', { name: /Follow @OpenDesignHQ on X/i })).toHaveAttribute(
+  // GitHub links must target THIS fork's repository (docs/FORK-PIN.md) so
+  // bug reports and feature requests land where the team reads them.
+  await expect(menu.getByRole('menuitem', { name: /Get help on GitHub/i })).toHaveAttribute(
     'href',
-    'https://x.com/OpenDesignHQ',
+    'https://github.com/wiggdevin/mishmash/issues/new',
   );
+  await expect(menu.getByRole('menuitem', { name: /Submit a feature request/i })).toHaveAttribute(
+    'href',
+    'https://github.com/wiggdevin/mishmash/pulls',
+  );
+  await expect(menu.getByRole('menuitem', { name: /What.s new/i })).toHaveAttribute(
+    'href',
+    'https://github.com/wiggdevin/mishmash/releases',
+  );
+  // The desktop-download item left with the desktop shell (web Studio only).
+  await expect(menu.getByRole('menuitem', { name: /Download desktop app/i })).toHaveCount(0);
   await expect(menu.getByRole('menuitem', { name: /Join Discord/i })).toHaveAttribute(
     'href',
     'https://discord.gg/mHAjSMV6gz',

@@ -1137,6 +1137,7 @@ describe('fetchDesignLibraryCatalog', () => {
       { category: {} },
       { domains: [{}] },
       { duplicate_of: {} },
+      { description: {} },
     ]) {
       vi.stubGlobal('fetch', vi.fn(async () => new Response(
         JSON.stringify({
@@ -1148,6 +1149,21 @@ describe('fetchDesignLibraryCatalog', () => {
       const result = await fetchDesignLibraryCatalog();
       expect(result.ok, `override ${JSON.stringify(overrides)} must fail the gate`).toBe(false);
     }
+  });
+
+  it('accepts an item with a string description (optional field)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({
+        library: 'L', rights_ledger: 'r', note: 'n', total_collections: 1, root: '/tmp/x',
+        groups: [{
+          title: 'x', folder: 'x', blurb: '',
+          items: [{ id: 'a', label: 'A', rel: 'g/a', thumb: null, kind: 'k', files: 1, size: '1 MB', category: 'g', domains: ['web'], allowed_use: 'own-code', description: 'Warm editorial kit. Best for real-estate landing pages.' }],
+        }],
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )));
+    const result = await fetchDesignLibraryCatalog();
+    expect(result.ok).toBe(true);
   });
 
   it('returns ok:false when an item has domains that is not an array', async () => {

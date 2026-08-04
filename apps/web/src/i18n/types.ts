@@ -1847,7 +1847,6 @@ export interface Dict {
   'entry.helpGetHelp': string;
   'entry.helpSubmitFeature': string;
   'entry.helpWhatsNew': string;
-  'entry.helpDownloadDesktop': string;
 
   // Connectors tab
   'connectors.title': string;
@@ -4363,6 +4362,7 @@ export interface Dict {
   'newproj.startBlank': string;
   'newproj.startBlankHint': string;
   'workspace.pages': string;
+  'workspace.canvas': string;
   'workspace.allProjectFiles': string;
   'workspace.newBlankPage': string;
   'workspace.noPagesYet': string;
@@ -4406,6 +4406,8 @@ export interface Dict {
   'designLibrary.useAsTemplate': string;
   'designLibrary.useAsTemplateBusy': string;
   'designLibrary.useAsTemplateError': string;
+  'designLibrary.preview': string;
+  'designLibrary.previewClose': string;
   // Storyboard — Seedance 2.0 image-first keyframe workflow.
   'storyboard.title': string;
   'storyboard.newStoryboard': string;
