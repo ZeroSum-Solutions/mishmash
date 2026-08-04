@@ -149,4 +149,30 @@ describe('od figma import CLI', () => {
       'POST /api/runs',
     ]);
   });
+
+  it('forwards --subdir through the multipart import request', async () => {
+    stub = await startFigmaStubServer();
+    tempRoot = mkdtempSync(join(tmpdir(), 'od-figma-cli-'));
+    const figPath = join(tempRoot, 'Mock kit.fig');
+    writeFileSync(figPath, Buffer.from('fake fig bytes'));
+
+    const result = await runCli([
+      'figma',
+      'import',
+      '--project',
+      'project-1',
+      '--file',
+      figPath,
+      '--subdir',
+      'figma-alpha',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(0);
+    const importReq = stub.requests.find((req) => req.url.endsWith('/figma/import'));
+    expect(importReq?.body).toContain('name="subdir"');
+    expect(importReq?.body).toContain('figma-alpha');
+  });
 });

@@ -376,7 +376,7 @@ import { readOpenCodeServiceFailure } from './runtimes/opencode-log.js';
 import { createAgentStderrVisibilityFilter } from './amr-stderr-filter.js';
 import { createQoderStreamHandler } from './runtimes/qoder-stream.js';
 import { subscribe as subscribeFileEvents } from './project-watchers.js';
-import { importFigmaFromBytes } from './figma/figma-import.js';
+import { importFigmaFromBytes, safeSnapshotSubdir } from './figma/figma-import.js';
 import { renderDesignSystemPreview } from './design-systems/preview.js';
 import { renderDesignSystemShowcase } from './design-systems/showcase.js';
 import { createChatRunService } from './runtimes/runs.js';
@@ -3078,10 +3078,16 @@ export async function startServer({
 
         const projectRoot = resolveProjectDir(PROJECTS_DIR, req.params.id, project.metadata);
         const notes = typeof body.notes === 'string' ? body.notes : undefined;
+        const rawSubdir = typeof body.subdir === 'string' ? body.subdir.trim() : '';
+        const subdir = rawSubdir ? safeSnapshotSubdir(rawSubdir) : undefined;
+        if (rawSubdir && !subdir) {
+          return sendApiError(res, 400, 'BAD_REQUEST', 'subdir must be a single safe path segment');
+        }
         const result = await importFigmaFromBytes(req.file.buffer, {
           cwd: projectRoot,
           label: decodeMultipartFilename(req.file.originalname || 'figma-import.fig'),
           notes,
+          ...(subdir ? { subdir } : {}),
         });
         return res.json(result);
       } catch (caught) {

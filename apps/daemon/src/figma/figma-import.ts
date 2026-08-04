@@ -36,6 +36,20 @@ export interface FigmaImportOptions {
 
 const DEFAULT_SUBDIR = 'figma';
 const DEFAULT_ASSET_MAX = 12 * 1024 * 1024;
+
+/**
+ * A snapshot subdir must stay a single path segment inside the staging cwd:
+ * multi-file imports rely on distinct sibling directories (`figma-a/`,
+ * `figma-b/`) and anything carrying separators or dot-segments could escape
+ * the project root. Returns the trimmed segment, or null when unsafe.
+ */
+export function safeSnapshotSubdir(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > 128) return null;
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(trimmed)) return null;
+  return trimmed;
+}
 const MAX_CONTEXT_COLORS = 24;
 const MAX_CONTEXT_COMPONENTS = 30;
 

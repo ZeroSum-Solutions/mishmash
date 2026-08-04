@@ -4979,10 +4979,25 @@ async function stageLocalCodeFiles(projectId: string, files: File[]): Promise<St
   };
 }
 
+// Distinct per-file snapshot dirs keep multi-.fig imports from overwriting
+// each other's `figma/` snapshot. Derives a clean `figma-<slug>` segment from
+// the file's leaf name; the daemon validates it server-side. The optional
+// `used` set disambiguates same-named files within one staging batch.
+export function figmaSnapshotSubdir(relPath: string, index: number, used?: Set<string>): string {
+  const slug = safeContextFileName(relPath, `file-${index}`).replace(/\.md$/i, '');
+  let subdir = `figma-${slug}`;
+  if (used) {
+    if (used.has(subdir)) subdir = `${subdir}-${index}`;
+    used.add(subdir);
+  }
+  return subdir;
+}
+
 async function stageFigmaFiles(projectId: string, files: File[]): Promise<StagedFigmaContext> {
   if (files.length === 0) return { summaryPaths: [], skippedCount: 0 };
   const selected = selectFigmaFiles(files);
   const summaryPaths: string[] = [];
+  const usedSubdirs = new Set<string>();
   let failed = 0;
   let index = 0;
   for (const file of selected) {
@@ -4990,11 +5005,11 @@ async function stageFigmaFiles(projectId: string, files: File[]): Promise<Staged
     // `figma/` snapshot — node tree, tokens, assets, thumbnail, and an
     // agent-facing DESIGN-context.md. Distinct subdirs keep multiple files
     // from overwriting each other; a single file uses the default `figma/`.
-    const base = safeContextFileName(resourceRelativePath(file), `figma-${index}`).replace(/\.fig$/i, '');
+    const subdir = figmaSnapshotSubdir(resourceRelativePath(file), index, usedSubdirs);
     const outcome = await importProjectFigma(
       projectId,
       file,
-      selected.length > 1 ? { subdir: `figma-${base}` } : undefined,
+      selected.length > 1 ? { subdir } : undefined,
     );
     if (outcome.ok) {
       summaryPaths.push(outcome.result.contextPath);
