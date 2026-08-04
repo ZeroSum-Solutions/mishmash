@@ -1514,10 +1514,12 @@ function resolveEsbuild(): MinimalEsbuild {
 }
 interface MinimalPwLocator { count(): Promise<number> }
 interface MinimalPwRequest { url(): string }
+interface MinimalPwResponse { url(): string; status(): number }
 interface MinimalPwPage {
   on(event: 'pageerror', cb: (err: Error) => void): void;
   on(event: 'console', cb: (msg: { type(): string; text(): string }) => void): void;
   on(event: 'request' | 'requestfinished' | 'requestfailed', cb: (req: MinimalPwRequest) => void): void;
+  on(event: 'response', cb: (resp: MinimalPwResponse) => void): void;
   goto(url: string, opts?: Record<string, unknown>): Promise<unknown>;
   setContent(html: string, opts?: Record<string, unknown>): Promise<void>;
   evaluate<T>(fn: (...args: never[]) => T, arg?: unknown): Promise<T>;
@@ -1526,8 +1528,21 @@ interface MinimalPwPage {
   locator(selector: string): MinimalPwLocator;
   close(): Promise<void>;
 }
-interface MinimalPwBrowser { newPage(): Promise<MinimalPwPage>; close(): Promise<void>; process(): { pid: number } | null }
-interface MinimalPwBrowserType { launch(opts?: Record<string, unknown>): Promise<MinimalPwBrowser> }
+// AMENDED 2026-08-03 (gate-defect ruling r2, DECISIONS.md): the original
+// MinimalPwBrowser shim declared a `process()` method that Playwright's real
+// Browser object does not have (that is Puppeteer's API; in Playwright only
+// BrowserServer.process() exists). The shim let C4-10's memory poller
+// typecheck a call that is a guaranteed runtime TypeError -- dead code until
+// the sixth baseline restatement made C4-10's corpus gate pass, then a
+// process crash before any manifest write. `process()` is removed from the
+// Browser shim and modeled on MinimalPwBrowserServer, the object that
+// actually owns it in Playwright's API.
+interface MinimalPwBrowser { newPage(): Promise<MinimalPwPage>; close(): Promise<void> }
+// Real signature per installed playwright-core@1.60.0 types.d.ts:18798:
+// `process(): ChildProcess` -- non-null, with `pid` optional on Node's
+// ChildProcess. Modeled minimally and honestly (second-audit correction).
+interface MinimalPwBrowserServer { wsEndpoint(): string; process(): { readonly pid?: number }; close(): Promise<void> }
+interface MinimalPwBrowserType { launch(opts?: Record<string, unknown>): Promise<MinimalPwBrowser>; launchServer(opts?: Record<string, unknown>): Promise<MinimalPwBrowserServer>; connect(wsEndpoint: string): Promise<MinimalPwBrowser> }
 function resolvePlaywright(): { chromium: MinimalPwBrowserType } {
   return createRequire(path.join(repoRoot, 'e2e/package.json'))('@playwright/test') as { chromium: MinimalPwBrowserType };
 }
@@ -2639,19 +2654,39 @@ interface DesignsTabActivationMeasurement {
   peakConcurrentRequests: number;
   peakCombinedRssKb: number;
   projectCount: number;
+  // AMENDED 2026-08-03 (r2, second-audit finding 2): digest of the ordered,
+  // id-sorted sampled project ids -- checkC410 requires parent and HEAD to
+  // report the IDENTICAL digest before any statistics are compared.
+  projectIdsDigest: string;
 }
 async function measureDesignsTabActivation(rootDir: string, scratchCorpusDir: string, reps: number): Promise<DesignsTabActivationMeasurement | { error: string }> {
   let daemon: BootedDaemon | undefined;
   let browser: MinimalPwBrowser | undefined;
+  let browserServer: MinimalPwBrowserServer | undefined;
+  // AMENDED 2026-08-03 (r2, second-audit finding 4): poller lifecycle is
+  // function-scoped so the finally block can stop it on EVERY exit path --
+  // an exception mid-rep must not leave the poller looping through later
+  // criteria.
+  let pollAbort: AbortController | undefined;
+  let poller: Promise<void> | undefined;
+  let pollerError: string | undefined;
   const harnessPath = path.join(rootDir, 'apps/web/src/.verify-w4-c410-harness.tsx');
   try {
     daemon = await bootDaemonForProbing(scratchCorpusDir, rootDir);
     const listResp = await fetch(`${daemon.url}/api/projects`, { signal: AbortSignal.timeout(30_000) });
     if (!listResp.ok) return { error: `GET /api/projects failed: ${listResp.status}` };
     const listJson = (await listResp.json()) as { projects?: { id?: unknown }[] };
-    const sample = (listJson.projects ?? []).filter((p) => typeof p.id === 'string').slice(0, 30);
+    // AMENDED 2026-08-03 (r2, second-audit finding 2): deterministic,
+    // id-sorted workload selection. The prior first-30-in-listing-order
+    // sample let a HEAD-side listing change (ordering or cardinality)
+    // select a cheaper workload than the parent's and manufacture the
+    // required improvement; sorting by id binds both sides of the R8
+    // comparison to the same projects, and checkC410 additionally gates on
+    // exact digest + cardinality equality.
+    const sample = (listJson.projects ?? []).filter((p) => typeof p.id === 'string').sort((a, b) => (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0)).slice(0, 30);
     if (sample.length === 0) return { error: 'no projects with a string id found in the scratch corpus' };
     const sampleIds = new Set(sample.map((p) => String(p.id)));
+    const projectIdsDigest = sha256Bytes(sample.map((p) => String(p.id)).join('\n'));
     // Ceremony ruling item 5: a timed mount is proven ONLY by a subsequent
     // EXACT DesignsTab data request for a sampled project -- the real
     // client (apps/web/src/providers/registry.ts) issues exactly
@@ -2700,26 +2735,60 @@ import { DesignsTab } from './components/DesignsTab';
     if (!bundledJs) return { error: 'esbuild produced no output for the DesignsTab activation harness' };
 
     const pw = resolvePlaywright();
-    browser = await pw.chromium.launch();
+    // AMENDED 2026-08-03 (gate-defect ruling r2, DECISIONS.md): launch a
+    // BrowserServer and connect to it instead of chromium.launch().
+    // Playwright's plain Browser has no process(); only BrowserServer does.
+    // The prior code called browser.process() in the poller below -- a
+    // guaranteed TypeError inside a fire-and-forget async IIFE, which Node
+    // escalates to an unhandled rejection and a whole-process crash BEFORE
+    // any manifest (or emergency manifest) is written. launchServer()
+    // preserves the browser-process-tree RSS term of peakCombinedRssKb
+    // exactly as the measurement was designed -- dropping the term instead
+    // would have quietly weakened the R8 memory non-regression gate.
+    browserServer = await pw.chromium.launchServer();
+    browser = await pw.chromium.connect(browserServer.wsEndpoint());
     const daemonOrigin = daemon.url;
 
     let peakConcurrentRequests = 0;
     let peakCombinedRssKb = 0;
+    // AMENDED 2026-08-03 (r2, second-audit finding 1): mirror C4-5's
+    // checked-sample invariant (see aggregateDescendantRssKbChecked above).
+    // psSnapshot() converts a failed `ps` into `[]`, and the old poller
+    // silently converted THAT into rssKb=0 -- indistinguishable from real
+    // zero, letting the R8 memory gate collapse to `0 <= 0 * ceiling` (a
+    // false green). `ps -A` can never truly return zero rows, so an empty
+    // snapshot means `ps` itself failed; every poll now records explicit
+    // validity, and the measurement result below requires >=1 valid poll,
+    // ZERO invalid polls, and a positive peak. The per-tree RSS formulas
+    // are byte-for-byte the sealed originals -- only validity gating is new.
+    let validRssSamples = 0;
+    let invalidRssSamples = 0;
     const rootPid = daemon.pid;
-    const pollAbort = new AbortController();
-    const poller = (async () => {
-      while (!pollAbort.signal.aborted) {
+    pollAbort = new AbortController();
+    const pollSignal = pollAbort.signal;
+    // AMENDED 2026-08-03 (r2): the poller is fire-and-forget; any throw
+    // inside it is an unhandled rejection that kills the gate run with no
+    // tally. Capture the first error and fail the measurement CLOSED (an
+    // explicit error result with evidence) instead of crashing.
+    poller = (async () => {
+      while (!pollSignal.aborted) {
         const snap = psSnapshot();
-        let daemonRssKb = 0;
-        if (rootPid) { const desc = descendantsOf(rootPid, snap); daemonRssKb = snap.filter((r) => desc.has(r.pid)).reduce((s, r) => s + r.rssKb, 0); }
-        let browserRssKb = 0;
-        const bpid = browser?.process()?.pid;
-        if (bpid) { const desc = descendantsOf(bpid, snap); desc.add(bpid); browserRssKb = snap.filter((r) => desc.has(r.pid)).reduce((s, r) => s + r.rssKb, 0); }
-        const combined = daemonRssKb + browserRssKb;
-        if (combined > peakCombinedRssKb) peakCombinedRssKb = combined;
+        const bpid = browserServer?.process()?.pid;
+        if (snap.length === 0 || !rootPid || typeof bpid !== 'number') {
+          invalidRssSamples++;
+        } else {
+          const dDesc = descendantsOf(rootPid, snap);
+          const daemonRssKb = snap.filter((r) => dDesc.has(r.pid)).reduce((s, r) => s + r.rssKb, 0);
+          const bDesc = descendantsOf(bpid, snap);
+          bDesc.add(bpid);
+          const browserRssKb = snap.filter((r) => bDesc.has(r.pid)).reduce((s, r) => s + r.rssKb, 0);
+          const combined = daemonRssKb + browserRssKb;
+          if (combined <= 0) invalidRssSamples++;
+          else { validRssSamples++; if (combined > peakCombinedRssKb) peakCombinedRssKb = combined; }
+        }
         await sleep(300);
       }
-    })();
+    })().catch((err: unknown) => { pollerError = err instanceof Error ? (err.stack ?? err.message) : String(err); });
 
     // Ceremony ruling item 5: every timed repetition gets a genuinely
     // FRESH page (`browser.newPage()`), not the same page/React root
@@ -2754,6 +2823,15 @@ import { DesignsTab } from './components/DesignsTab';
         // Listeners armed only now -- after every preparatory step above.
         let inFlight = 0;
         let sawQualifyingMountRequest = false;
+        // AMENDED 2026-08-03 (r2, second-audit finding 3): a repetition whose
+        // daemon-origin work FAILS is not a successful activation. The real
+        // registry converts fetch failures and non-OK responses into empty
+        // arrays, so a broken implementation could fail fast, look faster,
+        // and still read as "started + drained". Any daemon-origin request
+        // failure, non-2xx daemon-origin response, or page error invalidates
+        // the repetition (no sample recorded).
+        let repInvalidReason: string | undefined;
+        page.on('pageerror', (err) => { if (!repInvalidReason) repInvalidReason = `pageerror: ${err.message}`; });
         page.on('request', (req) => {
           const url = req.url();
           if (!url.startsWith(daemonOrigin)) return;
@@ -2762,7 +2840,16 @@ import { DesignsTab } from './components/DesignsTab';
           if (isQualifyingMountRequestUrl(url, daemonOrigin)) sawQualifyingMountRequest = true;
         });
         page.on('requestfinished', (req) => { if (req.url().startsWith(daemonOrigin)) inFlight = Math.max(0, inFlight - 1); });
-        page.on('requestfailed', (req) => { if (req.url().startsWith(daemonOrigin)) inFlight = Math.max(0, inFlight - 1); });
+        page.on('requestfailed', (req) => {
+          if (!req.url().startsWith(daemonOrigin)) return;
+          inFlight = Math.max(0, inFlight - 1);
+          if (!repInvalidReason) repInvalidReason = `requestfailed: ${req.url()}`;
+        });
+        page.on('response', (resp) => {
+          if (!resp.url().startsWith(daemonOrigin)) return;
+          const status = resp.status();
+          if ((status < 200 || status >= 300) && !repInvalidReason) repInvalidReason = `non-2xx daemon response ${status}: ${resp.url()}`;
+        });
 
         const t0 = Date.now();
         await page.addScriptTag({ content: bundledJs });
@@ -2789,6 +2876,13 @@ import { DesignsTab } from './components/DesignsTab';
           continue;
         }
 
+        // AMENDED 2026-08-03 (r2, second-audit finding 3): quiescence alone
+        // is not success -- the drained traffic must all have SUCCEEDED.
+        if (repInvalidReason) {
+          repFailures.push(`rep(i=${i}): FAILED -- ${repInvalidReason}; no sample recorded`);
+          continue;
+        }
+
         const elapsed = Date.now() - t0;
         if (i >= 0) readinessMsSamples.push(elapsed);
         else warmupValid = true; // i === -1 reached here only via a started+drained warmup
@@ -2799,6 +2893,20 @@ import { DesignsTab } from './components/DesignsTab';
 
     pollAbort.abort();
     await poller;
+    // AMENDED 2026-08-03 (r2): a poller crash is a measurement failure with
+    // evidence, never a silent omission of the RSS term and never a process
+    // crash -- fail closed.
+    if (pollerError) {
+      return { error: `memory/request poller crashed (fail-closed; previously this was an unhandled rejection that killed the gate before any manifest write): ${pollerError}` };
+    }
+    // AMENDED 2026-08-03 (r2, second-audit finding 1): C4-5's checked-sample
+    // invariant -- at least one valid RSS poll, ZERO invalid polls, and a
+    // positive peak. An empty `ps` snapshot or an unobservable process tree
+    // is a sampling failure, never a real zero, and must not collapse into
+    // a passable `0 <= 0 * ceiling`.
+    if (validRssSamples === 0 || invalidRssSamples > 0 || peakCombinedRssKb <= 0) {
+      return { error: `RSS sampling invalid (fail-closed): validRssSamples=${validRssSamples} invalidRssSamples=${invalidRssSamples} peakCombinedRssKb=${peakCombinedRssKb} -- empty ps snapshots / missing process trees are ps failures, not zero RSS (C4-5 precedent)` };
+    }
     // Ceremony ruling item 5: R8 statistics only after warmup PLUS five
     // valid, started, and proven-quiescent timed repetitions -- a run with
     // any failed repetition (including the warmup itself) is an error,
@@ -2806,10 +2914,17 @@ import { DesignsTab } from './components/DesignsTab';
     if (!warmupValid || readinessMsSamples.length < reps) {
       return { error: `warmupValid=${warmupValid}, ${readinessMsSamples.length}/${reps} timed repetitions were valid (started + proven-quiescent) -- R8 statistics require a valid discarded warmup PLUS all ${reps} timed repetitions\n${repFailures.join('\n')}` };
     }
-    return { readinessMsSamples, peakConcurrentRequests, peakCombinedRssKb, projectCount: sample.length };
+    return { readinessMsSamples, peakConcurrentRequests, peakCombinedRssKb, projectCount: sample.length, projectIdsDigest };
   } finally {
+    // AMENDED 2026-08-03 (r2, second-audit finding 4): stop the poller on
+    // EVERY exit path -- an exception mid-rep must not leave it looping
+    // through later criteria. (Idempotent with the success-path abort; the
+    // poller promise carries its own .catch and never rejects.)
+    if (pollAbort) pollAbort.abort();
+    if (poller) await poller;
     try { fs.unlinkSync(harnessPath); } catch { /* best effort */ }
     if (browser) await browser.close().catch(() => undefined);
+    if (browserServer) await browserServer.close().catch(() => undefined);
     if (daemon) await daemon.kill().catch(() => undefined);
   }
 }
@@ -2898,6 +3013,17 @@ async function checkC410(): Promise<{ ok: boolean; evidence: string; detail?: st
     if ('error' in parentResult) return { ok: false, evidence: `parent(${baseCommit.slice(0, 12)}) measurement failed: ${parentResult.error}`, detail: 'could not establish a parent baseline for comparison' };
     if ('error' in headResult) return { ok: false, evidence: `head(${headSha.slice(0, 12)}) measurement failed: ${headResult.error}`, detail: 'could not measure HEAD' };
 
+    // AMENDED 2026-08-03 (r2, second-audit finding 2): parent and HEAD must
+    // benchmark the IDENTICAL deterministic project set. Both sides sample
+    // id-sorted projects from scratch copies of the same frozen corpus, so
+    // the ordered-id digests must match exactly; a mismatch means the R8
+    // comparison is not apples-to-apples (e.g. a HEAD-side listing change
+    // dropping or swapping projects) and could manufacture the required
+    // improvement.
+    if (parentResult.projectIdsDigest !== headResult.projectIdsDigest || parentResult.projectCount !== headResult.projectCount) {
+      return { ok: false, evidence: `parent/HEAD workload mismatch: parent projectIdsDigest=${parentResult.projectIdsDigest} count=${parentResult.projectCount}; head projectIdsDigest=${headResult.projectIdsDigest} count=${headResult.projectCount}`, detail: 'C4-10 requires the identical deterministic project-ID set on both sides of the R8 comparison' };
+    }
+
     const parentP50 = percentile(parentResult.readinessMsSamples, 50);
     const parentP95 = percentile(parentResult.readinessMsSamples, 95);
     const headP50 = percentile(headResult.readinessMsSamples, 50);
@@ -2921,7 +3047,7 @@ async function checkC410(): Promise<{ ok: boolean; evidence: string; detail?: st
 
     return {
       ok,
-      evidence: `corpus digest (recomputed BEFORE any scratch copy/daemon boot, same canonical walk as W0): stated=${baseline.corpus.sha256} computed=${corpusDigest.sha256} filesHashed=${corpusDigest.fileCount} -> MATCH\nparent(${baseCommit.slice(0, 12)}, scratch corpus): readinessSamples=${JSON.stringify(parentResult.readinessMsSamples)} p50=${parentP50}ms p95=${parentP95}ms peakConcurrentRequests=${parentResult.peakConcurrentRequests} peakCombinedRssKb=${parentResult.peakCombinedRssKb} projectCount=${parentResult.projectCount}\nhead(${headSha.slice(0, 12)}, scratch corpus): readinessSamples=${JSON.stringify(headResult.readinessMsSamples)} p50=${headP50}ms p95=${headP95}ms peakConcurrentRequests=${headResult.peakConcurrentRequests} peakCombinedRssKb=${headResult.peakCombinedRssKb} projectCount=${headResult.projectCount}\nbaseline authoritative fields: minimumImprovementThreshold=${minImprovementPct}% nonRegressionCeiling=${nonRegressionCeilingPct}%\np50: target<=${improvementTargetMs.toFixed(1)}ms -> improved=${readinessImproved}; ceiling<=${p50RegressionCeilingMs.toFixed(1)}ms -> notRegressed=${p50NotRegressed}\np95: ceiling<=${p95RegressionCeilingMs.toFixed(1)}ms -> notRegressed=${p95NotRegressed}\npeak combined RSS non-regression (<=+${nonRegressionCeilingPct}%): ${rssNotRegressed}\npeak concurrent requests non-regression (<=+${nonRegressionCeilingPct}%): ${requestCountNotRegressed}`,
+      evidence: `corpus digest (recomputed BEFORE any scratch copy/daemon boot, same canonical walk as W0): stated=${baseline.corpus.sha256} computed=${corpusDigest.sha256} filesHashed=${corpusDigest.fileCount} -> MATCH\nparent(${baseCommit.slice(0, 12)}, scratch corpus): readinessSamples=${JSON.stringify(parentResult.readinessMsSamples)} p50=${parentP50}ms p95=${parentP95}ms peakConcurrentRequests=${parentResult.peakConcurrentRequests} peakCombinedRssKb=${parentResult.peakCombinedRssKb} projectCount=${parentResult.projectCount} projectIdsDigest=${parentResult.projectIdsDigest}\nhead(${headSha.slice(0, 12)}, scratch corpus): readinessSamples=${JSON.stringify(headResult.readinessMsSamples)} p50=${headP50}ms p95=${headP95}ms peakConcurrentRequests=${headResult.peakConcurrentRequests} peakCombinedRssKb=${headResult.peakCombinedRssKb} projectCount=${headResult.projectCount} projectIdsDigest=${headResult.projectIdsDigest}\nbaseline authoritative fields: minimumImprovementThreshold=${minImprovementPct}% nonRegressionCeiling=${nonRegressionCeilingPct}%\np50: target<=${improvementTargetMs.toFixed(1)}ms -> improved=${readinessImproved}; ceiling<=${p50RegressionCeilingMs.toFixed(1)}ms -> notRegressed=${p50NotRegressed}\np95: ceiling<=${p95RegressionCeilingMs.toFixed(1)}ms -> notRegressed=${p95NotRegressed}\npeak combined RSS non-regression (<=+${nonRegressionCeilingPct}%): ${rssNotRegressed}\npeak concurrent requests non-regression (<=+${nonRegressionCeilingPct}%): ${requestCountNotRegressed}`,
       detail: ok ? undefined : 'does not beat the parent commit by the baseline minimum p50 improvement threshold, or regresses p95/RSS/request-concurrency past the baseline non-regression ceiling',
     };
   } finally {
