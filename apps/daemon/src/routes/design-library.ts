@@ -54,7 +54,26 @@ function startProjectMaxBytes(): number {
   return Number.isFinite(raw) && raw > 0 ? raw : START_PROJECT_MAX_BYTES_DEFAULT;
 }
 
-const START_PROJECT_EXCLUDED_DIR_NAMES = new Set(['.git', 'node_modules', '__MACOSX']);
+// Beyond VCS/deps/zip noise, derived build caches are excluded from kit
+// copies. Real kits ship with their dev-server droppings — a `.next/`
+// webpack cache alone can be hundreds of MB — and none of these trees can
+// function in the copied project anyway once `node_modules` is excluded.
+// Counting them against the copy caps made large kits fail import while
+// blaming a cache file ("size limit would skip a required file
+// (.next/cache/webpack/…/29.pack)"). Deliberately NOT excluded: `dist`,
+// `build`, `out` — kits legitimately ship their deliverable there (see
+// ENTRY_FILE_CANDIDATES).
+const START_PROJECT_EXCLUDED_DIR_NAMES = new Set([
+  '.git',
+  'node_modules',
+  '__MACOSX',
+  '.next',
+  '.nuxt',
+  '.turbo',
+  '.cache',
+  '.parcel-cache',
+  '.vite',
+]);
 const START_PROJECT_EXCLUDED_FILE_NAMES = new Set(['.DS_Store']);
 
 // First of these relative to the copied project root wins; otherwise the
