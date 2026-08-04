@@ -249,7 +249,7 @@ describe('UpdateDialog', () => {
     expect(screen.queryByRole('button', { name: 'Explore new features' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Check for updates' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Download manually' }));
-    await waitFor(() => expect(openExternal).toHaveBeenCalledWith('https://github.com/nexu-io/open-design/releases'));
+    await waitFor(() => expect(openExternal).toHaveBeenCalledWith('https://github.com/wiggdevin/mishmash/releases'));
   });
 
   it('defaults to Later when tasks are active and requires an explicit Restart anyway override', async () => {

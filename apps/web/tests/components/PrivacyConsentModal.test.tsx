@@ -14,7 +14,9 @@ vi.mock('../../src/analytics/provider', () => ({
   }),
 }));
 
-const PRIVACY_POLICY_HREF = 'https://github.com/nexu-io/open-design/blob/main/PRIVACY.md';
+// The policy link must target this fork's own PRIVACY.md (docs/FORK-PIN.md),
+// not the upstream project's copy.
+const PRIVACY_POLICY_HREF = 'https://github.com/wiggdevin/mishmash/blob/main/PRIVACY.md';
 
 function renderModal(overrides?: { onShare?: () => void; onDecline?: () => void }) {
   const onShare = overrides?.onShare ?? vi.fn();
