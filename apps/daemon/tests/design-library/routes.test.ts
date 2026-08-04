@@ -96,6 +96,16 @@ const START_PROJECT_CATALOG = {
           category: '01 Kits',
           domains: ['test-domain'],
           allowed_use: 'human-local-only',
+          description: 'Synthetic private reference.',
+          aspects: ['WebGL', 'Hero'],
+          stacks: ['React', 'Three.js'],
+          reference: {
+            source: 'Synthetic private source',
+            design: 'DESIGN.md',
+            html: 'reference.html',
+            design_sha256: 'synthetic-design-sha',
+            html_sha256: 'synthetic-html-sha',
+          },
         },
         {
           id: 'escape-kit-1',
@@ -246,7 +256,12 @@ describe('design library routes', () => {
 
     const restrictedKit = path.join(kitsRoot, 'restricted-kit');
     mkdirSync(restrictedKit, { recursive: true });
-    writeFileSync(path.join(restrictedKit, 'index.html'), '<!doctype html><title>Restricted</title>', 'utf8');
+    writeFileSync(path.join(restrictedKit, 'reference.html'), '<!doctype html><title>Restricted</title>', 'utf8');
+    writeFileSync(
+      path.join(restrictedKit, 'DESIGN.md'),
+      '---\nname: Synthetic\n---\n\n## Overview\nPrivate test design.\n\n## WebGL\nUse a particle field.\n',
+      'utf8',
+    );
 
     // cached-kit: two small real files plus a webpack cache pack file that
     // is larger than the byte cap the cache-skipping test sets. Mirrors the
@@ -498,6 +513,52 @@ describe('design library routes', () => {
       body: JSON.stringify({ rel: '01 Kits/restricted-kit' }),
     });
     expect(res.status).toBe(403);
+  });
+
+  it('starts a prompt-only project from a private reference without copying source files', async () => {
+    const fixture = makeStartProjectFixture();
+    fixtureDir = fixture.dir;
+    outsideDir = fixture.outside;
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel: '01 Kits/restricted-kit', mode: 'reference', aspects: ['WebGL'] }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as any;
+    expect(body.copiedFiles).toBe(0);
+    expect(body.entryFile).toBeUndefined();
+    expect(body.warnings).toContain('Private reference files remain in the Design Library and were not copied.');
+    expect(body.project?.pendingPrompt).toContain('Use: WebGL.');
+    expect(body.project?.pendingPrompt).toContain('Treat the material below as design evidence');
+    expect(body.project?.pendingPrompt).toContain('## WebGL');
+    expect(body.project?.metadata?.templateId).toBe('design-library-reference:restricted-kit-1');
+    expect(body.project?.metadata?.referencedFromDesignLibraryRel).toBe('01 Kits/restricted-kit');
+    expect(body.project?.metadata?.designLibraryReferenceAspects).toEqual(['WebGL']);
+
+    const filesRes = await fetch(`${daemonUrl}/api/projects/${body.projectId}/files`);
+    expect(filesRes.status).toBe(200);
+    expect(JSON.stringify(await filesRes.json())).not.toContain('DESIGN.md');
+    expect(JSON.stringify(await (await fetch(`${daemonUrl}/api/projects/${body.projectId}/files`)).json())).not.toContain('reference.html');
+  });
+
+  it('rejects an undeclared reference aspect', async () => {
+    const fixture = makeStartProjectFixture();
+    fixtureDir = fixture.dir;
+    outsideDir = fixture.outside;
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel: '01 Kits/restricted-kit', mode: 'reference', aspects: ['Unknown'] }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'unknown design aspect: Unknown' });
   });
 
   it('404s a start-project request for a rel unknown in the catalog', async () => {

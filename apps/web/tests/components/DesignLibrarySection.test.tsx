@@ -20,7 +20,7 @@ const CATALOG: DesignLibraryCatalog = {
   library: 'Test Design Assets',
   rights_ledger: 'test ledger',
   note: 'test note',
-  total_collections: 2,
+  total_collections: 3,
   root: '/tmp/test-design-assets',
   groups: [
     {
@@ -59,6 +59,26 @@ const CATALOG: DesignLibraryCatalog = {
           category: '02 App Captures',
           domains: ['app-ui', 'fintech'],
           allowed_use: 'human-local-only',
+        },
+        {
+          id: 'neuform-reference-1',
+          label: 'NeuForm Particle Field',
+          rel: '05 NeuForm Favorites/Tools/particle-field',
+          thumb: '.catalog/thumbs/neuform-particle-field.jpg',
+          kind: 'NeuForm motion/WebGL tool',
+          files: 2,
+          size: '42 KB',
+          category: '05 NeuForm Favorites/Tools',
+          domains: ['neuform', 'webgl-motion'],
+          allowed_use: 'human-local-only',
+          description: 'Particle hero with restrained orbital motion.',
+          aspects: ['WebGL', 'Hero', 'GSAP motion'],
+          stacks: ['React', 'Three.js', 'GSAP'],
+          reference: {
+            source: 'NeuForm Pro favorite export',
+            design: 'DESIGN.md',
+            html: 'reference.html',
+          },
         },
       ],
     },
@@ -202,6 +222,30 @@ describe('DesignLibrarySection', () => {
 
     await waitFor(() => expect(startDesignLibraryProject).toHaveBeenCalledWith('01 UI Kits/neon-dashboard'));
     await waitFor(() => expect(onOpenProject).toHaveBeenCalledWith('proj-1', 'conv-1'));
+  });
+
+  it('selects an aspect and starts a prompt-only project from a private reference', async () => {
+    startDesignLibraryProject.mockResolvedValue({
+      ok: true,
+      response: { ok: true, projectId: 'proj-ref', conversationId: 'conv-ref', copiedFiles: 0, skippedFiles: 0, warnings: [] },
+    });
+    const onOpenProject = vi.fn();
+    render(<DesignLibrarySection active onOpenProject={onOpenProject} />);
+
+    const label = await screen.findByText('NeuForm Particle Field');
+    const card = label.closest('article') as HTMLElement;
+    expect(within(card).getByText(/React · Three.js · GSAP/)).toBeTruthy();
+    fireEvent.click(within(card).getByRole('button', { name: 'WebGL' }));
+    fireEvent.click(within(card).getByRole('button', { name: /Use design/ }));
+
+    await waitFor(() =>
+      expect(startDesignLibraryProject).toHaveBeenCalledWith(
+        '05 NeuForm Favorites/Tools/particle-field',
+        undefined,
+        { mode: 'reference', aspects: ['WebGL'] },
+      ),
+    );
+    await waitFor(() => expect(onOpenProject).toHaveBeenCalledWith('proj-ref', 'conv-ref'));
   });
 
   it('shows an inline error and does not navigate when Use as template fails', async () => {

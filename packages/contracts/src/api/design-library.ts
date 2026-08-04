@@ -3,8 +3,9 @@
 // apps/daemon/src/routes/design-library.ts). Every item is rights-gated via
 // `allowed_use`; the web UI must not offer attach/insert/copy affordances for
 // anything other than `own-code` / `licensed-source-review` — those two tiers
-// may be copied into a new managed project via `start-project` below, every
-// other tier stays browse/open-only.
+// may be copied into a new managed project via `start-project` below.
+// `human-local-only` items may opt into a prompt-only reference flow when the
+// catalog supplies `reference`; their source bytes remain outside the project.
 //
 // Keep this file pure TypeScript — no Node, browser, or daemon imports.
 
@@ -37,6 +38,21 @@ export interface DesignLibraryItem {
    * absent for uncurated items.
    */
   description?: string;
+  /** Selectable visual/interaction ingredients, e.g. hero, WebGL, GSAP. */
+  aspects?: string[];
+  /** Implementation technologies detected in the source reference. */
+  stacks?: string[];
+  /**
+   * Private local source provenance. Paths are relative to `rel` and are
+   * resolved by the daemon; they are never exposed as public static files.
+   */
+  reference?: {
+    source: string;
+    design: string | null;
+    html: string | null;
+    design_sha256?: string;
+    html_sha256?: string;
+  };
 }
 
 export interface DesignLibraryGroup {
@@ -60,6 +76,10 @@ export interface DesignLibraryStartProjectRequest {
   /** Path relative to the library root of the catalog item to start from. */
   rel: string;
   name?: string;
+  /** Copy a licensed kit, or create a prompt-only project from a private reference. */
+  mode?: 'copy' | 'reference';
+  /** Optional subset of the item's declared aspects; empty means full design. */
+  aspects?: string[];
 }
 
 export interface DesignLibraryStartProjectResponse {
