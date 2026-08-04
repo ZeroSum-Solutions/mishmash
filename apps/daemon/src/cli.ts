@@ -304,7 +304,7 @@ const AUTOMATION_BOOLEAN_FLAGS = new Set([
 const FEEDBACK_STRING_FLAGS = new Set([
   'daemon-url', 'project', 'conversation', 'message', 'rating', 'reason', 'note', 'prompt-file',
 ]);
-const FEEDBACK_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
+const FEEDBACK_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'clear']);
 const MEMORY_STRING_FLAGS = new Set([
   'daemon-url', 'name', 'description', 'type', 'body', 'body-file',
   // `od memory profile set` reads structured fields verbatim and/or a prose
@@ -10814,8 +10814,10 @@ function printFeedbackHelp() {
                    --rating <positive|negative> [--reason <code[,code...]>]
                    [--note "<text>" | --prompt-file <path|->] [--json]
 
-Submit assistant-turn feedback through the same /api/runs/:id/feedback endpoint
-used by the Studio. Reason codes are: matched_request, strong_visual,
+       od feedback --clear --project <id> --conversation <id> --message <id> [--json]
+
+Persist assistant-turn feedback through the same message endpoint used by the
+Studio, then best-effort forward a rating to telemetry. Reason codes are: matched_request, strong_visual,
 useful_structure, easy_to_continue, followed_design_system, missed_request,
 weak_visual, incomplete_output, hard_to_use, missed_design_system, other.
 
@@ -10827,6 +10829,7 @@ Options:
   --reason <code[,code...]>  Comma-separated feedback reason codes.
   --note <text>              Custom feedback text.
   --prompt-file <path|->     Read custom feedback text from a file, or - for stdin.
+  --clear                    Remove the persisted feedback (does not emit telemetry).
   --json                     Print the daemon response as JSON.
   --daemon-url <url>         Override daemon URL.`);
 }
@@ -10844,11 +10847,11 @@ async function runFeedback(args) {
     process.exit(2);
   }
   const runId = positionalArgs(args)[0];
-  if (!runId || !flags.project || !flags.conversation || !flags.message || !flags.rating) {
+  if (!flags.project || !flags.conversation || !flags.message || (!flags.clear && (!runId || !flags.rating))) {
     console.error('Usage: od feedback <runId> --project <id> --conversation <id> --message <id> --rating <positive|negative> [--reason <code[,code...]>] [--note "<text>" | --prompt-file <path|->] [--json]');
     process.exit(2);
   }
-  if (flags.rating !== 'positive' && flags.rating !== 'negative') {
+  if (!flags.clear && flags.rating !== 'positive' && flags.rating !== 'negative') {
     console.error('--rating must be positive or negative');
     process.exit(2);
   }
@@ -10860,36 +10863,80 @@ async function runFeedback(args) {
     process.exit(2);
   }
   customReason = (customReason ?? '').trim();
-  const body = {
+  const reasonCodes = typeof flags.reason === 'string'
+    ? flags.reason.split(',').map((code) => code.trim()).filter(Boolean)
+    : [];
+  const telemetryBody = {
     projectId: flags.project,
     conversationId: flags.conversation,
     assistantMessageId: flags.message,
     rating: flags.rating,
-    reasonCodes: typeof flags.reason === 'string'
-      ? flags.reason.split(',').map((code) => code.trim()).filter(Boolean)
-      : [],
+    reasonCodes,
     hasCustomReason: customReason.length > 0,
     customReason,
   };
   const base = await cliDaemonBaseUrl(flags);
-  let resp;
+  const messagePath = `/api/projects/${encodeURIComponent(flags.project)}/conversations/${encodeURIComponent(flags.conversation)}/messages`;
+  let messagesResp;
   try {
-    resp = await fetch(`${base}/api/runs/${encodeURIComponent(runId)}/feedback`, {
-      method: 'POST',
+    messagesResp = await fetch(`${base}${messagePath}`);
+  } catch (err) {
+    surfaceFetchError(err, base);
+    process.exit(3);
+  }
+  if (!messagesResp.ok) return structuredHttpFailure(messagesResp);
+  const messages = (await messagesResp.json()).messages;
+  const message = Array.isArray(messages) ? messages.find((item) => item?.id === flags.message) : undefined;
+  if (!message) {
+    exitWithStructuredError({
+      code: 'message-not-found',
+      message: `Assistant message ${flags.message} was not found in conversation ${flags.conversation}.`,
+    });
+  }
+  const now = Date.now();
+  const feedback = flags.clear
+    ? undefined
+    : {
+        rating: flags.rating,
+        ...(reasonCodes.length > 0 ? { reasonCodes } : {}),
+        ...(customReason ? { customReason } : {}),
+        ...(reasonCodes.length > 0 || customReason ? { reasonsSubmittedAt: now } : {}),
+        createdAt: message.feedback?.rating === flags.rating ? message.feedback.createdAt : now,
+        updatedAt: now,
+      };
+  const persistedMessage = { ...message, ...(feedback ? { feedback } : { feedback: undefined }) };
+  let persistResp;
+  try {
+    persistResp = await fetch(`${base}${messagePath}/${encodeURIComponent(flags.message)}`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(persistedMessage),
     });
   } catch (err) {
     surfaceFetchError(err, base);
     process.exit(3);
   }
-  if (!resp.ok) return structuredHttpFailure(resp);
-  const result = await resp.json();
+  if (!persistResp.ok) return structuredHttpFailure(persistResp);
+  const result = await persistResp.json();
+
+  // Keep telemetry faithful to the Studio: it is a best-effort side channel
+  // and must not turn a durable feedback success into a CLI failure.
+  if (!flags.clear) {
+    try {
+      await fetch(`${base}/api/runs/${encodeURIComponent(runId)}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(telemetryBody),
+      });
+    } catch {
+      // Best-effort, matching reportChatRunFeedback in the Studio.
+    }
+  }
   if (flags.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
     return;
   }
-  console.log(`Feedback submitted for run ${runId}: ${result.status ?? 'accepted'}.`);
+  console.log(`Feedback ${flags.clear ? 'cleared' : 'persisted'} for message ${flags.message}.`);
 }
 
 function printAutomationHelp() {
