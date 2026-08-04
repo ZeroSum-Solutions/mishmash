@@ -89,18 +89,21 @@ describe('DesignLibrarySection', () => {
     expect(fetchDesignLibraryCatalog).toHaveBeenCalledTimes(1);
   });
 
-  it('narrows the grid with the domain facet chip filter', async () => {
+  it('condenses domain facets into a counted select and narrows the grid', async () => {
     render(<DesignLibrarySection active />);
     await screen.findByText('Neon Dashboard Kit');
     expect(screen.getByText('Fintune (iOS)')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: /fintech/ }));
+    const domainSelect = screen.getByRole('combobox', { name: 'All domains' });
+    expect(within(domainSelect).getByRole('option', { name: 'fintech (1)' })).toBeTruthy();
+    expect(within(domainSelect).getByRole('option', { name: 'ui-kit (1)' })).toBeTruthy();
+
+    fireEvent.change(domainSelect, { target: { value: 'fintech' } });
 
     expect(screen.queryByText('Neon Dashboard Kit')).toBeNull();
     expect(screen.getByText('Fintune (iOS)')).toBeTruthy();
 
-    // Clicking the same chip again clears the filter.
-    fireEvent.click(screen.getByRole('button', { name: /fintech/ }));
+    fireEvent.change(domainSelect, { target: { value: '' } });
     expect(screen.getByText('Neon Dashboard Kit')).toBeTruthy();
   });
 
@@ -110,10 +113,11 @@ describe('DesignLibrarySection', () => {
     const card = label.closest('article') as HTMLElement;
     expect(card.getAttribute('data-allowed-use')).toBe('human-local-only');
 
-    // One button: Open folder. This card has no thumbnail so no preview
-    // button either — and never Use as template on this tier.
+    // The cover opens catalog details even without a visual; the only other
+    // action is Open folder. This tier never offers Use as template.
     const buttons = within(card).getAllByRole('button');
-    expect(buttons).toHaveLength(1);
+    expect(buttons).toHaveLength(2);
+    expect(within(card).getByRole('button', { name: 'Preview Fintune (iOS)' })).toBeTruthy();
     const openFolderBtn = within(card).getByRole('button', { name: /open folder/i });
     expect(within(card).queryByText('Use as template')).toBeNull();
 
@@ -136,7 +140,7 @@ describe('DesignLibrarySection', () => {
     const restrictedCard = restrictedLabel.closest('article') as HTMLElement;
     expect(restrictedCard.getAttribute('data-allowed-use')).toBe('human-local-only');
     const restrictedButtons = within(restrictedCard).getAllByRole('button');
-    expect(restrictedButtons).toHaveLength(1);
+    expect(restrictedButtons).toHaveLength(2);
     expect(within(restrictedCard).queryByText('Use as template')).toBeNull();
   });
 
@@ -182,10 +186,69 @@ describe('DesignLibrarySection', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Neon Dashboard Kit' })).toBeNull());
   });
 
-  it('does not offer a preview on cards with no thumbnail', async () => {
+  it('opens useful catalog details with an explicit fallback when no visual is available', async () => {
     render(<DesignLibrarySection active />);
     await screen.findByText('Fintune (iOS)');
-    expect(screen.queryByRole('button', { name: 'Preview Fintune (iOS)' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Fintune (iOS)' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Fintune (iOS)' });
+    expect(within(dialog).getByText('Visual preview unavailable')).toBeTruthy();
+    expect(within(dialog).getByText('No preview · 40 files · 12 MB')).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: /open folder/i })).toBeTruthy();
+    expect(within(dialog).queryByRole('img')).toBeNull();
+  });
+
+  it('keeps every Human Local Only item in a stable bottom partition', async () => {
+    fetchDesignLibraryCatalog.mockResolvedValue({
+      ok: true,
+      catalog: {
+        ...CATALOG,
+        total_collections: 4,
+        groups: [
+          CATALOG.groups[1]!,
+          {
+            title: 'Mixed',
+            folder: '02 Mixed',
+            blurb: 'Mixed rights.',
+            items: [
+              {
+                ...CATALOG.groups[1]!.items[0]!,
+                id: 'human-2',
+                label: 'Second Human Reference',
+                rel: '02 Mixed/human',
+              },
+              {
+                ...CATALOG.groups[0]!.items[0]!,
+                id: 'own-code-1',
+                label: 'Own Code Project',
+                rel: '02 Mixed/own-code',
+                allowed_use: 'own-code',
+              },
+            ],
+          },
+          CATALOG.groups[0]!,
+        ],
+      },
+    });
+
+    render(<DesignLibrarySection active />);
+    await screen.findByText('Own Code Project');
+
+    const cards = screen.getAllByTestId('design-library-card');
+    expect(cards.map((card) => card.getAttribute('data-allowed-use'))).toEqual([
+      'own-code',
+      'licensed-source-review',
+      'human-local-only',
+      'human-local-only',
+    ]);
+    expect(cards.map((card) => within(card).getByRole('heading').textContent)).toEqual([
+      'Own Code Project',
+      'Neon Dashboard Kit',
+      'Fintune (iOS)',
+      'Second Human Reference',
+    ]);
+    expect(screen.getByRole('heading', { name: 'Human Local Only' })).toBeTruthy();
   });
 
   it('starts a project and navigates via onOpenProject when Use as template succeeds', async () => {
