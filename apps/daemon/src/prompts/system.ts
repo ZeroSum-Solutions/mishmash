@@ -1607,6 +1607,23 @@ path via \`"$OD_NODE_BIN" "$OD_BIN" media generate --surface image --model ${ima
 Do not silently fall back.`;
 }
 
+// Standing style contract for projects started from a Design Library kit
+// ("Use as Template" / featured templates). Keyed narrowly on the synthetic
+// `design-library:` template id so the template-kind reference-injection
+// flow (a different feature) is untouched. The copied kit files must govern
+// styling on every turn — not only when the user remembers to ask.
+// Maintained byte-identical with the API/BYOK copy in
+// packages/contracts/src/prompts/system.ts.
+function designLibraryKitLines(metadata: ProjectMetadata): string[] {
+  if (!metadata.templateId?.startsWith('design-library:')) return [];
+  const kit = metadata.templateLabel
+    ? `the licensed design kit "${metadata.templateLabel}"`
+    : 'a licensed design kit';
+  return [
+    `- **design kit template**: this project was started from ${kit}; the kit's files were copied into the project root. Treat them as the binding visual-language reference for everything generated in this project: apply the kit's palette, typography, spacing and density, component patterns, and imagery by default, without waiting to be asked. Study the kit's actual pages, screens, and source files before styling — a thumbnail or cover image alone is not sufficient evidence. If the user explicitly asks for a different style, follow the user; otherwise the kit's style is the standing default.`,
+  ];
+}
+
 // `style: 'facts'` (slim core) keeps the block a pure fact sheet: key-value
 // fields plus media/workflow data. The doctrine prose the classic variant
 // grew here (responsive contract, cross-platform rule, the seven
@@ -1739,6 +1756,7 @@ function renderMetadataBlock(
       lines.push(`- **template**: ${metadata.templateLabel}`);
     }
   }
+  lines.push(...designLibraryKitLines(metadata));
   if (metadata.kind === 'image') {
     lines.push(
       `- **imageModel**: ${metadata.imageModel ?? '(unknown — ask: which image model/provider to use)'}`,
