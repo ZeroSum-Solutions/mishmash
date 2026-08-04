@@ -47,6 +47,7 @@ import {
   FinalizeUpstreamError,
   isFinalizeProviderProtocol,
   isProviderCredentialRejection,
+  providerLabel,
 } from '../design/finalize-design.js';
 import { resolveProviderConfig } from '../media/config.js';
 import { modelsForSurface } from '../media/models.js';
@@ -798,11 +799,13 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
       // key as a broken feature (BUG-10). Message is composed here, never
       // echoed from the upstream body.
       if (err instanceof FinalizeUpstreamError && isProviderCredentialRejection(err)) {
+        const label = providerLabel(provider.protocol);
         return sendApiError(
           res,
           401,
           'UNAUTHORIZED',
-          'the text provider rejected its API key — update the stored credential under Settings → Media providers (or the textProvider sent with this request) and retry',
+          `${label} rejected its API key — update the stored credential under Settings → Media providers (or the textProvider sent with this request) and retry`,
+          { details: { kind: 'provider-error', providerErrorKind: 'invalid-credential', provider: label } },
         );
       }
       // Deliberately surfaces only the error's own message — never the raw

@@ -154,6 +154,38 @@ export type ApiValidationErrorDetails = {
   issues: ApiValidationIssue[];
 };
 
+/**
+ * Provider-error taxonomy (BUG-10). Classifies a provider HTTP failure by
+ * what the caller should DO about it, independent of the HTTP status a
+ * given provider happens to answer with. Google's Generative Language API
+ * answers an invalid API key with a generic-looking 400
+ * (`API_KEY_INVALID` / "API key not valid") rather than 401/403, so a
+ * status-only mapping reads that as a random upstream failure instead of a
+ * stale credential — the user is told only "upstream Google Gemini
+ * returned 400" and reads a broken feature rather than a bad key. The
+ * daemon's shared provider-call boundary
+ * (apps/daemon/src/integrations/provider-errors.ts) classifies into this
+ * union; both the web UI and the `od` CLI key off `providerErrorKind` in
+ * `ApiError.details` (see `ApiProviderErrorDetails` below) instead of
+ * re-deriving it from the HTTP status themselves.
+ *
+ * - 'invalid-credential': the provider rejected the API key itself. Fix:
+ *   update the stored credential.
+ * - 'rate-limited': the provider throttled the request. Fix: retry later.
+ * - 'upstream-error': any other provider-side failure (5xx, network error,
+ *   malformed response).
+ */
+export const PROVIDER_ERROR_KINDS = ['invalid-credential', 'rate-limited', 'upstream-error'] as const;
+export type ProviderErrorKind = (typeof PROVIDER_ERROR_KINDS)[number];
+
+/** `ApiError.details` shape for a classified provider-call failure. */
+export type ApiProviderErrorDetails = {
+  kind: 'provider-error';
+  providerErrorKind: ProviderErrorKind;
+  /** Human-readable provider name, e.g. "Google Gemini" — same string the message names. */
+  provider: string;
+};
+
 /** Success payload or shared error envelope for agent-facing daemon tool endpoints. */
 export type AgentToolApiResponse<TSuccess> = TSuccess | ApiErrorResponse;
 

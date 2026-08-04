@@ -274,10 +274,22 @@ describe('POST /api/storyboards/:id/draft-shots', () => {
     });
 
     expect(resp.status).toBe(401);
-    const body = (await resp.json()) as { error: { code?: string; message?: string } };
+    const body = (await resp.json()) as {
+      error: { code?: string; message?: string; details?: { providerErrorKind?: string; provider?: string } };
+    };
     expect(body.error.code).toBe('UNAUTHORIZED');
     expect(body.error.message).toMatch(/api key/i);
     expect(body.error.message).not.toMatch(/^upstream .* returned 400$/i);
+    // Naming the credential alone isn't enough — a generic "the text
+    // provider" message still reads like a broken feature. The message and
+    // the typed taxonomy code (surfaced to the CLI's --json/structured
+    // error output) must both name the actual provider.
+    expect(body.error.message).toMatch(/google gemini/i);
+    expect(body.error.details).toEqual({
+      kind: 'provider-error',
+      providerErrorKind: 'invalid-credential',
+      provider: 'Google Gemini',
+    });
   });
 
   it('still reports a plain 400 that is NOT a credential rejection as an upstream failure', async () => {
