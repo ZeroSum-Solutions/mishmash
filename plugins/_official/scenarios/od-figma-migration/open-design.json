@@ -34,6 +34,11 @@
       "stages": [
         {
           "id": "extract",
+          "inputs": {
+            "fileUrl": "{{figmaUrl}}",
+            "nodeId": "{{nodeId}}",
+            "frameName": "{{frameName}}"
+          },
           "atoms": [
             "figma-extract"
           ]
@@ -100,6 +105,13 @@
         "label": "Target stack",
         "placeholder": "React 18 + Tailwind",
         "default": "React 18 + Tailwind"
+      },
+      {
+        "name": "nodeId",
+        "type": "string",
+        "required": false,
+        "label": "Node to extract",
+        "placeholder": "1314:7264"
       },
       {
         "name": "frameName",
