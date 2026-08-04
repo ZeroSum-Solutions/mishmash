@@ -68,6 +68,12 @@ async function startFigmaStubServer(): Promise<StubServer> {
             assetCount: 0,
             hasThumbnail: false,
             warnings: [],
+            looksMultiStyle: true,
+            styleCount: 2,
+            styles: [
+              { name: 'Marketing', summary: '2 colors', distinct: true, tokens: { colors: ['#3366ff', '#ffffff'], typography: [] } },
+              { name: 'Dashboard', summary: '2 colors', distinct: true, tokens: { colors: ['#112233', '#445566'], typography: [] } },
+            ],
           },
           contextPath: 'figma/DESIGN-context.md',
           suggestedPrompt: 'Build from figma/DESIGN-context.md',
@@ -204,5 +210,32 @@ describe('od figma import CLI', () => {
     const importReq = stub.requests.find((req) => req.url.endsWith('/figma/import'));
     expect(importReq?.body).toContain('name="subdir"');
     expect(importReq?.body).toContain('figma-alpha');
+  });
+
+  it('lists detected page styles as JSON and forwards a selected page', async () => {
+    stub = await startFigmaStubServer();
+    tempRoot = mkdtempSync(join(tmpdir(), 'od-figma-cli-'));
+    const figPath = join(tempRoot, 'Mock kit.fig');
+    writeFileSync(figPath, Buffer.from('fake fig bytes'));
+
+    const listed = await runCli([
+      'figma', 'import', '--project', 'project-1', '--file', figPath,
+      '--list-pages', '--json', '--daemon-url', stub.baseUrl,
+    ]);
+    expect(listed.code).toBe(0);
+    expect(JSON.parse(listed.stdout)).toEqual(expect.objectContaining({
+      looksMultiStyle: true,
+      styleCount: 2,
+      styles: [expect.objectContaining({ name: 'Marketing' }), expect.objectContaining({ name: 'Dashboard' })],
+    }));
+
+    const scoped = await runCli([
+      'figma', 'import', '--project', 'project-1', '--file', figPath,
+      '--page', 'Dashboard', '--json', '--daemon-url', stub.baseUrl,
+    ]);
+    expect(scoped.code).toBe(0);
+    const scopedRequest = stub.requests.at(-1);
+    expect(scopedRequest?.body).toContain('name="page"');
+    expect(scopedRequest?.body).toContain('Dashboard');
   });
 });

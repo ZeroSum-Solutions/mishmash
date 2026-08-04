@@ -13,6 +13,7 @@ import type { ProjectMetadata } from '../src/api/projects.js';
 // system-prompt composers are maintained copies and the bullet must stay
 // byte-identical in both.
 const MARKER = '- **design kit template**:';
+const REFERENCE_MARKER = '- **design library reference**:';
 
 describe('composeSystemPrompt — design-library kit standing style instruction', () => {
   it('adds the standing instruction for design-library template projects', () => {
@@ -34,6 +35,21 @@ describe('composeSystemPrompt — design-library kit standing style instruction'
     });
     expect(out).toContain(MARKER);
     expect(out).toContain('a licensed design kit');
+  });
+
+  it('keeps selected private-reference aspects standing without claiming source files were copied', () => {
+    const out = composeSystemPrompt({
+      metadata: {
+        kind: 'prototype',
+        templateId: 'design-library-reference:particle-field',
+        templateLabel: 'Particle Field',
+        designLibraryReferenceAspects: ['WebGL', 'Hero'],
+      } as ProjectMetadata,
+    });
+    expect(out).toContain(REFERENCE_MARKER);
+    expect(out).toContain('using WebGL, Hero');
+    expect(out).toContain('reference files were not copied');
+    expect(out).not.toContain(MARKER);
   });
 
   it('stays silent for plain prototypes and non-design-library templates', () => {

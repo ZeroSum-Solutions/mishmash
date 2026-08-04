@@ -38,6 +38,11 @@ interface Props {
 // Only these allowed_use tiers may be copied into a new project — mirrors
 // COPYABLE_ALLOWED_USE in apps/daemon/src/routes/design-library.ts.
 const COPYABLE_ALLOWED_USE = new Set<DesignLibraryAllowedUse>(['own-code', 'licensed-source-review']);
+const REFERENCEABLE_ALLOWED_USE = new Set<DesignLibraryAllowedUse>([
+  'own-code',
+  'licensed-source-review',
+  'human-local-only',
+]);
 
 const ALLOWED_USE_TOOLTIP_KEY = {
   'own-code': 'designLibrary.allowedUse.ownCode',
@@ -103,7 +108,10 @@ export function DesignLibrarySection({ active, onOpenProject }: Props) {
           if (
             query &&
             !item.label.toLowerCase().includes(query) &&
-            !(item.description ?? '').toLowerCase().includes(query)
+            !(item.description ?? '').toLowerCase().includes(query) &&
+            !item.domains.some((value) => value.toLowerCase().includes(query)) &&
+            !(item.aspects ?? []).some((value) => value.toLowerCase().includes(query)) &&
+            !(item.stacks ?? []).some((value) => value.toLowerCase().includes(query))
           ) {
             return false;
           }
@@ -261,32 +269,45 @@ function DesignLibraryGroupSection({
   );
 }
 
-// Start-project state shared by the card and the preview dialog — both
-// surfaces offer the identical "Use as template" action against the same
-// endpoint and must fail the same way.
-function useUseAsTemplate(
+// Shared start-project state for both source-copy and private-reference
+// modes, used by the card and the preview dialog alike. Reference mode sends
+// only the selected aspect names; the daemon resolves and bounds the local
+// design context. Both surfaces must fail the same way.
+function useStartFromDesignLibrary(
   item: DesignLibraryItem,
   t: ReturnType<typeof useT>,
+  mode: 'copy' | 'reference',
+  aspects: string[],
   onOpenProject?: (projectId: string, conversationId?: string) => void,
 ) {
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
-  const canUseAsTemplate = Boolean(onOpenProject) && COPYABLE_ALLOWED_USE.has(item.allowed_use);
+  const canStart =
+    Boolean(onOpenProject) &&
+    (mode === 'copy'
+      ? COPYABLE_ALLOWED_USE.has(item.allowed_use)
+      : Boolean(item.reference) && REFERENCEABLE_ALLOWED_USE.has(item.allowed_use));
 
-  async function handleUseAsTemplate() {
+  async function handleStart() {
     if (starting) return;
     setStartError(null);
     setStarting(true);
-    const result = await startDesignLibraryProject(item.rel);
+    const result =
+      mode === 'reference'
+        ? await startDesignLibraryProject(item.rel, undefined, { mode, aspects })
+        : await startDesignLibraryProject(item.rel);
     setStarting(false);
     if (!result.ok) {
-      setStartError(result.message || t('designLibrary.useAsTemplateError'));
+      setStartError(
+        result.message ||
+          t(mode === 'copy' ? 'designLibrary.useAsTemplateError' : 'designLibrary.useAsReferenceError'),
+      );
       return;
     }
     onOpenProject?.(result.response.projectId, result.response.conversationId);
   }
 
-  return { starting, startError, canUseAsTemplate, handleUseAsTemplate };
+  return { starting, startError, canStart, handleStart };
 }
 
 function UseAsTemplateButton({
@@ -306,6 +327,74 @@ function UseAsTemplateButton({
   );
 }
 
+function UseAsReferenceButton({
+  starting,
+  selectedCount,
+  onClick,
+  t,
+}: {
+  starting: boolean;
+  selectedCount: number;
+  onClick: () => void;
+  t: ReturnType<typeof useT>;
+}) {
+  return (
+    <button type="button" className={styles.useAsTemplateBtn} onClick={onClick} disabled={starting}>
+      <Icon name="sparkles" size={14} />
+      {starting
+        ? t('designLibrary.useAsReferenceBusy')
+        : selectedCount > 0
+          ? `${t('designLibrary.useAsReference')} · ${selectedCount} ${t('designLibrary.selectedAspects')}`
+          : t('designLibrary.useAsReference')}
+    </button>
+  );
+}
+
+function AspectSelector({
+  aspects,
+  selected,
+  onChange,
+  t,
+}: {
+  aspects: string[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  t: ReturnType<typeof useT>;
+}) {
+  if (aspects.length === 0) return null;
+  return (
+    <div className={styles.aspectSection}>
+      <span className={styles.aspectLabel}>{t('designLibrary.aspectsLabel')}</span>
+      <div className={styles.aspectOptions}>
+        <button
+          type="button"
+          className={styles.aspectChip}
+          aria-pressed={selected.length === 0}
+          onClick={() => onChange([])}
+        >
+          {t('designLibrary.fullDesign')}
+        </button>
+        {aspects.map((aspect) => {
+          const isSelected = selected.includes(aspect);
+          return (
+            <button
+              key={aspect}
+              type="button"
+              className={styles.aspectChip}
+              aria-pressed={isSelected}
+              onClick={() =>
+                onChange(isSelected ? selected.filter((value) => value !== aspect) : [...selected, aspect])
+              }
+            >
+              {aspect}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function DesignLibraryCard({
   item,
   t,
@@ -317,12 +406,16 @@ function DesignLibraryCard({
 }) {
   const [thumbError, setThumbError] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [selectedAspects, setSelectedAspects] = useState<string[]>([]);
   const tooltip = t(ALLOWED_USE_TOOLTIP_KEY[item.allowed_use]);
-  const { starting, startError, canUseAsTemplate, handleUseAsTemplate } = useUseAsTemplate(
+  const templateStart = useStartFromDesignLibrary(
     item,
     t,
+    'copy',
+    [],
     onOpenProject,
   );
+  const referenceStart = useStartFromDesignLibrary(item, t, 'reference', selectedAspects, onOpenProject);
   const hasVisualPreview = Boolean(item.thumb) && !thumbError;
 
   return (
@@ -332,7 +425,7 @@ function DesignLibraryCard({
           <img
             className={styles.thumbImg}
             src={designLibraryThumbUrl(item.thumb)}
-            alt=""
+            alt={item.label}
             loading="lazy"
             onError={() => setThumbError(true)}
           />
@@ -377,6 +470,19 @@ function DesignLibraryCard({
             ))}
           </div>
         ) : null}
+        {item.stacks?.length ? (
+          <p className={styles.stackLine}>
+            <span>{t('designLibrary.stacksLabel')}:</span> {item.stacks.join(' · ')}
+          </p>
+        ) : null}
+        {referenceStart.canStart ? (
+          <AspectSelector
+            aspects={item.aspects ?? []}
+            selected={selectedAspects}
+            onChange={setSelectedAspects}
+            t={t}
+          />
+        ) : null}
         {item.duplicate_of ? (
           <p className={styles.duplicateNote}>
             {t('designLibrary.duplicateOfPrefix')} {item.duplicate_of}
@@ -388,11 +494,24 @@ function DesignLibraryCard({
           <Icon name="folder" size={14} />
           {t('designLibrary.openFolder')}
         </button>
-        {canUseAsTemplate ? (
-          <UseAsTemplateButton starting={starting} onClick={handleUseAsTemplate} t={t} />
+        {templateStart.canStart ? (
+          <UseAsTemplateButton
+            starting={templateStart.starting}
+            onClick={templateStart.handleStart}
+            t={t}
+          />
+        ) : referenceStart.canStart ? (
+          <UseAsReferenceButton
+            starting={referenceStart.starting}
+            selectedCount={selectedAspects.length}
+            onClick={referenceStart.handleStart}
+            t={t}
+          />
         ) : null}
       </div>
-      {startError ? <p className={styles.startError}>{startError}</p> : null}
+      {templateStart.startError || referenceStart.startError ? (
+        <p className={styles.startError}>{templateStart.startError || referenceStart.startError}</p>
+      ) : null}
       {previewOpen ? (
         <DesignLibraryPreviewDialog
           item={item}
@@ -400,6 +519,8 @@ function DesignLibraryCard({
           hasVisualPreview={hasVisualPreview}
           onClose={() => setPreviewOpen(false)}
           onOpenProject={onOpenProject}
+          selectedAspects={selectedAspects}
+          onSelectedAspectsChange={setSelectedAspects}
         />
       ) : null}
     </article>
@@ -416,19 +537,20 @@ function DesignLibraryPreviewDialog({
   hasVisualPreview,
   onClose,
   onOpenProject,
+  selectedAspects,
+  onSelectedAspectsChange,
 }: {
   item: DesignLibraryItem;
   t: ReturnType<typeof useT>;
   hasVisualPreview: boolean;
   onClose: () => void;
   onOpenProject?: (projectId: string, conversationId?: string) => void;
+  selectedAspects: string[];
+  onSelectedAspectsChange: (next: string[]) => void;
 }) {
   const [previewImageError, setPreviewImageError] = useState(false);
-  const { starting, startError, canUseAsTemplate, handleUseAsTemplate } = useUseAsTemplate(
-    item,
-    t,
-    onOpenProject,
-  );
+  const templateStart = useStartFromDesignLibrary(item, t, 'copy', [], onOpenProject);
+  const referenceStart = useStartFromDesignLibrary(item, t, 'reference', selectedAspects, onOpenProject);
   const showImage = hasVisualPreview && Boolean(item.thumb) && !previewImageError;
   return createPortal(
     <Dialog
@@ -477,24 +599,50 @@ function DesignLibraryPreviewDialog({
             ))}
           </div>
         ) : null}
+        {item.stacks?.length ? (
+          <p className={styles.stackLine}>
+            <span>{t('designLibrary.stacksLabel')}:</span> {item.stacks.join(' · ')}
+          </p>
+        ) : null}
         {item.duplicate_of ? (
           <p className={styles.duplicateNote}>
             {t('designLibrary.duplicateOfPrefix')} {item.duplicate_of}
           </p>
+        ) : null}
+        {referenceStart.canStart ? (
+          <AspectSelector
+            aspects={item.aspects ?? []}
+            selected={selectedAspects}
+            onChange={onSelectedAspectsChange}
+            t={t}
+          />
         ) : null}
         <div className={`${styles.cardActions} ${styles.previewActions}`}>
           <button type="button" className={styles.openFolderBtn} onClick={() => openDesignLibraryPath(item.rel)}>
             <Icon name="folder" size={14} />
             {t('designLibrary.openFolder')}
           </button>
-          {canUseAsTemplate ? (
-            <UseAsTemplateButton starting={starting} onClick={handleUseAsTemplate} t={t} />
+          {templateStart.canStart ? (
+            <UseAsTemplateButton
+              starting={templateStart.starting}
+              onClick={templateStart.handleStart}
+              t={t}
+            />
+          ) : referenceStart.canStart ? (
+            <UseAsReferenceButton
+              starting={referenceStart.starting}
+              selectedCount={selectedAspects.length}
+              onClick={referenceStart.handleStart}
+              t={t}
+            />
           ) : null}
           <button type="button" className={styles.openFolderBtn} onClick={onClose}>
             {t('designLibrary.previewClose')}
           </button>
         </div>
-        {startError ? <p className={styles.startError}>{startError}</p> : null}
+        {templateStart.startError || referenceStart.startError ? (
+          <p className={styles.startError}>{templateStart.startError || referenceStart.startError}</p>
+        ) : null}
       </div>
     </Dialog>,
     document.body,

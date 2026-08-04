@@ -249,3 +249,38 @@
   font-size: 12px;
   color: var(--text-muted);
 }
+.styleChoice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.styleChoice p {
+  margin: 0;
+  color: var(--text);
+}
+.styleChoice label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.styleChoice select {
+  max-width: 70%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font: inherit;
+}
+.summaryActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

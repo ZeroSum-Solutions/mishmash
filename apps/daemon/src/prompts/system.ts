@@ -157,6 +157,7 @@ type ProjectMetadata = {
   includeOsWidgets?: boolean | null;
   templateId?: string | null;
   templateLabel?: string | null;
+  designLibraryReferenceAspects?: string[] | null;
   platform?: string | null;
   platformTargets?: string[] | null;
   inspirationDesignSystemIds?: string[];
@@ -1615,6 +1616,17 @@ Do not silently fall back.`;
 // Maintained byte-identical with the API/BYOK copy in
 // packages/contracts/src/prompts/system.ts.
 function designLibraryKitLines(metadata: ProjectMetadata): string[] {
+  if (metadata.templateId?.startsWith('design-library-reference:')) {
+    const reference = metadata.templateLabel
+      ? `the private local reference "${metadata.templateLabel}"`
+      : 'a private local design reference';
+    const aspects = metadata.designLibraryReferenceAspects?.length
+      ? metadata.designLibraryReferenceAspects.join(', ')
+      : 'the complete design direction';
+    return [
+      `- **design library reference**: this project was started from ${reference}, using ${aspects}. Keep that visual direction as the standing default unless the user asks to change it. The licensed reference files were not copied into the project; never claim they are project source, reproduce their markup/copy/assets verbatim, or ship them.`,
+    ];
+  }
   if (!metadata.templateId?.startsWith('design-library:')) return [];
   const kit = metadata.templateLabel
     ? `the licensed design kit "${metadata.templateLabel}"`

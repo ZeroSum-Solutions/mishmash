@@ -21,6 +21,7 @@ import {
   fetchSkillExample,
   isDeployProviderId,
   openFolderDialog,
+  startDesignLibraryProject,
   updateDeployConfig,
   uploadProjectFiles,
   writeProjectTextFileDetailed,
@@ -1138,6 +1139,9 @@ describe('fetchDesignLibraryCatalog', () => {
       { domains: [{}] },
       { duplicate_of: {} },
       { description: {} },
+      { aspects: [{}] },
+      { stacks: 'React' },
+      { reference: { source: 'NeuForm', design: {}, html: 'reference.html' } },
     ]) {
       vi.stubGlobal('fetch', vi.fn(async () => new Response(
         JSON.stringify({
@@ -1164,6 +1168,26 @@ describe('fetchDesignLibraryCatalog', () => {
     )));
     const result = await fetchDesignLibraryCatalog();
     expect(result.ok).toBe(true);
+  });
+
+  it('accepts optional private-reference metadata when every nested field is well formed', async () => {
+    const catalog = {
+      library: 'L', rights_ledger: 'r', note: 'n', total_collections: 1, root: '/tmp/x',
+      groups: [{
+        title: 'x', folder: 'x', blurb: '',
+        items: [{
+          id: 'a', label: 'A', rel: 'g/a', thumb: null, kind: 'k', files: 2, size: '10 KB',
+          category: 'g', domains: ['webgl'], allowed_use: 'human-local-only',
+          aspects: ['WebGL'], stacks: ['React', 'Three.js'],
+          reference: { source: 'NeuForm', design: 'DESIGN.md', html: 'reference.html', html_sha256: 'abc' },
+        }],
+      }],
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(catalog), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })));
+    await expect(fetchDesignLibraryCatalog()).resolves.toEqual({ ok: true, catalog });
   });
 
   it('returns ok:false when an item has domains that is not an array', async () => {
@@ -1198,5 +1222,32 @@ describe('fetchDesignLibraryCatalog', () => {
     })));
     const result = await fetchDesignLibraryCatalog();
     expect(result).toEqual({ ok: true, catalog });
+  });
+});
+
+describe('startDesignLibraryProject', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('sends reference mode and selected aspects over the shared start-project contract', async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
+      new Response(JSON.stringify({ ok: true, projectId: 'p1', conversationId: 'c1' }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await startDesignLibraryProject('05 NeuForm Favorites/Tools/field', undefined, {
+      mode: 'reference',
+      aspects: ['WebGL', 'Hero'],
+    });
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.body))).toEqual({
+      rel: '05 NeuForm Favorites/Tools/field',
+      mode: 'reference',
+      aspects: ['WebGL', 'Hero'],
+    });
   });
 });
