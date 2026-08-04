@@ -329,6 +329,27 @@ jobs:
           mount | grep -E ' /tmp |/home/runner|_work' || true
           cat /proc/sys/fs/inotify/max_user_watches /proc/sys/fs/inotify/max_user_instances || true
 
+      # The daemon suite gains Playwright-driven renderer tests when a branch
+      # declares a playwright dependency in apps/daemon (W4 project covers).
+      # Provision Chromium only in that case: the detect step keeps this job
+      # byte-equivalent on branches without the dependency, and setup-playwright
+      # itself hard-fails when pointed at a package.json with no playwright
+      # entry, so it cannot simply run unconditionally.
+      - name: Detect daemon Playwright dependency
+        id: daemon-playwright
+        shell: bash
+        run: |
+          present=$(node -p "const pkg = require('./apps/daemon/package.json'); const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) }; Boolean(deps['@playwright/test'] || deps.playwright)")
+          echo "present=$present" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Playwright
+        if: ${{ steps.daemon-playwright.outputs.present == 'true' }}
+        uses: ./.github/actions/setup-playwright
+        with:
+          package-json-path: apps/daemon/package.json
+          install-command: pnpm -C apps/daemon exec playwright install --with-deps chromium
+          runner-labels: ${{ toJSON(fromJSON(needs.runners.outputs.runs_on).workspace_unit) }}
+
       - name: Prebuild daemon entrypoint declarations
         run: pnpm --filter @open-design/daemon build
 

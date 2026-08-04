@@ -678,11 +678,25 @@ function scratchCopyCorpus(corpusPath: string): string {
 // setParentNodes=true) whose className references "card" or "thumb" --
 // the real card-container convention in all three known surfaces
 // (design-card, design-card-thumb, recent-projects__card-thumb).
+// AMENDED 2026-08-03 (gate-defect ruling, DECISIONS.md): the original walk
+// tested ts.isJsxOpeningElement(current) against the .parent chain, but a
+// normally-nested <img>'s ancestors are JsxElement nodes -- the opening
+// element that owns the attributes is a CHILD of JsxElement
+// (.openingElement), never itself an ancestor. The original therefore could
+// not match ANY normally-nested <img> (proven against the pre-existing,
+// untouched cover patterns in DesignsTab.tsx / RecentProjectsStrip.tsx) and
+// made C4-1 unsatisfiable by a correct implementation. The amendment adds
+// the JsxElement branch reading current.openingElement.attributes; the
+// documented Sol r2 intent (a JSX ancestor whose className references
+// card|thumb) is unchanged.
 function jsxAncestorHasCardClassName(node: TsNode, sourceFile: TypeScriptModule.SourceFile): boolean {
   let current: TsNode | undefined = node.parent;
   while (current) {
-    if (ts.isJsxOpeningElement(current) || ts.isJsxSelfClosingElement(current)) {
-      for (const attr of current.attributes.properties) {
+    let attributesOwner: TypeScriptModule.JsxOpeningElement | TypeScriptModule.JsxSelfClosingElement | undefined;
+    if (ts.isJsxOpeningElement(current) || ts.isJsxSelfClosingElement(current)) attributesOwner = current;
+    else if (ts.isJsxElement(current)) attributesOwner = current.openingElement;
+    if (attributesOwner) {
+      for (const attr of attributesOwner.attributes.properties) {
         if (ts.isJsxAttribute(attr) && attr.name.getText(sourceFile) === 'className' && attr.initializer) {
           if (/\b(card|thumb)\b/i.test(attr.initializer.getText(sourceFile))) return true;
         }
@@ -1127,21 +1141,36 @@ async function probeC43C44(): Promise<C43C44Result> {
     const c44b = gen3.sourceHash !== gen2.sourceHash;
     rows.push(`C4-4b byte-change-mtime-PINNED (fs.writeFileSync + fs.utimesSync restoring the OLD mtime): sourceHash=${gen3.sourceHash} changed=${c44b}`);
 
-    // --- C4-4c: byte change via the normal HTTP upload path (mtime moves
+    // --- C4-4c: byte change via an ordinary on-disk edit (mtime moves
     // naturally too) must ALSO regenerate -- an ordinary positive control
     // alongside the two filesystem-level directional proofs above.
-    const htmlV3 = htmlV2.replace('v2-content-changed-mtime-pinned', 'v3-http-reupload');
-    await uploadProjectFile(daemon.url, projectId, 'index.html', htmlV3);
+    // AMENDED 2026-08-03 (gate-defect ruling, DECISIONS.md): originally
+    // seeded via HTTP re-upload of index.html on the assumption that
+    // POST /api/projects/:id/upload overwrites a same-named file. It
+    // deliberately never does (uniqueUploadFileName saves index-1.html;
+    // asserted as intended product behavior by
+    // apps/daemon/tests/project-upload-filenames.test.ts), so the
+    // "edited" bytes never entered index.html's transitive graph and this
+    // leg -- plus every C4-3 edit seed below -- was unsatisfiable by a
+    // correct implementation. Re-seeded as direct fs writes to the
+    // daemon's own on-disk copy, the same seeding C4-4a/b above already
+    // use; on-disk edits are first-class product surface (imported-folder
+    // projects are edited by external editors). Unlike C4-4b, mtime is
+    // NOT pinned here, preserving this leg's distinct purpose.
+    const htmlV3 = htmlV2.replace('v2-content-changed-mtime-pinned', 'v3-fs-edit-mtime-natural');
+    fs.writeFileSync(indexAbs, htmlV3);
     const gen4 = await generateAndCapture(daemon, projectId);
-    if ('error' in gen4) return { ok43: false, ok44: false, evidence: `${rows.join('\n')}\nhttp-reupload generate failed: ${gen4.error}`, gated: false };
+    if ('error' in gen4) return { ok43: false, ok44: false, evidence: `${rows.join('\n')}\nfs-edit-mtime-natural generate failed: ${gen4.error}`, gated: false };
     const c44c = gen4.sourceHash !== gen3.sourceHash;
-    rows.push(`C4-4c http-reupload (ordinary positive control): sourceHash=${gen4.sourceHash} changed=${c44c}`);
+    rows.push(`C4-4c fs-edit-mtime-natural (ordinary positive control, direct write, mtime unpinned): sourceHash=${gen4.sourceHash} changed=${c44c}`);
 
     // --- C4-3 (CSS leg): edit ONLY the linked CSS, leave index.html
     // untouched. Must still regenerate -- the exact S4-5 "entry-hash-only
     // serves stale covers" failure mode.
     const cssV2 = cssV1.replace('#101010', '#e00000');
-    await uploadProjectFile(daemon.url, projectId, 'styles.css', cssV2, 'text/css');
+    const cssAbs = findProjectFileOnDisk(dataDir, projectId, 'styles.css');
+    if (!cssAbs) return { ok43: false, ok44: false, evidence: `${rows.join('\n')}\ncould not locate styles.css on disk under OD_DATA_DIR for project ${projectId}`, gated: false };
+    fs.writeFileSync(cssAbs, cssV2);
     const gen5 = await generateAndCapture(daemon, projectId);
     if ('error' in gen5) return { ok43: false, ok44: false, evidence: `${rows.join('\n')}\ncss-only-edit generate failed: ${gen5.error}`, gated: false };
     const c43css = gen5.sourceHash !== gen4.sourceHash;
@@ -1152,11 +1181,13 @@ async function probeC43C44(): Promise<C43C44Result> {
     // correctly-regenerated cover cannot coincidentally hash the same by
     // rendering the same broken-image icon both times.
     const htmlV4 = htmlV3.replace('</body>', '<img src="hero.png" width="8" height="8"></body>');
-    await uploadProjectFile(daemon.url, projectId, 'index.html', htmlV4);
+    fs.writeFileSync(indexAbs, htmlV4);
     await uploadProjectFile(daemon.url, projectId, 'hero.png', await makeSolidPng([220, 20, 20]), 'image/png');
     const gen6 = await generateAndCapture(daemon, projectId);
     if ('error' in gen6) return { ok43: false, ok44: false, evidence: `${rows.join('\n')}\nbefore-image-edit generate failed: ${gen6.error}`, gated: false };
-    await uploadProjectFile(daemon.url, projectId, 'hero.png', await makeSolidPng([20, 20, 220]), 'image/png');
+    const heroAbs = findProjectFileOnDisk(dataDir, projectId, 'hero.png');
+    if (!heroAbs) return { ok43: false, ok44: false, evidence: `${rows.join('\n')}\ncould not locate hero.png on disk under OD_DATA_DIR for project ${projectId}`, gated: false };
+    fs.writeFileSync(heroAbs, await makeSolidPng([20, 20, 220]));
     const gen7 = await generateAndCapture(daemon, projectId);
     if ('error' in gen7) return { ok43: false, ok44: false, evidence: `${rows.join('\n')}\nafter-image-edit generate failed: ${gen7.error}`, gated: false };
     const c43img = gen7.sourceHash !== gen6.sourceHash;
@@ -1170,11 +1201,13 @@ async function probeC43C44(): Promise<C43C44Result> {
     // regardless of whether an unparseable font visually renders any
     // differently (the exact false-red class this rewrite closes).
     const cssV3 = `${cssV2}\n@font-face{font-family:'W4Probe';src:url('probe.woff2') format('woff2');}\n.hero{font-family:'W4Probe';}`;
-    await uploadProjectFile(daemon.url, projectId, 'styles.css', cssV3, 'text/css');
+    fs.writeFileSync(cssAbs, cssV3);
     await uploadProjectFile(daemon.url, projectId, 'probe.woff2', Buffer.from(`w4-font-v1-${crypto.randomBytes(8).toString('hex')}`), 'font/woff2');
     const gen8 = await generateAndCapture(daemon, projectId);
     if ('error' in gen8) return { ok43: false, ok44: false, evidence: `${rows.join('\n')}\nbefore-font-edit generate failed: ${gen8.error}`, gated: false };
-    await uploadProjectFile(daemon.url, projectId, 'probe.woff2', Buffer.from(`w4-font-v2-${crypto.randomBytes(8).toString('hex')}`), 'font/woff2');
+    const fontAbs = findProjectFileOnDisk(dataDir, projectId, 'probe.woff2');
+    if (!fontAbs) return { ok43: false, ok44: false, evidence: `${rows.join('\n')}\ncould not locate probe.woff2 on disk under OD_DATA_DIR for project ${projectId}`, gated: false };
+    fs.writeFileSync(fontAbs, Buffer.from(`w4-font-v2-${crypto.randomBytes(8).toString('hex')}`));
     const gen9 = await generateAndCapture(daemon, projectId);
     if ('error' in gen9) return { ok43: false, ok44: false, evidence: `${rows.join('\n')}\nafter-font-edit generate failed: ${gen9.error}`, gated: false };
     const c43font = gen9.sourceHash !== gen8.sourceHash;
@@ -1194,7 +1227,7 @@ async function probeC43C44(): Promise<C43C44Result> {
 
 async function runC43C44(): Promise<void> {
   const startedAt = Date.now();
-  const command = 'generate -> fs.utimesSync mtime-only bump / fs.writeFileSync+utimesSync byte-change-mtime-pinned / HTTP re-upload / CSS-only edit / real-PNG image edit / font-file edit -> compare POST-response cover.sourceHash (one shared probe run, graded as two criteria)';
+  const command = 'generate -> fs.utimesSync mtime-only bump / fs.writeFileSync+utimesSync byte-change-mtime-pinned / fs.writeFileSync mtime-natural / CSS-only fs edit / real-PNG image fs edit / font-file fs edit -> compare POST-response cover.sourceHash (one shared probe run, graded as two criteria; edit seeding amended 2026-08-03 -- see C4-4c comment)';
   try {
     const result = await probeC43C44();
     const durationMs = Date.now() - startedAt;

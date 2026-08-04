@@ -11,7 +11,7 @@
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LibraryAsset } from '@open-design/contracts';
+import type { LibraryAsset, LibraryAssetListResponse } from '@open-design/contracts';
 
 // Control lazy-mount visibility per test.
 let lazyInView = false;
@@ -19,10 +19,12 @@ vi.mock('../../src/components/plugins-home/useInView', () => ({
   useInView: () => ({ ref: { current: null }, inView: lazyInView }),
 }));
 
-const fetchLibraryAssets = vi.fn(async (): Promise<LibraryAsset[]> => []);
+const fetchLibraryAssetsPage = vi.fn(
+  async (): Promise<LibraryAssetListResponse> => ({ assets: [], total: 0, truncated: false }),
+);
 const fetchLibraryAsset = vi.fn(async (): Promise<LibraryAsset | null> => null);
 vi.mock('../../src/providers/registry', () => ({
-  fetchLibraryAssets: (...args: unknown[]) => fetchLibraryAssets(...(args as [])),
+  fetchLibraryAssetsPage: (...args: unknown[]) => fetchLibraryAssetsPage(...(args as [])),
   fetchLibraryAsset: (...args: unknown[]) => fetchLibraryAsset(...(args as [])),
   libraryAssetRawUrl: (id: string) => `/raw/${id}`,
   applyLibraryAsset: vi.fn(),
@@ -153,11 +155,14 @@ describe('snapshotCardRects', () => {
 describe('LibrarySection lazy-mount contract', () => {
   beforeEach(() => {
     lazyInView = false;
-    fetchLibraryAssets.mockReset().mockResolvedValue([
+    const seeded = [
       makeAsset({ id: 'img-1', kind: 'image', sourceTitle: 'A photo' }),
       makeAsset({ id: 'html-1', kind: 'html', sourceTitle: 'A page' }),
       makeAsset({ id: 'ds-1', kind: 'design-system', sourceTitle: 'A design system' }),
-    ]);
+    ];
+    fetchLibraryAssetsPage
+      .mockReset()
+      .mockResolvedValue({ assets: seeded, total: seeded.length, truncated: false });
     fetchLibraryAsset.mockReset().mockResolvedValue(null);
     // The SSE effect's `new EventSource` is wrapped in try/catch; a no-op stub
     // keeps it quiet without driving live events here.

@@ -456,6 +456,7 @@ import {
   buildAcpMcpServers,
   buildClaudeMcpJson,
   buildOpenCodeMcpConfigContent,
+  findInsecureMcpSpawnTokenPairings,
   isManagedProjectCwd,
   readMcpConfig,
   writeMcpConfig,
@@ -4775,6 +4776,33 @@ export async function startServer({
     const connectedExternalMcp = enabledExternalMcp
       .filter((s) => typeof oauthTokensForSpawn[s.id] === 'string')
       .map((s) => ({ id: s.id, label: s.label }));
+
+    // https-or-loopback (see mcp-config.ts::isHttpsOrLoopbackMcpUrl): the
+    // builders below already withhold the bearer for any server whose URL
+    // is plain http to a non-loopback host — this just makes that refusal
+    // observable on the run stream (daemon HTTP SSE, using the same
+    // 'diagnostic' event other non-fatal spawn-time notices use) and in
+    // daemon logs, instead of the token silently going missing.
+    for (const refusal of findInsecureMcpSpawnTokenPairings(
+      enabledExternalMcp,
+      oauthTokensForSpawn,
+    )) {
+      console.warn(
+        '[mcp-config] withholding OAuth bearer at spawn: server',
+        refusal.serverId,
+        'url',
+        refusal.url,
+        'is plain http to a non-loopback host',
+      );
+      design.runs.emit(run, 'diagnostic', {
+        type: 'mcp_spawn_token_refused',
+        serverId: refusal.serverId,
+        url: refusal.url,
+        reason:
+          "Plain http to a non-loopback host cannot carry this MCP server's bearer token in cleartext; " +
+          'use https, or point the server at a loopback address (localhost / 127.0.0.1).',
+      });
+    }
 
     // Intent signals gate stable-region prompt blocks, so every flip changes
     // stableInstructionFingerprint and re-sends the whole stable block on

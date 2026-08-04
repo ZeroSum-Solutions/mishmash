@@ -19,6 +19,7 @@ export default defineConfig({
   // config. Excluding them at the config level keeps every functional
   // consumer (full pool, `test:ui*`, ui_p0 groups) aligned.
   testIgnore: 'visual-*.test.ts',
+  globalSetup: './lib/artifact-retention.setup.ts',
   outputDir: './ui/reports/test-results',
   timeout: Number(process.env.OD_PLAYWRIGHT_TIMEOUT) || 45_000,
   retries: process.env.CI ? 1 : 0,

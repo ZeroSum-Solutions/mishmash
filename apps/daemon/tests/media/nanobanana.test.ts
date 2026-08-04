@@ -256,4 +256,92 @@ describe('nano-banana media generation', () => {
     })).rejects.toThrow(/nano-banana image 429:.*quota exceeded/);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  // BUG-10. Google answers an invalid API key with HTTP 400 (body: "API key
+  // not valid. Please pass a valid API key."), not 401/403 — before the
+  // provider-error taxonomy classified this call site, an invalid Nano
+  // Banana credential surfaced as a bare "nano-banana image 400: {...}",
+  // echoing the raw upstream body and giving no hint the fix is the stored
+  // credential. A rejected credential must say it's the credential, and
+  // must name the provider, whatever status carried it.
+  it('names the credential when Google rejects the Nano Banana API key with its 400 quirk', async () => {
+    await writeConfig({
+      providers: {
+        nanobanana: { baseUrl: TEST_NANOBANANA_BASE_URL },
+      },
+    });
+
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({
+        error: {
+          code: 400,
+          message: 'API key not valid. Please pass a valid API key.',
+          status: 'INVALID_ARGUMENT',
+          details: [{ reason: 'API_KEY_INVALID' }],
+        },
+      }),
+      { status: 400, headers: { 'content-type': 'application/json' } },
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let caught: unknown;
+    try {
+      await generateMedia({
+        projectRoot,
+        projectsRoot,
+        projectId: 'project-1',
+        surface: 'image',
+        model: 'gemini-3.1-flash-image-preview',
+        prompt: 'A neon city skyline',
+        aspect: '1:1',
+      });
+      throw new Error('expected generateMedia to reject');
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const err = caught as Error & { status?: number; code?: string };
+    expect(err.code).toBe('invalid-credential');
+    expect(err.status).toBe(400);
+    expect(err.message).toMatch(/google gemini/i);
+    expect(err.message).toMatch(/credential/i);
+    // Never echo the raw upstream body back to the user.
+    expect(err.message).not.toMatch(/API key not valid/i);
+  });
+
+  it('still reports a plain 400 that is NOT a credential rejection as an upstream failure', async () => {
+    await writeConfig({
+      providers: {
+        nanobanana: { baseUrl: TEST_NANOBANANA_BASE_URL },
+      },
+    });
+
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({ error: { code: 400, message: 'Unknown field: shot_count' } }),
+      { status: 400, headers: { 'content-type': 'application/json' } },
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let caught: unknown;
+    try {
+      await generateMedia({
+        projectRoot,
+        projectsRoot,
+        projectId: 'project-1',
+        surface: 'image',
+        model: 'gemini-3.1-flash-image-preview',
+        prompt: 'A neon city skyline',
+        aspect: '1:1',
+      });
+      throw new Error('expected generateMedia to reject');
+    } catch (err) {
+      caught = err;
+    }
+
+    const err = caught as Error & { status?: number; code?: string };
+    expect(err.code).toBe('upstream-error');
+    expect(err.status).toBe(400);
+    expect(err.message).toMatch(/nano-banana image 400/);
+  });
 });

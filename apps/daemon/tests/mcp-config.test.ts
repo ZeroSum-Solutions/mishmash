@@ -8,6 +8,8 @@ import {
   buildAcpMcpServers,
   buildClaudeMcpJson,
   buildOpenCodeMcpConfigContent,
+  findInsecureMcpSpawnTokenPairings,
+  isHttpsOrLoopbackMcpUrl,
   isManagedProjectCwd,
   readMcpConfig,
   sanitizeMcpServer,
@@ -295,6 +297,102 @@ describe('buildClaudeMcpJson', () => {
     ]) as { mcpServers: Record<string, Record<string, unknown>> };
     // Empty Authorization is worse than missing — should be omitted.
     expect(out.mcpServers.higgsfield?.headers).toBeUndefined();
+  });
+
+  // https-or-loopback: a daemon-issued bearer token may only be injected
+  // into the spawned agent's environment alongside an https URL or a
+  // loopback http URL. Plain http to a non-loopback host must NOT carry
+  // the token — it would ride the wire in cleartext off this machine.
+  describe('https-or-loopback spawn-injection guard', () => {
+    it('does NOT inject a stored OAuth Bearer into a plain-http, non-loopback server (the bug)', () => {
+      const out = buildClaudeMcpJson(
+        [
+          {
+            id: 'shady-relay',
+            transport: 'http',
+            enabled: true,
+            authMode: 'oauth',
+            url: 'http://mcp.example.com/mcp',
+          },
+        ],
+        { 'shady-relay': 'access-tok-xyz' },
+      ) as { mcpServers: Record<string, Record<string, unknown>> };
+      expect(out.mcpServers['shady-relay']?.headers).toBeUndefined();
+    });
+
+    it('still injects the Bearer for https, regardless of host', () => {
+      const out = buildClaudeMcpJson(
+        [
+          {
+            id: 'higgsfield',
+            transport: 'http',
+            enabled: true,
+            authMode: 'oauth',
+            url: 'https://mcp.higgsfield.ai/mcp',
+          },
+        ],
+        { higgsfield: 'access-tok-xyz' },
+      ) as { mcpServers: Record<string, Record<string, unknown>> };
+      expect(out.mcpServers.higgsfield?.headers).toEqual({
+        Authorization: 'Bearer access-tok-xyz',
+      });
+    });
+
+    it('still injects the Bearer for plain http on a loopback host (deliberate carve-out, matches inferMcpAuthModeForUrl)', () => {
+      const out = buildClaudeMcpJson(
+        [
+          {
+            id: 'figma-use',
+            transport: 'http',
+            enabled: true,
+            authMode: 'oauth',
+            url: 'http://127.0.0.1:38451/mcp',
+          },
+        ],
+        { 'figma-use': 'access-tok-xyz' },
+      ) as { mcpServers: Record<string, Record<string, unknown>> };
+      expect(out.mcpServers['figma-use']?.headers).toEqual({
+        Authorization: 'Bearer access-tok-xyz',
+      });
+    });
+
+    // Fail closed, not fail open: a server with no url at all can't be
+    // proven https-or-loopback, so the guard must withhold the Bearer
+    // rather than let it through unchecked. Not reachable via the normal
+    // sanitizeMcpServer path today (http/sse always carries a url there),
+    // but buildClaudeMcpJson takes McpServerConfig[] directly and doesn't
+    // re-validate — a future caller (or a bug elsewhere) could still hand
+    // it a server with a missing/empty url alongside a live token.
+    it('withholds the Bearer when the server has no url (fail closed)', () => {
+      const out = buildClaudeMcpJson(
+        [
+          {
+            id: 'no-url',
+            transport: 'http',
+            enabled: true,
+            authMode: 'oauth',
+          },
+        ],
+        { 'no-url': 'access-tok-xyz' },
+      ) as { mcpServers: Record<string, Record<string, unknown>> };
+      expect(out.mcpServers['no-url']?.headers).toBeUndefined();
+    });
+
+    it('withholds the Bearer when the server url is an empty string (fail closed)', () => {
+      const out = buildClaudeMcpJson(
+        [
+          {
+            id: 'blank-url',
+            transport: 'http',
+            enabled: true,
+            authMode: 'oauth',
+            url: '',
+          },
+        ],
+        { 'blank-url': 'access-tok-xyz' },
+      ) as { mcpServers: Record<string, Record<string, unknown>> };
+      expect(out.mcpServers['blank-url']?.headers).toBeUndefined();
+    });
   });
 });
 
@@ -692,6 +790,176 @@ describe('buildOpenCodeMcpConfigContent', () => {
     expect((raw as string).charCodeAt(0)).not.toBe(0xfeff);
     // Round-trip MUST parse cleanly.
     expect(() => JSON.parse(raw as string)).not.toThrow();
+  });
+
+  // https-or-loopback: same invariant as buildClaudeMcpJson above, applied
+  // to the OpenCode delivery shape (OPENCODE_CONFIG_CONTENT).
+  describe('https-or-loopback spawn-injection guard', () => {
+    it('does NOT inject a stored OAuth Bearer into a plain-http, non-loopback server (the bug)', () => {
+      const raw = buildOpenCodeMcpConfigContent(
+        [
+          {
+            id: 'shady-relay',
+            transport: 'http',
+            enabled: true,
+            authMode: 'oauth',
+            url: 'http://mcp.example.com/mcp',
+          },
+        ],
+        { 'shady-relay': 'access-tok-xyz' },
+      );
+      const parsed = JSON.parse(raw as string) as {
+        mcp: Record<string, Record<string, unknown>>;
+      };
+      expect(parsed.mcp['shady-relay']?.headers).toBeUndefined();
+    });
+
+    it('still injects the Bearer for https, regardless of host', () => {
+      const raw = buildOpenCodeMcpConfigContent(
+        [
+          {
+            id: 'higgsfield',
+            transport: 'http',
+            enabled: true,
+            authMode: 'oauth',
+            url: 'https://mcp.higgsfield.ai/mcp',
+          },
+        ],
+        { higgsfield: 'access-tok-xyz' },
+      );
+      const parsed = JSON.parse(raw as string) as {
+        mcp: Record<string, Record<string, unknown>>;
+      };
+      expect(parsed.mcp.higgsfield?.headers).toEqual({
+        Authorization: 'Bearer access-tok-xyz',
+      });
+    });
+
+    it('still injects the Bearer for plain http on a loopback host (deliberate carve-out)', () => {
+      const raw = buildOpenCodeMcpConfigContent(
+        [
+          {
+            id: 'figma-use',
+            transport: 'http',
+            enabled: true,
+            authMode: 'oauth',
+            url: 'http://localhost:38451/mcp',
+          },
+        ],
+        { 'figma-use': 'access-tok-xyz' },
+      );
+      const parsed = JSON.parse(raw as string) as {
+        mcp: Record<string, Record<string, unknown>>;
+      };
+      expect(parsed.mcp['figma-use']?.headers).toEqual({
+        Authorization: 'Bearer access-tok-xyz',
+      });
+    });
+  });
+});
+
+// https-or-loopback is the design pinned for the MCP spawn-injection path:
+// a token-bearing MCP server URL handed to a spawned agent's environment
+// must be https or a loopback address (localhost / 127.0.0.1 / ::1 and
+// their IPv4-mapped forms — the same loopback notion `inferMcpAuthModeForUrl`
+// already uses). Plain http to a non-loopback host is refused ONLY when a
+// bearer token would ride along; an unauthenticated http server pointed at
+// a non-loopback host remains a valid config (see `sanitizeMcpServer` —
+// config-time validation is unchanged by this guard).
+describe('isHttpsOrLoopbackMcpUrl — https-or-loopback spawn-injection guard', () => {
+  it('allows https regardless of host', () => {
+    expect(isHttpsOrLoopbackMcpUrl('https://mcp.example.com/mcp')).toBe(true);
+    expect(isHttpsOrLoopbackMcpUrl('https://127.0.0.1:9999/mcp')).toBe(true);
+  });
+
+  it('allows plain http on loopback hosts (deliberate carve-out)', () => {
+    expect(isHttpsOrLoopbackMcpUrl('http://localhost:38451/mcp')).toBe(true);
+    expect(isHttpsOrLoopbackMcpUrl('http://127.0.0.1:38451/mcp')).toBe(true);
+    expect(isHttpsOrLoopbackMcpUrl('http://[::1]:38451/mcp')).toBe(true);
+  });
+
+  it('allows plain http on an IPv4-mapped IPv6 loopback literal', () => {
+    // WHATWG URL canonicalizes the dotted-decimal spelling to hex groups
+    // (verified against Node's URL impl: `new URL('http://[::ffff:127.0.0.1]/').hostname`
+    // === '::ffff:7f00:1'), so this is the form isLoopbackHost actually sees
+    // from every current caller — pin it directly rather than just the
+    // dotted spelling, which never reaches the URL-parsing callers.
+    expect(isHttpsOrLoopbackMcpUrl('http://[::ffff:127.0.0.1]:9999/mcp')).toBe(true);
+    expect(isHttpsOrLoopbackMcpUrl('http://[::ffff:7f00:1]:9999/mcp')).toBe(true);
+  });
+
+  it('rejects plain http on a non-loopback host', () => {
+    expect(isHttpsOrLoopbackMcpUrl('http://mcp.example.com/mcp')).toBe(false);
+    expect(isHttpsOrLoopbackMcpUrl('http://192.168.1.5:8080/mcp')).toBe(false);
+  });
+
+  it('rejects an unparsable URL (fail closed)', () => {
+    expect(isHttpsOrLoopbackMcpUrl('not a url')).toBe(false);
+  });
+});
+
+describe('findInsecureMcpSpawnTokenPairings', () => {
+  it('reports only the pairing that would leak the token over plain http', () => {
+    const refusals = findInsecureMcpSpawnTokenPairings(
+      [
+        {
+          id: 'shady-relay',
+          transport: 'http',
+          enabled: true,
+          authMode: 'oauth',
+          url: 'http://mcp.example.com/mcp',
+        },
+        {
+          id: 'higgsfield',
+          transport: 'http',
+          enabled: true,
+          authMode: 'oauth',
+          url: 'https://mcp.higgsfield.ai/mcp',
+        },
+        {
+          id: 'figma-use',
+          transport: 'http',
+          enabled: true,
+          authMode: 'oauth',
+          url: 'http://localhost:38451/mcp',
+        },
+      ],
+      {
+        'shady-relay': 'tok-1',
+        higgsfield: 'tok-2',
+        'figma-use': 'tok-3',
+      },
+    );
+    expect(refusals).toEqual([
+      { serverId: 'shady-relay', url: 'http://mcp.example.com/mcp' },
+    ]);
+  });
+
+  it('reports nothing when no token is attached (config-only http entries stay allowed)', () => {
+    // SCOPE: a user may still configure/run an unauthenticated http,
+    // non-loopback server — the pairing only gets refused when a bearer
+    // token is actually in play (authMode 'oauth' with no token issued
+    // yet, or authMode 'none' outright).
+    const refusals = findInsecureMcpSpawnTokenPairings(
+      [
+        {
+          id: 'not-yet-authed',
+          transport: 'http',
+          enabled: true,
+          authMode: 'oauth',
+          url: 'http://mcp.example.com/mcp',
+        },
+        {
+          id: 'unauthenticated-by-design',
+          transport: 'http',
+          enabled: true,
+          authMode: 'none',
+          url: 'http://mcp.example.com/mcp',
+        },
+      ],
+      {},
+    );
+    expect(refusals).toEqual([]);
   });
 });
 

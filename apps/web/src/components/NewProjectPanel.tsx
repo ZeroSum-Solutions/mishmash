@@ -2992,6 +2992,13 @@ function MediaModelCards({
                   </div>
                   {group.models.map((model) => {
                     const active = value === model.id;
+                    // Group header already badges provider readiness, but the
+                    // per-model label needs its own mark too: this is the
+                    // same "(needs API key)" idiom the storyboard shot/mood
+                    // pickers append to model.label (see isModelConfigured in
+                    // storyboard/model-defaults.ts) — group.ready is the same
+                    // isMediaProviderPickerReady check that idiom reads.
+                    const needsKey = !group.ready;
                     return (
                       <button
                         key={model.id}
@@ -3005,6 +3012,7 @@ function MediaModelCards({
                         <span className="ds-picker-item-text">
                           <span className="ds-picker-item-title">
                             {model.label}
+                            {needsKey ? ` ${t('storyboard.needsApiKey')}` : null}
                             {model.default ? (
                               <span className="ds-picker-item-badge">
                                 {t('newproj.modelRecommended')}

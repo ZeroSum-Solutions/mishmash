@@ -173,6 +173,20 @@
   gap: 16px;
 }
 
+/* Pagination footer (BUG-5): only rendered while more matching assets exist
+   past the current page, so it never implies a truncated set is complete. */
+.loadMoreRow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 0 8px;
+}
+.loadMoreCount {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 /* --- timeline view ------------------------------------------------------ */
 
 .timeline {

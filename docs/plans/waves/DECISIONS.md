@@ -482,3 +482,70 @@ strong-sounding one.
   regardless, but the pass count was not verified.
 - Disposition: NM-19 toolbox reliability is NOT cancelled. The 17-phantom-skill-ID problem is real
   and unaddressed; a future package re-expands it on the runtime-observation pattern.
+## 2026-08-03 — Gate-defect ruling: verify-w4 amendment round 1 (C4-1 walker, C4-3/C4-4 edit seeding) + W4 lease amendment (`docs/security/**`)
+
+**Trigger.** The first full W4 gate-of-record runs (branch `feat/w4-covers-impl`, executed
+twice with identical tallies, 9/15) produced evidence that three criteria were
+unsatisfiable by any correct implementation:
+
+- **C4-1**: `jsxAncestorHasCardClassName` walks `.parent` testing
+  `ts.isJsxOpeningElement(current)`, but a normally-nested `<img>`'s ancestor chain
+  contains only `JsxElement` nodes — the opening element that owns `className` is a
+  *child* of the ancestor (`.openingElement`), never itself an ancestor. The checker can
+  therefore never match any normally-nested `<img>`, regardless of how real the
+  card/thumb wrapper is. Verified independently by the orchestrator against the verifier
+  source, and by the wave implementer three ways (synthetic ASTs; the pre-existing,
+  untouched cover patterns in `DesignsTab.tsx:983` / `RecentProjectsStrip.tsx:264` also
+  fail it).
+- **C4-3 (css/image/font legs) / C4-4c**: the edit seeds re-upload an existing filename
+  via `POST /api/projects/:id/upload`, assuming overwrite. `uniqueUploadFileName`
+  (`apps/daemon/src/server.ts`) deliberately never overwrites — it saves `name-1.ext` —
+  and `apps/daemon/tests/project-upload-filenames.test.ts` asserts this as intended
+  product behavior. The "edited" bytes never enter the rendered file's transitive graph,
+  so a CORRECT invalidator must report an unchanged `sourceHash`; the legs punish
+  correctness. Confirmed by direct HTTP trace during the gate runs.
+
+**Amendment (r1).** (a) C4-1: add the missing `ts.isJsxElement(current)` branch reading
+`current.openingElement.attributes`; the documented Sol r2 intent (a JSX ancestor whose
+className references card|thumb) is unchanged. (b) C4-3/C4-4c: re-seed the *edit* steps
+as direct fs writes to the daemon's own on-disk copy — the same seeding C4-4a/b already
+use — with C4-4c left mtime-unpinned to preserve its distinct purpose; *new-file* seeds
+stay on the real HTTP upload path. No thresholds, scans, or grading logic are weakened.
+Gameability considered: an implementation cannot observe how bytes reached disk, and
+on-disk edits are first-class product surface (imported-folder projects are edited by
+external editors).
+
+**Lease.** W4 `allow` += `docs/security/**` — C4-8 requires the NM-35C threat note under
+`docs/security/`, which the original lease omitted. W0 and W9-ingest also lease the path
+but both are landed; no concurrent writer. LEASE reads `leases.json@baseCommit`, so this
+lands on main before the wave branch syncs.
+
+**Not amended.** C4-5's memory-ceiling leg: one flaky gate failure against 7/7 clean
+standalone reproductions of the identical fixture+detection logic is re-run evidence, not
+amendment evidence. C4-10: restored by the sixth scale-baseline restatement (same routine
+cause as restatements two through five), not by amendment.
+
+**Process.** Amendments authored by the orchestrator (not the wave implementer),
+adversarially reviewed by an independent reviewer (verdict recorded below), applied by
+the founder's hand — the machine permission classifier default-denies agent writes to
+gate artifacts, a correct default that was respected, with the prepared patches handed to
+the founder verbatim — then re-pinned (`approved-gate.sha256` + `approved-verify-w4.ts`;
+`approved-gate.commit` updated after the main landing). Issued under the 2026-07-28
+founder delegation of gate authority; founder may veto.
+
+**Adversarial review verdict.** APPROVE (independent typescript-reviewer, 2026-08-03).
+Both unsatisfiability claims verified via executable AST probes — including
+reconstructions of the real `DesignsTab.tsx`/`RecentProjectsStrip.tsx` markup, where the
+original walker returns false and the amended one returns true — with decoy fixtures
+(`hero-banner`, bare `<img>`, and regex-boundary tokens `discard`/`thumbnail`/
+`cardboard`/`flashcard`/`thumbstick`) all correctly rejected by the amended walker.
+No gate-weakening found; the reviewer notes the fs-write re-seeding closes a latent
+gaming vector (an implementation hooking the HTTP upload route rather than hashing real
+on-disk content would have passed the old legs and fails the amended ones). Patch applies
+with zero fuzz; amended file parses with zero diagnostics under the repo's TS 5.9.3.
+Lease diff structurally confirmed to touch only the W4 entry (one allow line + note);
+`docs/security/**`'s other allow claims (W0, W9-ingest) confirmed landed on main.
+Reviewer caveat, recorded honestly: the C4-5 flake count (7/7 standalone) and the C4-10
+sixth-restatement provenance rest on the contemporaneous execution record rather than
+the reviewer's own reproduction; both sit under "Not amended" and carry no code diff.
+

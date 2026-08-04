@@ -212,6 +212,7 @@
         "apps/daemon/src/covers/**",
         "apps/daemon/src/routes/covers*.ts",
         "apps/daemon/src/cli.ts",
+        "docs/security/**",
         "packages/contracts/**",
         "apps/web/tests/**",
         "apps/daemon/tests/**",
@@ -224,7 +225,7 @@
         "apps/daemon/src/backup/create.ts",
         "scripts/waves/capability-manifest.json"
       ],
-      "note": "Owns registry.ts. W3 runs after W4 lands \u2014 a shared lease across one 2,500-line module is not enforceable. `apps/daemon/tests/**` is also claimed by W0 and W1; Burst ordering serializes these writers \u2014 W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3. Amended 2026-07-28 (Sol verify-w4 r1 rulings 1-3): renderer dependency + route registration require `apps/daemon/package.json`, `pnpm-lock.yaml`, `nix/pnpm-deps.nix` (generated lock artifact), and `apps/daemon/src/server.ts`; C4-11 requires `apps/daemon/src/backup/manifest.ts` + `create.ts` (restore.ts deliberately EXCLUDED \u2014 its generic manifest-driven loop suffices; amend only if a red spec proves otherwise; `server-context.ts`/`route-context-contract.ts` likewise amend-on-proof); C4-12 requires `scripts/waves/capability-manifest.json` with an exact cover row (same ruling as W1's C1-8 \u2014 bespoke parity probes cannot replace the authoritative manifest). `server.ts` and `capability-manifest.json` are also W1-leased and `backup/**` is W0-owned: Burst ordering serializes these writers (W0 landed; W1 is Burst 2 and lands before W4 implementation in Burst 3), never concurrent."
+      "note": "Owns registry.ts. W3 runs after W4 lands \u2014 a shared lease across one 2,500-line module is not enforceable. `apps/daemon/tests/**` is also claimed by W0 and W1; Burst ordering serializes these writers \u2014 W0 lands before Burst 2, W1 is Burst 2, W4 is Burst 3. Amended 2026-07-28 (Sol verify-w4 r1 rulings 1-3): renderer dependency + route registration require `apps/daemon/package.json`, `pnpm-lock.yaml`, `nix/pnpm-deps.nix` (generated lock artifact), and `apps/daemon/src/server.ts`; C4-11 requires `apps/daemon/src/backup/manifest.ts` + `create.ts` (restore.ts deliberately EXCLUDED \u2014 its generic manifest-driven loop suffices; amend only if a red spec proves otherwise; `server-context.ts`/`route-context-contract.ts` likewise amend-on-proof); C4-12 requires `scripts/waves/capability-manifest.json` with an exact cover row (same ruling as W1's C1-8 \u2014 bespoke parity probes cannot replace the authoritative manifest). `server.ts` and `capability-manifest.json` are also W1-leased and `backup/**` is W0-owned: Burst ordering serializes these writers (W0 landed; W1 is Burst 2 and lands before W4 implementation in Burst 3), never concurrent. Amended 2026-08-03 (gate-defect ruling, DECISIONS.md, orchestrator under the 2026-07-28 founder delegation): added `docs/security/**` — C4-8 requires the NM-35C threat-model note in docs/security/, which the original lease omitted; W0 and W9-ingest also allow this path but both are landed, so there is no concurrent writer."
     },
     "W9-ingest": {
       "slug": "mishmash-w9-ingest-tranche",

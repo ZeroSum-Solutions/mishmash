@@ -106,6 +106,20 @@ export interface Storyboard {
   ratio: string;
   moodDrafts: StoryboardMoodDraft[];
   shots: StoryboardShot[];
+  /**
+   * Path relative to the storyboard-media project to the most recently
+   * assembled output (see POST /api/storyboards/:id/assemble), persisted
+   * once an assemble run completes successfully. Every run writes a
+   * uniquely-named file (storyboard id + a run discriminator — see
+   * storyboards/assemble.ts's assembleOutputName) rather than a fixed
+   * `final.mp4`, so this field is how a caller resolves "the current run's
+   * output" instead of guessing a hardcoded name. Storyboards assembled
+   * before this field existed have no value here even though a legacy
+   * `final.mp4` may still sit in the project dir from whichever storyboard
+   * happened to assemble last under the old shared-name behavior — absence
+   * means "not tracked", not "never assembled".
+   */
+  finalOutput?: string;
 }
 
 /** Lightweight row for the storyboard list view — full shot/mood-draft bodies omitted. */

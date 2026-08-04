@@ -316,4 +316,129 @@ describe('renderStoryboardFinish deadline handling', () => {
       await rm(dirB, { recursive: true, force: true });
     }
   });
+
+  // Regression coverage for a tie found (and fixed here) while stabilizing
+  // the tests above: render.ts used to race renderMedia() against TWO
+  // independently-scheduled timers — an outer cancelTimer
+  // (`setTimeout(cancel, deadline.remainingMs())`) and withDeadline's own
+  // internal timeout — each computed moments apart from the same clock, so
+  // they were effectively always due at the same instant once a render
+  // genuinely outlived its budget, with nothing coordinating that against
+  // what renderMedia() itself was doing at that exact moment. render.ts's
+  // renderMediaWithCancelableDeadline() now collapses those two timers into
+  // ONE, gated by a single settle-once callback shared with cancel() — so
+  // cancel() can only ever fire as part of the same atomic decision that
+  // produces the timeout rejection, never as a stray side effect of a
+  // render that already settled. Fake timers pin the tie deterministically:
+  // give renderMedia() its own settlement timer for the EXACT same delay
+  // the deadline gives that unified timer, so both are due on the identical
+  // simulated tick, then let vitest's fake-timer engine (which fires
+  // same-instant timers in registration order, unlike relying on real OS
+  // scheduling jitter) resolve the ordering.
+  describe('cancelTimer vs. renderMedia() completion tie', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('must never invoke cancel() when renderMedia() settles on the same tick the deadline expires', async () => {
+      probeDurationSecMock.mockResolvedValue(4);
+      bundleMock.mockResolvedValue('file:///fake-bundle');
+      selectCompositionMock.mockResolvedValue({ width: 1280, height: 720, fps: 30, durationInFrames: 60 });
+
+      // Lets the test await (via a plain microtask, never touching the fake
+      // clock) the exact moment renderMedia() is invoked, so
+      // vi.advanceTimersByTimeAsync below only starts moving the virtual
+      // clock once every earlier stage (bundle, ffprobe, selectComposition,
+      // and render.ts's own real mkdtemp/cp calls) has already registered
+      // whatever timers it's going to register. Advancing prematurely would
+      // tick the fake clock before cancelTimer even exists.
+      let reachedRenderMedia: () => void;
+      const reachedRenderMediaPromise = new Promise<void>((resolve) => {
+        reachedRenderMedia = resolve;
+      });
+      renderMediaMock.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            reachedRenderMedia();
+            // Registered for the SAME 100ms delay the deadline gives
+            // cancelTimer/withDeadline below — the tie under test: the
+            // render "finishes" at the exact instant the budget expires.
+            setTimeout(() => resolve(undefined), 100);
+          }),
+      );
+
+      const clipPath = await makeFixtureClip();
+
+      vi.useFakeTimers();
+      const resultPromise = renderStoryboardFinish({
+        clipPaths: [clipPath],
+        titleEnabled: false,
+        titleText: '',
+        transitionsEnabled: true,
+        audioPath: null,
+        captions: null,
+        ratio: '16:9',
+        outputPath: path.join(scratchDir, 'final.mp4'),
+        deadline: createDeadline(100),
+      });
+
+      await reachedRenderMediaPromise;
+      // Fires renderMedia()'s own resolve timer and
+      // renderMediaWithCancelableDeadline's single unified timer together —
+      // both were scheduled for the identical 100ms delay off the same
+      // frozen fake clock.
+      await vi.advanceTimersByTimeAsync(100);
+
+      await expect(resultPromise).resolves.toBeUndefined();
+      expect(cancelMock).not.toHaveBeenCalled();
+    });
+
+    it('still cancels exactly once and rejects with the labeled timeout when renderMedia() has not settled at the same tie point', async () => {
+      probeDurationSecMock.mockResolvedValue(4);
+      bundleMock.mockResolvedValue('file:///fake-bundle');
+      selectCompositionMock.mockResolvedValue({ width: 1280, height: 720, fps: 30, durationInFrames: 60 });
+
+      let reachedRenderMedia: () => void;
+      const reachedRenderMediaPromise = new Promise<void>((resolve) => {
+        reachedRenderMedia = resolve;
+      });
+      renderMediaMock.mockImplementation(
+        () =>
+          new Promise(() => {
+            // Never resolves — the render has not produced a result by the
+            // deadline, so the deadline side of the tie must win, exactly
+            // once.
+            reachedRenderMedia();
+          }),
+      );
+
+      const clipPath = await makeFixtureClip();
+
+      vi.useFakeTimers();
+      const resultPromise = renderStoryboardFinish({
+        clipPaths: [clipPath],
+        titleEnabled: false,
+        titleText: '',
+        transitionsEnabled: true,
+        audioPath: null,
+        captions: null,
+        ratio: '16:9',
+        outputPath: path.join(scratchDir, 'final.mp4'),
+        deadline: createDeadline(100),
+      });
+
+      await reachedRenderMediaPromise;
+      await vi.advanceTimersByTimeAsync(100);
+
+      let caught: unknown;
+      try {
+        await resultPromise;
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(RemotionFinishTimeoutError);
+      expect((caught as InstanceType<typeof RemotionFinishTimeoutError>).stage).toBe('renderMedia');
+      expect(cancelMock).toHaveBeenCalledTimes(1);
+    });
+  });
 });

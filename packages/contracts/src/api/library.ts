@@ -239,17 +239,27 @@ export interface LibraryAssetFilter {
   source?: LibrarySourceKind;
   projectId?: string;
   designSystemId?: string;
+  /** Page size. Defaults to 500, clamped to the 1000-row hard max. */
   limit?: number;
+  /**
+   * Rows to skip before the page, in the same `archived_date DESC,
+   * created_at DESC` order the list is returned in. Combined with `limit`
+   * (the page-size ceiling), this is how a caller pages past the cap instead
+   * of only being able to detect that it was truncated (BUG-5). Defaults to
+   * 0.
+   */
+  offset?: number;
 }
 
 export interface LibraryAssetListResponse {
   assets: LibraryAsset[];
-  /** Full matching-row count for the filter, independent of the page limit.
-   * The list caps at 500 rows by default (1000 hard max), so without this a
-   * larger library silently rendered as a complete-looking partial set
-   * (BUG-5). */
+  /** Full matching-row count for the filter, independent of paging.
+   * The list caps each page at 500 rows by default (1000 hard max), so
+   * without this a larger library silently rendered as a complete-looking
+   * partial set (BUG-5). */
   total: number;
-  /** True when `assets` is a truncated page of `total`. */
+  /** True when more matching rows exist past this page (`offset + assets.length < total`) --
+   * i.e. there is a next page to fetch. */
   truncated: boolean;
 }
 
