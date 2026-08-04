@@ -12,6 +12,7 @@ function parseWorkerCount(value: string | undefined): number {
 export default defineConfig({
   testDir: './ui',
   testMatch: 'visual-*.test.ts',
+  globalSetup: './lib/artifact-retention.setup.ts',
   outputDir: './ui/reports/visual-test-results',
   timeout: Number(process.env.OD_PLAYWRIGHT_TIMEOUT) || 240_000,
   expect: {

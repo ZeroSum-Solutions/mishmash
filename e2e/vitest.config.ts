@@ -15,6 +15,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     fileParallelism: true,
+    globalSetup: ['./lib/artifact-retention.setup.ts'],
     include: ['specs/**/*.spec.ts', 'tests/**/*.test.ts'],
     maxWorkers,
     pool: 'forks',
