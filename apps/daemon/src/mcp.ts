@@ -1334,7 +1334,20 @@ async function resolveProjectEntry(
 // host-injected React/Babel do not — those still need the MishMash
 // UI). Returns null when there's no entry file. Pure: no I/O, so
 // get_project can call it from project data it already has.
+// The `/raw/` route serves bytes with their Content-Type and no Studio
+// rendering, so only directly browser-renderable entries make an honest
+// previewUrl. A canvas that is source code (e.g. a react-component
+// artifact's .tsx primary) still reaches callers via studioUrl.
+const RAW_PREVIEWABLE_EXTENSIONS = new Set([
+  '.html', '.htm', '.svg', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif',
+]);
+
 function rawPreviewUrl(baseUrl: string, projectId: string, entry: unknown): string | null {
+  if (typeof entry === 'string' && entry.length > 0) {
+    const dot = entry.lastIndexOf('.');
+    const ext = dot === -1 ? '' : entry.slice(dot).toLowerCase();
+    if (!RAW_PREVIEWABLE_EXTENSIONS.has(ext)) return null;
+  }
   return buildProjectRawFileUrl(baseUrl, projectId, entry);
 }
 
