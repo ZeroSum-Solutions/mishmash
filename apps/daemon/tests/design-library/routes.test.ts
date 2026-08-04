@@ -33,6 +33,7 @@ const SYNTHETIC_CATALOG = {
           category: '00 Synthetic',
           domains: ['test-domain'],
           allowed_use: 'human-local-only',
+          description: 'Synthetic style blurb. Best for passthrough tests.',
         },
       ],
     },
@@ -302,6 +303,9 @@ describe('design library routes', () => {
     expect(body.groups[0]?.items[0]).toMatchObject({
       id: 'synthetic-item-1',
       allowed_use: 'human-local-only',
+      // Curated per-item descriptions authored in the external catalog must
+      // reach consumers (web cards, preview dialog, `od design-library show`).
+      description: 'Synthetic style blurb. Best for passthrough tests.',
     });
   });
 

@@ -4406,6 +4406,8 @@ export interface Dict {
   'designLibrary.useAsTemplate': string;
   'designLibrary.useAsTemplateBusy': string;
   'designLibrary.useAsTemplateError': string;
+  'designLibrary.preview': string;
+  'designLibrary.previewClose': string;
   // Storyboard — Seedance 2.0 image-first keyframe workflow.
   'storyboard.title': string;
   'storyboard.newStoryboard': string;

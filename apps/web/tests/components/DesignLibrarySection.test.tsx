@@ -39,6 +39,7 @@ const CATALOG: DesignLibraryCatalog = {
           category: '01 UI Kits',
           domains: ['ui-kit', 'dashboard'],
           allowed_use: 'licensed-source-review',
+          description: 'Dark glassmorphic analytics dashboard. Best for SaaS admin panels.',
         },
       ],
     },
@@ -103,19 +104,20 @@ describe('DesignLibrarySection', () => {
     expect(screen.getByText('Neon Dashboard Kit')).toBeTruthy();
   });
 
-  it('exposes no action beyond Open folder on a human-local-only card', async () => {
+  it('exposes no copy action beyond Open folder on a human-local-only card', async () => {
     render(<DesignLibrarySection active />);
     const label = await screen.findByText('Fintune (iOS)');
     const card = label.closest('article') as HTMLElement;
     expect(card.getAttribute('data-allowed-use')).toBe('human-local-only');
 
+    // One button: Open folder. This card has no thumbnail so no preview
+    // button either — and never Use as template on this tier.
     const buttons = within(card).getAllByRole('button');
     expect(buttons).toHaveLength(1);
-    const [openFolderBtn] = buttons;
-    expect(openFolderBtn).toBeTruthy();
-    expect(openFolderBtn!.textContent).toContain('Open folder');
+    const openFolderBtn = within(card).getByRole('button', { name: /open folder/i });
+    expect(within(card).queryByText('Use as template')).toBeNull();
 
-    fireEvent.click(openFolderBtn!);
+    fireEvent.click(openFolderBtn);
     await waitFor(() => expect(openDesignLibraryPath).toHaveBeenCalledWith('02 App Captures/fintune'));
   });
 
@@ -127,7 +129,7 @@ describe('DesignLibrarySection', () => {
     const licensedCard = licensedLabel.closest('article') as HTMLElement;
     expect(licensedCard.getAttribute('data-allowed-use')).toBe('licensed-source-review');
     const licensedButtons = within(licensedCard).getAllByRole('button');
-    expect(licensedButtons).toHaveLength(2);
+    expect(licensedButtons).toHaveLength(3);
     expect(within(licensedCard).getByText('Use as template')).toBeTruthy();
 
     const restrictedLabel = screen.getByText('Fintune (iOS)');
@@ -136,6 +138,54 @@ describe('DesignLibrarySection', () => {
     const restrictedButtons = within(restrictedCard).getAllByRole('button');
     expect(restrictedButtons).toHaveLength(1);
     expect(within(restrictedCard).queryByText('Use as template')).toBeNull();
+  });
+
+  it('renders the description on the card when present and omits it when absent', async () => {
+    render(<DesignLibrarySection active />);
+    const label = await screen.findByText('Neon Dashboard Kit');
+    const card = label.closest('article') as HTMLElement;
+    expect(
+      within(card).getByText('Dark glassmorphic analytics dashboard. Best for SaaS admin panels.'),
+    ).toBeTruthy();
+
+    const bareCard = screen.getByText('Fintune (iOS)').closest('article') as HTMLElement;
+    expect(bareCard.querySelector('[data-testid="design-library-description"]')).toBeNull();
+  });
+
+  it('matches descriptions in search, not just labels', async () => {
+    render(<DesignLibrarySection active />);
+    await screen.findByText('Neon Dashboard Kit');
+
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'glassmorphic' } });
+    expect(screen.getByText('Neon Dashboard Kit')).toBeTruthy();
+    expect(screen.queryByText('Fintune (iOS)')).toBeNull();
+  });
+
+  it('opens a full-size preview dialog from the thumbnail and closes on Escape', async () => {
+    render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
+    await screen.findByText('Neon Dashboard Kit');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Neon Dashboard Kit' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Neon Dashboard Kit' });
+    // Full uncropped composite (the "whole kit UI, laid out") plus the
+    // kit's metadata and description.
+    expect(within(dialog).getByRole('img', { name: 'Neon Dashboard Kit' })).toBeTruthy();
+    expect(
+      within(dialog).getByText('Dark glassmorphic analytics dashboard. Best for SaaS admin panels.'),
+    ).toBeTruthy();
+    // The same actions the card offers stay reachable from the dialog.
+    expect(within(dialog).getByRole('button', { name: /open folder/i })).toBeTruthy();
+    expect(within(dialog).getByText('Use as template')).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Neon Dashboard Kit' })).toBeNull());
+  });
+
+  it('does not offer a preview on cards with no thumbnail', async () => {
+    render(<DesignLibrarySection active />);
+    await screen.findByText('Fintune (iOS)');
+    expect(screen.queryByRole('button', { name: 'Preview Fintune (iOS)' })).toBeNull();
   });
 
   it('starts a project and navigates via onOpenProject when Use as template succeeds', async () => {
