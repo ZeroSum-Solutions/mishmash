@@ -3295,9 +3295,6 @@ export function FileWorkspace({
             <button
               type="button"
               className={`ws-tab canvas-tab ${activeTab === resolvedCanvasFile ? 'active' : ''}`}
-              role="tab"
-              aria-selected={activeTab === resolvedCanvasFile}
-              tabIndex={0}
               data-testid="workspace-canvas-tab"
               onClick={() => openFile(resolvedCanvasFile, { forcePersist: true })}
               title={t('workspace.canvas')}

@@ -769,7 +769,12 @@ async function handleMcpToolCall(baseUrl: string, name: unknown, args: McpArgs) 
         const project = data?.project ?? data;
         const resolvedDir = typeof data?.resolvedDir === 'string' ? data.resolvedDir : null;
         const declaredEntry = project?.metadata?.entryFile ?? null;
-        const entryFile = await resolveProjectEntry(baseUrl, id, declaredEntry);
+        const entryFile = await resolveProjectEntry(
+          baseUrl,
+          id,
+          declaredEntry,
+          (data as { resolvedCanvasFile?: unknown } | undefined)?.resolvedCanvasFile,
+        );
         const previewUrl = rawPreviewUrl(baseUrl, id, entryFile);
         // Build the studio deep link too — needs the project's
         // default conversation, which we look up once. Cheap to skip
@@ -1286,7 +1291,21 @@ async function getDefaultConversationId(baseUrl: string, projectId: string): Pro
 // index.html exists at the project root — without the fallback,
 // get_project/get_run would silently omit previewUrl and force the
 // outer agent to guess a file:// path.
-async function resolveProjectEntry(baseUrl: string, projectId: string, declared: unknown): Promise<string | null> {
+async function resolveProjectEntry(
+  baseUrl: string,
+  projectId: string,
+  declared: unknown,
+  resolvedCanvasFile?: unknown,
+): Promise<string | null> {
+  // The project-detail route owns canvas resolution (`resolvedCanvasFile`,
+  // which validates entryFile existence and honors artifact-manifest
+  // primaries). Both callers just fetched that detail response, so prefer
+  // its answer — MCP studio/preview links then agree with the workspace
+  // Canvas tab and `od project info`. The legacy chain below stays as the
+  // fallback for daemons that do not report the field.
+  if (typeof resolvedCanvasFile === 'string' && resolvedCanvasFile.length > 0) {
+    return resolvedCanvasFile;
+  }
   if (typeof declared === 'string' && declared.length > 0) return declared;
   try {
     const data = await getJson<{ files?: Array<{ path?: string; name?: string; kind?: string }> }>(
@@ -1330,7 +1349,12 @@ async function buildRunPreviewUrl(baseUrl: string, projectId: string): Promise<s
     );
     const project = data?.project ?? data;
     const declared = (project as { metadata?: JsonObject } | undefined)?.metadata?.entryFile;
-    const entry = await resolveProjectEntry(baseUrl, projectId, declared);
+    const entry = await resolveProjectEntry(
+      baseUrl,
+      projectId,
+      declared,
+      (data as { resolvedCanvasFile?: unknown } | undefined)?.resolvedCanvasFile,
+    );
     return rawPreviewUrl(baseUrl, projectId, entry);
   } catch {
     return null;
