@@ -1016,3 +1016,28 @@ re-running C4-5/C4-10 again; this record is the closure.
   license landing any other wave, or any future W4 change, against a gate
   report with undiagnosed or unexplained failures.
 
+## 2026-08-04 — W6a-P stop-rule escalation: one final confirmation and same-session `/goal`
+
+**Trigger.** The Client Website Studio planning arc returned three consecutive non-APPROVE
+verdicts: Grok 4.5 `REVISE`, Fable 5 round 1 `REVISE`, and Fable 5 round 2 `REVISE`.
+GLOBAL-GOAL rule 8 and VERIFICATION-CONTRACT §6 stopped the arc before another review,
+freeze, lease grant, `/goal`, or implementation.
+
+**Founder instructions.** Devin Wiggins directed, “once the plan is in place please run
+with /goal this session included,” and, after W4 landed with its recorded two-criterion
+waiver, confirmed, “ok it should be unbloccked now.”
+
+**Binding narrow ruling.** Authorize exactly one final Fable 5 confirmation through Claude
+Code OAuth. Its scope is limited to F5R-01 through F5R-05, regressions introduced by those
+closures, and the exact W4 compatibility correction required by the founder-waived W4
+landing at `2941cfcc76eba068cd74665c6b21537683efda70`: only C4-5 and C4-10 are waived, and
+all other W4 criteria remain passing and mechanically verified. This is not authority to
+weaken or generalize the W4 waiver.
+
+If the confirmation returns APPROVE with no blocking finding, W6a-P may run through
+`/goal` in the same session after W4 is an ancestor of fresh `origin/main` and the
+plan-freeze lease is granted. The ruling does not waive W3, W4, W5, fresh-base,
+reviewer-independence, exact-file lease, or active-Claude-worktree isolation requirements.
+W6a product implementation remains gated behind the existing W3 → W5 → W6a sequence.
+Any non-APPROVE verdict or new blocking finding in the final confirmation parks W6a-P with
+no further autonomous fix round.
