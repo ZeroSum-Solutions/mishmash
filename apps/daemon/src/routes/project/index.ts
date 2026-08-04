@@ -44,7 +44,7 @@ import {
 import { connectorService } from '../../connectors/service.js';
 import type { RouteDeps } from '../../server-context.js';
 import { listSkills } from '../../skills.js';
-import { isSafeId } from '../../projects.js';
+import { isSafeId, resolveCanvasFile } from '../../projects.js';
 import {
   BUILT_IN_PROJECT_LOCATION_ID,
   allProjectLocations,
@@ -2101,8 +2101,9 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       }
     }
     const resolvedDir = projectDetailResolvedDir(PROJECTS_DIR, project, resolveProjectDir);
-    /** @type {import('@open-design/contracts').ProjectResponse} */
-    const body = { project, resolvedDir };
+    const resolvedCanvasFile = await resolveCanvasFile(PROJECTS_DIR, project);
+    /** @type {import('@open-design/contracts').ProjectDetailResponse} */
+    const body = { project, resolvedDir, resolvedCanvasFile };
     res.json(body);
   });
 

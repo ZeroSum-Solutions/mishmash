@@ -4363,6 +4363,7 @@ export interface Dict {
   'newproj.startBlank': string;
   'newproj.startBlankHint': string;
   'workspace.pages': string;
+  'workspace.canvas': string;
   'workspace.allProjectFiles': string;
   'workspace.newBlankPage': string;
   'workspace.noPagesYet': string;

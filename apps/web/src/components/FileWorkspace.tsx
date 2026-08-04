@@ -168,6 +168,11 @@ interface Props {
   /** Absolute on-disk project directory (from GET /api/projects/:id). Used by
    * the Design Files panel's "copy absolute path" action. */
   resolvedDir?: string | null;
+  /** Daemon-resolved primary design file (GET /api/projects/:id
+   * `resolvedCanvasFile`). Drives the persistent Canvas tab — one click
+   * back to the working design from anywhere in the workspace. Hidden
+   * when null (no unambiguous canvas). */
+  resolvedCanvasFile?: string | null;
   files: ProjectFile[];
   liveArtifacts: LiveArtifactSummary[];
   filesRefreshKey?: number;
@@ -1043,6 +1048,7 @@ export function FileWorkspace({
   rootDirName,
   reloading,
   resolvedDir,
+  resolvedCanvasFile,
   files,
   liveArtifacts,
   filesRefreshKey = 0,
@@ -3283,6 +3289,20 @@ export function FileWorkspace({
                 <Icon name="blocks" size={13} />
               </span>
               <span className="ws-tab-label">{t('dsManager.tabDesignSystem')}</span>
+            </button>
+          ) : null}
+          {resolvedCanvasFile ? (
+            <button
+              type="button"
+              className={`ws-tab canvas-tab ${activeTab === resolvedCanvasFile ? 'active' : ''}`}
+              data-testid="workspace-canvas-tab"
+              onClick={() => openFile(resolvedCanvasFile, { forcePersist: true })}
+              title={t('workspace.canvas')}
+            >
+              <span className="tab-icon" aria-hidden>
+                <Icon name="layout" size={13} />
+              </span>
+              <span className="ws-tab-label">{t('workspace.canvas')}</span>
             </button>
           ) : null}
           <div className="ws-pages-menu-anchor" ref={pagesMenuRef} role="presentation">

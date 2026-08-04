@@ -162,6 +162,81 @@ describe('GET /api/projects/:id resolvedDir', () => {
     expect(body.error?.message).toMatch(/EEXIST|not a directory|file already exists/i);
   });
 
+  // Red specs for the daemon-owned canvas resolution behind the workspace
+  // "Canvas" control: GET /api/projects/:id must carry a single
+  // `resolvedCanvasFile` the UI button, MCP links, and CLI can all agree
+  // on. Order: metadata.entryFile → artifact-manifest primary →
+  // index.html → the single root-level .html → null.
+  async function createCanvasProject(projectId: string): Promise<void> {
+    const createResp = await fetch(`${baseUrl}/api/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: projectId, name: 'Canvas fixture', skillId: null, designSystemId: null }),
+    });
+    expect(createResp.status).toBe(200);
+  }
+
+  async function writeCanvasFile(projectId: string, name: string, extra: Record<string, unknown> = {}): Promise<void> {
+    const resp = await fetch(`${baseUrl}/api/projects/${projectId}/files`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, content: '<!doctype html><h1>c</h1>', ...extra }),
+    });
+    expect(resp.status).toBe(200);
+  }
+
+  async function fetchCanvasFile(projectId: string): Promise<string | null | undefined> {
+    const resp = await fetch(`${baseUrl}/api/projects/${projectId}`);
+    expect(resp.status).toBe(200);
+    const detail = (await resp.json()) as { resolvedCanvasFile?: string | null };
+    return detail.resolvedCanvasFile;
+  }
+
+  it('resolves the canvas to metadata.entryFile when it exists on disk', async () => {
+    const projectId = `proj-canvas-entry-${Date.now()}`;
+    await createCanvasProject(projectId);
+    await writeCanvasFile(projectId, 'home.html');
+    await writeCanvasFile(projectId, 'about.html');
+    const patchResp = await fetch(`${baseUrl}/api/projects/${projectId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ metadata: { kind: 'prototype', entryFile: 'home.html' } }),
+    });
+    expect(patchResp.status).toBe(200);
+
+    expect(await fetchCanvasFile(projectId)).toBe('home.html');
+  });
+
+  it('resolves the canvas to an artifact-manifest primary file over name heuristics', async () => {
+    const projectId = `proj-canvas-manifest-${Date.now()}`;
+    await createCanvasProject(projectId);
+    await writeCanvasFile(projectId, 'sidebar.html');
+    await writeCanvasFile(projectId, 'dashboard.html', {
+      artifactManifest: { kind: 'html', renderer: 'html', exports: ['html'], primary: true },
+    });
+
+    expect(await fetchCanvasFile(projectId)).toBe('dashboard.html');
+  });
+
+  it('falls back to index.html, then to the single root-level html, else null', async () => {
+    const withIndex = `proj-canvas-index-${Date.now()}`;
+    await createCanvasProject(withIndex);
+    await writeCanvasFile(withIndex, 'index.html');
+    await writeCanvasFile(withIndex, 'pages/detail.html');
+    expect(await fetchCanvasFile(withIndex)).toBe('index.html');
+
+    const single = `proj-canvas-single-${Date.now()}`;
+    await createCanvasProject(single);
+    await writeCanvasFile(single, 'landing.html');
+    expect(await fetchCanvasFile(single)).toBe('landing.html');
+
+    const ambiguous = `proj-canvas-none-${Date.now()}`;
+    await createCanvasProject(ambiguous);
+    await writeCanvasFile(ambiguous, 'one.html');
+    await writeCanvasFile(ambiguous, 'two.html');
+    expect(await fetchCanvasFile(ambiguous)).toBeNull();
+  });
+
   it('persists skipDiscoveryBrief for batch-created projects', async () => {
     const projectId = `proj-skip-discovery-${Date.now()}`;
     const createResp = await fetch(`${baseUrl}/api/projects`, {
