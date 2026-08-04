@@ -2,16 +2,18 @@
 
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LibraryAsset } from '@open-design/contracts';
+import type { LibraryAsset, LibraryAssetListResponse } from '@open-design/contracts';
 
 vi.mock('../../src/components/plugins-home/useInView', () => ({
   useInView: () => ({ ref: { current: null }, inView: false }),
 }));
 
-const fetchLibraryAssets = vi.fn(async (): Promise<LibraryAsset[]> => []);
+const fetchLibraryAssetsPage = vi.fn(
+  async (): Promise<LibraryAssetListResponse> => ({ assets: [], total: 0, truncated: false }),
+);
 const fetchLibraryAsset = vi.fn(async (): Promise<LibraryAsset | null> => null);
 vi.mock('../../src/providers/registry', () => ({
-  fetchLibraryAssets: (...args: unknown[]) => fetchLibraryAssets(...(args as [])),
+  fetchLibraryAssetsPage: (...args: unknown[]) => fetchLibraryAssetsPage(...(args as [])),
   fetchLibraryAsset: (...args: unknown[]) => fetchLibraryAsset(...(args as [])),
   libraryAssetRawUrl: (id: string) => `/raw/${id}`,
   applyLibraryAsset: vi.fn(),
@@ -44,7 +46,9 @@ function makeAsset(over: Partial<LibraryAsset> = {}): LibraryAsset {
 
 describe('LibrarySection accessibility', () => {
   beforeEach(() => {
-    fetchLibraryAssets.mockReset().mockResolvedValue([makeAsset()]);
+    fetchLibraryAssetsPage
+      .mockReset()
+      .mockResolvedValue({ assets: [makeAsset()], total: 1, truncated: false });
     fetchLibraryAsset.mockReset().mockResolvedValue(null);
     (globalThis as { EventSource?: unknown }).EventSource = class {
       addEventListener() {}

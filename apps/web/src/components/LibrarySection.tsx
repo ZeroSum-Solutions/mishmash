@@ -25,7 +25,7 @@ import {
   fetchDesignSystem,
   fetchDesignSystems,
   fetchLibraryAsset,
-  fetchLibraryAssets,
+  fetchLibraryAssetsPage,
   fetchLibraryAssetAsFile,
   libraryAssetRawUrl,
   syncLibrary,
@@ -37,6 +37,7 @@ import { setPendingDesignSystemCreateEntry } from '../analytics/ds-create-entry'
 import { setComposerSeed, setDesignSystemAssetSeed, setHomeComposerAssetSeed } from '../state/libraryHandoff';
 import { Button, Dialog, DialogDescription, DialogFooter, DialogTitle } from '@open-design/components';
 import { Icon } from './Icon';
+import { useT } from '../i18n';
 import {
   KindIcon,
   SOURCE_LABELS,
@@ -489,8 +490,32 @@ const LibraryCard = memo(function LibraryCard({
 });
 
 export function LibrarySection({ active, onOpenProject }: Props) {
+  const t = useT();
   const [assets, setAssets] = useState<LibraryAsset[]>([]);
   const [loading, setLoading] = useState(false);
+  // Pagination (BUG-5): the daemon caps each page at 500/1000 rows, so a
+  // larger library needs more than one request. `total`/`hasMore` come
+  // straight off the server response so the count shown is never a guess,
+  // and `fetchedCountRef` tracks rows fetched so far (pre client-side kind
+  // filter) — the offset the next page continues from.
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const fetchedCountRef = useRef(0);
+  // Ref mirrors of `total`/`assets`, kept in sync via effects below, so
+  // handlers that fire from outside React's render cycle (the long-lived SSE
+  // subscription, delete handlers) can read the current value synchronously
+  // instead of closing over a stale one — the same idiom `loadRef` already
+  // uses for `load` itself.
+  const totalRef = useRef(0);
+  const assetsRef = useRef<LibraryAsset[]>([]);
+  // Monotonic request generation. `load()` bumps it to start a new "epoch";
+  // `loadMore()` reads (without bumping) the epoch it started in. Any async
+  // response — from either — is discarded if the epoch has since moved on,
+  // so a filter change or Refresh that fires a fresh `load()` while a
+  // `loadMore()` page is still in flight can't have that stale page append
+  // onto the new grid or clobber total/hasMore/fetchedCountRef.
+  const requestIdRef = useRef(0);
   const [syncing, setSyncing] = useState(false);
   const [kind, setKind] = useState('');
   const [source, setSource] = useState('');
@@ -557,14 +582,74 @@ export function LibrarySection({ active, onOpenProject }: Props) {
     filtersActiveRef.current = filtersActive;
   }, [filtersActive]);
 
+  useEffect(() => {
+    totalRef.current = total;
+  }, [total]);
+  useEffect(() => {
+    assetsRef.current = assets;
+  }, [assets]);
+
+  // Fresh page 1 — used on mount, on any filter change, and by the manual
+  // Refresh / Sync actions. Resets the paging cursor and starts a new request
+  // generation: any `loadMore()` still in flight from before this call will
+  // see its own captured generation go stale and discard its response
+  // instead of appending old-filter rows onto this fresh grid.
   const load = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+    // A fresh load() invalidates any loadMore() page still in flight from the
+    // previous view. Clear its loading indicator immediately here rather than
+    // relying on that stale request's own `finally` (below, `loadMore()`
+    // unconditionally clears `loadingMore` when ITS fetch settles, but if
+    // this load() fires while that fetch is still pending, the button would
+    // otherwise stay disabled/aria-busy until the stale fetch eventually
+    // resolves — which could be a long time, or never).
+    setLoadingMore(false);
     setLoading(true);
-    const next = await fetchLibraryAssets(query);
-    // Final filtering is badge-aware (shared with the picker) so `image` excludes
-    // element captures and `element` keeps only them; other kinds pass through.
-    setAssets(next.filter((a) => matchesKindFilter(a, kind as KindFilterValue)));
-    setLoading(false);
+    try {
+      const page = await fetchLibraryAssetsPage(query);
+      if (requestIdRef.current !== requestId) return; // superseded by a newer load()
+      fetchedCountRef.current = page.assets.length;
+      // Final filtering is badge-aware (shared with the picker) so `image` excludes
+      // element captures and `element` keeps only them; other kinds pass through.
+      setAssets(page.assets.filter((a) => matchesKindFilter(a, kind as KindFilterValue)));
+      setTotal(page.total);
+      setHasMore(page.truncated);
+    } finally {
+      if (requestIdRef.current === requestId) setLoading(false);
+    }
   }, [query, kind]);
+
+  // Fetch the next page (BUG-5) and append it — the grid never silently caps
+  // at the first page's rows. `offset` continues from every row fetched so
+  // far, so kind-filtered-out rows on the client don't cause the server page
+  // to be re-requested. Reads (rather than bumps) `requestIdRef`: a
+  // `loadMore()` continues the CURRENT generation `load()` started, so a
+  // fresh `load()` firing mid-flight (filter change, Refresh, Sync) bumps the
+  // generation out from under this call and its response is discarded.
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    const requestId = requestIdRef.current;
+    setLoadingMore(true);
+    try {
+      const page = await fetchLibraryAssetsPage({ ...query, offset: fetchedCountRef.current });
+      // Only the DATA-mutating updates are generation-gated — a superseding
+      // load() means this page belongs to a view the user has already left,
+      // so it must not be appended/counted.
+      if (requestIdRef.current !== requestId) return;
+      fetchedCountRef.current += page.assets.length;
+      const filtered = page.assets.filter((a) => matchesKindFilter(a, kind as KindFilterValue));
+      setAssets((prev) => [...prev, ...filtered]);
+      setTotal(page.total);
+      setHasMore(page.truncated);
+    } finally {
+      // Unconditional: this request's OWN loading indicator must clear when
+      // ITS fetch settles regardless of generation, or a superseded call
+      // would leave "Load more" stuck disabled/aria-busy forever -- nothing
+      // else would ever flip it back (a generation-gated reset here can
+      // never fire once superseded, since the check is permanently false).
+      setLoadingMore(false);
+    }
+  }, [query, kind, hasMore, loadingMore]);
 
   // Force a reconcile (design systems + agent deliverables → referenced Library
   // rows), then reload so the freshly-indexed assets appear. The throttle lives
@@ -594,6 +679,22 @@ export function LibrarySection({ active, onOpenProject }: Props) {
     loadRef.current = load;
   }, [load]);
 
+  // Shared by every delete path (a card's own delete, bulk delete, and a live
+  // SSE delete event) to keep the pagination invariant `total -
+  // fetchedCountRef == rows not yet loaded` intact after `removedCount`
+  // already-fetched rows are removed. Without this, `total` overstates the
+  // library (the deleted rows never leave it) and the next `loadMore()`
+  // offset silently skips one row per delete that happened before it — the
+  // same class of drift BUG-5 was fixed to prevent, just from the other
+  // direction.
+  const reconcilePagingAfterRemoval = useCallback((removedCount: number) => {
+    if (removedCount <= 0) return;
+    fetchedCountRef.current = Math.max(0, fetchedCountRef.current - removedCount);
+    const nextTotal = Math.max(0, totalRef.current - removedCount);
+    setTotal(nextTotal);
+    setHasMore(fetchedCountRef.current < nextTotal);
+  }, []);
+
   // Live updates: clipper captures and deletes patch the grid incrementally.
   // A burst of captures used to trigger one full refetch + full re-render PER
   // event; here events are coalesced over a short window and applied as a
@@ -610,12 +711,18 @@ export function LibrarySection({ active, onOpenProject }: Props) {
 
     const flush = async () => {
       timer = null;
-      // Deletes are free (no fetch); apply them first.
+      // Deletes are free (no fetch); apply them first. Reconcile
+      // total/fetchedCountRef/hasMore by however many of the deleted ids were
+      // actually present — an id can arrive here for an asset this client
+      // never fetched into its current page window, which must not shrink
+      // the paging cursor it was never counted in.
       if (pendingDelete.size) {
         const del = new Set(pendingDelete);
         pendingDelete.clear();
         for (const id of del) pendingIngest.delete(id);
+        const removedCount = assetsRef.current.reduce((n, a) => (del.has(a.id) ? n + 1 : n), 0);
         setAssets((prev) => prev.filter((a) => !del.has(a.id)));
+        reconcilePagingAfterRemoval(removedCount);
       }
       // A filtered view can't predict membership client-side — one reload.
       if (pendingFull || filtersActiveRef.current) {
@@ -634,7 +741,19 @@ export function LibrarySection({ active, onOpenProject }: Props) {
           return;
         }
         const resolved = fetched.filter((a): a is LibraryAsset => a !== null);
+        // Only genuinely NEW rows (not a dedup re-ingest refreshing an
+        // existing card in place) grow the paging cursor/total — otherwise
+        // the next loadMore() would double-count and duplicate rows.
+        const priorIds = new Set(assetsRef.current.map((a) => a.id));
+        const addedCount = resolved.reduce((n, a) => (priorIds.has(a.id) ? n : n + 1), 0);
         setAssets((prev) => mergeIngestedAssets(prev, resolved));
+        if (addedCount > 0) {
+          fetchedCountRef.current += addedCount;
+          setTotal(totalRef.current + addedCount);
+          // `hasMore` is unaffected: a live prepend grows total and the
+          // fetched cursor by the same amount, so the not-yet-loaded tail
+          // (total - fetchedCountRef) — what hasMore answers — is unchanged.
+        }
       }
     };
 
@@ -679,10 +798,16 @@ export function LibrarySection({ active, onOpenProject }: Props) {
     });
   }, [assets]);
 
-  const onDelete = useCallback(async (id: string) => {
-    const ok = await deleteLibraryAsset(id);
-    if (ok) setAssets((prev) => prev.filter((a) => a.id !== id));
-  }, []);
+  const onDelete = useCallback(
+    async (id: string) => {
+      const ok = await deleteLibraryAsset(id);
+      if (!ok) return;
+      const wasPresent = assetsRef.current.some((a) => a.id === id);
+      setAssets((prev) => prev.filter((a) => a.id !== id));
+      reconcilePagingAfterRemoval(wasPresent ? 1 : 0);
+    },
+    [reconcilePagingAfterRemoval],
+  );
 
   // "Edit as page": turn a captured html asset into a fresh editable OD project
   // and open it on its index.html. The daemon owns the project creation; here we
@@ -709,10 +834,12 @@ export function LibrarySection({ active, onOpenProject }: Props) {
     const results = await Promise.all(ids.map((id) => deleteLibraryAsset(id)));
     const deleted = new Set(ids.filter((_, i) => results[i]));
     if (!deleted.size) return;
+    const removedCount = assetsRef.current.reduce((n, a) => (deleted.has(a.id) ? n + 1 : n), 0);
     setAssets((prev) => prev.filter((a) => !deleted.has(a.id)));
+    reconcilePagingAfterRemoval(removedCount);
     setSelectedIds(new Set());
     setPreviewId((cur) => (cur && deleted.has(cur) ? null : cur));
-  }, [selectedIds]);
+  }, [selectedIds, reconcilePagingAfterRemoval]);
 
   // Bulk delete is destructive and easy to trigger (a button or Delete/
   // Backspace), so it routes through a confirmation dialog instead of removing
@@ -1068,6 +1195,16 @@ export function LibrarySection({ active, onOpenProject }: Props) {
   const previewIndex = previewId ? assets.findIndex((a) => a.id === previewId) : -1;
   const previewAsset = previewIndex >= 0 ? assets[previewIndex] : null;
   const selectedCount = selectedIds.size;
+  // The `element` filter queries the server as `kind:'image'` (element clips
+  // have no storage kind of their own) then splits client-side, so the
+  // server's `total`/`truncated` count ALL images, not just elements —
+  // showing them here would overstate the count, and "Load more" could fetch
+  // an entire page of non-element images that renders nothing. Suppressing
+  // the affordance for this one pseudo-kind keeps every real kind fully
+  // paginated while being honest that `element` isn't (yet) — see the PR's
+  // Adjacent issues for the full rationale; fixing it for real means an
+  // element-aware server query, out of scope here.
+  const showLoadMore = hasMore && kind !== 'element';
 
   // Day-bucketed groups for the timeline view (newest day first). Items keep
   // their flat index in `assets` so range/box selection stays consistent across
@@ -1332,6 +1469,21 @@ export function LibrarySection({ active, onOpenProject }: Props) {
           {assets.map((asset, index) => renderCard(asset, index))}
         </div>
       )}
+
+      {showLoadMore ? (
+        <div className={styles.loadMoreRow}>
+          {/* aria-live: this text changes after every Load more click (the
+              shown count grows), so a screen-reader user gets an announcement
+              instead of silence — the same "never silently present a
+              truncated set" principle BUG-5 fixed, applied to a11y. */}
+          <span className={styles.loadMoreCount} aria-live="polite">
+            {t('library.assetCount', { shown: assets.length, total })}
+          </span>
+          <Button variant="ghost" onClick={() => void loadMore()} disabled={loadingMore} aria-busy={loadingMore}>
+            {loadingMore ? t('library.loadingMore') : t('library.loadMore')}
+          </Button>
+        </div>
+      ) : null}
 
       {band ? (
         <div

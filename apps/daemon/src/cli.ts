@@ -245,7 +245,7 @@ const USAGE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 // `od library …` (OD Library asset registry). Hoisted so the dispatcher can
 // parse flags without hitting a temporal-dead-zone on these sets.
 const LIBRARY_ASSET_STRING_FLAGS = new Set([
-  'daemon-url', 'kind', 'tag', 'source', 'date', 'query', 'project', 'label', 'out', 'dir', 'limit',
+  'daemon-url', 'kind', 'tag', 'source', 'date', 'query', 'project', 'label', 'out', 'dir', 'limit', 'offset',
 ]);
 const LIBRARY_ASSET_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const DIAGNOSTICS_STRING_FLAGS = new Set(['daemon-url', 'output']);
@@ -8073,7 +8073,7 @@ function printLibraryHelp() {
   console.log(`Usage: od library <command> [options]
 
 Commands:
-  list                      List library assets. Filters: --kind --tag --source --date --limit
+  list                      List library assets. Filters: --kind --tag --source --date --limit --offset
   get <id>                  Print one asset (JSON).
   rm <id>                   Delete an asset.
   search <query>            Keyword search across captions / tags / titles.
@@ -8094,8 +8094,11 @@ Options:
   --tag <tag>               Filter by / attach a tag.
   --source <kind>           Filter by source (clipper|manual-upload|agent-task|design-system|generated).
   --date <YYYY-MM-DD>       Filter by archive date.
-  --limit <n>               Max rows for list (default 500, max 1000). A
-                            truncated list says so on stderr.
+  --limit <n>               Max rows per page for list (default 500, max
+                            1000). A truncated page says so on stderr.
+  --offset <n>              Rows to skip before the page (default 0). Page
+                            past --limit by re-running with a higher
+                            --offset, e.g. --offset <prior --limit>.
   --project <id>            Target project for apply.
   --dir <subdir>            Subdirectory inside the project for apply (default: library).
   --out <file>              Write the figma export to a file (default: stdout).`);
@@ -8127,6 +8130,19 @@ async function runLibrary(args) {
     switch (sub) {
       case 'list':
       case 'search': {
+        // Validate --offset client-side instead of forwarding a bad value to
+        // the daemon: an unparsable or negative offset must fail loudly here
+        // rather than silently falling back to 0 server-side, which would
+        // make `od library list --offset abc` quietly re-list page 1 instead
+        // of erroring.
+        let offsetNum = 0;
+        if (flags.offset !== undefined) {
+          offsetNum = Number(flags.offset);
+          if (!Number.isFinite(offsetNum) || !Number.isInteger(offsetNum) || offsetNum < 0) {
+            console.error(`--offset must be a non-negative integer, got: ${flags.offset}`);
+            process.exit(2);
+          }
+        }
         const params = new URLSearchParams();
         const query = sub === 'search' ? flags.query || pos[0] : flags.query;
         if (query) params.set('q', query);
@@ -8136,6 +8152,7 @@ async function runLibrary(args) {
         if (flags.date) params.set('date', flags.date);
         if (flags.project) params.set('projectId', flags.project);
         if (flags.limit) params.set('limit', flags.limit);
+        if (flags.offset !== undefined) params.set('offset', String(offsetNum));
         const qs = params.toString();
         const resp = await fetch(`${base}/api/library/assets${qs ? `?${qs}` : ''}`);
         if (!resp.ok) return structuredHttpFailure(resp);
@@ -8146,12 +8163,15 @@ async function runLibrary(args) {
           const label = asset.sourceTitle || asset.sourceUrl || asset.caption || '';
           console.log(`${asset.id}\t${asset.kind}\t${dims}\t${label}`);
         }
-        // BUG-5: the list caps at 500 rows — say so instead of letting a
-        // partial page read as the whole library. (--json carries
-        // total/truncated in the payload itself.)
+        // BUG-5: each page caps at 500 rows — say so, and give the exact next
+        // --offset, instead of letting a partial page read as the whole
+        // library. (--json carries total/truncated in the payload itself.)
         if (data.truncated) {
+          const shown = (data.assets ?? []).length;
+          const nextOffset = offsetNum + shown;
           console.error(
-            `(showing ${(data.assets ?? []).length} of ${data.total} matching assets — pass a higher --limit or narrow the filter)`,
+            `(showing ${shown} of ${data.total} matching assets — pass --offset ${nextOffset} for the next page, ` +
+              `a higher --limit, or narrow the filter)`,
           );
         }
         return;

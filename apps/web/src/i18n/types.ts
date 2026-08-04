@@ -54,6 +54,9 @@ export interface Dict {
   'libraryPicker.allKinds': string;
   'libraryPicker.add': string;
   'libraryPicker.loading': string;
+  'library.assetCount': string;
+  'library.loadMore': string;
+  'library.loadingMore': string;
   'common.save': string;
   'common.close': string;
   'common.clear': string;
@@ -1001,6 +1004,7 @@ export interface Dict {
   'entry.navTasks': string;
   'entry.navPlugins': string;
   'entry.navDesignSystems': string;
+  'entry.navLibrary': string;
   'entry.navDesignLibrary': string;
   'entry.navStoryboard': string;
   'entry.navIntegrations': string;
