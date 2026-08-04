@@ -133,6 +133,28 @@ describe('POST /api/projects/:id/cover/generate + GET /api/projects/:id/cover', 
     expect(body.error?.code).toBe('PROJECT_NOT_FOUND');
   });
 
+  // Security review finding: GET .../cover joined req.params.id straight
+  // onto the covers root with no isSafeId()/getProject() check (unlike the
+  // POST generate handler, which validates via resolveProjectDir), so a
+  // traversal-shaped id could read cover.png from a sibling RUNTIME_DATA_DIR
+  // path. Seed a REAL cover under a sibling id-shaped directory the covers
+  // root would sit next to, then prove a ".." id cannot reach it.
+  it('GET rejects a path-traversal-shaped project id instead of escaping the covers root', async () => {
+    const id = `cover-traversal-victim-${Date.now()}`;
+    await createProject(id);
+    await uploadFile(id, 'index.html', '<!doctype html><html><body>victim</body></html>');
+    const gen = await fetch(`${baseUrl}/api/projects/${id}/cover/generate`, { method: 'POST' });
+    expect(gen.status).toBe(200);
+
+    // ".." resolves (via path.join(coversRoot, "..")) to RUNTIME_DATA_DIR
+    // itself -- the traversal target a correct guard must reject.
+    const traversalIds = ['..', '../..', `..%2F..%2Fcovers%2F${id}`];
+    for (const traversalId of traversalIds) {
+      const resp = await fetch(`${baseUrl}/api/projects/${traversalId}/cover`);
+      expect(resp.status).toBe(404);
+    }
+  });
+
   // NOTE on edit mechanism: apps/daemon/src/server.ts's upload endpoint
   // (`uniqueUploadFileName`, ~line 1905) never overwrites an existing
   // same-named file -- a second upload of "styles.css" silently lands as

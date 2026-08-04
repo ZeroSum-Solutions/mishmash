@@ -11,6 +11,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { ProjectCoverRecord } from '@open-design/contracts';
+import { isSafeId } from '../projects.js';
 
 export const COVER_IMAGE_FILENAME = 'cover.png';
 export const COVER_RECORD_FILENAME = 'record.json';
@@ -20,7 +21,18 @@ export function coversRootDir(runtimeDataDir: string): string {
   return path.join(runtimeDataDir, 'covers');
 }
 
+/**
+ * Defense in depth: every store function below joins `projectId` straight
+ * onto the covers root, so a path-traversal-shaped id ("..", "../../x")
+ * must never reach path.join() here even if a future caller forgets its
+ * own route-level guard (see routes/covers.ts's GET handler, which already
+ * rejects this at the HTTP boundary). Mirrors isSafeId(), the same guard
+ * resolveProjectDir() applies for the on-disk project root.
+ */
 function projectCoverDir(runtimeDataDir: string, projectId: string): string {
+  if (!isSafeId(projectId)) {
+    throw new Error(`invalid project id for cover storage: ${JSON.stringify(projectId)}`);
+  }
   return path.join(coversRootDir(runtimeDataDir), projectId);
 }
 

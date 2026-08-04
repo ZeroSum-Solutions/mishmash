@@ -9,6 +9,7 @@ import type { Express } from 'express';
 import { generateProjectCover } from '../covers/service.js';
 import { isTypedCoverError } from '../covers/errors.js';
 import { readCoverImageBytes } from '../covers/store.js';
+import { isSafeId } from '../projects.js';
 import type { RouteDeps } from '../server-context.js';
 
 export interface RegisterCoversRoutesDeps extends RouteDeps<'db' | 'paths' | 'projectStore' | 'projectFiles'> {}
@@ -55,6 +56,14 @@ export function registerCoverRoutes(app: Express, ctx: RegisterCoversRoutesDeps)
 
   app.get('/api/projects/:id/cover', async (req, res) => {
     const projectId = String(req.params.id ?? '');
+    // A path-traversal-shaped id (e.g. "..") must never reach the covers
+    // store: readCoverImageBytes joins projectId straight onto the covers
+    // root, so an unvalidated ".." here could read cover.png from ANY
+    // sibling directory under RUNTIME_DATA_DIR. isSafeId() is the same
+    // guard resolveProjectDir() applies for the POST generate route above.
+    if (!isSafeId(projectId) || !getProject(db, projectId)) {
+      return res.status(404).end();
+    }
     const bytes = await readCoverImageBytes(RUNTIME_DATA_DIR, projectId);
     if (!bytes) return res.status(404).end();
     res.setHeader('Content-Type', 'image/png');
