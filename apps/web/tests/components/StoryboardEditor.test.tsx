@@ -12,6 +12,8 @@ const mockDraftStoryboardShots = vi.fn();
 
 vi.mock('../../src/providers/registry', () => ({
   assembleStoryboard: vi.fn(),
+  clearStoryboardStyleReference: vi.fn(),
+  setStoryboardStyleReference: vi.fn(),
   draftStoryboardShots: (...args: unknown[]) => mockDraftStoryboardShots(...args),
   exportStoryboardSlider: vi.fn(),
   generateStoryboardFrame: (...args: unknown[]) => mockGenerateStoryboardFrame(...args),
