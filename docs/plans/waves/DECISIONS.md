@@ -549,3 +549,137 @@ Reviewer caveat, recorded honestly: the C4-5 flake count (7/7 standalone) and th
 sixth-restatement provenance rest on the contemporaneous execution record rather than
 the reviewer's own reproduction; both sit under "Not amended" and carry no code diff.
 
+
+---
+
+## 2026-08-03 — W4 gate-defect amendment r2: C4-10 crash + three false-green paths in newly-reachable sealed-verifier code
+
+**Status:** APPLIED (founder-run apply script; re-pinned).
+
+**Trigger defect (the crash).** `scripts/waves/verify-w4.ts`'s C4-10 memory
+poller called `browser?.process()?.pid` on the object returned by
+`pw.chromium.launch()`. Playwright's `Browser` has no `process()` method —
+that is Puppeteer's API; in Playwright only `BrowserServer` (from
+`launchServer()`) has it. The call sits inside a fire-and-forget async IIFE
+with no catch; its first-iteration `TypeError` became an unhandled rejection,
+which under Node 24's default `--unhandled-rejections=throw` killed the whole
+gate process before any manifest — including the emergency manifest, whose
+`main().catch(...)` never sees detached-promise rejections — was written.
+Contributing cause: the verifier's own local shim `MinimalPwBrowser` FALSELY
+declared `process(): { pid: number } | null`, which let the Puppeteer-style
+call typecheck (both the landed and amended files compile with zero
+diagnostics under the repo's strict scripts/tsconfig.json — the false shim
+was the mechanism).
+
+**Why it surfaced only now.** The code was unreachable in every prior gate
+run: C4-10 short-circuited at its corpus-validity precheck until the sixth
+scale-baseline restatement landed (PR #55, `4b614aab9`). The first run past
+that check — on the W4 branch after the r1 amendment (merge `a6955fc84`,
+NM-35C re-added as `9d222f9ea`) — crashed at verify-w4.ts:2716 with the exact
+TypeError above. The W4 agent correctly refused to touch the sealed verifier
+and stopped for direction.
+
+**Review process (two rounds, both REJECT-default).** A first draft fixing
+only the crash was reviewed by two independent auditors. The Claude
+adversarial reviewer APPROVED it (empirical verification: installed
+playwright-core@1.60.0 typings quoted; live probes showing
+`launchServer()+connect()` spawns a process tree structurally identical to
+`launch()`; both files compiled clean under scripts/tsconfig.json). The
+second auditor — GPT-5.6 via Codex, read-only — confirmed the crash fix but
+**REJECTED the round**, finding three additional false-green paths in the
+newly-reachable C4-10 code plus a lifecycle leak:
+
+1. *RSS fail-open*: `psSnapshot()` converts a failed `ps` into `[]`; the
+   poller converted that into rssKb=0, so both sides could report
+   `peakCombinedRssKb=0` and the R8 memory gate collapsed to
+   `0 <= 0 * ceiling` — the exact failure class C4-5's own
+   `aggregateDescendantRssKbChecked` had already patched.
+2. *Workload unbound*: parent and HEAD each independently took the first 30
+   projects in their own daemon's listing order (`updated_at DESC`); a
+   HEAD-side listing change could select a cheaper workload and manufacture
+   the required 10% improvement.
+3. *Failed HTTP as success*: `requestfailed`/non-2xx responses merely drained
+   the in-flight counter; a fail-fast implementation would read as
+   "started + drained" with better latency/RSS.
+4. *Poller leak*: an exception mid-rep left the poller looping through later
+   criteria (nothing aborted it on the exception path).
+5. *Shim looseness*: `BrowserServer.process()` typed `{ pid: number } | null`
+   vs the real non-null `ChildProcess` with optional `pid`.
+
+**Final amendment (+144/−18 by git numstat):**
+1. `measureDesignsTabActivation` launches `chromium.launchServer()` and
+   `connect()`s to it; the poller reads `browserServer?.process()?.pid`.
+   This PRESERVES the browser-process-tree RSS term of `peakCombinedRssKb`
+   exactly as designed — dropping the term would have quietly weakened the
+   memory non-regression gate.
+2. Shim honesty: `process()` removed from `MinimalPwBrowser`; new
+   `MinimalPwBrowserServer { wsEndpoint(); process(): { readonly pid?: number };
+   close() }` (cited to types.d.ts:18798); `MinimalPwBrowserType` gains
+   `launchServer`/`connect`; new `MinimalPwResponse` + `Page.on('response')`
+   overload.
+3. C4-5-style checked RSS sampling: every 300ms poll records validity (empty
+   snapshot, missing pids, or non-positive combined RSS → invalid); the
+   measurement requires ≥1 valid poll, ZERO invalid polls, and a positive
+   peak, else an explicit `{ error }`. The per-tree RSS formulas are
+   byte-identical to the sealed originals (daemon leg descendants-only as
+   before; browser leg includes the server pid as before) — only validity
+   gating is new.
+4. Deterministic workload binding: the sample is id-sorted before slicing to
+   30; each measurement returns `projectIdsDigest` (sha256 of the ordered
+   ids); `checkC410` requires parent and HEAD digests + cardinality to match
+   exactly BEFORE any statistics, and records both digests in evidence.
+5. Successful-activation semantics: `pageerror`, daemon-origin
+   `requestfailed`, or a non-2xx daemon-origin response invalidates the
+   repetition (no sample) — quiescence alone is no longer success.
+6. Fail-closed poller lifecycle: `pollAbort`/`poller`/`pollerError` are
+   function-scoped; a captured poller error fails the measurement with
+   evidence; the `finally` aborts and awaits the poller on EVERY exit path
+   before closing browser, browser server, and daemon.
+
+No lease change and no CI change in this round. All other criteria untouched.
+
+**Re-review verdicts on the final draft:**
+
+*Claude adversarial reviewer (REJECT-default): VERDICT APPROVE.* All five
+corrections verified genuinely closed against the sealed C4-5 precedent
+(`aggregateDescendantRssKbChecked` / `pollerHealthy`); the daemon-excludes-
+root / browser-includes-root asymmetry confirmed as pre-existing sealed
+design, with the browser main process empirically measured at ~50% of the
+browser-tree RSS (so including it is load-bearing); no new defects found —
+no startup race for the zero-invalid-polls rule (browser fully awaited
+before the poller exists), id-sorting is order-symmetric and removes the
+HEAD-controllable variable, the response listener fails closed and
+symmetrically, `Page.on('response')`/`Response.status()`/`Response.url()`
+verified against installed typings, double abort/await is idempotent-safe.
+Minimality re-walked hunk-by-hunk: every change traces to one of the five
+findings. Independently recompiled the final draft under the repo's exact
+scripts/tsconfig.json: zero diagnostics.
+
+*GPT-5.6 via Codex, second-round re-audit (read-only, verifier skill):
+VERDICT APPROVE.* Per-correction closure table, all five CLOSED with line
+citations into the draft: (1) every poll classified valid/invalid — empty
+snapshot, missing root pid, non-numeric browser pid, non-positive combined
+RSS, zero valid samples, or ANY invalid sample returns an explicit error
+before results; (2) ids sorted before slicing, hashed in order,
+parent/HEAD digest + count equality required before any percentile
+comparison, both digests in evidence; (3) timed repetitions reject page
+errors, daemon-origin request failures, and daemon-origin non-2xx responses
+after quiescence, recording no sample; (4) poller lifecycle function-scoped,
+finally aborts and awaits it before closing browser/browser-server/daemon on
+every exit; (5) shim matches Playwright's real contract, pid guarded before
+use. New defects: none found. Its explicit ruling on the retained RSS scope:
+"acceptable — the daemon calculation still measures descendants while
+excluding its wrapper root; the browser calculation still includes the
+BrowserServer PID explicitly. Requiring only positive combined RSS preserves
+the sealed metric and remains symmetric across parent and HEAD. Requiring
+individual daemon RSS positivity would redefine the measurement."
+Independent strict TypeScript compilation exit 0, zero diagnostics;
+`git diff --check` clean; approved draft sha256
+`3a90ca47d9fefe5837d6c8d69aa8d293f0e08bf764c0ffbee93342531bf1288b`. The
+audit "approves the amendment, not the full W4 gate outcome."
+
+**Re-pin.** The founder apply script copies the amended file over
+`scripts/waves/verify-w4.ts`, appends this entry, and re-pins
+`approved-gate.sha256` + `approved-verify-w4.ts`. Landing commit recorded in
+`approved-gate.meta.txt` after the merge.
+
