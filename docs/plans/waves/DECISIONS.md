@@ -683,3 +683,237 @@ audit "approves the amendment, not the full W4 gate outcome."
 `approved-gate.sha256` + `approved-verify-w4.ts`. Landing commit recorded in
 `approved-gate.meta.txt` after the merge.
 
+
+---
+
+## 2026-08-03 — W4 gate-defect amendment r3: C4-10's r2 rules were structurally unpassable against the app's own design; drain was load-dependent
+
+**Status:** APPLIED (founder-run apply script; re-pinned).
+
+**Trigger.** First post-r2 gate runs: 13/15 then 14/15 (C4-5's known flake
+cleared on its one allowed re-run). C4-10 failed byte-identically in both:
+every parent repetition (warmup + 5) invalidated with `non-2xx daemon
+response 404: /api/brands/mobile-first-application-with-3ef56f/logo` —
+0/5 valid, no parent baseline, gate fail.
+
+**Root cause 1 — r2's invalidation rules fight the product's design.**
+The 404 is the app working as designed: `ProjectBrandCover`
+(DesignsTab.tsx) probes `/api/brands/:id/logo` via `<img>` with a
+documented logo→favicon→monogram error chain, and two of the four corpus
+brands legitimately have no logo imagery. Systematic enumeration (out-of-
+tree probes replicating the C4-10 harness with exhaustive event capture,
+frame attribution, two deterministic reps) showed the full designed-miss
+surface r2's "any daemon-origin failure/non-2xx/pageerror invalidates"
+rules collide with: 2 logo-img 404s, 12 cover-existence HEAD probes
+aborted by the component's OWN AbortController cleanup
+(project-cover.tsx), ~40 website-clone cover-iframe subresource failures
+(absolute-path assets, ORB-blocked from the sandboxed iframe's opaque
+origin), and 2 clone-script pageerrors from sandboxed iframes — one with
+an EMPTY stack, defeating any stack-based attribution. The Designs tab
+EMBEDS arbitrary user content; embedded-content failure is business-as-
+usual, and r2 made every parent rep invalid, structurally.
+
+**Root cause 2 — r2's drain raced parked media and machine load.** A
+clone project's 19MB `<video preload="metadata">` parks its range request
+open indefinitely (Chromium reads the moov atom and stops consuming), so
+the all-traffic drain can never reach stable-zero once the iframe cascade
+starts. Idle-machine replications of the exact parent environment
+(detached worktree at the parent commit + `pnpm install --offline`):
+DRAIN-EXPIRY 6/6. The recorded gate runs' parent reps "drained" (24/24)
+only because the loaded gate machine (RSS poller forking `ps` every
+300ms, post-C4-1..9 state) stretched React's data→iframe phase gap past
+the 250ms stable-streak, exiting the drain at DATA quiescence before any
+iframe traffic began. The sealed drain measured time-to-data-quiescence
+under load and whole-cascade-or-expiry when idle — a load-dependent
+measurement meaning.
+
+**Amendment (+294/−13 by git numstat).** Both the drain and the
+invalidation rules are scoped to the DesignsTab's own data plane —
+main-frame `fetch`/`xhr` daemon-origin requests, the plane the
+qualifying-mount check already lives on:
+1. `inFlight`, the drain, `peakConcurrentRequests`, and the qualifying-
+   mount check track data-plane requests only, via an identity Set (no
+   cross-plane decrements). Readiness = time-to-data-quiescence:
+   deterministic, load-independent, identical in meaning on both sides,
+   and continuous with what the recorded runs de facto measured.
+2. `requestfailed` invalidates only data-plane requests, except the cover
+   existence probe's designed cleanup abort (`HEAD` + `net::ERR_ABORTED`
+   + `/api/projects/:id/raw/*`).
+3. Non-2xx responses invalidate only data-plane requests, except the same
+   probe's designed missing-cover answer (`HEAD` + 404 + same path).
+4. `page.on('pageerror')` (all frames, no attribution) replaced by an
+   in-page main-window `error`/`unhandledrejection` hook installed before
+   the mount and read after the drain. Sandboxed cover iframes are cross-
+   origin by construction, so their designed errors can never reach it;
+   without a `capture` flag, element load errors (the designed img 404s)
+   cannot either. Structurally typed (scripts/tsconfig.json has no DOM
+   lib).
+5. Anti-gaming: images/media/subframe traffic sit OUTSIDE the readiness
+   clock, so a HEAD build that 404s its covers gains nothing on the
+   measured axis; cover correctness is C4-1..C4-9's jurisdiction; RSS and
+   request-concurrency remain non-regression ceilings; a HEAD aborting
+   its own GET data fetches still invalidates; the carve-outs are method-
+   AND-path-scoped so a data plane rewritten onto HEAD `/raw/` requests
+   cannot hide behind them.
+6. Unmeasurable execution modes fail closed (round-1 Claude adversarial
+   finding 1): requests issued by a Service Worker are invisible to
+   Playwright's page-scoped request events entirely (empirically proven —
+   the events never fire; only context-scoped listeners see them), so a
+   data plane routed through a service worker would escape both the
+   readiness clock and the invalidation net; SharedWorker traffic has no
+   Playwright surface at all. A rep in which a service worker is created
+   (context `serviceworker` event, or the in-page wrapper on
+   `navigator.serviceWorker.register`) or a `SharedWorker` is constructed
+   is invalidated. Neither side's activation path uses workers today
+   (guards empirically silent on both sides); first use fails the
+   criterion loudly and would need its own reviewed amendment with real
+   worker-aware measurement.
+7. Round-1 Codex findings, all closed: the qualifying mount request must
+   be a MAIN-FRAME GET (a bodyless HEAD or hidden-frame decoy proves
+   nothing); the designed-probe carve-outs bind their path's project id
+   to the sampled set; the data plane is fetch/xhr from ANY frame
+   (closing the hidden-iframe escape — empirical basis: zero subframe
+   fetch/xhr traffic exists on the frozen corpus), with only
+   Service-Worker-originated requests excluded because that whole mode
+   fails closed per item 6; a 1-second settle window after drain success
+   keeps all invalidation listeners armed so a late data phase's failures
+   still invalidate (the readiness clock stops at first-quiescence,
+   captured before the window); and the in-page error sink is
+   tamper-proof (closure-held array behind a non-configurable getter
+   returning copies — reassignment and mutation attempts are defeated,
+   positive-tested).
+8. tsx serialization hazard, discovered by end-to-end probe execution and
+   guarded in-code: tsx's esbuild keepNames pass injects a module-scoped
+   `__name()` helper around object-literal property arrows and
+   const-declared arrows (and, for serialized page.evaluate callbacks,
+   const-bound function expressions and function declarations too), which
+   crashes inside the browser (strict tsc cannot catch this — it does not
+   see tsx's transform). Every serialized callback in the amended file
+   uses only member-assigned function values, call-argument arrows, and
+   method shorthand; an in-code comment records the empirically verified
+   rules.
+9. Realm-scoped execution modes fail closed in EVERY frame, at
+   construction (round-2 both reviewers; round-3 Claude): the round-1
+   in-page wrappers reached only the main frame; the round-2 fix installed
+   per-frame wrappers via `page.addInitScript` but self-scoped them to the
+   daemon origin, so an about:blank attacker frame (origin "null") was
+   skipped, constructed a native SharedWorker, and DETACHED before the
+   post-settle readability sweep — a proven wire-level escape of all three
+   layers. rev6 makes the wrapper UNCONDITIONAL (every frame, every
+   origin) and reports SYNCHRONOUSLY at construction, which is
+   detach-immune (the violation is recorded before the frame can be
+   removed). Dedicated `Worker` is wrapped alongside `SharedWorker` and
+   `serviceWorker.register`. Removing the origin gate is proven
+   false-trip-free by a worker-construction census over the frozen corpus
+   (every frame/origin/worker-type, 3s window, both sides): ZERO designed
+   constructions — cover iframes only REFERENCE worker APIs, and opaque
+   sandboxed origins cannot use them. The readability sweep and in-flight
+   assertion are retained as secondary defense-in-depth (sweep no longer
+   load-bearing); the in-flight check is re-read as the last gate before
+   acceptance.
+10. Sample acceptance asserts quiescence (round-2 Codex): a rep with any
+   data-plane request still in flight after the settle window is
+   invalidated, not accepted.
+11. Integrity by construction, not by in-page guard (round-2 Codex): the
+   tamperable in-page error sink is removed; main-frame errors and worker
+   violations both travel a `page.exposeFunction` channel accumulated
+   Node-side and captured eagerly at install, so patching array
+   internals, proxying globalThis, or overwriting the channel binding
+   cannot suppress a recorded violation. Positive-tested.
+RSS formulas, corpus digest binding, poller lifecycle, and worktree logic
+are untouched.
+
+**Definition sign-off.** This amendment narrows what C4-10's "activation
+readiness" clock observes to the DesignsTab data plane (the sealed R8 text
+defines the statistical envelope but not "readiness" itself; the recorded
+gate runs de facto measured data quiescence under load). The founder's
+application of this ruling constitutes explicit acceptance of that
+definition.
+
+**Empirical validation.** Under rev6 semantics: parent (exact
+parent-commit worktree replica) 6/6 valid reps, drains 375-487ms,
+49 data-plane requests/rep; HEAD (W4 branch worktree) 6/6 valid, drains
+377-452ms, 32 data-plane requests/rep — the unconditional wrapper does not
+false-trip (census-predicted, probe-confirmed). Guard positive tests 5/5
+PASS; detach-exploit tests 3/3 CAUGHT (about:blank SharedWorker detach@50ms;
+dedicated Worker in a detached frame; construct-then-synchronously-detach);
+worker-construction census 0/0. An earlier stricter draft caught
+HEAD's `<img src=/api/projects/:id/cover>` 404ing on the fresh corpus —
+the covers implementation's own designed not-yet-generated fallback —
+confirming images cannot sit in the invalidation scope on ANY fresh
+corpus. Strict compile under the repo's exact scripts/tsconfig.json: zero
+diagnostics. Every shim addition verified against installed
+playwright-core@1.60.0 typings with line citations
+(mainFrame :3638, failure :20457, frame :20493, method :20537,
+resourceType :20604, request :20817).
+
+**Marginality disclosure (not a defect).** Parent and HEAD data-plane p50
+land in overlapping 400-600ms bands across idle runs; the baseline's ≥10%
+p50 improvement gate is a genuine near-coin-flip. A legitimate C4-10
+failure after this amendment means the covers implementation must reduce
+real data-plane work — the criterion is doing its job.
+
+**Review history and landing decision (honest record).** This amendment
+was subjected to REJECT-default adversarial review (a Claude adversarial
+reviewer plus GPT-5.6 via Codex) across seven revisions. Each round
+surfaced a REAL, exploit-proven false-green channel, and each was closed
+before the next:
+- rev1->rev2: Service-Worker fetches are invisible to Playwright
+  page-scoped request events (wire-level proof). Closed: context
+  `serviceworker` event + register wrapper.
+- rev2->rev3 (Codex): HEAD-method qualifying; carve-outs unbound to the
+  sampled ids; hidden-iframe escape; late-phase loss; tamperable sink.
+  Closed: main-frame GET qualifying; sampleId-bound `/raw/` carve-outs;
+  any-frame data plane; settle window; getter.
+- rev3->rev5 (both, independently): same-origin SUBFRAME SharedWorker
+  escaped the main-frame-only wrappers; the getter was defeatable via
+  `Array.prototype.slice`. Closed: per-frame `addInitScript` wrappers +
+  `exposeFunction` channel; in-flight assertion; Node-side sinkless
+  reporting.
+- rev5->rev6 (Claude): detach-before-sweep -- an about:blank frame
+  (origin "null") skipped the origin-scoped wrapper, built a native
+  SharedWorker, and detached before the sweep. Closed FUNDAMENTALLY:
+  UNCONDITIONAL every-frame wrapper firing SYNCHRONOUSLY at construction
+  (detach-immune); dedicated `Worker` wrapped; zero-construction census.
+- rev6, round 4 (Claude): a `window.open()` popup gets its OWN Playwright
+  Page object, so the Page-scoped `addInitScript`/`exposeFunction`/
+  `page.on('request')` instrumentation never sees a popup's plain
+  `fetch()` at all -- a worker-free data-plane escape. Documented
+  remediation for a future amendment if ever needed: context-scoped
+  installation (`page.context().addInitScript`/`.exposeFunction`) plus
+  `page.on('popup')` invalidation. NOT applied here (see landing
+  decision).
+
+rev6 author validation: parent and HEAD both 6/6 valid; every proven
+worker/iframe exploit reproduced and CAUGHT (guard positive tests 5/5,
+detach-exploit tests 3/3 incl. a synchronous same-task detach, worker
+census 0/0); strict compile exit 0; the sealed measurement formulas (RSS,
+corpus digest, poller lifecycle, worktree logic) byte-identical to the
+original across all revisions. The round-4 reviewer independently
+confirmed the sha/numstat, the clean compile, the minimality, and that the
+construction-time wrapper is unbreakable across nested/blob:/data: frames
+and the tightest timing races.
+
+**Founder landing decision (2026-08-04).** The founder elected to LAND
+rev6 on good-faith-implementation terms rather than continue the
+adversarial gauntlet, INCLUDING with the round-4 popup escape known and
+unclosed. Rationale: every residual finding (rounds 1-4) closes a
+MALICIOUS-implementer threat model -- a HEAD deliberately routing its data
+plane through service workers, shared workers, detached iframes, or now a
+hidden popup to game a browser performance metric -- that does not apply
+to this project's own trusted first-party covers agent, whose
+implementation demonstrably uses none of those patterns. The criterion as
+landed correctly measures data-plane activation readiness and catches a
+covers implementation that regresses or fails to improve, which is its
+actual job. This is an explicit founder scoping decision; it is NOT a
+claim that the reviewers issued a clean final approval of rev6 (they did
+not -- round 4 was a REJECT on the popup vector, and the process was ended
+by founder decision). If the threat model ever changes to include an
+untrusted covers contributor, the context-scoping + popup-invalidation
+remediation above must be applied and re-reviewed first.
+
+**Re-pin.** The founder apply script copies the amended file over
+`scripts/waves/verify-w4.ts`, appends this entry, and re-pins
+`approved-gate.sha256` + `approved-verify-w4.ts`. Landing commit recorded
+in `approved-gate.meta.txt` after the merge.
+
