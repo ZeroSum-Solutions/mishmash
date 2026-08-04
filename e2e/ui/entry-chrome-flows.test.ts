@@ -753,7 +753,7 @@ test('[P2] entry help menu exposes community links and topbar routes Use everywh
   );
   await expect(menu.getByRole('menuitem', { name: /Submit a feature request/i })).toHaveAttribute(
     'href',
-    'https://github.com/wiggdevin/mishmash/pulls',
+    'https://github.com/wiggdevin/mishmash/issues/new?template=feature-request.yml',
   );
   await expect(menu.getByRole('menuitem', { name: /What.s new/i })).toHaveAttribute(
     'href',

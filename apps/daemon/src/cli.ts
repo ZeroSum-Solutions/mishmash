@@ -301,6 +301,10 @@ const AUTOMATION_STRING_FLAGS = new Set([
 const AUTOMATION_BOOLEAN_FLAGS = new Set([
   'help', 'h', 'json', 'disabled', 'enabled',
 ]);
+const FEEDBACK_STRING_FLAGS = new Set([
+  'daemon-url', 'project', 'conversation', 'message', 'rating', 'reason', 'note', 'prompt-file',
+]);
+const FEEDBACK_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 const MEMORY_STRING_FLAGS = new Set([
   'daemon-url', 'name', 'description', 'type', 'body', 'body-file',
   // `od memory profile set` reads structured fields verbatim and/or a prose
@@ -511,6 +515,7 @@ const SUBCOMMAND_MAP = {
   project: runProject,
   automation: runAutomation,
   automations: runAutomation,
+  feedback: runFeedback,
   memory: runMemory,
   run: runRun,
   files: runFiles,
@@ -10802,6 +10807,89 @@ async function readPromptFromFlags(flags) {
     return await readFile(path, 'utf8');
   }
   return null;
+}
+
+function printFeedbackHelp() {
+  console.log(`Usage: od feedback <runId> --project <id> --conversation <id> --message <id>
+                   --rating <positive|negative> [--reason <code[,code...]>]
+                   [--note "<text>" | --prompt-file <path|->] [--json]
+
+Submit assistant-turn feedback through the same /api/runs/:id/feedback endpoint
+used by the Studio. Reason codes are: matched_request, strong_visual,
+useful_structure, easy_to_continue, followed_design_system, missed_request,
+weak_visual, incomplete_output, hard_to_use, missed_design_system, other.
+
+Options:
+  --project <id>             Project id (required).
+  --conversation <id>        Conversation id (required).
+  --message <id>             Assistant message id (required).
+  --rating <positive|negative>  Helpfulness rating (required).
+  --reason <code[,code...]>  Comma-separated feedback reason codes.
+  --note <text>              Custom feedback text.
+  --prompt-file <path|->     Read custom feedback text from a file, or - for stdin.
+  --json                     Print the daemon response as JSON.
+  --daemon-url <url>         Override daemon URL.`);
+}
+
+async function runFeedback(args) {
+  if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    printFeedbackHelp();
+    process.exit(args.length === 0 ? 2 : 0);
+  }
+  let flags;
+  try {
+    flags = parseFlags(args, { string: FEEDBACK_STRING_FLAGS, boolean: FEEDBACK_BOOLEAN_FLAGS });
+  } catch (err) {
+    console.error(err.message);
+    process.exit(2);
+  }
+  const runId = positionalArgs(args)[0];
+  if (!runId || !flags.project || !flags.conversation || !flags.message || !flags.rating) {
+    console.error('Usage: od feedback <runId> --project <id> --conversation <id> --message <id> --rating <positive|negative> [--reason <code[,code...]>] [--note "<text>" | --prompt-file <path|->] [--json]');
+    process.exit(2);
+  }
+  if (flags.rating !== 'positive' && flags.rating !== 'negative') {
+    console.error('--rating must be positive or negative');
+    process.exit(2);
+  }
+  let customReason;
+  try {
+    customReason = typeof flags.note === 'string' ? flags.note : await readPromptFromFlags(flags);
+  } catch (err) {
+    console.error(`failed to read custom feedback: ${err.message}`);
+    process.exit(2);
+  }
+  customReason = (customReason ?? '').trim();
+  const body = {
+    projectId: flags.project,
+    conversationId: flags.conversation,
+    assistantMessageId: flags.message,
+    rating: flags.rating,
+    reasonCodes: typeof flags.reason === 'string'
+      ? flags.reason.split(',').map((code) => code.trim()).filter(Boolean)
+      : [],
+    hasCustomReason: customReason.length > 0,
+    customReason,
+  };
+  const base = await cliDaemonBaseUrl(flags);
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/runs/${encodeURIComponent(runId)}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    surfaceFetchError(err, base);
+    process.exit(3);
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  const result = await resp.json();
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    return;
+  }
+  console.log(`Feedback submitted for run ${runId}: ${result.status ?? 'accepted'}.`);
 }
 
 function printAutomationHelp() {

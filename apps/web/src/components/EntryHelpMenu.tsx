@@ -3,7 +3,7 @@
 // Mirrors the Lovart-style "?" affordance shown in the bottom-left
 // corner of the workspace: a single round button that opens a small
 // popover with the external help links we want every user to be one
-// click away from — GitHub issues for help, GitHub PRs for feature
+// click away from — GitHub issues for help, a feature-request issue form for
 // requests, and releases for the changelog. All GitHub links target
 // THIS fork's repository (docs/FORK-PIN.md; guarded by
 // scripts/check-fork-repo-links.ts) so reports land where the team
@@ -28,7 +28,7 @@ import { useT } from '../i18n';
 
 const REPO = 'https://github.com/wiggdevin/mishmash';
 const ISSUES_URL = `${REPO}/issues/new`;
-const PRS_URL = `${REPO}/pulls`;
+const FEATURE_REQUEST_URL = `${REPO}/issues/new?template=feature-request.yml`;
 const RELEASES_URL = `${REPO}/releases`;
 const DISCORD_URL = 'https://discord.gg/mHAjSMV6gz';
 
@@ -130,7 +130,7 @@ export function EntryHelpMenu() {
           </a>
           <a
             className="entry-help-popover__item"
-            href={PRS_URL}
+            href={FEATURE_REQUEST_URL}
             {...ext}
             role="menuitem"
             onClick={() => {
