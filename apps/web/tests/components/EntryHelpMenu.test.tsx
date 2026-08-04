@@ -43,7 +43,7 @@ describe('EntryHelpMenu', () => {
       `${FORK_REPO}/issues/new`,
     );
     expect(screen.getByRole('menuitem', { name: 'Submit a feature request' }).getAttribute('href')).toBe(
-      `${FORK_REPO}/pulls`,
+      `${FORK_REPO}/issues/new?template=feature-request.yml`,
     );
     expect(screen.getByRole('menuitem', { name: 'What’s new' }).getAttribute('href')).toBe(
       `${FORK_REPO}/releases`,
