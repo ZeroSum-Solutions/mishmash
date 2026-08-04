@@ -2350,33 +2350,49 @@ export function HomeView({
               // the design from the URL text, and the prefilled composer was
               // never sent. The full URL goes into pluginInputs verbatim so a
               // `node-id` frame selection survives to the pipeline.
-              const record = plugins.find((p) => p.id === 'od-figma-migration');
-              if (!record) {
+              const record = plugins.find((p) => p.id === 'od-figma-migration') ?? null;
+              if (!record && !pluginsLoading) {
                 setFigmaModalOpen(false);
                 setError(
                   'Bundled scenario "od-figma-migration" is not installed. Reinstall the daemon to restore the default plugin set.',
                 );
                 return;
               }
+              // While the plugin list is still loading, submit with the
+              // literal id — the daemon validates it at create time, and a
+              // genuine absence surfaces through the failure path below.
               setFigmaModalOpen(false);
-              void onSubmit({
-                prompt: `Migrate the Figma file at ${url} into a responsive webpage using its design system.${notes ? ` ${notes}` : ''}`,
-                pluginId: record.id,
-                pluginType: record.marketplaceTrust ?? 'official',
-                skillId: null,
-                appliedPluginSnapshotId: null,
-                pluginTitle: record.title,
-                taskKind: null,
-                pluginInputs: {
-                  figmaUrl: url,
-                  targetStack: 'React 18 + Tailwind',
-                  ...(notes ? { notes } : {}),
-                },
-                projectKind: 'prototype',
-                projectMetadata: homeCreateProjectMetadata('prototype', null, null),
-                designSystemId,
-                conversationMode: sessionMode,
-              });
+              void (async () => {
+                try {
+                  const accepted = await onSubmit({
+                    prompt: `Migrate the Figma file at ${url} into a responsive webpage using its design system.${notes ? ` ${notes}` : ''}`,
+                    pluginId: 'od-figma-migration',
+                    pluginType: record?.marketplaceTrust ?? 'official',
+                    skillId: null,
+                    appliedPluginSnapshotId: null,
+                    // pluginTitle is the created project's display name —
+                    // keep the import-specific name, not the scenario title.
+                    pluginTitle: 'Imported from Figma',
+                    taskKind: null,
+                    pluginInputs: {
+                      figmaUrl: url,
+                      targetStack: 'React 18 + Tailwind',
+                      ...(notes ? { notes } : {}),
+                    },
+                    projectKind: 'prototype',
+                    projectMetadata: homeCreateProjectMetadata('prototype', null, null),
+                    designSystemId,
+                    conversationMode: sessionMode,
+                  });
+                  // 'blocked' means the shell refused but surfaced its own UI
+                  // (e.g. the AMR balance gate) — nothing more to report.
+                  if (accepted === false) {
+                    setError('Could not start the Figma import — try again.');
+                  }
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : String(err));
+                }
+              })();
             }}
           />
         ) : null}

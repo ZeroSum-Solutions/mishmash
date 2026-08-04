@@ -124,6 +124,46 @@ describe('HomeView Figma URL import', () => {
     expect(payload.pluginInputs?.notes).toBe('make it a landing page');
     expect(payload.prompt).toContain(url);
     expect(payload.projectKind).toBe('prototype');
+    // pluginTitle names the created project — the import-specific name, not
+    // the scenario title.
+    expect(payload.pluginTitle).toBe('Imported from Figma');
+  });
+
+  it('submits with the literal plugin id while the plugin list is still loading', async () => {
+    // /api/plugins never resolves — the cold-mount race. The submit must not
+    // misreport the bundled scenario as uninstalled; the daemon validates
+    // the id at create time.
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const href = typeof input === 'string' ? input : input.toString();
+      if (href === '/api/plugins') return new Promise<Response>(() => {});
+      return Promise.resolve(new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+    }));
+    writeHomeGuideStage('done');
+    const onSubmit = vi.fn<HomeSubmit>();
+    render(
+      <I18nProvider initial="en">
+        <HomeView
+          projects={[]}
+          onSubmit={onSubmit}
+          onOpenProject={() => undefined}
+          onViewAllProjects={() => undefined}
+        />
+      </I18nProvider>,
+    );
+    fireEvent.click(await screen.findByTestId('home-hero-plus-trigger'));
+    fireEvent.click(await screen.findByTestId('composer-plus-figma'));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Figma URL' }));
+    fireEvent.change(screen.getByPlaceholderText('https://figma.com/design/…'), {
+      target: { value: 'https://figma.com/design/AbC123xYz/My-App' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Import & build' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]![0].pluginId).toBe('od-figma-migration');
+    expect(screen.queryByText(/is not installed/)).toBeNull();
   });
 
   it('surfaces the reinstall error instead of a silent no-op when the scenario plugin is missing', async () => {

@@ -86,6 +86,33 @@ const ACME_BRAND = {
 
 const HOME_PLUGINS = [
   {
+    id: 'od-figma-migration',
+    title: 'Figma migration',
+    version: '0.1.0',
+    trust: 'bundled',
+    sourceKind: 'bundled',
+    source: '/tmp/od-figma-migration',
+    fsPath: '/tmp/od-figma-migration',
+    capabilitiesGranted: ['prompt:inject'],
+    installedAt: 0,
+    updatedAt: 0,
+    manifest: {
+      name: 'od-figma-migration',
+      title: 'Figma migration',
+      version: '0.1.0',
+      description: 'Migrate a Figma file into a webpage.',
+      od: {
+        kind: 'scenario',
+        taskKind: 'figma-migration',
+        useCase: { query: 'Migrate the Figma file at {{figmaUrl}}.' },
+        inputs: [
+          { name: 'figmaUrl', type: 'string', required: true, label: 'Figma URL' },
+          { name: 'targetStack', type: 'string', default: 'React 18 + Tailwind', label: 'Target stack' },
+        ],
+      },
+    },
+  },
+  {
     id: 'example-web-prototype',
     title: 'Web Prototype',
     version: '0.1.0',
@@ -746,6 +773,11 @@ test('[P1] home Figma URL import creates a project with the migration prompt', a
   expect(createBodies[0]?.pendingPrompt).toBe(
     `Migrate the Figma file at ${figmaUrl} into a responsive webpage using its design system. ${notes}`,
   );
+  // The URL runs the real od-figma-migration scenario — the URL travels in
+  // pluginInputs verbatim, not just inside the prompt text.
+  expect(createBodies[0]?.pluginId).toBe('od-figma-migration');
+  expect((createBodies[0]?.pluginInputs as Record<string, unknown>)?.figmaUrl).toBe(figmaUrl);
+  expect((createBodies[0]?.pluginInputs as Record<string, unknown>)?.notes).toBe(notes);
   await expect(page).toHaveURL(new RegExp(`/projects/${projectId}`));
 });
 
