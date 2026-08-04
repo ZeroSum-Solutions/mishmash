@@ -85,7 +85,11 @@ describe('StyleReferenceControl', () => {
     fireEvent.click(screen.getByTestId('style-reference-apply'));
 
     await waitFor(() => expect(onApplied).toHaveBeenCalledWith(applied));
-    expect(mockSetStoryboardStyleReference).toHaveBeenCalledWith('sb-1', DESIGN_MD);
+    expect(mockSetStoryboardStyleReference).toHaveBeenCalledWith(
+      'sb-1',
+      DESIGN_MD,
+      '2026-01-01T00:00:00.000Z',
+    );
     // Dialog closed after a successful apply.
     expect(screen.queryByTestId('style-reference-input')).toBeNull();
   });
@@ -110,7 +114,72 @@ describe('StyleReferenceControl', () => {
     fireEvent.click(screen.getByTestId('style-reference-remove'));
 
     await waitFor(() => expect(onApplied).toHaveBeenCalledWith(cleared));
-    expect(mockClearStoryboardStyleReference).toHaveBeenCalledWith('sb-1');
+    expect(mockClearStoryboardStyleReference).toHaveBeenCalledWith(
+      'sb-1',
+      '2026-01-01T00:00:00.000Z',
+    );
+  });
+
+  it('sends the doc version and resyncs the editor on a 409 conflict', async () => {
+    const otherClientsDoc = styledDoc();
+    mockSetStoryboardStyleReference.mockResolvedValue({
+      ok: false,
+      status: 409,
+      message: 'storyboard changed',
+      conflict: otherClientsDoc,
+    });
+    const onApplied = vi.fn();
+    render(<StyleReferenceControl storyboard={baseDoc()} onApplied={onApplied} />);
+
+    fireEvent.click(screen.getByTestId('style-reference-trigger'));
+    fireEvent.change(screen.getByTestId('style-reference-input'), {
+      target: { value: DESIGN_MD },
+    });
+    fireEvent.click(screen.getByTestId('style-reference-apply'));
+
+    await waitFor(() => expect(onApplied).toHaveBeenCalledWith(otherClientsDoc));
+    expect(mockSetStoryboardStyleReference).toHaveBeenCalledWith(
+      'sb-1',
+      DESIGN_MD,
+      '2026-01-01T00:00:00.000Z',
+    );
+    // Conflict is surfaced inline and the dialog stays open for the retry.
+    expect(screen.getByRole('alert').textContent).toContain('changed in another window');
+    expect(screen.getByTestId('style-reference-input')).toBeTruthy();
+  });
+
+  it('ignores Cancel while a mutation is in flight', async () => {
+    let resolveApply!: (value: unknown) => void;
+    mockSetStoryboardStyleReference.mockReturnValue(
+      new Promise((resolve) => {
+        resolveApply = resolve;
+      }),
+    );
+    const applied = styledDoc();
+    const onApplied = vi.fn();
+    render(<StyleReferenceControl storyboard={baseDoc()} onApplied={onApplied} />);
+
+    fireEvent.click(screen.getByTestId('style-reference-trigger'));
+    fireEvent.change(screen.getByTestId('style-reference-input'), {
+      target: { value: DESIGN_MD },
+    });
+    fireEvent.click(screen.getByTestId('style-reference-apply'));
+
+    // The mutation is pending: Cancel must not dismiss the dialog.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByTestId('style-reference-input')).toBeTruthy();
+
+    resolveApply({ ok: true, value: applied });
+    await waitFor(() => expect(onApplied).toHaveBeenCalledWith(applied));
+    expect(screen.queryByTestId('style-reference-input')).toBeNull();
+  });
+
+  it('names the paste textarea for assistive tech', () => {
+    render(<StyleReferenceControl storyboard={baseDoc()} onApplied={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('style-reference-trigger'));
+    expect(screen.getByRole('textbox', { name: 'Style reference' })).toBe(
+      screen.getByTestId('style-reference-input'),
+    );
   });
 
   it('surfaces an apply failure inline and keeps the dialog open', async () => {

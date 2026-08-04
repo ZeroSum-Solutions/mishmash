@@ -646,9 +646,16 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
   app.delete('/api/storyboards/:id/style-reference', async (req, res) => {
     if (!requireLocal(req, res)) return;
     if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
+    const expectedUpdatedAt = req.body?.expectedUpdatedAt;
+    if (expectedUpdatedAt !== undefined && typeof expectedUpdatedAt !== 'string') {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'expectedUpdatedAt must be a string');
+    }
     await withStoryboardLock(req.params.id, async () => {
       const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
       if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+      if (expectedUpdatedAt !== undefined && expectedUpdatedAt !== storyboard.updatedAt) {
+        return res.status(409).json({ error: 'storyboard changed', storyboard });
+      }
       delete storyboard.styleReference;
       storyboard.updatedAt = nowIso();
       await writeStoryboard(RUNTIME_DATA_DIR, storyboard);

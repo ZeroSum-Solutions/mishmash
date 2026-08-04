@@ -201,6 +201,12 @@ export interface SetStoryboardStyleReferenceRequest {
   expectedUpdatedAt?: string;
 }
 
+/** Optional body of DELETE /api/storyboards/:id/style-reference. */
+export interface ClearStoryboardStyleReferenceRequest {
+  /** Optimistic concurrency, same semantics as PatchStoryboardRequest. */
+  expectedUpdatedAt?: string;
+}
+
 // --- Draft shots from a brief ----------------------------------------------
 
 /**

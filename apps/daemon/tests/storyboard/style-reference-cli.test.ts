@@ -152,6 +152,18 @@ describe('od storyboard style-reference CLI', () => {
     expect(JSON.parse(stdout)).toEqual(STYLE_RESPONSE);
   });
 
+  it('reports an unreadable --design-md file as a file error, not a daemon failure', async () => {
+    const { code, stderr } = await runCli([
+      'storyboard', 'style-reference', 'sb-1',
+      '--design-md', '/nonexistent/DESIGN.md',
+      '--daemon-url', baseUrl,
+    ]);
+    expect(code).toBe(2);
+    expect(stderr).toContain('failed to read --design-md /nonexistent/DESIGN.md');
+    expect(stderr).not.toContain('failed to reach daemon');
+    expect(seenRequests).toHaveLength(0);
+  });
+
   it('exits 2 with usage when neither --design-md nor --clear is given', async () => {
     const { code, stderr } = await runCli([
       'storyboard', 'style-reference', 'sb-1',

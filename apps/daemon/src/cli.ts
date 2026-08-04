@@ -9306,6 +9306,23 @@ async function runStoryboard(args) {
       console.error(usage);
       process.exit(2);
     }
+    // --design-md <path|-> rides the same file-or-stdin reader every other
+    // long-form input flag uses (readPromptFromFlags' prompt-file leg). Read
+    // OUTSIDE the fetch try/catch: a missing or unreadable file is a local
+    // filesystem error (exit 2), not a daemon-connectivity failure.
+    let designMd = null;
+    if (!flags.clear) {
+      try {
+        designMd = await readPromptFromFlags({ 'prompt-file': flags['design-md'] });
+      } catch (err) {
+        console.error(`failed to read --design-md ${flags['design-md']}: ${err?.message ?? err}`);
+        process.exit(2);
+      }
+      if (!designMd || !designMd.trim()) {
+        console.error(usage);
+        process.exit(2);
+      }
+    }
     let resp;
     try {
       if (flags.clear) {
@@ -9313,14 +9330,6 @@ async function runStoryboard(args) {
           method: 'DELETE',
         });
       } else {
-        // --design-md <path|-> rides the same file-or-stdin reader every
-        // other long-form input flag uses (readPromptFromFlags' prompt-file
-        // leg), rather than a second stdin-reading implementation.
-        const designMd = await readPromptFromFlags({ 'prompt-file': flags['design-md'] });
-        if (!designMd || !designMd.trim()) {
-          console.error(usage);
-          process.exit(2);
-        }
         resp = await fetch(`${base}/api/storyboards/${encodeURIComponent(id)}/style-reference`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },

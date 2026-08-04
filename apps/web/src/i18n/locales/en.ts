@@ -4308,6 +4308,8 @@ export const en: Dict = {
   'storyboard.styleReferenceApply': 'Apply style',
   'storyboard.styleReferenceApplying': 'Extracting…',
   'storyboard.styleReferenceRemove': 'Remove style reference',
+  'storyboard.styleReferenceConflict':
+    'This storyboard changed in another window — the latest version was loaded. Try again.',
   'storyboard.addShot': 'Add shot',
   'storyboard.assemble': 'Assemble video',
   'storyboard.assembling': 'Assembling…',

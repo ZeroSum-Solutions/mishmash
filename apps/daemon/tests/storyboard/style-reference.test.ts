@@ -201,6 +201,25 @@ describe('storyboard style reference', () => {
     expect(((await getResp.json()) as any).storyboard.styleReference).toBeUndefined();
   });
 
+  it('DELETE rejects a stale expectedUpdatedAt with 409 and keeps the reference', async () => {
+    await boot();
+    const created = await createStoryboard();
+    expect((await setStyleReference(created.id, DESIGN_MD)).status).toBe(200);
+
+    const delResp = await fetch(`${base}/api/storyboards/${created.id}/style-reference`, {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ expectedUpdatedAt: 'not-the-current-stamp' }),
+    });
+    expect(delResp.status).toBe(409);
+    const body = (await delResp.json()) as any;
+    expect(body.error).toBe('storyboard changed');
+    expect(body.storyboard.styleReference?.brand?.name).toBe('Heritage');
+
+    const getResp = await fetch(`${base}/api/storyboards/${created.id}`);
+    expect(((await getResp.json()) as any).storyboard.styleReference?.brand?.name).toBe('Heritage');
+  });
+
   it('frame generation carries the style reference to the provider, raw prompt leading', async () => {
     await boot();
     process.env.OD_OPENROUTER_API_KEY = 'sk-or-test-key-1234';

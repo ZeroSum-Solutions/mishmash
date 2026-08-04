@@ -5,6 +5,11 @@
 // style profile and returns the updated doc; an active reference shows its
 // brand name plus palette swatches and can be removed. Extraction lives
 // server-side so the CLI and web surfaces share one behavior.
+//
+// Both mutations send the doc's updatedAt as expectedUpdatedAt: a stale
+// dialog (another tab changed the storyboard) gets a 409 with the current
+// doc, which is resynced into the editor via onApplied so the retry starts
+// fresh instead of silently overwriting the other client's write.
 
 import { useId, useState } from 'react';
 import type { Storyboard } from '@open-design/contracts';
@@ -26,7 +31,11 @@ import styles from './StyleReferenceControl.module.css';
 
 export interface StyleReferenceControlProps {
   storyboard: Storyboard;
-  /** Receives the daemon's updated doc after a successful apply/remove. */
+  /**
+   * Receives the daemon's updated doc after a successful apply/remove — and
+   * after a 409 conflict, where it carries the OTHER client's current doc so
+   * the editor resyncs before the user retries.
+   */
   onApplied: (storyboard: Storyboard) => void;
 }
 
@@ -40,9 +49,24 @@ export function StyleReferenceControl({ storyboard, onApplied }: StyleReferenceC
 
   const active = storyboard.styleReference;
 
-  function close() {
+  // User-initiated close (Cancel, Escape, backdrop). A no-op while a
+  // mutation is in flight: closing mid-request would let the style land
+  // anyway after the dialog is gone — or race a second request on reopen.
+  function closeIdle() {
+    if (busy) return;
     setOpen(false);
     setError(null);
+  }
+
+  function handleFailure(result: { status?: number; message: string; conflict?: Storyboard }) {
+    if (result.status === 409 && result.conflict) {
+      // Resync the editor to the other client's doc; the retry then carries
+      // a fresh expectedUpdatedAt.
+      onApplied(result.conflict);
+      setError(t('storyboard.styleReferenceConflict'));
+    } else {
+      setError(result.message);
+    }
     setBusy(false);
   }
 
@@ -50,29 +74,23 @@ export function StyleReferenceControl({ storyboard, onApplied }: StyleReferenceC
     if (busy || !designMd.trim()) return;
     setBusy(true);
     setError(null);
-    const result = await setStoryboardStyleReference(storyboard.id, designMd);
-    if (!result.ok) {
-      setError(result.message);
-      setBusy(false);
-      return;
-    }
+    const result = await setStoryboardStyleReference(storyboard.id, designMd, storyboard.updatedAt);
+    if (!result.ok) return handleFailure(result);
     onApplied(result.value);
     setDesignMd('');
-    close();
+    setBusy(false);
+    setOpen(false);
   }
 
   async function remove() {
     if (busy) return;
     setBusy(true);
     setError(null);
-    const result = await clearStoryboardStyleReference(storyboard.id);
-    if (!result.ok) {
-      setError(result.message);
-      setBusy(false);
-      return;
-    }
+    const result = await clearStoryboardStyleReference(storyboard.id, storyboard.updatedAt);
+    if (!result.ok) return handleFailure(result);
     onApplied(result.value);
-    close();
+    setBusy(false);
+    setOpen(false);
   }
 
   return (
@@ -89,7 +107,12 @@ export function StyleReferenceControl({ storyboard, onApplied }: StyleReferenceC
           : t('storyboard.styleReference')}
       </button>
       {open ? (
-        <Dialog onClose={close} ariaLabelledBy={titleId} closeOnEscape>
+        <Dialog
+          onClose={closeIdle}
+          ariaLabelledBy={titleId}
+          closeOnEscape={!busy}
+          closeOnBackdrop={!busy}
+        >
           <DialogHeader>
             <DialogTitle id={titleId}>{t('storyboard.styleReference')}</DialogTitle>
           </DialogHeader>
@@ -122,6 +145,7 @@ export function StyleReferenceControl({ storyboard, onApplied }: StyleReferenceC
               rows={8}
               value={designMd}
               data-testid="style-reference-input"
+              aria-label={t('storyboard.styleReference')}
               placeholder={t('storyboard.styleReferencePlaceholder')}
               onChange={(e) => setDesignMd(e.target.value)}
             />
@@ -132,7 +156,7 @@ export function StyleReferenceControl({ storyboard, onApplied }: StyleReferenceC
             ) : null}
           </DialogBody>
           <DialogFooter>
-            <Button variant="ghost" onClick={close}>
+            <Button variant="ghost" disabled={busy} onClick={closeIdle}>
               {t('storyboard.cancel')}
             </Button>
             <Button

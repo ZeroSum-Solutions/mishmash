@@ -4424,6 +4424,7 @@ export interface Dict {
   'storyboard.styleReferenceApply': string;
   'storyboard.styleReferenceApplying': string;
   'storyboard.styleReferenceRemove': string;
+  'storyboard.styleReferenceConflict': string;
   'storyboard.addShot': string;
   'storyboard.assemble': string;
   'storyboard.assembling': string;

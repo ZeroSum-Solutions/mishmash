@@ -701,10 +701,18 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
             <option key={ratio} value={ratio}>{ratio}</option>
           ))}
         </select>
-        {/* The daemon returns the whole updated doc on apply/remove, so the
-            fresh read replaces local state the same way runMutation's
-            persisted result does. */}
-        <StyleReferenceControl storyboard={storyboard} onApplied={setStoryboard} />
+        {/* The daemon returns the whole updated doc on apply/remove/conflict.
+            It must land in BOTH stores, exactly like runMutation's persisted
+            result: storyboardRef is what every queued mutation composes onto,
+            so a state-only update would leave the next edit built from the
+            pre-style doc (stale updatedAt → guaranteed 409). */}
+        <StyleReferenceControl
+          storyboard={storyboard}
+          onApplied={(doc) => {
+            storyboardRef.current = doc;
+            setStoryboard(doc);
+          }}
+        />
       </header>
 
       <MoodLane

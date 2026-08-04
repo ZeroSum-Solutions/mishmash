@@ -3184,29 +3184,48 @@ export async function patchStoryboard(
 export async function setStoryboardStyleReference(
   id: string,
   designMd: string,
+  expectedUpdatedAt?: string,
 ): Promise<StoryboardApiResult<Storyboard>> {
-  try {
-    const resp = await fetch(`/api/storyboards/${encodeURIComponent(id)}/style-reference`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ designMd }),
-    });
-    if (!resp.ok) return { ok: false, status: resp.status, message: await readStoryboardApiError(resp) };
-    const data = (await resp.json()) as { storyboard: Storyboard };
-    return { ok: true, value: data.storyboard };
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
-  }
+  return styleReferenceMutation(id, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ designMd, ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}) }),
+  });
 }
 
 /** DELETE /api/storyboards/:id/style-reference — clears it. Returns the updated doc. */
 export async function clearStoryboardStyleReference(
   id: string,
+  expectedUpdatedAt?: string,
+): Promise<StoryboardApiResult<Storyboard>> {
+  return styleReferenceMutation(id, {
+    method: 'DELETE',
+    ...(expectedUpdatedAt
+      ? {
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedUpdatedAt }),
+        }
+      : {}),
+  });
+}
+
+/** Shared transport for both style-reference mutations — same 409 conflict
+ * envelope handling as patchStoryboard (see its doc comment). */
+async function styleReferenceMutation(
+  id: string,
+  init: RequestInit,
 ): Promise<StoryboardApiResult<Storyboard>> {
   try {
-    const resp = await fetch(`/api/storyboards/${encodeURIComponent(id)}/style-reference`, {
-      method: 'DELETE',
-    });
+    const resp = await fetch(`/api/storyboards/${encodeURIComponent(id)}/style-reference`, init);
+    if (resp.status === 409) {
+      const payload = (await resp.json().catch(() => null)) as { error?: string; storyboard?: Storyboard } | null;
+      return {
+        ok: false,
+        status: 409,
+        message: (payload && typeof payload.error === 'string' && payload.error) || 'storyboard changed',
+        conflict: payload?.storyboard,
+      };
+    }
     if (!resp.ok) return { ok: false, status: resp.status, message: await readStoryboardApiError(resp) };
     const data = (await resp.json()) as { storyboard: Storyboard };
     return { ok: true, value: data.storyboard };

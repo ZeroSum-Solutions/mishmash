@@ -44,6 +44,29 @@ describe('styleReferenceFromDesignMd', () => {
     expect(styleReferenceFromDesignMd('')).toBeNull();
     expect(styleReferenceFromDesignMd('   \n\t ')).toBeNull();
   });
+
+  it('truncates oversized input before extraction so the stored profile stays bounded', () => {
+    // Same 240k cap as the brand flow's normalizeDesignMdInput: prose past
+    // the cap must never reach the extracted profile's retained fields
+    // (description / tone / messagingPillars keep the Overview section).
+    // Within the cap, description AND the pillars can each retain the prose,
+    // so the honest bound is a small multiple of the cap — not unbounded
+    // paste-size growth.
+    const marker = 'PAST-THE-CAP-MARKER';
+    const oversized = `${DESIGN_MD}\n${'x'.repeat(250_000)}\n\n## Overview tail\n${marker}\n`;
+    const ref = styleReferenceFromDesignMd(oversized);
+    expect(ref).toBeTruthy();
+    expect(ref!.brand.name).toBe('Heritage');
+    expect(JSON.stringify(ref)).not.toContain(marker);
+    expect(JSON.stringify(ref).length).toBeLessThan(1_000_000);
+
+    // And regardless of how much prose the profile retains, the composed
+    // PROMPT clause stays small: prose segments (mood/imagery) are clamped,
+    // so a pathological unpunctuated Overview cannot balloon every frame
+    // dispatch by hundreds of KB.
+    const composed = composeStyledMediaPrompt('raw prompt', ref!);
+    expect(composed.length).toBeLessThan('raw prompt'.length + 2_000);
+  });
 });
 
 describe('composeStyledMediaPrompt', () => {

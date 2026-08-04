@@ -12,13 +12,23 @@ import type { BrandColorRole, StoryboardStyleReference } from '@open-design/cont
 import { brandFromDesignMd, sourceUrlForDesignMd } from '../brands/design-md-input.js';
 
 /**
+ * Largest DESIGN.md input considered, in characters — the same truncation
+ * cap the brand flow applies (brands/index.ts's normalizeDesignMdInput).
+ * Without it a multi-megabyte valid paste would flow into the extracted
+ * profile's prose fields (description/tone/messagingPillars retain the
+ * Overview section) and bloat every subsequent storyboard read/write,
+ * breaking the contract's "stored doc stays bounded" promise.
+ */
+const MAX_DESIGN_MD_INPUT_CHARS = 240_000;
+
+/**
  * Extract a storyboard style reference from pasted DESIGN.md content.
  * Returns null when the paste is empty or the brand engine cannot derive a
  * profile from it — the caller decides how to report that (the HTTP route
  * answers 400).
  */
 export function styleReferenceFromDesignMd(designMd: string): StoryboardStyleReference | null {
-  const markdown = designMd.trim();
+  const markdown = designMd.trim().slice(0, MAX_DESIGN_MD_INPUT_CHARS);
   if (!markdown) return null;
   const brand = brandFromDesignMd({ markdown, sourceUrl: sourceUrlForDesignMd(markdown) });
   if (!brand) return null;
@@ -32,6 +42,21 @@ const PROMPT_COLOR_ROLES: readonly BrandColorRole[] = [
   'accent',
   'accent-secondary',
 ];
+
+/**
+ * Largest prose segment (mood/imagery) the style clause will carry. The
+ * extraction keeps free prose from the paste (e.g. tone is the Overview's
+ * first "sentence" — which, for unpunctuated text, is the whole run), and a
+ * media prompt must never balloon by hundreds of KB because of it.
+ */
+const MAX_PROSE_SEGMENT_CHARS = 300;
+
+function clampProse(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.length > MAX_PROSE_SEGMENT_CHARS
+    ? `${trimmed.slice(0, MAX_PROSE_SEGMENT_CHARS)}…`
+    : trimmed;
+}
 
 /**
  * Prompt-steering invariant for every storyboard media dispatch (frame
@@ -62,11 +87,11 @@ export function composeStyledMediaPrompt(
     .filter((family, index, all) => Boolean(family) && all.indexOf(family) === index);
   if (families.length) parts.push(`typography ${families.join(' / ')}`);
 
-  const tone = brand.voice.tone.trim();
+  const tone = clampProse(brand.voice.tone);
   if (tone) parts.push(`mood ${tone}`);
 
   const imagery = [brand.imagery.style, brand.imagery.treatment]
-    .map((value) => value.trim())
+    .map((value) => clampProse(value))
     .filter(Boolean)
     .join('; ');
   if (imagery) parts.push(`imagery ${imagery}`);
