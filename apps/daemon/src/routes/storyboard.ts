@@ -65,6 +65,10 @@ import {
   withStoryboardLock,
   writeStoryboard,
 } from '../storyboards/store.js';
+import {
+  composeStyledMediaPrompt,
+  styleReferenceFromDesignMd,
+} from '../storyboards/style-reference.js';
 
 export interface RegisterStoryboardRoutesDeps
   extends RouteDeps<'http' | 'paths' | 'ids' | 'db' | 'projectStore' | 'projectFiles' | 'media' | 'validation'> {}
@@ -606,6 +610,52 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
     });
   });
 
+  // Sets/replaces the storyboard's style reference by extracting a style
+  // profile from pasted DESIGN.md through the brand engine's deterministic
+  // design-md leg (see storyboards/style-reference.ts). Only the extracted
+  // profile is persisted — never the raw paste. Runs under the same
+  // per-storyboard lock and optimistic-concurrency semantics as PATCH.
+  app.post('/api/storyboards/:id/style-reference', async (req, res) => {
+    if (!requireLocal(req, res)) return;
+    if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
+    const designMd = req.body?.designMd;
+    if (typeof designMd !== 'string' || !designMd.trim()) {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'designMd must be a non-empty string');
+    }
+    const expectedUpdatedAt = req.body?.expectedUpdatedAt;
+    if (expectedUpdatedAt !== undefined && typeof expectedUpdatedAt !== 'string') {
+      return sendApiError(res, 400, 'BAD_REQUEST', 'expectedUpdatedAt must be a string');
+    }
+    await withStoryboardLock(req.params.id, async () => {
+      const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+      if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+      if (expectedUpdatedAt !== undefined && expectedUpdatedAt !== storyboard.updatedAt) {
+        return res.status(409).json({ error: 'storyboard changed', storyboard });
+      }
+      const styleReference = styleReferenceFromDesignMd(designMd);
+      if (!styleReference) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'designMd did not yield a style profile');
+      }
+      storyboard.styleReference = styleReference;
+      storyboard.updatedAt = nowIso();
+      await writeStoryboard(RUNTIME_DATA_DIR, storyboard);
+      res.json({ storyboard });
+    });
+  });
+
+  app.delete('/api/storyboards/:id/style-reference', async (req, res) => {
+    if (!requireLocal(req, res)) return;
+    if (!isSafeId(req.params.id)) return sendApiError(res, 400, 'BAD_REQUEST', 'invalid storyboard id');
+    await withStoryboardLock(req.params.id, async () => {
+      const storyboard = await readStoryboard(RUNTIME_DATA_DIR, req.params.id);
+      if (!storyboard) return sendApiError(res, 404, 'NOT_FOUND', 'storyboard not found');
+      delete storyboard.styleReference;
+      storyboard.updatedAt = nowIso();
+      await writeStoryboard(RUNTIME_DATA_DIR, storyboard);
+      res.json({ storyboard });
+    });
+  });
+
   // Reveals the hidden storyboard-media project folder in the OS file
   // browser — same fire-and-forget `open` spawn as design-library's
   // POST /api/design-library/open.
@@ -891,7 +941,7 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
     const { taskId } = dispatchMediaTask({
       surface,
       model,
-      prompt,
+      prompt: composeStyledMediaPrompt(prompt, storyboard.styleReference),
       output: framePath,
       aspect,
       length: surface === 'video' ? durationSec : undefined,
@@ -1070,7 +1120,7 @@ export function registerStoryboardRoutes(app: Express, ctx: RegisterStoryboardRo
       const { taskId } = dispatchMediaTask({
         surface: 'video',
         model: currentShot.model,
-        prompt: motionPrompt,
+        prompt: composeStyledMediaPrompt(motionPrompt, current.styleReference),
         output: outputPath,
         aspect: current.ratio,
         length: currentShot.durationSec,

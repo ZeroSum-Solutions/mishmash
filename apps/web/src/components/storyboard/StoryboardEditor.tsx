@@ -36,6 +36,7 @@ import {
 } from './model-defaults';
 import { MoodLane } from './MoodLane';
 import { ShotDetailsDrawer } from './ShotDetailsDrawer';
+import { StyleReferenceControl } from './StyleReferenceControl';
 import { ShotRow } from './ShotRow';
 import { ShotStartOptions } from './ShotStartOptions';
 import { appendShotIfAbsent, persistStoryboardMutation, type StoryboardMutator } from './storyboard-persist';
@@ -700,6 +701,10 @@ export function StoryboardEditor({ storyboard: initial, configured, onBack }: St
             <option key={ratio} value={ratio}>{ratio}</option>
           ))}
         </select>
+        {/* The daemon returns the whole updated doc on apply/remove, so the
+            fresh read replaces local state the same way runMutation's
+            persisted result does. */}
+        <StyleReferenceControl storyboard={storyboard} onApplied={setStoryboard} />
       </header>
 
       <MoodLane
