@@ -2342,19 +2342,55 @@ export function HomeView({
               })();
             }}
             onFigmaUrl={(url, notes) => {
+              // A pasted Figma URL must run the real od-figma-migration
+              // scenario — the same routing as the "From Figma" chip and
+              // `od figma import --figma-url`. The previous behavior seeded a
+              // bare pendingPrompt that merely mentioned the URL: the agent
+              // has no Figma access outside the pipeline, so it hallucinated
+              // the design from the URL text, and the prefilled composer was
+              // never sent. The full URL goes into pluginInputs verbatim so a
+              // `node-id` frame selection survives to the pipeline.
+              const record = plugins.find((p) => p.id === 'od-figma-migration') ?? null;
+              if (!record && !pluginsLoading) {
+                setFigmaModalOpen(false);
+                setError(
+                  'Bundled scenario "od-figma-migration" is not installed. Reinstall the daemon to restore the default plugin set.',
+                );
+                return;
+              }
+              // While the plugin list is still loading, submit with the
+              // literal id — the daemon validates it at create time, and a
+              // genuine absence surfaces through the failure path below.
+              setFigmaModalOpen(false);
               void (async () => {
-                const reshapePrompt = `Migrate the Figma file at ${url} into a responsive webpage using its design system.${notes ? ` ${notes}` : ''}`;
                 try {
-                  const { project } = await createProject({
-                    name: 'Imported from Figma',
+                  const accepted = await onSubmit({
+                    prompt: `Migrate the Figma file at ${url} into a responsive webpage using its design system.${notes ? ` ${notes}` : ''}`,
+                    pluginId: 'od-figma-migration',
+                    pluginType: record?.marketplaceTrust ?? 'official',
                     skillId: null,
-                    designSystemId: null,
-                    pendingPrompt: reshapePrompt,
+                    appliedPluginSnapshotId: null,
+                    // pluginTitle is the created project's display name —
+                    // keep the import-specific name, not the scenario title.
+                    pluginTitle: 'Imported from Figma',
+                    taskKind: null,
+                    pluginInputs: {
+                      figmaUrl: url,
+                      targetStack: 'React 18 + Tailwind',
+                      ...(notes ? { notes } : {}),
+                    },
+                    projectKind: 'prototype',
+                    projectMetadata: homeCreateProjectMetadata('prototype', null, null),
+                    designSystemId,
+                    conversationMode: sessionMode,
                   });
-                  setFigmaModalOpen(false);
-                  onOpenProject(project.id);
-                } catch {
-                  setFigmaModalOpen(false);
+                  // 'blocked' means the shell refused but surfaced its own UI
+                  // (e.g. the AMR balance gate) — nothing more to report.
+                  if (accepted === false) {
+                    setError('Could not start the Figma import — try again.');
+                  }
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : String(err));
                 }
               })();
             }}
