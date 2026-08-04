@@ -4979,10 +4979,29 @@ async function stageLocalCodeFiles(projectId: string, files: File[]): Promise<St
   };
 }
 
+// Distinct per-file snapshot dirs keep multi-.fig imports from overwriting
+// each other's `figma/` snapshot. Derives a clean `figma-<slug>` segment from
+// the file's leaf name; the daemon validates it server-side. The optional
+// `used` set disambiguates same-named files within one staging batch.
+export function figmaSnapshotSubdir(relPath: string, index: number, used?: Set<string>): string {
+  const slug = safeContextFileName(relPath, `file-${index}`).replace(/\.md$/i, '');
+  let subdir = `figma-${slug}`;
+  if (used) {
+    // Probe until genuinely free: a one-shot suffix could itself collide
+    // with a filename-derived sibling (e.g. `Design-2.fig` vs `Design.fig`).
+    for (let suffix = 2; used.has(subdir); suffix += 1) {
+      subdir = `figma-${slug}-${suffix}`;
+    }
+    used.add(subdir);
+  }
+  return subdir;
+}
+
 async function stageFigmaFiles(projectId: string, files: File[]): Promise<StagedFigmaContext> {
   if (files.length === 0) return { summaryPaths: [], skippedCount: 0 };
   const selected = selectFigmaFiles(files);
   const summaryPaths: string[] = [];
+  const usedSubdirs = new Set<string>();
   let failed = 0;
   let index = 0;
   for (const file of selected) {
@@ -4990,11 +5009,11 @@ async function stageFigmaFiles(projectId: string, files: File[]): Promise<Staged
     // `figma/` snapshot — node tree, tokens, assets, thumbnail, and an
     // agent-facing DESIGN-context.md. Distinct subdirs keep multiple files
     // from overwriting each other; a single file uses the default `figma/`.
-    const base = safeContextFileName(resourceRelativePath(file), `figma-${index}`).replace(/\.fig$/i, '');
+    const subdir = figmaSnapshotSubdir(resourceRelativePath(file), index, usedSubdirs);
     const outcome = await importProjectFigma(
       projectId,
       file,
-      selected.length > 1 ? { subdir: `figma-${base}` } : undefined,
+      selected.length > 1 ? { subdir } : undefined,
     );
     if (outcome.ok) {
       summaryPaths.push(outcome.result.contextPath);
@@ -5188,7 +5207,7 @@ function buildCreationAgentPrompt(
       ? `${stagedLocalCode.skippedCount} local code files were skipped because they were too large, duplicate, generated, or outside the focused upload limit.`
       : '',
     stagedFigma?.summaryPaths.length
-      ? `Each .fig was decoded into a real design snapshot — read the context briefs first: ${stagedFigma.summaryPaths.join(', ')}. They sit beside \`figma/tree.json\`, \`figma/tokens.json\`, \`figma/assets/\`, and a \`figma/thumbnail.png\` preview. Bind the system to these real tokens, type, and components.`
+      ? `Each .fig was decoded into a real design snapshot — read the context briefs first: ${stagedFigma.summaryPaths.join(', ')}. Each brief sits beside its snapshot's \`tree.json\`, \`tokens.json\`, \`assets/\`, and \`thumbnail.png\` preview in the same directory. Bind the system to these real tokens, type, and components.`
       : '',
     stagedFigma?.skippedCount
       ? `${stagedFigma.skippedCount} .fig files were skipped (duplicate or failed to decode).`

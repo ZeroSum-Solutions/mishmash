@@ -329,7 +329,7 @@ const SHARE_BOOLEAN_FLAGS = new Set([
 // top-of-file SUBCOMMAND_MAP dispatch during module evaluation; a `const`
 // further down would still be in TDZ when the handler reads it.
 const FIGMA_STRING_FLAGS = new Set([
-  'daemon-url', 'project', 'file', 'figma-url', 'notes', 'prompt', 'prompt-file',
+  'daemon-url', 'project', 'file', 'figma-url', 'notes', 'subdir', 'prompt', 'prompt-file',
 ]);
 const FIGMA_BOOLEAN_FLAGS = new Set([
   'help', 'h', 'json', 'build',
@@ -5615,7 +5615,8 @@ async function runShare(args) {
 function printFigmaUsage() {
   console.log(`Usage:
   od figma import --project <id> --file <path.fig> [--notes "<text>"]
-                  [--build] [--prompt "<text>" | --prompt-file <path|->] [--json]
+                  [--subdir <name>] [--build]
+                  [--prompt "<text>" | --prompt-file <path|->] [--json]
   od figma import --project <id> --figma-url <url> [--notes "<text>"] [--json]
 
 Imports a Figma design into a project. A .fig file is decoded fully offline
@@ -5628,6 +5629,8 @@ Flags:
   --file <path.fig>    Local .fig to decode offline.
   --figma-url <url>    Figma file URL (https://figma.com/(file|design)/<key>).
   --notes "<text>"     Design brief folded into the reshape prompt.
+  --subdir <name>      Snapshot directory (single path segment; default figma).
+                       Distinct subdirs keep multi-file imports separate.
   --build              After import, start a run that builds the webpage.
   --prompt / --prompt-file   Override the build prompt (file or - for stdin).
   --daemon-url <url>   MishMash daemon HTTP base.
@@ -5695,6 +5698,7 @@ async function runFigma(args) {
   const form = new FormData();
   form.append('file', new Blob([bytes]), basename(file));
   if (flags.notes) form.append('notes', String(flags.notes));
+  if (flags.subdir) form.append('subdir', String(flags.subdir));
   const resp = await fetch(`${base}/api/projects/${encodeURIComponent(flags.project)}/figma/import`, {
     method: 'POST',
     body: form,
