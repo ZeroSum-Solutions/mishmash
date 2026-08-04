@@ -2,9 +2,13 @@
 //
 // Mirrors the Lovart-style "?" affordance shown in the bottom-left
 // corner of the workspace: a single round button that opens a small
-// popover with the four external help links we want every user to be
-// one click away from — GitHub issues for help, GitHub PRs for feature
-// requests, releases for the changelog, and the desktop download.
+// popover with the external help links we want every user to be one
+// click away from — GitHub issues for help, GitHub PRs for feature
+// requests, and releases for the changelog. All GitHub links target
+// THIS fork's repository (docs/FORK-PIN.md; guarded by
+// scripts/check-fork-repo-links.ts) so reports land where the team
+// actually reads them. The desktop-download item was removed with the
+// desktop shell — this fork ships the web Studio only.
 //
 // The links open in a new tab (with safe `noopener` rel) and are
 // labeled via the i18n dictionary so locale switching keeps the menu
@@ -22,11 +26,10 @@ import {
 import { Icon } from './Icon';
 import { useT } from '../i18n';
 
-const REPO = 'https://github.com/nexu-io/open-design';
+const REPO = 'https://github.com/wiggdevin/mishmash';
 const ISSUES_URL = `${REPO}/issues/new`;
 const PRS_URL = `${REPO}/pulls`;
 const RELEASES_URL = `${REPO}/releases`;
-const LATEST_RELEASE_URL = `${REPO}/releases/latest`;
 const DISCORD_URL = 'https://discord.gg/mHAjSMV6gz';
 
 const ext = { target: '_blank', rel: 'noreferrer noopener' } as const;
@@ -147,7 +150,7 @@ export function EntryHelpMenu() {
           </a>
           <a
             className="entry-help-popover__item"
-            href={LATEST_RELEASE_URL}
+            href={RELEASES_URL}
             {...ext}
             role="menuitem"
             onClick={() => {
@@ -164,27 +167,6 @@ export function EntryHelpMenu() {
               <Icon name="bell" size={14} />
             </span>
             <span>{t('entry.helpWhatsNew')}</span>
-          </a>
-          <div className="entry-help-popover__divider" aria-hidden />
-          <a
-            className="entry-help-popover__item"
-            href={RELEASES_URL}
-            {...ext}
-            role="menuitem"
-            onClick={() => {
-              trackHelpPopoverClick(analytics.track, {
-                page_name: 'home',
-                area: 'help_resources_popover',
-                element: 'download_desktop_app',
-                surface: 'popover',
-              });
-              setOpen(false);
-            }}
-          >
-            <span className="entry-help-popover__icon" aria-hidden>
-              <Icon name="download" size={14} />
-            </span>
-            <span>{t('entry.helpDownloadDesktop')}</span>
           </a>
           <div className="entry-help-popover__divider" aria-hidden />
           <a

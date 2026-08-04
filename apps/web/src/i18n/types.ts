@@ -1847,7 +1847,6 @@ export interface Dict {
   'entry.helpGetHelp': string;
   'entry.helpSubmitFeature': string;
   'entry.helpWhatsNew': string;
-  'entry.helpDownloadDesktop': string;
 
   // Connectors tab
   'connectors.title': string;

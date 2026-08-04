@@ -1341,7 +1341,6 @@ export const en: Dict = {
   'entry.helpGetHelp': 'Get help on GitHub',
   'entry.helpSubmitFeature': 'Submit a feature request',
   'entry.helpWhatsNew': 'What\u2019s new',
-  'entry.helpDownloadDesktop': 'Download desktop app',
   'entry.tabImageTemplates': 'Image templates',
   'entry.tabVideoTemplates': 'Video templates',
   'promptTemplates.searchPlaceholder': 'Search templates…',

@@ -127,5 +127,5 @@ any data involved still follows the controls described on this page.
 ## Changes to this page
 
 This document tracks the data handling of the shipped app. When the telemetry
-behavior changes, this page is updated alongside it. For questions, open a
-[GitHub Discussion](https://github.com/nexu-io/open-design/discussions).
+behavior changes, this page is updated alongside it. For questions, open an
+[issue on this repository](https://github.com/wiggdevin/mishmash/issues/new).

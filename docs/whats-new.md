@@ -51,7 +51,7 @@ without a valid `id`/`title`/`body`; the daemon then resolves to "no highlight".
   "title": "Design system sync",
   "body": "Import, edit and sync design systems with cleaner release highlights on Home.",
   "imageUrl": "https://whatsnew.open-design.ai/0.13.0.png",
-  "linkUrl": "https://github.com/nexu-io/open-design/releases/tag/open-design-v0.13.0",
+  "linkUrl": "https://github.com/wiggdevin/mishmash/releases",
   "locales": {
     "zh-CN": {
       "title": "设计系统同步",
