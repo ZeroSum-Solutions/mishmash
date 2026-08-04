@@ -153,6 +153,22 @@ const START_PROJECT_CATALOG = {
           domains: ['test-domain'],
           allowed_use: 'licensed-source-review',
         },
+        // Ships its design content next to a derived build cache
+        // (.next/cache/webpack/*.pack), the way real UI8 Next.js kits do.
+        // The cache must not count against the copy caps or reach the
+        // copied project.
+        {
+          id: 'cached-kit-1',
+          label: 'Cached Kit',
+          rel: '01 Kits/cached-kit',
+          thumb: null,
+          kind: 'HTML kit',
+          files: 3,
+          size: '9 KB',
+          category: '01 Kits',
+          domains: ['test-domain'],
+          allowed_use: 'licensed-source-review',
+        },
       ],
     },
   ],
@@ -165,6 +181,7 @@ describe('design library routes', () => {
   let outsideDir: string | null = null;
   const PREV_ROOT = process.env.OD_DESIGN_LIBRARY_DIR;
   const PREV_MAX_FILES = process.env.OD_DESIGN_LIBRARY_COPY_MAX_FILES;
+  const PREV_MAX_BYTES = process.env.OD_DESIGN_LIBRARY_COPY_MAX_BYTES;
 
   afterEach(async () => {
     await Promise.resolve(shutdown?.());
@@ -185,6 +202,8 @@ describe('design library routes', () => {
     else process.env.OD_DESIGN_LIBRARY_DIR = PREV_ROOT;
     if (PREV_MAX_FILES === undefined) delete process.env.OD_DESIGN_LIBRARY_COPY_MAX_FILES;
     else process.env.OD_DESIGN_LIBRARY_COPY_MAX_FILES = PREV_MAX_FILES;
+    if (PREV_MAX_BYTES === undefined) delete process.env.OD_DESIGN_LIBRARY_COPY_MAX_BYTES;
+    else process.env.OD_DESIGN_LIBRARY_COPY_MAX_BYTES = PREV_MAX_BYTES;
   });
 
   async function start(): Promise<string> {
@@ -227,6 +246,19 @@ describe('design library routes', () => {
     const restrictedKit = path.join(kitsRoot, 'restricted-kit');
     mkdirSync(restrictedKit, { recursive: true });
     writeFileSync(path.join(restrictedKit, 'index.html'), '<!doctype html><title>Restricted</title>', 'utf8');
+
+    // cached-kit: two small real files plus a webpack cache pack file that
+    // is larger than the byte cap the cache-skipping test sets. Mirrors the
+    // production shape of a Next.js kit shipped with its .next/ droppings.
+    const cachedKit = path.join(kitsRoot, 'cached-kit');
+    mkdirSync(path.join(cachedKit, 'assets'), { recursive: true });
+    mkdirSync(path.join(cachedKit, '.next', 'cache', 'webpack', 'client-development'), { recursive: true });
+    writeFileSync(path.join(cachedKit, 'index.html'), '<!doctype html><title>Cached</title>', 'utf8');
+    writeFileSync(path.join(cachedKit, 'assets', 'app.js'), 'console.log("kit");', 'utf8');
+    writeFileSync(
+      path.join(cachedKit, '.next', 'cache', 'webpack', 'client-development', '29.pack'),
+      Buffer.alloc(8192),
+    );
 
     writeFileSync(path.join(outside, 'secret.txt'), 'secret', 'utf8');
 
@@ -571,6 +603,34 @@ describe('design library routes', () => {
       expect(res.status).toBe(422);
     },
   );
+
+  // Red spec for the "large kit fails import blaming a cache file" bug:
+  // real UI8 Next.js kits ship their .next/ webpack cache (hundreds of MB),
+  // which counted against the copy byte cap and aborted the whole import
+  // with "size limit would skip a required file (.next/.../NN.pack)" even
+  // though the kit's actual design content fit comfortably.
+  it('copies a kit whose derived build cache alone would breach the byte cap', async () => {
+    const fixture = makeStartProjectFixture();
+    fixtureDir = fixture.dir;
+    outsideDir = fixture.outside;
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    // Smaller than the 8 KB cache pack file, larger than the two real
+    // files: import only succeeds if the cache never enters the walk.
+    process.env.OD_DESIGN_LIBRARY_COPY_MAX_BYTES = '4096';
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel: '01 Kits/cached-kit' }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { copiedFiles: number; skippedFiles: number };
+    // Both real files arrive; the .next tree is skipped, not copied and
+    // not counted against the caps.
+    expect(body.copiedFiles).toBe(2);
+    expect(body.skippedFiles).toBeGreaterThanOrEqual(1);
+  });
 
   it('enforces the copy file cap during start-project', async () => {
     const fixture = makeStartProjectFixture();
