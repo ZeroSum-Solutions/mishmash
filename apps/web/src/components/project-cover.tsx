@@ -2,6 +2,16 @@ import { useEffect, useState } from 'react';
 import { projectFileUrl } from '../providers/registry';
 import type { ProjectFile } from '../types';
 
+/**
+ * W4 — the daemon's rendered, persisted cover image (GET
+ * /api/projects/:id/cover). Raw image bytes when a cover has been
+ * generated, 404 before the first render — HtmlProjectCoverFrame's
+ * onError fallback handles the not-yet-rendered case as a static glyph.
+ */
+export function renderedCoverUrl(projectId: string): string {
+  return `/api/projects/${encodeURIComponent(projectId)}/cover`;
+}
+
 export type ProjectCoverKind = 'html' | 'image' | 'video' | 'logo';
 
 export interface ProjectCoverOverride {
@@ -46,8 +56,27 @@ export function projectCoverUrl(projectId: string, name: string, version?: numbe
   return `${url}${separator}v=${encodeURIComponent(String(Math.trunc(version)))}`;
 }
 
+/**
+ * Renders an HTML-kind project's cover. S4-5 correction: this used to
+ * mount a LIVE sandboxed iframe of the project's raw HTML once a HEAD
+ * check verified it existed -- `sandbox="allow-scripts"` (deliberately
+ * without `allow-same-origin`, see docs/security/daemon-threat-model.md
+ * NM-35C) stops the frame reaching the parent document, but it does
+ * nothing to stop the frame's OWN outbound requests: the project's HTML
+ * could still pull remote CSS/fonts/scripts/trackers on first card view,
+ * well before any real render pipeline existed to police that content
+ * (C4-7).
+ *
+ * Fixed: an `<img>` pointed at the SAME `src` the caller already passes.
+ * Browsers never parse HTML bytes as an image, so no script or
+ * network-capable frame is ever created regardless of what `src` resolves
+ * to -- the not-yet-rendered state falls straight through `onError` into
+ * the static glyph. Once a real cover exists (call sites pass
+ * `renderedCoverUrl(projectId)`, see above), `src` serves real image
+ * bytes and the same `<img>` renders it.
+ */
 export function HtmlProjectCoverFrame({
-  src,
+  src: coverSrc,
   initial,
   iframeClassName,
   glyphClassName,
@@ -60,62 +89,28 @@ export function HtmlProjectCoverFrame({
   diagnostic: string;
 }) {
   const [failed, setFailed] = useState(false);
-  const [verified, setVerified] = useState(false);
 
   useEffect(() => {
-    if (!src) {
-      setFailed(false);
-      setVerified(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    let disposed = false;
-
     setFailed(false);
-    setVerified(false);
+  }, [coverSrc]);
 
-    fetch(src, { method: 'HEAD', cache: 'no-store', signal: controller.signal })
-      .then((response) => {
-        if (disposed) return;
-        if (response.ok || response.status === 304) {
-          setVerified(true);
-          return;
-        }
-        console.warn(
-          `[project-cover] HTML cover unavailable (${response.status} ${response.statusText}):`,
-          diagnostic,
-        );
-        setFailed(true);
-      })
-      .catch((err) => {
-        if (disposed || (err instanceof DOMException && err.name === 'AbortError')) return;
-        console.warn('[project-cover] failed to verify HTML cover:', diagnostic, err);
-        setFailed(true);
-      });
-
-    return () => {
-      disposed = true;
-      controller.abort();
-    };
-  }, [src, diagnostic]);
-
-  if (!src || failed || !verified) {
+  if (!coverSrc || failed) {
     return <span className={glyphClassName}>{initial}</span>;
   }
 
   return (
-    <iframe
-      className={iframeClassName}
-      src={src}
-      title=""
-      loading="lazy"
-      sandbox="allow-scripts"
-      tabIndex={-1}
-      onError={() => {
-        console.warn('[project-cover] failed to load HTML cover:', diagnostic);
-        setFailed(true);
-      }}
-    />
+    <span className="cover-thumb-frame">
+      <img
+        className={iframeClassName}
+        src={coverSrc}
+        alt=""
+        loading="lazy"
+        draggable={false}
+        onError={() => {
+          console.warn('[project-cover] cover image unavailable, showing glyph fallback:', diagnostic);
+          setFailed(true);
+        }}
+      />
+    </span>
   );
 }

@@ -32,12 +32,47 @@ import {
 	HtmlProjectCoverFrame,
 	coverFromProjectFile,
 	projectCoverUrl,
+	renderedCoverUrl,
 	selectProjectFileCover,
 	type ProjectCoverOverride,
 } from "./project-cover";
 
 type SubTab = "recent" | "yours";
 type ViewMode = "grid" | "kanban";
+
+// S4-6 (NM-27C execution half) -- the per-project fetchLiveArtifacts/
+// fetchProjectFiles fan-out used to be a single unbounded Promise.all,
+// issuing one request per project regardless of how many there are. A
+// small FIFO pool bounds concurrency to a fixed ceiling that does not
+// scale with project count, and isolates one project's failure from the
+// rest: a rejected worker never rejects the whole batch, so every OTHER
+// project's request still completes and its state still updates.
+const FAN_OUT_CONCURRENCY = 12;
+
+async function mapWithConcurrencyLimit<T, R>(
+	items: readonly T[],
+	limit: number,
+	worker: (item: T) => Promise<R>,
+): Promise<R[]> {
+	const results: R[] = new Array(items.length);
+	let nextIndex = 0;
+	async function runNext(): Promise<void> {
+		for (;;) {
+			const i = nextIndex++;
+			if (i >= items.length) return;
+			results[i] = await worker(items[i] as T);
+		}
+	}
+	const workerCount = Math.max(1, Math.min(limit, items.length));
+	await Promise.all(Array.from({ length: workerCount }, () => runNext()));
+	return results;
+}
+
+// S4-6 -- a project list large enough to matter (hundreds of rows) must
+// not render one .design-card per project; the grid paginates instead.
+// PAGE_SIZE stays well above any normal-sized list so pagination is
+// invisible for typical project counts and only engages at real scale.
+const GRID_PAGE_SIZE = 60;
 
 type DesignListItem =
 	| { type: "project"; project: Project; updatedAt: number; createdAt: number }
@@ -119,6 +154,8 @@ export function DesignsTab({
 	}, [analytics.track]);
 	const [filter, setFilter] = useState("");
 	const [sub, setSub] = useState<SubTab>("recent");
+	// S4-6 -- pagination for the grid view; see GRID_PAGE_SIZE above.
+	const [visibleCount, setVisibleCount] = useState(GRID_PAGE_SIZE);
 	const [liveArtifactsByProject, setLiveArtifactsByProject] = useState<
 		Record<string, LiveArtifactSummary[]>
 	>({});
@@ -166,12 +203,15 @@ export function DesignsTab({
 			return;
 		}
 
-		void Promise.all(
-			projectIds.map(
-				async (projectId) =>
-					[projectId, await fetchLiveArtifacts(projectId)] as const,
-			),
-		).then((entries) => {
+		void mapWithConcurrencyLimit(projectIds, FAN_OUT_CONCURRENCY, async (projectId) => {
+			try {
+				return [projectId, await fetchLiveArtifacts(projectId)] as const;
+			} catch {
+				// One project's failure must not blank the rest of the grid --
+				// every other project's fetch keeps running via the shared pool.
+				return [projectId, []] as const;
+			}
+		}).then((entries) => {
 			if (cancelled) return;
 			setLiveArtifactsByProject(Object.fromEntries(entries));
 		});
@@ -187,30 +227,30 @@ export function DesignsTab({
 			setCoverByProject({});
 			return;
 		}
-		void Promise.all(
-			projects.map(async (project) => {
-				const designSystemProject = isDesignSystemProject(project);
-				// Brand projects render a generated logo/monogram cover (see
-				// projectCover) instead of a raw HTML file preview, so skip the
-				// file scan entirely for them.
-				if (project.metadata?.kind === "brand") return [project.id, null] as const;
-				if (project.metadata?.entryFile && !designSystemProject) return [project.id, null] as const;
-				let files: Awaited<ReturnType<typeof fetchProjectFiles>>;
-				try {
-					files = await fetchProjectFiles(project.id);
-				} catch {
-					return [project.id, null] as const;
+		void mapWithConcurrencyLimit(projects, FAN_OUT_CONCURRENCY, async (project) => {
+			const designSystemProject = isDesignSystemProject(project);
+			// Brand projects render a generated logo/monogram cover (see
+			// projectCover) instead of a raw HTML file preview, so skip the
+			// file scan entirely for them.
+			if (project.metadata?.kind === "brand") return [project.id, null] as const;
+			if (project.metadata?.entryFile && !designSystemProject) return [project.id, null] as const;
+			let files: Awaited<ReturnType<typeof fetchProjectFiles>>;
+			try {
+				files = await fetchProjectFiles(project.id);
+			} catch {
+				// One project's failure must not blank the rest of the grid --
+				// every other project's fetch keeps running via the shared pool.
+				return [project.id, null] as const;
+			}
+			if (designSystemProject) {
+				const logo = findDesignSystemLogoFile(files);
+				if (logo) {
+					return [project.id, coverFromProjectFile(logo, "logo")] as const;
 				}
-				if (designSystemProject) {
-					const logo = findDesignSystemLogoFile(files);
-					if (logo) {
-						return [project.id, coverFromProjectFile(logo, "logo")] as const;
-					}
-					return [project.id, null] as const;
-				}
-				return [project.id, selectProjectFileCover(files)] as const;
-			}),
-		).then((entries) => {
+				return [project.id, null] as const;
+			}
+			return [project.id, selectProjectFileCover(files)] as const;
+		}).then((entries) => {
 			if (cancelled) return;
 			setCoverByProject(Object.fromEntries(entries));
 		});
@@ -363,6 +403,17 @@ export function DesignsTab({
 			);
 		});
 	}, [projects, liveArtifactsByProject, filter, sub]);
+
+	// S4-6 -- reset pagination whenever the underlying list changes shape
+	// (a new search, sort, or filter should always start back at page one).
+	useEffect(() => {
+		setVisibleCount(GRID_PAGE_SIZE);
+	}, [filter, sub]);
+
+	const visibleFiltered = useMemo(
+		() => filtered.slice(0, visibleCount),
+		[filtered, visibleCount],
+	);
 
 	const filteredProjects = useMemo(
 		() =>
@@ -698,8 +749,9 @@ export function DesignsTab({
 					)}
 				</div>
 			) : view === "grid" ? (
+				<>
 				<div className="design-grid">
-					{filtered.map((item) => {
+					{visibleFiltered.map((item) => {
 						const p = item.project;
 						const skill = skillName(p.skillId);
 						const ds = dsName(resolveProjectDesignSystemId(p));
@@ -933,7 +985,7 @@ export function DesignsTab({
 										<video className="thumb-media" src={cover.src} muted preload="metadata" playsInline />
 									) : cover.kind === "html" ? (
 										<HtmlProjectCoverFrame
-											src={cover.src}
+											src={renderedCoverUrl(p.id)}
 											initial={cover.initial}
 											iframeClassName="thumb-iframe"
 											glyphClassName="project-thumb-glyph"
@@ -985,6 +1037,33 @@ export function DesignsTab({
 						);
 					})}
 				</div>
+				{filtered.length > visibleCount ? (
+					// Inline-styled (not a new global class) and a plain string
+					// (not a new i18n key): both apps/web/src/styles/workspace/
+					// drawer.css (which would own a `.design-grid` sibling class)
+					// and apps/web/src/i18n/{types,locales/en}.ts are outside this
+					// wave's write lease (docs/plans/waves/leases.json[W4]).
+					<button
+						type="button"
+						className="design-grid-load-more"
+						style={{
+							marginTop: 14,
+							alignSelf: "center",
+							padding: "8px 16px",
+							background: "var(--bg-panel)",
+							border: "1px solid var(--border)",
+							borderRadius: "var(--radius)",
+							color: "var(--text-strong)",
+							fontSize: 13,
+							fontWeight: 600,
+							cursor: "pointer",
+						}}
+						onClick={() => setVisibleCount((count) => count + GRID_PAGE_SIZE)}
+					>
+						{`Load ${filtered.length - visibleCount} more`}
+					</button>
+				) : null}
+				</>
 			) : (
 				<div className="design-kanban-board">
 					{STATUS_ORDER.map((status) => {

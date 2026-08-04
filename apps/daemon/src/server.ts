@@ -620,6 +620,8 @@ import { registerMediaRoutes } from './routes/media.js';
 import { registerDesignLibraryRoutes } from './routes/design-library.js';
 import { registerStoryboardRoutes } from './routes/storyboard.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes } from './routes/project/index.js';
+import { registerCoverRoutes } from './routes/covers.js';
+import { sweepOrphanedRenderProcesses } from './covers/render-pid-registry.js';
 import { registerVelaRoutes } from './routes/vela.js';
 import { registerFinalizeRoutes, registerImportRoutes, registerProjectExportRoutes } from './import-export-routes.js';
 import { registerHandoffRoutes } from './routes/handoff.js';
@@ -3302,6 +3304,36 @@ export async function startServer({
     projectFiles: projectFileDeps,
     validation: validationDeps,
   });
+  // C4-8 / S4-5: /raw/* serves a project's own files with no
+  // Content-Security-Policy today, unlike /preview/:scope/* (which sets a
+  // restrictive CSP via routes/project/index.ts's setProjectPreviewHeaders).
+  // A raw-served HTML document is exactly what a live-preview iframe (or,
+  // pre-fix, project-cover.tsx's HtmlProjectCoverFrame) points at, so this
+  // gap let a project's HTML pull remote CSS/fonts/scripts/trackers freely.
+  // registerProjectFileRoutes lives outside this wave's write lease
+  // (docs/plans/waves/leases.json[W4]), so this closes the gap via
+  // app-level middleware registered ahead of that route -- mirroring the
+  // EXACT restrictive policy setProjectPreviewHeaders already uses (every
+  // source list is a quoted keyword or a non-network data:/blob: scheme;
+  // connect-src is 'none').
+  const projectRawFileCsp = [
+    "default-src 'self' data: blob:",
+    "img-src 'self' data: blob:",
+    "media-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "style-src 'self' 'unsafe-inline'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    "connect-src 'none'",
+    "form-action 'none'",
+    "base-uri 'none'",
+    "object-src 'none'",
+  ].join('; ');
+  app.use(/^\/api\/projects\/([^/]+)\/raw\/(.+)$/u, (_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', projectRawFileCsp);
+    next();
+  });
   registerProjectFileRoutes(app, {
     db,
     http: httpDeps,
@@ -3314,6 +3346,18 @@ export async function startServer({
     artifacts: artifactDeps,
     projectPreviewScopes,
   });
+  registerCoverRoutes(app, {
+    db,
+    paths: pathDeps,
+    projectStore: projectStoreDeps,
+    projectFiles: projectFileDeps,
+  });
+  // Orphan reaper (security-review finding 6): reap any renderer browser
+  // tree a PRIOR daemon process left running (SIGKILL'd between
+  // chromium.launchServer() succeeding and its own per-job cleanup). Never
+  // blocks server startup -- fire-and-forget, errors swallowed, since a
+  // sweep failure must not prevent the daemon from serving traffic.
+  void sweepOrphanedRenderProcesses(RUNTIME_DATA_DIR).catch(() => undefined);
 
   registerMediaRoutes(app, {
     db,

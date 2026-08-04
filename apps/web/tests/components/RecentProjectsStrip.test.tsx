@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { RecentProjectsStrip } from '../../src/components/RecentProjectsStrip';
@@ -219,9 +219,12 @@ describe('RecentProjectsStrip', () => {
       expect(designSystemCard?.querySelector('img')?.getAttribute('src')).toBe(
         '/api/projects/project-ds/files/imagery/cover-0.png?v=3',
       );
-      const htmlFrame = container.querySelector<HTMLIFrameElement>('.recent-projects__card-thumb-html iframe');
-      expect(htmlFrame).toBeTruthy();
-      expect(htmlFrame?.getAttribute('src')).toBe('/api/projects/project-html/files/index.html?v=200');
+      // S4-5: HTML-kind covers render a static <img> pointed at the daemon's
+      // persisted cover endpoint, never a live iframe of the raw file.
+      const htmlImg = container.querySelector<HTMLImageElement>('.recent-projects__card-thumb-html img');
+      expect(htmlImg).toBeTruthy();
+      expect(htmlImg?.getAttribute('src')).toBe('/api/projects/project-html/cover');
+      expect(container.querySelector('.recent-projects__card-thumb-html iframe')).toBeNull();
       expect(container.querySelector('.recent-projects__card-thumb-html .recent-projects__card-glyph')).toBeNull();
     });
   });
@@ -255,9 +258,7 @@ describe('RecentProjectsStrip', () => {
     });
   });
 
-  it('renders HTML and deck covers from the current file URL', async () => {
-    const fetchMock = stubCoverProbe();
-
+  it('renders HTML and deck covers from the rendered cover endpoint', async () => {
     const { container } = render(
       <RecentProjectsStrip
         projects={[
@@ -281,28 +282,20 @@ describe('RecentProjectsStrip', () => {
     const deckCard = container.querySelector('[data-project-id="project-deck"]');
     const htmlCard = container.querySelector('[data-project-id="project-html"]');
 
+    // S4-5: HTML-kind covers (including "deck" projects, which resolve to
+    // an html-kind cover via the file scan) render a static <img> pointed
+    // at the daemon's persisted cover endpoint, never a live iframe.
     await waitFor(() => {
-      expect(deckCard?.querySelector('iframe')?.getAttribute('src')).toBe(
-        '/api/projects/project-deck/files/index.html?v=400',
-      );
-      expect(htmlCard?.querySelector('iframe')?.getAttribute('src')).toBe(
-        '/api/projects/project-html/files/index.html?v=200',
-      );
+      expect(deckCard?.querySelector('img')?.getAttribute('src')).toBe('/api/projects/project-deck/cover');
+      expect(htmlCard?.querySelector('img')?.getAttribute('src')).toBe('/api/projects/project-html/cover');
+      expect(deckCard?.querySelector('iframe')).toBeNull();
+      expect(htmlCard?.querySelector('iframe')).toBeNull();
       expect(deckCard?.querySelector('.recent-projects__card-glyph')).toBeNull();
       expect(htmlCard?.querySelector('.recent-projects__card-glyph')).toBeNull();
     });
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/projects/project-deck/files/index.html?v=400',
-      expect.objectContaining({ cache: 'no-store', method: 'HEAD' }),
-    );
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/projects/project-html/files/index.html?v=200',
-      expect.objectContaining({ cache: 'no-store', method: 'HEAD' }),
-    );
   });
 
-  it('falls back to the glyph and logs when an HTML cover is unavailable', async () => {
-    stubCoverProbe(404, 'Not Found');
+  it('falls back to the glyph and logs when the rendered cover image fails to load (not yet generated, S4-5)', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const { container } = render(
@@ -319,14 +312,20 @@ describe('RecentProjectsStrip', () => {
       />,
     );
 
+    const queryThumb = (): Element | null => container.querySelector('.recent-projects__card-thumb-html');
     await waitFor(() => {
-      const htmlThumb = container.querySelector('.recent-projects__card-thumb-html');
-      expect(htmlThumb?.querySelector('iframe')).toBeNull();
-      expect(htmlThumb?.querySelector('.recent-projects__card-glyph')?.textContent).toBe('W');
-      expect(warn).toHaveBeenCalledWith(
-        '[project-cover] HTML cover unavailable (404 Not Found):',
-        'project-html:index.html',
-      );
+      expect(queryThumb()?.querySelector('img')).toBeTruthy();
     });
+    const img = queryThumb()?.querySelector('img');
+    expect(img).toBeTruthy();
+    if (img) fireEvent.error(img);
+
+    expect(queryThumb()?.querySelector('iframe')).toBeNull();
+    expect(queryThumb()?.querySelector('img')).toBeNull();
+    expect(queryThumb()?.querySelector('.recent-projects__card-glyph')?.textContent).toBe('W');
+    expect(warn).toHaveBeenCalledWith(
+      '[project-cover] cover image unavailable, showing glyph fallback:',
+      'project-html:index.html',
+    );
   });
 });

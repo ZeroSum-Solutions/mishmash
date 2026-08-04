@@ -917,3 +917,102 @@ remediation above must be applied and re-reviewed first.
 `approved-gate.sha256` + `approved-verify-w4.ts`. Landing commit recorded
 in `approved-gate.meta.txt` after the merge.
 
+## 2026-08-04 — W4 gate waiver: C4-5 (environmental flake) + C4-10 (marginal readiness) ACCEPTED, wave ships at 13/15
+
+**Status:** ACCEPTED (founder ruling, Devin, 2026-08-04). Not a verifier
+defect in either case; neither criterion is "fixed" by this entry.
+
+**Context.** After the r3/rev6 C4-10 amendment landed on main
+(`dda322ba4`, PR #66, sealed gate sha256
+`fb00636e9bc069a4a932a802a10be6843b06d5b5e120fbfd97213d6c960d72aa`),
+`feat/w4-covers-impl` was merged current with main and the full gate was
+re-run to completion (`pnpm exec tsx scripts/waves/verify-w4.ts`, worktree
+HEAD `db109f25b`). Final result: **13/15**, `MANIFEST_SHA256=8fd153f39050a1ca25cce59514dcfad933ee42438c0e468daf80b71401eb5783`,
+`treeDirty=false`. All 13 other criteria (C4-1..C4-4, C4-6..C4-9, C4-11,
+C4-12, GATE-INTEGRITY, LEASE, HEAD-DRIFT) pass. Two do not, and both are
+accepted here rather than chased further.
+
+**C4-10 — ACCEPTED. Marginal readiness, not a regression.** R8 activation
+measurement, parent (`dda322ba4232`) vs head (`db109f25bc50`), both
+against their own scratch copy of the same corpus digest
+(`2828f6176a44c8f50e1ebc32ad44d953ef2b512085f48e580fbfd514b10832c7`,
+2849 files, MATCH on both sides):
+
+| axis | parent | head | threshold | result |
+|---|---|---|---|---|
+| readiness p50 | 415ms | 418ms | ≤373.5ms (parent −10%) | **not met** |
+| readiness p95 | 510ms | 424ms | ≤637.5ms (parent +25%) | met |
+| peak combined RSS | 3,035,424 KB | 2,141,840 KB (**−29%**) | ≤+25% | met |
+| peak concurrent requests | 32 | 24 (**−25%**) | ≤+25% | met |
+
+(A prior clean run on the same branch state showed the same shape —
+parent p50 439ms vs head 433ms, head RSS −24%, head concurrency −25% —
+confirming this is a stable measurement, not run-to-run noise.) Head ties
+parent on readiness p50 (well within the two runs' own noise band) and
+does not regress p95, RSS, or concurrency on any measured run — it
+substantially *improves* RSS and concurrency both times. It does not
+clear C4-10's ≥10% p50 improvement bar. Founder assessment: the covers
+feature's real, demonstrated win is resource efficiency (lower peak
+memory, fewer peak concurrent requests via the bounded fan-out/pagination
+work), not first-paint speed — DesignsTab's data plane gained one new
+real request per card (`GET /api/projects/:id/cover`), which offsets
+whatever readiness gain the lighter fan-out would otherwise produce.
+C4-10's rev6 amendment record itself flagged this as a live possibility
+("Marginality disclosure (not a defect)" above) and said a legitimate
+failure here would mean exactly this: real, if modest, data-plane cost.
+That is what the numbers show. Not a verifier defect; not to be
+"fixed" by further gate or verifier changes.
+
+**C4-5 — ACCEPTED as a known verifier ENVIRONMENTAL flake.** Every
+failure is the SAME single leg (memory-ceiling) with the SAME signature:
+`validSamples=1, invalidSamples=0, totalSamples=1, rssGrowthKb=0` — the
+slow-job control, per-job-timeout, and concurrency-plateau legs pass
+cleanly on every run, always. Mechanism: the verifier's OWN external RSS
+poller samples the daemon's process tree on a FIXED 400ms interval;
+C4-5's memory-hog render typically completes (launch, allocate past the
+400MB ceiling, get killed with a typed `RENDER_MEMORY_LIMIT`) in roughly
+400-900ms, and is measurably faster right after C4-5's own preceding
+24-launch concurrency leg has warmed the OS's Chromium-binary page cache
+— a race that can cost the poller its second sample. This was
+independently reproduced and diagnosed earlier in this same remediation
+session: **7 clean standalone reproductions** of the identical fixture
+and detection logic (3 with an in-process daemon boot, 3 with the exact
+child-process `pnpm exec tsx <bootscript>` pattern `bootDaemonForProbing`
+uses, 1 matching the verifier's own boot helper precisely), every one
+showing the mechanism working correctly — `RENDER_MEMORY_LIMIT` returned,
+2-3 valid external samples, positive measured growth. Across this gate's
+several full runs it has also PASSED cleanly on its own re-run more than
+once. Not to be "fixed" by reopening the sealed verifier (its 400ms
+poll interval and the render's absolute wall-clock speed are both outside
+this wave's authority to change); the renderer's actual boundedness is
+independently verified by the daemon's own owned test suite
+(`apps/daemon/tests/covers/renderer.test.ts`), which is not subject to
+this timing race and passes deterministically.
+
+**Ruling.** The project-covers wave (W4) ships at **13/15**: 13 real
+passes, these two documented and founder-accepted waivers, zero
+unaddressed failures. Landing feat/w4-covers-impl does not require
+re-running C4-5/C4-10 again; this record is the closure.
+
+### W4-C4-5-C4-10-WAIVER
+- Decision: waived (both criteria)
+- Decider: Devin Wiggins (founder), 2026-08-04
+- Landed amendment referenced: PR #66 (`dda322ba4`, r3/rev6), sealed gate
+  sha256 `fb00636e9bc069a4a932a802a10be6843b06d5b5e120fbfd97213d6c960d72aa`
+- Evidence run: `feat/w4-covers-impl` @ `db109f25b`,
+  `MANIFEST_SHA256=8fd153f39050a1ca25cce59514dcfad933ee42438c0e468daf80b71401eb5783`,
+  13/15, treeDirty=false
+- Rationale: C4-10 is a genuine, reproducible, marginal result (readiness
+  p50 ties parent; RSS −29%, concurrency −25%, p95 comfortably inside
+  ceiling) reflecting a real architectural tradeoff the criterion's own
+  amendment record anticipated, not a defect. C4-5 is a verifier-internal
+  timing race (fixed 400ms external poll vs a sub-second, cache-warmth-
+  sensitive render), independently reproduced clean 7/7 outside the gate
+  and passing on the gate's own re-runs; the renderer's real boundedness
+  is separately and deterministically covered by
+  `apps/daemon/tests/covers/renderer.test.ts`.
+- Precedent: this is a founder-accepted deviation on two SPECIFIC,
+  fully-diagnosed, evidence-backed criteria for THIS wave. It does not
+  license landing any other wave, or any future W4 change, against a gate
+  report with undiagnosed or unexplained failures.
+
