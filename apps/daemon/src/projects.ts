@@ -151,6 +151,46 @@ export async function listFiles(projectsRoot, projectId, opts = {}) {
   return out;
 }
 
+// Resolve the single file the workspace "Canvas" control should open — the
+// one answer the web UI, MCP studio links, and `od project info` must all
+// agree on (AGENTS.md dual-track: the daemon HTTP layer is the source of
+// truth). Order of authority: the project's declared entryFile (when it
+// still exists on disk), an artifact manifest that declares its file
+// primary (newest first — listFiles sorts mtime-desc), the conventional
+// root index.html, then the only root-level .html. Ambiguity resolves to
+// null rather than a guess.
+export async function resolveCanvasFile(projectsRoot, project) {
+  const metadata = project?.metadata;
+  let files;
+  try {
+    files = await listFiles(projectsRoot, project.id, { metadata });
+  } catch {
+    return null;
+  }
+  const declared =
+    typeof metadata?.entryFile === 'string' && metadata.entryFile.length > 0 ? metadata.entryFile : null;
+  if (declared && files.some((f) => f.path === declared)) return declared;
+  const primary = files.find((f) => manifestDeclaresPrimaryFile(f));
+  if (primary) return primary.path;
+  if (files.some((f) => f.path === 'index.html')) return 'index.html';
+  const rootHtml = files.filter((f) => !f.path.includes('/') && f.path.toLowerCase().endsWith('.html'));
+  if (rootHtml.length === 1) return rootHtml[0].path;
+  return null;
+}
+
+// Mirrors the web client's manifestDeclaresPrimary/primaryValueTargetsFile
+// semantics (ProjectView.tsx): `primary: true` marks the file itself,
+// a string names the primary file of a multi-file output.
+function manifestDeclaresPrimaryFile(file) {
+  const manifest = file?.artifactManifest;
+  if (!manifest) return false;
+  const value = manifest.primary ?? manifest.metadata?.primary;
+  if (value === true) return true;
+  if (typeof value !== 'string') return false;
+  const normalize = (v) => v.replace(/\\/g, '/').replace(/^\.?\//, '').toLowerCase();
+  return normalize(value) === normalize(file.path);
+}
+
 export async function listProjectFolders(projectsRoot, projectId, opts = {}) {
   const metadata = opts?.metadata;
   const dir = resolveProjectDir(projectsRoot, projectId, metadata);

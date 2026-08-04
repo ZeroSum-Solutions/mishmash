@@ -324,6 +324,15 @@ export interface ProjectResponse {
 // `resolveProjectDir(...)` so the web client never reconstructs the path.
 export interface ProjectDetailResponse extends ProjectResponse {
   resolvedDir: string;
+  /**
+   * The single file the workspace "Canvas" control opens — resolved
+   * server-side so the web UI, MCP studio links, and `od project info`
+   * agree on one answer. Order: `metadata.entryFile` (when it exists on
+   * disk) → an artifact manifest declaring its file primary → root
+   * `index.html` → the only root-level `.html`. `null` when no
+   * unambiguous canvas exists.
+   */
+  resolvedCanvasFile: string | null;
 }
 
 export interface CreateProjectResponse extends ProjectResponse {

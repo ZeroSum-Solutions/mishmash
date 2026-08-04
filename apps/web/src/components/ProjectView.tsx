@@ -8770,6 +8770,7 @@ export function ProjectView({
           })()}
           reloading={false}
           resolvedDir={projectDetail.resolvedDir}
+          resolvedCanvasFile={projectDetail.resolvedCanvasFile}
           files={projectFiles}
           liveArtifacts={liveArtifacts}
           filesRefreshKey={filesRefresh}
