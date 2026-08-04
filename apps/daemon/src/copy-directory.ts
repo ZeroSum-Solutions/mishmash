@@ -60,6 +60,24 @@ export async function copyDirectoryContents(
   state: CopyDirectoryState,
   options: CopyDirectoryOptions,
 ): Promise<void> {
+  await walkAndCopy(sourceDir, destDir, state, options, sourceDir);
+}
+
+// Recursive walk behind copyDirectoryContents. `copyRoot` stays pinned to
+// the ORIGINAL source root across recursion so every onIncomplete relPath
+// names the entry by its full path from the copied directory's root (e.g.
+// `.next/cache/webpack/client-development/29.pack`). Rebasing against the
+// per-level `sourceDir` collapsed that to the bare filename, which made cap
+// and symlink errors unlocatable for anything nested.
+async function walkAndCopy(
+  sourceDir: string,
+  destDir: string,
+  state: CopyDirectoryState,
+  options: CopyDirectoryOptions,
+  copyRoot: string,
+): Promise<void> {
+  const relFromRoot = (target: string, fallback: string): string =>
+    path.relative(copyRoot, target) || fallback;
   // The per-entry symlink check below only ever sees entries discovered by
   // walking INTO a directory -- it never re-examines the directory it is
   // about to walk. Without this, a caller that resolves a source root via
@@ -72,7 +90,7 @@ export async function copyDirectoryContents(
   // directory, not a symlink, immediately before the walk.
   const rootInfo = await lstat(sourceDir).catch(() => null);
   if (rootInfo?.isSymbolicLink()) {
-    options.onIncomplete('symbolic links are not supported', '.');
+    options.onIncomplete('symbolic links are not supported', relFromRoot(sourceDir, '.'));
   }
   const entries = await readdir(sourceDir, { withFileTypes: true });
   await mkdir(destDir, { recursive: true });
@@ -87,21 +105,21 @@ export async function copyDirectoryContents(
       continue;
     }
     if (entry.isSymbolicLink()) {
-      options.onIncomplete('symbolic links are not supported', path.relative(sourceDir, source) || entry.name);
+      options.onIncomplete('symbolic links are not supported', relFromRoot(source, entry.name));
     }
     if (entry.isDirectory()) {
-      await copyDirectoryContents(source, destination, state, options);
+      await walkAndCopy(source, destination, state, options, copyRoot);
       continue;
     }
     if (!entry.isFile()) {
-      options.onIncomplete('special files are not supported', path.relative(sourceDir, source) || entry.name);
+      options.onIncomplete('special files are not supported', relFromRoot(source, entry.name));
     }
     if (state.copiedFiles >= options.limits.maxFiles) {
-      options.onIncomplete('file limit would skip required files', path.relative(sourceDir, source) || entry.name);
+      options.onIncomplete('file limit would skip required files', relFromRoot(source, entry.name));
     }
     const sourceInfo = await stat(source);
     if (state.copiedBytes + sourceInfo.size > options.limits.maxBytes) {
-      options.onIncomplete('size limit would skip a required file', path.relative(sourceDir, source) || entry.name);
+      options.onIncomplete('size limit would skip a required file', relFromRoot(source, entry.name));
     }
     await mkdir(path.dirname(destination), { recursive: true });
     await copyFile(source, destination);
