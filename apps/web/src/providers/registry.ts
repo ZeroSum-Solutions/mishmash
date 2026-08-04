@@ -2966,7 +2966,8 @@ function isDesignLibraryItemShape(item: unknown): boolean {
     Array.isArray(candidate.domains) &&
     candidate.domains.every((domain) => typeof domain === 'string') &&
     typeof candidate.allowed_use === 'string' &&
-    (candidate.duplicate_of === undefined || typeof candidate.duplicate_of === 'string')
+    (candidate.duplicate_of === undefined || typeof candidate.duplicate_of === 'string') &&
+    (candidate.description === undefined || typeof candidate.description === 'string')
   );
 }
 

@@ -4290,6 +4290,8 @@ export const en: Dict = {
   'designLibrary.useAsTemplate': 'Use as template',
   'designLibrary.useAsTemplateBusy': 'Starting project…',
   'designLibrary.useAsTemplateError': 'Could not start a project from this kit.',
+  'designLibrary.preview': 'Preview',
+  'designLibrary.previewClose': 'Close',
   'storyboard.title': 'Storyboard',
   'storyboard.newStoryboard': 'New storyboard',
   'storyboard.loading': 'Loading storyboards…',

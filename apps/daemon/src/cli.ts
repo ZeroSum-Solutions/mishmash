@@ -8876,12 +8876,17 @@ async function runWhatsNew(args) {
 function printDesignLibraryHelp() {
   console.log(`Usage:
   od design-library catalog [--json]
+  od design-library show <rel> [--json]
   od design-library start-project --rel <rel> [--name <name>] [--json]
 
 Reads the local Design Library catalog (~/Desktop/Design Assets/catalog.json
 by default, or OD_DESIGN_LIBRARY_DIR) over the same GET
 /api/design-library/catalog contract the web Design Library tab reads.
 \`catalog\` is read-only — it never uploads or copies library bytes.
+
+\`show\` prints one catalog item (label, kind, allowed_use, domains,
+description, preview thumb URL) resolved by its rel path — the composable
+"inspect a kit" operation behind the web UI's thumbnail preview dialog.
 
 \`start-project\` copies a licensed kit's files into a new managed project
 over the same POST /api/design-library/start-project contract as the web
@@ -8908,6 +8913,9 @@ async function runDesignLibrary(args) {
   const subArgs = [...args.slice(0, idx), ...args.slice(idx + 1)];
   if (sub === 'catalog') {
     return runDesignLibraryCatalog(subArgs);
+  }
+  if (sub === 'show') {
+    return runDesignLibraryShow(subArgs);
   }
   if (sub === 'start-project') {
     return runDesignLibraryStartProject(subArgs);
@@ -8936,6 +8944,52 @@ async function runDesignLibraryCatalog(rawArgs) {
   if (!resp.ok) return structuredHttpFailure(resp);
   const data = await resp.json();
   process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+}
+
+// `od design-library show <rel>` — resolve one catalog item over the same
+// GET /api/design-library/catalog contract the web preview dialog reads.
+async function runDesignLibraryShow(rawArgs) {
+  const flags = parseFlags(rawArgs, { string: LIBRARY_STRING_FLAGS, boolean: LIBRARY_BOOLEAN_FLAGS });
+  if (flags.help || flags.h) {
+    printDesignLibraryHelp();
+    return;
+  }
+  const rel = positionalArgs(rawArgs, LIBRARY_STRING_FLAGS)[0];
+  if (!rel) {
+    console.error('Usage: od design-library show <rel> [--json]');
+    process.exit(2);
+  }
+  const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/design-library/catalog`);
+  } catch (err) {
+    return exitWithStructuredError({
+      code: 'daemon-not-running',
+      message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+    });
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  const data = await resp.json();
+  const item = (data.groups ?? [])
+    .flatMap((group) => group.items ?? [])
+    .find((candidate) => candidate.rel === rel);
+  if (!item) {
+    return exitWithStructuredError({
+      code: 'missing-input',
+      message: `No design-library catalog item with rel "${rel}"`,
+    });
+  }
+  if (flags.json) return process.stdout.write(JSON.stringify(item, null, 2) + '\n');
+  console.log(`${item.label} (${item.rel})`);
+  console.log(`Kind: ${item.kind} · ${item.files} files · ${item.size}`);
+  console.log(`Allowed use: ${item.allowed_use}`);
+  if (item.domains?.length) console.log(`Domains: ${item.domains.join(', ')}`);
+  if (item.description) console.log(`Description: ${item.description}`);
+  if (item.thumb) {
+    const thumbFile = String(item.thumb).split('/').pop() ?? '';
+    console.log(`Preview: ${base}/api/design-library/thumb/${encodeURIComponent(thumbFile)}`);
+  }
 }
 
 async function runDesignLibraryStartProject(rawArgs) {
