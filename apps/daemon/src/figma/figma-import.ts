@@ -50,6 +50,24 @@ export function safeSnapshotSubdir(raw: unknown): string | null {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(trimmed)) return null;
   return trimmed;
 }
+
+/**
+ * Lexical validation alone does not confine the write: a symlink planted at
+ * the snapshot path would let the recursive mkdir and every subsequent write
+ * follow it outside the project root. The snapshot dir and its assets/ child
+ * must therefore be real directories (or absent) — never links.
+ */
+async function rejectSymlinkAt(target: string): Promise<void> {
+  let stat;
+  try {
+    stat = await fsp.lstat(target);
+  } catch {
+    return; // absent — mkdir will create a real directory
+  }
+  if (stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new Error(`snapshot path ${path.basename(target)} must be a real directory inside the project`);
+  }
+}
 const MAX_CONTEXT_COLORS = 24;
 const MAX_CONTEXT_COMPONENTS = 30;
 
@@ -80,6 +98,8 @@ export async function importFigmaFromBytes(
 
   const figmaDir = path.join(cwd, subdir);
   const assetsDir = path.join(figmaDir, 'assets');
+  await rejectSymlinkAt(figmaDir);
+  await rejectSymlinkAt(assetsDir);
   await fsp.mkdir(assetsDir, { recursive: true });
 
   const written: string[] = [];
@@ -113,7 +133,8 @@ export async function importFigmaFromBytes(
 
   const inventory = buildInventory(decoded, tree, tokens, assetCount);
 
-  const contextMd = renderDesignContext({ label, inventory, tree, tokens, thumbnailPath, notes: opts.notes });
+  const snapshotDirRel = rel(figmaDir);
+  const contextMd = renderDesignContext({ label, inventory, tree, tokens, thumbnailPath, notes: opts.notes, snapshotDir: snapshotDirRel });
   const contextFile = path.join(figmaDir, 'DESIGN-context.md');
   await fsp.writeFile(contextFile, contextMd, 'utf8');
   const contextPath = rel(contextFile);
@@ -141,7 +162,7 @@ export async function importFigmaFromBytes(
     files: written,
     inventory,
     contextPath,
-    suggestedPrompt: buildSuggestedPrompt(label, inventory, contextPath, thumbnailPath, opts.notes),
+    suggestedPrompt: buildSuggestedPrompt(label, inventory, contextPath, thumbnailPath, opts.notes, snapshotDirRel),
     label,
   };
   if (thumbnailPath) result.thumbnailPath = thumbnailPath;
@@ -189,12 +210,14 @@ interface ContextArgs {
   tokens: ReturnType<typeof liftTokens>;
   thumbnailPath?: string | undefined;
   notes?: string | undefined;
+  /** Snapshot dir relative to the staging cwd (e.g. `figma`, `figma-homepage`). */
+  snapshotDir: string;
 }
 
 const COMPONENT_NAME_RE = /(button|card|modal|dialog|input|nav|tab|menu|toast|badge|avatar|table|list|toolbar|sidebar|header|footer|chip|tooltip|dropdown|accordion|banner|hero|form|field)/i;
 
 function renderDesignContext(args: ContextArgs): string {
-  const { label, inventory, tree, tokens, thumbnailPath, notes } = args;
+  const { label, inventory, tree, tokens, thumbnailPath, notes, snapshotDir } = args;
   const componentNames = Array.from(
     new Set(tree.filter((n) => COMPONENT_NAME_RE.test(n.name)).map((n) => n.name.trim())),
   ).slice(0, MAX_CONTEXT_COMPONENTS);
@@ -210,9 +233,9 @@ function renderDesignContext(args: ContextArgs): string {
     '',
     '## Snapshot',
     '',
-    `- Tree: \`figma/tree.json\` (${inventory.nodeCount} nodes)`,
-    `- Tokens: \`figma/tokens.json\``,
-    `- Assets: \`figma/assets/\` (${inventory.assetCount} files)`,
+    `- Tree: \`${snapshotDir}/tree.json\` (${inventory.nodeCount} nodes)`,
+    `- Tokens: \`${snapshotDir}/tokens.json\``,
+    `- Assets: \`${snapshotDir}/assets/\` (${inventory.assetCount} files)`,
     thumbnailPath ? `- Preview: \`${thumbnailPath}\` — treat as visual ground truth` : '- Preview: none shipped in this file',
     '',
     '## Inventory',
@@ -249,14 +272,15 @@ function buildSuggestedPrompt(
   contextPath: string,
   thumbnailPath: string | undefined,
   notes: string | undefined,
+  snapshotDir: string,
 ): string {
   const parts: string[] = [
     `I imported the Figma file "${label}". The decoded design snapshot is in \`${path.dirname(contextPath)}/\` — read \`${contextPath}\` first for the inventory, tokens, and components.`,
     thumbnailPath
-      ? `Use \`${thumbnailPath}\` as the visual ground truth and \`figma/assets/\` for any embedded logos/icons (don't redraw them).`
+      ? `Use \`${thumbnailPath}\` as the visual ground truth and \`${snapshotDir}/assets/\` for any embedded logos/icons (don't redraw them).`
       : '',
     inventory.decoded
-      ? 'Build a clean, responsive webpage that reproduces this design, binding every screen to the real tokens, type, and spacing from `figma/tokens.json` — semantic HTML, not absolute-positioned layers.'
+      ? `Build a clean, responsive webpage that reproduces this design, binding every screen to the real tokens, type, and spacing from \`${snapshotDir}/tokens.json\` — semantic HTML, not absolute-positioned layers.`
       : 'The node tree did not fully decode; rebuild the page from the preview and assets, matching the colors and type you can see.',
   ];
   if (notes && notes.trim()) parts.push(`Author notes: ${notes.trim()}`);

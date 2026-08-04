@@ -22,6 +22,13 @@ describe('figmaSnapshotSubdir', () => {
   it('disambiguates same-named files within one batch via the used set', () => {
     const used = new Set<string>();
     expect(figmaSnapshotSubdir('a/Design.fig', 0, used)).toBe('figma-design');
-    expect(figmaSnapshotSubdir('b/Design.fig', 1, used)).toBe('figma-design-1');
+    expect(figmaSnapshotSubdir('b/Design.fig', 1, used)).toBe('figma-design-2');
+  });
+
+  it('keeps probing when the disambiguation suffix itself collides with a file-derived name', () => {
+    const used = new Set<string>();
+    expect(figmaSnapshotSubdir('Design-2.fig', 0, used)).toBe('figma-design-2');
+    expect(figmaSnapshotSubdir('a/Design.fig', 1, used)).toBe('figma-design');
+    expect(figmaSnapshotSubdir('b/Design.fig', 2, used)).toBe('figma-design-3');
   });
 });

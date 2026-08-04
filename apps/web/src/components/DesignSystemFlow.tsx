@@ -4987,7 +4987,11 @@ export function figmaSnapshotSubdir(relPath: string, index: number, used?: Set<s
   const slug = safeContextFileName(relPath, `file-${index}`).replace(/\.md$/i, '');
   let subdir = `figma-${slug}`;
   if (used) {
-    if (used.has(subdir)) subdir = `${subdir}-${index}`;
+    // Probe until genuinely free: a one-shot suffix could itself collide
+    // with a filename-derived sibling (e.g. `Design-2.fig` vs `Design.fig`).
+    for (let suffix = 2; used.has(subdir); suffix += 1) {
+      subdir = `figma-${slug}-${suffix}`;
+    }
     used.add(subdir);
   }
   return subdir;
@@ -5203,7 +5207,7 @@ function buildCreationAgentPrompt(
       ? `${stagedLocalCode.skippedCount} local code files were skipped because they were too large, duplicate, generated, or outside the focused upload limit.`
       : '',
     stagedFigma?.summaryPaths.length
-      ? `Each .fig was decoded into a real design snapshot — read the context briefs first: ${stagedFigma.summaryPaths.join(', ')}. They sit beside \`figma/tree.json\`, \`figma/tokens.json\`, \`figma/assets/\`, and a \`figma/thumbnail.png\` preview. Bind the system to these real tokens, type, and components.`
+      ? `Each .fig was decoded into a real design snapshot — read the context briefs first: ${stagedFigma.summaryPaths.join(', ')}. Each brief sits beside its snapshot's \`tree.json\`, \`tokens.json\`, \`assets/\`, and \`thumbnail.png\` preview in the same directory. Bind the system to these real tokens, type, and components.`
       : '',
     stagedFigma?.skippedCount
       ? `${stagedFigma.skippedCount} .fig files were skipped (duplicate or failed to decode).`

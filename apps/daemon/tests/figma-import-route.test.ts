@@ -95,6 +95,32 @@ describe('POST /api/projects/:id/figma/import — HTTP layer', () => {
     const projectDir = path.join(dataDir, 'projects', PROJECT_ID);
     expect(fs.existsSync(path.join(projectDir, 'figma-alpha', 'tree.json'))).toBe(true);
     expect(fs.existsSync(path.join(projectDir, 'figma-beta', 'tree.json'))).toBe(true);
+
+    // Agent-facing references must point at the actual snapshot dir, not the
+    // default `figma/` one — otherwise the reshape prompt directs the agent
+    // at files that do not exist.
+    expect(first.suggestedPrompt).toContain('figma-alpha/');
+    expect(first.suggestedPrompt).not.toContain('`figma/');
+    const contextMd = fs.readFileSync(path.join(projectDir, 'figma-alpha', 'DESIGN-context.md'), 'utf8');
+    expect(contextMd).toContain('figma-alpha/tree.json');
+    expect(contextMd).not.toContain('`figma/tree.json`');
+  });
+
+  it('rejects a subdir that names a planted symlink instead of a real directory', async () => {
+    const outside = fs.mkdtempSync(path.join(dataDir, 'figma-symlink-escape-'));
+    const projectDir = path.join(dataDir, 'projects', PROJECT_ID);
+    fs.symlinkSync(outside, path.join(projectDir, 'figma-evil'));
+
+    const figBytes = await buildSampleFig();
+    const form = new FormData();
+    form.append('file', new Blob([figBytes]), 'evil.fig');
+    form.append('subdir', 'figma-evil');
+    const resp = await fetch(`${baseUrl}/api/projects/${PROJECT_ID}/figma/import`, {
+      method: 'POST',
+      body: form,
+    });
+    expect(resp.status).toBe(400);
+    expect(fs.readdirSync(outside)).toEqual([]);
   });
 
   it('rejects a subdir that is not a single safe path segment', async () => {
