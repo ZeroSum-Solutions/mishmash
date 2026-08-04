@@ -16,6 +16,9 @@
 // Draft-from-brief reuses the finalize provider protocol union rather than
 // declaring a second, drifting copy of "which text APIs we can speak to".
 import type { FinalizeProviderProtocol } from './finalize.js';
+// The style reference reuses the brand engine's extracted-profile shape
+// rather than declaring a second, drifting copy of "what a style is".
+import type { Brand } from './brands.js';
 
 export type StoryboardFrameOrigin = 'generated' | 'derived' | 'uploaded' | 'previous-shot';
 
@@ -96,6 +99,24 @@ export interface StoryboardShot {
   error?: string;
 }
 
+/**
+ * A style profile attached to a storyboard so frame stills, mood drafts, and
+ * shot renders inherit a referenced visual identity (palette, typography,
+ * mood) through prompt steering. Extracted server-side from pasted DESIGN.md
+ * content by the brand engine's deterministic design-md leg via
+ * POST /api/storyboards/:id/style-reference; cleared via DELETE on the same
+ * path. Only the extracted profile is stored — never the raw paste — so the
+ * storyboard doc stays bounded regardless of paste size.
+ */
+export interface StoryboardStyleReference {
+  /** Where the profile came from; pasted DESIGN.md is the only source today. */
+  source: 'design-md';
+  /** The extracted brand/style profile (brand engine output). */
+  brand: Brand;
+  /** ISO 8601 — when the reference was last set/extracted. */
+  updatedAt: string;
+}
+
 export interface Storyboard {
   id: string;
   title: string;
@@ -120,6 +141,8 @@ export interface Storyboard {
    * means "not tracked", not "never assembled".
    */
   finalOutput?: string;
+  /** See StoryboardStyleReference. Absent means no style steering. */
+  styleReference?: StoryboardStyleReference;
 }
 
 /** Lightweight row for the storyboard list view — full shot/mood-draft bodies omitted. */
@@ -165,6 +188,23 @@ export interface PatchStoryboardRequest {
 export interface StoryboardConflictResponse {
   error: 'storyboard changed';
   storyboard: Storyboard;
+}
+
+/** Body of POST /api/storyboards/:id/style-reference. */
+export interface SetStoryboardStyleReferenceRequest {
+  /**
+   * Pasted DESIGN.md content; the daemon extracts the style profile from it
+   * via the brand engine's design-md leg. See StoryboardStyleReference.
+   */
+  designMd: string;
+  /** Optimistic concurrency, same semantics as PatchStoryboardRequest. */
+  expectedUpdatedAt?: string;
+}
+
+/** Optional body of DELETE /api/storyboards/:id/style-reference. */
+export interface ClearStoryboardStyleReferenceRequest {
+  /** Optimistic concurrency, same semantics as PatchStoryboardRequest. */
+  expectedUpdatedAt?: string;
 }
 
 // --- Draft shots from a brief ----------------------------------------------

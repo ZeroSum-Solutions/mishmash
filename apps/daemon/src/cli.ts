@@ -218,7 +218,7 @@ const LIBRARY_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 // module evaluation) doesn't hit a temporal-dead-zone on these sets.
 const STORYBOARD_STRING_FLAGS = new Set([
   'daemon-url', 'title', 'file', 'shot', 'slot', 'finish', 'audio',
-  'brief', 'prompt-file', 'shot-count',
+  'brief', 'prompt-file', 'shot-count', 'design-md',
 ]);
 // Only the negative forms are real flags — titles/transitions both default
 // to on (assemble.ts: `finish.titles ?? true`, `finish.transitions ?? true`),
@@ -229,6 +229,7 @@ const STORYBOARD_BOOLEAN_FLAGS = new Set([
   'help',
   'h',
   'json',
+  'clear',
   'no-titles',
   'no-transitions',
   'captions',
@@ -329,7 +330,7 @@ const SHARE_BOOLEAN_FLAGS = new Set([
 // top-of-file SUBCOMMAND_MAP dispatch during module evaluation; a `const`
 // further down would still be in TDZ when the handler reads it.
 const FIGMA_STRING_FLAGS = new Set([
-  'daemon-url', 'project', 'file', 'figma-url', 'notes', 'subdir', 'page', 'prompt', 'prompt-file',
+  'daemon-url', 'project', 'file', 'figma-url', 'node-id', 'frame-name', 'notes', 'subdir', 'page', 'prompt', 'prompt-file',
 ]);
 const FIGMA_BOOLEAN_FLAGS = new Set([
   'help', 'h', 'json', 'build', 'list-pages',
@@ -5714,7 +5715,7 @@ function printFigmaUsage() {
   od figma import --project <id> --file <path.fig> [--notes "<text>"]
                   [--subdir <name>] [--page <name>] [--list-pages] [--build]
                   [--prompt "<text>" | --prompt-file <path|->] [--json]
-  od figma import --project <id> --figma-url <url> [--notes "<text>"] [--json]
+  od figma import --project <id> --figma-url <url> [--node-id <id>] [--frame-name <name>] [--notes "<text>"] [--json]
 
 Imports a Figma design into a project. A .fig file is decoded fully offline
 (no Figma account); a Figma URL runs through the od-figma-migration scenario
@@ -5725,6 +5726,8 @@ Flags:
   --project <id>       Target project id (required).
   --file <path.fig>    Local .fig to decode offline.
   --figma-url <url>    Figma file URL (https://figma.com/(file|design)/<key>).
+  --node-id <id>       Figma node id to extract (for example 1314:7264).
+  --frame-name <name>  Top-level frame name to extract when no node id is set.
   --notes "<text>"     Design brief folded into the reshape prompt.
   --subdir <name>      Snapshot directory (single path segment; default figma).
                        Distinct subdirs keep multi-file imports separate.
@@ -5769,7 +5772,12 @@ async function runFigma(args) {
     const runBody = {
       projectId: flags.project,
       pluginId: 'od-figma-migration',
-      pluginInputs: { figmaUrl, ...(flags.notes ? { notes: flags.notes } : {}) },
+      pluginInputs: {
+        figmaUrl,
+        ...(flags['node-id'] ? { nodeId: flags['node-id'] } : {}),
+        ...(flags['frame-name'] ? { frameName: flags['frame-name'] } : {}),
+        ...(flags.notes ? { notes: flags.notes } : {}),
+      },
     };
     const runResp = await fetch(`${base}/api/runs`, {
       method: 'POST',
@@ -9162,6 +9170,8 @@ function printStoryboardHelp() {
   od storyboard list [--json]
   od storyboard create [--title "<title>"] [--json]
   od storyboard get <id> [--json]
+  od storyboard style-reference <id> --design-md <path|-> [--json]
+  od storyboard style-reference <id> --clear [--json]
   od storyboard upload <id> --file <path> [--shot <shotId>] [--slot start|end] [--json]
   od storyboard render-shot <id> <shotId> [--json]
   od storyboard assemble <id> [--finish remotion [--title "<text>"] [--no-titles]
@@ -9177,9 +9187,13 @@ also PATCH that shot's start (default) or end frame to the uploaded path.
 the same way \`od media generate\` does, then PATCHes the storyboard with
 the final status/output/error before printing the result. \`draft\` posts a
 free-text brief to draft-shots, which appends up to --shot-count generated
-shots to the storyboard. Shot creation/editing beyond upload/draft (motion
-prompts, model/resolution/duration) is a web-UI flow; this CLI covers
-list/create/upload/render/assemble/draft only.
+shots to the storyboard. \`style-reference\` sets (or, with --clear,
+removes) the storyboard's style reference from a DESIGN.md file or stdin —
+the daemon extracts a style profile from it and every frame/shot render
+prompt then steers toward that palette, typography, and mood. Shot
+creation/editing beyond upload/draft (motion prompts,
+model/resolution/duration) is a web-UI flow; this CLI covers
+list/create/style-reference/upload/render/assemble/draft only.
 
 \`assemble\` defaults to an ffmpeg hard-cut concat of the ordered done-shot
 outputs into a uniquely-named output file per run (so concurrent/repeated
@@ -9206,6 +9220,9 @@ Options:
   --no-captions         Force captions off even when --audio is set (assemble --finish remotion only).
   --audio <path>        Narration/voiceover file to burn captions from (assemble --finish remotion
                          only; .wav/.mp3/.m4a/.aac). Not persisted as a storyboard asset.
+  --design-md <path|->  DESIGN.md file to set as the style reference (style-reference
+                         only; - for stdin).
+  --clear               Remove the style reference (style-reference only).
   --brief <text>         Creative brief to draft shots from (draft only; or use --prompt-file).
   --prompt-file <path|-> Read the brief from a file, or - for stdin (draft only; long-form input).
   --shot-count <n>       How many shots to draft, 1-12 (draft only; defaults to 4).
@@ -9219,7 +9236,7 @@ async function runStoryboard(args) {
     printStoryboardHelp();
     return;
   }
-  const known = ['list', 'create', 'get', 'upload', 'render-shot', 'assemble', 'draft'];
+  const known = ['list', 'create', 'get', 'style-reference', 'upload', 'render-shot', 'assemble', 'draft'];
   if (!known.includes(sub)) {
     console.error(`unknown subcommand: od storyboard ${sub}`);
     printStoryboardHelp();
@@ -9302,6 +9319,60 @@ async function runStoryboard(args) {
     if (!resp.ok) return structuredHttpFailure(resp);
     const data = await resp.json();
     return writeJson(data);
+  }
+
+  if (sub === 'style-reference') {
+    const id = positionals[0];
+    const usage = 'Usage: od storyboard style-reference <id> --design-md <path|-> [--json]\n' +
+      '       od storyboard style-reference <id> --clear [--json]';
+    if (!id || (!flags['design-md'] && !flags.clear)) {
+      console.error(usage);
+      process.exit(2);
+    }
+    // --design-md <path|-> rides the same file-or-stdin reader every other
+    // long-form input flag uses (readPromptFromFlags' prompt-file leg). Read
+    // OUTSIDE the fetch try/catch: a missing or unreadable file is a local
+    // filesystem error (exit 2), not a daemon-connectivity failure.
+    let designMd = null;
+    if (!flags.clear) {
+      try {
+        designMd = await readPromptFromFlags({ 'prompt-file': flags['design-md'] });
+      } catch (err) {
+        console.error(`failed to read --design-md ${flags['design-md']}: ${err?.message ?? err}`);
+        process.exit(2);
+      }
+      if (!designMd || !designMd.trim()) {
+        console.error(usage);
+        process.exit(2);
+      }
+    }
+    let resp;
+    try {
+      if (flags.clear) {
+        resp = await fetch(`${base}/api/storyboards/${encodeURIComponent(id)}/style-reference`, {
+          method: 'DELETE',
+        });
+      } else {
+        resp = await fetch(`${base}/api/storyboards/${encodeURIComponent(id)}/style-reference`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ designMd }),
+        });
+      }
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    if (flags.clear) {
+      console.log(`[storyboard] style reference cleared for ${data.storyboard?.id}`);
+    } else {
+      const name = data.storyboard?.styleReference?.brand?.name;
+      console.log(`[storyboard] style reference set to "${name}" for ${data.storyboard?.id}`);
+    }
+    return;
   }
 
   if (sub === 'upload') {

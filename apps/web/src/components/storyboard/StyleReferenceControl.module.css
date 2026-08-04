@@ -1,0 +1,63 @@
+/* Storyboard style-reference control — header chip + paste dialog
+   (StyleReferenceControl.tsx). */
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dur-enter, 200ms) var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1));
+}
+
+.trigger:hover {
+  color: var(--text);
+}
+
+.triggerActive {
+  color: var(--text);
+}
+
+.hint {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.activeSummary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.activeName {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.swatches {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.error {
+  margin: 8px 0 0;
+  color: var(--danger, #c0392b);
+  font-size: 12px;
+}

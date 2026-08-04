@@ -4417,6 +4417,14 @@ export interface Dict {
   'storyboard.back': string;
   'storyboard.titleLabel': string;
   'storyboard.ratio': string;
+  'storyboard.styleReference': string;
+  'storyboard.styleReferenceActive': string;
+  'storyboard.styleReferenceHint': string;
+  'storyboard.styleReferencePlaceholder': string;
+  'storyboard.styleReferenceApply': string;
+  'storyboard.styleReferenceApplying': string;
+  'storyboard.styleReferenceRemove': string;
+  'storyboard.styleReferenceConflict': string;
   'storyboard.addShot': string;
   'storyboard.assemble': string;
   'storyboard.assembling': string;

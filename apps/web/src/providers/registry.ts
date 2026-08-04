@@ -3178,6 +3178,64 @@ export async function patchStoryboard(
 }
 
 /**
+ * POST /api/storyboards/:id/style-reference — extracts a style profile from
+ * pasted DESIGN.md server-side (brand engine design-md leg) and attaches it
+ * to the storyboard so frame/shot prompts inherit it. Returns the updated doc.
+ */
+export async function setStoryboardStyleReference(
+  id: string,
+  designMd: string,
+  expectedUpdatedAt?: string,
+): Promise<StoryboardApiResult<Storyboard>> {
+  return styleReferenceMutation(id, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ designMd, ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}) }),
+  });
+}
+
+/** DELETE /api/storyboards/:id/style-reference — clears it. Returns the updated doc. */
+export async function clearStoryboardStyleReference(
+  id: string,
+  expectedUpdatedAt?: string,
+): Promise<StoryboardApiResult<Storyboard>> {
+  return styleReferenceMutation(id, {
+    method: 'DELETE',
+    ...(expectedUpdatedAt
+      ? {
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedUpdatedAt }),
+        }
+      : {}),
+  });
+}
+
+/** Shared transport for both style-reference mutations — same 409 conflict
+ * envelope handling as patchStoryboard (see its doc comment). */
+async function styleReferenceMutation(
+  id: string,
+  init: RequestInit,
+): Promise<StoryboardApiResult<Storyboard>> {
+  try {
+    const resp = await fetch(`/api/storyboards/${encodeURIComponent(id)}/style-reference`, init);
+    if (resp.status === 409) {
+      const payload = (await resp.json().catch(() => null)) as { error?: string; storyboard?: Storyboard } | null;
+      return {
+        ok: false,
+        status: 409,
+        message: (payload && typeof payload.error === 'string' && payload.error) || 'storyboard changed',
+        conflict: payload?.storyboard,
+      };
+    }
+    if (!resp.ok) return { ok: false, status: resp.status, message: await readStoryboardApiError(resp) };
+    const data = (await resp.json()) as { storyboard: Storyboard };
+    return { ok: true, value: data.storyboard };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
+/**
  * POST /api/storyboards/:id/draft-shots — drafts several shots at once from
  * a brief (as opposed to the single-shot addShotFromPrompt client-only
  * path). Same 409/expectedUpdatedAt optimistic-concurrency shape as

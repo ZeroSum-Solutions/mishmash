@@ -102,6 +102,13 @@
         "default": "React 18 + Tailwind"
       },
       {
+        "name": "nodeId",
+        "type": "string",
+        "required": false,
+        "label": "Node to extract",
+        "placeholder": "1314:7264"
+      },
+      {
         "name": "frameName",
         "type": "string",
         "required": false,

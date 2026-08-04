@@ -125,6 +125,36 @@ async function runCli(args: string[]): Promise<{ stdout: string; stderr: string;
 }
 
 describe('od figma import CLI', () => {
+  it('forwards node and frame scope flags into migration plugin inputs', async () => {
+    stub = await startFigmaStubServer();
+
+    const result = await runCli([
+      'figma',
+      'import',
+      '--project',
+      'project-1',
+      '--figma-url',
+      'https://figma.com/design/ABC123/Kit?node-id=1314%3A7264',
+      '--node-id',
+      '1314-7264',
+      '--frame-name',
+      'Dashboard',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(0);
+    const runRequest = stub.requests.find((request) => request.url === '/api/runs');
+    expect(JSON.parse(runRequest?.body ?? '{}')).toMatchObject({
+      pluginInputs: {
+        figmaUrl: 'https://figma.com/design/ABC123/Kit?node-id=1314%3A7264',
+        nodeId: '1314-7264',
+        frameName: 'Dashboard',
+      },
+    });
+  });
+
   it('emits JSON-only stdout when --build and --json are combined', async () => {
     stub = await startFigmaStubServer();
     tempRoot = mkdtempSync(join(tmpdir(), 'od-figma-cli-'));

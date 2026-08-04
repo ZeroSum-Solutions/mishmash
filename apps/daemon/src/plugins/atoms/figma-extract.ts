@@ -19,7 +19,7 @@
 //                            stays empty.
 //   <cwd>/figma/meta.json    { fileUrl, fileKey, version,
 //                              lastModified, exportedAt,
-//                              atomDigest, unsupportedNodes[] }
+//                              atomDigest, unsupportedNodes[], scope }
 //
 // Network is pluggable: callers pass `fetchFn` (defaults to
 // `globalThis.fetch`). Tests + offline mode pass a fixture-backed
@@ -65,14 +65,22 @@ export interface FigmaExtractReport {
     atomDigest:        string;
     unsupportedNodes:  Array<{ id: string; type: string; reason: string }>;
     nodeCount:         number;
+    scope:             FigmaExtractScope;
   };
 }
+
+export type FigmaExtractScope =
+  | { kind: 'whole-file' }
+  | { kind: 'node'; nodeId: string }
+  | { kind: 'frame'; frameName: string };
 
 export interface FigmaExtractOptions {
   cwd: string;
   // Either fileUrl or fileKey is required.
   fileUrl?: string;
   fileKey?: string;
+  nodeId?: string;
+  frameName?: string;
   // OAuth bearer token. Forwarded as 'Authorization: Bearer <t>'.
   // The atom never persists it.
   token: string;
@@ -108,8 +116,11 @@ export async function runFigmaExtract(opts: FigmaExtractOptions): Promise<FigmaE
   const fetchFn = opts.fetchFn ?? globalThis.fetch;
   if (!fetchFn) throw new Error('figma-extract: no fetch implementation available');
 
-  // 1. GET /v1/files/<key> — full document tree.
-  const url = `https://api.figma.com/v1/files/${encodeURIComponent(fileKey)}`;
+  const nodeId = normalizeNodeId(opts.nodeId) ?? extractNodeId(opts.fileUrl);
+  // 1. GET /v1/files/<key> — full document tree, unless a node is selected.
+  const url = nodeId
+    ? `https://api.figma.com/v1/files/${encodeURIComponent(fileKey)}/nodes?ids=${encodeURIComponent(nodeId)}`
+    : `https://api.figma.com/v1/files/${encodeURIComponent(fileKey)}`;
   const res = await fetchFn(url, {
     headers: { 'Authorization': `Bearer ${opts.token}` },
   });
@@ -117,11 +128,31 @@ export async function runFigmaExtract(opts: FigmaExtractOptions): Promise<FigmaE
     const text = await safeText(res);
     throw new Error(`figma-extract: ${res.status} ${res.statusText} from ${url}: ${text}`);
   }
-  const body = await res.json() as FigmaApiFileResponse;
+  const body = await res.json() as FigmaApiFileResponse | FigmaApiNodesResponse;
 
   const unsupportedNodes: FigmaExtractReport['meta']['unsupportedNodes'] = [];
   const tree: FigmaNode[] = [];
-  walkNode(body.document, undefined, tree, unsupportedNodes);
+  let scope: FigmaExtractScope;
+  if (nodeId) {
+    const node = (body as FigmaApiNodesResponse).nodes?.[nodeId]?.document;
+    if (!node) throw new Error(`figma-extract: node "${nodeId}" was not returned by ${url}`);
+    walkNode(node, undefined, tree, unsupportedNodes);
+    scope = { kind: 'node', nodeId };
+  } else {
+    const file = body as FigmaApiFileResponse;
+    if (opts.frameName) {
+      const frame = findTopLevelFrame(file.document, opts.frameName);
+      if (!frame) {
+        const available = topLevelFrames(file.document).map((candidate) => candidate.name);
+        throw new Error(`figma-extract: frame "${opts.frameName}" not found; available top-level frames: ${available.join(', ') || '(none)'}`);
+      }
+      walkNode(frame, undefined, tree, unsupportedNodes);
+      scope = { kind: 'frame', frameName: frame.name };
+    } else {
+      walkNode(file.document, undefined, tree, unsupportedNodes);
+      scope = { kind: 'whole-file' };
+    }
+  }
 
   const tokens = liftTokens(tree);
   const meta: FigmaExtractReport['meta'] = {
@@ -131,6 +162,7 @@ export async function runFigmaExtract(opts: FigmaExtractOptions): Promise<FigmaE
     atomDigest:       digestObject({ tree, tokens }),
     unsupportedNodes,
     nodeCount:        tree.length,
+    scope,
   };
   if (body.version)      meta.version      = body.version;
   if (body.lastModified) meta.lastModified = body.lastModified;
@@ -270,11 +302,38 @@ function extractFileKey(fileUrl: string | undefined): string | undefined {
   return m ? m[1] : undefined;
 }
 
+function extractNodeId(fileUrl: string | undefined): string | undefined {
+  if (!fileUrl) return undefined;
+  try {
+    return normalizeNodeId(new URL(fileUrl).searchParams.get('node-id') ?? undefined);
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeNodeId(nodeId: string | undefined): string | undefined {
+  if (!nodeId) return undefined;
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(nodeId);
+  } catch {
+    return undefined;
+  }
+  const match = /^(\d+)(?::|-)(\d+)$/.exec(decoded);
+  return match ? `${match[1]}:${match[2]}` : undefined;
+}
+
 interface FigmaApiFileResponse {
   document:       FigmaApiNode;
   version?:       string;
   lastModified?:  string;
   components?:    Record<string, { name: string }>;
+}
+
+interface FigmaApiNodesResponse {
+  nodes?: Record<string, { document?: FigmaApiNode }>;
+  version?: string;
+  lastModified?: string;
 }
 
 // Shared with the offline `.fig` decoder (apps/daemon/src/figma/*). The
@@ -293,6 +352,18 @@ export interface FigmaApiNode {
   characters?: string;
   componentId?: string;
   visible?: boolean;
+}
+
+function topLevelFrames(document: FigmaApiNode): FigmaApiNode[] {
+  return (document.children ?? [])
+    .filter((child) => child.type === 'CANVAS')
+    .flatMap((canvas) => (canvas.children ?? []).filter((child) => child.type === 'FRAME'));
+}
+
+function findTopLevelFrame(document: FigmaApiNode, frameName: string): FigmaApiNode | undefined {
+  const frames = topLevelFrames(document);
+  return frames.find((frame) => frame.name === frameName)
+    ?? frames.find((frame) => frame.name.toLocaleLowerCase() === frameName.toLocaleLowerCase());
 }
 
 export function walkNode(

@@ -78,12 +78,16 @@ export interface FigmaImportResult {
 }
 
 /** JSON body for `POST /api/figma/import` and the project-scoped variant.
- *  A `.fig` upload arrives as multipart instead of `figmaUrl`. */
+ *  A `.fig` upload arrives as multipart instead of `figmaUrl`. Figma URL
+ *  imports run through an `od-figma-migration` run, not these endpoints. */
 export interface FigmaImportRequest {
-  /** Figma file URL (`https://figma.com/(file|design)/<key>/...`). Routed
-   *  through the OAuth `figma-extract` atom; mutually exclusive with an
-   *  uploaded `.fig`. */
+  /** Figma file URL (`https://figma.com/(file|design)/<key>/...`). This
+   *  endpoint rejects URL imports; start an `od-figma-migration` run instead. */
   figmaUrl?: string;
+  /** Optional Figma node id for an `od-figma-migration` URL import. */
+  nodeId?: string;
+  /** Optional top-level frame name for an `od-figma-migration` URL import. */
+  frameName?: string;
   /** Optional design brief / migration notes folded into `suggestedPrompt`. */
   notes?: string;
   /** Optional top-level page name to import instead of the whole document. */
