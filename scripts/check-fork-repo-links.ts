@@ -38,8 +38,13 @@ export const FORK_LINK_SURFACES: string[] = [
   "apps/web/src/components/WhatsNewPopup.tsx",
   "apps/web/src/components/SettingsDialog.tsx",
   "apps/web/src/components/UpdateDialog.tsx",
-  // First-run privacy disclosure links the policy document.
+  // First-run privacy disclosure links the policy document — and the policy
+  // itself carries a questions contact, so both are inventoried.
   "apps/web/src/components/PrivacyConsentModal.tsx",
+  "PRIVACY.md",
+  // Operator doc whose example payload gets copy-pasted into the
+  // OD_WHATS_NEW_URL document (its linkUrl wins over the in-app fallback).
+  "docs/whats-new.md",
   // Issue templates render on the fork's own new-issue chooser. The upstream
   // tutorial-submission and preview-feedback templates were deleted outright
   // (they solicited content for the upstream project's marketing site and a
