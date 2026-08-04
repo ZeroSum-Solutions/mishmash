@@ -334,10 +334,10 @@ const SHARE_BOOLEAN_FLAGS = new Set([
 // top-of-file SUBCOMMAND_MAP dispatch during module evaluation; a `const`
 // further down would still be in TDZ when the handler reads it.
 const FIGMA_STRING_FLAGS = new Set([
-  'daemon-url', 'project', 'file', 'figma-url', 'node-id', 'frame-name', 'notes', 'subdir', 'prompt', 'prompt-file',
+  'daemon-url', 'project', 'file', 'figma-url', 'node-id', 'frame-name', 'notes', 'subdir', 'page', 'prompt', 'prompt-file',
 ]);
 const FIGMA_BOOLEAN_FLAGS = new Set([
-  'help', 'h', 'json', 'build',
+  'help', 'h', 'json', 'build', 'list-pages',
 ]);
 // `od brand …` mirrors the Brands library + New Brand modal. Same surface,
 // same /api/brands store. The CLI form is the embeddability contract: an
@@ -5718,7 +5718,7 @@ async function runShare(args) {
 function printFigmaUsage() {
   console.log(`Usage:
   od figma import --project <id> --file <path.fig> [--notes "<text>"]
-                  [--subdir <name>] [--build]
+                  [--subdir <name>] [--page <name>] [--list-pages] [--build]
                   [--prompt "<text>" | --prompt-file <path|->] [--json]
   od figma import --project <id> --figma-url <url> [--node-id <id>] [--frame-name <name>] [--notes "<text>"] [--json]
 
@@ -5736,6 +5736,8 @@ Flags:
   --notes "<text>"     Design brief folded into the reshape prompt.
   --subdir <name>      Snapshot directory (single path segment; default figma).
                        Distinct subdirs keep multi-file imports separate.
+  --page <name>        Import one named top-level page instead of all pages.
+  --list-pages         Print the detected page/style breakdown after decoding.
   --build              After import, start a run that builds the webpage.
   --prompt / --prompt-file   Override the build prompt (file or - for stdin).
   --daemon-url <url>   MishMash daemon HTTP base.
@@ -5809,12 +5811,26 @@ async function runFigma(args) {
   form.append('file', new Blob([bytes]), basename(file));
   if (flags.notes) form.append('notes', String(flags.notes));
   if (flags.subdir) form.append('subdir', String(flags.subdir));
+  if (flags.page) form.append('page', String(flags.page));
   const resp = await fetch(`${base}/api/projects/${encodeURIComponent(flags.project)}/figma/import`, {
     method: 'POST',
     body: form,
   });
   if (!resp.ok) return structuredHttpFailure(resp);
   const data = await resp.json();
+
+  if (flags['list-pages']) {
+    const pages = {
+      looksMultiStyle: Boolean(data.inventory?.looksMultiStyle),
+      styleCount: data.inventory?.styleCount ?? 0,
+      styles: data.inventory?.styles ?? [],
+    };
+    if (flags.json) return process.stdout.write(JSON.stringify(pages, null, 2) + '\n');
+    for (const style of pages.styles) {
+      console.log(`${style.name}\t${style.summary}${style.distinct ? ' (distinct style)' : ''}`);
+    }
+    return;
+  }
 
   if (flags.json && !flags.build) {
     return process.stdout.write(JSON.stringify(data, null, 2) + '\n');

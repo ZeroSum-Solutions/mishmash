@@ -46,6 +46,8 @@ export function FigmaImportModal({ onClose, resolveProjectId, onImported, onFigm
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<FigmaImportResult | null>(null);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [selectedPage, setSelectedPage] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -85,10 +87,29 @@ export function FigmaImportModal({ onClose, resolveProjectId, onImported, onFigm
       return;
     }
     setResult(outcome.result);
+    setProjectId(projectId);
+    setSelectedPage('');
     setStatus('done');
-    // Hand the snapshot + prompt to the host (prefill composer / navigate).
+  }, [file, notes, resolveProjectId]);
+
+  const buildImportedPages = useCallback(async () => {
+    if (!result || !projectId || !file) return;
+    if (!selectedPage) {
+      onImported(result, projectId);
+      return;
+    }
+    setStatus('importing');
+    setError(null);
+    const outcome = await importProjectFigma(projectId, file, { ...(notes ? { notes } : {}), page: selectedPage });
+    if (!outcome.ok) {
+      setStatus('error');
+      setError(outcome.error);
+      return;
+    }
+    setResult(outcome.result);
+    setStatus('done');
     onImported(outcome.result, projectId);
-  }, [file, notes, resolveProjectId, onImported]);
+  }, [file, notes, onImported, projectId, result, selectedPage]);
 
   const submitUrl = useCallback(() => {
     const trimmed = url.trim();
@@ -148,8 +169,15 @@ export function FigmaImportModal({ onClose, resolveProjectId, onImported, onFigm
           </button>
         </header>
 
-        {status === 'done' && result ? (
-          <FigmaImportSummary result={result} />
+        {(status === 'done' || status === 'importing') && result ? (
+          <FigmaImportSummary
+            result={result}
+            selectedPage={selectedPage}
+            onSelectedPageChange={setSelectedPage}
+            onBuild={() => void buildImportedPages()}
+            onClose={onClose}
+            disabled={importing}
+          />
         ) : (
           <>
             {onFigmaUrl ? (
@@ -260,7 +288,21 @@ export function FigmaImportModal({ onClose, resolveProjectId, onImported, onFigm
   return createPortal(modal, document.body);
 }
 
-function FigmaImportSummary({ result }: { result: FigmaImportResult }) {
+function FigmaImportSummary({
+  result,
+  selectedPage,
+  onSelectedPageChange,
+  onBuild,
+  onClose,
+  disabled,
+}: {
+  result: FigmaImportResult;
+  selectedPage: string;
+  onSelectedPageChange: (page: string) => void;
+  onBuild: () => void;
+  onClose: () => void;
+  disabled: boolean;
+}) {
   const inv = result.inventory;
   return (
     <div className={styles.summaryPane}>
@@ -284,7 +326,23 @@ function FigmaImportSummary({ result }: { result: FigmaImportResult }) {
           ))}
         </div>
       ) : null}
-      <p className={styles.summaryFoot}>The prompt is ready in the composer — review and send to build the page.</p>
+      {inv.looksMultiStyle ? (
+        <div className={styles.styleChoice}>
+          <p>This file looks like {inv.styleCount} different styles.</p>
+          <label>
+            Import scope
+            <select value={selectedPage} onChange={(event) => onSelectedPageChange(event.target.value)} disabled={disabled}>
+              <option value="">All pages</option>
+              {inv.styles.map((style) => <option key={style.name} value={style.name}>{style.name} — {style.summary}</option>)}
+            </select>
+          </label>
+        </div>
+      ) : null}
+      <footer className={styles.summaryActions}>
+        <Button variant="ghost" onClick={onClose} disabled={disabled}>Cancel</Button>
+        <Button onClick={onBuild} disabled={disabled}>{selectedPage ? `Build ${selectedPage}` : 'Build all pages'}</Button>
+      </footer>
+      <p className={styles.summaryFoot}>Choose a page only if you want to narrow the import; all pages stays the default.</p>
     </div>
   );
 }

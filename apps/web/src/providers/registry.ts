@@ -2086,13 +2086,14 @@ export async function uploadProjectFile(
 export async function importProjectFigma(
   projectId: string,
   file: File,
-  opts?: { notes?: string; subdir?: string },
+  opts?: { notes?: string; subdir?: string; page?: string },
 ): Promise<{ ok: true; result: FigmaImportResult } | { ok: false; error: string }> {
   try {
     const form = new FormData();
     form.append('file', file);
     if (opts?.notes && opts.notes.trim()) form.append('notes', opts.notes.trim());
     if (opts?.subdir && opts.subdir.trim()) form.append('subdir', opts.subdir.trim());
+    if (opts?.page && opts.page.trim()) form.append('page', opts.page.trim());
     const resp = await fetch(`/api/projects/${encodeURIComponent(projectId)}/figma/import`, {
       method: 'POST',
       body: form,
