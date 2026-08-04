@@ -480,8 +480,36 @@
       "GET /api/runs/:param/events",
       "GET /api/runs/:param/result-package",
       "POST /api/runs",
-      "POST /api/runs/:param/cancel"
+      "POST /api/runs/:param/cancel",
+      "POST /api/runs/:param/feedback"
     ]
+  },
+  {
+    "capability": "feedback",
+    "uiEntryPoint": "Assistant message Helpful / Not-helpful controls",
+    "cliArgs": [
+      "feedback",
+      "--help"
+    ],
+    "httpMethod": "PUT",
+    "httpPath": "/api/projects/:id/conversations/:conversationId/messages/:messageId",
+    "outputSchema": "{ message: { ...persisted message, feedback } }",
+    "parityApplicable": false,
+    "reason": "Feedback attaches to an existing assistant turn: the durable write is a PUT of a message that must already exist, and the telemetry leg needs that message's runId. A nonce project created fresh per gate run has no assistant message to rate, so there is no probe body that exercises the real path without first driving a full chat run. The UI has the same precondition — the controls only render on a completed assistant message.",
+    "probeBody": {
+      "id": "w0-manifest-check-message",
+      "role": "assistant",
+      "content": "w0 manifest check",
+      "feedback": {
+        "rating": "positive",
+        "reasonCodes": [
+          "matched_request"
+        ],
+        "createdAt": 0,
+        "updatedAt": 0
+      }
+    },
+    "knownNamespaceRoutes": []
   },
   {
     "capability": "files",
