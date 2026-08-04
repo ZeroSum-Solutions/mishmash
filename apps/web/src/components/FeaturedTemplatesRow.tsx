@@ -167,7 +167,9 @@ export function FeaturedTemplatesRow({ onOpenProject, onToolAction, onBrowseLibr
     try {
       const result = await startDesignLibraryProject(spec.rel);
       if (!result.ok) {
-        setError(t('home.featured.startError'));
+        // Surface the daemon's specific reason (e.g. which file tripped a
+        // copy cap) — same contract as DesignLibrarySection's card error.
+        setError(result.message || t('home.featured.startError'));
         return;
       }
       onOpenProject(result.response.projectId);

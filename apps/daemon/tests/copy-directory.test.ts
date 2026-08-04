@@ -166,6 +166,49 @@ describe('copyDirectoryContents', () => {
     ).rejects.toMatchObject({ reason: 'size limit would skip a required file' });
   });
 
+  // Red specs for the "unlocatable cap error" bug: every onIncomplete call
+  // must name the offending entry by its path from the ORIGINAL copy root.
+  // The recursion used to rebase `sourceDir` per level, collapsing
+  // path.relative to the bare filename — a cap trip deep inside
+  // `.next/cache/webpack/` reported just "29.pack", which reads as
+  // meaningless junk with no clue where it lives.
+  it('reports a byte-cap breach with the path from the copy root', async () => {
+    const root = await makeTempRoot('od-copy-directory-byte-cap-path-');
+    const source = path.join(root, 'source');
+    const dest = path.join(root, 'dest');
+    await mkdir(path.join(source, 'nested', 'deep'), { recursive: true });
+    await writeFile(path.join(source, 'nested', 'deep', 'big.bin'), 'x'.repeat(64), 'utf8');
+
+    const state = freshState();
+    await expect(
+      copyDirectoryContents(source, dest, state, {
+        ...DEFAULT_OPTIONS,
+        limits: { maxFiles: 1000, maxBytes: 32 },
+        onIncomplete,
+      }),
+    ).rejects.toMatchObject({
+      reason: 'size limit would skip a required file',
+      relPath: path.join('nested', 'deep', 'big.bin'),
+    });
+  });
+
+  it.runIf(canSymlink)('reports a nested symlink with the path from the copy root', async () => {
+    const root = await makeTempRoot('od-copy-directory-symlink-path-');
+    const source = path.join(root, 'source');
+    const dest = path.join(root, 'dest');
+    await mkdir(path.join(source, 'nested'), { recursive: true });
+    await writeFile(path.join(source, 'nested', 'target.txt'), 'asset', 'utf8');
+    await symlink('target.txt', path.join(source, 'nested', 'linked.txt'));
+
+    const state = freshState();
+    await expect(
+      copyDirectoryContents(source, dest, state, { ...DEFAULT_OPTIONS, onIncomplete }),
+    ).rejects.toMatchObject({
+      reason: 'symbolic links are not supported',
+      relPath: path.join('nested', 'linked.txt'),
+    });
+  });
+
   it('skips the top-level skipSourcePath entry without copying or counting it', async () => {
     const root = await makeTempRoot('od-copy-directory-skip-source-');
     const source = path.join(root, 'source');
