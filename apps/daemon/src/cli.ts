@@ -330,7 +330,7 @@ const SHARE_BOOLEAN_FLAGS = new Set([
 // top-of-file SUBCOMMAND_MAP dispatch during module evaluation; a `const`
 // further down would still be in TDZ when the handler reads it.
 const FIGMA_STRING_FLAGS = new Set([
-  'daemon-url', 'project', 'file', 'figma-url', 'notes', 'subdir', 'prompt', 'prompt-file',
+  'daemon-url', 'project', 'file', 'figma-url', 'node-id', 'frame-name', 'notes', 'subdir', 'prompt', 'prompt-file',
 ]);
 const FIGMA_BOOLEAN_FLAGS = new Set([
   'help', 'h', 'json', 'build',
@@ -5715,7 +5715,7 @@ function printFigmaUsage() {
   od figma import --project <id> --file <path.fig> [--notes "<text>"]
                   [--subdir <name>] [--build]
                   [--prompt "<text>" | --prompt-file <path|->] [--json]
-  od figma import --project <id> --figma-url <url> [--notes "<text>"] [--json]
+  od figma import --project <id> --figma-url <url> [--node-id <id>] [--frame-name <name>] [--notes "<text>"] [--json]
 
 Imports a Figma design into a project. A .fig file is decoded fully offline
 (no Figma account); a Figma URL runs through the od-figma-migration scenario
@@ -5726,6 +5726,8 @@ Flags:
   --project <id>       Target project id (required).
   --file <path.fig>    Local .fig to decode offline.
   --figma-url <url>    Figma file URL (https://figma.com/(file|design)/<key>).
+  --node-id <id>       Figma node id to extract (for example 1314:7264).
+  --frame-name <name>  Top-level frame name to extract when no node id is set.
   --notes "<text>"     Design brief folded into the reshape prompt.
   --subdir <name>      Snapshot directory (single path segment; default figma).
                        Distinct subdirs keep multi-file imports separate.
@@ -5768,7 +5770,12 @@ async function runFigma(args) {
     const runBody = {
       projectId: flags.project,
       pluginId: 'od-figma-migration',
-      pluginInputs: { figmaUrl, ...(flags.notes ? { notes: flags.notes } : {}) },
+      pluginInputs: {
+        figmaUrl,
+        ...(flags['node-id'] ? { nodeId: flags['node-id'] } : {}),
+        ...(flags['frame-name'] ? { frameName: flags['frame-name'] } : {}),
+        ...(flags.notes ? { notes: flags.notes } : {}),
+      },
     };
     const runResp = await fetch(`${base}/api/runs`, {
       method: 'POST',
