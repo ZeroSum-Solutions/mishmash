@@ -152,3 +152,45 @@ bullets are reserved for the mechanically-verified P0 rows.
 - [C9-6] POST /api/library/ingest closes the clipper/token caller class's previously-uncapped dataUrl/text payload gap (LIBRARY_UPLOAD_MAX_BYTES applies only to manual-upload, and a URL-sourced fetch's own cap does not apply to dataUrl/text bodies): an explicit byte-volume cap (5,000,000 bytes, CLIPPER_INGEST_MAX_BYTES in routes/library.ts) rejects an oversized clipper payload with 413: `a clipper ingest payload past the 5000000 byte limit: reject with 413`
 - [C9-6] GET /api/library/assets closes its per-caller reconcile-trigger exposure (the route's own reconcile-on-list throttle, RECONCILE_THROTTLE_MS, is program-wide, not per-caller, and the route itself carries no gate of its own): a bounded per-origin request-rate limit (20 requests / 10s, assetsListOk in routes/library.ts) rejects a caller over the limit with 429: `a library assets list request past the 20 request limit gets 429`
 
+## Wave 4
+
+Local project covers (`docs/plans/waves/W4-project-covers.md`). This wave
+touches two DOM-embedding surfaces that render untrusted, user-authored
+project HTML inline in the workspace: the design-grid card thumbnail
+(`apps/web/src/components/project-cover.tsx`, `DesignsTab.tsx`,
+`RecentProjectsStrip.tsx`) and DesignsTab's separate live-artifact preview
+tile (`apps/web/src/components/DesignsTab.tsx:788-800`).
+
+### NM-35C — deliberate `allow-same-origin` omission on the live-artifact iframe
+
+`DesignsTab.tsx`'s live-artifact thumbnail mounts the project's own rendered
+HTML in a real, live `<iframe sandbox="allow-scripts" ...>`
+(`DesignsTab.tsx:792-799`, `src={liveArtifactPreviewUrl(p.id, artifact.id)}`).
+The sandbox token list is `allow-scripts` alone — `allow-same-origin` is
+**deliberately not granted**, and must never be added back without a
+documented threat-model change here. The two tokens combine dangerously:
+`allow-scripts` alone lets the framed document execute JavaScript, but
+because the iframe has no `allow-same-origin`, the browser treats its
+origin as opaque (`null`) — script inside the frame can run, but it cannot
+read or write the parent document, cannot access the parent's cookies,
+storage, or same-origin fetch credentials, and cannot claim the daemon's
+own origin for its outbound requests. Granting `allow-same-origin`
+alongside `allow-scripts` on a frame whose `src` serves attacker-controlled
+project content would let that script escape the sandbox entirely: it could
+reach into the parent document via `window.top`, read `localStorage`/
+`document.cookie` under the daemon's real origin, and issue same-origin
+`fetch()` calls carrying the operator's own session — i.e. exactly the
+"script + parent-origin access" combination the sandbox attribute exists to
+prevent. The omission is intentional and load-bearing, not an oversight.
+
+`project-cover.tsx`'s `HtmlProjectCoverFrame` (the OTHER embedding surface
+this wave introduces, covering the design-grid card thumbnail and the
+recent-projects strip) goes further and avoids the iframe question
+entirely: it never mounts a live document at all. It points a plain
+`<img src=... />` at the daemon's own pre-rendered, pre-cropped PNG
+(`GET /api/projects/:id/cover`) and falls back to a static glyph via
+`onError` when no cover exists yet. Browsers never parse image bytes as
+HTML/script regardless of what the URL resolves to, so this surface carries
+no `sandbox`/`allow-same-origin` question at all — the constraint above
+applies specifically to the still-live `DesignsTab.tsx` iframe.
+

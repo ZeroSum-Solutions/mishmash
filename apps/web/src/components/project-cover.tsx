@@ -76,7 +76,7 @@ export function projectCoverUrl(projectId: string, name: string, version?: numbe
  * bytes and the same `<img>` renders it.
  */
 export function HtmlProjectCoverFrame({
-  src,
+  src: coverSrc,
   initial,
   iframeClassName,
   glyphClassName,
@@ -92,23 +92,25 @@ export function HtmlProjectCoverFrame({
 
   useEffect(() => {
     setFailed(false);
-  }, [src]);
+  }, [coverSrc]);
 
-  if (!src || failed) {
+  if (!coverSrc || failed) {
     return <span className={glyphClassName}>{initial}</span>;
   }
 
   return (
-    <img
-      className={iframeClassName}
-      src={src}
-      alt=""
-      loading="lazy"
-      draggable={false}
-      onError={() => {
-        console.warn('[project-cover] cover image unavailable, showing glyph fallback:', diagnostic);
-        setFailed(true);
-      }}
-    />
+    <span className="cover-thumb-frame">
+      <img
+        className={iframeClassName}
+        src={coverSrc}
+        alt=""
+        loading="lazy"
+        draggable={false}
+        onError={() => {
+          console.warn('[project-cover] cover image unavailable, showing glyph fallback:', diagnostic);
+          setFailed(true);
+        }}
+      />
+    </span>
   );
 }

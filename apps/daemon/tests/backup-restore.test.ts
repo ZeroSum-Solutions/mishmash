@@ -95,7 +95,8 @@ describe('backup/restore engine', () => {
     const archivePath = path.join(archiveDir, 'archive');
     const result = await createBackupArchive({ dataDir, outPath: archivePath });
     expect(result.manifest.map((e) => e.class).sort()).toEqual(
-      ['app-config', 'library-assets', 'memory-markdown', 'projects-dir', 'sqlite-database'].sort(),
+      // W4: 'covers' joined the archived class set (apps/daemon/src/backup/manifest.ts).
+      ['app-config', 'covers', 'library-assets', 'memory-markdown', 'projects-dir', 'sqlite-database'].sort(),
     );
 
     const restoreDir = await mkdtemp(path.join(os.tmpdir(), 'od-backup-restore-'));
