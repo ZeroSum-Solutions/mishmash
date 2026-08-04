@@ -34,11 +34,6 @@
       "stages": [
         {
           "id": "extract",
-          "inputs": {
-            "fileUrl": "{{figmaUrl}}",
-            "nodeId": "{{nodeId}}",
-            "frameName": "{{frameName}}"
-          },
           "atoms": [
             "figma-extract"
           ]
