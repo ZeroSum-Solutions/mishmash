@@ -88,6 +88,19 @@ export function resolveRequestPath(siteRoot, requestPath) {
   }
   if (real !== realRoot && !real.startsWith(realRoot + path.sep)) return null;
 
+  // Directory-index fallback: a captured page whose URL is also a directory
+  // prefix (`/account` alongside `/account/login`) is stored at
+  // `<dir>/index.html` -- see lib/path-collision.mjs. Serve it for the
+  // extensionless request too, exactly as the origin host does.
+  try {
+    if (fs.statSync(resolved).isDirectory()) {
+      const index = path.join(resolved, "index.html");
+      return fs.existsSync(index) ? index : null;
+    }
+  } catch {
+    return null;
+  }
+
   return resolved;
 }
 
