@@ -53,6 +53,12 @@ describe('buildAgentGuideMarkdown', () => {
     expect(md).not.toContain("--prompt 'A 10-slide investor pitch");
   });
 
+  it('includes the required caller-owned id in the HTTP project-create example', () => {
+    const md = buildAgentGuideMarkdown();
+
+    expect(md).toContain('"id": "hermes-test-run"');
+  });
+
   it('surfaces version and CLI hints in the checklist when supplied', () => {
     const md = buildAgentGuideMarkdown({
       versionHint: '0.42.0',

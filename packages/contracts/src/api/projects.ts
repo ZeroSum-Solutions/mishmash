@@ -290,6 +290,8 @@ export interface Conversation {
 }
 
 export interface CreateProjectRequest {
+  /** Client-owned id used to address the project after creation. */
+  id: string;
   name: string;
   /** Optional project library location id. Omit or use `default` for .od/projects. */
   projectLocationId?: string;
