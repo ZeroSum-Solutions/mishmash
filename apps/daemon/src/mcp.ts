@@ -185,7 +185,7 @@ const TOOL_DEFS = [
         maxBytes: {
           type: 'number',
           description:
-            'Soft cap on total text bytes (default 1_500_000). Also capped at 200 files. Excess files are dropped and truncated:true is set.',
+            'Soft cap on total text bytes (default 1_500_000). Also capped at 200 files. Excess referenced/all-mode files are dropped with truncated:true; an over-budget shallow/auto entry returns an error.',
         },
       },
       additionalProperties: false,
@@ -1600,7 +1600,7 @@ const MAX_FILES = 200;
 function totalTextBytes(files: ProjectFileBundleEntry[]): number {
   let n = 0;
   for (const f of files) {
-    if (!f.binary && typeof f.content === 'string') n += f.content.length;
+    if (!f.binary && typeof f.content === 'string') n += Buffer.byteLength(f.content, 'utf8');
   }
   return n;
 }
@@ -1636,7 +1636,7 @@ async function getArtifact(baseUrl: string, projectArg: unknown, entryArg: unkno
   if (include === 'shallow') {
     let file;
     try {
-      file = await fetchProjectFile(baseUrl, id, entry);
+      file = await fetchProjectFile(baseUrl, id, entry, maxBytes);
     } catch (err) {
       return errorResult(errorMessage(err));
     }
@@ -1669,7 +1669,7 @@ async function getArtifact(baseUrl: string, projectArg: unknown, entryArg: unkno
   // returning an empty bundle would hide that.
   let entryFile;
   try {
-    entryFile = await fetchProjectFile(baseUrl, id, entry);
+    entryFile = await fetchProjectFile(baseUrl, id, entry, maxBytes);
   } catch (err) {
     return errorResult(errorMessage(err));
   }
@@ -1712,10 +1712,9 @@ async function getArtifact(baseUrl: string, projectArg: unknown, entryArg: unkno
   return okBundle({ project, entry, files: fetched, truncated, active, resolved });
 }
 
-// Thrown by fetchProjectFile when the server-advertised content-length exceeds
-// the remaining byte budget. Distinguished from generic fetch errors (404,
-// network) so callers can set truncated: true without treating it as a hard
-// failure of the whole bundle.
+// Thrown by fetchProjectFile when the declared or measured content length
+// exceeds the remaining byte budget. Distinguished from generic fetch errors
+// (404, network) so callers can report the budget rejection honestly.
 class BudgetExceededError extends Error {}
 
 async function fetchProjectFile(baseUrl: string, projectId: string, relPath: string, remainingBytes = Infinity): Promise<ProjectFileBundleEntry> {
@@ -1730,7 +1729,8 @@ async function fetchProjectFile(baseUrl: string, projectId: string, relPath: str
     throw new Error(`daemon ${resp.status} on ${url}: ${body || resp.statusText}`);
   }
   const mime = ((resp.headers.get('content-type') || 'application/octet-stream').split(';')[0] ?? 'application/octet-stream').trim();
-  const headerSize = Number(resp.headers.get('content-length'));
+  const contentLength = resp.headers.get('content-length');
+  const headerSize = contentLength === null ? Number.NaN : Number(contentLength);
   const size = Number.isFinite(headerSize) && headerSize >= 0 ? headerSize : null;
   if (!isTextualMime(mime)) {
     return { name: relPath, mime, size, content: null, binary: true };
@@ -1741,7 +1741,13 @@ async function fetchProjectFile(baseUrl: string, projectId: string, relPath: str
     throw new BudgetExceededError(`file ${relPath} (${size} bytes) exceeds remaining budget`);
   }
   const content = await resp.text();
-  return { name: relPath, mime, size: size ?? content.length, content, binary: false };
+  const contentBytes = Buffer.byteLength(content, 'utf8');
+  if (contentBytes > remainingBytes) {
+    throw new BudgetExceededError(
+      `file ${relPath} (${contentBytes} bytes) exceeds remaining budget`,
+    );
+  }
+  return { name: relPath, mime, size: size ?? contentBytes, content, binary: false };
 }
 
 // Patterns common to HTML and CSS (also fine to run on plain markdown).

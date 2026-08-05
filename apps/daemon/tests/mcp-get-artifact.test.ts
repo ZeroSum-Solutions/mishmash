@@ -12,6 +12,7 @@ interface DaemonAppOpts {
   fileContent?: string;
   contentType?: string;
   contentLength?: number | null;
+  omitContentLength?: boolean;
 }
 
 interface Harness {
@@ -40,7 +41,13 @@ function parseArtifactBody(text: string): ArtifactBody {
 }
 
 function makeDaemonApp(opts: DaemonAppOpts = {}): Express {
-  const { files = [], fileContent = 'body {}', contentType = 'text/css', contentLength = null } = opts;
+  const {
+    files = [],
+    fileContent = 'body {}',
+    contentType = 'text/css',
+    contentLength = null,
+    omitContentLength = false,
+  } = opts;
   const app = express();
 
   app.get('/api/projects/:id', (_req, res) =>
@@ -54,6 +61,11 @@ function makeDaemonApp(opts: DaemonAppOpts = {}): Express {
   app.get('/api/projects/:id/raw/*splat', (_req, res) => {
     const headers: Record<string, string> = { 'content-type': contentType };
     if (contentLength != null) headers['content-length'] = String(contentLength);
+    if (omitContentLength) {
+      res.set(headers).write(fileContent);
+      res.end();
+      return;
+    }
     res.set(headers).send(fileContent);
   });
 
@@ -108,7 +120,9 @@ describe('getArtifact maxBytes cap', () => {
   const fileContent = 'a'.repeat(200);
 
   beforeAll(async () => {
-    const r = await startServer(makeDaemonApp({ files: fileList, fileContent, contentType: 'text/css' }));
+    const r = await startServer(
+      makeDaemonApp({ files: fileList, fileContent, contentType: 'text/css', contentLength: 200 }),
+    );
     server = r.server;
     baseUrl = r.baseUrl;
   });
@@ -120,6 +134,75 @@ describe('getArtifact maxBytes cap', () => {
     const body = parseArtifactBody(firstText(result.content));
     expect(body.truncated).toBe(true);
     expect(body.files.length).toBeLessThan(10);
+  });
+
+  it('rejects an over-budget shallow artifact with a known content length', async () => {
+    const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+      project: PROJECT_ID,
+      entry: 'index.html',
+      include: 'shallow',
+      maxBytes: 16,
+    });
+
+    expect(result).toMatchObject({ isError: true });
+    expect(firstText(result.content)).toContain('exceeds remaining budget');
+  });
+});
+
+describe('public MCP get_artifact maxBytes cap without content length', () => {
+  let server: http.Server;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    const r = await startServer(
+      makeDaemonApp({
+        files: [{ name: 'first.txt' }, { name: 'second.txt' }],
+        fileContent: 'é'.repeat(100),
+        contentType: 'text/plain',
+        omitContentLength: true,
+      }),
+    );
+    server = r.server;
+    baseUrl = r.baseUrl;
+  });
+
+  afterAll(() => new Promise((resolve) => server.close(resolve)));
+
+  it('rejects an over-budget UTF-8 artifact after reading a chunked body', async () => {
+    const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+      project: PROJECT_ID,
+      entry: 'index.html',
+      include: 'shallow',
+      maxBytes: 16,
+    });
+
+    expect(result).toMatchObject({ isError: true });
+    expect(firstText(result.content)).toContain('file index.html (200 bytes) exceeds remaining budget');
+  });
+
+  it('rejects an over-budget auto entry after reading a chunked body', async () => {
+    const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+      project: PROJECT_ID,
+      entry: 'index.html',
+      include: 'auto',
+      maxBytes: 16,
+    });
+
+    expect(result).toMatchObject({ isError: true });
+    expect(firstText(result.content)).toContain('file index.html (200 bytes) exceeds remaining budget');
+  });
+
+  it('counts UTF-8 bytes across an all-files bundle', async () => {
+    const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+      project: PROJECT_ID,
+      entry: 'index.html',
+      include: 'all',
+      maxBytes: 300,
+    });
+    const body = parseArtifactBody(firstText(result.content));
+
+    expect(body.truncated).toBe(true);
+    expect(body.files).toHaveLength(1);
   });
 });
 
