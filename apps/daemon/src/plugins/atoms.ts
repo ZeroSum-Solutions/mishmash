@@ -38,6 +38,10 @@ export const FIRST_PARTY_ATOMS: ReadonlyArray<AtomCatalogEntry> = [
   { id: 'build-test',              label: 'Build / test',            description: 'Shell-out to typecheck + tests; emits build/tests.passing signals.', status: 'implemented', taskKinds: ['code-migration'] },
   { id: 'diff-review',             label: 'Diff review',             description: 'Render rewrite as review/{diff.patch,summary.md,decision.json}.', status: 'implemented', taskKinds: ['code-migration', 'tune-collab'] },
   { id: 'handoff',                 label: 'Handoff',                 description: 'Update ArtifactManifest provenance + handoffKind ladder.', status: 'implemented', taskKinds: ['code-migration', 'tune-collab'] },
+  // Objective accessibility gate: runs axe-core against the rendered
+  // artifact so `craft/accessibility-baseline.md` is enforced at runtime
+  // rather than only described in prose.
+  { id: 'a11y-audit',              label: 'Accessibility audit',     description: 'axe-core WCAG 2.1 AA audit; emits a11y.passing + a11y.violations signals.', status: 'implemented', taskKinds: ['new-generation', 'code-migration', 'figma-migration', 'tune-collab'] },
 ];
 
 const ATOMS_BY_ID = new Map<string, AtomCatalogEntry>(FIRST_PARTY_ATOMS.map((a) => [a.id, a]));

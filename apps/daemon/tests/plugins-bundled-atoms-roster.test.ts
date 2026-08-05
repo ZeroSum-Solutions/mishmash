@@ -43,11 +43,16 @@ const PHASE_7_ATOMS = [
 // Phase 8 (production code delivery, spec §21.4)
 const PHASE_8_ATOMS = ['handoff'];
 
+// Quality gates that measure the artifact directly rather than reading the
+// agent's own account of it.
+const QUALITY_GATE_ATOMS = ['a11y-audit'];
+
 const EXPECTED_ATOMS = [
   ...PHASE_4_ATOMS,
   ...PHASE_6_ATOMS,
   ...PHASE_7_ATOMS,
   ...PHASE_8_ATOMS,
+  ...QUALITY_GATE_ATOMS,
 ].sort();
 
 describe('plugins/_official/atoms roster', () => {

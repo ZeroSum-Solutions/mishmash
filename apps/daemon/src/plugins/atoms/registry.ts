@@ -13,9 +13,10 @@
 //     on first use)
 //   - `runStageWithRegistry(ctx)` walks `stage.atoms`, asks each
 //     registered worker for its signals, then pessimistically
-//     merges them (lowest number / false-wins boolean) so a single
-//     atom returning `critique.score: 2` overrides the optimistic
-//     defaults
+//     merges them (false-wins boolean; for numbers, whichever
+//     direction is worse for that signal — see HIGHER_IS_WORSE) so a
+//     single atom returning `critique.score: 2` overrides the
+//     optimistic defaults
 //   - permissive defaults (`critique.score: 4`, `preview.ok: true`,
 //     `user.confirmed: true`) keep the happy path converging in one
 //     iteration when no atom contradicts them — matches v1 stub
@@ -43,6 +44,13 @@ export interface AtomWorkerContext {
   iteration:      number;
   snapshot:       AppliedPluginSnapshot;
   runEvents?:     RunEventForAnalyticsObservability[];
+  // Resolved filesystem root of the run's project, for atoms that observe
+  // artifacts on disk rather than rows in the run's audit log (`a11y-audit`
+  // reads the rendered artifact). Optional because most atoms never touch
+  // the filesystem, and because a caller that cannot resolve a root must be
+  // able to say so — a filesystem atom given no root stays silent rather
+  // than guessing a path.
+  projectRoot?:   string | undefined;
 }
 
 export interface AtomOutcome {
@@ -86,7 +94,7 @@ export function listRegisteredAtomIds(): string[] {
 // Real worker observations REPLACE these defaults wholesale (rather
 // than min-merging) so a real score of 5 never gets clipped to the
 // default 4; cross-worker conflicts inside a single stage still
-// pessimistically merge (false-wins / lowest-number-wins).
+// pessimistically merge (false-wins boolean, worst-direction number).
 export const PERMISSIVE_DEFAULT_SIGNALS: Readonly<UntilSignals> = Object.freeze({
   'critique.score': 4,
   'preview.ok':     true,
@@ -121,7 +129,7 @@ export async function runStageWithRegistry(
       for (const [k, v] of Object.entries(out.signals ?? {})) {
         const key = k as keyof UntilSignals;
         const prev = real.get(key);
-        real.set(key, prev === undefined ? v : mergePessimistic(prev, v));
+        real.set(key, prev === undefined ? v : mergePessimistic(key, prev, v));
       }
       if (out.note) notes.push(`[${worker.id}] ${out.note}`);
     } catch (err) {
@@ -149,11 +157,24 @@ function tokensUsedFromRunEvents(
   return usage.total_tokens ?? null;
 }
 
-// Pessimistic merge between multiple workers contributing to the
-// same signal key. Cross-worker false-wins / lowest-number-wins
-// so a single failing gate still surfaces as a failed convergence.
-function mergePessimistic(prev: unknown, next: unknown): unknown {
+// Signals whose LARGER value is the worse outcome.
+//
+// Most numeric signals are scores, where lower is worse and `Math.min` is
+// therefore the pessimistic choice. A count of problems inverts that: taking
+// the minimum of 0 and 5 violations would report the clean observation and
+// discard the failing one, which is optimistic merging wearing a pessimistic
+// name. Direction has to be declared per signal, not assumed.
+const HIGHER_IS_WORSE: ReadonlySet<string> = new Set<keyof UntilSignals>([
+  'a11y.violations',
+]);
+
+// Pessimistic merge between multiple workers contributing to the same signal
+// key. Cross-worker false-wins for booleans; for numbers, whichever direction
+// is worse for that particular signal.
+function mergePessimistic(key: string, prev: unknown, next: unknown): unknown {
   if (typeof prev === 'boolean' && typeof next === 'boolean') return prev && next;
-  if (typeof prev === 'number' && typeof next === 'number') return Math.min(prev, next);
+  if (typeof prev === 'number' && typeof next === 'number') {
+    return HIGHER_IS_WORSE.has(key) ? Math.max(prev, next) : Math.min(prev, next);
+  }
   return next;
 }

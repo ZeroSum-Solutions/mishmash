@@ -167,6 +167,81 @@ gate. New and repaired UI tests must hold the following invariants.
 - E2E tests may validate cross-app/resource consistency, but must not treat one app's private implementation as a shared helper for another app. Keep test-only helpers local to `e2e/lib/` or promote reusable logic to a pure package such as `packages/contracts`.
 - E2E imports may use `@/*` for `lib/*`; keep this alias local to the e2e package.
 
+## Design catalogue visual baselines
+
+`ui/visual-catalog.test.ts` is the repository's pixel-regression lane over the
+statically renderable catalogue: `design-systems/<id>/components.html` and
+`design-templates/<id>/example.html`. Discovery and shard selection live in
+`lib/playwright/catalog.ts`; the inventory guard is
+`tests/visual-catalog-coverage.test.ts`.
+
+Distinguish it from the other `visual-*.test.ts` files. Those use
+`captureVisual`, which writes a PNG to a reports directory for a human to look
+at and **asserts nothing** — a capture gallery. This lane uses
+`toHaveScreenshot` against a baseline, so it fails on a change nobody went
+looking for.
+
+- The lane is hermetic: every non-`file:`/`data:`/`blob:` request is aborted.
+  About half the template examples reference external fonts or images, and a
+  fixture must render identically with or without a network.
+- Shard with `OD_VISUAL_CATALOG_SHARDS` (total) and `OD_VISUAL_CATALOG_SHARD`
+  (1-based). Selection strides rather than slices, so every shard mixes both
+  catalogues instead of one shard drawing all the slow decks.
+- `maxDiffPixelRatio` is 0.002 — enough to absorb antialiasing jitter, not
+  enough to hide a restyled component.
+
+### Baseline storage
+
+**Ubuntu is the authoritative renderer, and only the linux baselines are
+tracked — in Git LFS.** Playwright suffixes baselines per platform
+(`-darwin`, `-linux`) and a full run is ~255 fixtures at ~300 KB each, so each
+platform is on the order of 70 MB. CI runs `ubuntu-24.04`, so darwin baselines
+carry no gating value and are gitignored.
+
+LFS rather than plain blobs because the cost that matters is not the initial
+70 MB against an already-1.7 GB object database — it is that PNGs cannot be
+delta-compressed, so every regenerated baseline would add a full blob to
+history permanently. LFS keeps each version pinned to its commit while history
+carries pointers. A cache or workflow artifact was rejected for the opposite
+reason: eviction would make a merge gate nondeterministic.
+
+Wiring, in `.gitattributes` and `.gitignore` at the repo root:
+
+```
+e2e/ui/visual-catalog.test.ts-snapshots/*-linux.png filter=lfs diff=lfs merge=lfs -text
+e2e/ui/visual-catalog.test.ts-snapshots/*-darwin.png   # gitignored
+```
+
+**Working on macOS.** Bootstrap local (ignored) darwin baselines once, then run
+without the flag for feedback. The e2e script list is a closed allowlist
+enforced by `pnpm guard`, so this lane uses the raw Playwright command:
+
+```bash
+pnpm exec playwright test -c playwright.visual.config.ts visual-catalog --update-snapshots
+pnpm exec playwright test -c playwright.visual.config.ts visual-catalog
+```
+
+Regenerate only what changed with `--grep`; reserve a full-catalogue
+regeneration for a renderer upgrade, and review the diff before committing
+replacements.
+
+**Updating the authoritative baselines** means producing them on ubuntu — a
+darwin PNG must never be committed as a linux one. Until the CI
+baseline-generation job exists, that is a manual ubuntu run.
+
+**Still to do before this lane can gate merges** (deliberately not done in the
+branch that introduced it — a required gate with no baselines fails every run):
+
+1. Bootstrap the 255 linux baselines on `ubuntu-24.04` and commit the LFS
+   pointers.
+2. Set `lfs: true` on the checkout in the `playwright_visual` lane.
+3. Promote `playwright_visual` to a scope-triggered required gate. Read
+   `.github/AGENTS.md` first — CI topology has its own ownership rules.
+
+Revisit the whole approach if this lane's LFS storage grows by more than
+~500 MB in any rolling 12 months; at that point a content-addressed store with
+a committed manifest beats LFS.
+
 ## Commands
 
 Run commands from this directory:

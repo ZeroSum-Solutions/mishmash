@@ -168,7 +168,7 @@ describe('bundled gallery roster', () => {
     expect(hiddenFlows).toEqual([...HIDDEN_FLOW_ROSTER]);
 
     const atoms = manifests.filter((manifest) => manifest.od?.kind === 'atom');
-    expect(atoms.length).toBe(13);
+    expect(atoms.length).toBe(14);
     expect(manifests.length).toBe(VISIBLE_ROSTER.length + HIDDEN_FLOW_ROSTER.length + atoms.length);
   });
 });
