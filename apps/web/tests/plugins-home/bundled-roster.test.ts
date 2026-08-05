@@ -1,5 +1,5 @@
 // Roster regression for the Workflows and Assets curation (2026-07-30):
-// the bundled catalog renders exactly the 90 curated tiles. Flow plugins
+// the bundled catalog renders exactly the 80 curated tiles. Flow plugins
 // (od-* scenarios, the share actions, the home-hero clone/deck entries)
 // and atoms stay installed but never appear as tiles. Uses the same
 // visibility predicate as the gallery hook so the contract cannot drift
@@ -16,7 +16,7 @@ import { isGalleryVisiblePlugin } from '../../src/components/plugins-home/galler
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const BUNDLED_ROOT = path.join(REPO_ROOT, 'plugins', '_official');
 
-// The complete curated gallery — Devin's 90-item keep list. Any bundled
+// The complete curated gallery — Devin's 80-item keep list. Any bundled
 // catalog change (add, retire, tag flip) must consciously update this pin.
 const VISIBLE_ROSTER = [
   'design-system-airbnb',
@@ -92,16 +92,6 @@ const VISIBLE_ROSTER = [
   'example-wireframe-mobile-flow',
   'example-wireframe-sketch',
   'image-template-notion-team-dashboard-live-artifact',
-  'image-template-profile-avatar-anime-girl-to-cinematic-photo',
-  'image-template-profile-avatar-casual-fashion-grid-photoshoot',
-  'image-template-profile-avatar-cyberpunk-anime-portrait-with-neon-face-text',
-  'image-template-profile-avatar-glamorous-woman-in-black-portrait',
-  'image-template-profile-avatar-hyper-realistic-selfie-texture-prompts',
-  'image-template-profile-avatar-monochrome-studio-portrait',
-  'image-template-profile-avatar-old-photo-restoration-to-dslr-portrait',
-  'image-template-profile-avatar-professional-identity-portrait-wallpaper',
-  'image-template-profile-avatar-realistically-imperfect-ai-selfie',
-  'image-template-profile-avatar-signed-marker-portrait-on-shikishi',
   'video-template-frame-arc-voltage',
   'video-template-frame-chroma-glitch',
   'video-template-frame-data-chart-nyt',
@@ -163,7 +153,7 @@ function bundledManifests(): BundledManifest[] {
 }
 
 describe('bundled gallery roster', () => {
-  it('renders exactly the 90 curated bundled tiles and hides every flow plugin', () => {
+  it('renders exactly the 80 curated bundled tiles and hides every flow plugin', () => {
     const manifests = bundledManifests();
     const visible = manifests
       .filter((manifest) => isGalleryVisiblePlugin({ manifest }))

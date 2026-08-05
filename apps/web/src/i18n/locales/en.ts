@@ -950,7 +950,6 @@ export const en: Dict = {
   'pluginsHome.subfacet.brand-visuals': 'Brand / logo',
   'pluginsHome.subfacet.storyboards-motion-refs': 'Storyboards',
   'pluginsHome.subfacet.social-content': 'Social / content',
-  'pluginsHome.subfacet.avatar-portrait': 'Avatar / portrait',
   'pluginsHome.subfacet.illustration-style': 'Illustration / style',
   'pluginsHome.subfacet.motion-effects': 'Motion / effects',
   'pluginsHome.subfacet.social-short-form': 'Social / short form',

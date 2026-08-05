@@ -170,6 +170,9 @@ function parseEntryBody(body, title, ctx, featured) {
   const previewImage = extractFirstImage(body);
   const previewVideo = extractVideoLink(body);
   const category = inferCategory(title, ctx.surface);
+  // Avatar/portrait templates were removed from the product (2026-08-04).
+  // Drop them at import time so a re-run does not resurrect the category.
+  if (category === 'Profile / Avatar') return null;
   const tags = inferTags(title, prompt, ctx.surface);
 
   return {

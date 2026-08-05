@@ -1292,7 +1292,6 @@ export interface Dict {
   'pluginsHome.subfacet.brand-visuals': string;
   'pluginsHome.subfacet.storyboards-motion-refs': string;
   'pluginsHome.subfacet.social-content': string;
-  'pluginsHome.subfacet.avatar-portrait': string;
   'pluginsHome.subfacet.illustration-style': string;
   'pluginsHome.subfacet.motion-effects': string;
   'pluginsHome.subfacet.social-short-form': string;

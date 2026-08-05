@@ -4,6 +4,8 @@ Generated 2026-07-30 from the 8-shard judge fan-out + curated-id bias + hand-tun
 
 2026-07-31 reference-integration pass: 8 tiles replaced 1:1 by patterns harvested from the five reference repos (satus, lenis, react-three-fiber, Codrops, awesome-threejs) — each replacement won an adversarial head-to-head judge verdict against the tile it displaced. Total stays 90.
 
+**Superseded 2026-08-04.** The `emblem` section below (10 avatar/portrait image templates) was removed from the product, along with the 21 `profile-avatar-*` prompt templates and the `avatar-portrait` image subfacet. The keep list is now 80. The section stays here as a record of the 2026-07-30 decision, not as current state.
+
 ## website (50)
 
 - `example-pricing-spring-tiers` — Spring Tiers Pricing (reference-integration replacement for example-pricing-page; judge 9.0 vs 4.5)

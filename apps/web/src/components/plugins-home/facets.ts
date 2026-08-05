@@ -449,13 +449,6 @@ const SUBCATEGORIES: readonly SubcategoryDef[] = [
   },
   {
     parent: 'image',
-    slug: 'avatar-portrait',
-    label: 'Avatar / portrait',
-    starterPrompt: 'Create a MishMash image plugin for avatars, portraits, identity photos, or character headshots.',
-    test: byAnySlug('profile-avatar', 'portrait', 'selfie', 'identity'),
-  },
-  {
-    parent: 'image',
     slug: 'illustration-style',
     label: 'Illustration / style',
     starterPrompt: 'Create a MishMash image plugin for illustrations, anime, fantasy scenes, 3D renders, or style-transfer prompts.',

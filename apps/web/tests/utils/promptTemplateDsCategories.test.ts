@@ -18,7 +18,7 @@ describe('inferPromptTemplateCategoriesForDs', () => {
 
   it('maps anime/illustration keywords to the illustration bucket', () => {
     const cats = inferPromptTemplateCategoriesForDs(ds({ category: 'Anime', title: 'Slice of life' }));
-    expect(cats).toEqual(expect.arrayContaining(['Anime', 'Illustration', 'Profile / Avatar']));
+    expect(cats).toEqual(expect.arrayContaining(['Anime', 'Illustration', 'Social Media Post']));
   });
 
   it('maps gaming/UI keywords to Game UI and App/Web Design', () => {

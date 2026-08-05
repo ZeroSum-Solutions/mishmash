@@ -62,8 +62,6 @@ export const PLUGIN_POPULARITY: Readonly<Record<string, number>> = {
   'example-blog-post': 0.4425,
   'example-doc-kami-parchment': 0.4396,
   'example-mockup-device-3d': 0.4381,
-  'image-template-profile-avatar-anime-girl-to-cinematic-photo': 0.4237,
-  'image-template-profile-avatar-casual-fashion-grid-photoshoot': 0.4209,
   'image-template-notion-team-dashboard-live-artifact': 0.3997,
   'example-finance-report': 0.3962,
   'example-trading-analysis-dashboard-template': 0.394,

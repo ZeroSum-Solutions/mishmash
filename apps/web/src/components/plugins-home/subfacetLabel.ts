@@ -35,7 +35,6 @@ export function pluginSubfacetLabel(
     case 'brand-visuals': return t('pluginsHome.subfacet.brand-visuals');
     case 'storyboards-motion-refs': return t('pluginsHome.subfacet.storyboards-motion-refs');
     case 'social-content': return t('pluginsHome.subfacet.social-content');
-    case 'avatar-portrait': return t('pluginsHome.subfacet.avatar-portrait');
     case 'illustration-style': return t('pluginsHome.subfacet.illustration-style');
     case 'motion-effects': return t('pluginsHome.subfacet.motion-effects');
     case 'social-short-form': return t('pluginsHome.subfacet.social-short-form');

@@ -702,15 +702,6 @@ const COMMUNITY_PAGE_PRESETS: ProjectPagePreset[] = [
     source: 'community',
   },
   {
-    id: 'community-avatar-portrait',
-    category: 'image',
-    title: pageText('Avatar Portrait'),
-    description: pageText('Portrait art direction page for identity, lighting, styling, and crop references.'),
-    icon: 'image',
-    fileBaseName: 'avatar-portrait',
-    source: 'community',
-  },
-  {
     id: 'community-showa-magazine',
     category: 'image',
     title: pageText('Showa Magazine Cover'),

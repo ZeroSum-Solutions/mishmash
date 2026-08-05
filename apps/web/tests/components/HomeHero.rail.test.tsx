@@ -402,28 +402,25 @@ describe('HomeHero intent rail', () => {
   });
 
   it('keeps curated presets even when they rely on fallback prompt text', () => {
-    const avatarPortrait = makePlugin(
-      'image-template-profile-avatar-anime-girl-to-cinematic-photo',
-      'image',
-      'Profile Avatar - Anime Girl to Cinematic Photo',
-      ['image-template'],
+    const kanbanBoard = makePlugin(
+      'example-kanban-board',
+      'prototype',
+      'Kanban Board',
+      [],
       { query: null },
     );
-    const ordinaryImage = makePlugin(
-      'image-template-ordinary',
-      'image',
-      'Ordinary image',
-      ['image-template'],
+    const ordinaryPrototype = makePlugin(
+      'example-ordinary-prototype',
+      'prototype',
+      'Ordinary prototype',
     );
     renderHero({
-      activeChipId: 'image',
-      pluginOptions: [ordinaryImage, avatarPortrait],
+      activeChipId: 'prototype',
+      pluginOptions: [ordinaryPrototype, kanbanBoard],
     });
 
     const presets = screen.getAllByTestId('home-hero-plugin-preset');
-    expect(presets[0]?.getAttribute('data-plugin-id')).toBe(
-      'image-template-profile-avatar-anime-girl-to-cinematic-photo',
-    );
+    expect(presets[0]?.getAttribute('data-plugin-id')).toBe('example-kanban-board');
   });
 
   it('moves live artifact presets out of Image and into Live artifact examples', () => {
