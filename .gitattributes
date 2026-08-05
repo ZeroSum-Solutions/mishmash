@@ -1,3 +1,10 @@
 design-systems/**/design-tokens.json text eol=lf
 design-systems/**/tailwind-v4.css    text eol=lf
 design-systems/**/tokens.css         text eol=lf
+
+# Design-catalogue visual baselines. Ubuntu is the authoritative renderer (CI
+# runs ubuntu-24.04), so only the linux set is tracked. LFS keeps each baseline
+# version pinned to its commit while git history stores pointer files — the
+# concern is not the initial ~70 MB but that every regenerated PNG would
+# otherwise add a full, undeltifiable blob to a 1.7 GB object database forever.
+e2e/ui/visual-catalog.test.ts-snapshots/*-linux.png filter=lfs diff=lfs merge=lfs -text

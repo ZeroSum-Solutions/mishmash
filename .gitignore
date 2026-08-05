@@ -105,3 +105,7 @@ deploy/agent-bins/
 
 # Looper harness attachments (bug screenshots etc.) — agent scratch, not repo content
 .looper-attachments/
+
+# Local macOS visual baselines. Ubuntu is the authoritative renderer; darwin
+# snapshots are for local feedback only and must never be committed.
+e2e/ui/visual-catalog.test.ts-snapshots/*-darwin.png
