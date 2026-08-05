@@ -33,7 +33,7 @@ never needs a path outside `corpus.path`) and so the walk in
 The live daemon at `~/projects/mishmash` was never touched, stopped, or
 pointed at by a writable connection — only a plain filesystem read (`cp -R`)
 against its data directory, per this wave's safety contract. The corpus
-lives outside the repo at `/Users/zero-suminc./.cache/mishmash-w0-scale-corpus`
+lives outside the repo at `~/.cache/mishmash-w0-scale-corpus`
 (not committed — 1+ GB does not belong in git); `scale-baseline-2026-07.json`
 records its path, content sha256 (every file hashed, sorted by relative
 path), and an explicit `isRealStoreSnapshot: true` declaration so this

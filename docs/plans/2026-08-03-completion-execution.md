@@ -203,10 +203,10 @@ reviewer ≠ author, verifier + proof manifest per VERIFICATION-CONTRACT.md).
   deleted, per the reviewed-deletions convention.
 - ENV-1: **RESOLVED 2026-08-03.** Stored vault key probed `API_KEY_INVALID`; root cause
   was the key having been deleted upstream (AI Studio key list was empty). New key minted
-  in Devin's real Chrome (devszerosum@gmail.com, project `posture-ai-499202` / Posture AI),
-  smoke-tested 200 in memory, saved via `zsvault edit google_api_key --value-stdin`
+  in the operator's real browser session (operator account, operator GCP project),
+  smoke-tested 200 in memory, saved to the operator's secret manager
   (committed + pushed), stored value re-read and re-probed 200. Persistence verified:
-  `export GOOGLE_API_KEY=` present in `~/.config/zs-api-keys.env` and resolves in a fresh
+  `export GOOGLE_API_KEY=` present in the operator's shell env file and resolves in a fresh
   login shell. Dev servers were already stopped, so the next `pnpm tools-dev` start
   inherits the new key. Clipboard cleared after save. Runbook (now historical):
   `~/Inbox/notes/handoffs/ENV-1-google-api-key-rotation.md`.
