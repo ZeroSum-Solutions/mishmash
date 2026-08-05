@@ -38,6 +38,7 @@ import path from "node:path";
 
 import { collectReferenceCandidates } from "./asset-discovery.mjs";
 import { walk } from "./fs-walk.mjs";
+import { hasCapturedBytes } from "./path-collision.mjs";
 
 /** Fragment-free manifest identity for a URL (A4). */
 function manifestUrlKey(url) {
@@ -225,8 +226,9 @@ export function isCaptured({ siteDir, manifest, url }) {
   const local = manifest.get(url);
   if (!local) return false;
   try {
-    const dest = path.join(siteDir, local);
-    return fs.existsSync(dest) && fs.statSync(dest).size > 0;
+    // Directory-index aware: a page whose path collides with a directory
+    // prefix lands at `<dest>/index.html` (see lib/path-collision.mjs).
+    return hasCapturedBytes(path.join(siteDir, local));
   } catch {
     return false;
   }

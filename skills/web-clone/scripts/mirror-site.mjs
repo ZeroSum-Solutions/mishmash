@@ -59,6 +59,7 @@ import { fetchInPage } from "./lib/in-page-fetch.mjs";
 import { looksLikeBotWallBody, looksLikeBotWallResponse, headfulEscalationGuidance } from "./lib/bot-wall.mjs";
 import { startStaticServer } from "./lib/static-server.mjs";
 import { createMirrorManifest, findMissingSourceUrls } from "./lib/mirror-manifest.mjs";
+import { hasCapturedBytes, writableTarget } from "./lib/path-collision.mjs";
 import { containedPath } from "./lib/safe-path.mjs";
 
 const FETCH_THROTTLE_MS = 140;
@@ -203,7 +204,7 @@ function persistOwnResponse(resp) {
   // events within the current pass; it must not permanently block a LATER
   // viewport's genuine complete response just because an earlier attempt
   // for the same URL failed, was empty, or was a bot-wall challenge.
-  if (fs.existsSync(dest) && fs.statSync(dest).size > 0) return;
+  if (hasCapturedBytes(dest)) return;
   if (destinationLocks.has(dest)) return destinationLocks.get(dest);
 
   const operation = (async () => {
@@ -214,8 +215,11 @@ function persistOwnResponse(resp) {
         botWallHits.push({ url, status, phase: "capture" });
         return;
       }
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.writeFileSync(dest, body);
+      // `/account` and `/account/login` cannot both be plain files -- resolve
+      // the page/directory collision before writing (lib/path-collision.mjs).
+      const target = writableTarget(dest);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, body);
     } catch {
       // Left unsaved; the final disk-existence pass below reports it as failed.
     } finally {
@@ -356,8 +360,9 @@ try {
         }
         const result = await fetchInPage(fetchPage, missingUrl);
         if (result.ok && result.body?.length) {
-          fs.mkdirSync(path.dirname(dest), { recursive: true });
-          fs.writeFileSync(dest, result.body);
+          const target = writableTarget(dest);
+          fs.mkdirSync(path.dirname(target), { recursive: true });
+          fs.writeFileSync(target, result.body);
           totalRefetched += 1;
           progress += 1;
         } else {
