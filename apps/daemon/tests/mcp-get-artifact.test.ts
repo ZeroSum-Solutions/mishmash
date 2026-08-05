@@ -283,7 +283,7 @@ describe('public MCP get_artifact auto byte accounting', () => {
       include: 'auto',
       maxBytes,
     });
-    const body = parseArtifactBody(firstText(result.content)) as ArtifactBody & {
+    const body = parseArtifactBody(firstText(result.content)) as Omit<ArtifactBody, 'files'> & {
       files: Array<{ content?: string | null }>;
     };
     const returnedBytes = body.files.reduce(
@@ -304,7 +304,7 @@ describe('public MCP get_artifact auto byte accounting', () => {
       include: 'auto',
       maxBytes: Buffer.byteLength(entry, 'utf8') + 1,
     });
-    const body = parseArtifactBody(firstText(result.content)) as ArtifactBody & {
+    const body = parseArtifactBody(firstText(result.content)) as Omit<ArtifactBody, 'files'> & {
       files: Array<{ name?: string }>;
     };
 
