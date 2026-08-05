@@ -184,6 +184,7 @@ const TOOL_DEFS = [
         },
         maxBytes: {
           type: 'number',
+          exclusiveMinimum: 0,
           description:
             'Soft cap on total text bytes (default 1_500_000). Also capped at 200 files. Excess referenced/all-mode files are dropped with truncated:true; an over-budget shallow/auto entry returns an error.',
         },
@@ -1612,8 +1613,13 @@ async function getArtifact(baseUrl: string, projectArg: unknown, entryArg: unkno
       `invalid include "${includeMode}"; expected one of: auto, all, shallow`,
     );
   }
-  const maxBytes =
-    typeof maxBytesArg === 'number' && Number.isFinite(maxBytesArg) && maxBytesArg > 0 ? maxBytesArg : DEFAULT_MAX_BYTES;
+  if (
+    maxBytesArg != null
+    && (typeof maxBytesArg !== 'number' || !Number.isFinite(maxBytesArg) || maxBytesArg <= 0)
+  ) {
+    return errorResult('maxBytes must be a positive number');
+  }
+  const maxBytes = maxBytesArg == null ? DEFAULT_MAX_BYTES : maxBytesArg;
 
   const { id, active, resolved } = await resolveProjectArg(baseUrl, projectArg);
   const data = await getJson<ProjectPayload>(`${baseUrl}/api/projects/${encodeURIComponent(id)}`);

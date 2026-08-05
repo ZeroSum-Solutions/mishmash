@@ -147,6 +147,21 @@ describe('getArtifact maxBytes cap', () => {
     expect(result).toMatchObject({ isError: true });
     expect(firstText(result.content)).toContain('exceeds remaining budget');
   });
+
+  it.each(['shallow', 'auto'] as const)(
+    'rejects a zero-byte budget for %s with a known content length',
+    async (include) => {
+      const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+        project: PROJECT_ID,
+        entry: 'index.html',
+        include,
+        maxBytes: 0,
+      });
+
+      expect(result).toMatchObject({ isError: true });
+      expect(firstText(result.content)).toContain('maxBytes must be a positive number');
+    },
+  );
 });
 
 describe('public MCP get_artifact maxBytes cap without content length', () => {
@@ -204,6 +219,21 @@ describe('public MCP get_artifact maxBytes cap without content length', () => {
     expect(body.truncated).toBe(true);
     expect(body.files).toHaveLength(1);
   });
+
+  it.each(['shallow', 'auto'] as const)(
+    'rejects a zero-byte budget for %s without a content length',
+    async (include) => {
+      const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+        project: PROJECT_ID,
+        entry: 'index.html',
+        include,
+        maxBytes: 0,
+      });
+
+      expect(result).toMatchObject({ isError: true });
+      expect(firstText(result.content)).toContain('maxBytes must be a positive number');
+    },
+  );
 });
 
 describe('fetchProjectFile per-file size pre-check', () => {
