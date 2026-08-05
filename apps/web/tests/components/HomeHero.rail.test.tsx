@@ -402,6 +402,11 @@ describe('HomeHero intent rail', () => {
   });
 
   it('keeps curated presets even when they rely on fallback prompt text', () => {
+    // Pinned on the prototype chip because CURATED_IMAGE_PLUGIN_IDS went
+    // empty when the avatar/portrait templates were removed. Same code path
+    // (curatedPluginPriorityForChip); example-kanban-board is index 0 of
+    // CURATED_PROTOTYPE_PLUGIN_IDS, so a curated pick with no useCase.query
+    // must still outrank an ordinary sibling listed ahead of it.
     const kanbanBoard = makePlugin(
       'example-kanban-board',
       'prototype',
