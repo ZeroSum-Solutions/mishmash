@@ -236,6 +236,83 @@ describe('public MCP get_artifact maxBytes cap without content length', () => {
   );
 });
 
+describe('public MCP get_artifact auto byte accounting', () => {
+  let server: http.Server;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    const app = express();
+    app.get('/api/projects/:id', (req, res) =>
+      res.json({
+        project: { id: req.params.id, name: 'Test', metadata: { entryFile: 'index.html' } },
+      }),
+    );
+    app.get('/api/projects/:id/raw/*splat', (req, res) => {
+      const fileName = req.params.splat.join('/');
+      if (fileName === 'index.html') {
+        res
+          .set({ 'content-type': 'text/html' })
+          .send('é<link href="first.css"><link href="second.css">');
+        return;
+      }
+      if (fileName === 'oversized.html') {
+        res
+          .set({ 'content-type': 'text/html' })
+          .send('<link href="large.css"><link href="small.css">');
+        return;
+      }
+      if (fileName === 'large.css') {
+        res.set({ 'content-type': 'text/css' }).send('x'.repeat(200));
+        return;
+      }
+      res.set({ 'content-type': 'text/css' }).send('x');
+    });
+    const r = await startServer(app);
+    server = r.server;
+    baseUrl = r.baseUrl;
+  });
+
+  afterAll(() => new Promise((resolve) => server.close(resolve)));
+
+  it('counts UTF-8 entry bytes before selecting referenced files', async () => {
+    const entry = 'é<link href="first.css"><link href="second.css">';
+    const maxBytes = Buffer.byteLength(entry, 'utf8') + 1;
+    const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+      project: PROJECT_ID,
+      entry: 'index.html',
+      include: 'auto',
+      maxBytes,
+    });
+    const body = parseArtifactBody(firstText(result.content)) as ArtifactBody & {
+      files: Array<{ content?: string | null }>;
+    };
+    const returnedBytes = body.files.reduce(
+      (total, file) => total + Buffer.byteLength(file.content ?? '', 'utf8'),
+      0,
+    );
+
+    expect(returnedBytes).toBeLessThanOrEqual(maxBytes);
+    expect(body.files).toHaveLength(2);
+    expect(body.truncated).toBe(true);
+  });
+
+  it('skips an oversized reference and continues to a later fitting file', async () => {
+    const entry = '<link href="large.css"><link href="small.css">';
+    const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+      project: PROJECT_ID,
+      entry: 'oversized.html',
+      include: 'auto',
+      maxBytes: Buffer.byteLength(entry, 'utf8') + 1,
+    });
+    const body = parseArtifactBody(firstText(result.content)) as ArtifactBody & {
+      files: Array<{ name?: string }>;
+    };
+
+    expect(body.files.map((file) => file.name)).toEqual(['oversized.html', 'small.css']);
+    expect(body.truncated).toBe(true);
+  });
+});
+
 describe('fetchProjectFile per-file size pre-check', () => {
   let server: http.Server;
   let baseUrl: string;
