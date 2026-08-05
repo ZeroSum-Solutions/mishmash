@@ -1714,7 +1714,7 @@ function parseFlags(argv, opts = {}) {
     }
     if (stringFlags.has(key)) {
       const next = argv[i + 1];
-      if (next == null) {
+      if (next == null || next.startsWith('--')) {
         throw new Error(`flag --${key} requires a value`);
       }
       out[key] = next;
@@ -6460,7 +6460,13 @@ Common options:
     if (exitCode !== 0) process.exit(exitCode);
     return;
   }
-  const flags = parseFlags(rest, { string: PROJECT_STRING_FLAGS, boolean: PROJECT_BOOLEAN_FLAGS });
+  let flags;
+  try {
+    flags = parseFlags(rest, { string: PROJECT_STRING_FLAGS, boolean: PROJECT_BOOLEAN_FLAGS });
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(2);
+  }
   const base = (await projectDaemonUrl(flags)).replace(/\/$/, '');
   switch (sub) {
     case 'list': {
@@ -6677,13 +6683,15 @@ Common options:
       return;
     }
     case 'delete': {
-      const id = rest.find((a) => !a.startsWith('-'));
+      const id = positionalArgs(rest, PROJECT_STRING_FLAGS)[0];
       if (!id) {
         console.error('Usage: od project delete <id>');
         process.exit(2);
       }
       const resp = await fetch(`${base}/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (!resp.ok) return structuredHttpFailure(resp, 'project-not-found');
+      const data = await resp.json();
+      if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       console.log(`[project] deleted ${id}`);
       return;
     }

@@ -53,6 +53,18 @@ describe('buildAgentGuideMarkdown', () => {
     expect(md).not.toContain("--prompt 'A 10-slide investor pitch");
   });
 
+  it('includes the required caller-owned id in the HTTP project-create example', () => {
+    const md = buildAgentGuideMarkdown();
+    const createRequestStart = md.indexOf('curl -s -X POST http://127.0.0.1:7456/api/projects');
+    const createRequestEnd = md.indexOf('\n```', createRequestStart);
+    const createRequest = md.slice(createRequestStart, createRequestEnd);
+
+    expect(createRequestStart).toBeGreaterThanOrEqual(0);
+    expect(createRequestEnd).toBeGreaterThan(createRequestStart);
+    expect(createRequest).toContain('"id": "hermes-test-run"');
+    expect(createRequest).toContain('"name": "Hermes test run"');
+  });
+
   it('surfaces version and CLI hints in the checklist when supplied', () => {
     const md = buildAgentGuideMarkdown({
       versionHint: '0.42.0',

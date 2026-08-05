@@ -515,6 +515,20 @@ describe('GET /api/projects/:id resolvedDir', () => {
     expect(rawResp.headers.get('access-control-allow-origin')).toBe('*');
     expect(await rawResp.text()).toContain('<h1>nested ok</h1>');
   });
+
+  it('rejects POST /api/projects without a caller-owned id', async () => {
+    const resp = await fetch(`${baseUrl}/api/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Missing project id' }),
+    });
+
+    expect(resp.status).toBe(400);
+    const body = (await resp.json()) as { error?: { code?: string; message?: string } };
+    expect(body.error?.code).toBe('BAD_REQUEST');
+    expect(body.error?.message).toMatch(/invalid project id/i);
+  });
+
   it('rejects non-boolean skipDiscoveryBrief on POST /api/projects', async () => {
     const projectId = `proj-skip-discovery-bad-${Date.now()}`;
     const resp = await fetch(`${baseUrl}/api/projects`, {

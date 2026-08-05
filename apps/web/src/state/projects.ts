@@ -11,6 +11,7 @@ import type {
   ChatSessionMode,
   CreateConversationRequest,
   CreateDesignSystemProjectFromProjectResponse,
+  CreateProjectRequest,
   DuplicateProjectResponse,
   CreatePluginShareProjectResponse,
   CreateTerminalRequest,
@@ -29,7 +30,6 @@ import type {
   Conversation,
   OpenTabsState,
   Project,
-  ProjectMetadata,
   ProjectTemplate,
 } from '../types';
 
@@ -83,21 +83,9 @@ export async function getProjectDetail(
   }
 }
 
-export async function createProject(input: {
-  name: string;
-  projectLocationId?: string;
-  skillId: string | null;
-  designSystemId: string | null;
-  pendingPrompt?: string;
-  metadata?: ProjectMetadata;
-  conversationMode?: ChatSessionMode;
-  // Plan §3.A1 / spec §11.5 — POST /api/projects accepts a pluginId
-  // (or pre-applied snapshot id) to resolve and pin a plugin to the new
-  // project. Used by the PluginLoopHome flow on Home.
-  pluginId?: string;
-  appliedPluginSnapshotId?: string;
-  pluginInputs?: Record<string, unknown>;
-}): Promise<{ project: Project; conversationId: string; appliedPluginSnapshotId?: string }> {
+export async function createProject(
+  input: Omit<CreateProjectRequest, 'id'>,
+): Promise<{ project: Project; conversationId: string; appliedPluginSnapshotId?: string }> {
   try {
     // `randomUUID` falls back to `crypto.getRandomValues` / `Math.random`
     // when `crypto.randomUUID` is unavailable. Open Design served over
@@ -105,11 +93,11 @@ export async function createProject(input: {
     // non-secure context, where `crypto.randomUUID` is undefined and
     // calling it directly throws — the surrounding try/catch then turns
     // the Create button into a silent no-op (issue #849).
-    const id = randomUUID();
+    const request: CreateProjectRequest = { id: randomUUID(), ...input };
     const resp = await fetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, ...input }),
+      body: JSON.stringify(request),
     });
     if (!resp.ok) {
       let message = 'Could not create project';

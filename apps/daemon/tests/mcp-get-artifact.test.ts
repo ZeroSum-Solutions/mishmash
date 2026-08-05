@@ -12,6 +12,7 @@ interface DaemonAppOpts {
   fileContent?: string;
   contentType?: string;
   contentLength?: number | null;
+  omitContentLength?: boolean;
 }
 
 interface Harness {
@@ -40,7 +41,13 @@ function parseArtifactBody(text: string): ArtifactBody {
 }
 
 function makeDaemonApp(opts: DaemonAppOpts = {}): Express {
-  const { files = [], fileContent = 'body {}', contentType = 'text/css', contentLength = null } = opts;
+  const {
+    files = [],
+    fileContent = 'body {}',
+    contentType = 'text/css',
+    contentLength = null,
+    omitContentLength = false,
+  } = opts;
   const app = express();
 
   app.get('/api/projects/:id', (_req, res) =>
@@ -54,6 +61,11 @@ function makeDaemonApp(opts: DaemonAppOpts = {}): Express {
   app.get('/api/projects/:id/raw/*splat', (_req, res) => {
     const headers: Record<string, string> = { 'content-type': contentType };
     if (contentLength != null) headers['content-length'] = String(contentLength);
+    if (omitContentLength) {
+      res.set(headers).write(fileContent);
+      res.end();
+      return;
+    }
     res.set(headers).send(fileContent);
   });
 
@@ -108,7 +120,9 @@ describe('getArtifact maxBytes cap', () => {
   const fileContent = 'a'.repeat(200);
 
   beforeAll(async () => {
-    const r = await startServer(makeDaemonApp({ files: fileList, fileContent, contentType: 'text/css' }));
+    const r = await startServer(
+      makeDaemonApp({ files: fileList, fileContent, contentType: 'text/css', contentLength: 200 }),
+    );
     server = r.server;
     baseUrl = r.baseUrl;
   });
@@ -120,6 +134,182 @@ describe('getArtifact maxBytes cap', () => {
     const body = parseArtifactBody(firstText(result.content));
     expect(body.truncated).toBe(true);
     expect(body.files.length).toBeLessThan(10);
+  });
+
+  it('rejects an over-budget shallow artifact with a known content length', async () => {
+    const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+      project: PROJECT_ID,
+      entry: 'index.html',
+      include: 'shallow',
+      maxBytes: 16,
+    });
+
+    expect(result).toMatchObject({ isError: true });
+    expect(firstText(result.content)).toContain('exceeds remaining budget');
+  });
+
+  it.each(['shallow', 'auto'] as const)(
+    'rejects a zero-byte budget for %s with a known content length',
+    async (include) => {
+      const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+        project: PROJECT_ID,
+        entry: 'index.html',
+        include,
+        maxBytes: 0,
+      });
+
+      expect(result).toMatchObject({ isError: true });
+      expect(firstText(result.content)).toContain('maxBytes must be a positive number');
+    },
+  );
+});
+
+describe('public MCP get_artifact maxBytes cap without content length', () => {
+  let server: http.Server;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    const r = await startServer(
+      makeDaemonApp({
+        files: [{ name: 'first.txt' }, { name: 'second.txt' }],
+        fileContent: 'é'.repeat(100),
+        contentType: 'text/plain',
+        omitContentLength: true,
+      }),
+    );
+    server = r.server;
+    baseUrl = r.baseUrl;
+  });
+
+  afterAll(() => new Promise((resolve) => server.close(resolve)));
+
+  it('rejects an over-budget UTF-8 artifact after reading a chunked body', async () => {
+    const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+      project: PROJECT_ID,
+      entry: 'index.html',
+      include: 'shallow',
+      maxBytes: 16,
+    });
+
+    expect(result).toMatchObject({ isError: true });
+    expect(firstText(result.content)).toContain('file index.html (200 bytes) exceeds remaining budget');
+  });
+
+  it('rejects an over-budget auto entry after reading a chunked body', async () => {
+    const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+      project: PROJECT_ID,
+      entry: 'index.html',
+      include: 'auto',
+      maxBytes: 16,
+    });
+
+    expect(result).toMatchObject({ isError: true });
+    expect(firstText(result.content)).toContain('file index.html (200 bytes) exceeds remaining budget');
+  });
+
+  it('counts UTF-8 bytes across an all-files bundle', async () => {
+    const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+      project: PROJECT_ID,
+      entry: 'index.html',
+      include: 'all',
+      maxBytes: 300,
+    });
+    const body = parseArtifactBody(firstText(result.content));
+
+    expect(body.truncated).toBe(true);
+    expect(body.files).toHaveLength(1);
+  });
+
+  it.each(['shallow', 'auto'] as const)(
+    'rejects a zero-byte budget for %s without a content length',
+    async (include) => {
+      const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+        project: PROJECT_ID,
+        entry: 'index.html',
+        include,
+        maxBytes: 0,
+      });
+
+      expect(result).toMatchObject({ isError: true });
+      expect(firstText(result.content)).toContain('maxBytes must be a positive number');
+    },
+  );
+});
+
+describe('public MCP get_artifact auto byte accounting', () => {
+  let server: http.Server;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    const app = express();
+    app.get('/api/projects/:id', (req, res) =>
+      res.json({
+        project: { id: req.params.id, name: 'Test', metadata: { entryFile: 'index.html' } },
+      }),
+    );
+    app.get('/api/projects/:id/raw/*splat', (req, res) => {
+      const fileName = req.params.splat.join('/');
+      if (fileName === 'index.html') {
+        res
+          .set({ 'content-type': 'text/html' })
+          .send('é<link href="first.css"><link href="second.css">');
+        return;
+      }
+      if (fileName === 'oversized.html') {
+        res
+          .set({ 'content-type': 'text/html' })
+          .send('<link href="large.css"><link href="small.css">');
+        return;
+      }
+      if (fileName === 'large.css') {
+        res.set({ 'content-type': 'text/css' }).send('x'.repeat(200));
+        return;
+      }
+      res.set({ 'content-type': 'text/css' }).send('x');
+    });
+    const r = await startServer(app);
+    server = r.server;
+    baseUrl = r.baseUrl;
+  });
+
+  afterAll(() => new Promise((resolve) => server.close(resolve)));
+
+  it('counts UTF-8 entry bytes before selecting referenced files', async () => {
+    const entry = 'é<link href="first.css"><link href="second.css">';
+    const maxBytes = Buffer.byteLength(entry, 'utf8') + 1;
+    const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+      project: PROJECT_ID,
+      entry: 'index.html',
+      include: 'auto',
+      maxBytes,
+    });
+    const body = parseArtifactBody(firstText(result.content)) as Omit<ArtifactBody, 'files'> & {
+      files: Array<{ content?: string | null }>;
+    };
+    const returnedBytes = body.files.reduce(
+      (total, file) => total + Buffer.byteLength(file.content ?? '', 'utf8'),
+      0,
+    );
+
+    expect(returnedBytes).toBeLessThanOrEqual(maxBytes);
+    expect(body.files).toHaveLength(2);
+    expect(body.truncated).toBe(true);
+  });
+
+  it('skips an oversized reference and continues to a later fitting file', async () => {
+    const entry = '<link href="large.css"><link href="small.css">';
+    const result = await handleMcpToolCall(baseUrl, 'get_artifact', {
+      project: PROJECT_ID,
+      entry: 'oversized.html',
+      include: 'auto',
+      maxBytes: Buffer.byteLength(entry, 'utf8') + 1,
+    });
+    const body = parseArtifactBody(firstText(result.content)) as Omit<ArtifactBody, 'files'> & {
+      files: Array<{ name?: string }>;
+    };
+
+    expect(body.files.map((file) => file.name)).toEqual(['oversized.html', 'small.css']);
+    expect(body.truncated).toBe(true);
   });
 });
 

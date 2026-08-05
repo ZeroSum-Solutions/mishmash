@@ -270,6 +270,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
           'curl -s -X POST http://127.0.0.1:7456/api/projects \\\n' +
           "  -H 'content-type: application/json' \\\n" +
           "  -d '{\n" +
+          '    "id": "hermes-test-run",\n' +
           '    "name": "Hermes test run",\n' +
           '    "metadata": { "kind": "prototype" },\n' +
           '    "pendingPrompt": "A landing page for an AI agent CLI",\n' +
