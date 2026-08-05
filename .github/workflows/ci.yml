@@ -434,6 +434,12 @@ jobs:
           pnpm --filter @open-design/web build:sidecar
 
       - name: E2E Vitest
+        env:
+          # DIAGNOSTIC ONLY -- not for merge. Pins the suite to a single worker
+          # to test whether the motion gate's reference-fixture failures are
+          # caused by CI worker concurrency doubling (nproc/2 went 1 -> 2 when
+          # the repo became public) rather than a real motion regression.
+          OD_E2E_VITEST_MAX_WORKERS: 1
         run: pnpm --filter @open-design/e2e test
 
   playwright_critical:
