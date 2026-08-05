@@ -61,7 +61,7 @@ one integrating writer from fresh `origin/main`.
 - Create each executable tranche in a new isolated worktree from fresh `origin/main`. Never
   implement in the root MishMash worktree, this Codex PRD-authoring worktree, or another agent's
   worktree.
-- Treat `/Users/zero-suminc./projects/mishmash/.claude/worktrees/**` as read-only. Before dispatch,
+- Treat `<repo-root>/.claude/worktrees/**` as read-only. Before dispatch,
   capture `git worktree list --porcelain`, branch ancestry, and each active worktree's changed
   paths. Do not edit, reset, clean, commit, or remove a Claude worktree.
 - Historical draft snapshot only: `origin/main@941be4f15` contains the design-library,

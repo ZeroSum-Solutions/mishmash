@@ -129,6 +129,21 @@ function sha256File(absPath: string): string {
   return sha256Bytes(fs.readFileSync(absPath));
 }
 
+// The committed baseline stores the corpus location portably so a public repo
+// does not publish the operator's home directory. `~` expands against the
+// running user's home; OD_W0_CORPUS_DIR overrides outright, which is what lets
+// a different machine point the R8 gate at its own copy of the corpus.
+// Resolution is location-only -- the 900MB floor, the content sha256, and the
+// real-store declaration still decide whether the directory is acceptable.
+function resolveCorpusPath(declared: string | undefined): string {
+  const override = process.env.OD_W0_CORPUS_DIR;
+  if (override && override.trim()) return path.resolve(override.trim());
+  if (!declared) return '';
+  if (declared === '~') return os.homedir();
+  if (declared.startsWith('~/')) return path.join(os.homedir(), declared.slice(2));
+  return declared;
+}
+
 interface CriterionResult {
   id: string; command: string; assertion: string; artifact: string | null; artifactSha256: string | null;
   exitCode: number; status: 'pass' | 'fail'; durationMs: number; detail?: string | undefined;
@@ -1884,14 +1899,19 @@ async function main(): Promise<void> {
     const mdRel = 'docs/testing/scale-baseline-2026-07.md';
     const jsonRel = 'docs/testing/scale-baseline-2026-07.json';
     if (!fileExists(mdRel) || !fileExists(jsonRel)) { record('C0-9', '', '', false, '', { detail: `missing: ${!fileExists(mdRel) ? mdRel : ''} ${!fileExists(jsonRel) ? jsonRel : ''}`.trim() }); return; }
-    interface BaselineJson { corpus: { path: string; sha256: string; isRealStoreSnapshot?: boolean; realStoreFingerprint?: string }; machine: { fingerprint: string }; warmup: { iterations: number }; scenarios: { name: string; samplesMs: number[]; p50: number; p95: number; toleranceBandPct?: number }[]; searchProbe?: { projectId: string; needle: string; expectFile: string; expectLine: number; expectSnippetContains: string }; nonRegressionCeiling: number; minimumImprovementThreshold: number; version: string }
+    interface BaselineJson { corpus: { path: string; sha256: string; isRealStoreSnapshot?: boolean; realStoreFingerprint?: string }; machine: { fingerprintSha256: string }; warmup: { iterations: number }; scenarios: { name: string; samplesMs: number[]; p50: number; p95: number; toleranceBandPct?: number }[]; searchProbe?: { projectId: string; needle: string; expectFile: string; expectLine: number; expectSnippetContains: string }; nonRegressionCeiling: number; minimumImprovementThreshold: number; version: string }
     let baseline: BaselineJson;
     try { baseline = JSON.parse(readRepoFile(jsonRel)) as BaselineJson; } catch (err) { record('C0-9', '', '', false, '', { detail: `invalid JSON: ${String(err)}` }); return; }
     const problems: string[] = [];
-    if (!baseline.machine?.fingerprint) problems.push('missing machine.fingerprint');
+    // The baseline commits a sha256 of the machine fingerprint rather than the
+    // fingerprint itself, so a public repo does not publish the operator's
+    // hostname. Hashing is not a weakening: the check is still exact equality
+    // against THIS machine's live fingerprint, just compared in hashed space.
+    if (!baseline.machine?.fingerprintSha256) problems.push('missing machine.fingerprintSha256');
     else {
       const liveFingerprint = `${os.hostname()}-${os.platform()}-${os.arch()}-${os.cpus().length}cpu`;
-      if (baseline.machine.fingerprint !== liveFingerprint) problems.push(`machine fingerprint mismatch: baseline="${baseline.machine.fingerprint}" live="${liveFingerprint}"`);
+      const liveFingerprintSha256 = sha256Bytes(liveFingerprint);
+      if (baseline.machine.fingerprintSha256 !== liveFingerprintSha256) problems.push(`machine fingerprint mismatch: baseline=${baseline.machine.fingerprintSha256.slice(0, 12)} live=${liveFingerprintSha256.slice(0, 12)}`);
     }
     if (typeof baseline.nonRegressionCeiling !== 'number') problems.push('missing nonRegressionCeiling');
     if (typeof baseline.minimumImprovementThreshold !== 'number') problems.push('missing minimumImprovementThreshold');
@@ -1921,11 +1941,12 @@ async function main(): Promise<void> {
     const MAX_HASHED_FILES = 3000; // deterministic sample cap for hashing runtime
     let corpusOk = false;
     let corpusTotalBytes = 0;
+    const corpusPath = resolveCorpusPath(baseline.corpus?.path);
     if (!baseline.corpus?.path || !baseline.corpus?.sha256) {
       problems.push('missing corpus.path/corpus.sha256');
     } else if (baseline.corpus.isRealStoreSnapshot !== true || typeof baseline.corpus.realStoreFingerprint !== 'string' || !baseline.corpus.realStoreFingerprint.trim()) {
       problems.push('corpus is not declared as a snapshot of the real store: corpus.isRealStoreSnapshot must be true and corpus.realStoreFingerprint must be a recorded, non-empty fingerprint');
-    } else if (fs.existsSync(baseline.corpus.path)) {
+    } else if (fs.existsSync(corpusPath)) {
       const allFiles: { rel: string; abs: string; size: number }[] = [];
       (function walk(dir: string, base: string): void {
         for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -1937,7 +1958,7 @@ async function main(): Promise<void> {
             corpusTotalBytes += size;
           }
         }
-      })(baseline.corpus.path, baseline.corpus.path);
+      })(corpusPath, corpusPath);
       if (allFiles.length === 0) problems.push('corpus.path is an empty store -- not declared/documented as intentionally empty');
       if (corpusTotalBytes < MIN_CORPUS_BYTES) problems.push(`corpus total size ${corpusTotalBytes} bytes is below the ${MIN_CORPUS_BYTES}-byte (900MB) scale floor -- not the real ~987MB scale-baseline store`);
       allFiles.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
@@ -1947,7 +1968,7 @@ async function main(): Promise<void> {
       if (recomputedCorpusHash !== baseline.corpus.sha256) problems.push(`corpus fingerprint mismatch: recomputed ${recomputedCorpusHash.slice(0, 12)} != stated ${baseline.corpus.sha256.slice(0, 12)}`);
       else if (allFiles.length > 0 && corpusTotalBytes >= MIN_CORPUS_BYTES) corpusOk = true;
     } else {
-      problems.push(`corpus.path "${baseline.corpus.path}" does not exist`);
+      problems.push(`corpus.path "${corpusPath}" does not exist`);
     }
 
     // Round-4 F9: the required R8 protocol is a discarded warmup pass
