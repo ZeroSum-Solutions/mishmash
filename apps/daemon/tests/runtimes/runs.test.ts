@@ -738,6 +738,25 @@ describe('run event log persistence', () => {
     expect(parsed[2]).toMatchObject({ event: 'end', data: { status: 'succeeded' } });
   });
 
+  it('does not resolve terminal waiters until events.jsonl is fully flushed', async () => {
+    const runs = createRunsWithLog(tmpDir);
+    const run = runs.create({ projectId: 'p1' });
+    const logPath = path.join(tmpDir, run.id, 'events.jsonl');
+
+    // Exceed the write-stream high-water mark so finish() cannot rely on the
+    // final write having reached the file before its synchronous return.
+    runs.emit(run, 'agent', { type: 'text_delta', delta: 'x'.repeat(2 * 1024 * 1024) });
+    const terminal = runs.wait(run);
+    runs.finish(run, 'succeeded', 0, null);
+    await terminal;
+
+    const lines = fs.readFileSync(logPath, 'utf8').trim().split('\n');
+    expect(JSON.parse(lines.at(-1) ?? '')).toMatchObject({
+      event: 'end',
+      data: { status: 'succeeded' },
+    });
+  });
+
   it('persists a restart-safe terminal state and telemetry checkpoints', () => {
     const runs = createRunsWithLog(tmpDir);
     const run = runs.create({

@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildProjectRawFileUrl } from '@open-design/contracts';
 
-import { _resetWebBaseUrlCache, handleMcpToolCall } from '../src/mcp.js';
+import {
+  _resetProjectListCache,
+  _resetWebBaseUrlCache,
+  handleMcpToolCall,
+} from '../src/mcp.js';
 
 const originalFetch = globalThis.fetch;
 
@@ -19,6 +23,7 @@ describe('public MCP discovery + generation tools', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     globalThis.fetch = originalFetch;
+    _resetProjectListCache();
     _resetWebBaseUrlCache();
   });
 
@@ -390,6 +395,52 @@ describe('public MCP discovery + generation tools', () => {
     await handleMcpToolCall('http://127.0.0.1:17456', 'create_project', { name: 'My Site', id: 'fixed-id' });
     const postBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(postBody.id).toBe('fixed-id');
+  });
+
+  it('makes a newly created project immediately available to name-based tools', async () => {
+    const baseUrl = 'http://127.0.0.1:17456';
+    let projectsReads = 0;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/api/projects') && init?.method === 'POST') {
+        return new Response(
+          JSON.stringify({ project: { id: 'new-project', name: 'New Project' } }),
+          { status: 200 },
+        );
+      }
+      if (url.endsWith('/api/projects')) {
+        projectsReads += 1;
+        const projects = projectsReads === 1
+          ? [{ id: 'existing-project', name: 'Existing Project' }]
+          : [
+              { id: 'existing-project', name: 'Existing Project' },
+              { id: 'new-project', name: 'New Project' },
+            ];
+        return new Response(JSON.stringify({ projects }), { status: 200 });
+      }
+      if (url.endsWith('/api/runs')) {
+        return new Response(JSON.stringify({ runId: 'run-new' }), { status: 200 });
+      }
+      throw new Error(`unexpected url ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await handleMcpToolCall(baseUrl, 'start_run', {
+      project: 'Existing Project',
+      prompt: 'warm the name cache',
+    });
+    await handleMcpToolCall(baseUrl, 'create_project', {
+      name: 'New Project',
+      id: 'new-project',
+    });
+    const result = await handleMcpToolCall(baseUrl, 'start_run', {
+      project: 'New Project',
+      prompt: 'use it immediately',
+    });
+
+    expect(result).not.toMatchObject({ isError: true });
+    expect(projectsReads).toBe(2);
+    const runsCalls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/api/runs'));
+    expect(JSON.parse(String(runsCalls[1]?.[1]?.body))).toMatchObject({ projectId: 'new-project' });
   });
 
   it('create_project requires a name before posting', async () => {

@@ -9067,6 +9067,7 @@ export async function startServer({
       if (daemonShutdownStarted) return;
       daemonShutdownStarted = true;
       daemonShuttingDown = true;
+      telemetry.cleanupFatalHandlers();
       await design.runs.shutdownActive({ graceMs: resolveChatRunShutdownGraceMs() });
       await terminalService.shutdownActive();
       await previewService.shutdown();
@@ -9133,6 +9134,7 @@ export async function startServer({
         } : url);
       });
     } catch (error) {
+      telemetry.cleanupFatalHandlers();
       cleanupDaemonBackgroundWork();
       reject(error);
       return;
@@ -9145,6 +9147,7 @@ export async function startServer({
     // EACCES / EADDRNOTAVAIL even on the same Node). Wire the event so the
     // returned Promise always settles instead of hanging forever.
     server.on('error', (error) => {
+      telemetry.cleanupFatalHandlers();
       cleanupDaemonBackgroundWork();
       reject(error);
     });

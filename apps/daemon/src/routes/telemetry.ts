@@ -12,6 +12,7 @@ import { observePendingInstallerApplyAttempts } from '../migration/index.js';
 
 export interface DaemonTelemetry {
   analyticsService: ReturnType<typeof createAnalyticsService>;
+  cleanupFatalHandlers: () => void;
   getCachedAppVersion: () => any;
   reportFeedback: (req: {
     runId: string;
@@ -91,7 +92,7 @@ export function registerTelemetryRoutes(app: Express, deps: RegisterTelemetryRou
     res.json({ ok: true });
   });
 
-  installFatalTelemetryHandlers({
+  const cleanupFatalHandlers = installFatalTelemetryHandlers({
     analyticsService,
     getAppVersion: () => cachedAppVersion,
   });
@@ -115,6 +116,7 @@ export function registerTelemetryRoutes(app: Express, deps: RegisterTelemetryRou
 
   return {
     analyticsService,
+    cleanupFatalHandlers,
     getCachedAppVersion: () => cachedAppVersion,
     reportFeedback: (req) =>
       reportRunFeedbackFromDaemon({
@@ -124,22 +126,32 @@ export function registerTelemetryRoutes(app: Express, deps: RegisterTelemetryRou
   };
 }
 
-function installFatalTelemetryHandlers({
-  analyticsService,
-  getAppVersion,
-}: {
+type FatalTelemetryRegistration = {
   analyticsService: ReturnType<typeof createAnalyticsService>;
   getAppVersion: () => any;
-}): void {
+};
+
+const fatalTelemetryRegistrations = new Map<symbol, FatalTelemetryRegistration>();
+let fatalTelemetryHandlers: {
+  onUncaughtException: (error: Error) => void;
+  onUnhandledRejection: (reason: unknown) => void;
+} | null = null;
+let fatalShuttingDown = false;
+
+function ensureFatalTelemetryHandlers(): void {
+  if (fatalTelemetryHandlers) return;
   const FATAL_FLUSH_TIMEOUT_MS = 1000;
-  let fatalShuttingDown = false;
   const triggerFatalShutdown = (
     eventName: string,
     properties: Record<string, unknown>,
   ): void => {
     if (fatalShuttingDown) return;
     fatalShuttingDown = true;
-    const flushSequence = (async () => {
+    const registrations = Array.from(fatalTelemetryRegistrations.values());
+    const flushSequence = Promise.allSettled(registrations.map(async ({
+      analyticsService,
+      getAppVersion,
+    }) => {
       try {
         await analyticsService.captureSafety({
           eventName,
@@ -150,7 +162,7 @@ function installFatalTelemetryHandlers({
         // capture must never block the exit path
       }
       await analyticsService.shutdown();
-    })();
+    }));
     void Promise.race([
       flushSequence,
       new Promise<void>((resolve) => {
@@ -162,19 +174,53 @@ function installFatalTelemetryHandlers({
       process.exit(1);
     });
   };
-  process.on('uncaughtException', (error) => {
+  const onUncaughtException = (error: Error) => {
     triggerFatalShutdown('daemon_uncaught_exception', {
       error_message: error?.message ?? String(error),
       error_name: error?.name ?? 'Error',
       error_stack: typeof error?.stack === 'string' ? error.stack.slice(0, 8192) : undefined,
     });
-  });
-  process.on('unhandledRejection', (reason) => {
+  };
+  const onUnhandledRejection = (reason: unknown) => {
     const asError = reason instanceof Error ? reason : null;
     triggerFatalShutdown('daemon_unhandled_rejection', {
       error_message: asError?.message ?? (typeof reason === 'string' ? reason : String(reason)),
       error_name: asError?.name ?? 'NonErrorRejection',
       error_stack: typeof asError?.stack === 'string' ? asError.stack.slice(0, 8192) : undefined,
     });
-  });
+  };
+  fatalTelemetryHandlers = { onUncaughtException, onUnhandledRejection };
+  process.on('uncaughtException', onUncaughtException);
+  process.on('unhandledRejection', onUnhandledRejection);
+}
+
+export function installFatalTelemetryHandlers({
+  analyticsService,
+  getAppVersion,
+}: {
+  analyticsService: ReturnType<typeof createAnalyticsService>;
+  getAppVersion: () => any;
+}): () => void {
+  ensureFatalTelemetryHandlers();
+  const token = Symbol('fatal-telemetry-registration');
+  fatalTelemetryRegistrations.set(token, { analyticsService, getAppVersion });
+
+  let cleanedUp = false;
+  return () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    fatalTelemetryRegistrations.delete(token);
+  };
+}
+
+// Internal — for tests only. Production keeps one dispatcher installed for the
+// process lifetime; test workers reset it so listener-count assertions do not
+// leak module state into later files.
+export function _resetFatalTelemetryHandlersForTests(): void {
+  fatalTelemetryRegistrations.clear();
+  fatalShuttingDown = false;
+  if (!fatalTelemetryHandlers) return;
+  process.off('uncaughtException', fatalTelemetryHandlers.onUncaughtException);
+  process.off('unhandledRejection', fatalTelemetryHandlers.onUnhandledRejection);
+  fatalTelemetryHandlers = null;
 }

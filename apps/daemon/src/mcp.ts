@@ -945,6 +945,7 @@ async function deleteProject(baseUrl: string, args: McpArgs) {
     return errorResult(await formatDaemonError(resp, url));
   }
   const json = (await resp.json()) as JsonObject;
+  invalidateProjectListCache(baseUrl);
   // The tool accepts a name substring (see resolveProjectId), so the
   // caller needs the resolvedProject echo to confirm which project was
   // actually destroyed — same contract write_file/delete_file follow
@@ -1002,7 +1003,9 @@ async function createProject(baseUrl: string, args: McpArgs) {
   if (typeof args.skill === 'string' && args.skill.length > 0) {
     body.skillId = args.skill;
   }
-  return ok(await postJson<JsonObject>(`${baseUrl}/api/projects`, body));
+  const result = await postJson<JsonObject>(`${baseUrl}/api/projects`, body);
+  invalidateProjectListCache(baseUrl);
+  return ok(result);
 }
 
 // Flatten daemon's plugin record into the few fields an external agent
@@ -1424,6 +1427,16 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const PROJECT_LIST_TTL_MS = 5000;
 let projectListCache: ProjectListCache | null = null;
 
+function invalidateProjectListCache(baseUrl: string): void {
+  if (projectListCache?.baseUrl === baseUrl) projectListCache = null;
+}
+
+// Internal — for tests only. Project-list lookups are cached across tool calls
+// in the same module instance, so test cases sharing a daemon URL must reset it.
+export function _resetProjectListCache(): void {
+  projectListCache = null;
+}
+
 async function fetchProjectList(baseUrl: string): Promise<ProjectSummary[]> {
   const now = Date.now();
   if (
@@ -1723,6 +1736,42 @@ async function getArtifact(baseUrl: string, projectArg: unknown, entryArg: unkno
 // (404, network) so callers can report the budget rejection honestly.
 class BudgetExceededError extends Error {}
 
+async function readTextBodyWithinBudget(
+  resp: Response,
+  relPath: string,
+  remainingBytes: number,
+): Promise<{ content: string; contentBytes: number }> {
+  if (!Number.isFinite(remainingBytes) || !resp.body) {
+    const content = await resp.text();
+    return { content, contentBytes: Buffer.byteLength(content, 'utf8') };
+  }
+
+  const reader = resp.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let contentBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    contentBytes += value.byteLength;
+    if (contentBytes > remainingBytes) {
+      try { await reader.cancel(); } catch { /* best-effort upstream cancellation */ }
+      throw new BudgetExceededError(
+        `file ${relPath} exceeds remaining budget (${remainingBytes} bytes)`,
+      );
+    }
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(contentBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { content: new TextDecoder().decode(bytes), contentBytes };
+}
+
 async function fetchProjectFile(baseUrl: string, projectId: string, relPath: string, remainingBytes = Infinity): Promise<ProjectFileBundleEntry> {
   const segments = String(relPath)
     .split('/')
@@ -1746,8 +1795,11 @@ async function fetchProjectFile(baseUrl: string, projectId: string, relPath: str
   if (size !== null && size > remainingBytes) {
     throw new BudgetExceededError(`file ${relPath} (${size} bytes) exceeds remaining budget`);
   }
-  const content = await resp.text();
-  const contentBytes = Buffer.byteLength(content, 'utf8');
+  const { content, contentBytes } = await readTextBodyWithinBudget(
+    resp,
+    relPath,
+    remainingBytes,
+  );
   if (contentBytes > remainingBytes) {
     throw new BudgetExceededError(
       `file ${relPath} (${contentBytes} bytes) exceeds remaining budget`,

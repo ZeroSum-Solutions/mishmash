@@ -192,7 +192,7 @@ describe('public MCP get_artifact maxBytes cap without content length', () => {
     });
 
     expect(result).toMatchObject({ isError: true });
-    expect(firstText(result.content)).toContain('file index.html (200 bytes) exceeds remaining budget');
+    expect(firstText(result.content)).toContain('file index.html exceeds remaining budget');
   });
 
   it('rejects an over-budget auto entry after reading a chunked body', async () => {
@@ -204,7 +204,7 @@ describe('public MCP get_artifact maxBytes cap without content length', () => {
     });
 
     expect(result).toMatchObject({ isError: true });
-    expect(firstText(result.content)).toContain('file index.html (200 bytes) exceeds remaining budget');
+    expect(firstText(result.content)).toContain('file index.html exceeds remaining budget');
   });
 
   it('counts UTF-8 bytes across an all-files bundle', async () => {
@@ -337,6 +337,38 @@ describe('fetchProjectFile per-file size pre-check', () => {
     const file = await fetchProjectFile(baseUrl, PROJECT_ID, 'styles.css', 20_000);
     expect(file.binary).toBe(false);
     expect(file.content?.length).toBe(10_000);
+  });
+
+  it('cancels an unknown-length response as soon as its byte budget is exceeded', async () => {
+    const originalFetch = globalThis.fetch;
+    let pulls = 0;
+    let canceled = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        if (pulls > 100) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(new Uint8Array(8));
+      },
+      cancel() {
+        canceled = true;
+      },
+    });
+    globalThis.fetch = async () => new Response(body, {
+      headers: { 'content-type': 'text/plain' },
+    });
+
+    try {
+      await expect(
+        fetchProjectFile(baseUrl, PROJECT_ID, 'stream.txt', 16),
+      ).rejects.toThrow(/exceeds remaining budget/);
+      expect(pulls).toBeLessThan(100);
+      expect(canceled).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 
