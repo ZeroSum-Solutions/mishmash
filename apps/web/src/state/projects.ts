@@ -93,11 +93,11 @@ export async function createProject(
     // non-secure context, where `crypto.randomUUID` is undefined and
     // calling it directly throws — the surrounding try/catch then turns
     // the Create button into a silent no-op (issue #849).
-    const id = randomUUID();
+    const request: CreateProjectRequest = { id: randomUUID(), ...input };
     const resp = await fetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, ...input }),
+      body: JSON.stringify(request),
     });
     if (!resp.ok) {
       let message = 'Could not create project';

@@ -55,8 +55,14 @@ describe('buildAgentGuideMarkdown', () => {
 
   it('includes the required caller-owned id in the HTTP project-create example', () => {
     const md = buildAgentGuideMarkdown();
+    const createRequestStart = md.indexOf('curl -s -X POST http://127.0.0.1:7456/api/projects');
+    const createRequestEnd = md.indexOf('\n```', createRequestStart);
+    const createRequest = md.slice(createRequestStart, createRequestEnd);
 
-    expect(md).toContain('"id": "hermes-test-run"');
+    expect(createRequestStart).toBeGreaterThanOrEqual(0);
+    expect(createRequestEnd).toBeGreaterThan(createRequestStart);
+    expect(createRequest).toContain('"id": "hermes-test-run"');
+    expect(createRequest).toContain('"name": "Hermes test run"');
   });
 
   it('surfaces version and CLI hints in the checklist when supplied', () => {

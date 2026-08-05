@@ -152,6 +152,12 @@ describe('createProject', () => {
         headers: { 'Content-Type': 'application/json' },
       }),
     );
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      id?: string;
+      name?: string;
+    };
+    expect(request.id).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(request.name).toBe('Draft DS project');
   });
 });
 
