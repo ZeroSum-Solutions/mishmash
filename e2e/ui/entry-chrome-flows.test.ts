@@ -547,6 +547,17 @@ test('[P2] entry chrome avoids horizontal overflow on compact desktop width', as
 });
 
 test('[P0] @critical entry execution pill opens the Local CLI and BYOK switcher from Home', async ({ page }) => {
+  // InlineModelSwitcher deliberately closes the popover when its anchor chip
+  // leaves the safe region of `.entry-main--scroll` (the anchor-visibility
+  // effect). At the default 720px-tall Desktop Chrome viewport this popover —
+  // five agents plus the model section — puts its footer button below the
+  // fold, so Playwright's own scroll-into-view scrolls that container, the
+  // anchor leaves the safe region, and the popover unmounts mid-click. In CI
+  // that read as "element is not visible" -> "element was detached from the
+  // DOM" -> a 120s test timeout followed by a green retry: ~2 minutes burned
+  // on every run. Give the popover room to render fully so no scroll is
+  // needed. The auto-close behavior is correct and is not what we're dodging.
+  await page.setViewportSize({ width: 1280, height: 1000 });
   await page.addInitScript((key) => {
     window.localStorage.setItem(
       key,

@@ -24,13 +24,26 @@ export const uiP0Groups = {
     grep: String.raw`\[P0\]`,
     files: ["ui/app-restoration.test.ts", "ui/critical-smoke.test.ts"],
   },
-  "entry-settings": {
+  // Split out of the former single `entry-settings` group (2026-08-04). That
+  // group was the CI critical path at ~11.8m of test payload while every other
+  // shard finished in 8-9m, so it alone set wall-clock. The two halves below
+  // are balanced on measured per-file time from run 30977989376
+  // (~313s entry-chrome / ~394s settings-onboarding), which drops both under
+  // the next-slowest shard. Coverage is unchanged — every file from the old
+  // group appears in exactly one half, enforced by
+  // validatePlaywrightSuiteTopology().
+  "entry-chrome": {
     grep: String.raw`\[P0\]`,
     files: [
       "ui/entry-chrome-flows.test.ts",
       "ui/entry-configuration-flows.test.ts",
-      "ui/amr-onboarding.test.ts",
       "ui/api-empty-response.test.ts",
+    ],
+  },
+  "settings-onboarding": {
+    grep: String.raw`\[P0\]`,
+    files: [
+      "ui/amr-onboarding.test.ts",
       "ui/settings-api-protocol.test.ts",
       "ui/settings-connectors-auth-happy-path.test.ts",
       "ui/settings-connectors-auth-recovery.test.ts",
@@ -62,7 +75,8 @@ export const uiP0Groups = {
 export type UiP0GroupName = keyof typeof uiP0Groups;
 
 export const uiP0CiMatrix = [
-  { name: "entry-settings", shard: "entry-settings" },
+  { name: "entry-chrome", shard: "entry-chrome" },
+  { name: "settings-onboarding", shard: "settings-onboarding" },
   { name: "project-workspace", shard: "project-workspace" },
   { name: "project-runtime", shard: "project-runtime" },
   { name: "workspace-restoration", shard: "workspace-restoration" },
