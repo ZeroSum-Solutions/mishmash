@@ -208,6 +208,9 @@ export function createChatRunService({
       // Set once finish() has closed the log stream, so a late post-finish emit
       // can't lazily re-open a stream nothing will ever close (FD leak).
       eventsLogClosed: false,
+      // Set by finish() while the terminal `end` record drains. Terminal
+      // waiters await this promise before reporting completion.
+      eventsLogFlushPromise: null,
     };
     runs.set(run.id, run);
     if (run.statePath) atomicWriteJson(run.statePath, durableRunState(run));
@@ -352,6 +355,25 @@ export function createChatRunService({
     ...(run.browserUse ? { browserUse: run.browserUse } : {}),
   });
 
+  const closeEventLog = (run) => {
+    // Any event emitted after this point must not lazily re-open the log.
+    run.eventsLogClosed = true;
+    const stream = run.eventsLogStream;
+    run.eventsLogStream = null;
+    if (!stream) return Promise.resolve();
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const settle = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      stream.once('error', settle);
+      try { stream.end(settle); } catch { settle(); }
+    });
+  };
+
   const finish = (run, status, code: number | null = null, signal: string | null = null) => {
     if (TERMINAL_RUN_STATUSES.has(run.status)) return;
     if (onRunFinished) {
@@ -391,14 +413,14 @@ export function createChatRunService({
     });
     for (const sse of run.clients) sse.end();
     run.clients.clear();
-    for (const waiter of run.waiters) waiter(statusBody(run));
-    run.waiters.clear();
-    // Close the event log stream now that no more events will be
-    // emitted for this run. The file stays on disk for tail/grep.
-    try { run.eventsLogStream?.end(); } catch { /* ignore */ }
-    run.eventsLogStream = null;
-    // Any event emitted after this point must not lazily re-open the log.
-    run.eventsLogClosed = true;
+    // Close the event log now that no more events will be persisted. Resolve
+    // terminal waiters only after the stream's end callback, which guarantees
+    // the final JSONL record has drained instead of merely being queued.
+    run.eventsLogFlushPromise = closeEventLog(run);
+    void run.eventsLogFlushPromise.then(() => {
+      for (const waiter of run.waiters) waiter(statusBody(run));
+      run.waiters.clear();
+    });
     scheduleCleanup(run);
   };
 
@@ -675,7 +697,9 @@ export function createChatRunService({
   };
 
   const wait = (run) => {
-    if (TERMINAL_RUN_STATUSES.has(run.status)) return Promise.resolve(statusBody(run));
+    if (TERMINAL_RUN_STATUSES.has(run.status)) {
+      return Promise.resolve(run.eventsLogFlushPromise).then(() => statusBody(run));
+    }
     return new Promise((resolve) => run.waiters.add(resolve));
   };
 
