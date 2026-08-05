@@ -2658,13 +2658,30 @@ describe('C4-9 DesignsTab fan-out bound', () => {
 // =========================================================================
 interface BaselineJson {
   corpus: { path: string; sha256: string };
-  machine: { fingerprint: string };
+  machine: { fingerprintSha256: string };
   nonRegressionCeiling: number;
   minimumImprovementThreshold: number;
   scenarios: { name: string; p50: number; p95: number; toleranceBandPct: number }[];
 }
 function machineFingerprint(): string {
   return `${os.hostname()}-${os.platform()}-${os.arch()}-${os.cpus().length}cpu`;
+}
+// Mirrors verify-w0's C0-9 identity handling: the committed baseline holds a
+// sha256 of the fingerprint, not the hostname itself, so a public repo does not
+// publish the operator's machine name. Equality is still exact, just hashed.
+function machineFingerprintSha256(): string {
+  return crypto.createHash('sha256').update(machineFingerprint()).digest('hex');
+}
+// Mirrors verify-w0's resolveCorpusPath: `~` expands against the running
+// user's home and OD_W0_CORPUS_DIR overrides, so the committed baseline can
+// name the corpus without embedding an absolute home directory.
+function resolveCorpusPath(declared: string | undefined): string {
+  const override = process.env.OD_W0_CORPUS_DIR;
+  if (override && override.trim()) return path.resolve(override.trim());
+  if (!declared) return '';
+  if (declared === '~') return os.homedir();
+  if (declared.startsWith('~/')) return path.join(os.homedir(), declared.slice(2));
+  return declared;
 }
 function percentile(samples: number[], p: number): number {
   const sorted = [...samples].sort((a, b) => a - b);
@@ -3250,17 +3267,18 @@ async function checkC410(): Promise<{ ok: boolean; evidence: string; detail?: st
   const mdContent = fs.readFileSync(baselineMdPath, 'utf8');
   if (!mdContent.includes('scale-baseline-2026-07.json')) return { ok: false, evidence: 'scale-baseline-2026-07.md does not reference scale-baseline-2026-07.json', detail: '.md and .json are not cross-bound' };
   const baseline = JSON.parse(fs.readFileSync(baselineJsonPath, 'utf8')) as BaselineJson;
+  const corpusPath = resolveCorpusPath(baseline.corpus?.path);
 
   if (!coverBackendSurface().present) {
     return {
       ok: false,
-      evidence: `baseline .md+.json bound and present (corpus=${baseline.corpus.path}, machine=${baseline.machine.fingerprint})\n${backendGateFailure().evidence}`,
+      evidence: `baseline .md+.json bound and present (corpus=${corpusPath}, machine=${baseline.machine.fingerprintSha256})\n${backendGateFailure().evidence}`,
       detail: 'product surface missing: nothing to measure yet -- the parent-vs-head R8 harness below is real and runs once apps/daemon/src/covers/** exists',
     };
   }
-  if (!fs.existsSync(baseline.corpus.path)) return { ok: false, evidence: `corpus path from baseline JSON does not exist on this machine: ${baseline.corpus.path}`, detail: 'cannot run the R8 comparison without the frozen corpus' };
-  const thisMachine = machineFingerprint();
-  if (thisMachine !== baseline.machine.fingerprint) return { ok: false, evidence: `machine fingerprint mismatch: baseline=${baseline.machine.fingerprint} this run=${thisMachine}`, detail: 'R8 baselines are machine-local by design' };
+  if (!fs.existsSync(corpusPath)) return { ok: false, evidence: `corpus path from baseline JSON does not exist on this machine: ${corpusPath}`, detail: 'cannot run the R8 comparison without the frozen corpus' };
+  const thisMachine = machineFingerprintSha256();
+  if (thisMachine !== baseline.machine.fingerprintSha256) return { ok: false, evidence: `machine fingerprint mismatch: baseline=${baseline.machine.fingerprintSha256} this run=${thisMachine}`, detail: 'R8 baselines are machine-local by design' };
 
   // Ceremony ruling item 5: recompute the corpus digest BEFORE any scratch
   // copy or daemon boot. A malformed declaration, walk/read error, or
@@ -3268,7 +3286,7 @@ async function checkC410(): Promise<{ ok: boolean; evidence: string; detail?: st
   if (!baseline.corpus.sha256 || typeof baseline.corpus.sha256 !== 'string') {
     return { ok: false, evidence: `baseline.corpus.sha256 is missing or malformed: ${JSON.stringify(baseline.corpus.sha256)}`, detail: 'cannot verify the frozen corpus matches a malformed baseline declaration' };
   }
-  const corpusDigest = recomputeCorpusDigest(baseline.corpus.path);
+  const corpusDigest = recomputeCorpusDigest(corpusPath);
   if ('error' in corpusDigest) {
     return { ok: false, evidence: `corpus digest recomputation FAILED before any scratch copy/daemon boot: ${corpusDigest.error}\nstated baseline.corpus.sha256=${baseline.corpus.sha256}`, detail: 'cannot verify the frozen corpus matches the declared baseline -- refusing to measure against a possibly-different corpus' };
   }
@@ -3285,9 +3303,9 @@ async function checkC410(): Promise<{ ok: boolean; evidence: string; detail?: st
     if ('error' in parentAt) return { ok: false, evidence: parentAt.error, detail: 'could not check out the parent commit for the parent-vs-head comparison' };
     parentWorktree = parentAt;
 
-    // Sol r1 ruling 5: NEVER boot directly against baseline.corpus.path.
-    parentScratch = scratchCopyCorpus(baseline.corpus.path);
-    headScratch = scratchCopyCorpus(baseline.corpus.path);
+    // Sol r1 ruling 5: NEVER boot directly against the frozen corpus path.
+    parentScratch = scratchCopyCorpus(corpusPath);
+    headScratch = scratchCopyCorpus(corpusPath);
 
     const parentResult = await measureDesignsTabActivation(parentWorktree.dir, parentScratch, REPS);
     const headResult = await measureDesignsTabActivation(repoRoot, headScratch, REPS);

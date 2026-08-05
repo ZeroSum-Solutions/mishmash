@@ -130,11 +130,15 @@ Same routine cause (run 5's green C0-9 boots). Frozen post-run state:
 
 ## Machine
 
-`Devins-MacBook-Pro.local-darwin-arm64-16cpu` (`os.hostname()-platform()-arch()-cpus().length` +
-`cpu`, matching the verifier's own fingerprint computation exactly).
+The baseline was recorded on a 16-core arm64 macOS host. Its identity is
+committed as `machine.fingerprintSha256` — the sha256 of
+`os.hostname()-platform()-arch()-cpus().length` + `cpu` — rather than the
+fingerprint itself, so this public repository does not publish the operator's
+hostname. The verifiers recompute that string live, hash it, and require exact
+equality, so the check is no weaker than storing the plaintext was.
 Baselines are machine-local by design — the R8 protocol's tolerance bands
-are meaningless across different hardware, and this file's `machine.fingerprint`
-field is what ties a re-run to "this same box."
+are meaningless across different hardware, and this file's
+`machine.fingerprintSha256` field is what ties a re-run to "this same box."
 
 ## Protocol
 
