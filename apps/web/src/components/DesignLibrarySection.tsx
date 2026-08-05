@@ -13,7 +13,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Dialog } from '@open-design/components';
-import type { DesignLibraryAllowedUse, DesignLibraryItem } from '@open-design/contracts';
+import type {
+  DesignLibraryAllowedUse,
+  DesignLibraryGroup,
+  DesignLibraryItem,
+} from '@open-design/contracts';
 import {
   designLibraryThumbUrl,
   fetchDesignLibraryCatalog,
@@ -92,10 +96,10 @@ export function DesignLibrarySection({ active, onOpenProject }: Props) {
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
   }, [catalog]);
 
-  const filteredGroups = useMemo(() => {
-    if (!catalog) return [];
+  const { primaryGroups, humanLocalGroups } = useMemo(() => {
+    if (!catalog) return { primaryGroups: [], humanLocalGroups: [] };
     const query = search.trim().toLowerCase();
-    return catalog.groups
+    const matchingGroups = catalog.groups
       .filter((group) => !category || group.folder === category)
       .map((group) => ({
         ...group,
@@ -115,9 +119,28 @@ export function DesignLibrarySection({ active, onOpenProject }: Props) {
         }),
       }))
       .filter((group) => group.items.length > 0);
+
+    // Stable-partition restricted references after every other result while
+    // retaining the catalog's group and item order inside each partition.
+    // A mixed source group appears once in the primary results and once in
+    // the clearly labeled reference-only section rather than interleaving
+    // Human Local Only cards with project-ready options.
+    const primaryGroups: DesignLibraryGroup[] = [];
+    const humanLocalGroups: DesignLibraryGroup[] = [];
+    for (const group of matchingGroups) {
+      const primaryItems = group.items.filter((item) => item.allowed_use !== 'human-local-only');
+      const humanLocalItems = group.items.filter((item) => item.allowed_use === 'human-local-only');
+      if (primaryItems.length > 0) primaryGroups.push({ ...group, items: primaryItems });
+      if (humanLocalItems.length > 0) humanLocalGroups.push({ ...group, items: humanLocalItems });
+    }
+    return { primaryGroups, humanLocalGroups };
   }, [catalog, search, category, domain]);
 
-  const hasAnyItems = filteredGroups.length > 0;
+  const hasAnyItems = primaryGroups.length > 0 || humanLocalGroups.length > 0;
+  const collectionCount = useMemo(
+    () => catalog?.groups.reduce((total, group) => total + group.items.length, 0) ?? 0,
+    [catalog],
+  );
 
   return (
     <div className={`entry-section ${styles.root}`}>
@@ -163,28 +186,21 @@ export function DesignLibrarySection({ active, onOpenProject }: Props) {
                 </option>
               ))}
             </select>
-          </div>
-
-          <div className={styles.chips} role="group" aria-label={t('designLibrary.allDomains')}>
-            <button
-              type="button"
-              className={styles.chip}
-              data-active={domain === '' ? 'true' : 'false'}
-              onClick={() => setDomain('')}
+            <select
+              aria-label={t('designLibrary.allDomains')}
+              className={`${styles.select} ${styles.domainSelect}`}
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
             >
-              {t('designLibrary.allDomains')}
-            </button>
-            {domainCounts.map(([d, count]) => (
-              <button
-                key={d}
-                type="button"
-                className={styles.chip}
-                data-active={domain === d ? 'true' : 'false'}
-                onClick={() => setDomain((current) => (current === d ? '' : d))}
-              >
-                {d} <span className={styles.chipCount}>{count}</span>
-              </button>
-            ))}
+              <option value="">
+                {t('designLibrary.allDomains')} ({collectionCount})
+              </option>
+              {domainCounts.map(([d, count]) => (
+                <option key={d} value={d}>
+                  {d} ({count})
+                </option>
+              ))}
+            </select>
           </div>
 
           {!hasAnyItems ? (
@@ -192,19 +208,33 @@ export function DesignLibrarySection({ active, onOpenProject }: Props) {
               <p>{t('designLibrary.emptyFiltered')}</p>
             </div>
           ) : (
-            filteredGroups.map((group) => (
-              <section key={group.folder} className={styles.group}>
-                <header className={styles.groupHead}>
-                  <h2 className={styles.groupTitle}>{group.title}</h2>
-                  <p className={styles.groupBlurb}>{group.blurb}</p>
-                </header>
-                <div className={styles.grid}>
-                  {group.items.map((item) => (
-                    <DesignLibraryCard key={item.id} item={item} t={t} onOpenProject={onOpenProject} />
+            <>
+              {primaryGroups.map((group) => (
+                <DesignLibraryGroupSection
+                  key={group.folder}
+                  group={group}
+                  t={t}
+                  onOpenProject={onOpenProject}
+                />
+              ))}
+              {humanLocalGroups.length > 0 ? (
+                <section className={styles.humanLocalSection}>
+                  <header className={styles.humanLocalHead}>
+                    <h2 className={styles.humanLocalTitle}>Human Local Only</h2>
+                    <p className={styles.groupBlurb}>Reference-only collections, kept separate from usable options.</p>
+                  </header>
+                  {humanLocalGroups.map((group) => (
+                    <DesignLibraryGroupSection
+                      key={group.folder}
+                      group={group}
+                      t={t}
+                      onOpenProject={onOpenProject}
+                      nested
+                    />
                   ))}
-                </div>
-              </section>
-            ))
+                </section>
+              ) : null}
+            </>
           )}
         </>
       ) : null}
@@ -212,9 +242,37 @@ export function DesignLibrarySection({ active, onOpenProject }: Props) {
   );
 }
 
+function DesignLibraryGroupSection({
+  group,
+  t,
+  onOpenProject,
+  nested = false,
+}: {
+  group: DesignLibraryGroup;
+  t: ReturnType<typeof useT>;
+  onOpenProject?: (projectId: string, conversationId?: string) => void;
+  nested?: boolean;
+}) {
+  const GroupHeading = nested ? 'h3' : 'h2';
+  return (
+    <section className={nested ? styles.nestedGroup : styles.group}>
+      <header className={styles.groupHead}>
+        <GroupHeading className={styles.groupTitle}>{group.title}</GroupHeading>
+        <p className={styles.groupBlurb}>{group.blurb}</p>
+      </header>
+      <div className={styles.grid}>
+        {group.items.map((item) => (
+          <DesignLibraryCard key={item.id} item={item} t={t} onOpenProject={onOpenProject} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // Shared start-project state for both source-copy and private-reference
-// modes. Reference mode sends only the selected aspect names; the daemon
-// resolves and bounds the local design context.
+// modes, used by the card and the preview dialog alike. Reference mode sends
+// only the selected aspect names; the daemon resolves and bounds the local
+// design context. Both surfaces must fail the same way.
 function useStartFromDesignLibrary(
   item: DesignLibraryItem,
   t: ReturnType<typeof useT>,
@@ -358,12 +416,12 @@ function DesignLibraryCard({
     onOpenProject,
   );
   const referenceStart = useStartFromDesignLibrary(item, t, 'reference', selectedAspects, onOpenProject);
-  const hasPreview = Boolean(item.thumb) && !thumbError;
+  const hasVisualPreview = Boolean(item.thumb) && !thumbError;
 
   return (
     <article className={styles.card} data-testid="design-library-card" data-allowed-use={item.allowed_use}>
       <div className={styles.thumb}>
-        {item.thumb && !thumbError ? (
+        {hasVisualPreview && item.thumb ? (
           <img
             className={styles.thumbImg}
             src={designLibraryThumbUrl(item.thumb)}
@@ -372,21 +430,23 @@ function DesignLibraryCard({
             onError={() => setThumbError(true)}
           />
         ) : (
-          <Icon name="image" size={28} className={styles.thumbGlyph} />
+          <div className={styles.thumbUnavailable} aria-hidden>
+            <Icon name="image" size={28} className={styles.thumbGlyph} />
+            <span>Visual preview unavailable</span>
+          </div>
         )}
-        {hasPreview ? (
-          <button
-            type="button"
-            className={styles.thumbButton}
-            aria-haspopup="dialog"
-            aria-label={`${t('designLibrary.preview')} ${item.label}`}
-            onClick={() => setPreviewOpen(true)}
-          >
-            <span className={styles.previewOverlay} aria-hidden>
-              <Icon name="search" size={20} />
-            </span>
-          </button>
-        ) : null}
+        <button
+          type="button"
+          className={styles.thumbButton}
+          aria-haspopup="dialog"
+          aria-label={`${t('designLibrary.preview')} ${item.label}`}
+          onClick={() => setPreviewOpen(true)}
+        >
+          <span className={styles.previewOverlay} aria-hidden>
+            <Icon name="search" size={18} />
+            <span>{t('designLibrary.preview')}</span>
+          </span>
+        </button>
         <span className={styles.badge} data-allowed-use={item.allowed_use} title={tooltip}>
           {allowedUseLabel(item.allowed_use)}
         </span>
@@ -452,10 +512,11 @@ function DesignLibraryCard({
       {templateStart.startError || referenceStart.startError ? (
         <p className={styles.startError}>{templateStart.startError || referenceStart.startError}</p>
       ) : null}
-      {previewOpen && hasPreview ? (
+      {previewOpen ? (
         <DesignLibraryPreviewDialog
           item={item}
           t={t}
+          hasVisualPreview={hasVisualPreview}
           onClose={() => setPreviewOpen(false)}
           onOpenProject={onOpenProject}
           selectedAspects={selectedAspects}
@@ -466,13 +527,14 @@ function DesignLibraryCard({
   );
 }
 
-// Full-size preview of a kit's composite screenshot — the founder's "open
-// the full design system view" for catalog items whose richest available
-// asset is the tiled screen composite. Rendered through the shared Dialog
-// primitive in a portal so it escapes the card grid's overflow.
+// Quick catalog details for every item. When the catalog supplies a curated
+// visual it is shown uncropped; otherwise the dialog keeps the metadata and
+// permitted actions useful without inventing a preview asset. Rendered
+// through the shared Dialog primitive in a portal so it escapes the grid.
 function DesignLibraryPreviewDialog({
   item,
   t,
+  hasVisualPreview,
   onClose,
   onOpenProject,
   selectedAspects,
@@ -480,73 +542,109 @@ function DesignLibraryPreviewDialog({
 }: {
   item: DesignLibraryItem;
   t: ReturnType<typeof useT>;
+  hasVisualPreview: boolean;
   onClose: () => void;
   onOpenProject?: (projectId: string, conversationId?: string) => void;
   selectedAspects: string[];
   onSelectedAspectsChange: (next: string[]) => void;
 }) {
+  const [previewImageError, setPreviewImageError] = useState(false);
   const templateStart = useStartFromDesignLibrary(item, t, 'copy', [], onOpenProject);
   const referenceStart = useStartFromDesignLibrary(item, t, 'reference', selectedAspects, onOpenProject);
-  if (!item.thumb) return null;
+  const showImage = hasVisualPreview && Boolean(item.thumb) && !previewImageError;
   return createPortal(
-    <div className={styles.previewBackdrop} onClick={onClose}>
-      <Dialog
-        ariaLabel={item.label}
-        onClose={onClose}
-        closeOnEscape
-        className={styles.previewDialog}
-      >
-        <div className={styles.previewImageWrap}>
-          <img className={styles.previewImage} src={designLibraryThumbUrl(item.thumb)} alt={item.label} />
+    <Dialog
+      ariaLabel={item.label}
+      onClose={onClose}
+      closeOnEscape
+      backdropClassName={styles.previewBackdrop}
+      className={styles.previewDialog}
+    >
+      <div className={styles.previewImageWrap}>
+        {showImage && item.thumb ? (
+          <img
+            className={styles.previewImage}
+            src={designLibraryThumbUrl(item.thumb)}
+            alt={item.label}
+            onError={() => setPreviewImageError(true)}
+          />
+        ) : (
+          <div className={styles.previewUnavailable}>
+            <Icon name="image" size={32} className={styles.thumbGlyph} />
+            <span>Visual preview unavailable</span>
+          </div>
+        )}
+      </div>
+      <div className={styles.previewMeta}>
+        <div className={styles.previewHeading}>
+          <h2 className={styles.previewTitle}>{item.label}</h2>
+          <span
+            className={`${styles.badge} ${styles.previewBadge}`}
+            data-allowed-use={item.allowed_use}
+            title={t(ALLOWED_USE_TOOLTIP_KEY[item.allowed_use])}
+          >
+            {allowedUseLabel(item.allowed_use)}
+          </span>
         </div>
-        <div className={styles.previewMeta}>
-          <h3 className={styles.label}>{item.label}</h3>
-          <p className={styles.detail}>
-            {item.kind} · {item.files} {t('designLibrary.filesUnit')} · {item.size}
+        <p className={styles.detail}>
+          {item.kind} · {item.files} {t('designLibrary.filesUnit')} · {item.size}
+        </p>
+        {item.description ? <p className={styles.description}>{item.description}</p> : null}
+        {item.domains.length > 0 ? (
+          <div className={styles.domains}>
+            {item.domains.map((domain) => (
+              <span key={domain} className={styles.domainTag}>
+                {domain}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {item.stacks?.length ? (
+          <p className={styles.stackLine}>
+            <span>{t('designLibrary.stacksLabel')}:</span> {item.stacks.join(' · ')}
           </p>
-          {item.description ? <p className={styles.description}>{item.description}</p> : null}
-          {item.stacks?.length ? (
-            <p className={styles.stackLine}>
-              <span>{t('designLibrary.stacksLabel')}:</span> {item.stacks.join(' · ')}
-            </p>
-          ) : null}
-          {referenceStart.canStart ? (
-            <AspectSelector
-              aspects={item.aspects ?? []}
-              selected={selectedAspects}
-              onChange={onSelectedAspectsChange}
+        ) : null}
+        {item.duplicate_of ? (
+          <p className={styles.duplicateNote}>
+            {t('designLibrary.duplicateOfPrefix')} {item.duplicate_of}
+          </p>
+        ) : null}
+        {referenceStart.canStart ? (
+          <AspectSelector
+            aspects={item.aspects ?? []}
+            selected={selectedAspects}
+            onChange={onSelectedAspectsChange}
+            t={t}
+          />
+        ) : null}
+        <div className={`${styles.cardActions} ${styles.previewActions}`}>
+          <button type="button" className={styles.openFolderBtn} onClick={() => openDesignLibraryPath(item.rel)}>
+            <Icon name="folder" size={14} />
+            {t('designLibrary.openFolder')}
+          </button>
+          {templateStart.canStart ? (
+            <UseAsTemplateButton
+              starting={templateStart.starting}
+              onClick={templateStart.handleStart}
+              t={t}
+            />
+          ) : referenceStart.canStart ? (
+            <UseAsReferenceButton
+              starting={referenceStart.starting}
+              selectedCount={selectedAspects.length}
+              onClick={referenceStart.handleStart}
               t={t}
             />
           ) : null}
-          <div className={styles.cardActions}>
-            <button type="button" className={styles.openFolderBtn} onClick={() => openDesignLibraryPath(item.rel)}>
-              <Icon name="folder" size={14} />
-              {t('designLibrary.openFolder')}
-            </button>
-            {templateStart.canStart ? (
-              <UseAsTemplateButton
-                starting={templateStart.starting}
-                onClick={templateStart.handleStart}
-                t={t}
-              />
-            ) : referenceStart.canStart ? (
-              <UseAsReferenceButton
-                starting={referenceStart.starting}
-                selectedCount={selectedAspects.length}
-                onClick={referenceStart.handleStart}
-                t={t}
-              />
-            ) : null}
-            <button type="button" className={styles.openFolderBtn} onClick={onClose}>
-              {t('designLibrary.previewClose')}
-            </button>
-          </div>
-          {templateStart.startError || referenceStart.startError ? (
-            <p className={styles.startError}>{templateStart.startError || referenceStart.startError}</p>
-          ) : null}
+          <button type="button" className={styles.openFolderBtn} onClick={onClose}>
+            {t('designLibrary.previewClose')}
+          </button>
         </div>
-      </Dialog>
-    </div>,
+        {templateStart.startError || referenceStart.startError ? (
+          <p className={styles.startError}>{templateStart.startError || referenceStart.startError}</p>
+        ) : null}
+      </div>
+    </Dialog>,
     document.body,
   );
 }
