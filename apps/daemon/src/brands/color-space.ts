@@ -57,6 +57,13 @@ const RAMP_LIGHTNESS: Record<(typeof RAMP_STOPS)[number], number> = {
   600: 0.55, 700: 0.47, 800: 0.39, 900: 0.31, 950: 0.24,
 };
 
+// Matches a trailing `/ var(...)` (modern rgb/hsl slash syntax) or a
+// trailing `, var(...)` before the closing paren (legacy rgba/hsla comma
+// syntax) — i.e. an alpha argument culori can't resolve to a number because
+// it's a custom-property reference rather than a literal. The RGB/HSL
+// channels before it are still concrete; only the alpha is unresolvable.
+const VARIABLE_ALPHA_RE = /\s*[,/]\s*var\([^)]*\)\s*(?=\))/i;
+
 /**
  * Reduce a CSS colour to one canonical `#rrggbb` key.
  *
@@ -68,12 +75,28 @@ const RAMP_LIGHTNESS: Record<(typeof RAMP_STOPS)[number], number> = {
  * `transparent` to `#000000` at zero alpha, and admitting that would put
  * black into the palette of every site that uses `transparent` anywhere,
  * which is all of them.
+ *
+ * Caveat on the variable-alpha path below: a stripped `var()` alpha is
+ * treated as opaque, so a colour whose custom property happens to resolve to
+ * `0` at runtime is admitted where a literal `rgba(...,0)` would be dropped.
+ * Resolving it would mean evaluating the cascade, which this static pass
+ * cannot do; admitting a real declared colour is the better error for palette
+ * extraction than losing every var()-driven colour on the page.
  */
 export function canonicalizeColor(raw: string): string | null {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
   if (trimmed.length === 0) return null;
-  const parsed = parse(trimmed);
+  let parsed = parse(trimmed);
+  // culori refuses the whole colour when only the alpha channel is a
+  // `var()` reference it can't resolve to a number, even though the RGB/HSL
+  // channels are concrete. Since partial alpha is already dropped from the
+  // canonical key above, an unresolvable alpha is no different from a
+  // resolvable one for this function's purposes — strip it and retry rather
+  // than losing a real brand colour to an opacity variable.
+  if (parsed === undefined && VARIABLE_ALPHA_RE.test(trimmed)) {
+    parsed = parse(trimmed.replace(VARIABLE_ALPHA_RE, ''));
+  }
   if (parsed === undefined) return null;
   if (parsed.alpha === 0) return null;
   const hex = formatHex(parsed);

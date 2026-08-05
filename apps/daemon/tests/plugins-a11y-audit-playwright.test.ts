@@ -123,6 +123,45 @@ describe('a11y-audit browser lifecycle', () => {
   });
 });
 
+/** Renders nothing at load; injects an inaccessible image ~250ms later. */
+const DEFERRED_PAGE = `<!doctype html>
+<html lang="en">
+  <head><title>Deferred</title></head>
+  <body>
+    <main id="root"></main>
+    <script>
+      setTimeout(function () {
+        var img = document.createElement('img');
+        img.src = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+        document.getElementById('root').appendChild(img);
+      }, 250);
+    </script>
+  </body>
+</html>`;
+
+describe('a11y-audit waits for the page to render', () => {
+  it(
+    'catches a violation introduced after the load event',
+    async () => {
+      // Auditing at `load` measures whatever the server sent, which for a
+      // client-rendered artifact is an empty shell. axe then finds nothing
+      // and reports a pass for a page it never actually saw — the same
+      // "unmeasured counted as passing" failure this atom exists to prevent,
+      // just relocated from the runner into the browser.
+      const target = await artifact('deferred.html', DEFERRED_PAGE);
+      const report = await runA11yAudit({
+        cwd: tmp,
+        target,
+        analyzeFn: playwrightAxeAnalyzer({ browser }),
+      });
+
+      expect(report.violations.map((v) => v.id)).toContain('image-alt');
+      expect(report.signals['a11y.passing']).toBe(false);
+    },
+    BROWSER_TIMEOUT,
+  );
+});
+
 describe('a11y-audit against real chromium + axe-core', () => {
   it(
     'fails the gate on a page with genuine WCAG violations',

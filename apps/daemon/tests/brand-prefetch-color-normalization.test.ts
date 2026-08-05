@@ -59,6 +59,27 @@ describe('normalizeColor — formats it already handled stay handled', () => {
     expect(normalizeColor('')).toBeNull();
     expect(normalizeColor('not-a-color')).toBeNull();
   });
+
+  it('still drops a fully transparent literal', () => {
+    expect(normalizeColor('rgba(255,0,0,0)')).toBeNull();
+  });
+});
+
+describe('normalizeColor — concrete channels with a variable alpha', () => {
+  // culori's `parse` returns undefined for a value whose channels are
+  // concrete but whose alpha is a `var()` reference — it can't resolve the
+  // alpha to a number and refuses the whole colour. The hand-rolled parser
+  // this replaced only ever read the first three channels, so it recovered
+  // `#0a5cff` from these same literals. Losing the colour outright is worse
+  // than the alpha imprecision that was already accepted everywhere else in
+  // this module: the RGB channels ARE the brand colour on the page.
+  it('recovers the colour from modern rgb() syntax with a var() alpha', () => {
+    expect(normalizeColor('rgb(10 92 255 / var(--opacity))')).toBe('#0a5cff');
+  });
+
+  it('recovers the colour from legacy rgba() syntax with a var() alpha', () => {
+    expect(normalizeColor('rgba(10, 92, 255, var(--a))')).toBe('#0a5cff');
+  });
 });
 
 describe('extractColors', () => {

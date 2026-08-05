@@ -46,6 +46,69 @@ export interface PlaywrightAxeAnalyzerOptions {
 
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 
+/** Mutation-free interval that counts as "the page has stopped rendering". */
+const SETTLE_QUIET_MS = 300;
+
+/**
+ * Wait for the page to stop changing before auditing it.
+ *
+ * `load` fires when the server's bytes are parsed, which for a
+ * client-rendered artifact is an empty shell. Auditing there finds nothing
+ * and reports a pass for a page axe never saw — the same "unmeasured counted
+ * as passing" failure the runner is built to prevent, relocated into the
+ * browser.
+ *
+ * Both waits are bounded and swallow their own timeout: a page that never
+ * goes quiet (a poller, an infinite animation) should still be audited in
+ * whatever state it reached, not turned into a skipped audit.
+ */
+async function settlePage(page: Awaited<ReturnType<Awaited<ReturnType<Browser['newContext']>>['newPage']>>, budgetMs: number): Promise<void> {
+  // One shared deadline for both waits. Giving each its own `budgetMs` would
+  // let settling consume twice its allotment and push the whole audit past
+  // the caller's timeout, turning a slow-but-healthy page into a `skipped`
+  // report — a false negative that erodes trust in "skipped" as a signal.
+  const deadline = Date.now() + budgetMs;
+  await page.waitForLoadState('networkidle', { timeout: budgetMs }).catch(() => {});
+  const remaining = Math.max(0, deadline - Date.now());
+  if (remaining === 0) return;
+  await page
+    .evaluate(
+      ({ quiet, max }: { quiet: number; max: number }) =>
+        new Promise<void>((resolve) => {
+          const g = globalThis as unknown as {
+            document: unknown;
+            MutationObserver: new (cb: () => void) => {
+              observe: (t: unknown, o: unknown) => void;
+              disconnect: () => void;
+            };
+            setTimeout: (fn: () => void, ms: number) => number;
+            clearTimeout: (id: number) => void;
+          };
+          let quietTimer = 0;
+          const observer = new g.MutationObserver(() => {
+            g.clearTimeout(quietTimer);
+            quietTimer = g.setTimeout(finish, quiet);
+          });
+          function finish() {
+            observer.disconnect();
+            g.clearTimeout(quietTimer);
+            g.clearTimeout(hardStop);
+            resolve();
+          }
+          const hardStop = g.setTimeout(finish, max);
+          observer.observe((g.document as { documentElement: unknown }).documentElement, {
+            subtree: true,
+            childList: true,
+            attributes: true,
+            characterData: true,
+          });
+          quietTimer = g.setTimeout(finish, quiet);
+        }),
+      { quiet: Math.min(SETTLE_QUIET_MS, remaining), max: remaining },
+    )
+    .catch(() => {});
+}
+
 function targetToUrl(target: string): string {
   return /^(?:https?|file):\/\//iu.test(target) ? target : pathToFileURL(target).href;
 }
@@ -139,6 +202,9 @@ export function playwrightAxeAnalyzer(
         // load is not raced by the outer timer and reported as unmeasured.
         timeout: Math.max(1_000, Math.floor(timeoutMs * 0.6)),
       });
+      // Budget: navigation gets 60%, settling 25%, leaving headroom for axe
+      // itself inside the caller's timeout.
+      await settlePage(page, Math.max(500, Math.floor(timeoutMs * 0.25)));
       await page.addScriptTag({ content: axeSource });
 
       // Project the result down inside the page: axe attaches every check's

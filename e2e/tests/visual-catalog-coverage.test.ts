@@ -21,6 +21,7 @@ import {
   discoverCatalogTargets,
   selectCatalogShard,
 } from '../lib/playwright/catalog.js';
+import { CATALOG_COVERAGE_PIN } from '../resources/catalog-coverage-pin.js';
 
 // Floors, not exact counts: the catalogue grows, and a test that has to be
 // edited every time someone adds a design system would be edited without
@@ -60,6 +61,30 @@ describe('design catalogue visual coverage', () => {
     for (const target of targets.slice(0, 5)) {
       expect(catalogTargetUrl(target).startsWith('file://')).toBe(true);
     }
+  });
+});
+
+describe('catalog coverage pin', () => {
+  // The floors above only catch discovery collapsing wholesale. A single
+  // fixture deletion (e.g. `design-templates/saas-landing/example.html`
+  // removed) still clears both floors and discoverCatalogTargets() skips a
+  // missing fixture silently by design (see catalog.ts), so that loss is
+  // invisible to every other check in this file. This pin is a committed
+  // snapshot of catalogue ids known to ship a fixture; it is a floor, not an
+  // exact-match lock, so discovering something new is never a failure here.
+  const targets = discoverCatalogTargets();
+  const discoveredIds = new Set(targets.map((t) => `${t.kind}/${t.id}`));
+
+  it('still discovers every pinned fixture', () => {
+    const missing = CATALOG_COVERAGE_PIN.filter(
+      (entry) => !discoveredIds.has(`${entry.kind}/${entry.id}`),
+    );
+    expect(
+      missing,
+      `pinned fixture(s) no longer discovered: ${missing
+        .map((entry) => `${entry.kind}/${entry.id}`)
+        .join(', ')}`,
+    ).toEqual([]);
   });
 });
 

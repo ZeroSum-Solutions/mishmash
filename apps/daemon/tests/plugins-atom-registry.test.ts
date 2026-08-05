@@ -124,6 +124,35 @@ describe('runStageWithRegistry: signal aggregation', () => {
     expect(out.critiqueSummary).toBeNull();
   });
 
+  it('merges a higher-is-worse numeric signal by taking the worst, not the lowest', async () => {
+    // `critique.score` is better when higher, so lowest-wins is pessimistic
+    // for it. `a11y.violations` is the opposite — more violations is worse —
+    // so lowest-wins would be *optimistic* and let a stage report zero
+    // problems while a worker had just observed five.
+    registerAtomWorker({
+      id:  'a11y-clean',
+      run: () => ({ signals: { 'a11y.violations': 0, 'a11y.passing': true } }),
+    });
+    registerAtomWorker({
+      id:  'a11y-dirty',
+      run: () => ({ signals: { 'a11y.violations': 5, 'a11y.passing': false } }),
+    });
+    const stage: PipelineStage = { id: 's', atoms: ['a11y-clean', 'a11y-dirty'] };
+    const out = await runStageWithRegistry(ctxFor(stage));
+
+    expect(out.signals['a11y.violations']).toBe(5);
+    expect(out.signals['a11y.passing']).toBe(false);
+  });
+
+  it('still merges a higher-is-better numeric signal by taking the lowest', async () => {
+    registerAtomWorker({ id: 'sc-low',  run: () => ({ signals: { 'critique.score': 2 } }) });
+    registerAtomWorker({ id: 'sc-high', run: () => ({ signals: { 'critique.score': 5 } }) });
+    const stage: PipelineStage = { id: 's', atoms: ['sc-low', 'sc-high'] };
+    const out = await runStageWithRegistry(ctxFor(stage));
+
+    expect(out.signals['critique.score']).toBe(2);
+  });
+
   it('pessimistically merges numeric signals (lowest wins) across multiple atoms', async () => {
     registerAtomWorker({
       id:  'judge-low',

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { harvestFonts, type FontFile } from "./fonts.js";
 import { canonicalizeColor } from "./color-space.js";
+import { analyzeCssFacts, type CssColorRoles } from "./css-facts.js";
 import { fetchExternalBrandAsset } from "./safe-fetch.js";
 
 /**
@@ -403,6 +404,47 @@ function sortColorCandidates(
     out.push(candidate);
   }
   return out;
+}
+
+/**
+ * Attach the colour role that PARSED css actually observed.
+ *
+ * `colorSourceForMatch` infers a role by regex-scanning the CSS text before
+ * a match, which is wrong whenever the declaration is minified, wraps a line,
+ * or hides inside a shorthand — and the role is what decides whether a colour
+ * becomes the brand's text colour or its background. `analyzeCssFacts` knows
+ * the real property, so its answer is added as separate `role:*` evidence
+ * beside the existing `prop:*` guess rather than replacing it.
+ *
+ * Strictly additive: the candidate set, its order, and its counts are left
+ * exactly as the extractor ranked them. Changing those here would silently
+ * re-rank a client's palette.
+ */
+export function annotateColorRoles(
+  candidates: ColorCandidate[],
+  css: string,
+): ColorCandidate[] {
+  if (candidates.length === 0) return candidates;
+
+  const byRole = analyzeCssFacts(css).colorsByRole;
+  const roleFor = new Map<string, Set<string>>();
+  for (const role of Object.keys(byRole) as (keyof CssColorRoles)[]) {
+    for (const { value } of byRole[role]) {
+      const existing = roleFor.get(value) ?? new Set<string>();
+      existing.add(`role:${role}`);
+      roleFor.set(value, existing);
+    }
+  }
+  if (roleFor.size === 0) return candidates;
+
+  return candidates.map((candidate) => {
+    const roles = roleFor.get(candidate.hex);
+    if (!roles) return candidate;
+    // Same 12-entry cap `sortColorCandidates` applies, so annotation cannot
+    // grow a candidate's evidence list past the extractor's own bound.
+    const sources = new Set([...(candidate.sources ?? []), ...roles]);
+    return { ...candidate, sources: [...sources].slice(0, 12) };
+  });
 }
 
 export function extractColors(css: string): ColorCandidate[] {
@@ -844,7 +886,7 @@ async function harvestFromHtml(
     for (const r of gfResults) if (r) cssChunks.push(r.text);
     allCss = cssChunks.join("\n");
 
-    colors = extractColors(allCss);
+    colors = annotateColorRoles(extractColors(allCss), allCss);
     ({ fonts, fontFaceFamilies } = extractFonts(allCss));
   }
   onProgress("styles", `${colors.length} colors, ${fonts.length} fonts`);
