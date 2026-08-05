@@ -269,6 +269,47 @@ describe('od project CLI', () => {
     });
   });
 
+  it('keeps option values out of the project deletion target', async () => {
+    stub = await startProjectStubServer();
+
+    const result = await runCli([
+      'project',
+      'delete',
+      '--daemon-url',
+      stub.baseUrl,
+      'project-1',
+      '--json',
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout)).toEqual({ ok: true });
+    expect(stub.requests).toHaveLength(1);
+    expect(stub.requests[0]).toMatchObject({
+      method: 'DELETE',
+      url: '/api/projects/project-1',
+    });
+  });
+
+  it('rejects project deletion when only string-flag values are present', async () => {
+    stub = await startProjectStubServer();
+
+    const result = await runCli([
+      'project',
+      'delete',
+      '--name',
+      'project-1',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(2);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Usage: od project delete <id>');
+    expect(stub.requests).toHaveLength(0);
+  });
+
   it('keeps the human-readable project deletion output without --json', async () => {
     stub = await startProjectStubServer();
 

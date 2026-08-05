@@ -6683,7 +6683,7 @@ Common options:
       return;
     }
     case 'delete': {
-      const id = rest.find((a) => !a.startsWith('-'));
+      const id = positionalArgs(rest, PROJECT_STRING_FLAGS)[0];
       if (!id) {
         console.error('Usage: od project delete <id>');
         process.exit(2);
