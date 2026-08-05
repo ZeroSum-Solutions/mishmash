@@ -1,0 +1,39 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "a11y-audit",
+  "title": "Accessibility audit",
+  "version": "0.1.0",
+  "publishedAt": "2026-08-05T00:00:00Z",
+  "description": "Run axe-core against the rendered artifact and emit a11y.passing + a11y.violations signals.",
+  "license": "MIT",
+  "author": {
+    "name": "MishMash",
+    "url": "https://github.com/nexu-io"
+  },
+  "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/atoms/a11y-audit",
+  "tags": [
+    "atom",
+    "first-party",
+    "new-generation",
+    "tune-collab",
+    "accessibility"
+  ],
+  "compat": {
+    "agentSkills": [
+      {
+        "path": "./SKILL.md"
+      }
+    ]
+  },
+  "od": {
+    "kind": "atom",
+    "scenario": "new-generation",
+    "mode": "critique",
+    "capabilities": [
+      "prompt:inject",
+      "fs:read",
+      "fs:write"
+    ]
+  }
+}

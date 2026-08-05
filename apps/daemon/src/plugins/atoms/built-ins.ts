@@ -9,15 +9,23 @@
 // watcher would force the agent into a fixed protocol we explicitly
 // kept out of scope.
 //
-// One atom does have a daemon-observable signal today:
-// `critique-theater`. The worker walks the run's devloop audit log
+// Two atoms do have daemon-observable signals today.
+//
+// `critique-theater` walks the run's devloop audit log
 // (`run_devloop_iterations.critique_summary`) and surfaces the
 // most recent numeric score it finds. Picking "latest" rather than
 // "lowest" matches real critique-loop semantics: the agent revises
 // based on prior critique, so each new score reflects the current
 // quality bar, not the worst earlier attempt.
+//
+// `a11y-audit` runs axe-core against the rendered artifact on disk.
+// Unlike critique-theater it does not read the agent's own account of
+// its work — it measures the artifact directly, which is the point:
+// an accessibility gate the model can talk its way past is not a gate.
+// It needs `ctx.projectRoot` and stays silent without one.
 
 import { FIRST_PARTY_ATOMS } from '../atoms.js';
+import { createA11yAuditWorker } from './a11y-audit-worker.js';
 import {
   registerAtomWorker,
   type AtomOutcome,
@@ -34,6 +42,14 @@ export function registerBuiltInAtomWorkers(): void {
         id:       atom.id,
         describe: 'reads run_devloop_iterations.critique_summary for real critique scores',
         run:      critiqueTheaterWorker,
+      });
+      continue;
+    }
+    if (atom.id === 'a11y-audit') {
+      registerAtomWorker({
+        id:       atom.id,
+        describe: 'runs axe-core against the rendered artifact for objective WCAG signals',
+        run:      createA11yAuditWorker(),
       });
       continue;
     }

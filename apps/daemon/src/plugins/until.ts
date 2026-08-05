@@ -27,6 +27,14 @@ export interface UntilSignals {
   // collapsing pass/fail into critique.score.
   'build.passing'?:  boolean | undefined;
   'tests.passing'?:  boolean | undefined;
+  // Promoted by the a11y-audit atom. `a11y.violations` counts violating
+  // *nodes* at or above the atom's fail threshold (serious/critical by
+  // default), so a plan can write `until: 'a11y.passing == true'` or
+  // `until: 'a11y.violations <= 3'`. Both stay undefined when the audit
+  // could not run — see the atom's docblock for why silence beats a
+  // fabricated pass.
+  'a11y.passing'?:    boolean | undefined;
+  'a11y.violations'?: number | undefined;
 }
 
 const SIGNAL_KINDS: Record<keyof UntilSignals, SignalKind> = {
@@ -36,6 +44,8 @@ const SIGNAL_KINDS: Record<keyof UntilSignals, SignalKind> = {
   'preview.ok':     'boolean',
   'build.passing':  'boolean',
   'tests.passing':  'boolean',
+  'a11y.passing':    'boolean',
+  'a11y.violations': 'number',
 };
 
 export type UntilOp = '==' | '!=' | '>=' | '<=' | '>' | '<';

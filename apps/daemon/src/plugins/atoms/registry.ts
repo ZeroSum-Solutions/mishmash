@@ -43,6 +43,13 @@ export interface AtomWorkerContext {
   iteration:      number;
   snapshot:       AppliedPluginSnapshot;
   runEvents?:     RunEventForAnalyticsObservability[];
+  // Resolved filesystem root of the run's project, for atoms that observe
+  // artifacts on disk rather than rows in the run's audit log (`a11y-audit`
+  // reads the rendered artifact). Optional because most atoms never touch
+  // the filesystem, and because a caller that cannot resolve a root must be
+  // able to say so — a filesystem atom given no root stays silent rather
+  // than guessing a path.
+  projectRoot?:   string | undefined;
 }
 
 export interface AtomOutcome {

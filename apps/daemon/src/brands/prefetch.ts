@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { harvestFonts, type FontFile } from "./fonts.js";
+import { canonicalizeColor } from "./color-space.js";
 import { fetchExternalBrandAsset } from "./safe-fetch.js";
 
 /**
@@ -289,51 +290,20 @@ function stripTags(html: string): string {
 
 // ─── colors ──────────────────────────────────────────────────────────
 
-function clamp255(n: number): number {
-  return Math.max(0, Math.min(255, Math.round(n)));
-}
-
-function toHexPair(n: number): string {
-  return clamp255(n).toString(16).padStart(2, "0");
-}
-
-/** Normalize a CSS color literal to #rrggbb. Returns null for unsupported
- *  syntaxes (oklch, var() refs, named colors) — those are counted raw. */
+/**
+ * Normalize a CSS color literal to `#rrggbb`, or null when the value carries
+ * no colour of its own (`var()`, `currentColor`, `transparent`).
+ *
+ * Delegates to `color-space.ts` (culori). The previous hand-rolled parser
+ * read hex / rgb / hsl only and documented the rest as "counted raw" — but
+ * the scanning regex in `extractColors` also matches `oklch(...)`, so an
+ * oklch literal reached `addColorCandidate`'s raw-string fallback and
+ * entered the palette as its own source text instead of as a colour. Named
+ * colours, `lab()`, `hwb()`, and `color()` had the same problem, and two
+ * spellings of one colour ranked as two separate brand colours.
+ */
 export function normalizeColor(raw: string): string | null {
-  const v = raw.trim().toLowerCase();
-  const hex = /^#([0-9a-f]{3,8})$/.exec(v);
-  if (hex) {
-    let h = hex[1];
-    if (h.length === 3 || h.length === 4) {
-      h = h.slice(0, 3).split("").map((c) => c + c).join("");
-    } else if (h.length === 8) {
-      h = h.slice(0, 6);
-    } else if (h.length !== 6) {
-      return null;
-    }
-    return `#${h}`;
-  }
-  const rgb = /^rgba?\(\s*([\d.]+)\s*[, ]\s*([\d.]+)\s*[, ]\s*([\d.]+)/.exec(v);
-  if (rgb) {
-    return `#${toHexPair(Number(rgb[1]))}${toHexPair(Number(rgb[2]))}${toHexPair(Number(rgb[3]))}`;
-  }
-  const hsl = /^hsla?\(\s*([\d.]+)(?:deg)?\s*[, ]\s*([\d.]+)%\s*[, ]\s*([\d.]+)%/.exec(v);
-  if (hsl) {
-    const [h, s, l] = [Number(hsl[1]) / 360, Number(hsl[2]) / 100, Number(hsl[3]) / 100];
-    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-    const p = 2 * l - q;
-    const hue = (t: number) => {
-      let x = t;
-      if (x < 0) x += 1;
-      if (x > 1) x -= 1;
-      if (x < 1 / 6) return p + (q - p) * 6 * x;
-      if (x < 1 / 2) return q;
-      if (x < 2 / 3) return p + (q - p) * (2 / 3 - x) * 6;
-      return p;
-    };
-    return `#${toHexPair(hue(h + 1 / 3) * 255)}${toHexPair(hue(h) * 255)}${toHexPair(hue(h - 1 / 3) * 255)}`;
-  }
-  return null;
+  return canonicalizeColor(raw);
 }
 
 function luma(hex: string): number {
@@ -349,7 +319,15 @@ function addColorCandidate(
   source?: string,
   weight = 1,
 ): void {
-  const norm = normalizeColor(raw) ?? raw.trim().toLowerCase();
+  // Drop what will not normalise rather than keying the palette on its
+  // source text. The old raw-string fallback existed because the previous
+  // parser could not read `oklch()` and counting it raw beat losing it;
+  // `canonicalizeColor` reads it now, so the only values still failing here
+  // are ones that carry no colour at all (`var()`, `currentColor`, alpha-0).
+  // Keeping those would put literals like `rgba(255,0,0,0)` into a palette
+  // of hexes, where `luma()` also mis-ranks them because it assumes #rrggbb.
+  const norm = normalizeColor(raw);
+  if (norm === null) return;
   const existing = counts.get(norm) ?? { count: 0, sources: new Set<string>() };
   existing.count += weight;
   if (source) existing.sources.add(source);

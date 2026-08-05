@@ -167,6 +167,48 @@ gate. New and repaired UI tests must hold the following invariants.
 - E2E tests may validate cross-app/resource consistency, but must not treat one app's private implementation as a shared helper for another app. Keep test-only helpers local to `e2e/lib/` or promote reusable logic to a pure package such as `packages/contracts`.
 - E2E imports may use `@/*` for `lib/*`; keep this alias local to the e2e package.
 
+## Design catalogue visual baselines
+
+`ui/visual-catalog.test.ts` is the repository's pixel-regression lane over the
+statically renderable catalogue: `design-systems/<id>/components.html` and
+`design-templates/<id>/example.html`. Discovery and shard selection live in
+`lib/playwright/catalog.ts`; the inventory guard is
+`tests/visual-catalog-coverage.test.ts`.
+
+Distinguish it from the other `visual-*.test.ts` files. Those use
+`captureVisual`, which writes a PNG to a reports directory for a human to look
+at and **asserts nothing** — a capture gallery. This lane uses
+`toHaveScreenshot` against a baseline, so it fails on a change nobody went
+looking for.
+
+- The lane is hermetic: every non-`file:`/`data:`/`blob:` request is aborted.
+  About half the template examples reference external fonts or images, and a
+  fixture must render identically with or without a network.
+- Shard with `OD_VISUAL_CATALOG_SHARDS` (total) and `OD_VISUAL_CATALOG_SHARD`
+  (1-based). Selection strides rather than slices, so every shard mixes both
+  catalogues instead of one shard drawing all the slow decks.
+- `maxDiffPixelRatio` is 0.002 — enough to absorb antialiasing jitter, not
+  enough to hide a restyled component.
+
+**Baselines are not committed, and that is a pending maintainer decision
+rather than an oversight.** Playwright suffixes baselines per platform
+(`-darwin`, `-linux`), and a full run is roughly 255 fixtures at ~300 KB each,
+on the order of 70 MB per platform. Committing that here is a repo-size call
+worth making deliberately. Until it is made:
+
+- The lane is wired into no merge gate.
+- Bootstrap baselines for the current platform, then compare against them
+  (the e2e script list is a closed allowlist enforced by `pnpm guard`, so this
+  lane is driven by the raw Playwright command like any other single case):
+
+  ```bash
+  pnpm exec playwright test -c playwright.visual.config.ts visual-catalog --update-snapshots
+  pnpm exec playwright test -c playwright.visual.config.ts visual-catalog
+  ```
+
+- Baselines from one platform are not usable on another; CI must generate its
+  own on the platform it runs.
+
 ## Commands
 
 Run commands from this directory:

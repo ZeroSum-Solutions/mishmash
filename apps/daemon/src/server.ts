@@ -4353,6 +4353,24 @@ export async function startServer({
     const projectIdForRun = run.projectId
       ?? snapshot.resolvedContext?.items?.[0]?.id
       ?? 'project-unknown';
+    // Filesystem root for atoms that must observe the artifact itself
+    // (`a11y-audit`) rather than the agent's account of it. Resolution is
+    // best-effort: an unknown project, an unavailable sandbox import, or a
+    // malformed id all leave this undefined, and filesystem atoms then stay
+    // silent instead of auditing a guessed path.
+    let projectRootForRun;
+    try {
+      const projectRow = getProject(dbHandle, projectIdForRun);
+      if (projectRow) {
+        projectRootForRun = resolveProjectDir(
+          PROJECTS_DIR,
+          projectIdForRun,
+          projectRow.metadata,
+        );
+      }
+    } catch {
+      projectRootForRun = undefined;
+    }
     const runnerMode = process.env.OD_PIPELINE_RUNNER === 'stub'
       ? 'stub'
       : 'registry';
@@ -4377,6 +4395,7 @@ export async function startServer({
           iteration,
           snapshot:       stageSnapshot,
           runEvents:      run.events,
+          projectRoot:    projectRootForRun,
         });
         return {
           signals:         outcome.signals,
