@@ -159,7 +159,15 @@ test('[P0] @critical workspace restores the last manually selected file tab afte
   await expect(restoredManualFileTab).toHaveAttribute('aria-selected', 'true');
   const restoredArtifactTab = page.getByRole('tab', { name: /workspace-artifact\.html/i });
   if ((await restoredArtifactTab.count()) === 0) {
+    // The tab strip and the chat log restore from different sources: tabs come
+    // back with the workspace state, while the conversation is re-fetched over
+    // HTTP. The manual-tab assertions above can therefore pass while the chat
+    // log is still empty, so the produced-files card is not on screen yet.
+    // Wait for the card itself before reaching into it -- asserting straight on
+    // the button reported "element(s) not found" and burned the default 10s
+    // timeout plus a full retry (~2 minutes) whenever the chat fetch was slow.
     const turnCard = page.locator('.msg.assistant').filter({ hasText: 'workspace-artifact.html' }).first();
+    await expect(turnCard).toBeVisible({ timeout: 30_000 });
     const openButton = turnCard.getByRole('button', { name: /^Open$/ });
     await expect(openButton).toBeVisible();
     await openButton.click();

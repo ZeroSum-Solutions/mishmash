@@ -434,6 +434,19 @@ jobs:
           pnpm --filter @open-design/web build:sidecar
 
       - name: E2E Vitest
+        env:
+          # The motion gate measures wall-clock rAF frame gaps, so it reads CPU
+          # contention from *other* vitest workers as jank in the fixture under
+          # test. When the repo became public, nproc went 2 -> 4 and
+          # configure-ci-parallelism's nproc/2 took workers 1 -> 2; the
+          # reference fixture then went from droppedFrameCount 1 to a median of
+          # 8 against a limit of 6 and failed repeatedly, while its Long Task
+          # total went 0 -> 136ms without its own code changing. Measured on
+          # this runner: pinning one worker restores reference to 1 and long
+          # tasks to 0, and the gate still flags the janky fixture at 27.
+          # Costs ~118s (313s -> 431s) and stays under the ~485s UI P0 critical
+          # path, so it does not move PR wall-clock.
+          OD_E2E_VITEST_MAX_WORKERS: 1
         run: pnpm --filter @open-design/e2e test
 
   playwright_critical:
