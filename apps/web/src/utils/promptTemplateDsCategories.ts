@@ -15,13 +15,7 @@ export function inferPromptTemplateCategoriesForDs(
   };
 
   if (/anime|manga|illustration|creative|artistic|editorial/i.test(blob)) {
-    add([
-      'Anime',
-      'Anime / Manga',
-      'Illustration',
-      'Profile / Avatar',
-      'Social Media Post',
-    ]);
+    add(['Anime', 'Anime / Manga', 'Illustration', 'Social Media Post']);
   }
   if (/game|gaming|\bgui\b|\bui\b|interface/i.test(blob)) {
     add(['Game UI', 'App / Web Design']);
@@ -59,9 +53,6 @@ export function inferPromptTemplateCategoriesForDs(
   }
   if (/infographic|data\s+viz|chart|diagram/i.test(blob)) {
     add(['Infographic', 'Data']);
-  }
-  if (/profile|avatar|portrait/i.test(blob)) {
-    add(['Profile / Avatar']);
   }
 
   return out.size > 0 ? [...out] : null;

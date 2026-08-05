@@ -132,7 +132,6 @@ describe('extractSubcategories', () => {
     expect(extractSubcategories(fixture({ id: 'brand', tags: ['typography'], od: { mode: 'image' } }))).toEqual(['brand-visuals']);
     expect(extractSubcategories(fixture({ id: 'storyboard', tags: ['storyboard'], od: { mode: 'image' } }))).toEqual(['storyboards-motion-refs']);
     expect(extractSubcategories(fixture({ id: 'social', tags: ['social-media-post'], od: { mode: 'image' } }))).toEqual(['social-content']);
-    expect(extractSubcategories(fixture({ id: 'portrait', tags: ['profile-avatar'], od: { mode: 'image' } }))).toEqual(['avatar-portrait']);
     expect(extractSubcategories(fixture({ id: 'illustration', tags: ['illustration'], od: { mode: 'image' } }))).toEqual(['illustration-style']);
   });
 
@@ -185,7 +184,7 @@ describe('buildFacetCatalog', () => {
       fixture({ id: 'prototype', tags: ['dashboard'], od: { mode: 'prototype' } }),
       fixture({ id: 'example-live-artifact', tags: ['live-artifact'], od: { mode: 'prototype' } }),
       fixture({ id: 'deck', tags: ['pitch-deck'], od: { mode: 'deck' } }),
-      fixture({ id: 'image', tags: ['profile-avatar'], od: { mode: 'image' } }),
+      fixture({ id: 'image', tags: ['illustration'], od: { mode: 'image' } }),
       fixture({ id: 'video', tags: ['cinematic'], od: { mode: 'video' } }),
       fixture({ id: 'hf', tags: ['hyperframes'], od: { mode: 'video' } }),
       fixture({ id: 'audio', od: { mode: 'audio' } }),
@@ -234,7 +233,6 @@ describe('buildFacetCatalog', () => {
       'brand-visuals',
       'storyboards-motion-refs',
       'social-content',
-      'avatar-portrait',
       'illustration-style',
     ]);
     expect((catalog.subcategory.video ?? []).map((o) => o.slug)).toEqual([
@@ -256,7 +254,7 @@ describe('applyFacetSelection', () => {
     fixture({ id: 'prototype-app', tags: ['mobile-app'], od: { mode: 'prototype' } }),
     fixture({ id: 'example-live-artifact', tags: ['live-artifact'], od: { mode: 'prototype' } }),
     fixture({ id: 'deck', od: { mode: 'deck', category: 'fundraising-pitch' } }),
-    fixture({ id: 'image', tags: ['profile-avatar'], od: { mode: 'image' } }),
+    fixture({ id: 'image', tags: ['illustration'], od: { mode: 'image' } }),
     fixture({ id: 'video', tags: ['cinematic'], od: { mode: 'video' } }),
     fixture({ id: 'hf', tags: ['hyperframes'], od: { mode: 'video' } }),
     fixture({ id: 'audio', od: { mode: 'audio' } }),

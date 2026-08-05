@@ -52,15 +52,14 @@ export const CURATED_LIVE_ARTIFACT_PLUGIN_IDS = [
 
 // The 2026-07-30 gallery curation retired every previous deck, video, and
 // hyperframes curated pick (including the pinned community slides batch)
-// and all but one image pick. Empty arrays fall back to popularity +
+// and all but one image pick; the surviving image pick went with the
+// avatar/portrait removal. Empty arrays fall back to popularity +
 // visual-appeal ordering for those chips; re-populate only from curator
 // picks that are on the keep list (the hyperframes picks below were
 // re-populated by the 2026-07-31 reference-integration pass).
 const CURATED_DECK_PLUGIN_IDS = [] as const;
 
-const CURATED_IMAGE_PLUGIN_IDS = [
-  'image-template-profile-avatar-anime-girl-to-cinematic-photo',
-] as const;
+const CURATED_IMAGE_PLUGIN_IDS = [] as const;
 
 const CURATED_VIDEO_PLUGIN_IDS = [] as const;
 

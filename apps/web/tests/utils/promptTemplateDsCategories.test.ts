@@ -18,7 +18,16 @@ describe('inferPromptTemplateCategoriesForDs', () => {
 
   it('maps anime/illustration keywords to the illustration bucket', () => {
     const cats = inferPromptTemplateCategoriesForDs(ds({ category: 'Anime', title: 'Slice of life' }));
-    expect(cats).toEqual(expect.arrayContaining(['Anime', 'Illustration', 'Profile / Avatar']));
+    expect(cats).toEqual(expect.arrayContaining(['Anime', 'Anime / Manga', 'Illustration']));
+  });
+
+  it('no longer routes portrait keywords to the retired Profile / Avatar bucket', () => {
+    // The avatar/portrait templates were removed from the product, so the
+    // bucket has no members left to map to.
+    expect(inferPromptTemplateCategoriesForDs(ds({ category: 'Portrait', title: 'Headshot' }))).toBeNull();
+    expect(
+      inferPromptTemplateCategoriesForDs(ds({ category: 'Anime', title: 'Avatar portraits' })),
+    ).not.toEqual(expect.arrayContaining(['Profile / Avatar']));
   });
 
   it('maps gaming/UI keywords to Game UI and App/Web Design', () => {
