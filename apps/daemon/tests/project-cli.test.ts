@@ -71,6 +71,14 @@ async function startProjectStubServer(): Promise<StubServer> {
         }));
         return;
       }
+      if (captured.method === 'POST' && captured.url === '/api/projects') {
+        res.statusCode = 201;
+        res.end(JSON.stringify({
+          project: { id: 'project-1', name: 'Created project' },
+          conversationId: 'conversation-create',
+        }));
+        return;
+      }
       if (captured.method === 'GET' && captured.url.startsWith('/api/projects/archive-project/archive')) {
         const url = new URL(captured.url, 'http://127.0.0.1');
         const root = url.searchParams.get('root') || '';
@@ -133,6 +141,44 @@ async function runCli(
 }
 
 describe('od project CLI', () => {
+  it('rejects a string flag when the next argument is another flag', async () => {
+    stub = await startProjectStubServer();
+
+    const result = await runCli([
+      'project',
+      'create',
+      '--name',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(2);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('flag --name requires a value');
+    expect(stub.requests).toHaveLength(0);
+  });
+
+  it('accepts a leading-dash string value with explicit equals syntax', async () => {
+    stub = await startProjectStubServer();
+
+    const result = await runCli([
+      'project',
+      'create',
+      '--name=--json',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout)).toMatchObject({ project: { id: 'project-1' } });
+    expect(stub.requests).toHaveLength(1);
+    expect(stub.requests[0]).toMatchObject({ method: 'POST', url: '/api/projects' });
+    expect(JSON.parse(stub.requests[0]!.body)).toMatchObject({ name: '--json' });
+  });
+
   it('creates a design-system project with prompt-file content and JSON output', async () => {
     stub = await startProjectStubServer();
     tempRoot = mkdtempSync(join(tmpdir(), 'od-project-cli-'));

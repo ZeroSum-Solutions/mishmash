@@ -1714,7 +1714,7 @@ function parseFlags(argv, opts = {}) {
     }
     if (stringFlags.has(key)) {
       const next = argv[i + 1];
-      if (next == null) {
+      if (next == null || next.startsWith('--')) {
         throw new Error(`flag --${key} requires a value`);
       }
       out[key] = next;
@@ -6460,7 +6460,13 @@ Common options:
     if (exitCode !== 0) process.exit(exitCode);
     return;
   }
-  const flags = parseFlags(rest, { string: PROJECT_STRING_FLAGS, boolean: PROJECT_BOOLEAN_FLAGS });
+  let flags;
+  try {
+    flags = parseFlags(rest, { string: PROJECT_STRING_FLAGS, boolean: PROJECT_BOOLEAN_FLAGS });
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(2);
+  }
   const base = (await projectDaemonUrl(flags)).replace(/\/$/, '');
   switch (sub) {
     case 'list': {
