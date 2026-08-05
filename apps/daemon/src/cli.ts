@@ -6690,6 +6690,8 @@ Common options:
       }
       const resp = await fetch(`${base}/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (!resp.ok) return structuredHttpFailure(resp, 'project-not-found');
+      const data = await resp.json();
+      if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
       console.log(`[project] deleted ${id}`);
       return;
     }

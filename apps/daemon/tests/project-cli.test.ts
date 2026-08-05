@@ -79,6 +79,11 @@ async function startProjectStubServer(): Promise<StubServer> {
         }));
         return;
       }
+      if (captured.method === 'DELETE' && captured.url === '/api/projects/project-1') {
+        res.statusCode = 200;
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
       if (captured.method === 'GET' && captured.url.startsWith('/api/projects/archive-project/archive')) {
         const url = new URL(captured.url, 'http://127.0.0.1');
         const root = url.searchParams.get('root') || '';
@@ -240,6 +245,49 @@ describe('od project CLI', () => {
       url: '/api/projects/source-project/duplicate',
     });
     expect(JSON.parse(stub.requests[0]!.body)).toEqual({ name: 'Duplicate Copy' });
+  });
+
+  it('prints the project deletion response as JSON with --json', async () => {
+    stub = await startProjectStubServer();
+
+    const result = await runCli([
+      'project',
+      'delete',
+      'project-1',
+      '--json',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout)).toEqual({ ok: true });
+    expect(stub.requests).toHaveLength(1);
+    expect(stub.requests[0]).toMatchObject({
+      method: 'DELETE',
+      url: '/api/projects/project-1',
+    });
+  });
+
+  it('keeps the human-readable project deletion output without --json', async () => {
+    stub = await startProjectStubServer();
+
+    const result = await runCli([
+      'project',
+      'delete',
+      'project-1',
+      '--daemon-url',
+      stub.baseUrl,
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(result.stdout).toBe('[project] deleted project-1\n');
+    expect(stub.requests).toHaveLength(1);
+    expect(stub.requests[0]).toMatchObject({
+      method: 'DELETE',
+      url: '/api/projects/project-1',
+    });
   });
 
   it('downloads a project archive to the content-disposition filename by default', async () => {
