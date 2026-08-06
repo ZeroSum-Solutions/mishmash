@@ -4,3 +4,18 @@
 // later WR tranches -- see docs/plans/waves/WR-routing.md's Tranche register.
 
 export { currentRoutingPolicyVersion, loadRoutingPolicy } from './policy.js';
+
+// L5 telemetry (WR wave, P1 tranche -- plan §3.2 L5, §3.1). See
+// telemetry.ts's own header for the full design rationale.
+export {
+  computeLaneMeters,
+  ensureRoutingTelemetryTable,
+  getRoutingTelemetryByRunId,
+  listRoutingTelemetry,
+  reconcileRoutedVsObserved,
+  recordRoutingTelemetry,
+  type RoutingReconciliation,
+  type RoutingReconciliationStatus,
+  type RoutingTelemetryFilters,
+  type RoutingTelemetryPagination,
+} from './telemetry.js';

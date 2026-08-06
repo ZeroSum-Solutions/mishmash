@@ -631,6 +631,7 @@ import { registerChatRoutes } from './routes/chat.js';
 import { registerRunRoutes } from './routes/runs.js';
 import { registerUsageRoutes } from './routes/usage.js';
 import { registerRoutingRoutes } from './routes/routing.js';
+import { ensureRoutingTelemetryTable } from './routing/telemetry.js';
 import { registerTerminalRoutes } from './routes/terminal.js';
 import { createTerminalService } from './terminals.js';
 import { confinePreviewCwd, createPreviewService } from './previews.js';
@@ -2574,6 +2575,11 @@ export async function startServer({
   // usage-tracking.ts for why this is a dedicated table rather than a new
   // `messages` column or PersistedAgentEvent kind).
   ensureUsageTable(db);
+  // L5 routing telemetry (WR wave, plan §3.2 L5): own table, migrated once
+  // at startup on the same shared connection -- see
+  // apps/daemon/src/routing/telemetry.ts's header for why this follows
+  // ensureUsageTable's exact pattern.
+  ensureRoutingTelemetryTable(db);
   const design = {
     runs: createChatRunService({
       createSseResponse,
@@ -8632,7 +8638,7 @@ export async function startServer({
     },
   });
   registerUsageRoutes(app, { db });
-  registerRoutingRoutes(app);
+  registerRoutingRoutes(app, db);
 
   // Each routine fire resolves an agent, prepares project/conversation state,
   // and dispatches into the same chat runner used by manual runs.

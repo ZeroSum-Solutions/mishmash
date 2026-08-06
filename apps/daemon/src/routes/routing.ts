@@ -4,22 +4,37 @@
 // telemetry}.ts. Every response here is a documented stub: real policy
 // content, admission control, and dispatch-time routing land in later WR
 // tranches (P1/P2) -- see docs/plans/waves/WR-routing.md's Tranche register.
+import type Database from 'better-sqlite3';
 import type { Express, Request, Response } from 'express';
 import type {
-  LaneMeter,
   RoutingDecision,
   RoutingDecisionPreviewResponse,
   RoutingKey,
   RoutingMetersResponse,
   RoutingPolicyResponse,
+  RoutingTelemetryListResponse,
 } from '@open-design/contracts';
 import { currentRoutingPolicyVersion, loadRoutingPolicy } from '../routing/index.js';
+import { computeLaneMeters, listRoutingTelemetry } from '../routing/telemetry.js';
 
 function queryStringOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-export function registerRoutingRoutes(app: Express): void {
+function queryIntOrUndefined(value: unknown): number | undefined {
+  if (typeof value !== 'string' || value.length === 0) return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * `db` is optional so a route-level test (or a future caller with no
+ * durable telemetry yet) can register these routes without a database --
+ * `/api/routing/meters` and `/api/routing/telemetry` degrade to an honest
+ * empty result rather than throwing. The real daemon boot
+ * (apps/daemon/src/server.ts) always passes its resolved db.
+ */
+export function registerRoutingRoutes(app: Express, db?: Database.Database): void {
   // GET /api/routing/policy -- the loaded policy document + its version.
   app.get('/api/routing/policy', (_req: Request, res: Response) => {
     const policy = loadRoutingPolicy();
@@ -75,11 +90,43 @@ export function registerRoutingRoutes(app: Express): void {
     res.json(response);
   });
 
-  // GET /api/routing/meters -- per-lane routing meters. Empty until P1/P2
-  // land telemetry persistence and real dispatch (CWR-P1-2/CWR-P2-4).
-  app.get('/api/routing/meters', (_req: Request, res: Response) => {
-    const laneMeters: LaneMeter[] = [];
+  // GET /api/routing/meters -- per-lane routing meters, aggregated from the
+  // L5 telemetry table (CWR-P2-4's lane-meter closure). `?windowMs=` scopes
+  // the aggregation to the trailing window; omit for all-time. Real content
+  // once telemetry rows exist (CWR-P1-2); an empty array when `db` was not
+  // supplied (see registerRoutingRoutes's doc comment) or no rows are in
+  // range yet -- same well-shaped-empty-array contract the P0 stub shipped.
+  app.get('/api/routing/meters', (req: Request, res: Response) => {
+    const windowMs = queryIntOrUndefined(req.query.windowMs);
+    const laneMeters = db ? computeLaneMeters(db, windowMs) : [];
     const response: RoutingMetersResponse = { laneMeters };
+    res.json(response);
+  });
+
+  // GET /api/routing/telemetry -- filtered, paginated read of the L5
+  // telemetry table (plan §3.2 L5's weekly-policy-review purpose). Optional
+  // per WR t4's deliverable list; wired here because the response-envelope
+  // pattern (RoutingTelemetryListResponse) is already cheap to reuse.
+  app.get('/api/routing/telemetry', (req: Request, res: Response) => {
+    if (!db) {
+      const empty: RoutingTelemetryListResponse = { rows: [], total: 0, limit: 0, offset: 0 };
+      res.json(empty);
+      return;
+    }
+    const response = listRoutingTelemetry(
+      db,
+      {
+        projectId: queryStringOrNull(req.query.projectId) ?? undefined,
+        runId: queryStringOrNull(req.query.runId) ?? undefined,
+        stage: queryStringOrNull(req.query.stage) ?? undefined,
+        sinceMs: queryIntOrUndefined(req.query.sinceMs),
+        untilMs: queryIntOrUndefined(req.query.untilMs),
+      },
+      {
+        limit: queryIntOrUndefined(req.query.limit),
+        offset: queryIntOrUndefined(req.query.offset),
+      },
+    );
     res.json(response);
   });
 }

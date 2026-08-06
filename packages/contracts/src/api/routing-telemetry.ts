@@ -53,13 +53,36 @@ export interface RoutingTelemetryRow {
 }
 
 /** Per-lane rollup -- plan §5/fix-round-1 HIGH-6's "lane meter closure",
- * exposed through `/api/routing/meters` and `od route meters --json`. */
+ * exposed through `/api/routing/meters` and `od route meters --json`.
+ *
+ * `tokens`/`costUsd`/`costEstimated`/`throttleEvents` were added in the L5
+ * storage tranche (plan §3.2 L5: "the router recommends... this dataset is
+ * the only path to ever justifying learned routing") once real telemetry
+ * rows existed to aggregate -- the P0 skeleton only had the four
+ * pass/escalation-rate fields because there was no row content yet to sum. */
 export interface LaneMeter {
   lane: string;
   runsRouted: number;
   runsObserved: number;
   escalationRate: number;
   passRate: number;
+  /** Sum of every row's `tokens` routed to this lane in the aggregation
+   * window (see `computeLaneMeters` in apps/daemon/src/routing/telemetry.ts). */
+  tokens: RoutingTelemetryTokenCounts;
+  /** Sum of every row's `costUsd` routed to this lane in the window. */
+  costUsd: number;
+  /** True only when every row contributing to `costUsd` had
+   * `costEstimated: true` -- false the moment even one contributing row
+   * carries a billed (non-estimated) figure. Mirrors `run_usage`'s own
+   * `pricingVersion` honesty rule (usage-tracking.ts): never report a
+   * confident-looking total that actually mixes estimates with real
+   * invoices. Vacuously `true` for a lane with zero routed rows. */
+  costEstimated: boolean;
+  /** Count of rows routed to this lane whose `escalated` flag is true --
+   * plan §3.1 L1's "observed throttles (429s, stream stalls) advance the
+   * [fallback] chain," counted per lane so a lane's reliability is
+   * visible on its own meter, not just folded into `escalationRate`. */
+  throttleEvents: number;
 }
 
 function isRoutingTelemetryTokenCounts(value: unknown): value is RoutingTelemetryTokenCounts {
@@ -114,15 +137,30 @@ export function isLaneMeter(value: unknown): value is LaneMeter {
     typeof value.runsRouted === 'number' &&
     typeof value.runsObserved === 'number' &&
     typeof value.escalationRate === 'number' &&
-    typeof value.passRate === 'number'
+    typeof value.passRate === 'number' &&
+    isRoutingTelemetryTokenCounts(value.tokens) &&
+    typeof value.costUsd === 'number' &&
+    typeof value.costEstimated === 'boolean' &&
+    typeof value.throttleEvents === 'number'
   );
 }
 
 /** Placeholder lane meter for a lane with no routed runs yet -- used by the
- * P0 daemon stub so `/api/routing/meters` returns a well-shaped empty array
+ * P0 daemon stub (and by `computeLaneMeters` for a lane it has never seen a
+ * row for) so `/api/routing/meters` returns a well-shaped empty array
  * rather than `null`/`undefined`. */
 export function emptyLaneMeter(lane: string): LaneMeter {
-  return { lane, runsRouted: 0, runsObserved: 0, escalationRate: 0, passRate: 0 };
+  return {
+    lane,
+    runsRouted: 0,
+    runsObserved: 0,
+    escalationRate: 0,
+    passRate: 0,
+    tokens: { input: 0, output: 0, cacheReadInput: 0 },
+    costUsd: 0,
+    costEstimated: true,
+    throttleEvents: 0,
+  };
 }
 
 /** Response envelope for GET /api/routing/meters -- shared by the route
@@ -134,4 +172,41 @@ export interface RoutingMetersResponse {
 
 export function isRoutingMetersResponse(value: unknown): value is RoutingMetersResponse {
   return isPlainObject(value) && Array.isArray(value.laneMeters) && value.laneMeters.every(isLaneMeter);
+}
+
+/** A `RoutingTelemetryRow` as actually persisted (L5 storage tranche): every
+ * stored row belongs to a project, the same way `run_usage`'s
+ * `StoredRunUsageRecord` adds `projectId` on top of the daemon's in-memory
+ * `RunUsageRecord` (usage-tracking.ts) rather than widening the base
+ * content type. Kept as a strict extension (not a change to
+ * `RoutingTelemetryRow`'s own fields) so the P0 wire shape stays exactly
+ * what CWR-P1-2's existing contract test already pins. */
+export interface StoredRoutingTelemetryRow extends RoutingTelemetryRow {
+  projectId: string;
+}
+
+export function isStoredRoutingTelemetryRow(value: unknown): value is StoredRoutingTelemetryRow {
+  return isRoutingTelemetryRow(value) && typeof (value as { projectId?: unknown }).projectId === 'string';
+}
+
+/** Response envelope for GET /api/routing/telemetry -- a filtered, paginated
+ * read of the L5 storage table (plan §3.2 L5's "weekly policy review"
+ * purpose). `total` is the full match count before `limit`/`offset` were
+ * applied, so a caller can page without a second count query. */
+export interface RoutingTelemetryListResponse {
+  rows: StoredRoutingTelemetryRow[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export function isRoutingTelemetryListResponse(value: unknown): value is RoutingTelemetryListResponse {
+  return (
+    isPlainObject(value) &&
+    Array.isArray(value.rows) &&
+    value.rows.every(isStoredRoutingTelemetryRow) &&
+    typeof value.total === 'number' &&
+    typeof value.limit === 'number' &&
+    typeof value.offset === 'number'
+  );
 }

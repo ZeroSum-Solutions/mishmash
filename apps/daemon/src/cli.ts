@@ -504,22 +504,45 @@ async function runCover(args) {
 // /api/routing/* HTTP surface the web RoutingPanel stub reads. Real
 // dispatch-time routing (a bare `od route --json` returning
 // escalationRate/passRate/laneMeters, CWR-P2-4) lands in a later WR tranche.
-const ROUTE_STRING_FLAGS = new Set(['daemon-url', 'template-id', 'build-class', 'stage']);
+const ROUTE_STRING_FLAGS = new Set([
+  'daemon-url',
+  'template-id',
+  'build-class',
+  'stage',
+  'project-id',
+  'run-id',
+  'since-ms',
+  'until-ms',
+  'limit',
+  'offset',
+  'window-ms',
+]);
 const ROUTE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 
 function printRouteHelp() {
-  console.log(`Usage: od route <policy|preview|meters> [options]
+  console.log(`Usage: od route <policy|preview|meters|telemetry> [options]
 
 Subcommands:
-  policy    GET /api/routing/policy -- current routing policy + version.
-  preview   GET /api/routing/decision/preview -- stub routing-decision
-            preview for a routing key.
-  meters    GET /api/routing/meters -- per-lane routing meters.
+  policy     GET /api/routing/policy -- current routing policy + version.
+  preview    GET /api/routing/decision/preview -- stub routing-decision
+             preview for a routing key.
+  meters     GET /api/routing/meters -- per-lane routing meters (L5
+             telemetry aggregation).
+  telemetry  GET /api/routing/telemetry -- filtered, paginated telemetry
+             rows (L5 storage).
 
 Options:
   --template-id <id>   Routing key template id (omit for the null fallback).
   --build-class <cls>  Routing key build class (omit for the null fallback).
-  --stage <stage>      Routing key stage (default: chat).
+  --stage <stage>      Routing key stage (default: chat); also a telemetry
+                        filter.
+  --project-id <id>    telemetry: filter by project id.
+  --run-id <id>        telemetry: filter by run id.
+  --since-ms <ms>      telemetry: lower bound on createdAt (epoch ms).
+  --until-ms <ms>      telemetry: upper bound on createdAt (epoch ms).
+  --limit <n>          telemetry: page size (default 50, max 500).
+  --offset <n>         telemetry: page offset (default 0).
+  --window-ms <ms>     meters: trailing aggregation window (omit for all-time).
   --json               Print machine-readable JSON.
   --daemon-url <url>`);
 }
@@ -580,9 +603,11 @@ async function runRoute(args) {
   }
 
   if (sub === 'meters') {
+    const metersQs = new URLSearchParams();
+    if (flags['window-ms']) metersQs.set('windowMs', String(flags['window-ms']));
     let resp;
     try {
-      resp = await fetch(`${base}/api/routing/meters`);
+      resp = await fetch(`${base}/api/routing/meters?${metersQs.toString()}`);
     } catch (err) {
       return exitWithStructuredError({
         code: 'daemon-not-running',
@@ -593,6 +618,31 @@ async function runRoute(args) {
     const data = await resp.json();
     if (flags.json) return writeJson(data);
     console.log(`Lane meters: ${Array.isArray(data?.laneMeters) ? data.laneMeters.length : 0}`);
+    return;
+  }
+
+  if (sub === 'telemetry') {
+    const qs = new URLSearchParams();
+    if (flags['project-id']) qs.set('projectId', String(flags['project-id']));
+    if (flags['run-id']) qs.set('runId', String(flags['run-id']));
+    if (flags.stage) qs.set('stage', String(flags.stage));
+    if (flags['since-ms']) qs.set('sinceMs', String(flags['since-ms']));
+    if (flags['until-ms']) qs.set('untilMs', String(flags['until-ms']));
+    if (flags.limit) qs.set('limit', String(flags.limit));
+    if (flags.offset) qs.set('offset', String(flags.offset));
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/routing/telemetry?${qs.toString()}`);
+    } catch (err) {
+      return exitWithStructuredError({
+        code: 'daemon-not-running',
+        message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+      });
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    console.log(`Telemetry rows: ${Array.isArray(data?.rows) ? data.rows.length : 0} of ${data?.total ?? 0}`);
     return;
   }
 

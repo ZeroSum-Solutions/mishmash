@@ -58,7 +58,7 @@ describe('od route dispatch', () => {
     const { stdout, stderr, code } = await runCli(['route', '--help']);
     expect(stderr).not.toContain('ReferenceError');
     expect(stderr).not.toContain('before initialization');
-    expect(stdout).toContain('od route <policy|preview|meters>');
+    expect(stdout).toContain('od route <policy|preview|meters|telemetry>');
     expect(code).toBe(0);
   });
 
@@ -70,7 +70,7 @@ describe('od route dispatch', () => {
   });
 });
 
-describe('od route <policy|preview|meters> --json against a live route', () => {
+describe('od route <policy|preview|meters|telemetry> --json against a live route', () => {
   let server: http.Server;
   let baseUrl: string;
 
@@ -116,7 +116,7 @@ describe('od route <policy|preview|meters> --json against a live route', () => {
   });
 });
 
-describe('od route <policy|preview|meters> --json on transport failure', () => {
+describe('od route <policy|preview|meters|telemetry> --json on transport failure', () => {
   // Nothing listens on this port (an ephemeral, momentarily-bound-then-closed
   // port), so every fetch() in runRoute hits ECONNREFUSED -- the transport
   // failure MED-7 asks the CLI to report as a structured --json error rather

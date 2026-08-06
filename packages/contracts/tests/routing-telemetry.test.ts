@@ -3,7 +3,9 @@ import {
   emptyLaneMeter,
   isLaneMeter,
   isRoutingMetersResponse,
+  isRoutingTelemetryListResponse,
   isRoutingTelemetryRow,
+  isStoredRoutingTelemetryRow,
   type RoutingTelemetryRow,
 } from '../src/api/routing-telemetry';
 
@@ -103,6 +105,10 @@ describe('isLaneMeter / emptyLaneMeter', () => {
       runsObserved: 0,
       escalationRate: 0,
       passRate: 0,
+      tokens: { input: 0, output: 0, cacheReadInput: 0 },
+      costUsd: 0,
+      costEstimated: true,
+      throttleEvents: 0,
     });
   });
 
@@ -111,7 +117,46 @@ describe('isLaneMeter / emptyLaneMeter', () => {
   });
 
   it('rejects a meter with a non-numeric field (nonnumeric meters, MED-5 negative test)', () => {
-    expect(isLaneMeter({ lane: 'x', runsRouted: 0, runsObserved: 0, escalationRate: 0, passRate: 'high' })).toBe(false);
+    expect(
+      isLaneMeter({
+        lane: 'x',
+        runsRouted: 0,
+        runsObserved: 0,
+        escalationRate: 0,
+        passRate: 'high',
+        tokens: { input: 0, output: 0, cacheReadInput: 0 },
+        costUsd: 0,
+        costEstimated: true,
+        throttleEvents: 0,
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a lane meter missing the L5 aggregate fields (tokens/costUsd/costEstimated/throttleEvents)', () => {
+    expect(
+      isLaneMeter({ lane: 'x', runsRouted: 0, runsObserved: 0, escalationRate: 0, passRate: 0 }),
+    ).toBe(false);
+  });
+});
+
+describe('isStoredRoutingTelemetryRow / isRoutingTelemetryListResponse', () => {
+  const STORED_ROW = { ...ROW, projectId: 'proj-1' };
+
+  it('accepts a well-formed stored row (RoutingTelemetryRow + projectId)', () => {
+    expect(isStoredRoutingTelemetryRow(STORED_ROW)).toBe(true);
+  });
+
+  it('rejects a row missing projectId -- projectId is the one field storage adds on top of the wire row', () => {
+    expect(isStoredRoutingTelemetryRow(ROW)).toBe(false);
+  });
+
+  it('accepts a well-shaped RoutingTelemetryListResponse envelope, including an empty page', () => {
+    expect(isRoutingTelemetryListResponse({ rows: [STORED_ROW], total: 1, limit: 50, offset: 0 })).toBe(true);
+    expect(isRoutingTelemetryListResponse({ rows: [], total: 0, limit: 50, offset: 0 })).toBe(true);
+  });
+
+  it('rejects an envelope whose rows contain a malformed entry', () => {
+    expect(isRoutingTelemetryListResponse({ rows: [ROW], total: 1, limit: 50, offset: 0 })).toBe(false);
   });
 });
 

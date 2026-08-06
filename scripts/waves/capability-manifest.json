@@ -1177,11 +1177,12 @@
     "httpPath": "/api/routing/policy",
     "outputSchema": "{ policy: RoutingPolicyDocument, policyVersion: number }",
     "parityApplicable": false,
-    "reason": "WR wave P0 skeleton (docs/plans/waves/WR-routing.md). The `route` capability spans three GET endpoints (policy, decision/preview, meters) -- httpPath/outputSchema above describe the `policy` subcommand's representative surface; `preview` and `meters` are documented in knownNamespaceRoutes below and reachable via `od route preview|meters`. All three are read-only stubs (no policy content, no admission control, no dispatch-time routing yet -- see WR-routing.md's Tranche register P1/P2 rows), so there is no live decision to compare CLI-vs-UI on beyond the fixed 'policy-stub-v0' rationale. UI parity is not yet checkable either way: RoutingPanel has no mount point granted by this wave's lease (apps/web/src/components/routing/** and AssistantMessage.tsx only), so it is exported but unregistered.",
+    "reason": "WR wave (docs/plans/waves/WR-routing.md). The `route` capability spans four GET endpoints (policy, decision/preview, meters, telemetry) -- httpPath/outputSchema above describe the `policy` subcommand's representative surface; `preview`/`meters`/`telemetry` are documented in knownNamespaceRoutes below and reachable via `od route preview|meters|telemetry`. `policy`/`preview` are still P0 stubs (no dispatch-time routing yet -- see WR-routing.md's Tranche register P2 rows); `meters` and `telemetry` now read real, persisted L5 telemetry (P1 tranche, plan §3.2 L5) once rows exist. UI parity is not yet checkable either way: RoutingPanel has no mount point granted by this wave's lease (apps/web/src/components/routing/** and AssistantMessage.tsx only), so it is exported but unregistered.",
     "knownNamespaceRoutes": [
       "GET /api/routing/policy",
       "GET /api/routing/decision/preview",
-      "GET /api/routing/meters"
+      "GET /api/routing/meters",
+      "GET /api/routing/telemetry"
     ]
   }
 ]
