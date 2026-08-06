@@ -546,6 +546,7 @@ Subcommands:
              decision engine for a routing key.
   meters     GET /api/routing/meters -- per-lane routing meters (L5
              telemetry aggregation).
+             Also carries per-runtime/per-lane reliability cooldown status (L1, t7).
   telemetry  GET /api/routing/telemetry -- filtered, paginated telemetry
              rows (L5 storage).
 
@@ -689,6 +690,18 @@ async function runRoute(args) {
     const data = await resp.json();
     if (flags.json) return writeJson(data);
     console.log(`Lane meters: ${Array.isArray(data?.laneMeters) ? data.laneMeters.length : 0}`);
+    // t7 (plan §3.2 L1 reliability): `cooldowns` is additive/optional on the
+    // response (omitted when the daemon has no db) -- silent when absent,
+    // same discipline the admission-results summary above already uses.
+    if (Array.isArray(data?.cooldowns) && data.cooldowns.length > 0) {
+      const activeCount = data.cooldowns.filter((c) => c?.inCooldown).length;
+      console.log(`Reliability cooldowns: ${data.cooldowns.length} scope(s) with recorded failures, ${activeCount} currently cooling.`);
+      for (const c of data.cooldowns) {
+        if (c?.inCooldown) {
+          console.log(`  ${c.scopeType}:${c.scopeId} -- cooling, ${c.remainingMs}ms remaining (${c.consecutiveFailures} consecutive failures)`);
+        }
+      }
+    }
     return;
   }
 

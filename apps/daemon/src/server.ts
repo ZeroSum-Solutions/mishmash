@@ -632,6 +632,7 @@ import { registerRunRoutes } from './routes/runs.js';
 import { registerUsageRoutes } from './routes/usage.js';
 import { registerRoutingRoutes } from './routes/routing.js';
 import { ensureRoutingTelemetryTable } from './routing/telemetry.js';
+import { ensureRoutingCooldownsTable, ensureRoutingRunSideEffectsTable } from './routing/reliability.js';
 import { registerTerminalRoutes } from './routes/terminal.js';
 import { createTerminalService } from './terminals.js';
 import { confinePreviewCwd, createPreviewService } from './previews.js';
@@ -2587,6 +2588,13 @@ export async function startServer({
   // apps/daemon/src/routing/telemetry.ts's header for why this follows
   // ensureUsageTable's exact pattern.
   ensureRoutingTelemetryTable(db);
+  // L1 reliability tables (WR wave, plan §3.2 L1 + §3.1 side-effect
+  // redispatch limits): own tables, migrated once at startup on the same
+  // shared connection -- see apps/daemon/src/routing/reliability.ts's
+  // header for why these are dedicated tables rather than telemetry
+  // columns.
+  ensureRoutingCooldownsTable(db);
+  ensureRoutingRunSideEffectsTable(db);
   const design = {
     runs: createChatRunService({
       createSseResponse,

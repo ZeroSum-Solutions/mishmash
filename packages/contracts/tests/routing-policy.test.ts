@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   isPlainObject,
+  isRoutingCooldownStatus,
   isRoutingPolicyDocument,
   isRoutingPolicyResponse,
   isStringArray,
   type RoutingCandidate,
+  type RoutingCooldownStatus,
   type RoutingPolicyDocument,
   type RoutingPolicyHardConstraint,
 } from '../src/api/routing-policy';
@@ -379,6 +381,64 @@ describe('isRoutingPolicyDocument', () => {
   it('rejects non-object input', () => {
     expect(isRoutingPolicyDocument(null)).toBe(false);
     expect(isRoutingPolicyDocument('not a policy')).toBe(false);
+  });
+
+  // t7 addition (plan §3.2 L1): cooldownPolicy is optional, exponential
+  // backoff config.
+  it('accepts a document with no cooldownPolicy at all -- optional, every pre-t7 fixture keeps validating', () => {
+    expect(isRoutingPolicyDocument(EMPTY_POLICY)).toBe(true);
+  });
+
+  it('accepts a well-shaped cooldownPolicy, with and without notes', () => {
+    expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, cooldownPolicy: { baseMs: 5000, factor: 2, maxMs: 300000 } })).toBe(true);
+    expect(
+      isRoutingPolicyDocument({ ...EMPTY_POLICY, cooldownPolicy: { baseMs: 5000, factor: 2, maxMs: 300000, notes: 'placeholder' } }),
+    ).toBe(true);
+  });
+
+  it('rejects a cooldownPolicy with a negative or fractional baseMs/maxMs', () => {
+    expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, cooldownPolicy: { baseMs: -1, factor: 2, maxMs: 300000 } })).toBe(false);
+    expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, cooldownPolicy: { baseMs: 1.5, factor: 2, maxMs: 300000 } })).toBe(false);
+    expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, cooldownPolicy: { baseMs: 5000, factor: 2, maxMs: -1 } })).toBe(false);
+  });
+
+  it('rejects a cooldownPolicy with a zero or negative factor', () => {
+    expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, cooldownPolicy: { baseMs: 5000, factor: 0, maxMs: 300000 } })).toBe(false);
+    expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, cooldownPolicy: { baseMs: 5000, factor: -2, maxMs: 300000 } })).toBe(false);
+  });
+
+  it('accepts a fractional factor (e.g. 1.5x growth is a legitimate backoff multiplier)', () => {
+    expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, cooldownPolicy: { baseMs: 5000, factor: 1.5, maxMs: 300000 } })).toBe(true);
+  });
+});
+
+describe('isRoutingCooldownStatus (t7, plan §3.2 L1)', () => {
+  const VALID: RoutingCooldownStatus = {
+    scopeType: 'lane',
+    scopeId: 'nous',
+    inCooldown: true,
+    remainingMs: 1200,
+    consecutiveFailures: 2,
+    category: 'rate_limit',
+    reason: 'cooling',
+  };
+
+  it('accepts a well-shaped status, including a null category', () => {
+    expect(isRoutingCooldownStatus(VALID)).toBe(true);
+    expect(isRoutingCooldownStatus({ ...VALID, category: null })).toBe(true);
+  });
+
+  it('rejects an unrecognized scopeType', () => {
+    expect(isRoutingCooldownStatus({ ...VALID, scopeType: 'process' })).toBe(false);
+  });
+
+  it('rejects a negative or fractional remainingMs/consecutiveFailures', () => {
+    expect(isRoutingCooldownStatus({ ...VALID, remainingMs: -1 })).toBe(false);
+    expect(isRoutingCooldownStatus({ ...VALID, consecutiveFailures: 1.5 })).toBe(false);
+  });
+
+  it('rejects an empty scopeId', () => {
+    expect(isRoutingCooldownStatus({ ...VALID, scopeId: '' })).toBe(false);
   });
 });
 

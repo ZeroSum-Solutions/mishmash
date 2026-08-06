@@ -113,6 +113,13 @@ export type RoutingDecisionReasonStep =
   | 'hard-constraint-filter'
   | 'data-classification-filter'
   | 'lane-throttle-demotion'
+  /** t7 (plan §3.2 L1 reliability): a candidate demoted because its
+   * runtime OR lane is in an active persisted cooldown (apps/daemon/src/
+   * routing/reliability.ts) -- kept distinct from `lane-throttle-demotion`
+   * (an in-window LaneMeter observation) because the two are different
+   * signal sources with different lifetimes, per this task's own brief
+   * ("cooldown and throttle reasons distinct"). */
+  | 'lane-cooldown-demotion'
   | 'admission-denied'
   | 'fail-closed'
   | 'selection'
@@ -125,6 +132,7 @@ const ROUTING_DECISION_REASON_STEPS: readonly RoutingDecisionReasonStep[] = [
   'hard-constraint-filter',
   'data-classification-filter',
   'lane-throttle-demotion',
+  'lane-cooldown-demotion',
   'admission-denied',
   'fail-closed',
   'selection',

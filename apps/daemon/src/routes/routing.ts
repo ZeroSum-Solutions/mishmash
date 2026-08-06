@@ -18,6 +18,7 @@ import type {
 } from '@open-design/contracts';
 import { decideRouting, estimatePromptTokens, loadRoutingPolicy } from '../routing/index.js';
 import { computeBuildSpendUsd, computeDaySpendUsd, computeStageSpendUsd, computeLaneMeters, listRoutingTelemetry } from '../routing/telemetry.js';
+import { computeCooldownStatuses, resolveCooldownConfig } from '../routing/reliability.js';
 
 const ROUTING_DATA_CLASSIFICATIONS: readonly RoutingDataClassification[] = ['client-confidential', 'internal', 'public'];
 
@@ -316,11 +317,23 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database): voi
   // once telemetry rows exist (CWR-P1-2); an empty array when `db` was not
   // supplied (see registerRoutingRoutes's doc comment) or no rows are in
   // range yet -- same well-shaped-empty-array contract the P0 stub shipped.
+  //
+  // t7 addition (plan §3.2 L1 reliability): `cooldowns` -- per-runtime/
+  // per-lane cooldown status from `apps/daemon/src/routing/reliability.ts`.
+  // Additive envelope field (RoutingMetersResponse#cooldowns is optional),
+  // omitted entirely (not a fabricated empty array) when `db` is absent --
+  // same "not evaluated" spirit as `laneMeters` degrading to `[]` only
+  // because an empty lane list IS a meaningful answer for that field, while
+  // omitting `cooldowns` distinguishes "no db to ask" from "asked, found
+  // none."
   app.get('/api/routing/meters', (req: Request, res: Response) => {
     const windowMsResult = parseOptionalQueryInt(req.query.windowMs, 'windowMs', EPOCH_MS_BOUNDS);
     if (!windowMsResult.ok) return respondInvalidQuery(res, windowMsResult.message);
     const laneMeters = db ? computeLaneMeters(db, windowMsResult.value) : [];
-    const response: RoutingMetersResponse = { laneMeters };
+    const response: RoutingMetersResponse = {
+      laneMeters,
+      ...(db ? { cooldowns: computeCooldownStatuses(db, resolveCooldownConfig(loadRoutingPolicy()), new Date()) } : {}),
+    };
     res.json(response);
   });
 

@@ -40,6 +40,7 @@ import {
   type RoutingAdmissionCandidateResult,
   type RoutingAdmissionVerdict,
   type RoutingCandidate,
+  type RoutingCooldownStatus,
   type RoutingDataClassification,
   type RoutingDecision,
   type RoutingDecisionReason,
@@ -55,6 +56,7 @@ import {
   type RoutingTransport,
 } from '@open-design/contracts';
 import { evaluateAdmission, type AdmissionSpendLookup } from './admission.js';
+import { findActiveCooldown } from './reliability.js';
 
 /** Sol review MED-2: the canonical subscription -> prepaid -> metered ->
  * local tier order (plan §2 "Lane realism"). Used to sort candidates before
@@ -62,8 +64,16 @@ import { evaluateAdmission, type AdmissionSpendLookup } from './admission.js';
  * why this beats consulting `policy.laneChains` directly (the three
  * subscription lanes never co-occur in any one chain array, so a chain
  * can't by itself tell two same-tier lanes apart; `transport` already
- * carries exactly that grouping on every candidate). */
-const TRANSPORT_TIER: Record<RoutingTransport, number> = {
+ * carries exactly that grouping on every candidate).
+ *
+ * Exported (t7): `apps/daemon/src/routing/reliability.ts`'s
+ * `laneFallbackChain` reads `policy.laneChains` directly rather than
+ * recomputing a tier order at runtime (that JSON is already authored in
+ * tier order), so this constant's only OTHER consumer is
+ * `routing-reliability.test.ts`, which cross-checks that `policy.laneChains`'
+ * ordering is actually consistent with this same map -- one source of truth
+ * for "what tier order means," never a second hardcoded copy. */
+export const TRANSPORT_TIER: Record<RoutingTransport, number> = {
   'subscription-oauth': 0,
   prepaid: 1,
   'metered-api': 2,
@@ -120,6 +130,24 @@ export interface DecideRoutingInput {
      * keeps this module free of `Date.now()` the same way `laneMeters`
      * keeps it free of a live telemetry query. */
     now: Date;
+  };
+  /**
+   * t7 (plan §3.2 L1 reliability): optional so every pre-t7 caller/test
+   * keeps working unchanged with no cooldown demotion applied at all --
+   * the exact same opt-in shape `admission` already uses. When present, a
+   * candidate whose RUNTIME OR LANE is in an active cooldown
+   * (`apps/daemon/src/routing/reliability.ts`'s `findActiveCooldown`) is
+   * demoted in the SAME transport-tier walk as throttle demotion, before
+   * that candidate ever reaches admission evaluation -- see the walk's own
+   * comment below for exactly how throttle/cooldown/admission compose.
+   * `statuses` arrives as an already-computed plain snapshot (e.g.
+   * `computeCooldownStatuses(db, resolveCooldownConfig(policy), now)`),
+   * never a live query this module runs itself -- the same "arrives as a
+   * plain argument" discipline `laneMeters` and `admission.spendLookup`
+   * already use.
+   */
+  cooldown?: {
+    statuses: RoutingCooldownStatus[];
   };
 }
 
@@ -546,6 +574,14 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
   const meterByLane = new Map(laneMeters.map((m) => [m.lane, m] as const));
   const demotions: RoutingLaneDemotion[] = [];
   const admissionResults: RoutingAdmissionCandidateResult[] = [];
+  // t7 (plan §3.2 L1): tracked SEPARATELY from `demotions.length` -- both
+  // throttle and cooldown demotions push into the SAME `demotions` array
+  // (its shape stays `{ fromLane, toLane, reason }`, unchanged from pre-t7,
+  // so existing exact-shape assertions on it keep passing), but the (e)
+  // exhaustion-cause taxonomy below needs to tell "was this throttled" from
+  // "was this cooled" apart, which the shared array's length alone cannot.
+  let throttleDemotionCount = 0;
+  let cooldownDemotionCount = 0;
   let selected: RoutingCandidate | null = null;
   for (let i = 0; i < tieredCandidates.length; i += 1) {
     const candidate = tieredCandidates[i]!;
@@ -554,8 +590,25 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
       const next = tieredCandidates[i + 1] ?? null;
       const reason = `lane "${candidate.lane}" shows ${throttleEvents} throttle event(s) (> threshold ${maxThrottleEvents}); demoting${next ? ` to "${next.lane}"` : ' -- no candidate remains'}.`;
       demotions.push({ fromLane: candidate.lane, toLane: next?.lane ?? null, reason });
+      throttleDemotionCount += 1;
       pushReason(reasons, 'lane-throttle-demotion', `throttled:${candidate.lane}`, reason);
       continue;
+    }
+    // t7 (plan §3.2 L1 reliability): checked AFTER throttle (unchanged
+    // precedence/behavior for every pre-t7 caller that never sets
+    // `input.cooldown`) but BEFORE admission -- a cooled candidate is never
+    // even priced, the same "cheapest/most-fundamental gate first" ordering
+    // admission.ts's own `evaluateAdmission` doc comment already argues for.
+    if (input.cooldown) {
+      const activeCooldown = findActiveCooldown(input.cooldown.statuses, candidate);
+      if (activeCooldown) {
+        const next = tieredCandidates[i + 1] ?? null;
+        const reason = `${activeCooldown.reason}${next ? ` Demoting to "${next.lane}".` : ' No candidate remains.'}`;
+        demotions.push({ fromLane: candidate.lane, toLane: next?.lane ?? null, reason });
+        cooldownDemotionCount += 1;
+        pushReason(reasons, 'lane-cooldown-demotion', `cooldown:${activeCooldown.scopeType}:${activeCooldown.scopeId}`, reason);
+        continue;
+      }
     }
     if (input.admission) {
       const admissionResult = evaluateAdmission({
@@ -585,37 +638,43 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
   }
 
   // (e) FAIL-CLOSED / DENIED-ADMISSION: the walk above exhausted every
-  // candidate. Sol review MED-3 (fix-round, second pass): the terminal
-  // cause per candidate is one of THREE buckets -- 'throttled' (recorded in
-  // `demotions`), a real budget denial (a `deny-*` verdict in
-  // `admissionResults`), or 'not-evaluated' (also in `admissionResults`,
-  // but NOT a budget denial -- e.g. no price row for the candidate's
-  // model). class/constraint filtering already produced ITS OWN terminal
-  // 'fail-closed-stop'/'error' earlier, in step (c), before this walk ever
-  // starts, so those causes never reach this branch. Every entry actually
-  // IN `admissionResults` at this point is guaranteed non-'admit' (an
-  // 'admit' would have set `selected` and broken the loop already), so
+  // candidate. Sol review MED-3 (fix-round, second pass), extended by t7
+  // with a fourth bucket: the terminal cause per candidate is one of FOUR
+  // buckets -- 'throttled' (`throttleDemotionCount`), 'cooled' (t7, plan
+  // §3.2 L1: `cooldownDemotionCount`), a real budget denial (a `deny-*`
+  // verdict in `admissionResults`), or 'not-evaluated' (also in
+  // `admissionResults`, but NOT a budget denial -- e.g. no price row for the
+  // candidate's model). class/constraint filtering already produced ITS OWN
+  // terminal 'fail-closed-stop'/'error' earlier, in step (c), before this
+  // walk ever starts, so those causes never reach this branch. Every entry
+  // actually IN `admissionResults` at this point is guaranteed non-'admit'
+  // (an 'admit' would have set `selected` and broken the loop already), so
   // `anyRealDenial`/`anyNotEvaluated` fully partition it.
   //
-  //   - PURE real-denial exhaustion (zero throttled, zero not-evaluated, at
-  //     least one real `deny-*`): the 'denied-admission' status, carrying
-  //     every evaluated candidate's verdict+reason.
+  //   - PURE real-denial exhaustion (zero throttled, zero cooled, zero
+  //     not-evaluated, at least one real `deny-*`): the 'denied-admission'
+  //     status, carrying every evaluated candidate's verdict+reason. t7:
+  //     cooling now ALSO excludes this path (a cooled candidate never even
+  //     reaches admission), the same way throttling always has.
   //   - EVERYTHING ELSE reports 'fail-closed-stop' -- the more
   //     conservative, human-surfaced signal -- covering pure throttle
-  //     exhaustion (unchanged pre-t6 behavior), pure not-evaluated
-  //     exhaustion (an un-priceable candidate is a fail-closed
-  //     non-selection, never a budget denial), and any mix of
-  //     throttled/denied/not-evaluated. `admissionResults` is always
-  //     retained on the terminal decision so the "why not this candidate"
-  //     trail is never silently dropped, and `admissionVerdict` still
-  //     reports `'denied'` whenever at least one real denial occurred
-  //     (even alongside throttling or not-evaluated candidates), `'not-
-  //     evaluated'` otherwise.
+  //     exhaustion (unchanged pre-t6 behavior), pure cooldown exhaustion
+  //     (t7: every remaining candidate is currently in an active
+  //     reliability cooldown), pure not-evaluated exhaustion (an
+  //     un-priceable candidate is a fail-closed non-selection, never a
+  //     budget denial), and any mix of throttled/cooled/denied/
+  //     not-evaluated. `admissionResults` is always retained on the
+  //     terminal decision so the "why not this candidate" trail is never
+  //     silently dropped, and `admissionVerdict` still reports `'denied'`
+  //     whenever at least one real denial occurred (even alongside
+  //     throttling/cooling/not-evaluated candidates), `'not-evaluated'`
+  //     otherwise.
   if (!selected) {
-    const anyThrottled = demotions.length > 0;
+    const anyThrottled = throttleDemotionCount > 0;
+    const anyCooled = cooldownDemotionCount > 0;
     const anyRealDenial = admissionResults.some((r) => r.verdict !== 'not-evaluated');
     const anyNotEvaluated = admissionResults.some((r) => r.verdict === 'not-evaluated');
-    if (!anyThrottled && !anyNotEvaluated && anyRealDenial) {
+    if (!anyThrottled && !anyCooled && !anyNotEvaluated && anyRealDenial) {
       const message = `every remaining candidate for sensitivity class "${sensitivityClass}" was denied by budget admission control (stage/build/day ceilings or the metered kill-switch); refusing to dispatch.`;
       pushReason(reasons, 'admission-denied', `admission-exhausted:${sensitivityClass}`, message);
       return terminalDecision({
@@ -630,17 +689,17 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
         admissionVerdict: 'denied',
       });
     }
-    const message = anyThrottled && (anyRealDenial || anyNotEvaluated)
-      ? `every remaining candidate for sensitivity class "${sensitivityClass}" was either throttled, denied by budget admission control, or could not be priced; refusing to fall through (mixed exhaustion reports as fail-closed, the more conservative signal).`
-      : anyNotEvaluated
-        ? `every remaining candidate for sensitivity class "${sensitivityClass}" could not be evaluated for admission (no usable price row) and/or was denied; a fail-closed non-selection, never a silent admit.`
-        : `every remaining candidate for sensitivity class "${sensitivityClass}" is currently throttled; refusing to fall through to an out-of-class or unlisted lane.`;
-    pushReason(
-      reasons,
-      'fail-closed',
-      `${anyThrottled && (anyRealDenial || anyNotEvaluated) ? 'mixed' : anyNotEvaluated ? 'not-evaluated' : 'throttle'}-exhausted:${sensitivityClass}`,
-      message,
-    );
+    const nonAdmissionCauseCount = [anyThrottled, anyCooled].filter(Boolean).length;
+    const isMixed = (nonAdmissionCauseCount > 0 && (anyRealDenial || anyNotEvaluated)) || nonAdmissionCauseCount > 1;
+    const bucketCode = isMixed ? 'mixed' : anyCooled ? 'cooldown' : anyNotEvaluated ? 'not-evaluated' : 'throttle';
+    const message = isMixed
+      ? `every remaining candidate for sensitivity class "${sensitivityClass}" was throttled, in an active reliability cooldown, denied by budget admission control, and/or could not be priced; refusing to fall through (mixed exhaustion reports as fail-closed, the more conservative signal).`
+      : anyCooled
+        ? `every remaining candidate for sensitivity class "${sensitivityClass}" is currently in an active reliability cooldown (plan §3.2 L1); refusing to fall through to an out-of-class or unlisted lane.`
+        : anyNotEvaluated
+          ? `every remaining candidate for sensitivity class "${sensitivityClass}" could not be evaluated for admission (no usable price row) and/or was denied; a fail-closed non-selection, never a silent admit.`
+          : `every remaining candidate for sensitivity class "${sensitivityClass}" is currently throttled; refusing to fall through to an out-of-class or unlisted lane.`;
+    pushReason(reasons, 'fail-closed', `${bucketCode}-exhausted:${sensitivityClass}`, message);
     return terminalDecision({
       policy,
       contextEstimateTokens: key.contextEstimateTokens,

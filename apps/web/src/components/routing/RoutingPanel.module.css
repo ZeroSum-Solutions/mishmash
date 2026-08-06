@@ -121,3 +121,18 @@
   align-self: flex-start;
   font-size: 13px;
 }
+
+.cooldownRow {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cooldownRowActive {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--warning, #b36b00);
+  font-weight: 600;
+}

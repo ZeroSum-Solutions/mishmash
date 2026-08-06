@@ -3,12 +3,14 @@ import {
   emptyLaneMeter,
   isLaneMeter,
   isRoutingMetersResponse,
+  isRoutingSideEffectKind,
   isRoutingTelemetryListResponse,
   isRoutingTelemetryRow,
   isStoredRoutingTelemetryRow,
   type RoutingTelemetryRow,
   type StoredRoutingTelemetryRow,
 } from '../src/api/routing-telemetry';
+import type { RoutingCooldownStatus } from '../src/api/routing-policy';
 
 // Type-shape coverage for the P0 routing-telemetry contract (WR wave
 // skeleton). Durable persistence and real gate-outcome content land in a
@@ -279,5 +281,43 @@ describe('isRoutingMetersResponse', () => {
 
   it('rejects an envelope whose laneMeters contains a malformed entry', () => {
     expect(isRoutingMetersResponse({ laneMeters: [{ lane: 'x' }] })).toBe(false);
+  });
+
+  // t7 addition (plan §3.2 L1): the additive, optional `cooldowns` field.
+  const ACTIVE_COOLDOWN: RoutingCooldownStatus = {
+    scopeType: 'runtime',
+    scopeId: 'claude',
+    inCooldown: true,
+    remainingMs: 4_000,
+    consecutiveFailures: 2,
+    category: 'rate_limit',
+    reason: 'cooling',
+  };
+
+  it('accepts an envelope with no cooldowns field at all -- optional, pre-t7 responses keep validating', () => {
+    expect(isRoutingMetersResponse({ laneMeters: [] })).toBe(true);
+  });
+
+  it('accepts an envelope carrying a well-shaped cooldowns array, empty or populated', () => {
+    expect(isRoutingMetersResponse({ laneMeters: [], cooldowns: [] })).toBe(true);
+    expect(isRoutingMetersResponse({ laneMeters: [], cooldowns: [ACTIVE_COOLDOWN] })).toBe(true);
+  });
+
+  it('rejects an envelope whose cooldowns contains a malformed entry', () => {
+    expect(isRoutingMetersResponse({ laneMeters: [], cooldowns: [{ scopeType: 'runtime' }] })).toBe(false);
+    expect(isRoutingMetersResponse({ laneMeters: [], cooldowns: 'not-an-array' })).toBe(false);
+  });
+});
+
+describe('isRoutingSideEffectKind (t7, plan §3.1)', () => {
+  it('accepts every documented kind', () => {
+    for (const kind of ['db-migration', 'git-push', 'network-call', 'supabase-change']) {
+      expect(isRoutingSideEffectKind(kind)).toBe(true);
+    }
+  });
+
+  it('rejects an arbitrary string', () => {
+    expect(isRoutingSideEffectKind('email-sent')).toBe(false);
+    expect(isRoutingSideEffectKind('')).toBe(false);
   });
 });

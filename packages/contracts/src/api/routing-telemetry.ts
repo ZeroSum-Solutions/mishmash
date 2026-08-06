@@ -6,11 +6,32 @@
 // return. Durable persistence (SQLite) and real gate-outcome content land
 // in later WR tranches -- see docs/plans/waves/WR-routing.md's Tranche
 // register (CWR-P1-2 for the telemetry row, CWR-P2-4 for lane meters).
-import { isFiniteNonNegativeInteger, isPlainObject } from './routing-policy.js';
+import { isFiniteNonNegativeInteger, isPlainObject, isRoutingCooldownStatus, type RoutingCooldownStatus } from './routing-policy.js';
 
 export type RoutingGateOutcome = 'pass' | 'fail' | 'blocked-on-founder';
 
 const ROUTING_GATE_OUTCOMES: readonly RoutingGateOutcome[] = ['pass', 'fail', 'blocked-on-founder'];
+
+/**
+ * t7 (WR wave, plan §3.1 side-effect redispatch limits): "Runs that perform
+ * external side effects (DB migrations, git pushes, network calls, Supabase
+ * changes) are marked non-redispatchable in the policy -- escalation for
+ * those requires human acknowledgment, never automatic re-run."
+ * `apps/daemon/src/routing/reliability.ts`'s `markRunSideEffects`/
+ * `isRedispatchable` are the only writers/readers of this vocabulary.
+ */
+export type RoutingSideEffectKind = 'db-migration' | 'git-push' | 'network-call' | 'supabase-change';
+
+const ROUTING_SIDE_EFFECT_KINDS: readonly RoutingSideEffectKind[] = [
+  'db-migration',
+  'git-push',
+  'network-call',
+  'supabase-change',
+];
+
+export function isRoutingSideEffectKind(value: unknown): value is RoutingSideEffectKind {
+  return typeof value === 'string' && (ROUTING_SIDE_EFFECT_KINDS as readonly string[]).includes(value);
+}
 
 export interface RoutingTelemetryTokenCounts {
   input: number;
@@ -233,10 +254,23 @@ export function emptyLaneMeter(lane: string): LaneMeter {
  * (AGENTS.md's contracts rule). */
 export interface RoutingMetersResponse {
   laneMeters: LaneMeter[];
+  /** t7 addition (plan §3.2 L1): per-runtime/per-lane cooldown status --
+   * additive envelope field, optional so a pre-t7 stored/cached response
+   * shape (and every existing test fixture) keeps validating without it.
+   * Omitted entirely when the caller has no db (same degrade-to-absent
+   * contract `laneMeters` already has via `RoutingMetersResponse`'s only
+   * caller, apps/daemon/src/routes/routing.ts) rather than a fabricated
+   * empty array standing in for "not evaluated." */
+  cooldowns?: RoutingCooldownStatus[];
 }
 
 export function isRoutingMetersResponse(value: unknown): value is RoutingMetersResponse {
-  return isPlainObject(value) && Array.isArray(value.laneMeters) && value.laneMeters.every(isLaneMeter);
+  return (
+    isPlainObject(value) &&
+    Array.isArray(value.laneMeters) &&
+    value.laneMeters.every(isLaneMeter) &&
+    (value.cooldowns === undefined || (Array.isArray(value.cooldowns) && value.cooldowns.every(isRoutingCooldownStatus)))
+  );
 }
 
 /** A `RoutingTelemetryRow` as actually persisted (L5 storage tranche): every

@@ -39,3 +39,30 @@ export {
   type AdmissionSpendLookup,
   type EvaluateAdmissionInput,
 } from './admission.js';
+
+// L1 reliability layer (WR wave, P2 tranche -- plan §3.2 L1 + §3.1
+// side-effect redispatch limits). See reliability.ts's own header for the
+// full rationale (storage design, cooldown policy, non-redispatchable
+// marking).
+export {
+  clearOnSuccess,
+  computeCooldownStatuses,
+  computeCooldownWindowMs,
+  DEFAULT_COOLDOWN_CONFIG,
+  ensureRoutingCooldownsTable,
+  ensureRoutingRunSideEffectsTable,
+  findActiveCooldown,
+  getCooldownRecord,
+  getRunRedispatchability,
+  getRunSideEffectKinds,
+  isInCooldown,
+  isRedispatchable,
+  laneFallbackChain,
+  markRunSideEffects,
+  nextLaneInChain,
+  recordObservedFailure,
+  resolveCooldownConfig,
+  type CooldownCheck,
+  type CooldownRecord,
+  type RunRedispatchability,
+} from './reliability.js';

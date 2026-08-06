@@ -9,7 +9,7 @@
 // that the real policy doesn't happen to exercise on its own.
 
 import { describe, expect, it } from 'vitest';
-import type { LaneMeter, RoutingKey, RoutingPolicyDocument } from '@open-design/contracts';
+import type { LaneMeter, RoutingCooldownStatus, RoutingKey, RoutingPolicyDocument } from '@open-design/contracts';
 import { emptyLaneMeter } from '@open-design/contracts';
 
 import { decideRouting, estimatePromptTokens } from '../src/routing/decision.js';
@@ -30,6 +30,23 @@ function keyFor(overrides: Partial<RoutingKey> = {}): RoutingKey {
 
 function throttled(lane: string, throttleEvents: number): LaneMeter {
   return { ...emptyLaneMeter(lane), throttleEvents };
+}
+
+// t7 (plan §3.2 L1 reliability): a fixture active-cooldown status, mirroring
+// `throttled`'s helper shape above -- `decideRouting`'s `cooldown.statuses`
+// input consumes exactly this RoutingCooldownStatus shape (see
+// apps/daemon/src/routing/reliability.ts's `computeCooldownStatuses`, the
+// real producer this fixture stands in for).
+function cooled(scopeType: 'runtime' | 'lane', scopeId: string): RoutingCooldownStatus {
+  return {
+    scopeType,
+    scopeId,
+    inCooldown: true,
+    remainingMs: 4_000,
+    consecutiveFailures: 2,
+    category: 'rate_limit',
+    reason: `scope "${scopeType}:${scopeId}" is in cooldown (test fixture).`,
+  };
 }
 
 describe('decideRouting -- §2 task-class resolution against the real policy', () => {
@@ -239,6 +256,94 @@ describe('decideRouting -- throttle demotion', () => {
     expect(decision.status).toBe('ok');
     expect(decision.modelFlag).toBe('claude-haiku-4-5');
     expect(decision.demotions).toEqual([]);
+  });
+});
+
+// t7 (plan §3.2 L1 reliability): decideRouting's optional `cooldown` input --
+// same tier-ordered demotion walk as throttling, but a DISTINCT reason step
+// ('lane-cooldown-demotion' vs 'lane-throttle-demotion') and cause-bucket
+// code ('cooldown-exhausted' vs 'throttle-exhausted'/'mixed-exhausted').
+describe('decideRouting -- cooldown demotion (t7)', () => {
+  it('a cooled primary lane demotes to burst, recording a lane-cooldown-demotion reason distinct from throttle', () => {
+    const decision = decideRouting({
+      policy: realPolicy,
+      key: keyFor(),
+      sensitivityClass: 'public',
+      laneMeters: [],
+      taskClass: 'mechanical-batch',
+      cooldown: { statuses: [cooled('lane', 'claude-code-oauth')] },
+    });
+    expect(decision.status).toBe('ok');
+    expect(decision.modelFlag).toBe('gpt-5.6-luna');
+    expect(decision.lane).toBe('codex-oauth');
+    expect(decision.demotions).toEqual([
+      { fromLane: 'claude-code-oauth', toLane: 'codex-oauth', reason: expect.stringContaining('cooldown') },
+    ]);
+    expect(decision.reasons.some((r) => r.step === 'lane-cooldown-demotion')).toBe(true);
+    expect(decision.reasons.some((r) => r.step === 'lane-throttle-demotion')).toBe(false);
+  });
+
+  it('a cooled RUNTIME (not just a lane) also demotes its candidate', () => {
+    // mechanical-batch's primary candidate carries runtimeId "claude" (the
+    // real policy's runtime identifier, not a lane string).
+    const decision = decideRouting({
+      policy: realPolicy,
+      key: keyFor(),
+      sensitivityClass: 'public',
+      laneMeters: [],
+      taskClass: 'mechanical-batch',
+      cooldown: { statuses: [cooled('runtime', 'claude')] },
+    });
+    expect(decision.status).toBe('ok');
+    expect(decision.lane).toBe('codex-oauth');
+    expect(decision.reasons.some((r) => r.step === 'lane-cooldown-demotion')).toBe(true);
+  });
+
+  it('omitting `cooldown` entirely reproduces the exact pre-t7 behavior -- no cooldown demotion applied', () => {
+    const decision = decideRouting({
+      policy: realPolicy,
+      key: keyFor(),
+      sensitivityClass: 'public',
+      laneMeters: [],
+      taskClass: 'mechanical-batch',
+    });
+    expect(decision.status).toBe('ok');
+    expect(decision.modelFlag).toBe('claude-haiku-4-5');
+    expect(decision.demotions).toEqual([]);
+  });
+
+  it('every remaining candidate cooled -> fail-closed-stop with a cooldown-exhausted reason code', () => {
+    const decision = decideRouting({
+      policy: realPolicy,
+      key: keyFor(),
+      sensitivityClass: 'public',
+      laneMeters: [],
+      taskClass: 'mechanical-batch',
+      cooldown: { statuses: [cooled('lane', 'claude-code-oauth'), cooled('lane', 'codex-oauth'), cooled('lane', 'deepseek-direct')] },
+    });
+    expect(decision.status).toBe('fail-closed-stop');
+    expect(decision.runtimeId).toBe('none');
+    expect(decision.reasons.some((r) => r.step === 'fail-closed' && r.code?.startsWith('cooldown-exhausted'))).toBe(true);
+  });
+
+  it('cooled + throttled mixed exhaustion (different candidates) -> fail-closed-stop with a mixed-exhausted reason code', () => {
+    const decision = decideRouting({
+      policy: realPolicy,
+      key: keyFor(),
+      sensitivityClass: 'public',
+      laneMeters: [throttled('claude-code-oauth', 1)],
+      taskClass: 'mechanical-batch',
+      cooldown: { statuses: [cooled('lane', 'codex-oauth'), cooled('lane', 'deepseek-direct')] },
+    });
+    expect(decision.status).toBe('fail-closed-stop');
+    expect(decision.runtimeId).toBe('none');
+    // Both a throttle demotion (claude-code-oauth) and a cooldown demotion
+    // (codex-oauth) actually occurred -- the shared `demotions` array holds
+    // both, distinguished by their `reasons` entries' step.
+    expect(decision.demotions.length).toBeGreaterThanOrEqual(2);
+    expect(decision.reasons.some((r) => r.step === 'lane-throttle-demotion')).toBe(true);
+    expect(decision.reasons.some((r) => r.step === 'lane-cooldown-demotion')).toBe(true);
+    expect(decision.reasons.some((r) => r.step === 'fail-closed' && r.code?.startsWith('mixed-exhausted'))).toBe(true);
   });
 });
 

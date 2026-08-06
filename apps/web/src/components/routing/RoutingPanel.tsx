@@ -25,6 +25,7 @@ import {
   isRoutingMetersResponse,
   isRoutingPolicyResponse,
   type LaneMeter,
+  type RoutingCooldownStatus,
   type RoutingDecision,
 } from '@open-design/contracts';
 import styles from './RoutingPanel.module.css';
@@ -39,6 +40,12 @@ export interface RoutingPanelProps {
 export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
   const [policyVersion, setPolicyVersion] = useState<number | null>(null);
   const [laneMeters, setLaneMeters] = useState<LaneMeter[]>([]);
+  // t7 addition (plan §3.2 L1): per-runtime/per-lane cooldown status --
+  // `/api/routing/meters`'s additive `cooldowns` field. `undefined` (not
+  // `[]`) distinguishes "not fetched yet / daemon has no db" from "fetched,
+  // no active cooldown history" -- see RoutingMetersResponse#cooldowns's own
+  // doc comment.
+  const [cooldowns, setCooldowns] = useState<RoutingCooldownStatus[] | undefined>(undefined);
   const [decision, setDecision] = useState<RoutingDecision | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -62,12 +69,14 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
         if (cancelled) return;
         setPolicyVersion(isRoutingPolicyResponse(policyData) ? policyData.policyVersion : null);
         setLaneMeters(isRoutingMetersResponse(metersData) ? metersData.laneMeters : []);
+        setCooldowns(isRoutingMetersResponse(metersData) ? metersData.cooldowns : undefined);
         setDecision(isRoutingDecisionPreviewResponse(previewData) ? previewData.decision : null);
       })
       .catch(() => {
         if (cancelled) return;
         setPolicyVersion(null);
         setLaneMeters([]);
+        setCooldowns(undefined);
         setDecision(null);
       })
       .finally(() => {
@@ -104,6 +113,34 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
                 <span>{meter.lane}</span>
                 <span>{meter.runsRouted} routed</span>
                 <span>{Math.round(meter.passRate * 100)}% pass</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className={styles.section} data-testid="routing-cooldowns">
+        <h3 className={styles.sectionTitle}>Reliability cooldowns</h3>
+        {loading ? (
+          <p className={styles.empty}>Loading…</p>
+        ) : !cooldowns || cooldowns.length === 0 ? (
+          <p className={styles.empty}>No active cooldown history.</p>
+        ) : (
+          <ul className={styles.reasonList}>
+            {cooldowns.map((cooldown) => (
+              <li
+                key={`${cooldown.scopeType}-${cooldown.scopeId}`}
+                className={cooldown.inCooldown ? styles.cooldownRowActive : styles.cooldownRow}
+                data-testid="routing-cooldown-row"
+                data-in-cooldown={cooldown.inCooldown}
+              >
+                <span className={styles.reasonStep}>
+                  {cooldown.scopeType}:{cooldown.scopeId}
+                </span>
+                <span>
+                  {cooldown.inCooldown ? `cooling (${cooldown.remainingMs}ms left)` : 'clear'} —{' '}
+                  {cooldown.consecutiveFailures} consecutive failure(s) — {cooldown.reason}
+                </span>
               </li>
             ))}
           </ul>

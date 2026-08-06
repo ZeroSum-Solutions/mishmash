@@ -26,6 +26,7 @@ import {
 import { registerRoutingRoutes } from '../src/routes/routing.js';
 import { closeDatabase, openDatabase } from '../src/db.js';
 import { ensureRoutingTelemetryTable } from '../src/routing/telemetry.js';
+import { ensureRoutingCooldownsTable, recordObservedFailure } from '../src/routing/reliability.js';
 
 let server: http.Server;
 let baseUrl: string;
@@ -289,6 +290,45 @@ describe('GET /api/routing/meters', () => {
     const body: unknown = await resp.json();
     expect(isRoutingMetersResponse(body)).toBe(true);
     expect((body as { laneMeters: unknown[] }).laneMeters).toEqual([]);
+    // No db registered on this bare-express app -- `cooldowns` is an
+    // additive/optional envelope field, omitted entirely rather than a
+    // fabricated empty array (RoutingMetersResponse#cooldowns's own doc
+    // comment).
+    expect((body as { cooldowns?: unknown[] }).cooldowns).toBeUndefined();
+  });
+});
+
+// t7 (plan §3.2 L1 reliability): with a real db registered, the additive
+// `cooldowns` field on GET /api/routing/meters surfaces recorded reliability
+// cooldown state.
+describe('GET /api/routing/meters -- cooldowns (t7)', () => {
+  it('includes a cooldown status entry once a failure has been recorded against a runtime/lane', async () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), 'od-routing-meters-cooldowns-'));
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    ensureRoutingCooldownsTable(db);
+    recordObservedFailure(db, 'claude', 'claude-code-oauth', 'rate_limit', new Date());
+
+    const app = express();
+    registerRoutingRoutes(app, db);
+    const cooldownServer = app.listen(0);
+    await new Promise<void>((resolve) => cooldownServer.once('listening', () => resolve()));
+    const cooldownBaseUrl = `http://127.0.0.1:${(cooldownServer.address() as AddressInfo).port}`;
+
+    try {
+      const resp = await fetch(`${cooldownBaseUrl}/api/routing/meters`);
+      expect(resp.status).toBe(200);
+      const body: unknown = await resp.json();
+      expect(isRoutingMetersResponse(body)).toBe(true);
+      const { cooldowns } = body as { cooldowns: Array<{ scopeType: string; scopeId: string; inCooldown: boolean }> };
+      expect(Array.isArray(cooldowns)).toBe(true);
+      expect(cooldowns.some((c) => c.scopeType === 'runtime' && c.scopeId === 'claude' && c.inCooldown)).toBe(true);
+      expect(cooldowns.some((c) => c.scopeType === 'lane' && c.scopeId === 'claude-code-oauth' && c.inCooldown)).toBe(true);
+    } finally {
+      await new Promise<void>((resolve) => cooldownServer.close(() => resolve()));
+      closeDatabase();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
 

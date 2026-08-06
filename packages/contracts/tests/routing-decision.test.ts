@@ -209,6 +209,17 @@ describe('isRoutingDecision', () => {
     expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', reasons: [{ step: 'selection' }] })).toBe(false);
   });
 
+  // t7 addition (plan §3.2 L1 reliability): a cooldown demotion is its own
+  // reason step, distinct from 'lane-throttle-demotion'.
+  it('accepts a reasons entry with the lane-cooldown-demotion step', () => {
+    const withCooldownReason = {
+      ...BASE_DECISION_FIELDS,
+      effort: 'low' as const,
+      reasons: [{ step: 'lane-cooldown-demotion', message: 'cooled', code: 'cooldown:lane:nous' }],
+    };
+    expect(isRoutingDecision(withCooldownReason)).toBe(true);
+  });
+
   it('accepts demotions with a null toLane (exhausted) and rejects a malformed demotion entry', () => {
     const withDemotion = {
       ...BASE_DECISION_FIELDS,

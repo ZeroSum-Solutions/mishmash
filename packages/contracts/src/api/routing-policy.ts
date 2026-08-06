@@ -100,6 +100,71 @@ const ROUTING_LANE_IDS: readonly RoutingLaneId[] = [
   'openrouter',
 ];
 
+/**
+ * t7 (WR wave, plan §3.2 L1 reliability): the two independent axes a
+ * cooldown can be scoped to -- a runtime CLI identifier (RoutingCandidate#
+ * runtimeId, e.g. "claude-code") or a lane (RoutingLaneId). Plan §3.2 L1:
+ * "per-runtime observed-failure cooldowns... lane-ordered fallback chains."
+ * A runtime failing across every lane and a single lane failing across
+ * every runtime are two different reliability signals, so
+ * `apps/daemon/src/routing/reliability.ts` tracks cooldown state
+ * independently per scope rather than folding both into one axis.
+ */
+export type RoutingCooldownScopeType = 'runtime' | 'lane';
+
+const ROUTING_COOLDOWN_SCOPE_TYPES: readonly RoutingCooldownScopeType[] = ['runtime', 'lane'];
+
+export interface RoutingCooldownScope {
+  type: RoutingCooldownScopeType;
+  id: string;
+}
+
+/**
+ * A cooldown scope's current status -- the plain-data snapshot shape both
+ * `decideRouting`'s optional `cooldown` input (apps/daemon/src/routing/
+ * decision.ts, t7) and `/api/routing/meters`'s additive `cooldowns` field
+ * (routing-telemetry.ts) consume, mirroring how `laneMeters`/`admission.
+ * spendLookup` already arrive at the decision engine as caller-computed
+ * arguments rather than live queries. `consecutiveFailures`/`category` read
+ * `0`/`null` for a scope reliability.ts has never recorded a failure for.
+ */
+export interface RoutingCooldownStatus {
+  scopeType: RoutingCooldownScopeType;
+  scopeId: string;
+  inCooldown: boolean;
+  /** Milliseconds remaining until the cooldown window elapses; `0` once
+   * elapsed or when never in cooldown. */
+  remainingMs: number;
+  consecutiveFailures: number;
+  /** The most recent observed-failure category -- reuses
+   * `TrackingRunFailureCategory` (packages/contracts/src/analytics), the
+   * SAME taxonomy `apps/daemon/src/run-retry-policy.ts` already classifies
+   * intra-run failures into (t7 CONSUMES that vocabulary, never invents a
+   * second one); kept as a plain `string` here so this contract file does
+   * not need an analytics-module dependency for a display-only field.
+   * `null` for a scope with no recorded failures. */
+  category: string | null;
+  reason: string;
+}
+
+function isRoutingCooldownScopeType(value: unknown): value is RoutingCooldownScopeType {
+  return typeof value === 'string' && (ROUTING_COOLDOWN_SCOPE_TYPES as readonly string[]).includes(value);
+}
+
+export function isRoutingCooldownStatus(value: unknown): value is RoutingCooldownStatus {
+  if (!isPlainObject(value)) return false;
+  return (
+    isRoutingCooldownScopeType(value.scopeType) &&
+    typeof value.scopeId === 'string' &&
+    value.scopeId.length > 0 &&
+    typeof value.inCooldown === 'boolean' &&
+    isFiniteNonNegativeInteger(value.remainingMs) &&
+    isFiniteNonNegativeInteger(value.consecutiveFailures) &&
+    (value.category === null || typeof value.category === 'string') &&
+    typeof value.reason === 'string'
+  );
+}
+
 /** The billing/access mechanism a lane uses -- what a hard constraint like
  * PRD §15's "no Anthropic model may use API credits, Nous, or OpenRouter"
  * actually forbids is a transport, not a lane name (`nous` IS the
@@ -382,6 +447,33 @@ export interface RoutingPolicyBudgetCeilings {
 }
 
 /**
+ * plan §3.2 L1: "per-runtime observed-failure cooldowns... exponential
+ * backoff." Operator-tunable exponential-backoff parameters --
+ * `apps/daemon/src/routing/reliability.ts`'s cooldown-window computation
+ * consumes these exactly the way `admission.ts` consumes
+ * `RoutingPolicyOutputTokenBound`: `windowMs = min(baseMs *
+ * factor^(consecutiveFailures - 1), maxMs)`. t7 addition, optional on
+ * `RoutingPolicyDocument` so every pre-t7 policy document/fixture keeps
+ * validating without it -- reliability.ts falls back to its own hardcoded
+ * conservative default (documented there) when this field is entirely
+ * absent, mirroring `outputTokenBound`'s own absence contract.
+ */
+export interface RoutingPolicyCooldownConfig {
+  /** Cooldown window (ms) after the FIRST observed failure
+   * (consecutiveFailures === 1). */
+  baseMs: number;
+  /** Multiplier applied per additional consecutive failure. */
+  factor: number;
+  /** Hard cap on the cooldown window regardless of how many consecutive
+   * failures have accumulated. */
+  maxMs: number;
+  /** Optional free-text disclosure, same spirit as
+   * `RoutingPolicyBudgetCeilings#notes` -- t7's v1 values are conservative
+   * operator-tunable placeholders, not plan-sourced figures. */
+  notes?: string;
+}
+
+/**
  * One of PRD §15's five exact process-role assignments for THIS program's
  * own meta-development (reviewing/building the routing capability itself),
  * distinct from the §2 end-user task-class `modelTable` (Sol review MED-1a).
@@ -455,6 +547,10 @@ export interface RoutingPolicyDocument {
    * it. */
   otherModelPriceRows?: RoutingPolicyPriceRow[];
   budgetCeilings: RoutingPolicyBudgetCeilings;
+  /** t7 addition (plan §3.2 L1): optional so every pre-t7 policy document/
+   * fixture keeps validating without it -- see RoutingPolicyCooldownConfig's
+   * own doc comment for the fallback-default contract. */
+  cooldownPolicy?: RoutingPolicyCooldownConfig;
   /** Top-level free-text caveats that don't fit a single row/field: open
    * questions carried over from the plan (e.g. unconfirmed Nous-hosted Grok
    * availability), runtime-model-id mapping notes that apply document-wide,
@@ -669,6 +765,22 @@ function isRoutingPolicyBudgetCeilings(value: unknown): value is RoutingPolicyBu
   );
 }
 
+/** t7: `baseMs`/`maxMs` are millisecond DURATIONS (nonnegative integers,
+ * same discipline as `RoutingPolicyRunawayLimits#wallClockCeilingMs`);
+ * `factor` is a multiplier that must be strictly positive (a zero or
+ * negative factor would zero out or invert the exponential growth this
+ * config exists to produce -- the same reasoning as
+ * `isThresholdedPricing`'s `multiplier` check above). */
+function isRoutingPolicyCooldownConfig(value: unknown): value is RoutingPolicyCooldownConfig {
+  if (!isPlainObject(value)) return false;
+  return (
+    isFiniteNonNegativeInteger(value.baseMs) &&
+    isPositiveFiniteNumber(value.factor) &&
+    isFiniteNonNegativeInteger(value.maxMs) &&
+    (value.notes === undefined || typeof value.notes === 'string')
+  );
+}
+
 /** Structural shape guard for a loaded `routing-policy.json` -- validates
  * every top-level field, every array entry, and every record value (not
  * just the container types), so a malformed nested row (e.g. a candidate
@@ -697,6 +809,7 @@ export function isRoutingPolicyDocument(value: unknown): value is RoutingPolicyD
     (doc.otherModelPriceRows === undefined ||
       (Array.isArray(doc.otherModelPriceRows) && doc.otherModelPriceRows.every(isRoutingPolicyPriceRow))) &&
     isRoutingPolicyBudgetCeilings(doc.budgetCeilings) &&
+    (doc.cooldownPolicy === undefined || isRoutingPolicyCooldownConfig(doc.cooldownPolicy)) &&
     (doc.notes === undefined || isStringArray(doc.notes))
   );
 }
