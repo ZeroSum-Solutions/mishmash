@@ -695,8 +695,8 @@ function validateDesignTokensJsonStructure(parsed: unknown): { ok: true; names: 
   if (envelope.format !== 'od-design-tokens/v1') {
     issues.push(`envelope "format" must be "od-design-tokens/v1", got ${JSON.stringify(envelope.format)}.`);
   }
-  if (typeof envelope.schemaVersion !== 'number') {
-    issues.push('envelope "schemaVersion" must be a number.');
+  if (envelope.schemaVersion !== 1) {
+    issues.push('envelope "schemaVersion" must be exactly 1 (the only canonical version).');
   }
   if (envelope.contract !== 'TOKEN_SCHEMA') {
     issues.push(`envelope "contract" must be "TOKEN_SCHEMA", got ${JSON.stringify(envelope.contract)}.`);
@@ -1968,6 +1968,25 @@ function findMissingSiblingGateIds(siblingGateResults: readonly DeterministicGat
   return expected.filter((id) => !supplied.has(id));
 }
 
+/**
+ * Sol t8 verdict-pass residue: EXACTLY one result per expected id. A
+ * duplicated id (e.g. a `fail` followed by a `pass` for the same gate) or an
+ * id outside the expected set must reject -- last-duplicate-wins would let a
+ * caller launder a failing gate behind a duplicate passing entry.
+ */
+function findDuplicateOrUnexpectedSiblingGateIds(
+  siblingGateResults: readonly DeterministicGateResult[],
+): string[] {
+  const expected = new Set<string>(DETERMINISTIC_GATE_IDS.filter((id) => id !== 'screenshot-ssim'));
+  const seen = new Set<string>();
+  const bad: string[] = [];
+  for (const result of siblingGateResults) {
+    if (!expected.has(result.id) || seen.has(result.id)) bad.push(result.id);
+    seen.add(result.id);
+  }
+  return bad;
+}
+
 export function recordBootstrapBaseline(db: Database.Database, input: RecordBootstrapBaselineInput): void {
   ensureSsimBaselinesTable(db);
   const existing = getSsimBaselineRow(db, input.buildId);
@@ -1981,6 +2000,12 @@ export function recordBootstrapBaseline(db: Database.Database, input: RecordBoot
   if (missingIds.length > 0) {
     throw new SsimLifecycleError(
       `cannot bootstrap an SSIM baseline for build "${input.buildId}": siblingGateResults is missing result(s) for: ${missingIds.join(', ')} -- the COMPLETE deterministic gate id set (every id other than screenshot-ssim) must be represented; a subset is not accepted.`,
+    );
+  }
+  const duplicateOrUnexpectedIds = findDuplicateOrUnexpectedSiblingGateIds(input.siblingGateResults);
+  if (duplicateOrUnexpectedIds.length > 0) {
+    throw new SsimLifecycleError(
+      `cannot bootstrap an SSIM baseline for build "${input.buildId}": siblingGateResults contains duplicate or unexpected gate id(s): ${duplicateOrUnexpectedIds.join(', ')} -- exactly one result per deterministic gate is required.`,
     );
   }
 

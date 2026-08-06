@@ -300,6 +300,13 @@ describe('tokens-schema gate', () => {
     expect(result.status).toBe('fail');
   });
 
+  it('fails a non-canonical schemaVersion (999) -- only exactly 1 is canonical (Sol t8 verdict-pass residue)', async () => {
+    const valid = validTokensJson();
+    writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify({ ...valid, schemaVersion: 999 }));
+    const result = await runOneGate(tempDir, ['tokens-schema']);
+    expect(result.status).toBe('fail');
+  });
+
   // Sol MED-6 residue: negative test per OMITTED FIELD CLASS -- envelope
   // fields the earlier fix-round's validator didn't check at all.
   it('fails when envelope "contract" is missing (name-complete otherwise)', async () => {
@@ -780,6 +787,20 @@ describe('SSIM baseline lifecycle (WR-routing.md Screenshot-baseline rules)', ()
     expect(() =>
       recordBootstrapBaseline(db, { buildId: 'build-1', screenshotPath: baselinePng, tokenFreezeVersion: 'v1', siblingGateResults: [] }),
     ).toThrow(/missing result/i);
+  });
+
+  it('rejects DUPLICATE sibling gate ids -- a fail cannot be laundered behind a later duplicate pass (Sol t8 verdict-pass residue)', async () => {
+    const baselinePng = path.join(tempDir, 'baseline.png');
+    await writeSolidPng(baselinePng, { r: 10, g: 10, b: 10 });
+    expect(() =>
+      recordBootstrapBaseline(db, {
+        buildId: 'build-1',
+        screenshotPath: baselinePng,
+        tokenFreezeVersion: 'v1',
+        siblingGateResults: [...completeSiblingResults({ 'form-smoke': 'fail' }), det('form-smoke', 'pass')],
+      }),
+    ).toThrow(/duplicate or unexpected/i);
+    expect(baselineState(db, 'build-1')).toBe('no-baseline-bootstrap');
   });
 
   // Sol HIGH-3 residue: a COMPLETE set where some gates are legitimately
