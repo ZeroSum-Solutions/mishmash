@@ -297,6 +297,78 @@ export function isRoutingMetersResponse(value: unknown): value is RoutingMetersR
   );
 }
 
+// ---------------------------------------------------------------------------
+// Rates (t9, plan §5 P2 gate: "escalation/pass rates visible" + WR-routing.md
+// CWR-P2-4's lane-meter closure). GET /api/routing/rates and `od route
+// [rates] --json` (also what a bare `od route --json` with no subcommand
+// resolves to) both return this shape -- the one place escalation rate, gate
+// pass rate, AND every lane's own meter are visible together in a single
+// response, which is exactly what CWR-P2-4's behavioral probe parses for.
+// `laneMeters` is keyed by lane id (an object, not an array) so the CLI/UI
+// can look a specific lane up directly; apps/daemon/src/routing/dispatch.ts's
+// `computeRoutingRates` seeds every lane named anywhere in the loaded
+// policy's `laneChains` with `emptyLaneMeter` BEFORE overlaying any actual
+// telemetry, so this object is non-empty even against a brand-new daemon
+// data dir with zero routed runs yet.
+// ---------------------------------------------------------------------------
+
+/** One (stage, templateId) rollup -- apps/daemon/src/routing/telemetry.ts's
+ * `computeStageAggregates` is the producer; see its own doc comment for why
+ * this slices the SAME escalation/pass signal `LaneMeter` carries, by stage
+ * instead of by lane. */
+export interface RoutingRatesByStage {
+  stage: string;
+  templateId: string | null;
+  runs: number;
+  escalationRate: number;
+  passRate: number;
+}
+
+function isRoutingRatesByStage(value: unknown): value is RoutingRatesByStage {
+  if (!isPlainObject(value)) return false;
+  return (
+    typeof value.stage === 'string' &&
+    (value.templateId === null || typeof value.templateId === 'string') &&
+    isFiniteNonNegativeInteger(value.runs) &&
+    typeof value.escalationRate === 'number' &&
+    typeof value.passRate === 'number'
+  );
+}
+
+function isLaneMeterRecord(value: unknown): value is Record<string, LaneMeter> {
+  if (!isPlainObject(value)) return false;
+  return Object.values(value).every(isLaneMeter);
+}
+
+/** Response envelope for GET /api/routing/rates. `windowMs` echoes the
+ * aggregation window the caller requested (`null` for all-time), matching
+ * `/api/routing/meters`'s own `?windowMs=` convention. `totalRuns`/
+ * `escalationRate`/`passRate` are computed over EVERY row in the window
+ * (not lane-attributed, unlike `LaneMeter#escalationRate`/`passRate`) --
+ * the single top-level summary CWR-P2-4's probe reads `escalationRate`/
+ * `passRate` from directly. */
+export interface RoutingRatesResponse {
+  windowMs: number | null;
+  totalRuns: number;
+  escalationRate: number;
+  passRate: number;
+  laneMeters: Record<string, LaneMeter>;
+  byStage: RoutingRatesByStage[];
+}
+
+export function isRoutingRatesResponse(value: unknown): value is RoutingRatesResponse {
+  return (
+    isPlainObject(value) &&
+    (value.windowMs === null || isFiniteNonNegativeInteger(value.windowMs)) &&
+    isFiniteNonNegativeInteger(value.totalRuns) &&
+    typeof value.escalationRate === 'number' &&
+    typeof value.passRate === 'number' &&
+    isLaneMeterRecord(value.laneMeters) &&
+    Array.isArray(value.byStage) &&
+    value.byStage.every(isRoutingRatesByStage)
+  );
+}
+
 /** A `RoutingTelemetryRow` as actually persisted (L5 storage tranche): every
  * stored row belongs to a project, the same way `run_usage`'s
  * `StoredRunUsageRecord` adds `projectId` on top of the daemon's in-memory

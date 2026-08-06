@@ -633,6 +633,10 @@ import { registerUsageRoutes } from './routes/usage.js';
 import { registerRoutingRoutes } from './routes/routing.js';
 import { ensureRoutingTelemetryTable } from './routing/telemetry.js';
 import { ensureRoutingCooldownsTable, ensureRoutingRunSideEffectsTable } from './routing/reliability.js';
+// WR wave (t9, plan §3.1 dispatch-time routing integration) -- see
+// apps/daemon/src/routing/dispatch.ts's own header for the full rationale.
+import { recordDispatchIntent, reconcilePostRun, resolveDispatchRouting } from './routing/dispatch.js';
+import { loadRoutingPolicy } from './routing/policy.js';
 import { registerTerminalRoutes } from './routes/terminal.js';
 import { createTerminalService } from './terminals.js';
 import { confinePreviewCwd, createPreviewService } from './previews.js';
@@ -2628,6 +2632,45 @@ export async function startServer({
           agentId: run.agentId ?? null,
           record,
         });
+        // WR wave (t9, plan §3.1: "post-run reconciliation flags divergence"):
+        // fills the OBSERVED side of the pre-spawn telemetry intent this run
+        // recorded (startChatRun's resolveDispatchRouting hook below), using
+        // the SAME already-computed usage `record` recordRunUsage just used
+        // -- no second usage scan. Skipped entirely for a run whose dispatch
+        // was blocked (nothing was ever routed to reconcile against) or that
+        // never went through the routing hook at all (best-effort, never a
+        // hard dependency of usage recording succeeding).
+        //
+        // Known gaps, honestly not closed by this wiring (see this wave's
+        // t9 report): `observedLane` stays null -- no run infrastructure
+        // today reports which LANE (as opposed to model) actually executed
+        // a call. `sideEffectKinds` is omitted -- no existing classifier
+        // maps a run's activity onto the db-migration/git-push/network-call/
+        // supabase-change vocabulary (apps/daemon/src/routing/dispatch.ts's
+        // `ReconcilePostRunObserved#sideEffectKinds` doc comment has the
+        // full rationale); both are real capability gaps, not lease
+        // limitations, and both live inside `apps/daemon/src/runtimes/**`
+        // (W1's lease), outside what this wave may implement.
+        try {
+          if (run.wrRoutingDecision && run.wrRoutingDecision.mode !== 'blocked') {
+            reconcilePostRun(db, run.id, run.retryAttemptCount ?? 0, {
+              observedModel: record.reported ?? record.resolved ?? null,
+              observedLane: null,
+              tokens: {
+                input: record.inputTokensEffective ?? 0,
+                output: record.outputTokens ?? 0,
+                cacheReadInput: record.cacheReadInputTokens ?? 0,
+              },
+              costUsd: record.costUsd ?? 0,
+              costEstimated: true,
+              runtimeId: run.agentId ?? null,
+              failureCategory: run.failureCategory ?? null,
+              now: new Date(),
+            });
+          }
+        } catch (err) {
+          console.warn('[routing] reconcilePostRun failed', err);
+        }
       },
     }),
     analytics: analyticsService,
@@ -5201,6 +5244,78 @@ export async function startServer({
     // the CLI's own default, which `buildModelRouting` readers backfill from
     // whatever the CLI later echoes.
     run.model = safeModel;
+    // WR wave (t9, plan §3.1 dispatch-time routing integration): resolve
+    // this dispatch's routing decision BEFORE the spawn below, using
+    // whatever runtime/model resolution just ran above as the
+    // 'runtime-default' fallback (WR-routing.md Fallback B). A fail-closed/
+    // budget-denied/structurally-invalid decision BLOCKS dispatch outright
+    // (plan §3.2 L2: never falls through). Purely additive and fail-OPEN on
+    // its OWN internal errors only (never on a real routing refusal, which
+    // DOES block) -- this integration must never itself crash a chat
+    // dispatch it does not yet own the sole model-flag source for.
+    // `routingOverride` is read permissively off the raw chat body:
+    // packages/contracts/src/api/chat.ts (ChatRequest) sits outside this
+    // wave's lease, so the field is not yet a first-class ChatRequest DTO
+    // member -- see this wave's t9 report for the governance-amendment this
+    // blocks on. Likewise, real /api/chat traffic carries no templateId/
+    // buildClass/taskClass today (ChatRequest has none), so this honestly
+    // resolves 'runtime-default' for ordinary chat -- exactly WR-routing.md
+    // Fallback B, not a bug in this wiring.
+    /** @type {any} */
+    const wrChatBodyAny = chatBody;
+    const wrRoutingOverride =
+      wrChatBodyAny && typeof wrChatBodyAny === 'object' && wrChatBodyAny.routingOverride
+        ? wrChatBodyAny.routingOverride
+        : null;
+    try {
+      const wrDispatchRouting = resolveDispatchRouting({
+        db,
+        policy: loadRoutingPolicy(),
+        chatRequest: {
+          routingOverride: wrRoutingOverride,
+          templateId: null,
+          buildClass: null,
+          stage: null,
+          taskClass: null,
+          sensitivityClass: null,
+          contextEstimateTokens: null,
+          promptText: null,
+          buildId: null,
+          designSystemId: typeof designSystemId === 'string' ? designSystemId : null,
+          runtimeDefault: { runtimeId: def.id, model: safeModel ?? 'default', lane: 'runtime-default' },
+        },
+        projectContext: {
+          projectId: typeof projectId === 'string' && projectId ? projectId : (run.projectId ?? 'unknown-project'),
+          buildId: null,
+        },
+        clock: new Date(),
+      });
+      if (wrDispatchRouting.mode === 'blocked') {
+        return design.runs.fail(run, 'ROUTING_BLOCKED', wrDispatchRouting.blocked.message);
+      }
+      recordDispatchIntent(db, runId, run.retryAttemptCount ?? 0, wrDispatchRouting.recordedIntent);
+      run.wrRoutingDecision = wrDispatchRouting;
+      // Apply the routed decision to the actual spawn ONLY when it targets
+      // the SAME runtime the caller already selected (`def.id`) -- swapping
+      // to a genuinely different runtime would require re-selecting `def`/
+      // `def.bin` far earlier in this function (a baseline control-flow
+      // change this additive hook cannot make); see this wave's t9 report
+      // for the governance-amendment full cross-runtime application needs.
+      // A same-runtime model/lane substitution is safe here: `safeModel`/
+      // `agentOptions.model` are already-declared `let`/mutable bindings
+      // this only reassigns, never redeclares.
+      if (
+        wrDispatchRouting.mode === 'routed' &&
+        wrDispatchRouting.decision &&
+        wrDispatchRouting.decision.runtimeId === def.id
+      ) {
+        safeModel = wrDispatchRouting.decision.modelFlag;
+        agentOptions.model = safeModel;
+        run.model = safeModel;
+      }
+    } catch (err) {
+      console.warn('[routing] resolveDispatchRouting failed', err);
+    }
     const agentResumeCtx =
       agentSupportsSessionResume && run.conversationId
         ? resolveAgentResumeContext(db, {

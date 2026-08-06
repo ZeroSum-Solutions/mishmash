@@ -623,6 +623,56 @@ export function computeLaneMeters(db: Database.Database, windowMs?: number): Lan
 }
 
 // ---------------------------------------------------------------------------
+// Per-stage/template rate rollup (t9, plan §5 P2 gate: "escalation/pass
+// rates visible"). `computeLaneMeters` above slices by LANE; the P2 gate
+// also wants that same escalation/pass signal sliced by (stage, templateId)
+// so a weekly policy review can see "which STAGE is escalating" rather than
+// only "which LANE is escalating" (plan §3.2 L5: "stage escalation rate
+// above its alarm -> fix the table"). Reuses the exact same
+// applicable-gate-outcome rules `computeLaneMeters` already applies (t8
+// fix-round: 'unavailable'/'skipped-not-applicable' never count as gated)
+// so the two rollups can never silently disagree on what "gated" means.
+// ---------------------------------------------------------------------------
+
+export interface RoutingStageAggregate {
+  stage: string;
+  templateId: string | null;
+  runs: number;
+  escalated: number;
+  gated: number;
+  gatedPass: number;
+}
+
+export function computeStageAggregates(db: Database.Database, windowMs?: number): RoutingStageAggregate[] {
+  const rows = fetchRowsForAggregation(db, windowMs);
+  const byKey = new Map<string, RoutingStageAggregate>();
+  for (const row of rows) {
+    // NUL-joined key: a stage id and a template id can each independently
+    // contain any printable character a caller supplies, so a plain `-`/`:`
+    // join could collide (stage "a-b" + templateId "c" vs stage "a" +
+    // templateId "b-c"). The U+0000 separator never appears in either field
+    // in practice (both come from closed policy vocabulary / slug-shaped
+    // ids) and is never itself ambiguous with real content.
+    const key = `${row.stage} ${row.templateId ?? ''}`;
+    let acc = byKey.get(key);
+    if (!acc) {
+      acc = { stage: row.stage, templateId: row.templateId, runs: 0, escalated: 0, gated: 0, gatedPass: 0 };
+      byKey.set(key, acc);
+    }
+    acc.runs += 1;
+    if (row.escalated) acc.escalated += 1;
+    const applicable = applicableGateOutcomes(row.gateOutcomes);
+    if (applicable.length > 0) {
+      acc.gated += 1;
+      if (allApplicableGatesPass(row.gateOutcomes)) acc.gatedPass += 1;
+    }
+  }
+  return [...byKey.values()].sort(
+    (a, b) => a.stage.localeCompare(b.stage) || (a.templateId ?? '').localeCompare(b.templateId ?? ''),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Spend lookup (t6, plan §3.1/§3.2 L4 admission control): "per-build and
 // per-day caps checked at every dispatch" needs a sum of estimated+exact
 // costs per buildId/day from this table -- daemon-side aggregation that

@@ -541,7 +541,8 @@ const ROUTE_STRING_FLAGS = new Set([
 const ROUTE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 
 function printRouteHelp() {
-  console.log(`Usage: od route <policy|preview|meters|telemetry|gates> [options]
+  console.log(`Usage: od route <policy|preview|meters|telemetry|gates|rates> [options]
+       od route --json                 (bare invocation -- same as \`od route rates --json\`)
 
 Subcommands:
   policy     GET /api/routing/policy -- current routing policy + version.
@@ -556,6 +557,10 @@ Subcommands:
   gates run         POST /api/routing/gates/run -- executes selected
                      deterministic gates against --artifact-dir and
                      classifies the cascade trigger (t8).
+  rates      GET /api/routing/rates -- escalation rate + gate pass rate
+             (overall and by stage/template) + every lane's own meter, in
+             one response (t9, plan §5 P2 gate). A bare \`od route --json\`
+             with no subcommand resolves to this same call.
 
 Options:
   --template-id <id>       Routing key template id (omit for the null fallback).
@@ -610,8 +615,15 @@ async function runRoute(args) {
     printRouteHelp();
     process.exit(args.length === 0 ? 2 : 0);
   }
-  const sub = args[0];
-  const rest = args.slice(1);
+  // A bare `od route --json` (no subcommand at all -- CWR-P2-4's exact
+  // invocation, `tsx apps/daemon/src/cli.ts route --json`) leaves `args[0]`
+  // as the flag token itself. Default that shape to `rates` and parse flags
+  // from the WHOLE `args` array (not `args.slice(1)`, which would silently
+  // drop `--json`) -- there is no other bare-flag subcommand today, so any
+  // leading `-`-prefixed token takes this same path.
+  const bareFlagsOnly = args[0].startsWith('-');
+  const sub = bareFlagsOnly ? 'rates' : args[0];
+  const rest = bareFlagsOnly ? args : args.slice(1);
   let flags;
   try {
     flags = parseFlags(rest, { string: ROUTE_STRING_FLAGS, boolean: ROUTE_BOOLEAN_FLAGS });
@@ -621,6 +633,28 @@ async function runRoute(args) {
   }
   const base = await cliDaemonBaseUrl(flags);
   const writeJson = (data) => process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+
+  if (sub === 'rates') {
+    const qs = new URLSearchParams();
+    if (flags['window-ms']) qs.set('windowMs', String(flags['window-ms']));
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/routing/rates?${qs.toString()}`);
+    } catch (err) {
+      return exitWithStructuredError({
+        code: 'daemon-not-running',
+        message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+      });
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    const laneCount = data && typeof data.laneMeters === 'object' && data.laneMeters !== null ? Object.keys(data.laneMeters).length : 0;
+    const escalationPct = ((data?.escalationRate ?? 0) * 100).toFixed(1);
+    const passPct = ((data?.passRate ?? 0) * 100).toFixed(1);
+    console.log(`Escalation rate: ${escalationPct}% -- Pass rate: ${passPct}% -- ${laneCount} lane(s) tracked.`);
+    return;
+  }
 
   if (sub === 'policy') {
     let resp;

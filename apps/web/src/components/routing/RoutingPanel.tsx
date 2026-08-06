@@ -31,12 +31,35 @@ import {
   isRoutingGatesRegistryResponse,
   isRoutingMetersResponse,
   isRoutingPolicyResponse,
+  isRoutingRatesResponse,
   type GateDefinitionDTO,
   type LaneMeter,
   type RoutingCooldownStatus,
   type RoutingDecision,
+  type RoutingRatesByStage,
 } from '@open-design/contracts';
 import styles from './RoutingPanel.module.css';
+
+// t9 addition (plan §3.1 dispatch-time routing integration): the override
+// surface's request shape. Kept local to this component rather than
+// imported from contracts -- packages/contracts/src/api/chat.ts is outside
+// this wave's lease, so `routingOverride` is not yet a first-class
+// ChatRequest DTO field (see apps/daemon/src/routing/dispatch.ts's header
+// for the full governance-amendment rationale). This form is a STUB: it is
+// not wired to any live chat run (RoutingPanel is not yet mounted in the
+// chat flow -- see this file's own header), so "Preview" only renders the
+// same rationale sentence `resolveDispatchRouting`'s override path would
+// record, computed locally, to demonstrate the surface shape.
+interface RoutingOverrideDraft {
+  model: string;
+  lane: string;
+  reason: string;
+}
+
+function overrideRationale(draft: RoutingOverrideDraft): string {
+  const reason = draft.reason.trim().length > 0 ? draft.reason.trim() : 'no reason given';
+  return `user override to ${draft.model} on lane "${draft.lane}": ${reason}.`;
+}
 
 export interface RoutingPanelProps {
   /** Base daemon URL for the fetch calls below; empty string performs a
@@ -61,8 +84,19 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
   // registry only; `od route gates run` / POST /api/routing/gates/run
   // cover execution.
   const [gates, setGates] = useState<GateDefinitionDTO[]>([]);
+  // t9 addition (plan §5 P2 gate: "escalation/pass rates visible"):
+  // GET /api/routing/rates -- overall escalation/pass rate + by-stage
+  // breakdown, the same shape `od route rates --json` reads.
+  const [ratesTotalRuns, setRatesTotalRuns] = useState<number | null>(null);
+  const [ratesEscalation, setRatesEscalation] = useState<number | null>(null);
+  const [ratesPass, setRatesPass] = useState<number | null>(null);
+  const [ratesByStage, setRatesByStage] = useState<RoutingRatesByStage[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  // t9 addition: override control stub -- see `RoutingOverrideDraft`'s own
+  // doc comment above for why this is local-only, not wired to a live run.
+  const [overrideDraft, setOverrideDraft] = useState<RoutingOverrideDraft>({ model: '', lane: '', reason: '' });
+  const [overridePreview, setOverridePreview] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,14 +113,20 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
       // sends one.
       fetch(`${daemonUrl}/api/routing/decision/preview`).then((r) => (r.ok ? r.json() : null)),
       fetch(`${daemonUrl}/api/routing/gates`).then((r) => (r.ok ? r.json() : null)),
+      fetch(`${daemonUrl}/api/routing/rates`).then((r) => (r.ok ? r.json() : null)),
     ])
-      .then(([policyData, metersData, previewData, gatesData]) => {
+      .then(([policyData, metersData, previewData, gatesData, ratesData]) => {
         if (cancelled) return;
         setPolicyVersion(isRoutingPolicyResponse(policyData) ? policyData.policyVersion : null);
         setLaneMeters(isRoutingMetersResponse(metersData) ? metersData.laneMeters : []);
         setCooldowns(isRoutingMetersResponse(metersData) ? metersData.cooldowns : undefined);
         setDecision(isRoutingDecisionPreviewResponse(previewData) ? previewData.decision : null);
         setGates(isRoutingGatesRegistryResponse(gatesData) ? gatesData.gates : []);
+        const rates = isRoutingRatesResponse(ratesData) ? ratesData : null;
+        setRatesTotalRuns(rates ? rates.totalRuns : null);
+        setRatesEscalation(rates ? rates.escalationRate : null);
+        setRatesPass(rates ? rates.passRate : null);
+        setRatesByStage(rates ? rates.byStage : []);
       })
       .catch(() => {
         if (cancelled) return;
@@ -95,6 +135,10 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
         setCooldowns(undefined);
         setDecision(null);
         setGates([]);
+        setRatesTotalRuns(null);
+        setRatesEscalation(null);
+        setRatesPass(null);
+        setRatesByStage([]);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -216,6 +260,86 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
         ) : (
           <p className={styles.previewPlaceholder}>No decision preview available yet.</p>
         )}
+      </div>
+
+      <div className={styles.section} data-testid="routing-rates">
+        <h3 className={styles.sectionTitle}>Escalation / pass rates</h3>
+        {loading ? (
+          <p className={styles.empty}>Loading…</p>
+        ) : ratesTotalRuns === null || ratesTotalRuns === 0 ? (
+          <p className={styles.empty}>No routed runs recorded yet.</p>
+        ) : (
+          <>
+            <dl className={styles.summary}>
+              <dt>Escalation rate</dt>
+              <dd>{Math.round((ratesEscalation ?? 0) * 100)}%</dd>
+              <dt>Pass rate</dt>
+              <dd>{Math.round((ratesPass ?? 0) * 100)}%</dd>
+              <dt>Runs</dt>
+              <dd>{ratesTotalRuns}</dd>
+            </dl>
+            {ratesByStage.length > 0 ? (
+              <ul className={styles.meterList}>
+                {ratesByStage.map((s) => (
+                  <li key={`${s.stage}-${s.templateId ?? ''}`} className={styles.meterRow}>
+                    <span>
+                      {s.stage}
+                      {s.templateId ? ` (${s.templateId})` : ''}
+                    </span>
+                    <span>{s.runs} run(s)</span>
+                    <span>{Math.round(s.escalationRate * 100)}% escalated</span>
+                    <span>{Math.round(s.passRate * 100)}% pass</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </>
+        )}
+      </div>
+
+      <div className={styles.section} data-testid="routing-override">
+        <h3 className={styles.sectionTitle}>Override (stub)</h3>
+        <p className={styles.previewPlaceholder}>
+          Explicit overrides are resolved dispatch-side
+          (`resolveDispatchRouting`, `mode: &apos;override&apos;`) -- this panel is not yet
+          mounted in a live chat run, so the fields below only preview the
+          rationale sentence a real override would record.
+        </p>
+        <div className={styles.section}>
+          <input
+            type="text"
+            placeholder="model (e.g. claude-opus-5)"
+            value={overrideDraft.model}
+            onChange={(e) => setOverrideDraft((d) => ({ ...d, model: e.target.value }))}
+            data-testid="routing-override-model"
+          />
+          <input
+            type="text"
+            placeholder="lane (e.g. claude-code-oauth)"
+            value={overrideDraft.lane}
+            onChange={(e) => setOverrideDraft((d) => ({ ...d, lane: e.target.value }))}
+            data-testid="routing-override-lane"
+          />
+          <input
+            type="text"
+            placeholder="reason"
+            value={overrideDraft.reason}
+            onChange={(e) => setOverrideDraft((d) => ({ ...d, reason: e.target.value }))}
+            data-testid="routing-override-reason"
+          />
+        </div>
+        <Button
+          variant="ghost"
+          disabled={!overrideDraft.model.trim() || !overrideDraft.lane.trim()}
+          onClick={() => setOverridePreview(overrideRationale(overrideDraft))}
+        >
+          Preview override
+        </Button>
+        {overridePreview ? (
+          <p className={styles.previewPlaceholder} data-testid="routing-override-preview">
+            {overridePreview}
+          </p>
+        ) : null}
       </div>
 
       <div className={styles.section} data-testid="routing-gates">

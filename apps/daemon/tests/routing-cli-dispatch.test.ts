@@ -58,7 +58,7 @@ describe('od route dispatch', () => {
     const { stdout, stderr, code } = await runCli(['route', '--help']);
     expect(stderr).not.toContain('ReferenceError');
     expect(stderr).not.toContain('before initialization');
-    expect(stdout).toContain('od route <policy|preview|meters|telemetry|gates>');
+    expect(stdout).toContain('od route <policy|preview|meters|telemetry|gates|rates>');
     expect(code).toBe(0);
   });
 
@@ -113,6 +113,35 @@ describe('od route <policy|preview|meters|telemetry> --json against a live route
     expect(code).toBe(0);
     const parsed = JSON.parse(stdout) as { laneMeters: unknown[] };
     expect(parsed.laneMeters).toEqual([]);
+  });
+
+  // t9 (plan §5 P2 gate, WR-routing.md CWR-P2-4): `od route rates --json`
+  // and a bare `od route --json` (no subcommand at all) must resolve to the
+  // identical GET /api/routing/rates call. This harness registers the
+  // routes with no `db` (bare-express, per registerRoutingRoutes' own doc
+  // comment), so `laneMeters` degrades to `{}` here -- the non-empty-lane-
+  // meters guarantee (seeded from policy) is asserted against a REAL db in
+  // routing-dispatch.test.ts's `computeRoutingRates` coverage instead; this
+  // suite only proves the CLI dispatch/shape wiring itself.
+  it('od route rates --json prints the escalationRate/passRate/laneMeters shape', async () => {
+    const { stdout, stderr, code } = await runCli(['route', 'rates', '--json', '--daemon-url', baseUrl]);
+    expect(stderr).toBe('');
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout) as { escalationRate: number; passRate: number; laneMeters: Record<string, unknown> };
+    expect(parsed).toHaveProperty('escalationRate');
+    expect(parsed).toHaveProperty('passRate');
+    expect(parsed).toHaveProperty('laneMeters');
+    expect(parsed).toHaveProperty('byStage');
+  });
+
+  it('od route --json with NO subcommand resolves to the same rates call as `od route rates --json`', async () => {
+    const { stdout, stderr, code } = await runCli(['route', '--json', '--daemon-url', baseUrl]);
+    expect(stderr).toBe('');
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout) as { escalationRate: number; passRate: number; laneMeters: Record<string, unknown> };
+    expect(parsed).toHaveProperty('escalationRate');
+    expect(parsed).toHaveProperty('passRate');
+    expect(parsed).toHaveProperty('laneMeters');
   });
 });
 

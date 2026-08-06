@@ -30,11 +30,13 @@ import type {
   RoutingKey,
   RoutingMetersResponse,
   RoutingPolicyResponse,
+  RoutingRatesResponse,
   RoutingTelemetryListResponse,
 } from '@open-design/contracts';
 import {
   advanceGateCascadeState,
   classifyCascadeTrigger,
+  computeRoutingRates,
   DETERMINISTIC_GATE_IDS,
   decideRouting,
   estimatePromptTokens,
@@ -439,6 +441,33 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database, proj
       laneMeters,
       ...(db ? { cooldowns: computeCooldownStatuses(db, resolveCooldownConfig(loadRoutingPolicy()), new Date()) } : {}),
     };
+    res.json(response);
+  });
+
+  // GET /api/routing/rates -- escalation rate + gate pass rate (overall and
+  // by stage/template) + every lane's own meter, in one response (t9, plan
+  // §5 P2 gate: "escalation/pass rates visible"; WR-routing.md CWR-P2-4's
+  // lane-meter closure). `?windowMs=` scopes the aggregation to the trailing
+  // window, same convention as `/api/routing/meters`. `od route rates
+  // --json` (and a bare `od route --json` with no subcommand) reads this
+  // exact shape -- see apps/daemon/src/routing/dispatch.ts's
+  // `computeRoutingRates` for why `laneMeters` is guaranteed non-empty even
+  // against a brand-new daemon data dir with zero routed runs yet.
+  app.get('/api/routing/rates', (req: Request, res: Response) => {
+    const windowMsResult = parseOptionalQueryInt(req.query.windowMs, 'windowMs', EPOCH_MS_BOUNDS);
+    if (!windowMsResult.ok) return respondInvalidQuery(res, windowMsResult.message);
+    if (!db) {
+      const empty: RoutingRatesResponse = {
+        windowMs: windowMsResult.value ?? null,
+        totalRuns: 0,
+        escalationRate: 0,
+        passRate: 0,
+        laneMeters: {},
+        byStage: [],
+      };
+      return res.json(empty);
+    }
+    const response: RoutingRatesResponse = computeRoutingRates(db, windowMsResult.value);
     res.json(response);
   });
 

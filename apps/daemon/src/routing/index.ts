@@ -14,6 +14,7 @@ export { decideRouting, estimatePromptTokens, type DecideRoutingInput } from './
 export {
   computeBuildSpendUsd,
   computeDaySpendUsd,
+  computeStageAggregates,
   computeStageSpendUsd,
   computeLaneMeters,
   ensureRoutingTelemetryTable,
@@ -24,9 +25,33 @@ export {
   type RoutingReconciliation,
   type RoutingReconciliationStatus,
   type RoutingSpendSnapshot,
+  type RoutingStageAggregate,
   type RoutingTelemetryFilters,
   type RoutingTelemetryPagination,
 } from './telemetry.js';
+
+// Dispatch-time routing integration (WR wave, P2 tranche, t9 -- plan §3.1
+// binding point + §5's P2 phase gate). See dispatch.ts's own header for the
+// full rationale (routing-key fallback modes, pre-spawn intent recording,
+// post-run reconciliation, and the P2 escalation/pass-rate + lane-meter
+// snapshot).
+export {
+  computeRoutingRates,
+  recordDispatchIntent,
+  reconcilePostRun,
+  resolveDispatchRouting,
+  type DispatchBlockedError,
+  type DispatchChatRequest,
+  type DispatchMode,
+  type DispatchProjectContext,
+  type DispatchRoutingOverride,
+  type DispatchRuntimeDefault,
+  type RecordedDispatchIntent,
+  type ReconcilePostRunObserved,
+  type ReconcilePostRunResult,
+  type ResolveDispatchRoutingInput,
+  type ResolveDispatchRoutingResult,
+} from './dispatch.js';
 
 // L4 admission control (WR wave, P2 tranche -- plan §3.1 budget bullet,
 // §3.2 L4). See admission.ts's own header for the full rationale.

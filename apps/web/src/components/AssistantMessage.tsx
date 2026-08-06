@@ -53,6 +53,11 @@ import {
   type RunModelRouting,
   type WorkspaceContextItem,
 } from "@open-design/contracts";
+// WR wave (t9, plan §3.1 dispatch-time routing integration): a standalone
+// import (not folded into the block above) so this file's BYTE-PRESERVE
+// overlap with W1 never has to touch a pre-existing import line -- see
+// docs/plans/waves/WR-routing.md's "Lease" section entry for this file.
+import { isRoutingTelemetryListResponse } from "@open-design/contracts";
 import { OdCardView, type BrandBrowserAssistConfirm } from "./OdCard";
 import {
   normalizeVisualStyleQuestionValue,
@@ -722,6 +727,9 @@ function AssistantMessageImpl({
     | undefined;
   const roleName = assistantRoleName(message, t);
   const modelRouting = useModelRoutingForRun(message.runId, !streaming);
+  // WR wave (t9, plan §3.1 dispatch-time routing integration): "why this
+  // model" -- see useRoutingIntentForRun's own doc comment below.
+  const routingIntent = useRoutingIntentForRun(message.runId, !streaming);
   const runUsageStatus = useRunUsageForRun(message.runId, !streaming);
   const roleIconId = agentIconId(message.agentId, message.agentName);
   const hasEmptyResponse = events.some(
@@ -881,6 +889,7 @@ function AssistantMessageImpl({
       ) : null}
       {modelRouting ? <ModelRoutingStatus routing={modelRouting} /> : null}
       {runUsageStatus ? <RunPricingStatus usage={runUsageStatus} /> : null}
+      {routingIntent ? <RoutingIntentStatus intent={routingIntent} /> : null}
       <div className="assistant-flow">
         {taskActivity ? (
           <TaskActivityCard
@@ -1665,6 +1674,76 @@ function RunPricingStatus({ usage }: { usage: RunUsageStatus }) {
   return (
     <span
       className="assistant-run-pricing-status assistant-run-pricing-unavailable"
+      role="status"
+      aria-label={label}
+      style={{
+        ...MODEL_ROUTING_STATUS_BASE_STYLE,
+        color: "#4a4a4a",
+        background: "#eef0f2",
+        border: "1px solid #d7dbe0",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+// WR wave (t9, plan §3.1 dispatch-time routing integration): "why this
+// model" -- fetches the routing-telemetry row this run's dispatch recorded
+// (GET /api/routing/telemetry, this wave's own leased endpoint) rather than
+// widening ChatRunStatusResponse (packages/contracts/src/api/chat.ts is
+// outside this wave's lease). Same "fetch once, best-effort, never break
+// the message" discipline as useModelRoutingForRun/useRunUsageForRun above:
+// skips while streaming, silent on any fetch failure, renders nothing for a
+// run that never went through the routing dispatch hook (older runs, or a
+// hook that failed open per its own doc comment in server.ts).
+interface RoutingIntentStatus {
+  stage: string;
+  templateId: string | null;
+  routedModel: string;
+  routedLane: string;
+  policyVersion: number;
+}
+
+function useRoutingIntentForRun(
+  runId: string | null | undefined,
+  enabled: boolean,
+): RoutingIntentStatus | null {
+  const [intent, setIntent] = useState<RoutingIntentStatus | null>(null);
+  useEffect(() => {
+    setIntent(null);
+    if (!enabled || !runId) return;
+    const controller = new AbortController();
+    fetch(`/api/routing/telemetry?runId=${encodeURIComponent(runId)}&limit=1`, {
+      signal: controller.signal,
+    })
+      .then((resp) => (resp.ok ? resp.json() : null))
+      .then((data: unknown) => {
+        if (!isRoutingTelemetryListResponse(data) || data.rows.length === 0) return;
+        const row = data.rows[0]!;
+        setIntent({
+          stage: row.stage,
+          templateId: row.templateId,
+          routedModel: row.routedModel,
+          routedLane: row.routedLane,
+          policyVersion: row.policyVersion,
+        });
+      })
+      .catch(() => {
+        // Best-effort, same as the routing/usage status hooks above.
+      });
+    return () => controller.abort();
+  }, [runId, enabled]);
+  return intent;
+}
+
+function RoutingIntentStatus({ intent }: { intent: RoutingIntentStatus }) {
+  const label = `Routed to ${intent.routedModel} on lane "${intent.routedLane}" for stage "${intent.stage}"${
+    intent.templateId ? ` (template ${intent.templateId})` : ""
+  } — routing policy v${intent.policyVersion}.`;
+  return (
+    <span
+      className="assistant-model-routing assistant-routing-intent"
       role="status"
       aria-label={label}
       style={{
