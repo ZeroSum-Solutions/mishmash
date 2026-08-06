@@ -7,36 +7,48 @@
 // belongs to a separate plan, docs/plans/2026-08-05-model-routing-system.md)
 // and is deleted, with the rest of scripts/waves/, when that program closes.
 //
-// FIX ROUND 2 (2026-08-05): rewritten to address GPT-5.6 Sol's second REVISE
-// verdict. Round 1's GOVERNANCE_COMMIT two-commit pin did not survive review:
-// a verifier on an unlanded branch cannot fully self-attest -- any pin it
-// stores in its own commit history is a floating self-attestation, because
-// the branch containing the pin is exactly the branch whose content the pin
-// is supposed to constrain. That machinery (GOVERNANCE_COMMIT,
-// PIN_LINE_PATTERN, the two-commit sequence) is deleted entirely.
+// FIX ROUND 3 (2026-08-05): Sol-directed remediation, four new blockers after
+// round 2 resolved every prior HIGH.
 //
-// BASE-ANCHORED GOVERNANCE, WITH AN EXPLICIT PRE-LANDING MODE: this verifier
-// now reads governance (the WR lease entry, every OTHER wave's lease entry,
-// the normative PRD sections, the Tranche register baseline) from
-// `baseCommit` (merge-base with origin/main) -- exactly like every other
-// wave verifier in this repo. That is fully sound once this wave's P0 has
-// landed to main. Pre-landing (the actual current state: no `WR` key exists
-// in leases.json at baseCommit yet), the verifier reads its own governance
-// from HEAD instead, records `mode: "pre-landing"` prominently in the
-// manifest, and -- per WR-routing.md's Tranche-entry gate rule 4 -- locks
-// gating to P0's own criteria only, regardless of what the Tranche register
-// claims for P1/P2. This makes the pre-landing state non-exploitable: no
-// product-shaped tranche can ever be graded as passing while this wave's own
-// governance is unlanded. The landing PR's own adversarial review is the
-// enforcement surface for the governance content itself while pre-landing --
-// this verifier says so honestly instead of manufacturing a self-issued pin.
+//   1. Pre-landing scope lock: mode=pre-landing no longer only locks GATING
+//      to P0 -- it now asserts the diff itself touches ONLY the three
+//      governance files (this PRD, leases.json, this verifier). Any other
+//      path in a pre-landing diff is an unconditional blocking failure
+//      (PRE-LANDING-SCOPE). Without this, a pre-landing diff could carry
+//      untested product code that never blocks anything and still merges.
+//   2. Hardcoded criterion->tranche map: CRITERION_TRANCHE below is the
+//      single source of truth for which criterion belongs to which tranche.
+//      GATE-INTEGRITY cross-checks the PRD's Tranche register rows against
+//      it and fails on divergence; the gating set is computed from this
+//      CONSTANT plus the register's open/complete STATUS only -- never from
+//      the register's own parsed criteria-per-row text. This closes the
+//      exploit where editing the PRD table's "Owns criteria" column could
+//      reassign which criteria gate.
+//   3. Verifier self-freeze post-landing: once mode=post-landing, this file
+//      itself must be byte-identical to its baseCommit version (folded into
+//      CWR-P0-4) -- "verifier changes are governance changes." Exempted
+//      pre-landing (the file is still being authored), which fix 1 makes
+//      safe: a pre-landing diff can only touch governance files anyway.
+//   4. FROZEN_SECTION_HEADINGS now also covers Tranche-entry gate, Verifier
+//      contract, Enforcement boundaries, and Review protocol.
+//
+// Also this round: existsAtRef()/readAt() discriminate "path missing at a
+// valid ref" (git says "fatal: path '...' does not exist in '<ref>'") from
+// a real command failure (any other stderr), throwing on the latter instead
+// of silently reading it as "missing" (M6 residue). HEAD-DRIFT's final,
+// authoritative re-read now runs immediately before the manifest write
+// (after GATE-INTEGRITY phase 1, before phase 2) in addition to the earlier
+// post-probe check.
+//
+// FIX ROUND 2: replaced the round-1 GOVERNANCE_COMMIT two-commit pin with
+// base-anchored governance (read from baseCommit, merge-base with
+// origin/main) plus an explicit pre-landing mode for the current, actual
+// state (no WR key at baseCommit yet) -- a verifier on an unlanded branch
+// cannot fully self-attest via a pin stored in its own history.
 //
 // STATUS ENUM: exactly pass | fail | blocked-on-founder, matching
 // VERIFICATION-CONTRACT.md §2. Any non-pass status on a gating criterion
-// blocks exit 0, including blocked-on-founder (a legal terminal state for
-// *landing* decisions, but this autonomous run still exits non-zero on one).
-// GATE-INTEGRITY and LEASE-INTEGRITY are unconditionally gating regardless
-// of tranche/mode -- see WR-routing.md's Tranche register grading rule.
+// blocks exit 0, including blocked-on-founder.
 //
 // Run: pnpm exec tsx scripts/waves/verify-wr-routing.ts
 
@@ -54,34 +66,55 @@ fs.mkdirSync(proofDir, { recursive: true });
 
 const PRD_PATH = 'docs/plans/waves/WR-routing.md';
 const LEASES_PATH = 'docs/plans/waves/leases.json';
+const VERIFIER_PATH = 'scripts/waves/verify-wr-routing.ts';
+// The ONLY paths a pre-landing diff may touch (fix-round-3, finding 1).
+const GOVERNANCE_ONLY_FILES: readonly string[] = [PRD_PATH, LEASES_PATH, VERIFIER_PATH];
 
 // ---------------------------------------------------------------- helpers --
 
-function sh(cmd: string, args: string[], cwd: string = repoRoot, timeoutMs = 15 * 60_000): { status: number; stdout: string } {
+function sh(cmd: string, args: string[], cwd: string = repoRoot, timeoutMs = 15 * 60_000): { status: number; stdout: string; stderr: string } {
   try {
     const stdout = execFileSync(cmd, args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs });
-    return { status: 0, stdout };
+    return { status: 0, stdout, stderr: '' };
   } catch (error) {
-    const e = error as { status?: number; stdout?: string };
-    return { status: e.status ?? 1, stdout: e.stdout ?? '' };
+    const e = error as { status?: number; stdout?: string; stderr?: string };
+    return { status: e.status ?? 1, stdout: e.stdout ?? '', stderr: e.stderr ?? '' };
   }
 }
 
-// Hard-fail helper (fix-round-1 MED-8, extended fix-round-2 point 9): any
-// proof-bearing git command error is a verifier failure, never a swallowed
-// empty string treated as "no change".
+// Hard-fail helper: any proof-bearing git command error is a verifier
+// failure, never a swallowed empty string treated as "no change".
 function gitOrFail(args: string[], timeoutMs?: number): string {
   const r = sh('git', args, repoRoot, timeoutMs);
-  if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed (exit ${r.status}): ${r.stdout.slice(0, 500)}`);
+  if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed (exit ${r.status}): ${(r.stderr || r.stdout).slice(0, 500)}`);
   return r.stdout.trim();
 }
 
+// Discriminates "the path doesn't exist at this ref" (expected, not an
+// error) from a real git command failure (bad ref, corrupt repo, etc.),
+// which must hard-fail instead of being silently read as "missing"
+// (fix-round-3, finding 5 / M6 residue). Empirically verified against this
+// git version: a missing path at a VALID ref says exactly
+// "fatal: path '<path>' does not exist in '<ref>'" on stderr; an invalid
+// ref itself says "fatal: invalid object name '<ref>'" -- that is a command
+// failure, not a missing-path condition, since every ref this file passes
+// (baseCommit, HEAD) is one it resolved itself and expects to be valid.
+function classifyGitPathError(stderr: string): 'missing-path' | 'command-failure' {
+  return /^fatal: path '.*' does not exist in /.test(stderr.trim()) ? 'missing-path' : 'command-failure';
+}
+
+function existsAtRef(ref: string, relPath: string): boolean {
+  const r = sh('git', ['cat-file', '-e', `${ref}:${relPath}`]);
+  if (r.status === 0) return true;
+  if (classifyGitPathError(r.stderr) === 'missing-path') return false;
+  throw new Error(`git cat-file -e ${ref}:${relPath} failed unexpectedly (exit ${r.status}): ${r.stderr.slice(0, 500)}`);
+}
+
 function readAt(commit: string, relPath: string): string | null {
-  try {
-    return execFileSync('git', ['show', `${commit}:${relPath}`], { cwd: repoRoot, encoding: 'utf8' });
-  } catch {
-    return null;
-  }
+  const r = sh('git', ['show', `${commit}:${relPath}`]);
+  if (r.status === 0) return r.stdout;
+  if (classifyGitPathError(r.stderr) === 'missing-path') return null;
+  throw new Error(`git show ${commit}:${relPath} failed unexpectedly (exit ${r.status}): ${r.stderr.slice(0, 500)}`);
 }
 
 function readText(relPath: string): string | null {
@@ -93,8 +126,26 @@ function readText(relPath: string): string | null {
   }
 }
 
-function existsAtRef(ref: string, relPath: string): boolean {
-  return sh('git', ['cat-file', '-e', `${ref}:${relPath}`]).status === 0;
+interface WaveLeaseEntry {
+  slug?: string;
+  allow?: unknown;
+  deny?: unknown;
+  note?: string;
+}
+interface LeasesFile {
+  waves?: Record<string, WaveLeaseEntry>;
+}
+interface PrdLease {
+  slug?: string;
+  allow?: unknown;
+  deny?: unknown;
+}
+function parseLeasesText(text: string | null): LeasesFile | null {
+  try {
+    return text ? (JSON.parse(text) as LeasesFile) : null;
+  } catch {
+    return null;
+  }
 }
 
 interface CriterionResult {
@@ -121,8 +172,8 @@ function record(id: string, command: string, assertion: string, status: 'pass' |
 }
 
 // Wraps a criterion's computation so an unexpected exception (including a
-// hard git failure via gitOrFail inside the criterion body) becomes an
-// honest 'fail' entry instead of aborting the whole run past this one check.
+// hard git failure inside the criterion body) becomes an honest 'fail'
+// entry instead of aborting the whole run past this one check.
 function safely(id: string, command: string, assertion: string, fn: () => { status: 'pass' | 'fail' | 'blocked-on-founder'; evidence: string; detail?: string }): void {
   try {
     const r = fn();
@@ -157,16 +208,11 @@ function matchesAnyGlob(filePath: string, globs: readonly string[]): boolean {
 function isLiteralGlob(glob: string): boolean {
   return !/[*?]/.test(glob);
 }
-// Real glob-intersection (fix-round-1, HIGH-2): two globs can share a path
-// when one's literal prefix (everything before its first */?) is a prefix
-// of the other's -- the conservative structural check the finding asked
-// for. DELIBERATELY CONSERVATIVE (over-inclusive) by design: prefix
-// containment can flag two globs as intersecting even where their true
-// match sets never actually overlap for every possible path (e.g. two
-// different literal segments after a shared wildcard boundary would still
-// need per-path checking to disprove) -- that is the correct failure
-// direction here, since a false positive costs a line of documentation and
-// a false negative costs a silent write conflict (fix-round-2, partial-2).
+// Real glob-intersection: two globs can share a path when one's literal
+// prefix (everything before its first */?) is a prefix of the other's --
+// the conservative structural check the finding asked for. DELIBERATELY
+// CONSERVATIVE (over-inclusive) by design: a false positive costs a line of
+// documentation, a false negative costs a silent write conflict.
 function globPrefix(glob: string): string {
   const idx = glob.search(/[*?]/);
   return idx === -1 ? glob : glob.slice(0, idx);
@@ -194,11 +240,10 @@ function extractSection(text: string, heading: string): string | null {
   return lines.slice(start, end).join('\n');
 }
 
-// Real, mechanical byte-preservation proof (fix-round-1, MED-7): every
-// removed/changed line in `git diff --unified=0 fromRef..toRef -- filePath`
-// is a violation, except lines matching ignorePattern. Hard-fails on a git
-// error (fix-round-2, point 9) instead of silently reading an empty diff as
-// "no changes".
+// Real, mechanical byte-preservation proof: every removed/changed line in
+// `git diff --unified=0 fromRef..toRef -- filePath` is a violation, except
+// lines matching ignorePattern. Hard-fails on a git error instead of
+// silently reading an empty diff as "no changes".
 function diffRemovals(fromRef: string, toRef: string, filePath: string, ignorePattern?: RegExp): string[] {
   const diff = gitOrFail(['diff', '--unified=0', `${fromRef}..${toRef}`, '--', filePath]);
   const removals: string[] = [];
@@ -249,10 +294,6 @@ const CANONICAL_DENY: readonly string[] = [
   'scripts/waves/verify-w6a-*.ts',
 ];
 
-// Every real allow-glob collision this wave has with another wave's allow
-// list, computed by globsIntersect() and surviving corrected deny-precedence
-// -- enumerated here as the ground truth CWR-P0-3 checks the live
-// computation against. Mirrors WR-routing.md's "Lease" section tables A/B.
 interface Overlap {
   file: string;
   pattern: string;
@@ -309,64 +350,91 @@ const OVERLAP_FILES: readonly string[] = [
   'apps/web/src/components/AssistantMessage.tsx',
 ];
 
+// fix-round-3, finding 4: extended to cover every remaining normative
+// prose section, not just the data-shaped ones.
 const FROZEN_SECTION_HEADINGS: readonly string[] = [
+  '## Tranche-entry gate for P1/P2',
   '## Routing-key fallback (normative)',
   '## Screenshot-baseline rules (normative)',
+  '## Verifier contract',
+  '## Enforcement boundaries',
   '## Lease',
+  '## Review protocol',
   '## Explicitly out of scope',
   '## Success criteria',
 ];
 
-interface WaveLeaseEntry {
-  slug?: string;
-  allow?: unknown;
-  deny?: unknown;
-  note?: string;
-}
-interface LeasesFile {
-  waves?: Record<string, WaveLeaseEntry>;
-}
-interface PrdLease {
-  slug?: string;
-  allow?: unknown;
-  deny?: unknown;
+// Canonical criterion -> tranche ownership (fix-round-3, finding 2). The
+// SOLE source of truth for gating: GATE-INTEGRITY cross-checks the PRD's
+// Tranche register rows against this map and fails on divergence; the
+// gating set is derived from this map + the register's open/complete
+// STATUS per tranche name -- never from the register's own parsed
+// criteria-per-row text, closing the in-memory register-rewrite exploit.
+// 'always-gating' items bypass the register/mode mechanism entirely; 'P0'
+// items are tranche-scoped but P0 can never revert to open once complete,
+// so in practice this group behaves as always-gating too. The PRD's P0 row
+// documents 'P0' ids UNION 'always-gating' ids together (no separate
+// "always-gating" table row exists) -- GATE-INTEGRITY's cross-check
+// computes that same union when validating the P0 row.
+type TrancheOwnership = 'P0' | 'P1' | 'P2' | 'always-gating';
+const CRITERION_TRANCHE: Readonly<Record<string, TrancheOwnership>> = {
+  'CWR-P0-1': 'P0',
+  'CWR-P0-2': 'P0',
+  'CWR-P0-3': 'P0',
+  'CWR-P0-4': 'P0',
+  LEASE: 'P0',
+  'HEAD-DRIFT': 'P0',
+  'BYTE-PRESERVE': 'P0',
+  'LEASE-INTEGRITY': 'always-gating',
+  'GATE-INTEGRITY': 'always-gating',
+  'CWR-P2-5': 'always-gating',
+  'PRE-LANDING-SCOPE': 'always-gating',
+  'CWR-P1-1': 'P1',
+  'CWR-P1-2': 'P1',
+  'CWR-P1-3': 'P1',
+  'CWR-P2-1': 'P2',
+  'CWR-P2-2': 'P2',
+  'CWR-P2-3': 'P2',
+  'CWR-P2-4': 'P2',
+};
+const ALL_CRITERION_IDS = Object.keys(CRITERION_TRANCHE);
+const ALWAYS_GATING_IDS = new Set(Object.entries(CRITERION_TRANCHE).filter(([, t]) => t === 'always-gating').map(([id]) => id));
+function idsForTranche(tranche: 'P0' | 'P1' | 'P2'): string[] {
+  const own = Object.entries(CRITERION_TRANCHE).filter(([, t]) => t === tranche).map(([id]) => id);
+  return tranche === 'P0' ? [...own, ...ALWAYS_GATING_IDS] : own;
 }
 
 // ------------------------------------------------------- git state (start) --
-// Resolved once, hard-fail on error. Re-resolved by HEAD-DRIFT AFTER all
-// behavioral probes complete (fix-round-2, point 13) to catch mid-run drift.
+// Resolved once, hard-fail on error. Re-checked by HEAD-DRIFT after all
+// behavioral probes, and again -- authoritatively -- immediately before the
+// manifest write (fix-round-3, finding 6).
 let headSha: string;
 let baseCommit: string;
+let diffNames: string[];
+let headLeasesJson: LeasesFile | null;
+let baseLeasesJson: LeasesFile | null;
 try {
   headSha = gitOrFail(['rev-parse', 'HEAD']);
   baseCommit = gitOrFail(['merge-base', 'origin/main', 'HEAD']);
+  diffNames = gitOrFail(['diff', '--name-only', `${baseCommit}...HEAD`]).split('\n').filter(Boolean);
+  headLeasesJson = parseLeasesText(readText(LEASES_PATH));
+  baseLeasesJson = parseLeasesText(readAt(baseCommit, LEASES_PATH));
 } catch (error) {
   console.error(`verify-wr-routing: FATAL git resolution error at start -- ${String(error)}`);
   process.exit(1);
 }
-const diffNames = gitOrFail(['diff', '--name-only', `${baseCommit}...HEAD`]).split('\n').filter(Boolean);
 
 // ============================================================
-// Mode detection (fix-round-2, point A) -- read leases.json at baseCommit;
-// a WR key there means this wave's governance has landed to main.
+// Mode detection -- a WR key in leases.json at baseCommit means this wave's
+// governance has landed to main.
 // ============================================================
-interface WaveLeaseEntry2 extends WaveLeaseEntry {}
-function parseLeasesText(text: string | null): LeasesFile | null {
-  try {
-    return text ? (JSON.parse(text) as LeasesFile) : null;
-  } catch {
-    return null;
-  }
-}
-const headLeasesJson = parseLeasesText(readText(LEASES_PATH));
-const headWavesRecord: Record<string, WaveLeaseEntry2> = headLeasesJson?.waves ?? {};
-const wrLease: WaveLeaseEntry2 | undefined = headWavesRecord.WR;
+const headWavesRecord: Record<string, WaveLeaseEntry> = headLeasesJson?.waves ?? {};
+const wrLease: WaveLeaseEntry | undefined = headWavesRecord.WR;
 const allowStr: readonly string[] = wrLease && Array.isArray(wrLease.allow) ? (wrLease.allow as string[]) : CANONICAL_ALLOW;
 const denyStr: readonly string[] = wrLease && Array.isArray(wrLease.deny) ? (wrLease.deny as string[]) : CANONICAL_DENY;
 
-const baseLeasesJson = parseLeasesText(readAt(baseCommit, LEASES_PATH));
-const baseWavesRecord: Record<string, WaveLeaseEntry2> = baseLeasesJson?.waves ?? {};
-const baseWrLease: WaveLeaseEntry2 | undefined = baseWavesRecord.WR;
+const baseWavesRecord: Record<string, WaveLeaseEntry> = baseLeasesJson?.waves ?? {};
+const baseWrLease: WaveLeaseEntry | undefined = baseWavesRecord.WR;
 const mode: 'pre-landing' | 'post-landing' = baseWrLease ? 'post-landing' : 'pre-landing';
 
 // ============================================================
@@ -377,7 +445,7 @@ const prdText = readText(PRD_PATH);
   const requiredMarkers: [string, RegExp][] = [
     ['identity header names the wave and slug', /^# Wave WR — Model routing system/m],
     ['slug line', /\*\*Slug:\*\* `wr-routing`/],
-    ['fix round 2 review status recorded', /fix round 2 \(final before escalation/],
+    ['fix round 3 review status recorded', /fix-round-3/],
     ['root cause recorded (self-attestation)', /a verifier on an unlanded branch cannot fully\s*self-attest/],
     ['P0 phase section', /^### P0 — Governance \+ closure scaffold \(this tranche\)$/m],
     ['P1 phase section', /^### P1 — Policy \+ telemetry \(advisory\)$/m],
@@ -391,10 +459,12 @@ const prdText = readText(PRD_PATH);
     ['fresh-main ancestry rule', /Fresh-main ancestry\./],
     ['byte-preservation rule', /Byte-preservation on every overlap file\./],
     ['W6a untouched rule', /W6a untouched\./],
-    ['P0-must-land-first rule (fix-round-2)', /P0 \(governance\) must have landed to `main` first \(fix-round-2, root-cause fix\)/],
+    ['P0-must-land-first rule', /P0 \(governance\) must have landed to `main` first/],
+    ['pre-landing diff scope rule (fix-round-3, finding 1)', /pre-landing diffs are governance-only/],
     ['tranche register section', /^## Tranche register$/m],
     ['tranche register grading rule (HIGH-3)', /Grading rule \(fix-round-1, HIGH-3, replacing the removed `skip` status\)/],
-    ['GATE-INTEGRITY/LEASE-INTEGRITY unconditional gating (new-HIGH-2)', /GATE-INTEGRITY.*and.*LEASE-INTEGRITY.*are the sole exceptions/],
+    ['always-gating exceptions named', /are the sole exceptions: they are unconditionally exit-blocking/],
+    ['hardcoded criterion-tranche map described (fix-round-3, finding 2)', /CRITERION_TRANCHE/],
     ['routing-key fallback section (normative)', /^## Routing-key fallback \(normative\)$/m],
     ['routing-key nullable component (MED-9)', /key = \(templateId \| NONE\) × \(buildClass \| NONE\) × stage/],
     ['routing-key fallback B: general chat', /General chat \(no brief, no template\)/],
@@ -405,14 +475,15 @@ const prdText = readText(PRD_PATH);
     ['screenshot-baseline negative-control calibration step', /Negative-control calibration\./],
     ['screenshot-baseline promotion to baseline v1', /the render become \*\*baseline v1\*\*/],
     ['verifier contract section', /^## Verifier contract$/m],
-    ['base-anchored governance subsection (fix-round-2)', /^### Base-anchored governance, with an explicit pre-landing mode \(fix-round-2, replaces the round-1 two-commit pin\)$/m],
+    ['base-anchored governance subsection', /^### Base-anchored governance, with an explicit pre-landing mode/m],
     ['mode detection described', /\*\*Mode detection\.\*\*/],
     ['pre-landing mode described', /\*\*`mode: "pre-landing"`\*\*/],
-    ['fresh-main fail-closed subsection', /^### Fresh-main, fail-closed \(fix-round-1, MED-8; hardened fix-round-2, new-HIGH-4\)$/m],
-    ['byte-preservation unconditional subsection', /^### Byte-preservation, unconditional \(fix-round-1, MED-7; hardened fix-round-2, new-HIGH-3\)$/m],
-    ['lease-collision corrected deny-precedence subsection', /^### Real lease-collision detection, with corrected deny-precedence \(fix-round-1, HIGH-2; corrected fix-round-2, partial-2\)$/m],
-    ['behavioral probes subsection', /^### Behavioral probes, not shape checks \(fix-round-1, HIGH-4\)$/m],
-    ['gate-integrity two-phase subsection', /^### GATE-INTEGRITY runs last, as a two-phase write \(fix-round-2, LOW-8\)$/m],
+    ['verifier self-freeze described (fix-round-3, finding 3)', /verifier changes are governance changes/],
+    ['fresh-main fail-closed subsection', /^### Fresh-main, fail-closed/m],
+    ['byte-preservation unconditional subsection', /^### Byte-preservation, unconditional/m],
+    ['lease-collision corrected deny-precedence subsection', /^### Real lease-collision detection, with corrected deny-precedence/m],
+    ['behavioral probes subsection', /^### Behavioral probes, not shape checks/m],
+    ['gate-integrity two-phase subsection', /^### GATE-INTEGRITY runs last, as a two-phase write/m],
     ['enforcement boundaries section', /^## Enforcement boundaries$/m],
     ['lease section', /^## Lease$/m],
     ['review protocol section', /^## Review protocol$/m],
@@ -442,8 +513,7 @@ const prdText = readText(PRD_PATH);
 
 // ============================================================
 // CWR-P0-2 -- lease matches the PRD's own declared JSON block, and both
-// match the canonical lists defined in this file. Mode-independent: this is
-// HEAD-internal consistency, not a freeze check.
+// match the canonical lists defined in this file. Mode-independent.
 // ============================================================
 {
   const problems: string[] = [];
@@ -487,9 +557,7 @@ const prdText = readText(PRD_PATH);
 
 // ============================================================
 // CWR-P0-3 -- no undocumented lease collisions, via real glob-intersection
-// with CORRECTED deny-precedence (fix-round-2, partial-2). Other waves'
-// leases are read from baseCommit (fix-round-2, point A.1) -- their
-// content is always already on main, in both modes.
+// with corrected deny-precedence. Other waves' leases read from baseCommit.
 // ============================================================
 safely(
   'CWR-P0-3',
@@ -505,10 +573,6 @@ safely(
         const theirDeny = Array.isArray(lease.deny) ? (lease.deny as unknown[]).filter((x): x is string => typeof x === 'string') : [];
         for (const theirGlob of theirAllow) {
           if (!globsIntersect(ourGlob, theirGlob)) continue;
-          // Corrected deny-precedence (fix-round-2): only excludes when OUR
-          // glob is a literal path (no wildcard) AND their deny pattern
-          // actually regex-matches it -- a deny only narrows the paths it
-          // matches, never the whole overlap by mere prefix intersection.
           const deniedByOwner = isLiteralGlob(ourGlob) && theirDeny.some((d) => globToRegExp(d).test(ourGlob));
           if (deniedByOwner) continue;
           const key = `${ourGlob}||${theirGlob}||${waveName}`;
@@ -543,20 +607,23 @@ safely(
 
 // ============================================================
 // CWR-P0-4 -- governance content is base-anchored and un-widened once
-// landed (fix-round-2, replaces the round-1 GOVERNANCE_COMMIT pin).
+// landed; ALSO the verifier's own self-freeze (fix-round-3, finding 3):
+// once post-landing, verify-wr-routing.ts itself must be byte-identical to
+// its baseCommit version. Pre-landing exempts this (the file is still being
+// authored), which fix 1 (PRE-LANDING-SCOPE) makes safe.
 // ============================================================
 safely(
   'CWR-P0-4',
-  `mode=${mode}; git show <baseCommit>:{${LEASES_PATH},${PRD_PATH}}`,
-  "in pre-landing mode, nothing to freeze against yet (pass, enforced instead by the landing PR's review); once post-landing, leases.json's WR entry and this document's frozen sections are byte-identical to their baseCommit versions",
+  `mode=${mode}; git show <baseCommit>:{${LEASES_PATH},${PRD_PATH},${VERIFIER_PATH}}`,
+  "in pre-landing mode, nothing to freeze against yet (pass, enforced instead by the landing PR's review); once post-landing, leases.json's WR entry, this document's frozen sections, and this verifier file are byte-identical to their baseCommit versions",
   () => {
     if (mode === 'pre-landing') {
       return {
         status: 'pass',
         evidence:
           `mode=pre-landing: no WR key exists in leases.json@baseCommit=${baseCommit} -- this wave's governance has not landed to main yet, so there is nothing to freeze against. ` +
-          'This is the expected, stable state (not a transient/incomplete one): pinning becomes enforceable the moment P0 lands. Until then the landing PR\'s own adversarial review is the enforcement surface for the governance content itself. ' +
-          'Per the Tranche-entry gate rule 4, gating is hardcoded to P0\'s own criteria only while mode=pre-landing, so this pass carries no risk of a product tranche free-riding on it.',
+          "This is the expected, stable state: pinning becomes enforceable the moment P0 lands. Until then the landing PR's own adversarial review is the enforcement surface for the governance content itself. " +
+          "Per fix-round-3 finding 1 (PRE-LANDING-SCOPE), a pre-landing diff can only touch this document, leases.json, and this verifier -- so this pass carries no risk of a product tranche free-riding on it.",
       };
     }
     const problems: string[] = [];
@@ -572,21 +639,25 @@ safely(
         problems.push(`frozen section "${heading}" differs from its baseCommit version (or is missing at one end)`);
       }
     }
+    const baseVerifierText = readAt(baseCommit, VERIFIER_PATH);
+    const headVerifierText = readText(VERIFIER_PATH);
+    if (baseVerifierText === null || headVerifierText === null || baseVerifierText !== headVerifierText) {
+      problems.push('scripts/waves/verify-wr-routing.ts differs from its baseCommit version -- verifier changes are governance changes: land them via a governance-only diff reviewed as blocked-on-founder');
+    }
     return {
       status: problems.length === 0 ? 'pass' : 'fail',
-      evidence: problems.length === 0 ? `mode=post-landing: governance content matches baseCommit=${baseCommit} exactly (frozen sections + WR lease entry)` : problems.join('\n'),
+      evidence: problems.length === 0 ? `mode=post-landing: governance content matches baseCommit=${baseCommit} exactly (frozen sections + WR lease entry + verifier self-freeze)` : problems.join('\n'),
     };
   },
 );
 
 // ============================================================
 // LEASE-INTEGRITY -- every OTHER wave's lease entry is byte-identical
-// between baseCommit and HEAD (fix-round-2, new-HIGH-5). Unconditionally
-// gating regardless of tranche/mode.
+// between baseCommit and HEAD. Unconditionally gating.
 // ============================================================
 safely(
   'LEASE-INTEGRITY',
-  `diff leases.json@baseCommit vs HEAD for every waves.* key except WR`,
+  'diff leases.json@baseCommit vs HEAD for every waves.* key except WR',
   "every non-WR entry in leases.json is byte-identical between baseCommit and HEAD -- this wave's diff never touches another wave's entry",
   () => {
     const problems: string[] = [];
@@ -630,8 +701,33 @@ safely(
 );
 
 // ============================================================
+// PRE-LANDING-SCOPE (fix-round-3, finding 1) -- while mode=pre-landing, the
+// diff may ONLY touch the three governance files. Unconditionally gating.
+// This is the root-cause fix: without it, a pre-landing diff could carry
+// untested product code that never blocks anything and still merges.
+// ============================================================
+safely(
+  'PRE-LANDING-SCOPE',
+  `git diff --name-only ${baseCommit}...HEAD (checked against the governance-only allowlist while mode=pre-landing)`,
+  'while mode=pre-landing, the diff touches ONLY the three governance files -- pre-landing diffs are governance-only; product tranches require P0 landed to main',
+  () => {
+    if (mode !== 'pre-landing') {
+      return { status: 'pass', evidence: `mode=${mode}: this check only constrains pre-landing diffs; not applicable post-landing.` };
+    }
+    const outside = diffNames.filter((f) => !GOVERNANCE_ONLY_FILES.includes(f));
+    return {
+      status: outside.length === 0 ? 'pass' : 'fail',
+      evidence:
+        outside.length === 0
+          ? `all ${diffNames.length} changed files are governance-only: ${diffNames.join(', ') || '(none)'}`
+          : `RULE VIOLATION: pre-landing diffs are governance-only; product tranches require P0 landed to main. Non-governance file(s) present in a pre-landing diff: ${outside.join(', ')}`,
+    };
+  },
+);
+
+// ============================================================
 // BYTE-PRESERVE -- overlap files are additive-only and never deleted since
-// baseCommit (fix-round-1, MED-7; hardened fix-round-2, new-HIGH-3).
+// baseCommit.
 // ============================================================
 safely(
   'BYTE-PRESERVE',
@@ -658,11 +754,11 @@ safely(
 );
 
 // ============================================================
-// Behavioral probes (fix-round-1, HIGH-4). Real test/CLI invocations, never
-// filename/source-shape checks. They legitimately fail today because P1/P2
-// code does not exist yet -- see the Tranche register for why that does not
-// block this run's exit code. Suite QUALITY is a review boundary, not a
-// verifier boundary -- see WR-routing.md "Enforcement boundaries".
+// Behavioral probes. Real test/CLI invocations, never filename/source-shape
+// checks. They legitimately fail today because P1/P2 code does not exist
+// yet -- see the Tranche register for why that does not block this run's
+// exit code. Suite QUALITY is a review boundary, not a verifier boundary --
+// see WR-routing.md "Enforcement boundaries".
 // ============================================================
 interface VitestProbeResult {
   exitStatus: number;
@@ -726,7 +822,7 @@ gradeVitestCriterion(
 
 safely(
   'CWR-P1-3',
-  `grep routingPolicyVersion apps/daemon/src/backup/create.ts; test -f packages/contracts/src/api/routing-telemetry.ts`,
+  'grep routingPolicyVersion apps/daemon/src/backup/create.ts; test -f packages/contracts/src/api/routing-telemetry.ts',
   'policy version + telemetry rows are in the backup set (app-config + sqlite-database archive classes, no new ArchiveClass needed)',
   () => {
     const createSrc = readText('apps/daemon/src/backup/create.ts') ?? '';
@@ -787,27 +883,29 @@ safely(
 );
 
 // ============================================================
-// CWR-P2-5 -- selector-eval floors unchanged. Real and always-gating: this
-// needs no implementation, only a diff.
+// CWR-P2-5 -- selector-eval floors unchanged. Real and always-gating.
 // ============================================================
-{
-  const floorsPath = 'evals/selector/floors.json';
-  const touchedFloors = diffNames.includes(floorsPath);
-  const floorsExistsAtBase = existsAtRef(baseCommit, floorsPath);
-  record(
-    'CWR-P2-5',
-    `git diff --name-only ${baseCommit}...HEAD -- ${floorsPath}`,
-    'evals/selector/floors.json is byte-identical between baseCommit and HEAD on every run of this verifier, including this P0 run',
-    !touchedFloors ? 'pass' : 'fail',
-    `floorsExistsAtBase=${floorsExistsAtBase}; touchedInDiff=${touchedFloors}`,
-  );
-}
+safely(
+  'CWR-P2-5',
+  `git diff --name-only ${baseCommit}...HEAD -- evals/selector/floors.json`,
+  'evals/selector/floors.json is byte-identical between baseCommit and HEAD on every run of this verifier, including this P0 run',
+  () => {
+    const floorsPath = 'evals/selector/floors.json';
+    const touchedFloors = diffNames.includes(floorsPath);
+    const floorsExistsAtBase = existsAtRef(baseCommit, floorsPath);
+    return {
+      status: !touchedFloors ? 'pass' : 'fail',
+      evidence: `floorsExistsAtBase=${floorsExistsAtBase}; touchedInDiff=${touchedFloors}`,
+    };
+  },
+);
 
 // ============================================================
-// HEAD-DRIFT -- runs AFTER all behavioral probes (fix-round-2, point 13):
-// fresh-main is now fail-closed (new-HIGH-4), and baseCommit/HEAD are
-// re-resolved here to catch a concurrent commit landing mid-run, including
-// during the (potentially slow) probes above.
+// HEAD-DRIFT -- runs AFTER all behavioral probes: fresh-main is fail-closed,
+// and baseCommit/HEAD are re-resolved here to catch a concurrent commit
+// landing mid-run, including during the (potentially slow) probes above.
+// A SECOND, authoritative re-read happens later, immediately before the
+// manifest write (fix-round-3, finding 6) -- this is the "post-probe" one.
 // ============================================================
 let freshMain: 'verified' | 'stale' | 'unverifiable' = 'unverifiable';
 safely(
@@ -833,12 +931,11 @@ safely(
         freshMain = isAncestor ? 'verified' : 'stale';
       }
     }
-    // Fail-closed: "unverifiable" is a fail, not a soft pass (fix-round-2, new-HIGH-4).
     const ok = stable && baseIsAncestor && freshMain === 'verified';
     const status: 'pass' | 'fail' | 'blocked-on-founder' = ok ? 'pass' : freshMain === 'unverifiable' && stable && baseIsAncestor ? 'blocked-on-founder' : 'fail';
     const base = {
       status,
-      evidence: `stable=${stable} baseIsAncestor=${baseIsAncestor} freshMain=${freshMain} remoteMainSha=${remoteMainSha ?? 'null'}\nbaseCommit=${baseCommit} head=${headSha} endBase=${endBaseCommit} endHead=${endHeadSha}`,
+      evidence: `[post-probe check] stable=${stable} baseIsAncestor=${baseIsAncestor} freshMain=${freshMain} remoteMainSha=${remoteMainSha ?? 'null'}\nbaseCommit=${baseCommit} head=${headSha} endBase=${endBaseCommit} endHead=${endHeadSha}`,
     };
     return freshMain === 'unverifiable'
       ? { ...base, detail: 'remote main tip could not be reached/fetched -- a human may need to confirm connectivity; an autonomous run still exits non-zero on this' }
@@ -847,9 +944,8 @@ safely(
 );
 
 // ============================================================
-// Tranche register (fix-round-1, HIGH-3; base-anchored fix-round-2, point
-// A.4) -- HEAD register always parsed; baseCommit register parsed only in
-// post-landing mode, for forward-only comparison.
+// Tranche register -- HEAD register always parsed; baseCommit register
+// parsed only in post-landing mode, for forward-only status comparison.
 // ============================================================
 interface TrancheRow {
   tranche: string;
@@ -871,23 +967,23 @@ const headRegister = parseTrancheRegister(prdText);
 const baseRegister = mode === 'post-landing' ? parseTrancheRegister(readAt(baseCommit, PRD_PATH)) : null;
 
 // ============================================================
-// GATE-INTEGRITY -- runs LAST (fix-round-2, LOW-8), after every other
-// criterion including the re-resolved HEAD-DRIFT. Two-phase write: phase 1
-// records from everything seen so far; phase 2 re-reads that artifact from
-// disk and corrects the record if the write itself was bad.
+// GATE-INTEGRITY -- runs LAST, after every other criterion including the
+// re-resolved HEAD-DRIFT. Two-phase write: phase 1 records from everything
+// seen so far; phase 2 re-reads that artifact from disk and corrects the
+// record if the write itself was bad. Cross-checks the PRD's register rows
+// against CRITERION_TRANCHE (fix-round-3, finding 2) -- documentation must
+// agree with the hardcoded map, but the map alone drives gating.
 // ============================================================
-const registerExpectedIds = ['CWR-P0-1', 'CWR-P0-2', 'CWR-P0-3', 'CWR-P0-4', 'CWR-P1-1', 'CWR-P1-2', 'CWR-P1-3', 'CWR-P2-1', 'CWR-P2-2', 'CWR-P2-3', 'CWR-P2-4', 'CWR-P2-5', 'LEASE', 'LEASE-INTEGRITY', 'HEAD-DRIFT', 'BYTE-PRESERVE', 'GATE-INTEGRITY'];
-const nonRegisterExpectedIds = registerExpectedIds.filter((id) => id !== 'GATE-INTEGRITY');
-
 function computeGateIntegrity(): { status: 'pass' | 'fail'; evidence: string } {
   const problems: string[] = [];
   const seenIds = results.map((r) => r.id);
-  for (const id of nonRegisterExpectedIds) {
+  const nonSelfIds = ALL_CRITERION_IDS.filter((id) => id !== 'GATE-INTEGRITY');
+  for (const id of nonSelfIds) {
     const matches = results.filter((r) => r.id === id);
     if (matches.length !== 1) problems.push(`${id}: ${matches.length} manifest entries (expected exactly 1)`);
   }
   for (const id of seenIds) {
-    if (!nonRegisterExpectedIds.includes(id) && id !== 'GATE-INTEGRITY') problems.push(`unexpected criterion id ${id} not in WR-routing.md's Success criteria table`);
+    if (!nonSelfIds.includes(id) && id !== 'GATE-INTEGRITY') problems.push(`unexpected criterion id ${id} not in CRITERION_TRANCHE`);
   }
   for (const r of results) {
     if (!r.artifact || !fs.existsSync(r.artifact) || fs.statSync(r.artifact).size === 0) problems.push(`${r.id}: artifact missing or empty`);
@@ -896,11 +992,15 @@ function computeGateIntegrity(): { status: 'pass' | 'fail'; evidence: string } {
   if (headRegister.length !== 3 || !['P0', 'P1', 'P2'].every((t) => headRegister.some((r) => r.tranche === t))) {
     problems.push(`Tranche register does not have exactly rows P0,P1,P2: ${JSON.stringify(headRegister.map((r) => r.tranche))}`);
   }
+  for (const tranche of ['P0', 'P1', 'P2'] as const) {
+    const row = headRegister.find((r) => r.tranche === tranche);
+    if (!row) continue;
+    const expected = idsForTranche(tranche);
+    if (new Set(row.criteria).size !== row.criteria.length) problems.push(`Tranche register row ${tranche} has a duplicate criterion`);
+    if (!sameSet(row.criteria, expected)) problems.push(`Tranche register row ${tranche} criteria ${JSON.stringify(row.criteria)} != CRITERION_TRANCHE-derived ${JSON.stringify(expected)}`);
+  }
   const p0Row = headRegister.find((r) => r.tranche === 'P0');
   if (!p0Row || p0Row.status !== 'complete') problems.push('Tranche register P0 row is not status=complete');
-  const allCriteriaInRegister = headRegister.flatMap((r) => r.criteria);
-  if (new Set(allCriteriaInRegister).size !== allCriteriaInRegister.length) problems.push('Tranche register has a duplicate criterion across rows');
-  if (!sameSet(allCriteriaInRegister, registerExpectedIds)) problems.push(`Tranche register criteria union ${JSON.stringify(allCriteriaInRegister)} != expected ${JSON.stringify(registerExpectedIds)}`);
   if (mode === 'post-landing' && baseRegister) {
     for (const baseRow of baseRegister) {
       const headRow = headRegister.find((r) => r.tranche === baseRow.tranche);
@@ -909,12 +1009,12 @@ function computeGateIntegrity(): { status: 'pass' | 'fail'; evidence: string } {
         continue;
       }
       if (baseRow.status === 'complete' && headRow.status !== 'complete') problems.push(`tranche ${baseRow.tranche} flipped complete -> open (forbidden)`);
-      if (headRow.status === 'complete' && !sameSet(headRow.criteria, baseRow.criteria)) {
-        problems.push(`tranche ${baseRow.tranche} is complete but its owned-criteria list changed since baseCommit`);
-      }
     }
   }
-  return { status: problems.length === 0 ? 'pass' : 'fail', evidence: problems.length === 0 ? `all ${nonRegisterExpectedIds.length} criteria present exactly once, all artifacts hash-matched, register self-consistent (mode=${mode})` : problems.join('\n') };
+  return {
+    status: problems.length === 0 ? 'pass' : 'fail',
+    evidence: problems.length === 0 ? `all ${nonSelfIds.length} criteria present exactly once, all artifacts hash-matched, register agrees with CRITERION_TRANCHE (mode=${mode})` : problems.join('\n'),
+  };
 }
 
 // Phase 1.
@@ -922,14 +1022,41 @@ function computeGateIntegrity(): { status: 'pass' | 'fail'; evidence: string } {
   const phase1 = computeGateIntegrity();
   record(
     'GATE-INTEGRITY',
-    "cross-check manifest entries against WR-routing.md's Success criteria table and Tranche register",
-    'every criterion ID has exactly one manifest entry with a non-empty, hash-matched artifact; the Tranche register is self-consistent and forward-only',
+    "cross-check manifest entries + Tranche register against the hardcoded CRITERION_TRANCHE map",
+    'every criterion ID has exactly one manifest entry with a non-empty, hash-matched artifact; the Tranche register agrees with CRITERION_TRANCHE and is forward-only',
     phase1.status,
     phase1.evidence,
   );
 }
-// Phase 2: re-read the just-written artifact from disk, not the in-memory
-// value, and correct the record if the write itself was bad.
+
+// ============================================================
+// HEAD-DRIFT final re-read (fix-round-3, finding 6) -- authoritative,
+// immediately before the manifest write. Runs AFTER GATE-INTEGRITY phase 1
+// and BEFORE GATE-INTEGRITY phase 2, per the specified ordering. Replaces
+// the HEAD-DRIFT record in place so exactly one entry survives; both this
+// entry and the manifest's top-level commit/baseCommit fields reflect it.
+// ============================================================
+const finalHeadSha = gitOrFail(['rev-parse', 'HEAD']);
+const finalBaseCommit = gitOrFail(['merge-base', 'origin/main', 'HEAD']);
+const finalStableVsRunStart = finalHeadSha === headSha && finalBaseCommit === baseCommit;
+{
+  const hdIndex = results.map((r) => r.id).lastIndexOf('HEAD-DRIFT');
+  const priorEntry = hdIndex >= 0 ? results[hdIndex] : undefined;
+  const priorEvidence = priorEntry?.artifact && fs.existsSync(priorEntry.artifact) ? fs.readFileSync(priorEntry.artifact, 'utf8') : '(prior HEAD-DRIFT artifact unavailable)';
+  const finalOk = finalStableVsRunStart && priorEntry?.status === 'pass';
+  const finalStatus: 'pass' | 'fail' | 'blocked-on-founder' = finalOk ? 'pass' : priorEntry?.status === 'blocked-on-founder' && finalStableVsRunStart ? 'blocked-on-founder' : 'fail';
+  if (hdIndex >= 0) results.splice(hdIndex, 1);
+  record(
+    'HEAD-DRIFT',
+    'git rev-parse HEAD; git merge-base origin/main HEAD (FINAL re-read, immediately before the manifest write)',
+    'baseCommit/HEAD resolved at start, re-checked after behavioral probes, and re-resolved one FINAL, authoritative time immediately before the manifest is written',
+    finalStatus,
+    `[FINAL, authoritative] finalHeadSha=${finalHeadSha} finalBaseCommit=${finalBaseCommit} finalStableVsRunStart=${finalStableVsRunStart}\n\n--- prior (post-probe) HEAD-DRIFT record ---\n${priorEvidence}`,
+  );
+}
+
+// Phase 2: re-read the just-written GATE-INTEGRITY artifact from disk, not
+// the in-memory value, and correct the record if the write itself was bad.
 {
   const giIndex = results.map((r) => r.id).lastIndexOf('GATE-INTEGRITY');
   const giEntry = results[giIndex];
@@ -947,8 +1074,8 @@ function computeGateIntegrity(): { status: 'pass' | 'fail'; evidence: string } {
     results.splice(giIndex, 1);
     record(
       'GATE-INTEGRITY',
-      "cross-check manifest entries against WR-routing.md's Success criteria table and Tranche register (phase 2 self-validation)",
-      'every criterion ID has exactly one manifest entry with a non-empty, hash-matched artifact; the Tranche register is self-consistent and forward-only',
+      "cross-check manifest entries + Tranche register against the hardcoded CRITERION_TRANCHE map (phase 2 self-validation)",
+      'every criterion ID has exactly one manifest entry with a non-empty, hash-matched artifact; the Tranche register agrees with CRITERION_TRANCHE and is forward-only',
       'fail',
       `phase-2 self-validation failed:\n${phase2Problems.join('\n')}`,
     );
@@ -956,36 +1083,33 @@ function computeGateIntegrity(): { status: 'pass' | 'fail'; evidence: string } {
 }
 
 // -------------------------------------------------- exit-code computation --
-// Gating criteria (fix-round-2, point A.4 + Tranche-entry gate rule 4):
-// - pre-landing mode: hardcoded to P0's own owned-criteria list, regardless
-//   of what the register claims for P1/P2 -- the root-cause fix.
-// - post-landing mode: every tranche marked `complete` at HEAD (a tranche
-//   flipping open->complete in this diff is graded gating in this same
-//   diff, per the Tranche register's rule).
-// GATE-INTEGRITY and LEASE-INTEGRITY are unconditionally gating regardless
-// (fix-round-2, new-HIGH-2), independent of the register entirely.
-const ALWAYS_GATING = new Set(['GATE-INTEGRITY', 'LEASE-INTEGRITY']);
-const gatingCriteria = new Set<string>();
+// Gating criteria (fix-round-3, finding 2): derived from CRITERION_TRANCHE
+// (the constant) + the register's open/complete STATUS per tranche name --
+// NEVER from the register's own parsed criteria-per-row text. 'always-gating'
+// ids gate unconditionally, independent of mode or register.
+const gatingCriteria = new Set<string>(ALWAYS_GATING_IDS);
 if (mode === 'pre-landing') {
-  const p0Row = headRegister.find((r) => r.tranche === 'P0');
-  for (const id of p0Row ? p0Row.criteria : []) gatingCriteria.add(id);
+  for (const id of idsForTranche('P0')) gatingCriteria.add(id);
 } else {
-  for (const row of headRegister) {
-    if (row.status === 'complete') for (const id of row.criteria) gatingCriteria.add(id);
+  for (const tranche of ['P0', 'P1', 'P2'] as const) {
+    const row = headRegister.find((r) => r.tranche === tranche);
+    if (row?.status === 'complete') for (const id of idsForTranche(tranche)) gatingCriteria.add(id);
   }
 }
-for (const id of ALWAYS_GATING) gatingCriteria.add(id);
 
-// git status failure = dirty = fail (fix-round-2, MED-6/point 9).
+// git status failure = dirty = fail.
 const statusResult = sh('git', ['status', '--porcelain']);
 const treeDirty = statusResult.status !== 0 ? true : statusResult.stdout.trim().length > 0;
 
 const manifest = {
   wave: 'WR',
   mode,
-  commit: headSha,
+  commit: finalHeadSha,
+  baseCommit: finalBaseCommit,
+  runStartCommit: headSha,
+  runStartBaseCommit: baseCommit,
+  finalCheckStableVsRunStart: finalStableVsRunStart,
   treeDirty,
-  baseCommit,
   freshMain,
   toolchain: { node: process.version, pnpm: sh('pnpm', ['--version']).stdout.trim() },
   trancheRegister: headRegister,
@@ -994,19 +1118,22 @@ const manifest = {
 fs.writeFileSync(path.join(proofDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
 
 // Any non-pass status on a gating criterion blocks exit 0, including
-// blocked-on-founder (fix-round-2, MED-7): a legal terminal state for a
-// *landing* decision, but an autonomous run still exits non-zero on one.
-const blockingFailures = results.filter((r) => r.status !== 'pass' && (gatingCriteria.has(r.id) || ALWAYS_GATING.has(r.id)));
-const nonGatingFailures = results.filter((r) => r.status !== 'pass' && !gatingCriteria.has(r.id) && !ALWAYS_GATING.has(r.id));
+// blocked-on-founder: a legal terminal state for a *landing* decision, but
+// an autonomous run still exits non-zero on one.
+const blockingFailures = results.filter((r) => r.status !== 'pass' && gatingCriteria.has(r.id));
+const nonGatingFailures = results.filter((r) => r.status !== 'pass' && !gatingCriteria.has(r.id));
 const passed = results.filter((r) => r.status === 'pass');
 
-console.log(`\nverify-wr-routing: mode=${mode} (PROMINENT: ${mode === 'pre-landing' ? 'this wave has NOT landed to main -- gating locked to P0 only' : 'read from baseCommit'}); ${passed.length} pass, ${blockingFailures.length} blocking-non-pass, ${nonGatingFailures.length} non-gating-fail (open tranche) (of ${results.length}); treeDirty=${treeDirty}; freshMain=${freshMain}`);
+console.log(
+  `\nverify-wr-routing: mode=${mode} (PROMINENT: ${mode === 'pre-landing' ? 'this wave has NOT landed to main -- gating locked to P0 only, diff locked to governance-only' : 'read from baseCommit'}); ${passed.length} pass, ${blockingFailures.length} blocking-non-pass, ${nonGatingFailures.length} non-gating-fail (open tranche) (of ${results.length}); treeDirty=${treeDirty}; freshMain=${freshMain}; finalStableVsRunStart=${finalStableVsRunStart}`,
+);
 for (const r of results) {
-  const gating = gatingCriteria.has(r.id) || ALWAYS_GATING.has(r.id);
+  const gating = gatingCriteria.has(r.id);
   const marker = r.status === 'pass' ? 'PASS' : gating ? `${r.status.toUpperCase()}(blocking)` : `${r.status.toUpperCase()}(non-gating,open-tranche)`;
   console.log(`  [${marker}] ${r.id} — ${r.assertion}`);
 }
-if (nonGatingFailures.length > 0) console.log(`  ⚠ ${nonGatingFailures.length} criteria fail honestly because their owning tranche is still 'open' -- see the Tranche register. Not silent, not blocking.`);
-if (mode === 'pre-landing') console.log('  ⚠ mode=pre-landing: this wave has not landed to main yet. Gating is locked to P0\'s own criteria only; no product tranche can be evidenced as passing from this run.');
+if (nonGatingFailures.length > 0) console.log("  ⚠ some criteria fail honestly because their owning tranche is still 'open' -- see the Tranche register. Not silent, not blocking.");
+if (mode === 'pre-landing') console.log("  ⚠ mode=pre-landing: this wave has not landed to main yet. Gating is locked to P0's own criteria only, and the diff is locked to governance-only files.");
+if (!finalStableVsRunStart) console.log('  ⚠ HEAD/base moved during this run -- see HEAD-DRIFT and the manifest for the authoritative final values.');
 if (treeDirty) console.log('  ⚠ tree is dirty: this run is advisory, never a wave pass (VERIFICATION-CONTRACT.md §2)');
 process.exit(blockingFailures.length === 0 && !treeDirty ? 0 : 1);

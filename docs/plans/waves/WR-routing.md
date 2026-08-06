@@ -153,32 +153,55 @@ flip from `open` to `complete` — asserted mechanically by the verifier at the 
    any of the six named files' documented change types below.
 3. **W6a untouched.** The tranche-completing commit's diff contains none of the deny-listed W6a
    paths. Checked by `LEASE`'s deny-glob assertion (below), same mechanism as every other deny.
-4. **P0 (governance) must have landed to `main` first (fix-round-2, root-cause fix).** No product
-   tranche may ever be declared `complete` while its own verifier run is in `pre-landing` mode (see
-   "Verifier contract" → "Base-anchored governance, with an explicit pre-landing mode"). This is
-   the rule that makes the pre-landing state non-exploitable: nothing product-shaped can pass while
-   this wave's own governance content is still unlanded, no matter what the Tranche register claims
-   for P1/P2 — the verifier hardcodes gating to P0's own criteria only whenever `mode ===
-   "pre-landing"`, full stop, regardless of register content. A verifier run recorded as
-   `pre-landing` can never be cited as evidence that a product tranche's criteria passed.
+4. **P0 (governance) must have landed to `main` first.** No product tranche may ever be declared
+   `complete` while its own verifier run is in `pre-landing` mode (see "Verifier contract" →
+   "Base-anchored governance, with an explicit pre-landing mode"). This is now enforced at **two**
+   independent levels, not one — a fix-round-3 correction after Sol found the first level alone
+   insufficient: gating **and** diff scope both lock down while `mode === "pre-landing"`:
+   - **Gating lock (fix-round-2).** The verifier hardcodes gating to P0's own criteria only
+     whenever `mode === "pre-landing"`, full stop, regardless of what the Tranche register claims
+     for P1/P2 — a verifier run recorded as `pre-landing` can never be cited as evidence that a
+     product tranche's criteria passed.
+   - **Diff-scope lock (fix-round-3, finding 1 — closes the gap the gating lock alone left open).**
+     **Pre-landing diffs are governance-only; product tranches require P0 landed to main.** While
+     `mode === "pre-landing"`, `PRE-LANDING-SCOPE` asserts the commit's entire diff touches *only*
+     `docs/plans/waves/WR-routing.md`, `docs/plans/waves/leases.json`, and
+     `scripts/waves/verify-wr-routing.ts` — nothing else, unconditionally. Without this, a
+     pre-landing diff could still carry untested product code sitting quietly inside a lease-allowed
+     path (e.g. a stub file under `apps/daemon/src/routing/`): the gating lock alone means that
+     code's criteria never block the *verifier*, but nothing stopped the code itself from riding
+     along in a mergeable diff. With both locks, **nothing product-shaped can be present in, let
+     alone pass from, a pre-landing diff** — the claim below is now literally true at the file level,
+     not just the criteria level.
 
 ## Tranche register
 
 Read from `baseCommit` once P0 has landed (see "Verifier contract"); read from `HEAD` only, with
-gating locked to P0, while `mode === "pre-landing"` (the current, actual state — this table has
-never yet been read from a landed `baseCommit`). Once landed, a tranche's `Status` cell may only
-move `open → complete` relative to its `baseCommit` version, never back, and once a tranche is
-`complete` **at baseCommit** its `Owns criteria` list may never change relative to that version —
-both checked mechanically. A tranche that flips `open → complete` **within the current diff**
-(i.e. `open` at `baseCommit`, `complete` at `HEAD`) is graded gating *in that same diff* — a tranche
-must pass its own criteria to land its own register flip, it cannot flip first and prove itself
-later. The criteria columns of this table are otherwise identical, in substance, to the "Success
-criteria" table below; this table exists to track *progress*, not to redefine *what* each criterion
-asserts (fix-round-1, HIGH-3; base-anchored fix-round-2, point A.4).
+gating locked to P0 **and diff scope locked to governance-only files**, while `mode ===
+"pre-landing"` (the current, actual state — this table has never yet been read from a landed
+`baseCommit`). Once landed, a tranche's `Status` cell may only move `open → complete` relative to
+its `baseCommit` version, never back — checked mechanically. The `Owns criteria` column in each row
+below is not itself trusted for gating (fix-round-3, finding 2): `GATE-INTEGRITY` cross-checks it
+against the hardcoded `CRITERION_TRANCHE` map in `verify-wr-routing.ts` (the actual source of truth
+for which criterion belongs to which tranche) and fails on any divergence, and the verifier's gating
+computation reads only the hardcoded map plus each tranche's `Status` cell — **never** this column's
+parsed text. This closes the exploit Sol reproduced: editing this table to move a criterion into
+`P0`'s row (always `complete`) no longer changes what actually gates, because gating never looked at
+this column in the first place; it only ever looked at `CRITERION_TRANCHE`, and `GATE-INTEGRITY`
+would immediately flag the resulting mismatch as a failure. A tranche that flips `open → complete`
+**within the current diff** (i.e. `open` at `baseCommit`, `complete` at `HEAD`) is graded gating *in
+that same diff* — a tranche must pass its own criteria to land its own register flip, it cannot flip
+first and prove itself later. `P0`'s row lists its own tranche-scoped criteria **union** the
+`always-gating` criteria (`LEASE-INTEGRITY`, `GATE-INTEGRITY`, `CWR-P2-5`, `PRE-LANDING-SCOPE`) —
+there is no separate table row for `always-gating`, since those criteria bypass the tranche/register
+mechanism entirely regardless of which row documents them; `GATE-INTEGRITY`'s cross-check computes
+that same union when validating the `P0` row. This table exists to track *progress*, not to redefine
+*what* each criterion asserts or which tranche gates it (fix-round-1, HIGH-3; base-anchored
+fix-round-2, point A.4; hardcoded-map fix-round-3, finding 2).
 
 | Tranche | Status | Owns criteria |
 |---|---|---|
-| P0 | complete | CWR-P0-1, CWR-P0-2, CWR-P0-3, CWR-P0-4, LEASE, LEASE-INTEGRITY, HEAD-DRIFT, BYTE-PRESERVE, GATE-INTEGRITY, CWR-P2-5 |
+| P0 | complete | CWR-P0-1, CWR-P0-2, CWR-P0-3, CWR-P0-4, LEASE, LEASE-INTEGRITY, HEAD-DRIFT, BYTE-PRESERVE, GATE-INTEGRITY, CWR-P2-5, PRE-LANDING-SCOPE |
 | P1 | open | CWR-P1-1, CWR-P1-2, CWR-P1-3 |
 | P2 | open | CWR-P2-1, CWR-P2-2, CWR-P2-3, CWR-P2-4 |
 
@@ -188,19 +211,21 @@ fourth "not yet applicable" status, matching `VERIFICATION-CONTRACT.md` §2's en
 criterion belonging to an `open` tranche that has no implementation yet **legitimately fails** (its
 behavioral probe finds no code to exercise), and that failure is recorded honestly in the manifest
 — but it does **not** affect the verifier's exit code, because exit code is computed only over
-criteria owned by tranches marked `complete` (P0's own criteria, always; P1/P2's criteria, only once
-their row above says `complete` **and** `mode !== "pre-landing"`, per the Tranche-entry gate's
-rule 4). **`GATE-INTEGRITY` and `LEASE-INTEGRITY` are the sole exceptions: they are unconditionally
-exit-blocking regardless of any tranche's status, register content, or `mode`** (fix-round-2,
-new-HIGH-2) — a bookkeeping failure in the manifest or lease itself is never something an `open`
-tranche's non-gating status can absorb. Any non-`pass` status, including `blocked-on-founder`,
-blocks exit `0` for a gating criterion — `blocked-on-founder` is a legal terminal state for
-*landing* decisions (a human must act), but an autonomous verifier run still exits non-zero on one
-(fix-round-2, MED-7). This means the *same* probe code ships now, in this fix commit, already wired
-to assert real behavior — it simply has nothing to pass against yet. Once a later tranche lands real
-code and flips its row to `complete` (with `mode !== "pre-landing"`), the identical probe starts
-gating for real, with no verifier rewrite (Success criteria table entries for CWR-P1-*/CWR-P2-*
-describe exactly what each probe checks).
+criteria the hardcoded `CRITERION_TRANCHE` map assigns to tranches marked `complete` (P0's own
+criteria, always; P1/P2's criteria, only once their row above says `complete` **and** `mode !==
+"pre-landing"`, per the Tranche-entry gate's rule 4). **`LEASE-INTEGRITY`, `GATE-INTEGRITY`,
+`CWR-P2-5`, and `PRE-LANDING-SCOPE` are the sole exceptions: they are unconditionally exit-blocking
+regardless of any tranche's status, register content, or `mode`** (fix-round-2, new-HIGH-2;
+extended fix-round-3) — a bookkeeping failure in the manifest or lease itself, or a scope violation
+in a pre-landing diff, is never something an `open` tranche's non-gating status can absorb. Any
+non-`pass` status, including `blocked-on-founder`, blocks exit `0` for a gating criterion —
+`blocked-on-founder` is a legal terminal state for *landing* decisions (a human must act), but an
+autonomous verifier run still exits non-zero on one (fix-round-2, MED-7). This means the *same*
+probe code ships now, in this fix commit, already wired to assert real behavior — it simply has
+nothing to pass against yet. Once a later tranche lands real code and flips its row to `complete`
+(with `mode !== "pre-landing"`), the identical probe starts gating for real, with no verifier
+rewrite (Success criteria table entries for CWR-P1-*/CWR-P2-* describe exactly what each probe
+checks).
 
 ## Routing-key fallback (normative)
 
@@ -304,26 +329,48 @@ P0 has landed to `main`**, exactly as it is for every other wave in `leases.json
   state** (this wave has not landed). The verifier reads its own governance content (the `WR` lease
   entry, the normative PRD sections, the Tranche register) from `HEAD` instead, because there is
   nothing at `baseCommit` to read. The manifest records `mode: "pre-landing"` prominently (top-level
-  field, not buried), and — per the Tranche-entry gate's rule 4 — **gating is hardcoded to P0's own
-  criteria only** while in this mode, regardless of what the Tranche register claims for P1/P2.
-  Pinning becomes enforceable the moment P0 lands; until then, **the landing PR's own adversarial
-  review is the enforcement surface for the governance content itself** — this verifier cannot be
-  that surface for content it has no landed reference point to check against, and it says so
-  honestly in the manifest rather than pretending otherwise with a self-issued sentinel.
+  field, not buried), and — per the Tranche-entry gate's rule 4 — **both gating and diff scope lock
+  down** while in this mode: gating is hardcoded to P0's own criteria only, regardless of what the
+  Tranche register claims for P1/P2, **and** `PRE-LANDING-SCOPE` asserts the diff touches only the
+  three governance files (fix-round-3, finding 1 — pre-landing diffs are governance-only; product
+  tranches require P0 landed to main). Pinning becomes enforceable the moment P0 lands; until then,
+  **the landing PR's own adversarial review is the enforcement surface for the governance content
+  itself** — this verifier cannot be that surface for content it has no landed reference point to
+  check against, and it says so honestly in the manifest rather than pretending otherwise with a
+  self-issued sentinel.
 
 No sentinel shas, no self-referential pin line, no two-commit sequence. `GOVERNANCE_COMMIT` and
 `PIN_LINE_PATTERN` are deleted from the verifier entirely.
 
 **What "frozen" means once `mode === "post-landing"`:** `leases.json`'s `WR` entry (`allow`, `deny`)
-must deep-equal its `baseCommit` version (checked by `CWR-P0-4`); the `## Routing-key fallback
-(normative)`, `## Screenshot-baseline rules (normative)`, `## Lease`, `## Explicitly out of scope`,
-and `## Success criteria` sections of this document must be byte-identical to their `baseCommit`
-versions (also `CWR-P0-4`); every *other* wave's lease entry must be byte-identical to its
-`baseCommit` version too (`LEASE-INTEGRITY`, fix-round-2 new-HIGH-5 — this wave's own diff must
-never touch another wave's entry, checked the same way regardless of mode since other waves' leases
-are always already on `main`). The `## Tranche register` section is explicitly **not** frozen —
-see "Tranche register" for its own forward-only rule, now anchored to `baseCommit` instead of a
+must deep-equal its `baseCommit` version (checked by `CWR-P0-4`); the `## Tranche-entry gate for
+P1/P2`, `## Routing-key fallback (normative)`, `## Screenshot-baseline rules (normative)`, `##
+Verifier contract`, `## Enforcement boundaries`, `## Lease`, `## Review protocol`, `## Explicitly
+out of scope`, and `## Success criteria` sections of this document must be byte-identical to their
+`baseCommit` versions (also `CWR-P0-4`, fix-round-3 finding 4 — extended to every remaining
+normative prose section, not just the data-shaped ones); every *other* wave's lease entry must be
+byte-identical to its `baseCommit` version too (`LEASE-INTEGRITY`, fix-round-2 new-HIGH-5 — this
+wave's own diff must never touch another wave's entry, checked the same way regardless of mode
+since other waves' leases are always already on `main`). **`scripts/waves/verify-wr-routing.ts`
+itself must also be byte-identical to its `baseCommit` version once post-landing** (fix-round-3,
+finding 3, folded into `CWR-P0-4`) — verifier changes are governance changes: land them via a
+governance-only diff reviewed as `blocked-on-founder`, the same review posture as any other
+frozen-section edit. Pre-landing exempts this one check (the file is still being authored on this
+very branch), which is safe *only* because `PRE-LANDING-SCOPE` already confines a pre-landing diff
+to the three governance files — the exemption and the scope lock are a matched pair, not two
+independent decisions. The `## Tranche register` section is explicitly **not** frozen — see
+"Tranche register" for its own forward-only rule, now anchored to `baseCommit` instead of a
 self-issued pin.
+
+**The hardcoded criterion→tranche map (fix-round-3, finding 2).** `CRITERION_TRANCHE` in
+`verify-wr-routing.ts` is the sole source of truth for which criterion belongs to which tranche —
+not the Tranche register table above, which is display/progress-tracking only. `GATE-INTEGRITY`
+cross-checks every row of the table against this constant and fails on any divergence; the gating
+computation itself reads only the constant plus each tranche's `open`/`complete` status, **never**
+the table's own parsed "Owns criteria" text. This is the fix for the exploit Sol reproduced against
+round 2: editing the table to move a criterion's *listed* ownership did nothing to its *actual*
+gating status before this map existed as code, but round 2's gating computation still trusted the
+table's parsed list directly — round 3 removes that trust entirely.
 
 ### Fresh-main, fail-closed (fix-round-1, MED-8; hardened fix-round-2, new-HIGH-4)
 
@@ -534,16 +581,18 @@ so no later tranche can silently soften it.
 ## Success criteria
 
 All criteria inherit `VERIFICATION-CONTRACT.md` §3. Verified by `scripts/waves/verify-wr-routing.ts`.
-Status enum is exactly `pass`/`fail`/`blocked-on-founder`. A criterion's tranche (see "Tranche
-register") determines whether a non-`pass` status blocks the verifier's exit code — **except**
-`GATE-INTEGRITY` and `LEASE-INTEGRITY`, which block unconditionally regardless of tranche or `mode`.
+Status enum is exactly `pass`/`fail`/`blocked-on-founder`. A criterion's tranche ownership comes
+from the hardcoded `CRITERION_TRANCHE` map (cross-checked against the Tranche register below, never
+trusted from the register's own text) and determines whether a non-`pass` status blocks the
+verifier's exit code — **except** `LEASE-INTEGRITY`, `GATE-INTEGRITY`, `CWR-P2-5`, and
+`PRE-LANDING-SCOPE`, which block unconditionally regardless of tranche or `mode`.
 
 | ID | Tranche | Criterion | Verification |
 |---|---|---|---|
 | CWR-P0-1 | P0 | Wave identity document complete | This document exists with every required section — read by exact heading/phrase match |
 | CWR-P0-2 | P0 | Lease matches PRD exactly | `leases.json`'s `WR` entry's `allow`/`deny` deep-equal this document's declared JSON block |
 | CWR-P0-3 | P0 | No undocumented lease collisions | Real glob-intersection (prefix-containment) against every other wave's allow list at `baseCommit`, corrected deny-precedence applied; every surviving intersection is one of the documented overlaps above |
-| CWR-P0-4 | P0 | Governance content is base-anchored and un-widened once landed | `mode: "pre-landing"` (current state) passes trivially — nothing to widen against yet, enforced by the landing PR's own review instead. Once `mode: "post-landing"`: `leases.json`'s `WR` entry and this document's frozen sections are byte-identical to their `baseCommit` versions |
+| CWR-P0-4 | P0 | Governance content, including this verifier, is base-anchored and un-widened once landed | `mode: "pre-landing"` (current state) passes trivially — nothing to widen against yet, enforced by the landing PR's own review instead. Once `mode: "post-landing"`: `leases.json`'s `WR` entry, this document's frozen sections, and `verify-wr-routing.ts` itself are byte-identical to their `baseCommit` versions |
 | CWR-P1-1 | P1 | `routing-policy.json` + drift-failing policy test | Behavioral: `packages/contracts/tests/routing*polic*` runs green with ≥1 test, including one matching `/drift\|unknown stage\|constraint/i` |
 | CWR-P1-2 | P1 | Telemetry row completeness (routed-vs-observed model) | Behavioral: `packages/contracts/tests/routing*telemetry*` runs green with ≥1 test, including one matching `/routed.*observed\|observed.*routed/i` |
 | CWR-P1-3 | P1 | Policy + telemetry are in the backup set | Behavioral: an `app-config` archive dump contains a `routingPolicyVersion` key matching the active policy's version; the archived SQLite database contains the telemetry table with ≥1 row after a routed run |
@@ -551,12 +600,13 @@ register") determines whether a non-`pass` status blocks the verifier's exit cod
 | CWR-P2-2 | P2 | Admission control denies over-budget dispatch | Behavioral: same suite, a passing test matching `/admission\|budget/i` |
 | CWR-P2-3 | P2 | Deterministic L3 gate runner for lane-A | Behavioral: same suite, a passing test matching `/l3\|deterministic.*gate/i` |
 | CWR-P2-4 | P2 | Escalation/pass rates + lane meters via `/api/routing/*` and `od route --json` | Behavioral: direct CLI invocation of the `route` subcommand with `--json`, zero exit, parseable JSON with `escalationRate`, `passRate`, non-empty `laneMeters`; HTTP-level proof deferred to the daemon test suite per "Enforcement boundaries" |
-| CWR-P2-5 | P0 (always-gating) | Selector-eval floors unchanged | `evals/selector/floors.json` byte-identical between `baseCommit` and `HEAD` on every run, including this P0 run |
+| CWR-P2-5 | always-gating | Selector-eval floors unchanged | `evals/selector/floors.json` byte-identical between `baseCommit` and `HEAD` on every run, including this P0 run |
 | LEASE | P0 | Write lease is mechanical | `git diff --name-only <base>...HEAD` ⊆ `WR`'s allow globs, touches none of `WR`'s deny globs |
-| LEASE-INTEGRITY | P0 (unconditionally gating) | Other waves' leases are untouched | Every non-`WR` entry in `leases.json` is byte-identical between `baseCommit` and `HEAD` |
-| HEAD-DRIFT | P0 | Base is fresh, not stale, and git errors are fatal | `baseCommit`/`HEAD` resolved at start and re-resolved unchanged after all behavioral probes complete; the live remote's `main` tip is fetched and confirmed an ancestor of `HEAD` (fail-closed — an unreachable remote is a fail, recorded as `freshMain: "unverifiable"`, not a pass); any git command error fails the run |
+| LEASE-INTEGRITY | always-gating | Other waves' leases are untouched | Every non-`WR` entry in `leases.json` is byte-identical between `baseCommit` and `HEAD` |
+| PRE-LANDING-SCOPE | always-gating | Pre-landing diffs are governance-only | While `mode: "pre-landing"`: `git diff --name-only <base>...HEAD` is a subset of exactly `{WR-routing.md, leases.json, verify-wr-routing.ts}` — any other path is an unconditional fail. Passes trivially once `mode: "post-landing"` |
+| HEAD-DRIFT | P0 | Base is fresh, not stale, and git errors are fatal | `baseCommit`/`HEAD` resolved at start, re-checked after all behavioral probes, and re-resolved a FINAL, authoritative time immediately before the manifest write; the live remote's `main` tip is fetched and confirmed an ancestor of `HEAD` (fail-closed — an unreachable remote is a fail, recorded as `freshMain: "unverifiable"`, not a pass); any git command error fails the run |
 | BYTE-PRESERVE | P0 | Overlap files are additive-only and never deleted | For each of the six named overlap files that existed at `baseCommit`: it still exists at `HEAD` (missing = unconditional fail), and `git diff --unified=0 <base>..HEAD` contains zero removed/changed lines |
-| GATE-INTEGRITY | P0 (unconditionally gating) | Manifest is self-consistent | Runs last, after every other criterion; every criterion ID above has exactly one manifest entry with a non-empty, hash-matched artifact, verified via a two-phase write that re-reads its own artifact from disk |
+| GATE-INTEGRITY | always-gating | Manifest and register are self-consistent | Runs last, after every other criterion including the final `HEAD-DRIFT` re-read; every criterion ID above has exactly one manifest entry with a non-empty, hash-matched artifact, verified via a two-phase write that re-reads its own artifact from disk; the Tranche register's rows are cross-checked against the hardcoded `CRITERION_TRANCHE` map |
 
 ## Adversarial review
 
