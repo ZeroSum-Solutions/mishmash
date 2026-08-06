@@ -585,29 +585,37 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
   }
 
   // (e) FAIL-CLOSED / DENIED-ADMISSION: the walk above exhausted every
-  // candidate. Sol review MED-3 (fix-round): the terminal cause per
-  // candidate is one of 'throttled' (recorded in `demotions`) or
-  // 'admission-denied' (recorded in `admissionResults`) -- class/constraint
-  // filtering already produced ITS OWN terminal 'fail-closed-stop'/'error'
-  // earlier, in step (c), before this walk ever starts, so those two causes
-  // never reach this branch. Three distinct combinations of the two causes
-  // that DO reach here:
-  //   - PURE throttle exhaustion (every survivor throttled, `admissionResults`
-  //     stays empty -- including whenever admission was never engaged at
-  //     all): unchanged pre-t6 'fail-closed-stop' behavior.
-  //   - PURE admission exhaustion (`demotions` stays empty, at least one
-  //     candidate reached admission and was denied): the 'denied-admission'
-  //     status, carrying every evaluated candidate's verdict+reason.
-  //   - MIXED (at least one candidate throttled AND at least one reached
-  //     admission and was denied): reported as 'fail-closed-stop' -- the
-  //     more conservative, human-surfaced signal, since availability
-  //     problems (throttling) are graver than a budget problem alone --
-  //     but `admissionResults` is still retained on the terminal decision
-  //     so the "why not this candidate" trail isn't silently dropped.
+  // candidate. Sol review MED-3 (fix-round, second pass): the terminal
+  // cause per candidate is one of THREE buckets -- 'throttled' (recorded in
+  // `demotions`), a real budget denial (a `deny-*` verdict in
+  // `admissionResults`), or 'not-evaluated' (also in `admissionResults`,
+  // but NOT a budget denial -- e.g. no price row for the candidate's
+  // model). class/constraint filtering already produced ITS OWN terminal
+  // 'fail-closed-stop'/'error' earlier, in step (c), before this walk ever
+  // starts, so those causes never reach this branch. Every entry actually
+  // IN `admissionResults` at this point is guaranteed non-'admit' (an
+  // 'admit' would have set `selected` and broken the loop already), so
+  // `anyRealDenial`/`anyNotEvaluated` fully partition it.
+  //
+  //   - PURE real-denial exhaustion (zero throttled, zero not-evaluated, at
+  //     least one real `deny-*`): the 'denied-admission' status, carrying
+  //     every evaluated candidate's verdict+reason.
+  //   - EVERYTHING ELSE reports 'fail-closed-stop' -- the more
+  //     conservative, human-surfaced signal -- covering pure throttle
+  //     exhaustion (unchanged pre-t6 behavior), pure not-evaluated
+  //     exhaustion (an un-priceable candidate is a fail-closed
+  //     non-selection, never a budget denial), and any mix of
+  //     throttled/denied/not-evaluated. `admissionResults` is always
+  //     retained on the terminal decision so the "why not this candidate"
+  //     trail is never silently dropped, and `admissionVerdict` still
+  //     reports `'denied'` whenever at least one real denial occurred
+  //     (even alongside throttling or not-evaluated candidates), `'not-
+  //     evaluated'` otherwise.
   if (!selected) {
     const anyThrottled = demotions.length > 0;
-    const anyAdmissionDenied = admissionResults.length > 0;
-    if (!anyThrottled && anyAdmissionDenied) {
+    const anyRealDenial = admissionResults.some((r) => r.verdict !== 'not-evaluated');
+    const anyNotEvaluated = admissionResults.some((r) => r.verdict === 'not-evaluated');
+    if (!anyThrottled && !anyNotEvaluated && anyRealDenial) {
       const message = `every remaining candidate for sensitivity class "${sensitivityClass}" was denied by budget admission control (stage/build/day ceilings or the metered kill-switch); refusing to dispatch.`;
       pushReason(reasons, 'admission-denied', `admission-exhausted:${sensitivityClass}`, message);
       return terminalDecision({
@@ -622,10 +630,17 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
         admissionVerdict: 'denied',
       });
     }
-    const message = anyThrottled && anyAdmissionDenied
-      ? `every remaining candidate for sensitivity class "${sensitivityClass}" was either throttled or denied by budget admission control; refusing to fall through (mixed availability/budget exhaustion reports as fail-closed, the more conservative signal).`
-      : `every remaining candidate for sensitivity class "${sensitivityClass}" is currently throttled; refusing to fall through to an out-of-class or unlisted lane.`;
-    pushReason(reasons, 'fail-closed', `${anyAdmissionDenied ? 'mixed' : 'throttle'}-exhausted:${sensitivityClass}`, message);
+    const message = anyThrottled && (anyRealDenial || anyNotEvaluated)
+      ? `every remaining candidate for sensitivity class "${sensitivityClass}" was either throttled, denied by budget admission control, or could not be priced; refusing to fall through (mixed exhaustion reports as fail-closed, the more conservative signal).`
+      : anyNotEvaluated
+        ? `every remaining candidate for sensitivity class "${sensitivityClass}" could not be evaluated for admission (no usable price row) and/or was denied; a fail-closed non-selection, never a silent admit.`
+        : `every remaining candidate for sensitivity class "${sensitivityClass}" is currently throttled; refusing to fall through to an out-of-class or unlisted lane.`;
+    pushReason(
+      reasons,
+      'fail-closed',
+      `${anyThrottled && (anyRealDenial || anyNotEvaluated) ? 'mixed' : anyNotEvaluated ? 'not-evaluated' : 'throttle'}-exhausted:${sensitivityClass}`,
+      message,
+    );
     return terminalDecision({
       policy,
       contextEstimateTokens: key.contextEstimateTokens,
@@ -635,7 +650,7 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
       demotions,
       rationale: message,
       admissionResults,
-      admissionVerdict: anyAdmissionDenied ? 'denied' : 'not-evaluated',
+      admissionVerdict: anyRealDenial ? 'denied' : 'not-evaluated',
     });
   }
 

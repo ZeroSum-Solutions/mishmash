@@ -477,13 +477,30 @@ function isPositiveFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
-/** Sol review MED-4: `effectiveDate` is read via `Date.parse` at admission
- * time (apps/daemon/src/routing/admission.ts's `findPriceRow`) -- a string
- * `Date.parse` cannot resolve to a real instant (`NaN`) must be rejected
- * here, at the policy boundary, rather than silently sorting as the oldest
- * possible date downstream. */
-function isIsoParseableDateString(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && Number.isFinite(Date.parse(value));
+/**
+ * Sol review MED-4/M4: `effectiveDate` is read at admission time
+ * (apps/daemon/src/routing/admission.ts's `findPriceRow`) as a date-ONLY
+ * value (every real row this policy carries is `YYYY-MM-DD`, never a
+ * time-of-day) -- a bare `Date.parse` is too permissive two different ways:
+ *   1. It accepts non-ISO shapes entirely (`Date.parse('August 31, 2026')`
+ *      resolves to a real instant), which would silently accept a format
+ *      this field was never meant to carry.
+ *   2. Per ECMA-262's Date Time String Format, an ISO-shaped string with an
+ *      out-of-range CALENDAR field (`2026-02-30`) does not reliably return
+ *      `NaN` -- Node's engine rolls it over into the next real date
+ *      (`2026-02-30` -> `2026-03-02`) instead of rejecting it.
+ * This first enforces the exact `YYYY-MM-DD` shape via regex, then
+ * round-trips through `Date.UTC` at midnight and compares the ISO date
+ * portion back against the original string -- a rolled-over invalid
+ * calendar date parses to SOME real instant, just never the one whose ISO
+ * representation matches the literal input, which is exactly what the
+ * round-trip catches.
+ */
+function isIsoDateOnlyString(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const ms = Date.parse(`${value}T00:00:00Z`);
+  if (!Number.isFinite(ms)) return false;
+  return new Date(ms).toISOString().slice(0, 10) === value;
 }
 
 function isThresholdedPricing(value: unknown): value is { thresholdTokens: number; multiplier: number } {
@@ -497,7 +514,7 @@ function isRoutingPolicyPriceRow(value: unknown): value is RoutingPolicyPriceRow
     typeof value.model === 'string' &&
     isNonNegativeFiniteNumber(value.inputPerMillion) &&
     isNonNegativeFiniteNumber(value.outputPerMillion) &&
-    (value.effectiveDate === undefined || isIsoParseableDateString(value.effectiveDate)) &&
+    (value.effectiveDate === undefined || isIsoDateOnlyString(value.effectiveDate)) &&
     (value.thresholdedPricing === undefined || isThresholdedPricing(value.thresholdedPricing))
   );
 }

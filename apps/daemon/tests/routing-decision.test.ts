@@ -734,4 +734,112 @@ describe('decideRouting -- admission control integration (t6)', () => {
     // fail-closed-stop (throttling, not admission, drove the final call).
     expect(decision.admissionVerdict).toBe('denied');
   });
+
+  // Sol review MED-3 (second pass): 'not-evaluated' is its own terminal
+  // cause bucket -- a fail-closed non-selection (no usable price row),
+  // never a budget denial -- and must be grouped with the conservative
+  // fail-closed-stop side, not misreported as 'denied-admission'.
+  describe('MED-3 second pass: not-evaluated is its own terminal cause, never an admission denial', () => {
+    function notEvaluatedFixturePolicy(overrides: Partial<RoutingPolicyDocument> = {}): RoutingPolicyDocument {
+      return {
+        policyVersion: 1,
+        stageVocabulary: ['chat'],
+        modelTable: [
+          {
+            match: { taskClass: 'not-evaluated-class' },
+            // Kimi K3 has no price row anywhere in this policy -- always not-evaluated.
+            primary: { runtimeId: 'kimi', model: 'moonshotai/kimi-k3', effort: 'inherit', lane: 'moonshot', transport: 'prepaid', modelFamily: 'moonshot' },
+            cheap: { runtimeId: 'claude', model: 'claude-opus-5', effort: 'inherit', lane: 'claude-code-oauth', transport: 'subscription-oauth', modelFamily: 'anthropic' },
+          },
+        ],
+        hardConstraints: [],
+        laneChains: {},
+        dataClassificationAllowlists: [{ classification: 'public', allowedLanes: ['claude-code-oauth', 'moonshot'], failClosed: true }],
+        sonnetPriceRows: [],
+        otherModelPriceRows: [{ model: 'claude-opus-5', inputPerMillion: 5, outputPerMillion: 25 }],
+        budgetCeilings: { perStageEstimatedCostUsd: { chat: 100 }, perBuildCapUsd: 100, perDayCapUsd: 100, meteredKillSwitch: false, outputTokenBound: { default: 0 } },
+        ...overrides,
+      };
+    }
+
+    it('candidate A not-evaluated + candidate B throttled -> fail-closed-stop', () => {
+      const decision = decideRouting({
+        policy: notEvaluatedFixturePolicy(),
+        key: keyFor({ contextEstimateTokens: 1000 }),
+        sensitivityClass: 'public',
+        laneMeters: [throttled('claude-code-oauth', 5)], // opus-5 (candidate B) throttled; kimi-k3's lane is untouched
+        taskClass: 'not-evaluated-class',
+        admission: { buildId: 'build-1', spendLookup: NO_SPEND, now: new Date('2026-08-05T00:00:00.000Z') },
+      });
+      expect(decision.status).toBe('fail-closed-stop');
+      expect(decision.runtimeId).toBe('none');
+      // Tier order is ascending (subscription-oauth before prepaid), so
+      // opus-5 (candidate B, tier0) is tried FIRST: it's throttled, demoting
+      // to kimi-k3 (candidate A, tier1), which then reaches admission and
+      // comes back not-evaluated.
+      expect(decision.demotions).toHaveLength(1);
+      expect(decision.admissionResults).toHaveLength(1);
+      expect(decision.admissionResults[0]).toMatchObject({ model: 'moonshotai/kimi-k3', verdict: 'not-evaluated' });
+      expect(decision.admissionVerdict).toBe('not-evaluated');
+    });
+
+    it('candidate A not-evaluated only -> fail-closed-stop, with the not-evaluated result visible on admissionResults', () => {
+      const singleCandidatePolicy = notEvaluatedFixturePolicy({
+        modelTable: [
+          {
+            match: { taskClass: 'not-evaluated-class' },
+            primary: { runtimeId: 'kimi', model: 'moonshotai/kimi-k3', effort: 'inherit', lane: 'moonshot', transport: 'prepaid', modelFamily: 'moonshot' },
+          },
+        ],
+      });
+      const decision = decideRouting({
+        policy: singleCandidatePolicy,
+        key: keyFor({ contextEstimateTokens: 1000 }),
+        sensitivityClass: 'public',
+        laneMeters: [],
+        taskClass: 'not-evaluated-class',
+        admission: { buildId: 'build-1', spendLookup: NO_SPEND, now: new Date('2026-08-05T00:00:00.000Z') },
+      });
+      expect(decision.status).toBe('fail-closed-stop');
+      expect(decision.runtimeId).toBe('none');
+      expect(decision.demotions).toEqual([]);
+      expect(decision.admissionResults).toHaveLength(1);
+      expect(decision.admissionResults[0]).toMatchObject({ model: 'moonshotai/kimi-k3', verdict: 'not-evaluated' });
+      expect(decision.admissionVerdict).toBe('not-evaluated');
+    });
+
+    it('candidate A denied + candidate B not-evaluated (no throttling) -> fail-closed-stop (mixed, conservative)', () => {
+      const decision = decideRouting({
+        // Tiny stage ceiling: opus-5 (tier0, tried first) is denied by cost;
+        // kimi-k3 (tier1, tried second) is never priceable at all.
+        policy: notEvaluatedFixturePolicy({
+          modelTable: [
+            {
+              match: { taskClass: 'not-evaluated-class' },
+              primary: { runtimeId: 'claude', model: 'claude-opus-5', effort: 'inherit', lane: 'claude-code-oauth', transport: 'subscription-oauth', modelFamily: 'anthropic' },
+              cheap: { runtimeId: 'kimi', model: 'moonshotai/kimi-k3', effort: 'inherit', lane: 'moonshot', transport: 'prepaid', modelFamily: 'moonshot' },
+            },
+          ],
+          budgetCeilings: { perStageEstimatedCostUsd: { chat: 0.01 }, perBuildCapUsd: 100, perDayCapUsd: 100, meteredKillSwitch: false, outputTokenBound: { default: 0 } },
+        }),
+        key: keyFor({ contextEstimateTokens: 300_000 }),
+        sensitivityClass: 'public',
+        laneMeters: [],
+        taskClass: 'not-evaluated-class',
+        admission: { buildId: 'build-1', spendLookup: NO_SPEND, now: new Date('2026-08-05T00:00:00.000Z') },
+      });
+      expect(decision.status).toBe('fail-closed-stop');
+      expect(decision.runtimeId).toBe('none');
+      expect(decision.demotions).toEqual([]);
+      expect(decision.admissionResults).toHaveLength(2);
+      expect(decision.admissionResults.map((r) => [r.model, r.verdict])).toEqual([
+        ['claude-opus-5', 'deny-stage-ceiling'],
+        ['moonshotai/kimi-k3', 'not-evaluated'],
+      ]);
+      // A real denial occurred (opus-5), so admissionVerdict still reports
+      // 'denied' even though the not-evaluated kimi-k3 candidate forced the
+      // overall status to the conservative fail-closed-stop side.
+      expect(decision.admissionVerdict).toBe('denied');
+    });
+  });
 });

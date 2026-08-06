@@ -171,6 +171,49 @@ describe('isRoutingPolicyDocument', () => {
     ).toBe(false);
   });
 
+  // Sol review M4 (fix-round): a bare Date.parse is too permissive two
+  // ways -- it accepts non-ISO shapes, and per ECMA-262 an ISO-shaped
+  // string with an out-of-range calendar field (month/day) rolls over into
+  // a different real date instead of failing. Both must be rejected.
+  it('rejects an out-of-range calendar date that Date.parse would silently roll over (2026-13-45)', () => {
+    expect(
+      isRoutingPolicyDocument({
+        ...EMPTY_POLICY,
+        sonnetPriceRows: [{ model: 'claude-sonnet-5', inputPerMillion: 2, outputPerMillion: 10, effectiveDate: '2026-13-45' }],
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects an out-of-range day-of-month that Date.parse would silently roll over into the next month (2026-02-30)', () => {
+    expect(
+      isRoutingPolicyDocument({
+        ...EMPTY_POLICY,
+        sonnetPriceRows: [{ model: 'claude-sonnet-5', inputPerMillion: 2, outputPerMillion: 10, effectiveDate: '2026-02-30' }],
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a non-ISO date shape Date.parse would otherwise accept ("August 31, 2026")', () => {
+    expect(
+      isRoutingPolicyDocument({
+        ...EMPTY_POLICY,
+        sonnetPriceRows: [{ model: 'claude-sonnet-5', inputPerMillion: 2, outputPerMillion: 10, effectiveDate: 'August 31, 2026' }],
+      }),
+    ).toBe(false);
+  });
+
+  it('accepts the two real Sonnet effectiveDates this policy actually ships (2026-01-01, 2026-08-31)', () => {
+    expect(
+      isRoutingPolicyDocument({
+        ...EMPTY_POLICY,
+        sonnetPriceRows: [
+          { model: 'claude-sonnet-5', inputPerMillion: 2, outputPerMillion: 10, effectiveDate: '2026-01-01' },
+          { model: 'claude-sonnet-5', inputPerMillion: 3, outputPerMillion: 15, effectiveDate: '2026-08-31' },
+        ],
+      }),
+    ).toBe(true);
+  });
+
   it('rejects thresholdedPricing with a zero or negative multiplier', () => {
     expect(
       isRoutingPolicyDocument({
