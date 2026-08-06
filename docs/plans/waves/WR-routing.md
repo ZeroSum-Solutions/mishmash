@@ -15,9 +15,16 @@ in "Verifier contract" below.
 from `docs/plans/waves/GLOBAL-GOAL.md`'s `mishmash-completion` program. It reuses that program's
 verification machinery (`VERIFICATION-CONTRACT.md`, `leases.json`) but is tracked under its own
 goal-state root, `~/.claude/goal-state/wr-routing/`, not under a `mishmash-` prefix.
-**Review status:** fix round 1, addressing GPT-5.6 Sol's REVISE verdict on commit `a2030ef87`
-(10 findings: HIGH-1..6, MED-7..10). Every finding's fix is cited by ID at its resolution point
-below so a re-reviewer can check each one directly.
+**Review status:** fix round 2 (final before escalation per `VERIFICATION-CONTRACT.md` §6's stop
+rule), addressing GPT-5.6 Sol's second REVISE verdict on the round-1 fix commits. Round 1 addressed
+a REVISE on commit `a2030ef87` (10 findings: HIGH-1..6, MED-7..10); round 2 found findings 3/9/10
+RESOLVED, the rest partial, and 5 new HIGHs, with one root cause underneath most of them: **a
+verifier on an unlanded branch cannot fully self-attest — every in-branch pin is a floating
+self-attestation.** Round 2 replaces the round-1 two-commit `GOVERNANCE_COMMIT` pin with the repo's
+own convention instead of continuing to fight that limitation: read governance from `baseCommit`
+(merge-base with `origin/main`), exactly like every other wave verifier, with an explicitly-labeled
+`pre-landing` mode for the (current) state where this wave hasn't landed yet. Every finding's fix is
+cited by ID at its resolution point below so a re-reviewer can check each one directly.
 
 ## Why this wave exists
 
@@ -127,51 +134,73 @@ in this wave's `deny` list (see "Lease").
 ## Tranche-entry gate for P1/P2
 
 Every product-code tranche of this wave (P1, P2, and any further split within them) must satisfy
-all three of the following before the tranche's register entry (see "Tranche register" below) may
-flip from `open` to `complete` — asserted mechanically by the verifier at the commit that flips it
-(fix-round-1, HIGH-5):
+all four of the following before the tranche's register entry (see "Tranche register" below) may
+flip from `open` to `complete` — asserted mechanically by the verifier at the commit that flips it:
 
-1. **Fresh-main ancestry.** `origin/main`'s current tip is an ancestor of the tranche-completing
-   commit — the tranche was rebased onto (or merged with) the latest `main` immediately before
-   landing, not built against a stale base. Checked by `HEAD-DRIFT` below.
+1. **Fresh-main ancestry.** `origin/main`'s current tip (verified against the live remote, not a
+   possibly-stale local ref) is an ancestor of the tranche-completing commit — the tranche was
+   rebased onto (or merged with) the latest `main` immediately before landing, not built against a
+   stale base. Checked by `HEAD-DRIFT` below (fix-round-1, HIGH-5(a); hardened fix-round-2, new-HIGH-4).
 2. **Byte-preservation on every overlap file.** Every line present in a shared/overlap file (the
    six named under "Lease") at the wave's own base commit (merge-base with `origin/main`) is still
-   present, unmodified, at the tranche-completing commit — the diff for that file may only add
-   lines, never delete or rewrite one. Checked by `BYTE-PRESERVE` below. **One-line exception
-   process:** if a shared file's existing line genuinely must change (not just have lines added
-   around it — e.g. a function signature the new routing call site needs), that is `human:`
+   present, unmodified, at the tranche-completing commit, and the file itself still exists — the
+   diff for that file may only add lines, never delete, rewrite, or remove the file. Checked by
+   `BYTE-PRESERVE` below (fix-round-1, MED-7; hardened fix-round-2, new-HIGH-3). **One-line
+   exception process:** if a shared file's existing line genuinely must change (not just have lines
+   added around it — e.g. a function signature the new routing call site needs), that is `human:`
    judgment (`VERIFICATION-CONTRACT.md` §3 R7) and resolves to `blocked-on-founder`; it is never
    silently downgraded to "additive" by the implementing agent. No such exception is expected for
    any of the six named files' documented change types below.
 3. **W6a untouched.** The tranche-completing commit's diff contains none of the deny-listed W6a
    paths. Checked by `LEASE`'s deny-glob assertion (below), same mechanism as every other deny.
+4. **P0 (governance) must have landed to `main` first (fix-round-2, root-cause fix).** No product
+   tranche may ever be declared `complete` while its own verifier run is in `pre-landing` mode (see
+   "Verifier contract" → "Base-anchored governance, with an explicit pre-landing mode"). This is
+   the rule that makes the pre-landing state non-exploitable: nothing product-shaped can pass while
+   this wave's own governance content is still unlanded, no matter what the Tranche register claims
+   for P1/P2 — the verifier hardcodes gating to P0's own criteria only whenever `mode ===
+   "pre-landing"`, full stop, regardless of register content. A verifier run recorded as
+   `pre-landing` can never be cited as evidence that a product tranche's criteria passed.
 
 ## Tranche register
 
-Frozen from the pinned governance commit forward (see "Verifier contract"). A tranche's `Status`
-cell may only move `open → complete`, never back, and once a tranche is `complete` its `Owns
-criteria` list may never change relative to the pinned governance commit's version of this table —
-both checked mechanically. The criteria columns of this table are otherwise identical, in
-substance, to the "Success criteria" table below; this table exists to track *progress*, not to
-redefine *what* each criterion asserts (fix-round-1, HIGH-3).
+Read from `baseCommit` once P0 has landed (see "Verifier contract"); read from `HEAD` only, with
+gating locked to P0, while `mode === "pre-landing"` (the current, actual state — this table has
+never yet been read from a landed `baseCommit`). Once landed, a tranche's `Status` cell may only
+move `open → complete` relative to its `baseCommit` version, never back, and once a tranche is
+`complete` **at baseCommit** its `Owns criteria` list may never change relative to that version —
+both checked mechanically. A tranche that flips `open → complete` **within the current diff**
+(i.e. `open` at `baseCommit`, `complete` at `HEAD`) is graded gating *in that same diff* — a tranche
+must pass its own criteria to land its own register flip, it cannot flip first and prove itself
+later. The criteria columns of this table are otherwise identical, in substance, to the "Success
+criteria" table below; this table exists to track *progress*, not to redefine *what* each criterion
+asserts (fix-round-1, HIGH-3; base-anchored fix-round-2, point A.4).
 
 | Tranche | Status | Owns criteria |
 |---|---|---|
-| P0 | complete | CWR-P0-1, CWR-P0-2, CWR-P0-3, CWR-P0-4, LEASE, HEAD-DRIFT, BYTE-PRESERVE, GATE-INTEGRITY, CWR-P2-5 |
+| P0 | complete | CWR-P0-1, CWR-P0-2, CWR-P0-3, CWR-P0-4, LEASE, LEASE-INTEGRITY, HEAD-DRIFT, BYTE-PRESERVE, GATE-INTEGRITY, CWR-P2-5 |
 | P1 | open | CWR-P1-1, CWR-P1-2, CWR-P1-3 |
 | P2 | open | CWR-P2-1, CWR-P2-2, CWR-P2-3, CWR-P2-4 |
 
 **Grading rule (fix-round-1, HIGH-3, replacing the removed `skip` status):** every criterion in
-every tranche is graded `pass` or `fail` on every verifier run — there is no third "not yet
-applicable" status. A criterion belonging to an `open` tranche that has no implementation yet
-**legitimately fails** (its behavioral probe finds no code to exercise), and that failure is
-recorded honestly in the manifest — but it does **not** affect the verifier's exit code, because
-exit code is computed only over criteria owned by tranches marked `complete` (P0's own criteria,
-always; P1/P2's criteria, only once their row above says `complete`). This means the *same* probe
-code ships now, in this fix commit, already wired to assert real behavior — it simply has nothing
-to pass against yet. Once a later tranche lands real code and flips its row to `complete`, the
-identical probe starts gating for real, with no verifier rewrite (Success criteria table entries
-for CWR-P1-*/CWR-P2-* describe exactly what each probe checks).
+every tranche is graded `pass`, `fail`, or `blocked-on-founder` on every verifier run — there is no
+fourth "not yet applicable" status, matching `VERIFICATION-CONTRACT.md` §2's enum exactly. A
+criterion belonging to an `open` tranche that has no implementation yet **legitimately fails** (its
+behavioral probe finds no code to exercise), and that failure is recorded honestly in the manifest
+— but it does **not** affect the verifier's exit code, because exit code is computed only over
+criteria owned by tranches marked `complete` (P0's own criteria, always; P1/P2's criteria, only once
+their row above says `complete` **and** `mode !== "pre-landing"`, per the Tranche-entry gate's
+rule 4). **`GATE-INTEGRITY` and `LEASE-INTEGRITY` are the sole exceptions: they are unconditionally
+exit-blocking regardless of any tranche's status, register content, or `mode`** (fix-round-2,
+new-HIGH-2) — a bookkeeping failure in the manifest or lease itself is never something an `open`
+tranche's non-gating status can absorb. Any non-`pass` status, including `blocked-on-founder`,
+blocks exit `0` for a gating criterion — `blocked-on-founder` is a legal terminal state for
+*landing* decisions (a human must act), but an autonomous verifier run still exits non-zero on one
+(fix-round-2, MED-7). This means the *same* probe code ships now, in this fix commit, already wired
+to assert real behavior — it simply has nothing to pass against yet. Once a later tranche lands real
+code and flips its row to `complete` (with `mode !== "pre-landing"`), the identical probe starts
+gating for real, with no verifier rewrite (Success criteria table entries for CWR-P1-*/CWR-P2-*
+describe exactly what each probe checks).
 
 ## Routing-key fallback (normative)
 
@@ -246,85 +275,105 @@ must satisfy all four or amend this section first.
 ## Verifier contract
 
 `scripts/waves/verify-wr-routing.ts` is the only thing that may declare a `CWR-*` criterion,
-`LEASE`, `HEAD-DRIFT`, `BYTE-PRESERVE`, or `GATE-INTEGRITY` passed, per `VERIFICATION-CONTRACT.md`
-§1. Status values are exactly `pass` | `fail` | `blocked-on-founder` — the same enum
-`VERIFICATION-CONTRACT.md` §2 defines; the `skip` status from the pre-fix-round-1 verifier is
-**removed entirely** (fix-round-1, HIGH-3). Every criterion in every tranche gets a real
-pass/fail verdict on every run; see "Tranche register" for how an `open` tranche's honest failures
-stay non-gating without a third status.
+`LEASE`, `LEASE-INTEGRITY`, `HEAD-DRIFT`, `BYTE-PRESERVE`, or `GATE-INTEGRITY` passed, per
+`VERIFICATION-CONTRACT.md` §1. Status values are exactly `pass` | `fail` | `blocked-on-founder` —
+the same enum `VERIFICATION-CONTRACT.md` §2 defines; the `skip` status from the earliest draft is
+**removed entirely** (fix-round-1, HIGH-3). Every criterion in every tranche gets a real verdict on
+every run; see "Tranche register" for how an `open` tranche's honest failures stay non-gating.
 
-### Governance-pin freeze (fix-round-1, HIGH-1)
+### Base-anchored governance, with an explicit pre-landing mode (fix-round-2, replaces the round-1 two-commit pin)
 
-Without a pin, a later tranche could widen this wave's own lease or redefine its normative rules
-and still pass, because the pre-fix verifier read `leases.json`/this document straight from the
-branch working tree with no fixed reference point. The fix pins a specific commit as the frozen
-governance baseline and checks every later commit against it, not against itself.
+**Round-1 root cause (Sol round 2):** a verifier running on an unlanded branch cannot fully
+self-attest — any pin it stores in its own commit history is a floating self-attestation, because
+the branch that contains the pin is exactly the branch whose content the pin is supposed to
+constrain. The round-1 `GOVERNANCE_COMMIT` two-commit dance did not escape this; it only moved the
+self-reference one commit over.
 
-**Mechanism — a deliberate two-commit sequence, chosen over the alternatives for the reason
-below.** A verifier cannot embed its own resulting commit sha (the sha is a hash of the commit's
-content, which would have to include that sha — no fixed point exists in general). Two ways to
-route around that:
+**The fix is to stop fighting it and use the mechanism every other wave verifier already uses:**
+read governance from `baseCommit` (`git merge-base origin/main HEAD`) — a commit this branch does
+not control, because it is defined by where `origin/main` actually is. This is fully sound **once
+P0 has landed to `main`**, exactly as it is for every other wave in `leases.json`.
 
-- **(a) Commit the verifier last**, so it can name its own parent's sha as the pin. Rejected: the
-  pin then names a commit that does *not* contain the verifier logic doing the checking, so the
-  "verifier itself is pinned" half of this requirement is unsatisfiable by construction — there is
-  no commit in that scheme where both the frozen content and the checking logic that enforces the
-  freeze coexist.
-- **(b) Two commits: content-freeze, then a pin-only follow-up.** Commit 1 ("fix(waves): apply WR
-  P0 governance review findings") contains the complete, reviewed `WR-routing.md`, `leases.json`,
-  and `verify-wr-routing.ts` — including all of this fix round's logic — with the pin constant
-  (`GOVERNANCE_COMMIT` in the verifier) set to the literal sentinel `'PENDING-PIN'`. Commit 2
-  ("chore(waves): pin WR governance commit sha") changes **exactly one line** — the
-  `GOVERNANCE_COMMIT` assignment, to commit 1's real sha — and nothing else in the file. The
-  verifier itself asserts this at every run from commit 2 onward: the diff between
-  `GOVERNANCE_COMMIT` and `HEAD` for `scripts/waves/verify-wr-routing.ts` may add lines but may
-  never delete or modify a pre-existing one, **except** the single `GOVERNANCE_COMMIT` assignment
-  line itself, which is allowed to change exactly once (from sentinel to real sha) and is
-  mechanically excluded from the no-deletion check by pattern, not by trust.
+**Mode detection.** At the start of every run, the verifier reads `leases.json` at `baseCommit`:
 
-Chosen because it is the only scheme where a real commit exists containing both the frozen content
-and the enforcement logic, and the one necessary exception (the pin line itself) is named and
-checked by pattern rather than asserted by prose. **What is frozen, exactly, from
-`GOVERNANCE_COMMIT` forward:** the `## Routing-key fallback (normative)` section, the `##
-Screenshot-baseline rules (normative)` section, the `## Lease` section (including its fenced JSON
-block), the `## Explicitly out of scope` section, and the `## Success criteria` table in this
-document must be byte-identical to their `GOVERNANCE_COMMIT` versions at every later commit;
-`leases.json`'s `WR` entry (`allow`, `deny`) must deep-equal its `GOVERNANCE_COMMIT` version
-exactly (no widening, no narrowing without amending this document's frozen sections first, which
-itself would require a new `GOVERNANCE_COMMIT` — an explicit, visible re-pin, never silent drift);
-`verify-wr-routing.ts` may only grow (additions only) relative to its `GOVERNANCE_COMMIT` version,
-modulo the one pin-line exception above. The `## Tranche register` section is explicitly **not**
-frozen — its `Status` column is how future tranches report progress, gated by the rule in that
-section that it may only move `open → complete`.
+- **`mode: "post-landing"`** — a `WR` key already exists in `leases.json` at `baseCommit`. This
+  wave's own governance has landed to `main`; everything below reads from `baseCommit` as the
+  frozen reference, the same way `CWR-P0-3` already reads every *other* wave's lease from
+  `baseCommit`.
+- **`mode: "pre-landing"`** — no `WR` key exists at `baseCommit` yet. **This is the current, actual
+  state** (this wave has not landed). The verifier reads its own governance content (the `WR` lease
+  entry, the normative PRD sections, the Tranche register) from `HEAD` instead, because there is
+  nothing at `baseCommit` to read. The manifest records `mode: "pre-landing"` prominently (top-level
+  field, not buried), and — per the Tranche-entry gate's rule 4 — **gating is hardcoded to P0's own
+  criteria only** while in this mode, regardless of what the Tranche register claims for P1/P2.
+  Pinning becomes enforceable the moment P0 lands; until then, **the landing PR's own adversarial
+  review is the enforcement surface for the governance content itself** — this verifier cannot be
+  that surface for content it has no landed reference point to check against, and it says so
+  honestly in the manifest rather than pretending otherwise with a self-issued sentinel.
 
-### Fresh-main + hard-fail git state (fix-round-1, MED-8)
+No sentinel shas, no self-referential pin line, no two-commit sequence. `GOVERNANCE_COMMIT` and
+`PIN_LINE_PATTERN` are deleted from the verifier entirely.
 
-`HEAD-DRIFT` resolves `baseCommit` (merge-base of `HEAD` and `origin/main`) and `HEAD` **at the
-start** of the run, hard-fails the whole run on any git command erroring anywhere (no swallowed
+**What "frozen" means once `mode === "post-landing"`:** `leases.json`'s `WR` entry (`allow`, `deny`)
+must deep-equal its `baseCommit` version (checked by `CWR-P0-4`); the `## Routing-key fallback
+(normative)`, `## Screenshot-baseline rules (normative)`, `## Lease`, `## Explicitly out of scope`,
+and `## Success criteria` sections of this document must be byte-identical to their `baseCommit`
+versions (also `CWR-P0-4`); every *other* wave's lease entry must be byte-identical to its
+`baseCommit` version too (`LEASE-INTEGRITY`, fix-round-2 new-HIGH-5 — this wave's own diff must
+never touch another wave's entry, checked the same way regardless of mode since other waves' leases
+are always already on `main`). The `## Tranche register` section is explicitly **not** frozen —
+see "Tranche register" for its own forward-only rule, now anchored to `baseCommit` instead of a
+self-issued pin.
+
+### Fresh-main, fail-closed (fix-round-1, MED-8; hardened fix-round-2, new-HIGH-4)
+
+`HEAD-DRIFT` resolves `baseCommit` (merge-base of `HEAD` and `origin/main`) and `HEAD` at the
+**start** of the run, hard-fails the whole run on any git command erroring anywhere (no swallowed
 git failures — a git error is a verifier failure, not an empty string quietly treated as "no
-change"), asserts `origin/main`'s tip is an ancestor of `HEAD` (fresh-main ancestry, HIGH-5(a)),
-attempts to confirm `origin/main` is fetchable (`git ls-remote --exit-code origin main`) and
-records `originMainFetchable`/`originMainStale` honestly in the manifest rather than hard-failing
-when offline, and **re-resolves `baseCommit`/`HEAD` again at the very end**, failing if either
-changed mid-run (a concurrent commit landing on the branch while the verifier was running would
-otherwise silently validate a tree that no longer exists).
+change"), and **re-resolves both again after every behavioral probe has finished** (fix-round-2,
+partial-8) — a concurrent commit landing mid-run, including during a slow `vitest`/CLI probe, is
+caught rather than silently validating a tree that no longer exists. Fresh-main is now **fail-closed
+by construction, not best-effort**: the verifier queries the live remote (`git ls-remote origin
+main`), attempts to fetch that exact sha so its object is available locally
+(`git fetch origin main`, bounded timeout), and requires it to be an ancestor of `HEAD`. Three
+outcomes, all recorded in the manifest as `freshMain`: `"verified"` (remote reachable, sha fetched,
+ancestor confirmed — pass), `"stale"` (remote reachable but `HEAD` does not include its tip —
+fail), `"unverifiable"` (the remote could not be reached or fetched at all — **fail, not a pass**;
+this is a `blocked-on-founder`-eligible condition since a person may need to confirm connectivity,
+but an autonomous run still exits non-zero on it). The round-1 version treated an unreachable remote
+as a soft, non-blocking note; that was wrong — an unverifiable fresh-main claim is exactly the kind
+of unenforced guarantee `VERIFICATION-CONTRACT.md` §3 R5 forbids.
 
-### Byte-preservation (fix-round-1, MED-7)
+### Byte-preservation, unconditional (fix-round-1, MED-7; hardened fix-round-2, new-HIGH-3)
 
-`BYTE-PRESERVE` asserts, for each of the six named overlap files under "Lease" that exist in the
-tree, that `git diff --unified=0 <baseCommit>..HEAD -- <file>` contains zero removed/changed lines
-(only additions) — a real, mechanical proof of "additive only," not prose. The one-line exception
-process is in "Tranche-entry gate for P1/P2" above.
+`BYTE-PRESERVE` checks, for each of the six named overlap files under "Lease", whether the file
+existed at `baseCommit`. If it did not, there is nothing to preserve and the file is skipped. **If
+it did, the file MUST still exist at `HEAD` — a missing file is an unconditional fail**, and
+`git diff --unified=0 <baseCommit>..HEAD -- <file>` must contain zero removed/changed lines (only
+additions). The round-1 version silently skipped a file that had gone missing from the *current*
+tree instead of checking existence at `baseCommit` first, which let a deletion pass as "nothing to
+check." The one-line exception process is in "Tranche-entry gate for P1/P2" above.
 
-### Real lease-collision detection (fix-round-1, HIGH-2)
+### Real lease-collision detection, with corrected deny-precedence (fix-round-1, HIGH-2; corrected fix-round-2, partial-2)
 
 `CWR-P0-3` computes glob intersection structurally: two globs intersect when one's literal prefix
-(everything before its first `*`/`?`) is a prefix of the other's literal prefix (or vice versa) —
-the conservative check the finding specified. A resulting intersection is **not** a live collision
-if the other wave's own `deny` list already excludes the overlapping path (the repo's own
-`deny-always-wins` convention, applied the same way W2's verifier reads a landed tree). Every
-intersection that survives that filter is enumerated in "Lease" below by name, not asserted in the
-abstract.
+(everything before its first `*`/`?`) is a prefix of the other's literal prefix (or vice versa).
+**This detection step is deliberately conservative (over-inclusive) by design** — prefix
+containment can flag two globs as intersecting even where their true match sets do not actually
+overlap in every case, and that is the correct failure direction for a collision check: a false
+positive costs a line of documentation, a false negative costs a silent write conflict.
+
+**Deny-precedence, corrected.** The round-1 version treated *any* intersecting deny glob as
+excluding the *entire* overlap — wrong, because a deny only narrows the paths it actually matches,
+not everything the two allow globs could ever jointly touch. The fix: a would-be collision is
+excluded by deny-precedence only when the excluding wave's deny pattern, checked with a real regex
+match (`globToRegExp`, not the conservative prefix heuristic), actually matches our specific
+**literal** glob (no wildcard) — the one case where "the deny covers it" is unambiguous, because a
+single concrete path either matches a pattern or it does not. When our side of the intersection is
+itself a wildcard glob, deny-precedence never applies (the overlap is always surfaced and must be
+documented) — the fix-round-1 version's `globsIntersect(d, ourGlob)` deny check is deleted, since it
+inherited the same over-broad prefix logic used for detection and reintroduced exactly the bug this
+fix removes.
 
 ### Behavioral probes, not shape checks (fix-round-1, HIGH-4)
 
@@ -342,7 +391,47 @@ that a file merely exists with a plausible name:
   (`tsx apps/daemon/src/cli.ts route --json`, the same invocation `od route --json` resolves to),
   requires a zero exit code, requires the stdout to parse as JSON, and requires the parsed object to
   carry `escalationRate`, `passRate`, and a non-empty `laneMeters` object — the lane-meter closure
-  criterion folded in per HIGH-6. A stub that prints `{}` fails the required-keys check.
+  criterion folded in per HIGH-6. A stub that prints `{}` fails the required-keys check. See
+  "Enforcement boundaries" below for exactly what this class of probe does and does not prove.
+
+### GATE-INTEGRITY runs last, as a two-phase write (fix-round-2, LOW-8)
+
+`GATE-INTEGRITY` computes its checks strictly after every other criterion (including the
+behavioral probes and the re-resolved `HEAD-DRIFT`) has been recorded, so its "every criterion
+present exactly once" assertion is checking the *complete* result set, not a partial one. It writes
+itself in two phases: phase 1 records a verdict from everything recorded so far; phase 2
+immediately re-reads that just-written artifact **from disk** (not from the in-memory value) and
+re-validates it is present, non-empty, and hash-matched — if phase 2 finds a problem (a write race,
+a truncated artifact), it replaces the phase-1 record with a corrected `fail` before the manifest is
+written, rather than trusting an in-memory object that might not reflect what actually landed on
+disk.
+
+## Enforcement boundaries
+
+*(fix-round-2, part C — accepted residuals, documented rather than mechanized.)*
+
+This wave's verifier is mechanical, not adversarial, and it is honest about where that line falls:
+
+- **Suite existence + green + negative-control keyword matching is what the verifier proves for
+  `CWR-P1-1`, `CWR-P1-2`, `CWR-P2-1`, `CWR-P2-2`, `CWR-P2-3`.** It does **not** prove the suite's
+  *quality* — that a test named with the right keyword actually exercises override/budget/constraint
+  *behavior* rather than, say, asserting a constant or mocking away the thing it claims to test. A
+  test that is green, present, and keyword-matched but exercises nothing real is a **review-catchable
+  violation** (the per-tranche adversarial review, reviewer ≠ author, required by "Review protocol"
+  below), **not a verifier-catchable one**. Keyword matching narrows what a reviewer has to check; it
+  does not replace the check.
+- **`CWR-P2-4`'s HTTP/UI surface proof lives in the focused daemon test suites (supertest-level or
+  equivalent), not in this verifier booting a live server.** The verifier's CLI invocation proves the
+  `route` subcommand exists and returns the required shape; it does not itself exercise
+  `/api/routing/*` end-to-end. That proof is the responsibility of the P2 tranche's own daemon test
+  suite (part of `apps/daemon/tests/routing*.test.ts` / `apps/daemon/tests/routing/**`, already
+  graded green by `CWR-P2-1`..`CWR-P2-3`'s behavioral probes) — the verifier requires those suites
+  green, and trusts them for the HTTP-level proof rather than re-implementing a server-boot harness
+  that would duplicate what the suite already has to do correctly.
+
+This is the honest boundary between what is mechanical (this verifier) and what is adversarial (the
+reviewer) — stated here so a future reader does not mistake "the verifier is green" for "there is
+nothing left for a reviewer to check."
 
 ## Lease
 
@@ -445,36 +534,42 @@ so no later tranche can silently soften it.
 ## Success criteria
 
 All criteria inherit `VERIFICATION-CONTRACT.md` §3. Verified by `scripts/waves/verify-wr-routing.ts`.
-Status enum is exactly `pass`/`fail`/`blocked-on-founder`; a criterion's tranche (see "Tranche
-register") determines whether its `fail` blocks the verifier's exit code, never its own status.
+Status enum is exactly `pass`/`fail`/`blocked-on-founder`. A criterion's tranche (see "Tranche
+register") determines whether a non-`pass` status blocks the verifier's exit code — **except**
+`GATE-INTEGRITY` and `LEASE-INTEGRITY`, which block unconditionally regardless of tranche or `mode`.
 
 | ID | Tranche | Criterion | Verification |
 |---|---|---|---|
 | CWR-P0-1 | P0 | Wave identity document complete | This document exists with every required section — read by exact heading/phrase match |
 | CWR-P0-2 | P0 | Lease matches PRD exactly | `leases.json`'s `WR` entry's `allow`/`deny` deep-equal this document's declared JSON block |
-| CWR-P0-3 | P0 | No undocumented lease collisions | Real glob-intersection (prefix-containment) against every other wave's allow list, deny-precedence applied; every surviving intersection is one of the documented overlaps above |
-| CWR-P0-4 | P0 | Governance content is pinned and un-widened | `leases.json`'s `WR` entry and this document's frozen sections (normative rules, lease, out-of-scope, success-criteria table) are byte-identical to their `GOVERNANCE_COMMIT` versions; `verify-wr-routing.ts` has added no deletions relative to its `GOVERNANCE_COMMIT` version except the one sanctioned pin-line change |
+| CWR-P0-3 | P0 | No undocumented lease collisions | Real glob-intersection (prefix-containment) against every other wave's allow list at `baseCommit`, corrected deny-precedence applied; every surviving intersection is one of the documented overlaps above |
+| CWR-P0-4 | P0 | Governance content is base-anchored and un-widened once landed | `mode: "pre-landing"` (current state) passes trivially — nothing to widen against yet, enforced by the landing PR's own review instead. Once `mode: "post-landing"`: `leases.json`'s `WR` entry and this document's frozen sections are byte-identical to their `baseCommit` versions |
 | CWR-P1-1 | P1 | `routing-policy.json` + drift-failing policy test | Behavioral: `packages/contracts/tests/routing*polic*` runs green with ≥1 test, including one matching `/drift\|unknown stage\|constraint/i` |
 | CWR-P1-2 | P1 | Telemetry row completeness (routed-vs-observed model) | Behavioral: `packages/contracts/tests/routing*telemetry*` runs green with ≥1 test, including one matching `/routed.*observed\|observed.*routed/i` |
 | CWR-P1-3 | P1 | Policy + telemetry are in the backup set | Behavioral: an `app-config` archive dump contains a `routingPolicyVersion` key matching the active policy's version; the archived SQLite database contains the telemetry table with ≥1 row after a routed run |
 | CWR-P2-1 | P2 | Dispatch-time routing with override | Behavioral: `apps/daemon/tests/routing*.test.ts` + `apps/daemon/tests/routing/**` run green with a passing test matching `/override/i` |
 | CWR-P2-2 | P2 | Admission control denies over-budget dispatch | Behavioral: same suite, a passing test matching `/admission\|budget/i` |
 | CWR-P2-3 | P2 | Deterministic L3 gate runner for lane-A | Behavioral: same suite, a passing test matching `/l3\|deterministic.*gate/i` |
-| CWR-P2-4 | P2 | Escalation/pass rates + lane meters via `/api/routing/*` and `od route --json` | Behavioral: direct CLI invocation of the `route` subcommand with `--json`, zero exit, parseable JSON with `escalationRate`, `passRate`, non-empty `laneMeters` |
+| CWR-P2-4 | P2 | Escalation/pass rates + lane meters via `/api/routing/*` and `od route --json` | Behavioral: direct CLI invocation of the `route` subcommand with `--json`, zero exit, parseable JSON with `escalationRate`, `passRate`, non-empty `laneMeters`; HTTP-level proof deferred to the daemon test suite per "Enforcement boundaries" |
 | CWR-P2-5 | P0 (always-gating) | Selector-eval floors unchanged | `evals/selector/floors.json` byte-identical between `baseCommit` and `HEAD` on every run, including this P0 run |
 | LEASE | P0 | Write lease is mechanical | `git diff --name-only <base>...HEAD` ⊆ `WR`'s allow globs, touches none of `WR`'s deny globs |
-| HEAD-DRIFT | P0 | Base is fresh, not stale, and git errors are fatal | `baseCommit`/`HEAD` resolved at start and re-resolved unchanged at end; `origin/main` is an ancestor of `HEAD`; any git command error fails the run |
-| BYTE-PRESERVE | P0 | Overlap files are additive-only | `git diff --unified=0 <base>..HEAD` for each of the six named overlap files contains zero removed/changed lines |
-| GATE-INTEGRITY | P0 | Manifest is self-consistent | Every criterion ID above has exactly one manifest entry with a non-empty, hash-matched artifact |
+| LEASE-INTEGRITY | P0 (unconditionally gating) | Other waves' leases are untouched | Every non-`WR` entry in `leases.json` is byte-identical between `baseCommit` and `HEAD` |
+| HEAD-DRIFT | P0 | Base is fresh, not stale, and git errors are fatal | `baseCommit`/`HEAD` resolved at start and re-resolved unchanged after all behavioral probes complete; the live remote's `main` tip is fetched and confirmed an ancestor of `HEAD` (fail-closed — an unreachable remote is a fail, recorded as `freshMain: "unverifiable"`, not a pass); any git command error fails the run |
+| BYTE-PRESERVE | P0 | Overlap files are additive-only and never deleted | For each of the six named overlap files that existed at `baseCommit`: it still exists at `HEAD` (missing = unconditional fail), and `git diff --unified=0 <base>..HEAD` contains zero removed/changed lines |
+| GATE-INTEGRITY | P0 (unconditionally gating) | Manifest is self-consistent | Runs last, after every other criterion; every criterion ID above has exactly one manifest entry with a non-empty, hash-matched artifact, verified via a two-phase write that re-reads its own artifact from disk |
 
 ## Adversarial review
 
-**GPT-5.6 Sol.** Focus for this fix round: does the two-commit pin actually close the widening hole,
-or does the one sanctioned pin-line exception create a new one (could a second "exception" line be
-smuggled in the same way)? Does the prefix-based glob-intersection check have false negatives (two
-globs that can share a path without one prefix containing the other — e.g. two different wildcard
-segments in the middle of the path)? Do the behavioral probes' keyword requirements actually block
-a stub, or can a stub satisfy the keyword by naming its one trivial test something like
-`"override test"`? Is the backup/restore resolution (reusing `app-config` + `sqlite-database`
-instead of a new archive class) actually sufficient, or does something in `restore.ts` need the
-policy version validated at restore time in a way a bare JSON key cannot provide?
+**GPT-5.6 Sol.** Focus for this fix round: does reading governance from `baseCommit` (with the
+`pre-landing` fallback) actually close the self-attestation hole, or does the `pre-landing` mode
+itself become a new hole if a future tranche's verifier run is misreported as `post-landing`
+against a `baseCommit` that doesn't actually carry a landed `WR` key? Does the corrected
+deny-precedence (literal-only, real regex match) still let through a case where a wildcard-vs-
+wildcard overlap should have been excluded but isn't documented? Do the behavioral probes' keyword
+requirements actually block a stub, or can a stub satisfy the keyword by naming its one trivial test
+something like `"override test"`? Does `BYTE-PRESERVE`'s existence-at-`HEAD` check correctly
+distinguish "file renamed" (which git may report as a delete+add, not caught by a naive
+`cat-file -e` check on the old path) from "file genuinely deleted"? Is the backup/restore resolution
+(reusing `app-config` + `sqlite-database` instead of a new archive class) actually sufficient, or
+does something in `restore.ts` need the policy version validated at restore time in a way a bare
+JSON key cannot provide?
