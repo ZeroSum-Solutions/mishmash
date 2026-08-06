@@ -343,12 +343,16 @@ No sentinel shas, no self-referential pin line, no two-commit sequence. `GOVERNA
 `PIN_LINE_PATTERN` are deleted from the verifier entirely.
 
 **What "frozen" means once `mode === "post-landing"`:** `leases.json`'s `WR` entry (`allow`, `deny`)
-must deep-equal its `baseCommit` version (checked by `CWR-P0-4`); the `## Tranche-entry gate for
-P1/P2`, `## Routing-key fallback (normative)`, `## Screenshot-baseline rules (normative)`, `##
-Verifier contract`, `## Enforcement boundaries`, `## Lease`, `## Review protocol`, `## Explicitly
-out of scope`, and `## Success criteria` sections of this document must be byte-identical to their
-`baseCommit` versions (also `CWR-P0-4`, fix-round-3 finding 4 — extended to every remaining
-normative prose section, not just the data-shaped ones); every *other* wave's lease entry must be
+must deep-equal its `baseCommit` version (checked by `CWR-P0-4`); the identity-bearing **preamble**
+(this document's title through the end of its front matter — Slug/Gates-on/Parallel-with/Loop/
+Program/Review-status — everything before the first `## ` heading, frozen as that byte range since
+it has no heading of its own) and the `## Scope`, `## Tranche-entry gate for P1/P2`, `##
+Routing-key fallback (normative)`, `## Screenshot-baseline rules (normative)`, `## Verifier
+contract`, `## Enforcement boundaries`, `## Lease`, `## Review protocol`, `## Explicitly out of
+scope`, and `## Success criteria` sections of this document must be byte-identical to their
+`baseCommit` versions (also `CWR-P0-4`, fix-round-3 finding 4 extended by fix-round-4 finding 1 to
+cover the preamble and `## Scope` too — the wave's identity, authorized phases, and gates must not
+be widenable post-landing); every *other* wave's lease entry must be
 byte-identical to its `baseCommit` version too (`LEASE-INTEGRITY`, fix-round-2 new-HIGH-5 — this
 wave's own diff must never touch another wave's entry, checked the same way regardless of mode
 since other waves' leases are always already on `main`). **`scripts/waves/verify-wr-routing.ts`

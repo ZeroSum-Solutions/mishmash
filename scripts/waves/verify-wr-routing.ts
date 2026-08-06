@@ -7,6 +7,20 @@
 // belongs to a separate plan, docs/plans/2026-08-05-model-routing-system.md)
 // and is deleted, with the rest of scripts/waves/, when that program closes.
 //
+// FIX ROUND 4 (2026-08-05): two PARTIALs after round 3 resolved every HIGH.
+//   1. Frozen-section coverage extended to the identity-bearing preamble
+//      (title through front matter, before the first "## " heading -- not
+//      itself heading-delimited, so frozen as a byte range via
+//      extractPreamble()) and to "## Scope" (the wave's authorized phases
+//      and gates), both folded into CWR-P0-4's post-landing check.
+//   2. Exact final operation order: (all criteria probes) -> HEAD-DRIFT's
+//      fresh-main leg (ls-remote/fetch, no re-resolve) -> git status/dirty
+//      check -> GATE-INTEGRITY phase 1 -> the FINAL HEAD+base re-resolve
+//      (the only re-resolve in the run, the very last git reads, recorded
+//      into the manifest as finalHead/finalBase with stability booleans) ->
+//      GATE-INTEGRITY phase 2 self-hash -> single atomic manifest write. No
+//      git operation of any kind follows the final re-resolve.
+//
 // FIX ROUND 3 (2026-08-05): Sol-directed remediation, four new blockers after
 // round 2 resolved every prior HIGH.
 //
@@ -240,6 +254,17 @@ function extractSection(text: string, heading: string): string | null {
   return lines.slice(start, end).join('\n');
 }
 
+// Extracts the identity-bearing preamble -- everything from the file's
+// first byte through the line immediately before the first "## " heading
+// (title, Slug/Gates-on/Parallel-with/Loop/Program/Review-status front
+// matter). Not heading-delimited on its own, so it is frozen as this byte
+// range rather than via extractSection() (fix-round-4, finding 1).
+function extractPreamble(text: string): string {
+  const lines = text.split('\n');
+  const idx = lines.findIndex((l) => /^## /.test(l));
+  return (idx === -1 ? lines : lines.slice(0, idx)).join('\n');
+}
+
 // Real, mechanical byte-preservation proof: every removed/changed line in
 // `git diff --unified=0 fromRef..toRef -- filePath` is a violation, except
 // lines matching ignorePattern. Hard-fails on a git error instead of
@@ -351,8 +376,13 @@ const OVERLAP_FILES: readonly string[] = [
 ];
 
 // fix-round-3, finding 4: extended to cover every remaining normative
-// prose section, not just the data-shaped ones.
+// prose section, not just the data-shaped ones. fix-round-4, finding 1:
+// '## Scope' added -- the wave's authorized phases and gates must not be
+// widenable post-landing. The identity-bearing preamble (title through
+// front matter, before this list's first heading) is not heading-delimited
+// and is frozen separately via extractPreamble(), not through this array.
 const FROZEN_SECTION_HEADINGS: readonly string[] = [
+  '## Scope',
   '## Tranche-entry gate for P1/P2',
   '## Routing-key fallback (normative)',
   '## Screenshot-baseline rules (normative)',
@@ -639,6 +669,14 @@ safely(
         problems.push(`frozen section "${heading}" differs from its baseCommit version (or is missing at one end)`);
       }
     }
+    // fix-round-4, finding 1: the identity-bearing preamble (title through
+    // front matter, before the first "## " heading) is not itself a
+    // heading, so it is frozen separately as a byte range from file start.
+    const basePreamble = basePrd ? extractPreamble(basePrd) : null;
+    const headPreamble = prdText ? extractPreamble(prdText) : null;
+    if (basePreamble === null || headPreamble === null || basePreamble !== headPreamble) {
+      problems.push('preamble (title through front matter, before the first "## " heading) differs from its baseCommit version');
+    }
     const baseVerifierText = readAt(baseCommit, VERIFIER_PATH);
     const headVerifierText = readText(VERIFIER_PATH);
     if (baseVerifierText === null || headVerifierText === null || baseVerifierText !== headVerifierText) {
@@ -901,21 +939,17 @@ safely(
 );
 
 // ============================================================
-// HEAD-DRIFT -- runs AFTER all behavioral probes: fresh-main is fail-closed,
-// and baseCommit/HEAD are re-resolved here to catch a concurrent commit
-// landing mid-run, including during the (potentially slow) probes above.
-// A SECOND, authoritative re-read happens later, immediately before the
-// manifest write (fix-round-3, finding 6) -- this is the "post-probe" one.
+// HEAD-DRIFT (fresh-main leg) -- runs immediately after all behavioral
+// probes, using ONLY the run-start headSha/baseCommit already known (no
+// re-resolve here -- there is exactly one re-resolve in this whole run, and
+// it is the FINAL one below, per fix-round-4 finding 2's literal ordering).
 // ============================================================
 let freshMain: 'verified' | 'stale' | 'unverifiable' = 'unverifiable';
 safely(
   'HEAD-DRIFT',
-  'git rev-parse HEAD; git merge-base origin/main HEAD; git merge-base --is-ancestor; git ls-remote origin main; git fetch origin main',
-  'baseCommit/HEAD resolved at start and unchanged after all behavioral probes complete; the live remote main tip is fetched and confirmed an ancestor of HEAD (fail-closed); any git command error fails the run',
+  'git merge-base --is-ancestor; git ls-remote origin main; git fetch origin main',
+  'the live remote main tip is fetched and confirmed an ancestor of HEAD (fail-closed); the run-start base is an ancestor of the run-start HEAD',
   () => {
-    const endHeadSha = gitOrFail(['rev-parse', 'HEAD']);
-    const endBaseCommit = gitOrFail(['merge-base', 'origin/main', 'HEAD']);
-    const stable = endHeadSha === headSha && endBaseCommit === baseCommit;
     const baseIsAncestor = sh('git', ['merge-base', '--is-ancestor', baseCommit, headSha]).status === 0;
 
     const remoteRefs = sh('git', ['ls-remote', 'origin', 'main'], repoRoot, 30_000);
@@ -931,11 +965,11 @@ safely(
         freshMain = isAncestor ? 'verified' : 'stale';
       }
     }
-    const ok = stable && baseIsAncestor && freshMain === 'verified';
-    const status: 'pass' | 'fail' | 'blocked-on-founder' = ok ? 'pass' : freshMain === 'unverifiable' && stable && baseIsAncestor ? 'blocked-on-founder' : 'fail';
+    const ok = baseIsAncestor && freshMain === 'verified';
+    const status: 'pass' | 'fail' | 'blocked-on-founder' = ok ? 'pass' : freshMain === 'unverifiable' && baseIsAncestor ? 'blocked-on-founder' : 'fail';
     const base = {
       status,
-      evidence: `[post-probe check] stable=${stable} baseIsAncestor=${baseIsAncestor} freshMain=${freshMain} remoteMainSha=${remoteMainSha ?? 'null'}\nbaseCommit=${baseCommit} head=${headSha} endBase=${endBaseCommit} endHead=${endHeadSha}`,
+      evidence: `[fresh-main leg] baseIsAncestor=${baseIsAncestor} freshMain=${freshMain} remoteMainSha=${remoteMainSha ?? 'null'}\nbaseCommit(run-start)=${baseCommit} head(run-start)=${headSha}`,
     };
     return freshMain === 'unverifiable'
       ? { ...base, detail: 'remote main tip could not be reached/fetched -- a human may need to confirm connectivity; an autonomous run still exits non-zero on this' }
@@ -943,9 +977,16 @@ safely(
   },
 );
 
+// git status/dirty check -- next in the literal sequence (fix-round-4,
+// finding 2), immediately after the fresh-main leg and before GATE-INTEGRITY
+// phase 1. git status failure = dirty = fail, never a swallowed "clean".
+const statusResult = sh('git', ['status', '--porcelain']);
+const treeDirty = statusResult.status !== 0 ? true : statusResult.stdout.trim().length > 0;
+
 // ============================================================
 // Tranche register -- HEAD register always parsed; baseCommit register
 // parsed only in post-landing mode, for forward-only status comparison.
+// Read here, before GATE-INTEGRITY phase 1, which consumes it.
 // ============================================================
 interface TrancheRow {
   tranche: string;
@@ -967,12 +1008,11 @@ const headRegister = parseTrancheRegister(prdText);
 const baseRegister = mode === 'post-landing' ? parseTrancheRegister(readAt(baseCommit, PRD_PATH)) : null;
 
 // ============================================================
-// GATE-INTEGRITY -- runs LAST, after every other criterion including the
-// re-resolved HEAD-DRIFT. Two-phase write: phase 1 records from everything
-// seen so far; phase 2 re-reads that artifact from disk and corrects the
-// record if the write itself was bad. Cross-checks the PRD's register rows
-// against CRITERION_TRANCHE (fix-round-3, finding 2) -- documentation must
-// agree with the hardcoded map, but the map alone drives gating.
+// GATE-INTEGRITY phase 1 -- after every criterion probe, the fresh-main leg,
+// and the dirty check; before the final HEAD+base re-resolve. Cross-checks
+// the PRD's register rows against CRITERION_TRANCHE (fix-round-3, finding
+// 2) -- documentation must agree with the hardcoded map, but the map alone
+// drives gating.
 // ============================================================
 function computeGateIntegrity(): { status: 'pass' | 'fail'; evidence: string } {
   const problems: string[] = [];
@@ -1017,6 +1057,10 @@ function computeGateIntegrity(): { status: 'pass' | 'fail'; evidence: string } {
   };
 }
 
+// Non-git toolchain read, resolved before the final re-resolve so nothing
+// but the phase-2 self-hash follows it (fix-round-4, finding 2).
+const pnpmVersion = sh('pnpm', ['--version']).stdout.trim();
+
 // Phase 1.
 {
   const phase1 = computeGateIntegrity();
@@ -1030,11 +1074,12 @@ function computeGateIntegrity(): { status: 'pass' | 'fail'; evidence: string } {
 }
 
 // ============================================================
-// HEAD-DRIFT final re-read (fix-round-3, finding 6) -- authoritative,
-// immediately before the manifest write. Runs AFTER GATE-INTEGRITY phase 1
-// and BEFORE GATE-INTEGRITY phase 2, per the specified ordering. Replaces
-// the HEAD-DRIFT record in place so exactly one entry survives; both this
-// entry and the manifest's top-level commit/baseCommit fields reflect it.
+// FINAL HEAD+base re-resolve (fix-round-4, finding 2) -- the very last git
+// reads of the entire run. Runs AFTER GATE-INTEGRITY phase 1 and BEFORE
+// GATE-INTEGRITY phase 2; no git operation of any kind follows this point,
+// only the phase-2 self-hash (fs-only) and the single manifest write.
+// Replaces the HEAD-DRIFT record in place so exactly one entry survives;
+// both this entry and the manifest's finalHead/finalBase fields reflect it.
 // ============================================================
 const finalHeadSha = gitOrFail(['rev-parse', 'HEAD']);
 const finalBaseCommit = gitOrFail(['merge-base', 'origin/main', 'HEAD']);
@@ -1086,7 +1131,9 @@ const finalStableVsRunStart = finalHeadSha === headSha && finalBaseCommit === ba
 // Gating criteria (fix-round-3, finding 2): derived from CRITERION_TRANCHE
 // (the constant) + the register's open/complete STATUS per tranche name --
 // NEVER from the register's own parsed criteria-per-row text. 'always-gating'
-// ids gate unconditionally, independent of mode or register.
+// ids gate unconditionally, independent of mode or register. Pure in-memory
+// computation -- no git operation, safe at any point after the final
+// re-resolve too, but placed here for readability.
 const gatingCriteria = new Set<string>(ALWAYS_GATING_IDS);
 if (mode === 'pre-landing') {
   for (const id of idsForTranche('P0')) gatingCriteria.add(id);
@@ -1097,10 +1144,12 @@ if (mode === 'pre-landing') {
   }
 }
 
-// git status failure = dirty = fail.
-const statusResult = sh('git', ['status', '--porcelain']);
-const treeDirty = statusResult.status !== 0 ? true : statusResult.stdout.trim().length > 0;
-
+// Single atomic manifest write (fix-round-4, finding 2) -- the only write of
+// manifest.json in the whole run. finalHeadSha/finalBaseCommit/
+// finalStableVsRunStart come from the FINAL re-resolve above (the very last
+// git reads of the run); treeDirty/freshMain were already resolved earlier
+// in the sequence. No git operation happens between that final re-resolve
+// and this write -- only the phase-2 self-hash (fs-only) in between.
 const manifest = {
   wave: 'WR',
   mode,
@@ -1108,10 +1157,12 @@ const manifest = {
   baseCommit: finalBaseCommit,
   runStartCommit: headSha,
   runStartBaseCommit: baseCommit,
+  finalHead: finalHeadSha,
+  finalBase: finalBaseCommit,
   finalCheckStableVsRunStart: finalStableVsRunStart,
   treeDirty,
   freshMain,
-  toolchain: { node: process.version, pnpm: sh('pnpm', ['--version']).stdout.trim() },
+  toolchain: { node: process.version, pnpm: pnpmVersion },
   trancheRegister: headRegister,
   criteria: results,
 };
