@@ -21,10 +21,29 @@ function queryStringOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-function queryIntOrUndefined(value: unknown): number | undefined {
-  if (typeof value !== 'string' || value.length === 0) return undefined;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : undefined;
+/** Sol review MED-5: a query param that is PRESENT but unparseable (e.g.
+ * `?limit=abc`) must be rejected with a 400, not silently coerced into
+ * "absent -> use the default" the way `queryIntOrUndefined` used to. Absent
+ * (`undefined`) is genuinely fine and returns `{ ok: true, value: undefined
+ * }` so the caller's own default applies. */
+type QueryIntResult = { ok: true; value: number | undefined } | { ok: false; message: string };
+
+function parseOptionalQueryInt(raw: unknown, name: string, opts: { min?: number } = {}): QueryIntResult {
+  if (raw === undefined) return { ok: true, value: undefined };
+  if (typeof raw !== 'string' || raw.length === 0 || !Number.isFinite(Number(raw))) {
+    return { ok: false, message: `\`${name}\` must be a finite number` };
+  }
+  const n = Number(raw);
+  if (opts.min !== undefined && n < opts.min) {
+    return { ok: false, message: `\`${name}\` must be >= ${opts.min}` };
+  }
+  return { ok: true, value: n };
+}
+
+/** House 400 error shape -- matches `/decision/preview`'s existing
+ * `invalid-routing-key` envelope below rather than inventing a second one. */
+function respondInvalidQuery(res: Response, message: string): void {
+  res.status(400).json({ error: { code: 'invalid-query-param', message } });
 }
 
 /**
@@ -97,8 +116,9 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database): voi
   // supplied (see registerRoutingRoutes's doc comment) or no rows are in
   // range yet -- same well-shaped-empty-array contract the P0 stub shipped.
   app.get('/api/routing/meters', (req: Request, res: Response) => {
-    const windowMs = queryIntOrUndefined(req.query.windowMs);
-    const laneMeters = db ? computeLaneMeters(db, windowMs) : [];
+    const windowMsResult = parseOptionalQueryInt(req.query.windowMs, 'windowMs', { min: 0 });
+    if (!windowMsResult.ok) return respondInvalidQuery(res, windowMsResult.message);
+    const laneMeters = db ? computeLaneMeters(db, windowMsResult.value) : [];
     const response: RoutingMetersResponse = { laneMeters };
     res.json(response);
   });
@@ -108,6 +128,15 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database): voi
   // per WR t4's deliverable list; wired here because the response-envelope
   // pattern (RoutingTelemetryListResponse) is already cheap to reuse.
   app.get('/api/routing/telemetry', (req: Request, res: Response) => {
+    const sinceMsResult = parseOptionalQueryInt(req.query.sinceMs, 'sinceMs');
+    if (!sinceMsResult.ok) return respondInvalidQuery(res, sinceMsResult.message);
+    const untilMsResult = parseOptionalQueryInt(req.query.untilMs, 'untilMs');
+    if (!untilMsResult.ok) return respondInvalidQuery(res, untilMsResult.message);
+    const limitResult = parseOptionalQueryInt(req.query.limit, 'limit', { min: 1 });
+    if (!limitResult.ok) return respondInvalidQuery(res, limitResult.message);
+    const offsetResult = parseOptionalQueryInt(req.query.offset, 'offset', { min: 0 });
+    if (!offsetResult.ok) return respondInvalidQuery(res, offsetResult.message);
+
     if (!db) {
       const empty: RoutingTelemetryListResponse = { rows: [], total: 0, limit: 0, offset: 0 };
       res.json(empty);
@@ -119,12 +148,12 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database): voi
         projectId: queryStringOrNull(req.query.projectId) ?? undefined,
         runId: queryStringOrNull(req.query.runId) ?? undefined,
         stage: queryStringOrNull(req.query.stage) ?? undefined,
-        sinceMs: queryIntOrUndefined(req.query.sinceMs),
-        untilMs: queryIntOrUndefined(req.query.untilMs),
+        sinceMs: sinceMsResult.value,
+        untilMs: untilMsResult.value,
       },
       {
-        limit: queryIntOrUndefined(req.query.limit),
-        offset: queryIntOrUndefined(req.query.offset),
+        limit: limitResult.value,
+        offset: offsetResult.value,
       },
     );
     res.json(response);

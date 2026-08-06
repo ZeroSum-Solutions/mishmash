@@ -3,15 +3,21 @@
 // docs/plans/2026-08-05-model-routing-system.md §3.2 L5, §3.1).
 //
 // Follows apps/daemon/src/runtimes/usage-tracking.ts's SQLite pattern
-// EXACTLY: a dedicated table this module owns outright (not a new column
-// on a shared table), idempotent per-run-id upsert (a retried/resumed run
-// replaces its own prior row instead of accumulating duplicates), and no
-// pragma of its own -- WAL mode is already set once, globally, by
-// db.ts's openDatabase() on the single shared connection every caller
-// hands this module. `ensureRoutingTelemetryTable` mirrors
-// `ensureUsageTable`'s shape; `recordRoutingTelemetry` mirrors
-// `recordRunUsage`'s upsert; `listRoutingTelemetry` mirrors
-// `listProjectRunUsage`.
+// EXACTLY where the two concepts actually match: a dedicated table this
+// module owns outright (not a new column on a shared table), no pragma of
+// its own -- WAL mode is already set once, globally, by db.ts's
+// openDatabase() on the single shared connection every caller hands this
+// module. `ensureRoutingTelemetryTable` mirrors `ensureUsageTable`'s shape;
+// `listRoutingTelemetry` mirrors `listProjectRunUsage`.
+//
+// One deliberate departure from usage-tracking.ts (Sol review MED-4): a
+// run-boundary escalation/retry re-dispatches the SAME logical run under a
+// new attempt (plan §3.1: "run-boundary cascade... fresh context on
+// escalation"), and escalation analysis is itself a §3.2 L5 purpose -- so
+// unlike `run_usage`'s "last write wins" run-id-only key (which is correct
+// for a cost total that should only ever reflect the CURRENT run), this
+// table keys on `(run_id, attempt)` so a retried run's first attempt
+// survives its own replacement rather than being silently overwritten.
 //
 // Scope discipline (WR t4): storage + query + reconciliation only. Nothing
 // here calls recordRoutingTelemetry from a real dispatch or run-finalize
@@ -19,7 +25,6 @@
 // logic here (t6).
 import type Database from 'better-sqlite3';
 import {
-  emptyLaneMeter,
   isStoredRoutingTelemetryRow,
   type LaneMeter,
   type RoutingGateOutcome,
@@ -31,7 +36,8 @@ import {
 export function ensureRoutingTelemetryTable(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS routing_telemetry (
-      run_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      attempt INTEGER NOT NULL DEFAULT 0,
       project_id TEXT NOT NULL,
       stage TEXT NOT NULL,
       template_id TEXT,
@@ -51,7 +57,8 @@ export function ensureRoutingTelemetryTable(db: Database.Database): void {
       escalated INTEGER NOT NULL,
       policy_version INTEGER NOT NULL,
       created_at TEXT NOT NULL,
-      recorded_at TEXT NOT NULL
+      recorded_at TEXT NOT NULL,
+      PRIMARY KEY (run_id, attempt)
     )
   `);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_routing_telemetry_project_id ON routing_telemetry(project_id)`);
@@ -59,13 +66,15 @@ export function ensureRoutingTelemetryTable(db: Database.Database): void {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_routing_telemetry_created_at ON routing_telemetry(created_at)`);
 }
 
-/** Idempotent per run id, exactly like `recordRunUsage` -- a row written at
- * dispatch time (observedModel/observedLane null) and later updated once
- * usage arrives post-run (plan §3.1) replaces itself in place rather than
- * accumulating a second row for the same run. Throws on a row that fails
- * the contracts guard: a malformed telemetry row must fail loudly, not
- * silently persist a shape the reconciliation/meter readers below cannot
- * trust (mirrors routing/policy.ts's loadRoutingPolicy fail-loud stance). */
+/** Idempotent per `(run_id, attempt)` -- a row written at dispatch time
+ * (observedModel/observedLane null) and later updated once usage arrives
+ * post-run (plan §3.1) for the SAME attempt replaces itself in place, but a
+ * new attempt number (a run-boundary retry/escalation) inserts a sibling
+ * row rather than clobbering the prior attempt's outcome (Sol review
+ * MED-4). Throws on a row that fails the contracts guard: a malformed
+ * telemetry row must fail loudly, not silently persist a shape the
+ * reconciliation/meter readers below cannot trust (mirrors
+ * routing/policy.ts's loadRoutingPolicy fail-loud stance). */
 export function recordRoutingTelemetry(db: Database.Database, row: StoredRoutingTelemetryRow): void {
   if (!isStoredRoutingTelemetryRow(row)) {
     throw new Error(
@@ -74,15 +83,15 @@ export function recordRoutingTelemetry(db: Database.Database, row: StoredRouting
   }
   db.prepare(
     `INSERT INTO routing_telemetry
-       (run_id, project_id, stage, template_id, design_system, routed_model,
+       (run_id, attempt, project_id, stage, template_id, design_system, routed_model,
         observed_model, routed_lane, observed_lane, tokens_input, tokens_output,
         tokens_cache_read_input, cache_hits, latency_ms, cost_usd, cost_estimated,
         gate_outcomes_json, escalated, policy_version, created_at, recorded_at)
-     VALUES (@runId, @projectId, @stage, @templateId, @designSystem, @routedModel,
+     VALUES (@runId, @attempt, @projectId, @stage, @templateId, @designSystem, @routedModel,
              @observedModel, @routedLane, @observedLane, @tokensInput, @tokensOutput,
              @tokensCacheReadInput, @cacheHits, @latencyMs, @costUsd, @costEstimated,
              @gateOutcomesJson, @escalated, @policyVersion, @createdAt, @recordedAt)
-     ON CONFLICT(run_id) DO UPDATE SET
+     ON CONFLICT(run_id, attempt) DO UPDATE SET
        project_id = excluded.project_id,
        stage = excluded.stage,
        template_id = excluded.template_id,
@@ -108,6 +117,7 @@ export function recordRoutingTelemetry(db: Database.Database, row: StoredRouting
 
 interface RoutingTelemetryDbRow {
   run_id: string;
+  attempt: number;
   project_id: string;
   stage: string;
   template_id: string | null;
@@ -133,6 +143,7 @@ interface RoutingTelemetryDbRow {
 function rowToParams(row: StoredRoutingTelemetryRow) {
   return {
     runId: row.runId,
+    attempt: row.attempt,
     projectId: row.projectId,
     stage: row.stage,
     templateId: row.templateId,
@@ -168,6 +179,7 @@ function dbRowToStored(row: RoutingTelemetryDbRow): StoredRoutingTelemetryRow {
   }
   return {
     runId: row.run_id,
+    attempt: row.attempt,
     projectId: row.project_id,
     stage: row.stage,
     templateId: row.template_id,
@@ -193,24 +205,43 @@ function dbRowToStored(row: RoutingTelemetryDbRow): StoredRoutingTelemetryRow {
   };
 }
 
-const ROUTING_TELEMETRY_SELECT_COLS = `run_id, project_id, stage, template_id, design_system, routed_model,
+const ROUTING_TELEMETRY_SELECT_COLS = `run_id, attempt, project_id, stage, template_id, design_system, routed_model,
   observed_model, routed_lane, observed_lane, tokens_input, tokens_output,
   tokens_cache_read_input, cache_hits, latency_ms, cost_usd, cost_estimated,
   gate_outcomes_json, escalated, policy_version, created_at, recorded_at`;
 
+/** Reads one specific attempt of a run (default: attempt 0, the first
+ * dispatch). Use `listRoutingTelemetryAttempts` to read every attempt a
+ * run has accumulated. */
 export function getRoutingTelemetryByRunId(
   db: Database.Database,
   runId: string,
+  attempt: number = 0,
 ): StoredRoutingTelemetryRow | null {
   const row = db
-    .prepare(`SELECT ${ROUTING_TELEMETRY_SELECT_COLS} FROM routing_telemetry WHERE run_id = ?`)
-    .get(runId) as RoutingTelemetryDbRow | undefined;
+    .prepare(`SELECT ${ROUTING_TELEMETRY_SELECT_COLS} FROM routing_telemetry WHERE run_id = ? AND attempt = ?`)
+    .get(runId, attempt) as RoutingTelemetryDbRow | undefined;
   return row ? dbRowToStored(row) : null;
+}
+
+/** Every attempt recorded for a run, ordered oldest attempt first -- the
+ * escalation-analysis read path MED-4 exists for (plan §3.2 L5: "the only
+ * path to ever justifying learned routing" needs to see what the FIRST
+ * attempt actually did, not just the attempt that happened to land last). */
+export function listRoutingTelemetryAttempts(db: Database.Database, runId: string): StoredRoutingTelemetryRow[] {
+  const dbRows = db
+    .prepare(`SELECT ${ROUTING_TELEMETRY_SELECT_COLS} FROM routing_telemetry WHERE run_id = ? ORDER BY attempt ASC`)
+    .all(runId) as RoutingTelemetryDbRow[];
+  return dbRows.map(dbRowToStored);
 }
 
 export interface RoutingTelemetryFilters {
   projectId?: string | undefined;
   runId?: string | undefined;
+  /** Narrows to one specific attempt; omit to match every attempt of a run
+   * (the default for both `listRoutingTelemetry` and lane-meter
+   * aggregation, per MED-4: meters must sum across attempts). */
+  attempt?: number | undefined;
   stage?: string | undefined;
   /** Inclusive lower bound on `createdAt`, epoch milliseconds. */
   sinceMs?: number | undefined;
@@ -242,6 +273,10 @@ function buildFilterClause(filters: RoutingTelemetryFilters): { where: string; p
     clauses.push('run_id = ?');
     params.push(filters.runId);
   }
+  if (filters.attempt !== undefined) {
+    clauses.push('attempt = ?');
+    params.push(filters.attempt);
+  }
   if (filters.stage !== undefined) {
     clauses.push('stage = ?');
     params.push(filters.stage);
@@ -260,7 +295,9 @@ function buildFilterClause(filters: RoutingTelemetryFilters): { where: string; p
 /** Filtered, paginated read of the telemetry table -- plan §3.2 L5's
  * "weekly policy review" purpose, and the storage side of the optional
  * GET /api/routing/telemetry surface. `total` is the full match count
- * before `limit`/`offset`, so a caller can page without a second request. */
+ * before `limit`/`offset`, so a caller can page without a second request.
+ * Every attempt of a matching run is included unless `filters.attempt`
+ * narrows to one. */
 export function listRoutingTelemetry(
   db: Database.Database,
   filters: RoutingTelemetryFilters = {},
@@ -277,7 +314,7 @@ export function listRoutingTelemetry(
       `SELECT ${ROUTING_TELEMETRY_SELECT_COLS}
          FROM routing_telemetry
          ${where}
-        ORDER BY created_at DESC, run_id DESC
+        ORDER BY created_at DESC, run_id DESC, attempt DESC
         LIMIT ? OFFSET ?`,
     )
     .all(...params, limit, offset) as RoutingTelemetryDbRow[];
@@ -285,7 +322,8 @@ export function listRoutingTelemetry(
 }
 
 /** Unpaginated internal read used only by `computeLaneMeters` -- lane
- * aggregation needs every matching row, not a page of them. */
+ * aggregation needs every matching row (every attempt included, MED-4), not
+ * a page of them. */
 function fetchRowsForAggregation(db: Database.Database, windowMs: number | undefined): StoredRoutingTelemetryRow[] {
   const filters: RoutingTelemetryFilters =
     windowMs !== undefined ? { sinceMs: Date.now() - windowMs } : {};
@@ -296,33 +334,56 @@ function fetchRowsForAggregation(db: Database.Database, windowMs: number | undef
   return dbRows.map(dbRowToStored);
 }
 
+/**
+ * Sol review HIGH-2/HIGH-3 (t4 fix commit): a row's usage/cost/gate/
+ * escalation metrics belong to whichever lane actually ran the work, not
+ * unconditionally to `routedLane`. `routedLane`/`runsRouted` still track
+ * pure routing INTENT (unaffected here); a separate accumulator tracks
+ * what got ATTRIBUTED to this lane, keyed by `observedLane ?? routedLane`
+ * (fall back to the routed lane only when nothing has been observed yet).
+ */
 interface LaneAccumulator {
   runsRouted: number;
   runsObserved: number;
-  escalatedCount: number;
-  gatedCount: number;
-  gatedPassCount: number;
-  tokensInput: number;
-  tokensOutput: number;
-  tokensCacheReadInput: number;
-  costUsd: number;
-  costEstimated: boolean;
-  throttleEvents: number;
+  attributedRuns: number;
+  attributedEscalated: number;
+  attributedGated: number;
+  attributedGatedPass: number;
+  attributedTokensInput: number;
+  attributedTokensOutput: number;
+  attributedTokensCacheReadInput: number;
+  attributedCostUsd: number;
+  /** Whether any attributed row was billed (`costEstimated: false`) /
+   * a pre-run estimate (`costEstimated: true`) -- both starting `false`
+   * (nothing seen yet) so a lane with zero attributed rows reports the
+   * vacuous `'exact'` default via `emptyLaneMeter`-equivalent logic below,
+   * not a fabricated 'mixed'/'estimated' claim about rows that don't exist. */
+  sawExactCost: boolean;
+  sawEstimatedCost: boolean;
+  /** Which attribution rule(s) actually contributed a row to this
+   * accumulator -- `'observed'` (a confirmed, non-null `observedLane`
+   * named this lane) vs `'routed-fallback'` (the row's `observedLane` was
+   * still null, so it fell back to `routedLane`). */
+  sawObservedAttribution: boolean;
+  sawFallbackAttribution: boolean;
 }
 
 function newAccumulator(): LaneAccumulator {
   return {
     runsRouted: 0,
     runsObserved: 0,
-    escalatedCount: 0,
-    gatedCount: 0,
-    gatedPassCount: 0,
-    tokensInput: 0,
-    tokensOutput: 0,
-    tokensCacheReadInput: 0,
-    costUsd: 0,
-    costEstimated: true,
-    throttleEvents: 0,
+    attributedRuns: 0,
+    attributedEscalated: 0,
+    attributedGated: 0,
+    attributedGatedPass: 0,
+    attributedTokensInput: 0,
+    attributedTokensOutput: 0,
+    attributedTokensCacheReadInput: 0,
+    attributedCostUsd: 0,
+    sawExactCost: false,
+    sawEstimatedCost: false,
+    sawObservedAttribution: false,
+    sawFallbackAttribution: false,
   };
 }
 
@@ -331,14 +392,29 @@ function allGatesPass(gateOutcomes: Record<string, RoutingGateOutcome>): boolean
   return outcomes.length > 0 && outcomes.every((outcome) => outcome === 'pass');
 }
 
+function resolveCostTriState(acc: LaneAccumulator): LaneMeter['cost'] {
+  if (acc.sawExactCost && acc.sawEstimatedCost) return 'mixed';
+  if (acc.sawExactCost) return 'exact';
+  if (acc.sawEstimatedCost) return 'estimated';
+  return 'exact'; // vacuous default for a lane with zero attributed rows
+}
+
+function resolveAttribution(acc: LaneAccumulator): LaneMeter['attribution'] {
+  if (acc.sawObservedAttribution && acc.sawFallbackAttribution) return 'mixed';
+  if (acc.sawObservedAttribution) return 'observed';
+  if (acc.sawFallbackAttribution) return 'routed-fallback';
+  return 'none';
+}
+
 /** Aggregates observed usage per lane over the trailing `windowMs`
- * (omit for all-time) -- plan §3.2 L5: tokens, estimated cost, run counts,
- * and throttle events per lane, the dataset the weekly policy review reads
- * ("stage escalation rate above its alarm -> fix the table"). A lane
- * appears in the result if it was ever routed to OR ever observed
- * (fallback target), even if the two never coincide for a given run --
- * this is exactly the lane-level fallback plan §3.1 says must be
- * traceable. Lanes are returned sorted by id for a stable response shape. */
+ * (omit for all-time; every attempt of every matching run is included,
+ * MED-4) -- plan §3.2 L5: tokens, estimated cost, run counts, and throttle
+ * events per lane, the dataset the weekly policy review reads ("stage
+ * escalation rate above its alarm -> fix the table"). A lane appears in the
+ * result if it was ever routed to, ever observed, OR ever the attribution
+ * target for another lane's fallback, even if these never coincide for a
+ * given run -- this is exactly the lane-level fallback plan §3.1 says must
+ * be traceable. Lanes are returned sorted by id for a stable response shape. */
 export function computeLaneMeters(db: Database.Database, windowMs?: number): LaneMeter[] {
   const rows = fetchRowsForAggregation(db, windowMs);
   const byLane = new Map<string, LaneAccumulator>();
@@ -352,23 +428,32 @@ export function computeLaneMeters(db: Database.Database, windowMs?: number): Lan
   };
 
   for (const row of rows) {
-    const routed = accFor(row.routedLane);
-    routed.runsRouted += 1;
-    routed.tokensInput += row.tokens.input;
-    routed.tokensOutput += row.tokens.output;
-    routed.tokensCacheReadInput += row.tokens.cacheReadInput;
-    routed.costUsd += row.costUsd;
-    routed.costEstimated = routed.costEstimated && row.costEstimated;
-    if (row.escalated) {
-      routed.escalatedCount += 1;
-      routed.throttleEvents += 1;
-    }
-    if (Object.keys(row.gateOutcomes).length > 0) {
-      routed.gatedCount += 1;
-      if (allGatesPass(row.gateOutcomes)) routed.gatedPassCount += 1;
-    }
+    // Routing INTENT: unconditional, always the routed lane.
+    accFor(row.routedLane).runsRouted += 1;
+
+    // Confirmed observation count: only when observedLane actually arrived.
     if (row.observedLane !== null) {
       accFor(row.observedLane).runsObserved += 1;
+    }
+
+    // ATTRIBUTION (HIGH-2): usage/cost/gates/escalations belong to whichever
+    // lane actually ran the work -- observedLane when confirmed, routedLane
+    // only as a not-yet-observed fallback.
+    const attributionLane = row.observedLane ?? row.routedLane;
+    const attributed = accFor(attributionLane);
+    attributed.attributedRuns += 1;
+    attributed.attributedTokensInput += row.tokens.input;
+    attributed.attributedTokensOutput += row.tokens.output;
+    attributed.attributedTokensCacheReadInput += row.tokens.cacheReadInput;
+    attributed.attributedCostUsd += row.costUsd;
+    if (row.costEstimated) attributed.sawEstimatedCost = true;
+    else attributed.sawExactCost = true;
+    if (row.observedLane !== null) attributed.sawObservedAttribution = true;
+    else attributed.sawFallbackAttribution = true;
+    if (row.escalated) attributed.attributedEscalated += 1;
+    if (Object.keys(row.gateOutcomes).length > 0) {
+      attributed.attributedGated += 1;
+      if (allGatesPass(row.gateOutcomes)) attributed.attributedGatedPass += 1;
     }
   }
 
@@ -376,19 +461,21 @@ export function computeLaneMeters(db: Database.Database, windowMs?: number): Lan
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([lane, acc]) => {
       const meter: LaneMeter = {
-        ...emptyLaneMeter(lane),
+        lane,
         runsRouted: acc.runsRouted,
         runsObserved: acc.runsObserved,
-        escalationRate: acc.runsRouted > 0 ? acc.escalatedCount / acc.runsRouted : 0,
-        passRate: acc.gatedCount > 0 ? acc.gatedPassCount / acc.gatedCount : 0,
+        escalationRate: acc.attributedRuns > 0 ? acc.attributedEscalated / acc.attributedRuns : 0,
+        passRate: acc.attributedGated > 0 ? acc.attributedGatedPass / acc.attributedGated : 0,
         tokens: {
-          input: acc.tokensInput,
-          output: acc.tokensOutput,
-          cacheReadInput: acc.tokensCacheReadInput,
+          input: acc.attributedTokensInput,
+          output: acc.attributedTokensOutput,
+          cacheReadInput: acc.attributedTokensCacheReadInput,
         },
-        costUsd: acc.costUsd,
-        costEstimated: acc.costEstimated,
-        throttleEvents: acc.throttleEvents,
+        costUsd: acc.attributedCostUsd,
+        cost: resolveCostTriState(acc),
+        throttleEvents: acc.attributedEscalated,
+        attributedRuns: acc.attributedRuns,
+        attribution: resolveAttribution(acc),
       };
       return meter;
     });
@@ -396,11 +483,24 @@ export function computeLaneMeters(db: Database.Database, windowMs?: number): Lan
 
 export type RoutingReconciliationStatus = 'match' | 'model-divergence' | 'lane-divergence' | 'unverified';
 
-/** Divergence flag + reason for one telemetry row's routed-vs-observed pair
- * (plan §3.1: "post-run usage reconciliation that flags runs whose
- * observed usage diverges from the routed intent"). */
+/** Divergence flags + reason for one telemetry row's routed-vs-observed
+ * pair (plan §3.1: "post-run usage reconciliation that flags runs whose
+ * observed usage diverges from the routed intent").
+ *
+ * Sol review MED-6: `modelDivergence`/`laneDivergence` are independent --
+ * both can be `true` at once (both axes diverged), and `status` alone
+ * (chosen by precedence, model wins display) would mask that. Consumers
+ * that only need "is anything wrong" read `divergent`; consumers doing
+ * per-axis analysis read the two flags directly instead of re-deriving them
+ * from `status`/`reason` text. */
 export interface RoutingReconciliation {
   status: RoutingReconciliationStatus;
+  /** True when the observed model differs from the routed model (only ever
+   * true once `observedModel` has actually arrived). */
+  modelDivergence: boolean;
+  /** True when the observed lane differs from the routed lane (only ever
+   * true once `observedLane` has actually arrived). */
+  laneDivergence: boolean;
   divergent: boolean;
   reason: string;
 }
@@ -414,50 +514,70 @@ type RoutingReconcileInput = Pick<RoutingTelemetryRow, 'routedModel' | 'observed
  * (requested vs. resolved vs. reported, for one run's model identity, at
  * the W1 usage-tracking layer). This answers "routed vs. observed" for a
  * telemetry row, across BOTH model and lane, at the WR routing layer. The
- * shared idea is precedence, not code: a detected divergence is reported
- * immediately, even if the other axis hasn't reported back yet, and only
- * full, unanimous confirmation earns the non-divergent terminal state --
- * anything short of that (including a legitimately-not-arrived-yet
- * observation) is `'unverified'`, per this module's brief: "observed
- * unavailable => 'unverified', not a divergence."
+ * shared idea is precedence, not code: `status` reports the higher-priority
+ * divergence first (model over lane) for display, even if the other axis
+ * hasn't reported back yet, and only full, unanimous confirmation earns the
+ * non-divergent terminal state -- anything short of that (including a
+ * legitimately-not-arrived-yet observation) is `'unverified'`, per this
+ * module's brief: "observed unavailable => 'unverified', not a divergence."
+ * `modelDivergence`/`laneDivergence` are computed independently of that
+ * precedence (MED-6) so a caller can see both axes even when `status` only
+ * names one.
  */
 function reconcileRow(row: RoutingReconcileInput): RoutingReconciliation {
-  if (row.observedModel !== null && row.observedModel !== row.routedModel) {
+  const modelDivergence = row.observedModel !== null && row.observedModel !== row.routedModel;
+  const laneDivergence = row.observedLane !== null && row.observedLane !== row.routedLane;
+  const divergent = modelDivergence || laneDivergence;
+
+  if (modelDivergence) {
     return {
       status: 'model-divergence',
-      divergent: true,
+      modelDivergence,
+      laneDivergence,
+      divergent,
       reason: `routed model "${row.routedModel}" but observed "${row.observedModel}"`,
     };
   }
-  if (row.observedLane !== null && row.observedLane !== row.routedLane) {
+  if (laneDivergence) {
     return {
       status: 'lane-divergence',
-      divergent: true,
+      modelDivergence,
+      laneDivergence,
+      divergent,
       reason: `routed lane "${row.routedLane}" but observed "${row.observedLane}"`,
     };
   }
   if (row.observedModel !== null && row.observedLane !== null) {
     return {
       status: 'match',
-      divergent: false,
+      modelDivergence,
+      laneDivergence,
+      divergent,
       reason: 'observed model and lane both confirm the routed decision',
     };
   }
   return {
     status: 'unverified',
-    divergent: false,
+    modelDivergence,
+    laneDivergence,
+    divergent,
     reason: "observed model/lane not yet reported -- usage arrives post-run (plan §3.1)",
   };
 }
 
 export function reconcileRoutedVsObserved(row: RoutingReconcileInput): RoutingReconciliation;
-export function reconcileRoutedVsObserved(db: Database.Database, runId: string): RoutingReconciliation | null;
+export function reconcileRoutedVsObserved(
+  db: Database.Database,
+  runId: string,
+  attempt?: number,
+): RoutingReconciliation | null;
 export function reconcileRoutedVsObserved(
   arg: RoutingReconcileInput | Database.Database,
   runId?: string,
+  attempt: number = 0,
 ): RoutingReconciliation | null {
   if (typeof runId === 'string') {
-    const row = getRoutingTelemetryByRunId(arg as Database.Database, runId);
+    const row = getRoutingTelemetryByRunId(arg as Database.Database, runId, attempt);
     return row ? reconcileRow(row) : null;
   }
   return reconcileRow(arg as RoutingReconcileInput);

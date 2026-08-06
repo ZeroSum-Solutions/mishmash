@@ -55,42 +55,71 @@ export interface RoutingTelemetryRow {
 /** Per-lane rollup -- plan §5/fix-round-1 HIGH-6's "lane meter closure",
  * exposed through `/api/routing/meters` and `od route meters --json`.
  *
- * `tokens`/`costUsd`/`costEstimated`/`throttleEvents` were added in the L5
- * storage tranche (plan §3.2 L5: "the router recommends... this dataset is
- * the only path to ever justifying learned routing") once real telemetry
- * rows existed to aggregate -- the P0 skeleton only had the four
- * pass/escalation-rate fields because there was no row content yet to sum. */
+ * Sol review (t4 fix commit) HIGH-2/HIGH-3: usage/cost/gate/escalation
+ * metrics are attributed to whichever lane a row's `observedLane ??
+ * routedLane` names -- NOT unconditionally to `routedLane` -- because a row
+ * whose run actually executed on a different (fallback) lane must not have
+ * its cost/tokens/escalation counted against the lane it was merely
+ * *routed* to. `runsRouted`/`runsObserved` stay pure routing-decision /
+ * confirmed-observation counts (unaffected by attribution); `attributedRuns`
+ * is the new denominator for `escalationRate`/`passRate`/the summed
+ * metrics, and `attribution` records which rule(s) produced it. */
 export interface LaneMeter {
   lane: string;
+  /** Count of rows whose ROUTING decision targeted this lane, regardless of
+   * where the run's metrics ended up attributed. */
   runsRouted: number;
+  /** Count of rows whose CONFIRMED `observedLane` is this lane (null
+   * observedLane rows are never counted here, even when they fall back to
+   * this lane for attribution -- see `attributedRuns`). */
   runsObserved: number;
+  /** escalatedCount / attributedRuns for rows attributed to this lane (0
+   * when attributedRuns is 0). */
   escalationRate: number;
+  /** gatedPassCount / gatedCount for rows attributed to this lane that
+   * carried at least one gate outcome (0 when none did). */
   passRate: number;
-  /** Sum of every row's `tokens` routed to this lane in the aggregation
-   * window (see `computeLaneMeters` in apps/daemon/src/routing/telemetry.ts). */
+  /** Sum of every ATTRIBUTED row's `tokens` for this lane in the
+   * aggregation window (see `computeLaneMeters` in
+   * apps/daemon/src/routing/telemetry.ts). */
   tokens: RoutingTelemetryTokenCounts;
-  /** Sum of every row's `costUsd` routed to this lane in the window. */
+  /** Sum of every ATTRIBUTED row's `costUsd` for this lane in the window. */
   costUsd: number;
-  /** True only when every row contributing to `costUsd` had
-   * `costEstimated: true` -- false the moment even one contributing row
-   * carries a billed (non-estimated) figure. Mirrors `run_usage`'s own
-   * `pricingVersion` honesty rule (usage-tracking.ts): never report a
-   * confident-looking total that actually mixes estimates with real
-   * invoices. Vacuously `true` for a lane with zero routed rows. */
-  costEstimated: boolean;
-  /** Count of rows routed to this lane whose `escalated` flag is true --
-   * plan §3.1 L1's "observed throttles (429s, stream stalls) advance the
-   * [fallback] chain," counted per lane so a lane's reliability is
-   * visible on its own meter, not just folded into `escalationRate`. */
+  /** Tri-state, replacing a plain boolean (Sol HIGH-3): a lane's cost total
+   * can legitimately mix billed and estimated rows, and collapsing that to
+   * `costEstimated: false` on the first exact row silently hid the estimate
+   * still baked into the sum. `'exact'` only when every attributed row was
+   * billed, `'estimated'` only when every attributed row was a pre-run
+   * estimate, `'mixed'` when both occurred, and `'exact'` (vacuously) for a
+   * lane with zero attributed rows -- mirrors `run_usage`'s own
+   * `pricingVersion` honesty rule (usage-tracking.ts) one step further. */
+  cost: 'exact' | 'estimated' | 'mixed';
+  /** Count of ATTRIBUTED rows whose `escalated` flag is true -- plan §3.1
+   * L1's "observed throttles (429s, stream stalls) advance the [fallback]
+   * chain," counted per lane so a lane's reliability is visible on its own
+   * meter, not just folded into `escalationRate`. */
   throttleEvents: number;
+  /** Count of rows whose usage/cost/gates/escalations are actually charged
+   * to this lane (`observedLane ?? routedLane === lane`) -- the denominator
+   * `escalationRate`/`passRate`/the summed fields above are computed over.
+   * Distinct from `runsRouted` precisely when a row's observed lane
+   * diverges from its routed lane. */
+  attributedRuns: number;
+  /** Which rule produced `attributedRuns`' metrics: `'observed'` when every
+   * attributed row had a confirmed, non-null `observedLane` naming this
+   * lane; `'routed-fallback'` when every attributed row instead fell back
+   * to this lane because `observedLane` was still null; `'mixed'` when
+   * both kinds contributed; `'none'` when this lane has zero attributed
+   * rows (it may still have `runsRouted`/`runsObserved` activity). */
+  attribution: 'observed' | 'routed-fallback' | 'mixed' | 'none';
 }
 
 function isRoutingTelemetryTokenCounts(value: unknown): value is RoutingTelemetryTokenCounts {
   if (!isPlainObject(value)) return false;
   return (
-    typeof value.input === 'number' &&
-    typeof value.output === 'number' &&
-    typeof value.cacheReadInput === 'number'
+    isNonNegativeFiniteNumber(value.input) &&
+    isNonNegativeFiniteNumber(value.output) &&
+    isNonNegativeFiniteNumber(value.cacheReadInput)
   );
 }
 
@@ -105,33 +134,59 @@ function isGateOutcomesRecord(value: unknown): value is Record<string, RoutingGa
   );
 }
 
+// ---- Semantic validation helpers (Sol review MED-5) ------------------------
+//
+// A shape-only guard (`typeof x === 'string'`) accepted an empty runId, a
+// negative token count, or an unparseable timestamp as a "valid" row --
+// each of those corrupts downstream aggregation/reconciliation silently
+// (an empty-string lane id collapsing into another lane's bucket, a
+// negative cost inverting a sum, an invalid timestamp sorting outside its
+// real window). These helpers turn that into a rejected row instead.
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function isNonNegativeFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+/** Accepts only a value `Date.parse` can resolve to a real instant --
+ * rejects non-strings, empty strings, and non-date text (`Date.parse`
+ * returns `NaN` for those) as well as literal `NaN`/`Infinity` timestamps. */
+function isValidTimestamp(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && Number.isFinite(Date.parse(value));
+}
+
 export function isRoutingTelemetryRow(value: unknown): value is RoutingTelemetryRow {
   if (!isPlainObject(value)) return false;
   const row = value;
   return (
-    typeof row.runId === 'string' &&
-    typeof row.stage === 'string' &&
-    (row.templateId === null || typeof row.templateId === 'string') &&
-    (row.designSystem === null || typeof row.designSystem === 'string') &&
-    typeof row.routedModel === 'string' &&
-    (row.observedModel === null || typeof row.observedModel === 'string') &&
-    typeof row.routedLane === 'string' &&
-    (row.observedLane === null || typeof row.observedLane === 'string') &&
+    isNonEmptyString(row.runId) &&
+    isNonEmptyString(row.stage) &&
+    (row.templateId === null || isNonEmptyString(row.templateId)) &&
+    (row.designSystem === null || isNonEmptyString(row.designSystem)) &&
+    isNonEmptyString(row.routedModel) &&
+    (row.observedModel === null || isNonEmptyString(row.observedModel)) &&
+    isNonEmptyString(row.routedLane) &&
+    (row.observedLane === null || isNonEmptyString(row.observedLane)) &&
     isRoutingTelemetryTokenCounts(row.tokens) &&
-    typeof row.cacheHits === 'number' &&
-    typeof row.latencyMs === 'number' &&
-    typeof row.costUsd === 'number' &&
+    isNonNegativeFiniteNumber(row.cacheHits) &&
+    isNonNegativeFiniteNumber(row.latencyMs) &&
+    isNonNegativeFiniteNumber(row.costUsd) &&
     typeof row.costEstimated === 'boolean' &&
     isGateOutcomesRecord(row.gateOutcomes) &&
     typeof row.escalated === 'boolean' &&
-    typeof row.policyVersion === 'number' &&
-    typeof row.createdAt === 'string' &&
-    typeof row.recordedAt === 'string'
+    isNonNegativeFiniteNumber(row.policyVersion) &&
+    isValidTimestamp(row.createdAt) &&
+    isValidTimestamp(row.recordedAt)
   );
 }
 
 export function isLaneMeter(value: unknown): value is LaneMeter {
   if (!isPlainObject(value)) return false;
+  const COST_STATES = ['exact', 'estimated', 'mixed'] as const;
+  const ATTRIBUTION_STATES = ['observed', 'routed-fallback', 'mixed', 'none'] as const;
   return (
     typeof value.lane === 'string' &&
     typeof value.runsRouted === 'number' &&
@@ -140,8 +195,12 @@ export function isLaneMeter(value: unknown): value is LaneMeter {
     typeof value.passRate === 'number' &&
     isRoutingTelemetryTokenCounts(value.tokens) &&
     typeof value.costUsd === 'number' &&
-    typeof value.costEstimated === 'boolean' &&
-    typeof value.throttleEvents === 'number'
+    typeof value.cost === 'string' &&
+    (COST_STATES as readonly string[]).includes(value.cost) &&
+    typeof value.throttleEvents === 'number' &&
+    typeof value.attributedRuns === 'number' &&
+    typeof value.attribution === 'string' &&
+    (ATTRIBUTION_STATES as readonly string[]).includes(value.attribution)
   );
 }
 
@@ -158,8 +217,10 @@ export function emptyLaneMeter(lane: string): LaneMeter {
     passRate: 0,
     tokens: { input: 0, output: 0, cacheReadInput: 0 },
     costUsd: 0,
-    costEstimated: true,
+    cost: 'exact',
     throttleEvents: 0,
+    attributedRuns: 0,
+    attribution: 'none',
   };
 }
 
@@ -180,13 +241,28 @@ export function isRoutingMetersResponse(value: unknown): value is RoutingMetersR
  * `RunUsageRecord` (usage-tracking.ts) rather than widening the base
  * content type. Kept as a strict extension (not a change to
  * `RoutingTelemetryRow`'s own fields) so the P0 wire shape stays exactly
- * what CWR-P1-2's existing contract test already pins. */
+ * what CWR-P1-2's existing contract test already pins.
+ *
+ * `attempt` (Sol review MED-4): a run-boundary escalation/retry (plan
+ * §3.1: "run-boundary cascade... fresh context on escalation") re-dispatches
+ * the SAME logical run under a new attempt rather than mutating history in
+ * place -- storage keys on `(runId, attempt)`, not `runId` alone, so a
+ * retried run's FIRST attempt's routed-vs-observed outcome survives instead
+ * of being silently overwritten by the second. `0` is the first attempt. */
 export interface StoredRoutingTelemetryRow extends RoutingTelemetryRow {
   projectId: string;
+  attempt: number;
 }
 
 export function isStoredRoutingTelemetryRow(value: unknown): value is StoredRoutingTelemetryRow {
-  return isRoutingTelemetryRow(value) && typeof (value as { projectId?: unknown }).projectId === 'string';
+  if (!isRoutingTelemetryRow(value)) return false;
+  const row = value as { projectId?: unknown; attempt?: unknown };
+  return (
+    isNonEmptyString(row.projectId) &&
+    typeof row.attempt === 'number' &&
+    Number.isInteger(row.attempt) &&
+    row.attempt >= 0
+  );
 }
 
 /** Response envelope for GET /api/routing/telemetry -- a filtered, paginated

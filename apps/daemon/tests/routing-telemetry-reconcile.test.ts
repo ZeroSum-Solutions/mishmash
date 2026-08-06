@@ -22,6 +22,7 @@ function row(overrides: Partial<StoredRoutingTelemetryRow> = {}): StoredRoutingT
   return {
     runId: 'run-1',
     projectId: 'proj-1',
+    attempt: 0,
     stage: 'chat',
     templateId: null,
     designSystem: null,
@@ -46,7 +47,12 @@ function row(overrides: Partial<StoredRoutingTelemetryRow> = {}): StoredRoutingT
 describe('reconcileRoutedVsObserved(row) -- pure row form', () => {
   it('reports "match" when observed model AND lane both confirm the routed decision', () => {
     const result = reconcileRoutedVsObserved(row());
-    expect(result).toMatchObject({ status: 'match', divergent: false });
+    expect(result).toMatchObject({
+      status: 'match',
+      divergent: false,
+      modelDivergence: false,
+      laneDivergence: false,
+    });
     expect(result.reason).toMatch(/confirm/i);
   });
 
@@ -54,7 +60,12 @@ describe('reconcileRoutedVsObserved(row) -- pure row form', () => {
     const result = reconcileRoutedVsObserved(
       row({ routedModel: 'claude-sonnet-5', observedModel: 'claude-opus-5' }),
     );
-    expect(result).toMatchObject({ status: 'model-divergence', divergent: true });
+    expect(result).toMatchObject({
+      status: 'model-divergence',
+      divergent: true,
+      modelDivergence: true,
+      laneDivergence: false,
+    });
     expect(result.reason).toContain('claude-sonnet-5');
     expect(result.reason).toContain('claude-opus-5');
   });
@@ -63,14 +74,24 @@ describe('reconcileRoutedVsObserved(row) -- pure row form', () => {
     const result = reconcileRoutedVsObserved(
       row({ routedLane: 'claude-code-oauth', observedLane: 'openrouter' }),
     );
-    expect(result).toMatchObject({ status: 'lane-divergence', divergent: true });
+    expect(result).toMatchObject({
+      status: 'lane-divergence',
+      divergent: true,
+      modelDivergence: false,
+      laneDivergence: true,
+    });
     expect(result.reason).toContain('claude-code-oauth');
     expect(result.reason).toContain('openrouter');
   });
 
   it('reports "unverified" (NOT a divergence) when observed model/lane have not arrived yet', () => {
     const result = reconcileRoutedVsObserved(row({ observedModel: null, observedLane: null }));
-    expect(result).toMatchObject({ status: 'unverified', divergent: false });
+    expect(result).toMatchObject({
+      status: 'unverified',
+      divergent: false,
+      modelDivergence: false,
+      laneDivergence: false,
+    });
   });
 
   it('reports "unverified" when only one of observedModel/observedLane has arrived and it matches so far', () => {
@@ -85,7 +106,26 @@ describe('reconcileRoutedVsObserved(row) -- pure row form', () => {
     const result = reconcileRoutedVsObserved(
       row({ routedModel: 'claude-sonnet-5', observedModel: 'claude-opus-5', observedLane: null }),
     );
-    expect(result).toMatchObject({ status: 'model-divergence', divergent: true });
+    expect(result).toMatchObject({ status: 'model-divergence', divergent: true, modelDivergence: true, laneDivergence: false });
+  });
+
+  // --- Sol review MED-6: independent axis flags --------------------------
+  it('exposes BOTH modelDivergence AND laneDivergence when both axes diverge simultaneously, even though status names only one (precedence is for display, not for hiding the other axis)', () => {
+    const result = reconcileRoutedVsObserved(
+      row({
+        routedModel: 'claude-sonnet-5',
+        observedModel: 'claude-opus-5',
+        routedLane: 'claude-code-oauth',
+        observedLane: 'openrouter',
+      }),
+    );
+    // status/display precedence still picks model-divergence first...
+    expect(result.status).toBe('model-divergence');
+    // ...but BOTH flags are true, so a per-axis consumer is never fooled
+    // into thinking the lane matched just because status only named the model.
+    expect(result.modelDivergence).toBe(true);
+    expect(result.laneDivergence).toBe(true);
+    expect(result.divergent).toBe(true);
   });
 });
 

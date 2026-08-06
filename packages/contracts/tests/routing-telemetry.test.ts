@@ -7,6 +7,7 @@ import {
   isRoutingTelemetryRow,
   isStoredRoutingTelemetryRow,
   type RoutingTelemetryRow,
+  type StoredRoutingTelemetryRow,
 } from '../src/api/routing-telemetry';
 
 // Type-shape coverage for the P0 routing-telemetry contract (WR wave
@@ -93,6 +94,58 @@ describe('isRoutingTelemetryRow', () => {
   it('rejects non-object input', () => {
     expect(isRoutingTelemetryRow(null)).toBe(false);
   });
+
+  // --- Sol review MED-5: semantic validation, not just shape -------------
+
+  it('rejects an empty runId', () => {
+    expect(isRoutingTelemetryRow({ ...ROW, runId: '' })).toBe(false);
+  });
+
+  it('rejects an empty stage', () => {
+    expect(isRoutingTelemetryRow({ ...ROW, stage: '' })).toBe(false);
+  });
+
+  it('rejects an empty routedLane', () => {
+    expect(isRoutingTelemetryRow({ ...ROW, routedLane: '' })).toBe(false);
+  });
+
+  it('rejects an empty non-null observedModel (empty string is not the same as the "not yet reported" null sentinel)', () => {
+    expect(isRoutingTelemetryRow({ ...ROW, observedModel: '' })).toBe(false);
+  });
+
+  it('rejects a negative token count', () => {
+    expect(isRoutingTelemetryRow({ ...ROW, tokens: { input: -1, output: 50, cacheReadInput: 0 } })).toBe(false);
+  });
+
+  it('rejects a non-finite token count', () => {
+    expect(isRoutingTelemetryRow({ ...ROW, tokens: { input: Number.NaN, output: 50, cacheReadInput: 0 } })).toBe(false);
+    expect(isRoutingTelemetryRow({ ...ROW, tokens: { input: Number.POSITIVE_INFINITY, output: 50, cacheReadInput: 0 } })).toBe(false);
+  });
+
+  it('rejects a negative costUsd', () => {
+    expect(isRoutingTelemetryRow({ ...ROW, costUsd: -0.01 })).toBe(false);
+  });
+
+  it('rejects a negative latencyMs', () => {
+    expect(isRoutingTelemetryRow({ ...ROW, latencyMs: -1 })).toBe(false);
+  });
+
+  it('rejects a negative cacheHits', () => {
+    expect(isRoutingTelemetryRow({ ...ROW, cacheHits: -1 })).toBe(false);
+  });
+
+  it('rejects a negative policyVersion', () => {
+    expect(isRoutingTelemetryRow({ ...ROW, policyVersion: -1 })).toBe(false);
+  });
+
+  it('rejects an invalid createdAt timestamp', () => {
+    expect(isRoutingTelemetryRow({ ...ROW, createdAt: 'not-a-date' })).toBe(false);
+    expect(isRoutingTelemetryRow({ ...ROW, createdAt: '' })).toBe(false);
+  });
+
+  it('rejects an invalid recordedAt timestamp', () => {
+    expect(isRoutingTelemetryRow({ ...ROW, recordedAt: 'not-a-date' })).toBe(false);
+  });
 });
 
 describe('isLaneMeter / emptyLaneMeter', () => {
@@ -107,8 +160,10 @@ describe('isLaneMeter / emptyLaneMeter', () => {
       passRate: 0,
       tokens: { input: 0, output: 0, cacheReadInput: 0 },
       costUsd: 0,
-      costEstimated: true,
+      cost: 'exact',
       throttleEvents: 0,
+      attributedRuns: 0,
+      attribution: 'none',
     });
   });
 
@@ -126,28 +181,71 @@ describe('isLaneMeter / emptyLaneMeter', () => {
         passRate: 'high',
         tokens: { input: 0, output: 0, cacheReadInput: 0 },
         costUsd: 0,
-        costEstimated: true,
+        cost: 'exact',
         throttleEvents: 0,
+        attributedRuns: 0,
+        attribution: 'none',
       }),
     ).toBe(false);
   });
 
-  it('rejects a lane meter missing the L5 aggregate fields (tokens/costUsd/costEstimated/throttleEvents)', () => {
+  it('rejects a lane meter missing the L5 aggregate fields (tokens/costUsd/cost/throttleEvents)', () => {
     expect(
       isLaneMeter({ lane: 'x', runsRouted: 0, runsObserved: 0, escalationRate: 0, passRate: 0 }),
     ).toBe(false);
   });
+
+  it('rejects a lane meter with a cost value outside the closed tri-state enum (Sol HIGH-3)', () => {
+    expect(isLaneMeter({ ...emptyLaneMeter('x'), cost: 'unknown' })).toBe(false);
+  });
+
+  it('accepts every legal cost tri-state value, including "mixed"', () => {
+    expect(isLaneMeter({ ...emptyLaneMeter('x'), cost: 'mixed' })).toBe(true);
+    expect(isLaneMeter({ ...emptyLaneMeter('x'), cost: 'estimated' })).toBe(true);
+  });
+
+  it('rejects a lane meter missing attributedRuns/attribution (Sol HIGH-2)', () => {
+    const { attributedRuns: _a, ...withoutAttributedRuns } = emptyLaneMeter('x');
+    expect(isLaneMeter(withoutAttributedRuns)).toBe(false);
+    const { attribution: _b, ...withoutAttribution } = emptyLaneMeter('x');
+    expect(isLaneMeter(withoutAttribution)).toBe(false);
+  });
+
+  it('rejects an attribution value outside the closed enum', () => {
+    expect(isLaneMeter({ ...emptyLaneMeter('x'), attribution: 'guessed' })).toBe(false);
+  });
 });
 
 describe('isStoredRoutingTelemetryRow / isRoutingTelemetryListResponse', () => {
-  const STORED_ROW = { ...ROW, projectId: 'proj-1' };
+  const STORED_ROW: StoredRoutingTelemetryRow = { ...ROW, projectId: 'proj-1', attempt: 0 };
 
-  it('accepts a well-formed stored row (RoutingTelemetryRow + projectId)', () => {
+  it('accepts a well-formed stored row (RoutingTelemetryRow + projectId + attempt)', () => {
     expect(isStoredRoutingTelemetryRow(STORED_ROW)).toBe(true);
   });
 
-  it('rejects a row missing projectId -- projectId is the one field storage adds on top of the wire row', () => {
+  it('accepts a second-attempt row (Sol MED-4: attempt > 0 is legal, not just the default)', () => {
+    expect(isStoredRoutingTelemetryRow({ ...STORED_ROW, attempt: 1 })).toBe(true);
+  });
+
+  it('rejects a row missing projectId -- projectId is one of the two fields storage adds on top of the wire row', () => {
     expect(isStoredRoutingTelemetryRow(ROW)).toBe(false);
+  });
+
+  it('rejects an empty projectId', () => {
+    expect(isStoredRoutingTelemetryRow({ ...STORED_ROW, projectId: '' })).toBe(false);
+  });
+
+  it('rejects a row missing attempt', () => {
+    const { attempt: _drop, ...missing } = STORED_ROW;
+    expect(isStoredRoutingTelemetryRow(missing)).toBe(false);
+  });
+
+  it('rejects a negative attempt', () => {
+    expect(isStoredRoutingTelemetryRow({ ...STORED_ROW, attempt: -1 })).toBe(false);
+  });
+
+  it('rejects a non-integer attempt', () => {
+    expect(isStoredRoutingTelemetryRow({ ...STORED_ROW, attempt: 1.5 })).toBe(false);
   });
 
   it('accepts a well-shaped RoutingTelemetryListResponse envelope, including an empty page', () => {

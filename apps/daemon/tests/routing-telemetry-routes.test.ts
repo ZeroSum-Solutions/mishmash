@@ -25,6 +25,7 @@ function row(overrides: Partial<StoredRoutingTelemetryRow> = {}): StoredRoutingT
   return {
     runId: 'run-1',
     projectId: 'proj-1',
+    attempt: 0,
     stage: 'chat',
     templateId: null,
     designSystem: null,
@@ -112,6 +113,28 @@ describe('GET /api/routing/meters -- real aggregates from telemetry', () => {
     const body = (await resp.json()) as { laneMeters: unknown[] };
     expect(body.laneMeters).toEqual([]);
   });
+
+  // --- Sol review MED-5: malformed query bounds are a 400, not a silent default ---
+  it('returns 400 with the house error shape for a non-numeric ?windowMs=', async () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    await startServer(db);
+
+    const resp = await fetch(`${baseUrl}/api/routing/meters?windowMs=not-a-number`);
+    expect(resp.status).toBe(400);
+    const body = (await resp.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('invalid-query-param');
+    expect(body.error.message).toContain('windowMs');
+  });
+
+  it('returns 400 for a negative ?windowMs=', async () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    await startServer(db);
+
+    const resp = await fetch(`${baseUrl}/api/routing/meters?windowMs=-5`);
+    expect(resp.status).toBe(400);
+  });
 });
 
 describe('GET /api/routing/telemetry -- filtered, paginated list', () => {
@@ -150,5 +173,28 @@ describe('GET /api/routing/telemetry -- filtered, paginated list', () => {
     expect(response.total).toBe(2);
     expect(response.limit).toBe(1);
     expect(response.rows).toHaveLength(1);
+  });
+
+  // --- Sol review MED-5: malformed query bounds are a 400, not a silent default ---
+  it.each([
+    ['sinceMs', 'not-a-number'],
+    ['untilMs', 'not-a-number'],
+    ['limit', 'abc'],
+    ['limit', '0'], // limit must be >= 1
+    ['offset', '-1'],
+  ])('returns 400 with the house error shape for a malformed ?%s=%s', async (param, value) => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    const app = express();
+    registerRoutingRoutes(app, db);
+    server = app.listen(0);
+    await new Promise<void>((resolve) => server.once('listening', () => resolve()));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+    const resp = await fetch(`${baseUrl}/api/routing/telemetry?${param}=${value}`);
+    expect(resp.status).toBe(400);
+    const body = (await resp.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('invalid-query-param');
+    expect(body.error.message).toContain(param);
   });
 });

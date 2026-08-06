@@ -15,6 +15,7 @@ import {
   ensureRoutingTelemetryTable,
   getRoutingTelemetryByRunId,
   listRoutingTelemetry,
+  listRoutingTelemetryAttempts,
   recordRoutingTelemetry,
 } from '../src/routing/telemetry.js';
 
@@ -33,6 +34,7 @@ function completeRow(overrides: Partial<StoredRoutingTelemetryRow> = {}): Stored
   return {
     runId: 'run-1',
     projectId: 'proj-1',
+    attempt: 0,
     stage: 'section-component-codegen',
     templateId: 'saas-landing',
     designSystem: 'ds-1',
@@ -85,7 +87,7 @@ describe('recordRoutingTelemetry + listRoutingTelemetry round-trip', () => {
     expect(listed.offset).toBe(0);
   });
 
-  it('is idempotent per run id -- a second write for the same runId (e.g. observed fields arriving post-run) replaces the row in place, not a second row', () => {
+  it('is idempotent per (run id, attempt) -- a second write for the same runId+attempt (e.g. observed fields arriving post-run) replaces the row in place, not a second row', () => {
     const db = openDatabase(tempDir, { dataDir: tempDir });
     ensureRoutingTelemetryTable(db);
     recordRoutingTelemetry(db, completeRow({ observedModel: null, observedLane: null }));
@@ -95,6 +97,46 @@ describe('recordRoutingTelemetry + listRoutingTelemetry round-trip', () => {
     expect(listed.total).toBe(1);
     expect(listed.rows[0]?.observedModel).toBe('claude-sonnet-5');
     expect(listed.rows[0]?.observedLane).toBe('claude-code-oauth');
+  });
+
+  it('preserves BOTH attempts of a retried run -- a run-boundary escalation must not erase the first attempt\'s outcome (Sol MED-4)', () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    const firstAttempt = completeRow({
+      attempt: 0,
+      routedLane: 'claude-code-oauth',
+      observedLane: 'claude-code-oauth',
+      escalated: true, // this attempt is what triggered the escalation
+    });
+    const secondAttempt = completeRow({
+      attempt: 1,
+      routedLane: 'codex-oauth',
+      observedLane: 'codex-oauth',
+      escalated: false,
+    });
+    recordRoutingTelemetry(db, firstAttempt);
+    recordRoutingTelemetry(db, secondAttempt);
+
+    // Both rows survive independently -- neither overwrote the other.
+    expect(getRoutingTelemetryByRunId(db, 'run-1', 0)).toEqual(firstAttempt);
+    expect(getRoutingTelemetryByRunId(db, 'run-1', 1)).toEqual(secondAttempt);
+
+    const attempts = listRoutingTelemetryAttempts(db, 'run-1');
+    expect(attempts).toHaveLength(2);
+    expect(attempts.map((r) => r.attempt)).toEqual([0, 1]);
+    expect(attempts[0]?.routedLane).toBe('claude-code-oauth');
+    expect(attempts[1]?.routedLane).toBe('codex-oauth');
+
+    // listRoutingTelemetry (unscoped by attempt) also returns both.
+    expect(listRoutingTelemetry(db, { runId: 'run-1' }).total).toBe(2);
+  });
+
+  it('getRoutingTelemetryByRunId defaults to attempt 0 when not specified', () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    recordRoutingTelemetry(db, completeRow({ attempt: 0, routedLane: 'claude-code-oauth' }));
+    recordRoutingTelemetry(db, completeRow({ attempt: 1, routedLane: 'codex-oauth' }));
+    expect(getRoutingTelemetryByRunId(db, 'run-1')?.routedLane).toBe('claude-code-oauth');
   });
 
   it('supports observedModel/observedLane null before the run reports back (plan §3.1 post-run reconciliation)', () => {
@@ -161,5 +203,29 @@ describe('recordRoutingTelemetry guard rejection', () => {
     ensureRoutingTelemetryTable(db);
     const bad = completeRow({ gateOutcomes: { lighthouse: 'maybe' } as never });
     expect(() => recordRoutingTelemetry(db, bad)).toThrow();
+  });
+
+  it('rejects a negative attempt', () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    expect(() => recordRoutingTelemetry(db, completeRow({ attempt: -1 }))).toThrow();
+  });
+
+  it('rejects an empty runId (Sol MED-5 semantic validation)', () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    expect(() => recordRoutingTelemetry(db, completeRow({ runId: '' }))).toThrow();
+  });
+
+  it('rejects a negative costUsd (Sol MED-5 semantic validation)', () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    expect(() => recordRoutingTelemetry(db, completeRow({ costUsd: -1 }))).toThrow();
+  });
+
+  it('rejects an invalid createdAt timestamp (Sol MED-5 semantic validation)', () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    expect(() => recordRoutingTelemetry(db, completeRow({ createdAt: 'not-a-date' }))).toThrow();
   });
 });
