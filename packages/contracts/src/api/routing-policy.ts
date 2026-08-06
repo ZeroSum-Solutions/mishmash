@@ -491,6 +491,42 @@ export interface RoutingPolicyBudgetCeilings {
    * as an implicit zero cap that would block every escalation.
    */
   gateTaxCapUsd?: number;
+  /**
+   * t8 fix-round addition (Sol HIGH-5 residue): the SERVER-DERIVED price of
+   * one model-based re-verification attempt at each cheap/mid/frontier
+   * escalation tier. Introduced because a client-supplied cost estimate
+   * defaulted to `0` when omitted, letting a caller understate (or entirely
+   * skip) the persisted gate-tax spend and evade the cap --
+   * `apps/daemon/src/routes/routing.ts`'s `POST /api/routing/gates/run` now
+   * REJECTS a client-supplied cost param outright and looks up the price of
+   * the tier it is about to escalate TO here instead. Optional so every
+   * pre-fix-round policy document/fixture keeps validating without it;
+   * `apps/daemon/src/routing/gates.ts`'s `verificationCostForTierUsd` falls
+   * back to its own hardcoded conservative defaults (documented there) when
+   * this field is entirely absent, so absence is never "verification is
+   * free."
+   */
+  verificationCostPerTierUsd?: RoutingPolicyVerificationCostPerTier;
+}
+
+/**
+ * See `RoutingPolicyBudgetCeilings#verificationCostPerTierUsd`'s own doc
+ * comment. All three tiers are required together (no partial tier pricing
+ * -- a policy that prices `cheap` but not `frontier` would leave the most
+ * expensive tier silently falling back to the hardcoded default, which is
+ * exactly the kind of half-configured state this task's "never silently
+ * trust what we could not verify" discipline should reject at validation
+ * time rather than at first use).
+ */
+export interface RoutingPolicyVerificationCostPerTier {
+  cheap: number;
+  mid: number;
+  frontier: number;
+  /** Optional free-text disclosure, same spirit as
+   * `RoutingPolicyBudgetCeilings#notes` -- these are conservative
+   * operator-tunable placeholders, not plan-sourced figures (the plan
+   * names no binding dollar figures for gate-triggered re-verification). */
+  notes?: string;
 }
 
 /**
@@ -835,6 +871,16 @@ function isRoutingPolicyOutputTokenBound(value: unknown): value is RoutingPolicy
   );
 }
 
+function isRoutingPolicyVerificationCostPerTier(value: unknown): value is RoutingPolicyVerificationCostPerTier {
+  if (!isPlainObject(value)) return false;
+  return (
+    isNonNegativeFiniteNumber(value.cheap) &&
+    isNonNegativeFiniteNumber(value.mid) &&
+    isNonNegativeFiniteNumber(value.frontier) &&
+    (value.notes === undefined || typeof value.notes === 'string')
+  );
+}
+
 function isRoutingPolicyBudgetCeilings(value: unknown): value is RoutingPolicyBudgetCeilings {
   if (!isPlainObject(value)) return false;
   return (
@@ -847,7 +893,8 @@ function isRoutingPolicyBudgetCeilings(value: unknown): value is RoutingPolicyBu
     (value.runawayLimits === undefined || isRunawayLimitsRecord(value.runawayLimits)) &&
     (value.outputTokenBound === undefined || isRoutingPolicyOutputTokenBound(value.outputTokenBound)) &&
     (value.notes === undefined || typeof value.notes === 'string') &&
-    (value.gateTaxCapUsd === undefined || isNonNegativeFiniteNumber(value.gateTaxCapUsd))
+    (value.gateTaxCapUsd === undefined || isNonNegativeFiniteNumber(value.gateTaxCapUsd)) &&
+    (value.verificationCostPerTierUsd === undefined || isRoutingPolicyVerificationCostPerTier(value.verificationCostPerTierUsd))
   );
 }
 

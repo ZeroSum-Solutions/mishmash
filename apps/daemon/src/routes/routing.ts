@@ -33,7 +33,6 @@ import type {
   RoutingTelemetryListResponse,
 } from '@open-design/contracts';
 import {
-  admitsUnderCap,
   advanceGateCascadeState,
   classifyCascadeTrigger,
   DETERMINISTIC_GATE_IDS,
@@ -45,8 +44,10 @@ import {
   getGateCascadeState,
   headroomFractionOf,
   loadRoutingPolicy,
+  nextEscalationTier,
   recordGateOutcomes,
   runGates,
+  verificationCostForTierUsd,
   type DeterministicGateId,
 } from '../routing/index.js';
 import {
@@ -508,12 +509,16 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database, proj
   // gate-tax cap). Cascade state is tracked server-side per `buildId`
   // (`getGateCascadeState`/`advanceGateCascadeState`, apps/daemon/src/
   // routing/gates.ts) -- this route reads it, classifies, and (only when
-  // it actually decides to escalate) persists the advance. A caller may
-  // still supply `nextEstimatedVerificationCostUsd`, an ESTIMATE checked
-  // against the remaining gate-tax budget the same way admission.ts checks
-  // a dispatch estimate -- supplying an estimate cannot itself evade
-  // anything, since the SPEND and TIER it's checked against are both
-  // server-truth.
+  // it actually decides to escalate) persists the advance.
+  //
+  // t8 fix-round residue (Sol HIGH-5 residue): `nextEstimatedVerificationCostUsd`
+  // is ALSO no longer accepted as client input -- it defaulted to `0` when
+  // omitted, letting a caller understate (or entirely skip) the persisted
+  // gate-tax spend and evade the cap that way instead. The route now prices
+  // the NEXT tier's verification attempt itself, server-side, via
+  // `verificationCostForTierUsd(policy, nextEscalationTier(cascadeState.tier))`
+  // -- `RoutingPolicyBudgetCeilings#verificationCostPerTierUsd`, an
+  // additive operator-tunable policy field.
   //
   // t8 fix-round (Sol MED-8): gate outcomes are now wired into telemetry.
   // `runId`/`attempt` may be supplied (a real dispatch's identifiers, whose
@@ -556,22 +561,11 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database, proj
 
     const buildId = body.buildId === undefined ? null : queryStringOrNull(body.buildId);
 
-    if (body.currentTier !== undefined || body.gateSpendSoFarUsd !== undefined) {
+    if (body.currentTier !== undefined || body.gateSpendSoFarUsd !== undefined || body.nextEstimatedVerificationCostUsd !== undefined) {
       return respondInvalidQuery(
         res,
-        '`currentTier`/`gateSpendSoFarUsd` are no longer accepted -- cascade tier and cumulative gate-tax spend are tracked server-side per `buildId`; a client can no longer assert its own progress.',
+        '`currentTier`/`gateSpendSoFarUsd`/`nextEstimatedVerificationCostUsd` are no longer accepted -- cascade tier and cumulative gate-tax spend are tracked server-side per `buildId`, and the verification cost is priced server-side from policy (RoutingPolicyBudgetCeilings#verificationCostPerTierUsd); a client can no longer assert its own progress or understate its cost.',
       );
-    }
-    let nextEstimatedVerificationCostUsd = 0;
-    if (body.nextEstimatedVerificationCostUsd !== undefined) {
-      if (
-        typeof body.nextEstimatedVerificationCostUsd !== 'number' ||
-        !Number.isFinite(body.nextEstimatedVerificationCostUsd) ||
-        body.nextEstimatedVerificationCostUsd < 0
-      ) {
-        return respondInvalidQuery(res, '`nextEstimatedVerificationCostUsd` must be a finite nonnegative number.');
-      }
-      nextEstimatedVerificationCostUsd = body.nextEstimatedVerificationCostUsd;
     }
 
     let runId: string | undefined;
@@ -604,6 +598,12 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database, proj
     // input (Sol HIGH-5). No db or no buildId means there is nothing to
     // persist against, so every such call is evaluated fresh at cheap/$0.
     const cascadeState = db && buildId !== null ? getGateCascadeState(db, buildId) : { tier: 'cheap' as const, spentUsd: 0 };
+    // Sol HIGH-5 residue: priced SERVER-SIDE from policy, never accepted
+    // from the client -- the price of the tier THIS call would escalate TO
+    // if it decides to escalate at all (classifyCascadeTrigger itself
+    // decides whether escalation actually happens; this is only the
+    // candidate cost fed into its gate-tax check).
+    const nextEstimatedVerificationCostUsd = verificationCostForTierUsd(policy, nextEscalationTier(cascadeState.tier));
     const cascade = classifyCascadeTrigger({
       gateResults: results,
       currentTier: cascadeState.tier,

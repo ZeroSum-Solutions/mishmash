@@ -162,6 +162,28 @@ describe('link-smoke gate', () => {
       rmSync(outsideTarget, { force: true });
     }
   });
+
+  // Sol HIGH-1 residue (b): the fix-round's earlier symlink check only
+  // lstat'd the href's FINAL path component. A symlinked INTERMEDIATE
+  // directory (href="linked-dir/nested/page.html" where "linked-dir" itself
+  // is the symlink, "nested/page.html" is not) must be caught too --
+  // hasSymlinkInChain walks every segment, not just the last one.
+  it('skips (never fails, never counts as checked) an href through a symlinked INTERMEDIATE directory', async () => {
+    const outsideDir = path.join(tempDir, '..', `od-link-smoke-symlink-dir-${Date.now()}`);
+    mkdirSync(outsideDir, { recursive: true });
+    mkdirSync(path.join(outsideDir, 'nested'), { recursive: true });
+    writeFileSync(path.join(outsideDir, 'nested', 'page.html'), '<html>outside via dir symlink</html>');
+    try {
+      const symlinkDirPath = path.join(tempDir, 'linked-dir');
+      symlinkSync(outsideDir, symlinkDirPath, 'dir');
+      writeFileSync(path.join(tempDir, 'index.html'), '<a href="linked-dir/nested/page.html">via symlinked dir</a>');
+      const result = await runOneGate(tempDir, ['link-smoke']);
+      expect(result.status).toBe('pass');
+      expect(result.evidence.join(' ')).toMatch(/symlinked target.*skipped/i);
+    } finally {
+      rmSync(outsideDir, { recursive: true, force: true });
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -200,27 +222,43 @@ describe('form-smoke gate', () => {
 // ---------------------------------------------------------------------------
 
 describe('tokens-schema gate', () => {
-  // t8 fix-round (Sol MED-6): a full, STRUCTURALLY valid od-design-tokens/v1
-  // envelope -- name/value/layer/sources on every token, not just a bag of
-  // names, since the gate now validates the full shape (envelope, per-token
-  // types, duplicate detection), not name presence alone.
+  // t8 fix-round (Sol MED-6, residue-hardened): a full, STRUCTURALLY valid
+  // od-design-tokens/v1 envelope matching packages/contracts/src/
+  // design-systems/derived-token-outputs.ts's renderDesignTokensJson EXACTLY
+  // (schemaVersion/format/contract/generatedAt/source/summary at the
+  // envelope level; name/value/type/layer/confidence/reason/sources per
+  // token) -- not just a bag of names, since the gate validates every field
+  // the canonical shape declares, not name presence alone.
   function validTokensJson(): Record<string, unknown> {
     const names = [...new Set([...getRequiredA1Names(), ...getRequiredA2Names(), ...getBSlotNames()])];
     return {
       schemaVersion: 1,
       format: 'od-design-tokens/v1',
-      tokens: names.map((name) => ({ name, value: '#000', layer: 'A1-identity', sources: [] })),
+      contract: 'TOKEN_SCHEMA',
+      generatedAt: '2026-08-05T00:00:00.000Z',
+      source: { tokensCss: 'tokens.css', tokenContractReport: 'source/token-contract.report.json' },
+      summary: { tokenCount: names.length },
+      tokens: names.map((name) => ({
+        name,
+        value: '#000',
+        type: 'color',
+        layer: 'A1-identity',
+        confidence: 'high',
+        reason: 'test fixture',
+        sources: ['tokens.css'],
+      })),
     };
   }
 
-  it('passes when every required A1/A2/B-slot token name is present with a fully valid structure', async () => {
+  it('passes when every required A1/A2/B-slot token name is present with a fully valid canonical structure', async () => {
     writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify(validTokensJson()));
     const result = await runOneGate(tempDir, ['tokens-schema']);
     expect(result.status).toBe('pass');
   });
 
   it('fails when a required token name is missing', async () => {
-    writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify({ schemaVersion: 1, format: 'od-design-tokens/v1', tokens: [] }));
+    const valid = validTokensJson();
+    writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify({ ...valid, tokens: [] }));
     const result = await runOneGate(tempDir, ['tokens-schema']);
     expect(result.status).toBe('fail');
   });
@@ -260,6 +298,122 @@ describe('tokens-schema gate', () => {
     writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify({ ...valid, format: 'something-else' }));
     const result = await runOneGate(tempDir, ['tokens-schema']);
     expect(result.status).toBe('fail');
+  });
+
+  // Sol MED-6 residue: negative test per OMITTED FIELD CLASS -- envelope
+  // fields the earlier fix-round's validator didn't check at all.
+  it('fails when envelope "contract" is missing (name-complete otherwise)', async () => {
+    const { contract: _drop, ...withoutContract } = validTokensJson();
+    writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify(withoutContract));
+    const result = await runOneGate(tempDir, ['tokens-schema']);
+    expect(result.status).toBe('fail');
+    expect(result.evidence.join(' ')).toMatch(/contract/i);
+  });
+
+  it('fails when envelope "generatedAt" is missing (name-complete otherwise)', async () => {
+    const { generatedAt: _drop, ...withoutGeneratedAt } = validTokensJson();
+    writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify(withoutGeneratedAt));
+    const result = await runOneGate(tempDir, ['tokens-schema']);
+    expect(result.status).toBe('fail');
+    expect(result.evidence.join(' ')).toMatch(/generatedAt/i);
+  });
+
+  it('fails when envelope "source" is missing entirely (name-complete otherwise)', async () => {
+    const { source: _drop, ...withoutSource } = validTokensJson();
+    writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify(withoutSource));
+    const result = await runOneGate(tempDir, ['tokens-schema']);
+    expect(result.status).toBe('fail');
+    expect(result.evidence.join(' ')).toMatch(/source/i);
+  });
+
+  it('fails when envelope "source" is missing its "tokenContractReport" sub-field', async () => {
+    const valid = validTokensJson();
+    const source = valid.source as Record<string, unknown>;
+    const { tokenContractReport: _drop, ...restSource } = source;
+    writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify({ ...valid, source: restSource }));
+    const result = await runOneGate(tempDir, ['tokens-schema']);
+    expect(result.status).toBe('fail');
+    expect(result.evidence.join(' ')).toMatch(/tokenContractReport/i);
+  });
+
+  it('fails when envelope "summary" key is entirely absent', async () => {
+    const { summary: _drop, ...withoutSummary } = validTokensJson();
+    writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify(withoutSummary));
+    const result = await runOneGate(tempDir, ['tokens-schema']);
+    expect(result.status).toBe('fail');
+    expect(result.evidence.join(' ')).toMatch(/summary/i);
+  });
+
+  it('accepts "summary" being null -- the canonical contract types it as `unknown`, only its PRESENCE is required', async () => {
+    const valid = validTokensJson();
+    writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify({ ...valid, summary: null }));
+    const result = await runOneGate(tempDir, ['tokens-schema']);
+    expect(result.status).toBe('pass');
+  });
+
+  it('fails when a token is missing "type" (name-complete otherwise)', async () => {
+    const valid = validTokensJson();
+    const tokens = valid.tokens as Array<Record<string, unknown>>;
+    const [first, ...rest] = tokens;
+    const { type: _drop, ...tokenWithoutType } = first as Record<string, unknown>;
+    writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify({ ...valid, tokens: [tokenWithoutType, ...rest] }));
+    const result = await runOneGate(tempDir, ['tokens-schema']);
+    expect(result.status).toBe('fail');
+    expect(result.evidence.join(' ')).toMatch(/\.type/i);
+  });
+
+  it('fails when a token is missing "confidence" (name-complete otherwise)', async () => {
+    const valid = validTokensJson();
+    const tokens = valid.tokens as Array<Record<string, unknown>>;
+    const [first, ...rest] = tokens;
+    const { confidence: _drop, ...tokenWithoutConfidence } = first as Record<string, unknown>;
+    writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify({ ...valid, tokens: [tokenWithoutConfidence, ...rest] }));
+    const result = await runOneGate(tempDir, ['tokens-schema']);
+    expect(result.status).toBe('fail');
+    expect(result.evidence.join(' ')).toMatch(/confidence/i);
+  });
+
+  it('fails when a token is missing "reason" (name-complete otherwise)', async () => {
+    const valid = validTokensJson();
+    const tokens = valid.tokens as Array<Record<string, unknown>>;
+    const [first, ...rest] = tokens;
+    const { reason: _drop, ...tokenWithoutReason } = first as Record<string, unknown>;
+    writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify({ ...valid, tokens: [tokenWithoutReason, ...rest] }));
+    const result = await runOneGate(tempDir, ['tokens-schema']);
+    expect(result.status).toBe('fail');
+    expect(result.evidence.join(' ')).toMatch(/reason/i);
+  });
+
+  it('fails when a token\'s "sources" array contains a non-string element', async () => {
+    const valid = validTokensJson();
+    const tokens = valid.tokens as Array<Record<string, unknown>>;
+    const [first, ...rest] = tokens;
+    const tokenWithBadSources = { ...(first as Record<string, unknown>), sources: [42] };
+    writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify({ ...valid, tokens: [tokenWithBadSources, ...rest] }));
+    const result = await runOneGate(tempDir, ['tokens-schema']);
+    expect(result.status).toBe('fail');
+    expect(result.evidence.join(' ')).toMatch(/sources/i);
+  });
+
+  it('fails when a token\'s optional "sourceName" is present but not a string', async () => {
+    const valid = validTokensJson();
+    const tokens = valid.tokens as Array<Record<string, unknown>>;
+    const [first, ...rest] = tokens;
+    const tokenWithBadSourceName = { ...(first as Record<string, unknown>), sourceName: 123 };
+    writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify({ ...valid, tokens: [tokenWithBadSourceName, ...rest] }));
+    const result = await runOneGate(tempDir, ['tokens-schema']);
+    expect(result.status).toBe('fail');
+    expect(result.evidence.join(' ')).toMatch(/sourceName/i);
+  });
+
+  it('accepts a valid string "sourceName" on a token (optional field, present-and-valid case)', async () => {
+    const valid = validTokensJson();
+    const tokens = valid.tokens as Array<Record<string, unknown>>;
+    const [first, ...rest] = tokens;
+    const tokenWithSourceName = { ...(first as Record<string, unknown>), sourceName: 'brand-a' };
+    writeFileSync(path.join(tempDir, 'design-tokens.json'), JSON.stringify({ ...valid, tokens: [tokenWithSourceName, ...rest] }));
+    const result = await runOneGate(tempDir, ['tokens-schema']);
+    expect(result.status).toBe('pass');
   });
 
   it('is skipped-not-applicable when no design-tokens.json is present', async () => {
@@ -398,6 +552,39 @@ describe('skipped-not-applicable vs unavailable distinction', () => {
     expect(['pass', 'fail', 'unavailable']).toContain(result.status);
   }, 10_000);
 
+  // Sol HIGH-2 residue: page.setDefaultTimeout does not bound page.evaluate,
+  // so a busy loop that starts AFTER navigation already succeeded (goto's
+  // own timeout never fires) must still be caught -- by the explicit
+  // Promise.race wrapping evaluate/addScriptTag, not goto. This artifact
+  // waits for axe-core to actually be injected (window.axe defined) before
+  // busy-looping, so the hang deterministically lands during/right before
+  // axe.run(), not during navigation.
+  it('axe: classifies a busy-loop that starts AFTER load (right as axe-core is injected) as FAIL within the timeout bound (Sol HIGH-2 residue)', async () => {
+    writeFileSync(
+      path.join(tempDir, 'index.html'),
+      `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>t</title></head><body>
+        <script>
+          var odCheck = setInterval(function () {
+            if (window.axe) {
+              clearInterval(odCheck);
+              while (true) {}
+            }
+          }, 5);
+        </script>
+      </body></html>`,
+    );
+    const startedAt = Date.now();
+    const result = await runOneGate(tempDir, ['axe'], { timeoutMs: 3_000 });
+    const elapsedMs = Date.now() - startedAt;
+    if (result.status !== 'unavailable') {
+      expect(result.status).toBe('fail');
+      expect(result.evidence.join(' ')).toMatch(/hang|infinite loop|did not complete/i);
+    }
+    // The whole gate call must resolve within a bound tied to the gate's
+    // own timeout budget, not hang the test process indefinitely.
+    expect(elapsedMs).toBeLessThan(6_000);
+  }, 10_000);
+
   it('axe: classifies an artifact whose script hangs indefinitely as FAIL, never a fabricated pass/unavailable (Sol HIGH-2, "a page that hangs is a failing artifact")', async () => {
     writeFileSync(
       path.join(tempDir, 'index.html'),
@@ -499,6 +686,35 @@ async function writeSolidPng(filePath: string, rgb: { r: number; g: number; b: n
     .toFile(filePath);
 }
 
+/**
+ * Sol HIGH-3 residue: `recordBootstrapBaseline` now requires the COMPLETE
+ * deterministic gate id set (every id other than 'screenshot-ssim'), not a
+ * subset. Defaults reflect what's ACTUALLY true in this repo/environment
+ * (verified elsewhere in this file's "not-applicable vs unavailable"
+ * suite): eslint/design-md-lint/lighthouse-ci are genuinely tool-absent
+ * here, so 'unavailable' is a legitimate status for them; ts-compile's
+ * tool (typescript) and axe's tools (axe-core + playwright) ARE resolvable
+ * in this repo, so they must be 'pass'/'skipped-not-applicable', never
+ * 'unavailable', to pass the registry-probe check.
+ */
+function completeSiblingResults(overrides: Partial<Record<Exclude<DeterministicGateId, 'screenshot-ssim'>, DeterministicGateResult['status']>> = {}): DeterministicGateResult[] {
+  const defaults: Record<Exclude<DeterministicGateId, 'screenshot-ssim'>, DeterministicGateResult['status']> = {
+    'ts-compile': 'skipped-not-applicable',
+    eslint: 'unavailable',
+    'design-md-lint': 'skipped-not-applicable',
+    'tokens-schema': 'skipped-not-applicable',
+    'link-smoke': 'pass',
+    'form-smoke': 'pass',
+    axe: 'pass',
+    'lighthouse-ci': 'unavailable',
+    'supabase-migration-dry-run': 'skipped-not-applicable',
+  };
+  const merged = { ...defaults, ...overrides };
+  return (Object.entries(merged) as Array<[Exclude<DeterministicGateId, 'screenshot-ssim'>, DeterministicGateResult['status']]>).map(([id, status]) =>
+    det(id, status),
+  );
+}
+
 describe('SSIM baseline lifecycle (WR-routing.md Screenshot-baseline rules)', () => {
   let db: ReturnType<typeof openDatabase>;
 
@@ -517,16 +733,16 @@ describe('SSIM baseline lifecycle (WR-routing.md Screenshot-baseline rules)', ()
   it('bootstrap -> negative-control-pending, and refuses a second bootstrap without invalidation', async () => {
     const baselinePng = path.join(tempDir, 'baseline.png');
     await writeSolidPng(baselinePng, { r: 10, g: 10, b: 10 });
-    recordBootstrapBaseline(db, { buildId: 'build-1', screenshotPath: baselinePng, tokenFreezeVersion: 'v1', siblingGateResults: [det('link-smoke', 'pass')] });
+    recordBootstrapBaseline(db, { buildId: 'build-1', screenshotPath: baselinePng, tokenFreezeVersion: 'v1', siblingGateResults: completeSiblingResults() });
     expect(baselineState(db, 'build-1')).toBe('negative-control-pending');
     expect(() =>
-      recordBootstrapBaseline(db, { buildId: 'build-1', screenshotPath: baselinePng, tokenFreezeVersion: 'v1', siblingGateResults: [det('link-smoke', 'pass')] }),
+      recordBootstrapBaseline(db, { buildId: 'build-1', screenshotPath: baselinePng, tokenFreezeVersion: 'v1', siblingGateResults: completeSiblingResults() }),
     ).toThrow();
   });
 
   // Sol HIGH-4b: promotion is SERVER-ENFORCED, not trusted -- a caller
-  // cannot bootstrap a baseline while claiming (or simply omitting) that a
-  // sibling deterministic gate failed.
+  // cannot bootstrap a baseline while claiming that a sibling deterministic
+  // gate failed.
   it('refuses to bootstrap when a sibling deterministic gate result is not "pass" (Sol HIGH-4b, server-enforced promotion)', async () => {
     const baselinePng = path.join(tempDir, 'baseline.png');
     await writeSolidPng(baselinePng, { r: 10, g: 10, b: 10 });
@@ -535,13 +751,16 @@ describe('SSIM baseline lifecycle (WR-routing.md Screenshot-baseline rules)', ()
         buildId: 'build-1',
         screenshotPath: baselinePng,
         tokenFreezeVersion: 'v1',
-        siblingGateResults: [det('link-smoke', 'pass'), det('form-smoke', 'fail')],
+        siblingGateResults: completeSiblingResults({ 'form-smoke': 'fail' }),
       }),
     ).toThrow(/form-smoke=fail/);
     expect(baselineState(db, 'build-1')).toBe('no-baseline-bootstrap');
   });
 
-  it('refuses to bootstrap when a sibling gate is "unavailable" or "skipped-not-applicable" (neither counts as a clean pass)', async () => {
+  // Sol HIGH-3 residue: a SUBSET (or empty) siblingGateResults array must be
+  // rejected outright, before any status is even inspected -- a caller
+  // cannot omit an inconvenient gate id to bootstrap vacuously.
+  it('rejects a SUBSET siblingGateResults array -- the complete deterministic gate id set must be represented (Sol HIGH-3 residue)', async () => {
     const baselinePng = path.join(tempDir, 'baseline.png');
     await writeSolidPng(baselinePng, { r: 10, g: 10, b: 10 });
     expect(() =>
@@ -549,10 +768,66 @@ describe('SSIM baseline lifecycle (WR-routing.md Screenshot-baseline rules)', ()
         buildId: 'build-1',
         screenshotPath: baselinePng,
         tokenFreezeVersion: 'v1',
-        siblingGateResults: [det('link-smoke', 'pass'), det('lighthouse-ci', 'unavailable')],
+        siblingGateResults: [det('link-smoke', 'pass')],
       }),
-    ).toThrow(/lighthouse-ci=unavailable/);
+    ).toThrow(/missing result/i);
     expect(baselineState(db, 'build-1')).toBe('no-baseline-bootstrap');
+  });
+
+  it('rejects a completely empty siblingGateResults array', async () => {
+    const baselinePng = path.join(tempDir, 'baseline.png');
+    await writeSolidPng(baselinePng, { r: 10, g: 10, b: 10 });
+    expect(() =>
+      recordBootstrapBaseline(db, { buildId: 'build-1', screenshotPath: baselinePng, tokenFreezeVersion: 'v1', siblingGateResults: [] }),
+    ).toThrow(/missing result/i);
+  });
+
+  // Sol HIGH-3 residue: a COMPLETE set where some gates are legitimately
+  // 'skipped-not-applicable' (content-dependent) or 'unavailable' (their
+  // tool is genuinely absent, per the registry probe) is ACCEPTED.
+  it('accepts a complete siblingGateResults set with legitimate skips and tool-absent unavailables (Sol HIGH-3 residue)', async () => {
+    const baselinePng = path.join(tempDir, 'baseline.png');
+    await writeSolidPng(baselinePng, { r: 10, g: 10, b: 10 });
+    expect(() =>
+      recordBootstrapBaseline(db, {
+        buildId: 'build-1',
+        screenshotPath: baselinePng,
+        tokenFreezeVersion: 'v1',
+        siblingGateResults: completeSiblingResults(),
+      }),
+    ).not.toThrow();
+    expect(baselineState(db, 'build-1')).toBe('negative-control-pending');
+  });
+
+  // Sol HIGH-3 residue: 'unavailable' is only legitimate when the
+  // registry's OWN tool-availability probe agrees the tool is absent --
+  // ts-compile's tool (typescript) IS resolvable in this repo, so claiming
+  // 'unavailable' for it is a red flag, not accepted.
+  it('rejects "unavailable" for a gate whose tool the registry probe says IS available (ts-compile, typescript is a real dependency here)', async () => {
+    const baselinePng = path.join(tempDir, 'baseline.png');
+    await writeSolidPng(baselinePng, { r: 10, g: 10, b: 10 });
+    expect(() =>
+      recordBootstrapBaseline(db, {
+        buildId: 'build-1',
+        screenshotPath: baselinePng,
+        tokenFreezeVersion: 'v1',
+        siblingGateResults: completeSiblingResults({ 'ts-compile': 'unavailable' }),
+      }),
+    ).toThrow(/ts-compile=unavailable.*tool IS resolvable/i);
+    expect(baselineState(db, 'build-1')).toBe('no-baseline-bootstrap');
+  });
+
+  it('accepts "unavailable" for a gate whose tool the registry probe agrees is genuinely absent (eslint is not installed anywhere in this repo)', async () => {
+    const baselinePng = path.join(tempDir, 'baseline.png');
+    await writeSolidPng(baselinePng, { r: 10, g: 10, b: 10 });
+    expect(() =>
+      recordBootstrapBaseline(db, {
+        buildId: 'build-1',
+        screenshotPath: baselinePng,
+        tokenFreezeVersion: 'v1',
+        siblingGateResults: completeSiblingResults({ eslint: 'unavailable' }),
+      }),
+    ).not.toThrow();
   });
 
   it('negative control MUST fail (discriminate) a deliberately-perturbed comparison before promoting to active', async () => {
@@ -563,7 +838,7 @@ describe('SSIM baseline lifecycle (WR-routing.md Screenshot-baseline rules)', ()
     // maximally different from the baseline, so the comparison MUST score
     // below the floor to prove it discriminates at all.
     await writeSolidPng(perturbedPng, { r: 245, g: 245, b: 245 });
-    recordBootstrapBaseline(db, { buildId: 'build-1', screenshotPath: baselinePng, tokenFreezeVersion: 'v1', siblingGateResults: [det('link-smoke', 'pass')] });
+    recordBootstrapBaseline(db, { buildId: 'build-1', screenshotPath: baselinePng, tokenFreezeVersion: 'v1', siblingGateResults: completeSiblingResults() });
 
     const negativeResult = await runNegativeControlCheck(db, { buildId: 'build-1', perturbedScreenshotPath: perturbedPng });
     expect(negativeResult.discriminates).toBe(true);
@@ -576,7 +851,7 @@ describe('SSIM baseline lifecycle (WR-routing.md Screenshot-baseline rules)', ()
     const almostIdenticalPng = path.join(tempDir, 'almost-identical.png');
     await writeSolidPng(baselinePng, { r: 10, g: 10, b: 10 });
     await writeSolidPng(almostIdenticalPng, { r: 10, g: 10, b: 10 });
-    recordBootstrapBaseline(db, { buildId: 'build-1', screenshotPath: baselinePng, tokenFreezeVersion: 'v1', siblingGateResults: [det('link-smoke', 'pass')] });
+    recordBootstrapBaseline(db, { buildId: 'build-1', screenshotPath: baselinePng, tokenFreezeVersion: 'v1', siblingGateResults: completeSiblingResults() });
 
     const negativeResult = await runNegativeControlCheck(db, { buildId: 'build-1', perturbedScreenshotPath: almostIdenticalPng });
     expect(negativeResult.discriminates).toBe(false);
@@ -594,7 +869,7 @@ describe('SSIM baseline lifecycle (WR-routing.md Screenshot-baseline rules)', ()
     const perturbedPng = path.join(tempDir, 'perturbed.png');
     await writeSolidPng(baselinePng, { r: 10, g: 10, b: 10 });
     await writeSolidPng(perturbedPng, { r: 245, g: 245, b: 245 });
-    recordBootstrapBaseline(db, { buildId: 'build-1', screenshotPath: baselinePng, tokenFreezeVersion: 'v1', siblingGateResults: [det('link-smoke', 'pass')] });
+    recordBootstrapBaseline(db, { buildId: 'build-1', screenshotPath: baselinePng, tokenFreezeVersion: 'v1', siblingGateResults: completeSiblingResults() });
     await runNegativeControlCheck(db, { buildId: 'build-1', perturbedScreenshotPath: perturbedPng });
     expect(baselineState(db, 'build-1', 'v1')).toBe('active');
 
@@ -606,7 +881,7 @@ describe('SSIM baseline lifecycle (WR-routing.md Screenshot-baseline rules)', ()
   it('invalidateSsimBaseline forces a return to no-baseline-bootstrap', async () => {
     const baselinePng = path.join(tempDir, 'baseline.png');
     await writeSolidPng(baselinePng, { r: 10, g: 10, b: 10 });
-    recordBootstrapBaseline(db, { buildId: 'build-1', screenshotPath: baselinePng, tokenFreezeVersion: 'v1', siblingGateResults: [det('link-smoke', 'pass')] });
+    recordBootstrapBaseline(db, { buildId: 'build-1', screenshotPath: baselinePng, tokenFreezeVersion: 'v1', siblingGateResults: completeSiblingResults() });
     invalidateSsimBaseline(db, 'build-1');
     expect(baselineState(db, 'build-1')).toBe('no-baseline-bootstrap');
   });
@@ -624,7 +899,7 @@ describe('SSIM baseline lifecycle (WR-routing.md Screenshot-baseline rules)', ()
     });
     expect(bootstrapResult.status).toBe('unavailable');
 
-    recordBootstrapBaseline(db, { buildId: 'build-1', screenshotPath: baselinePng, tokenFreezeVersion: 'v1', siblingGateResults: [det('link-smoke', 'pass')] });
+    recordBootstrapBaseline(db, { buildId: 'build-1', screenshotPath: baselinePng, tokenFreezeVersion: 'v1', siblingGateResults: completeSiblingResults() });
     const pendingResult = await runOneGate(tempDir, ['screenshot-ssim'], {
       buildId: 'build-1',
       db,
@@ -710,7 +985,7 @@ describe('screenshot-ssim gate -- lazy sharp import (Sol MED-7)', () => {
         buildId: 'build-med7',
         screenshotPath: path.join(tempDir, 'placeholder-baseline.png'),
         tokenFreezeVersion: 'v1',
-        siblingGateResults: [],
+        siblingGateResults: completeSiblingResults(),
       });
       // Force straight to 'active' by writing the row directly -- this
       // test's only concern is the sharp import failure path inside the
@@ -1066,47 +1341,70 @@ describe('POST /api/routing/gates/run -- server-persisted cascade state and gate
 
     // Second call for the SAME build: the persisted tier is 'mid', not
     // 'cheap' -- a client can no longer reset progress by omitting a
-    // tier (there is no client tier input at all anymore).
+    // tier (there is no client tier input at all anymore). Under the real
+    // shipped policy's per-tier verification prices, mid->frontier's $4
+    // pushes cumulative spend ($2 already persisted + $4) past the
+    // gate-tax cap -- this call is correctly BLOCKED (see the dedicated
+    // over-cap test below for the full accumulation proof); what THIS test
+    // asserts is that the tier persisted from call 1 (not client input) is
+    // what call 2 actually escalated FROM.
     const second = await runGatesHttp({ artifactDir: 'build-out', gates: ['form-smoke'], buildId });
     expect(second.status).toBe(200);
-    expect((second.body.cascade as { tier: string }).tier).toBe('frontier');
+    const secondCascade = second.body.cascade as { escalate: boolean; tier: string };
+    expect(secondCascade.escalate).toBe(false);
+    // Blocked-by-gate-tax must never silently advance the persisted tier
+    // -- it stays exactly where call 1 left it.
+    expect(secondCascade.tier).toBe('mid');
 
-    // A THIRD call: already at frontier, nowhere higher to escalate.
+    // A THIRD call: tier is STILL 'mid' (persisted, not reset to 'cheap',
+    // not advanced despite two failing form-smoke runs) -- proving
+    // persistence is real state, not recomputed fresh from a client input
+    // that no longer exists.
     const third = await runGatesHttp({ artifactDir: 'build-out', gates: ['form-smoke'], buildId });
     expect(third.status).toBe(200);
-    expect((third.body.cascade as { escalate: boolean; tier: string }).escalate).toBe(false);
-    expect((third.body.cascade as { tier: string }).tier).toBe('frontier');
+    const thirdCascade = third.body.cascade as { escalate: boolean; tier: string };
+    expect(thirdCascade.escalate).toBe(false);
+    expect(thirdCascade.tier).toBe('mid');
   });
 
-  it('two sequential over-cap runs: the second is blocked once persisted spend + estimate exceeds the cap (Sol HIGH-5)', async () => {
+  it('two sequential over-cap runs: the second is blocked once SERVER-DERIVED spend + tier price exceeds the cap (Sol HIGH-5 residue)', async () => {
     const buildId = `build-cap-${randomUUID()}`;
-    // gateTaxCapUsd is fixed by the real shipped policy (routing-policy.json,
-    // $5) -- pick an estimate that fits once, then again pushes past it.
-    const policyGateTaxCapUsd = loadRoutingPolicy().budgetCeilings.gateTaxCapUsd as number;
-    expect(typeof policyGateTaxCapUsd).toBe('number');
-    const perCallEstimate = policyGateTaxCapUsd * 0.6;
+    // Both the cap ($5, 10% headroom -> $4.50 effective) and the per-tier
+    // verification prices (cheap=$1, mid=$2, frontier=$4) come from the
+    // REAL shipped policy (routing-policy.json) -- this test asserts
+    // against server-derived pricing, not a client-supplied number (there
+    // is no such field left to supply).
+    const policy = loadRoutingPolicy();
+    const midCostUsd = policy.budgetCeilings.verificationCostPerTierUsd?.mid as number;
+    const frontierCostUsd = policy.budgetCeilings.verificationCostPerTierUsd?.frontier as number;
+    expect(typeof midCostUsd).toBe('number');
+    expect(typeof frontierCostUsd).toBe('number');
 
-    const first = await runGatesHttp({
-      artifactDir: 'build-out',
-      gates: ['form-smoke'],
-      buildId,
-      nextEstimatedVerificationCostUsd: perCallEstimate,
-    });
+    const first = await runGatesHttp({ artifactDir: 'build-out', gates: ['form-smoke'], buildId });
     expect(first.status).toBe(200);
-    expect((first.body.cascade as { escalate: boolean; gateTax: { overCap: boolean } }).escalate).toBe(true);
-    expect((first.body.cascade as { gateTax: { overCap: boolean } }).gateTax.overCap).toBe(false);
+    const firstCascade = first.body.cascade as { escalate: boolean; tier: string; gateTax: { overCap: boolean; spentUsd: number } };
+    expect(firstCascade.escalate).toBe(true);
+    expect(firstCascade.tier).toBe('mid');
+    expect(firstCascade.gateTax.overCap).toBe(false);
+    // Spend reported on THIS response is spend BEFORE this call's own
+    // contribution (nothing accumulated yet on the very first call).
+    expect(firstCascade.gateTax.spentUsd).toBe(0);
 
-    const second = await runGatesHttp({
-      artifactDir: 'build-out',
-      gates: ['form-smoke'],
-      buildId,
-      nextEstimatedVerificationCostUsd: perCallEstimate,
-    });
+    const second = await runGatesHttp({ artifactDir: 'build-out', gates: ['form-smoke'], buildId });
     expect(second.status).toBe(200);
-    const secondCascade = second.body.cascade as { escalate: boolean; gateTax: { overCap: boolean; spentUsd: number } };
+    const secondCascade = second.body.cascade as { escalate: boolean; tier: string; gateTax: { overCap: boolean; spentUsd: number } };
+    // Repeated runs accumulate SERVER-SIDE: the first call's mid-tier price
+    // is now reflected in the persisted spend this second call reads back.
+    expect(secondCascade.gateTax.spentUsd).toBeCloseTo(midCostUsd, 5);
     expect(secondCascade.gateTax.overCap).toBe(true);
     expect(secondCascade.escalate).toBe(false);
-    expect(secondCascade.gateTax.spentUsd).toBeCloseTo(perCallEstimate, 5);
+    expect(secondCascade.tier).toBe('mid'); // blocked -- never advances past mid once over cap.
+  });
+
+  it('rejects a client-supplied nextEstimatedVerificationCostUsd (Sol HIGH-5 residue -- verification cost is priced server-side only)', async () => {
+    const { status, body } = await runGatesHttp({ artifactDir: 'build-out', nextEstimatedVerificationCostUsd: 0 });
+    expect(status).toBe(400);
+    expect((body.error as { message: string }).message).toMatch(/no longer accepted/i);
   });
 
   it('rejects client-supplied currentTier/gateSpendSoFarUsd even with a real db configured', async () => {

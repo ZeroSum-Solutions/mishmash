@@ -47,7 +47,7 @@
 // hang-is-a-failure classification). This file launches its own
 // tightly-scoped Playwright context instead; see `runAxeGate`'s own doc
 // comment for the full threat model.
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -61,6 +61,7 @@ import {
   getRequiredA1Names,
   getRequiredA2Names,
   type RoutingGateOutcome,
+  type RoutingPolicyDocument,
 } from '@open-design/contracts';
 import { admitsUnderCap } from './admission.js';
 import { updateGateOutcomes } from './telemetry.js';
@@ -335,6 +336,42 @@ function isWithinCanonicalRoot(canonicalRoot: string, target: string): boolean {
 }
 
 /**
+ * t8 fix-round (Sol HIGH-1 residue): realpath-based containment check that
+ * tolerates a candidate path (or some SUFFIX of it) not existing on disk
+ * yet -- a plain `fs.realpathSync` throws ENOENT on a glob's literal prefix
+ * when nothing has been generated at that path yet, which the earlier
+ * fix-round's LEXICAL check papered over (and which is exactly the gap Sol
+ * flagged: a lexical comparison never catches an existing INTERMEDIATE
+ * directory that is itself a symlink pointing elsewhere).
+ *
+ * Walks up from `candidatePath` to the longest EXISTING ancestor,
+ * realpath-resolves THAT ancestor (resolving any symlink in it), then
+ * reconstructs the full path by re-appending the (still nonexistent, so
+ * lexical is fine there) remainder, and checks containment on the
+ * reconstructed result. A path with no resolvable ancestor at all (walked
+ * all the way to the filesystem root) is treated as NOT contained --
+ * fail closed.
+ */
+function isPathWithinCanonicalRootTolerant(candidatePath: string, canonicalRoot: string): boolean {
+  let current = candidatePath;
+  const suffixSegments: string[] = [];
+  for (;;) {
+    let real: string;
+    try {
+      real = fs.realpathSync(current);
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return false;
+      suffixSegments.unshift(path.basename(current));
+      current = parent;
+      continue;
+    }
+    const rebuilt = suffixSegments.length > 0 ? path.join(real, ...suffixSegments) : real;
+    return isWithinCanonicalRoot(canonicalRoot, rebuilt);
+  }
+}
+
+/**
  * Minimal string-aware JSONC (JSON-with-comments) stripper -- tsconfig.json
  * commonly carries `//`/`/* *\/` comments that `JSON.parse` rejects. Not a
  * full JSONC grammar (no trailing-comma handling), just enough to avoid
@@ -439,11 +476,12 @@ function checkTsconfigForEscapes(tsconfigPath: string, canonicalRoot: string): T
     }
     // Globs are checked up to their first wildcard segment only -- a glob
     // pattern like "src/**/*.ts" cannot itself walk upward past a literal
-    // ".." segment that precedes the wildcard, so truncating there and
-    // lexically resolving the literal prefix is sufficient.
+    // ".." segment that precedes the wildcard, so truncating there is
+    // sufficient; the REALPATH containment check below (not a lexical one)
+    // is what actually catches a symlinked intermediate directory.
     const literalPrefix = rawPath.split('*')[0] ?? rawPath;
     const lexicallyResolved = path.resolve(baseDir, literalPrefix);
-    if (!isWithinCanonicalRoot(canonicalRoot, lexicallyResolved)) {
+    if (!isPathWithinCanonicalRootTolerant(lexicallyResolved, canonicalRoot)) {
       return { escaped: true, reason: `tsconfig.json references a path outside the artifact directory: "${rawPath}"` };
     }
   }
@@ -622,12 +660,30 @@ async function runDesignMdLintGate(ctx: GateContext): Promise<DeterministicGateR
 // ---------------------------------------------------------------------------
 
 /**
- * t8 fix-round (Sol MED-6): full structural validation of design-tokens.json
- * -- envelope shape, per-token shape (name/value/layer/sources types),
- * DUPLICATE name detection, not just "are the required names present as
- * strings somewhere." A document that names every required token but is
- * otherwise malformed (a duplicate entry, a non-string value, a missing
- * `sources` array) must FAIL here, not slip through on name-presence alone.
+ * t8 fix-round (Sol MED-6, residue-hardened): full structural validation of
+ * design-tokens.json against the CANONICAL envelope this repo's own
+ * generator produces -- `packages/contracts/src/design-systems/
+ * derived-token-outputs.ts`'s `renderDesignTokensJson`, whose literal
+ * return shape is:
+ *
+ *   { schemaVersion: 1, format: 'od-design-tokens/v1', contract:
+ *     'TOKEN_SCHEMA', generatedAt: string, source: { tokensCss: string,
+ *     tokenContractReport: string }, summary: <DerivedDesignTokenReport
+ *     .summary, typed `unknown` in the contract itself -- required to be
+ *     PRESENT, its shape deliberately unconstrained>, tokens: [{ name,
+ *     value, type, layer, confidence, reason, sources, sourceName? }] }
+ *
+ * (`DerivedDesignTokenBinding`, same file: `name`/`layer`/`value`/
+ * `confidence`/`reason`/`sources`/optional `sourceName`; `type` is
+ * computed at render time, not part of the binding's own input shape, but
+ * IS always present on the rendered output.) The earlier fix-round's
+ * validator checked only `schemaVersion`/`format`/`tokens[].{name,value,
+ * layer,sources}` -- this checks every field the canonical shape declares,
+ * plus DUPLICATE name detection, so a document that names every required
+ * token but is otherwise malformed (missing `contract`, missing
+ * `generatedAt`, a per-token `type`/`confidence`/`reason` absent, a
+ * non-string `sources` element, a wrongly-typed `sourceName`) FAILS here
+ * rather than slipping through on name-presence alone.
  */
 function validateDesignTokensJsonStructure(parsed: unknown): { ok: true; names: Set<string> } | { ok: false; issues: string[] } {
   const issues: string[] = [];
@@ -635,12 +691,37 @@ function validateDesignTokensJsonStructure(parsed: unknown): { ok: true; names: 
     return { ok: false, issues: ['design-tokens.json root must be a JSON object.'] };
   }
   const envelope = parsed as Record<string, unknown>;
+
   if (envelope.format !== 'od-design-tokens/v1') {
     issues.push(`envelope "format" must be "od-design-tokens/v1", got ${JSON.stringify(envelope.format)}.`);
   }
   if (typeof envelope.schemaVersion !== 'number') {
     issues.push('envelope "schemaVersion" must be a number.');
   }
+  if (envelope.contract !== 'TOKEN_SCHEMA') {
+    issues.push(`envelope "contract" must be "TOKEN_SCHEMA", got ${JSON.stringify(envelope.contract)}.`);
+  }
+  if (typeof envelope.generatedAt !== 'string' || envelope.generatedAt.length === 0) {
+    issues.push(`envelope "generatedAt" must be a nonempty string, got ${JSON.stringify(envelope.generatedAt)}.`);
+  }
+  if (!envelope.source || typeof envelope.source !== 'object' || Array.isArray(envelope.source)) {
+    issues.push('envelope "source" must be an object.');
+  } else {
+    const source = envelope.source as Record<string, unknown>;
+    if (typeof source.tokensCss !== 'string' || source.tokensCss.length === 0) {
+      issues.push(`envelope "source.tokensCss" must be a nonempty string, got ${JSON.stringify(source.tokensCss)}.`);
+    }
+    if (typeof source.tokenContractReport !== 'string' || source.tokenContractReport.length === 0) {
+      issues.push(`envelope "source.tokenContractReport" must be a nonempty string, got ${JSON.stringify(source.tokenContractReport)}.`);
+    }
+  }
+  // `DerivedDesignTokenReport#summary` is typed `unknown` in the canonical
+  // contract itself -- deliberately unconstrained shape, but the KEY must
+  // exist (an omitted `summary` is not a valid render of this envelope).
+  if (!('summary' in envelope)) {
+    issues.push('envelope is missing required key "summary".');
+  }
+
   if (!Array.isArray(envelope.tokens)) {
     issues.push('envelope "tokens" must be an array.');
     return { ok: false, issues };
@@ -665,11 +746,23 @@ function validateDesignTokensJsonStructure(parsed: unknown): { ok: true; names: 
     if (typeof t.value !== 'string' || t.value.length === 0) {
       issues.push(`tokens[${index}] ("${t.name}").value must be a nonempty string, got ${JSON.stringify(t.value)}.`);
     }
+    if (typeof t.type !== 'string' || t.type.length === 0) {
+      issues.push(`tokens[${index}] ("${t.name}").type must be a nonempty string, got ${JSON.stringify(t.type)}.`);
+    }
     if (typeof t.layer !== 'string' || t.layer.length === 0) {
       issues.push(`tokens[${index}] ("${t.name}").layer must be a nonempty string, got ${JSON.stringify(t.layer)}.`);
     }
-    if (!Array.isArray(t.sources)) {
-      issues.push(`tokens[${index}] ("${t.name}").sources must be an array.`);
+    if (typeof t.confidence !== 'string' || t.confidence.length === 0) {
+      issues.push(`tokens[${index}] ("${t.name}").confidence must be a nonempty string, got ${JSON.stringify(t.confidence)}.`);
+    }
+    if (typeof t.reason !== 'string' || t.reason.length === 0) {
+      issues.push(`tokens[${index}] ("${t.name}").reason must be a nonempty string, got ${JSON.stringify(t.reason)}.`);
+    }
+    if (!Array.isArray(t.sources) || !t.sources.every((s) => typeof s === 'string')) {
+      issues.push(`tokens[${index}] ("${t.name}").sources must be an array of strings.`);
+    }
+    if (t.sourceName !== undefined && typeof t.sourceName !== 'string') {
+      issues.push(`tokens[${index}] ("${t.name}").sourceName, when present, must be a string, got ${JSON.stringify(t.sourceName)}.`);
     }
     names.add(t.name);
   });
@@ -750,6 +843,31 @@ function isExternalOrSpecialHref(href: string): boolean {
   return /^(?:https?|mailto|tel|data|javascript):/i.test(href);
 }
 
+/**
+ * t8 fix-round (Sol HIGH-1 residue): walks every path SEGMENT from `root`
+ * down to `target` (both absolute; `target` assumed already confirmed
+ * lexically under `root`) and returns true if ANY segment along the way --
+ * including `target` itself -- is a symlink. `lstat` on the final
+ * component alone (the earlier fix-round's version) misses a symlinked
+ * INTERMEDIATE directory, e.g. `href="linked-dir/nested/page.html"` where
+ * `linked-dir` is the symlink, not `page.html`.
+ */
+function hasSymlinkInChain(root: string, target: string): boolean {
+  const relative = path.relative(root, target);
+  if (relative === '') return false;
+  const segments = relative.split(path.sep).filter(Boolean);
+  let current = root;
+  for (const segment of segments) {
+    current = path.join(current, segment);
+    try {
+      if (fs.lstatSync(current).isSymbolicLink()) return true;
+    } catch {
+      return false; // does not exist -- the caller's own existence check handles this.
+    }
+  }
+  return false;
+}
+
 async function runLinkSmokeGate(ctx: GateContext): Promise<DeterministicGateResult> {
   const start = performance.now();
   const htmlFiles = listFilesRecursive(ctx.artifactDir, { extensions: ['.html', '.htm'] });
@@ -777,22 +895,21 @@ async function runLinkSmokeGate(ctx: GateContext): Promise<DeterministicGateResu
         broken.push(`${path.relative(ctx.artifactDir, file)}: href "${href}" escapes the artifact directory.`);
         continue;
       }
-      // t8 fix-round (Sol HIGH-1): lstat (never follows the final symlink
-      // component) rather than existsSync (which DOES follow it) -- a
-      // symlinked target could point anywhere on disk, including outside
-      // the artifact directory. Neither pass nor fail on a symlinked
-      // target: skip it from this gate's checked/broken accounting
-      // entirely, since "does the symlink's own dirent exist" says
-      // nothing trustworthy about what it points to.
-      let stat: fs.Stats;
-      try {
-        stat = fs.lstatSync(resolved);
-      } catch {
-        broken.push(`${path.relative(ctx.artifactDir, file)}: href "${href}" -> missing target "${relativeToRoot}".`);
+      // t8 fix-round (Sol HIGH-1 residue): lstat on the FINAL path
+      // component alone misses a symlink in an INTERMEDIATE directory
+      // (e.g. href="linked-dir/nested/page.html" where "linked-dir" itself
+      // is a symlink) -- walk every segment from the artifact root down to
+      // the target and skip if ANY of them is a symlink, never just the
+      // last one. Neither pass nor fail on a symlinked chain: skip it from
+      // this gate's checked/broken accounting entirely, since "does the
+      // symlink's own dirent exist" says nothing trustworthy about what it
+      // (or an ancestor) points to.
+      if (hasSymlinkInChain(ctx.artifactDir, resolved)) {
+        skippedSymlinks.push(href);
         continue;
       }
-      if (stat.isSymbolicLink()) {
-        skippedSymlinks.push(href);
+      if (!fs.existsSync(resolved)) {
+        broken.push(`${path.relative(ctx.artifactDir, file)}: href "${href}" -> missing target "${relativeToRoot}".`);
         continue;
       }
     }
@@ -921,6 +1038,31 @@ function isLocalSafeNonFileUrl(rawUrl: string): boolean {
   return rawUrl.startsWith('data:') || rawUrl.startsWith('blob:') || rawUrl.startsWith('about:');
 }
 
+/**
+ * t8 fix-round (Sol HIGH-2 residue): races `promise` against a hard
+ * `setTimeout` of `ms` -- unlike `page.setDefaultTimeout`, this actually
+ * bounds calls (like `page.evaluate`/`page.addScriptTag`) that Playwright
+ * itself never applies its default timeout to. The dangling underlying
+ * promise (still resolving/rejecting later against a possibly-hung page)
+ * is left to be garbage-collected once its context/browser closes; nothing
+ * awaits it further after this function returns.
+ */
+function withHardTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`operation exceeded ${ms}ms`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 async function runAxeGate(ctx: GateContext): Promise<DeterministicGateResult> {
   const start = performance.now();
   const entryHtml = findEntryHtmlFile(ctx.artifactDir);
@@ -995,12 +1137,34 @@ async function runAxeGate(ctx: GateContext): Promise<DeterministicGateResult> {
       );
     }
 
-    await page.addScriptTag({ content: axeSource });
+    // t8 fix-round (Sol HIGH-2 residue): `page.setDefaultTimeout` above
+    // does NOT bound `page.evaluate`/`page.addScriptTag` -- Playwright's
+    // "default timeout" only applies to actions with a documented
+    // `timeout` option (navigation, waiting, locator actions); an
+    // in-page script that starts busy-looping AFTER `page.goto` already
+    // resolved (so the earlier fix-round's goto-timeout branch never
+    // fires) can otherwise hang `evaluate` forever. Both calls are raced
+    // against the gate's own timeout budget; a race-loss explicitly
+    // closes the CONTEXT (not just relying on the outer `finally`'s
+    // `browser.close()`) before classifying the result as a gate FAILURE
+    // -- an artifact-induced hang, never 'unavailable'.
+    try {
+      await withHardTimeout(page.addScriptTag({ content: axeSource }), ctx.timeoutMs);
+    } catch (err) {
+      await context.close().catch(() => {});
+      return finishDeterministic(
+        'axe',
+        'fail',
+        [`the artifact's script blocked axe-core injection for longer than ${ctx.timeoutMs}ms -- a hang or infinite loop in the artifact's own script is the most likely cause: ${errorMessage(err)}`],
+        start,
+      );
+    }
 
     let result: AxeInPageResult;
     try {
-      result = await page.evaluate(runAxeInPage, [...AXE_WCAG_AA_TAGS]);
+      result = await withHardTimeout(page.evaluate(runAxeInPage, [...AXE_WCAG_AA_TAGS]), ctx.timeoutMs);
     } catch (err) {
+      await context.close().catch(() => {});
       return finishDeterministic(
         'axe',
         'fail',
@@ -1340,9 +1504,44 @@ export async function runGates(
 
 export type EscalationTier = 'cheap' | 'mid' | 'frontier';
 
-function nextEscalationTier(tier: EscalationTier): EscalationTier {
+/** Exported (t8 fix-round, Sol HIGH-5 residue): `apps/daemon/src/routes/
+ * routing.ts` needs this SAME ladder-stepping logic to compute, server-
+ * side, which tier's verification cost to price NEXT -- duplicating it at
+ * the route layer would risk the two falling out of sync with
+ * `classifyCascadeTrigger`'s own stepping. */
+export function nextEscalationTier(tier: EscalationTier): EscalationTier {
   if (tier === 'cheap') return 'mid';
   return 'frontier';
+}
+
+/**
+ * t8 fix-round (Sol HIGH-5 residue): the SERVER-DERIVED price of one
+ * model-based re-verification attempt at `tier`, read from
+ * `policy.budgetCeilings.verificationCostPerTierUsd` when configured, else
+ * a conservative hardcoded default -- replaces the earlier client-supplied
+ * `nextEstimatedVerificationCostUsd`, which defaulted to `0` and let a
+ * caller understate (or entirely skip) persisted gate-tax spend. Only
+ * `apps/daemon/src/routes/routing.ts`'s HTTP route calls this; the pure
+ * `classifyCascadeTrigger` below still accepts a plain
+ * `nextEstimatedVerificationCostUsd` number so it stays table-testable
+ * without a policy object in scope.
+ */
+const DEFAULT_VERIFICATION_COST_PER_TIER_USD: Record<EscalationTier, number> = {
+  cheap: 0.05,
+  mid: 0.25,
+  frontier: 1.5,
+};
+
+export function verificationCostForTierUsd(policy: RoutingPolicyDocument, tier: EscalationTier): number {
+  const configured = policy.budgetCeilings.verificationCostPerTierUsd;
+  if (configured && isFiniteNonNegative(configured[tier])) {
+    return configured[tier];
+  }
+  return DEFAULT_VERIFICATION_COST_PER_TIER_USD[tier];
+}
+
+function isFiniteNonNegative(value: number): boolean {
+  return Number.isFinite(value) && value >= 0;
 }
 
 export interface CascadeClassification {
@@ -1685,6 +1884,90 @@ export interface RecordBootstrapBaselineInput {
  * concurrency control this tranche does not add). A future t9 orchestrator
  * calls these directly once it owns that context.
  */
+function tryResolveSpecifier(specifier: string): boolean {
+  try {
+    require_.resolve(specifier);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let cachedSupabaseCliAvailable: boolean | undefined;
+
+/** Cached per-process (a CLI presence probe is expensive relative to
+ * everything else in this module, and cannot change mid-process). */
+function isSupabaseCliAvailable(): boolean {
+  if (cachedSupabaseCliAvailable !== undefined) return cachedSupabaseCliAvailable;
+  try {
+    const result = spawnSync('supabase', ['--version'], { timeout: 3_000, stdio: 'ignore' });
+    cachedSupabaseCliAvailable = result.error === undefined && result.status === 0;
+  } catch {
+    cachedSupabaseCliAvailable = false;
+  }
+  return cachedSupabaseCliAvailable;
+}
+
+/**
+ * t8 fix-round (Sol HIGH-3 residue): an INDEPENDENT, non-caller-controlled
+ * probe of whether a deterministic gate's underlying TOOL is resolvable/
+ * present in this environment -- deliberately SEPARATE from whether the
+ * gate's own `run()` reported `'unavailable'` for one particular render
+ * (which can be a CONTENT/config reason, e.g. `ts-compile` with TS files
+ * but no `tsconfig.json`, not a tooling-absence reason).
+ * `recordBootstrapBaseline` uses this to decide whether a sibling's
+ * `'unavailable'` status is a LEGITIMATE reason to still bootstrap (the
+ * tool genuinely isn't installed/configured anywhere in this workspace) or
+ * a red flag that should block it (the tool IS available, so an
+ * 'unavailable' render is anomalous and should not be silently trusted).
+ * Deliberately a STATIC resolvability check (package/binary presence), not
+ * a full runtime capability probe (e.g. does NOT launch a browser for
+ * `axe`) -- cheap, deterministic, and exactly what "the registry's
+ * availability probe" can mean without re-running (and re-costing) the
+ * gate itself.
+ */
+function isDeterministicGateToolAvailable(id: DeterministicGateId): boolean {
+  switch (id) {
+    case 'ts-compile':
+      return tryResolveSpecifier('typescript/bin/tsc');
+    case 'eslint':
+      return tryResolveSpecifier('eslint/bin/eslint.js');
+    case 'design-md-lint':
+      return tryResolveSpecifier('@google/design.md/package.json');
+    case 'lighthouse-ci':
+      return tryResolveSpecifier('@lhci/cli/package.json');
+    case 'axe':
+      return tryResolveSpecifier('axe-core/axe.min.js') && tryResolveSpecifier('playwright');
+    case 'supabase-migration-dry-run':
+      return isSupabaseCliAvailable();
+    case 'tokens-schema':
+    case 'link-smoke':
+    case 'form-smoke':
+      // Built-in, in-process logic with no external tool dependency --
+      // these gates never report 'unavailable' in the first place, so
+      // this branch is never actually consulted for them, but `true` is
+      // the honest answer to "is the tool present" regardless.
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * t8 fix-round (Sol HIGH-3 residue): the previous fix-round's check passed
+ * VACUOUSLY on an empty or partial `siblingGateResults` array -- a caller
+ * could omit an inconvenient gate entirely and bootstrap would never even
+ * see it. `siblingGateResults` must now contain EXACTLY one result per
+ * `DETERMINISTIC_GATE_IDS` entry other than `'screenshot-ssim'` (the
+ * COMPLETE registry-derived set); a missing id is rejected outright,
+ * before any status is even inspected.
+ */
+function findMissingSiblingGateIds(siblingGateResults: readonly DeterministicGateResult[]): DeterministicGateId[] {
+  const expected = DETERMINISTIC_GATE_IDS.filter((id) => id !== 'screenshot-ssim');
+  const supplied = new Set(siblingGateResults.map((r) => r.id));
+  return expected.filter((id) => !supplied.has(id));
+}
+
 export function recordBootstrapBaseline(db: Database.Database, input: RecordBootstrapBaselineInput): void {
   ensureSsimBaselinesTable(db);
   const existing = getSsimBaselineRow(db, input.buildId);
@@ -1693,13 +1976,31 @@ export function recordBootstrapBaseline(db: Database.Database, input: RecordBoot
       `build "${input.buildId}" already has an SSIM baseline record in state "${existing.state}" -- recordBootstrapBaseline is a one-time transition, not an overwrite. Call invalidateSsimBaseline first for a deliberate re-baseline.`,
     );
   }
-  const siblings = input.siblingGateResults.filter((r) => r.id !== 'screenshot-ssim');
-  const notPassing = siblings.filter((r) => r.status !== 'pass');
-  if (notPassing.length > 0) {
+
+  const missingIds = findMissingSiblingGateIds(input.siblingGateResults);
+  if (missingIds.length > 0) {
     throw new SsimLifecycleError(
-      `cannot bootstrap an SSIM baseline for build "${input.buildId}": ${notPassing.length} sibling deterministic gate(s) did not pass -- ${notPassing.map((r) => `${r.id}=${r.status}`).join(', ')}. WR-routing.md step 1 requires every OTHER deterministic gate to clear before this render is eligible to become a baseline.`,
+      `cannot bootstrap an SSIM baseline for build "${input.buildId}": siblingGateResults is missing result(s) for: ${missingIds.join(', ')} -- the COMPLETE deterministic gate id set (every id other than screenshot-ssim) must be represented; a subset is not accepted.`,
     );
   }
+
+  const byId = new Map(input.siblingGateResults.filter((r) => r.id !== 'screenshot-ssim').map((r) => [r.id, r] as const));
+  const problems: string[] = [];
+  for (const id of DETERMINISTIC_GATE_IDS) {
+    if (id === 'screenshot-ssim') continue;
+    const result = byId.get(id);
+    if (!result) continue; // already reported via missingIds above
+    if (result.status === 'pass' || result.status === 'skipped-not-applicable') continue;
+    if (result.status === 'unavailable' && !isDeterministicGateToolAvailable(id)) continue; // legitimate: tooling genuinely absent
+    const reason = result.status === 'unavailable' ? `${id}=unavailable (but the tool IS resolvable in this environment per the registry probe -- not accepted)` : `${id}=${result.status}`;
+    problems.push(reason);
+  }
+  if (problems.length > 0) {
+    throw new SsimLifecycleError(
+      `cannot bootstrap an SSIM baseline for build "${input.buildId}": ${problems.length} sibling deterministic gate(s) blocked bootstrap -- ${problems.join(', ')}. WR-routing.md step 1 requires every OTHER deterministic gate to clear (pass, genuinely not-applicable, or unavailable ONLY because its tool is absent) before this render is eligible to become a baseline.`,
+    );
+  }
+
   const now = (input.now ?? new Date()).toISOString();
   db.prepare(
     `INSERT INTO routing_ssim_baselines (build_id, state, baseline_screenshot_path, token_freeze_version, negative_control_passed, updated_at)
