@@ -45,6 +45,62 @@ export type RoutingEffort = 'low' | 'medium' | 'high' | 'xhigh';
 
 const ROUTING_EFFORTS: readonly RoutingEffort[] = ['low', 'medium', 'high', 'xhigh'];
 
+/**
+ * Every lane plan §2/PRD §15 actually name for in-program dispatch: the
+ * three subscription pools ("Lane realism": "subscription lanes (Claude
+ * Max, Codex, `agy`)"), the two prepaid lanes ("subscription -> prepaid
+ * (Nous, Moonshot)"), and the two metered lanes ("metered (DeepSeek direct,
+ * OpenRouter)"). `claude-code-oauth` (not `claude-max-oauth`) matches the
+ * exact term WR-routing.md's Review protocol and this program's PRD §15
+ * both use ("Claude Code OAuth (Max)" / "Claude Code OAuth only").
+ */
+export type RoutingLaneId =
+  | 'claude-code-oauth'
+  | 'codex-oauth'
+  | 'agy'
+  | 'nous'
+  | 'moonshot'
+  | 'deepseek-direct'
+  | 'openrouter';
+
+const ROUTING_LANE_IDS: readonly RoutingLaneId[] = [
+  'claude-code-oauth',
+  'codex-oauth',
+  'agy',
+  'nous',
+  'moonshot',
+  'deepseek-direct',
+  'openrouter',
+];
+
+/** The billing/access mechanism a lane uses -- what a hard constraint like
+ * PRD §15's "no Anthropic model may use API credits, Nous, or OpenRouter"
+ * actually forbids is a transport, not a lane name (`nous` IS the
+ * transport `prepaid`'s named instance, so the constraint reads as
+ * "anthropic + prepaid|metered-api forbidden", not a lane-string match). */
+export type RoutingTransport = 'subscription-oauth' | 'prepaid' | 'metered-api' | 'local';
+
+const ROUTING_TRANSPORTS: readonly RoutingTransport[] = [
+  'subscription-oauth',
+  'prepaid',
+  'metered-api',
+  'local',
+];
+
+/** The model vendor family a candidate's `model` belongs to -- what
+ * RoutingPolicyHardConstraint#modelFamily is actually compared against. */
+export type RoutingModelFamily = 'anthropic' | 'openai' | 'google' | 'xai' | 'deepseek' | 'moonshot' | 'other';
+
+const ROUTING_MODEL_FAMILIES: readonly RoutingModelFamily[] = [
+  'anthropic',
+  'openai',
+  'google',
+  'xai',
+  'deepseek',
+  'moonshot',
+  'other',
+];
+
 /** A routing-key predicate: every present field must match for this
  * candidate list to apply. `undefined` fields are wildcards. Context-size
  * thresholds compare against RoutingKey#contextEstimateTokens as
@@ -57,14 +113,26 @@ export interface RoutingMatchRule {
   maxContextTokens?: number;
 }
 
-/** One resolvable dispatch target: a runtime CLI, a model flag, and an
+/**
+ * One resolvable dispatch target: a runtime CLI, a model flag, and an
  * effort level -- three of the four `(runtime, model flag, effort, lane)`
- * binding-time fields RoutingDecision carries (plan §3.1); `lane` is
- * derived from `runtimeId` at dispatch time, not duplicated here. */
+ * binding-time fields RoutingDecision carries (plan §3.1). `lane` IS
+ * duplicated here (not merely "derived from runtimeId" as the P0 draft
+ * assumed): a hard constraint like PRD §15's forbidden-transport rule must
+ * be evaluable directly from a candidate's own fields, and `runtimeId` (a
+ * free-form CLI identifier, e.g. `claude-code`) does not by itself carry a
+ * closed transport/lane classification the admission-control layer can
+ * check against `RoutingPolicyHardConstraint#forbiddenTransports`.
+ * `modelFamily` is likewise carried per candidate, not re-derived from
+ * `model`'s free-form string, for the same reason.
+ */
 export interface RoutingCandidate {
   runtimeId: string;
   model: string;
   effort: RoutingEffort;
+  lane: RoutingLaneId;
+  transport: RoutingTransport;
+  modelFamily: RoutingModelFamily;
 }
 
 /**
@@ -107,15 +175,20 @@ export interface RoutingPolicyDataClassAllowlist {
  * `check-context-isolation`-style test) -- machine-evaluable, not prose:
  * PRD §15's "no Anthropic model may use API credits, Nous, or OpenRouter
  * for this program" is expressed as `{ modelFamily: 'anthropic',
- * forbiddenTransports: ['api-credits', 'nous', 'openrouter'] }`, which the
- * P2 admission-control layer can evaluate directly against a candidate's
- * `(model, transport)` pair instead of parsing `description`.
+ * forbiddenTransports: ['prepaid', 'metered-api'] }` (Nous/OpenRouter are
+ * `prepaid`/`metered-api` RoutingTransport instances, not lane strings --
+ * see RoutingCandidate's own doc comment), which the P2 admission-control
+ * layer can evaluate directly against a candidate's own `modelFamily` +
+ * `transport` fields instead of parsing `description`. `modelFamily` and
+ * `forbiddenTransports` share RoutingCandidate's closed unions so a
+ * constraint can never name a family/transport no candidate could ever
+ * carry.
  */
 export interface RoutingPolicyHardConstraint {
   id: string;
   description: string;
-  modelFamily: string;
-  forbiddenTransports: string[];
+  modelFamily: RoutingModelFamily;
+  forbiddenTransports: RoutingTransport[];
 }
 
 /** plan §3.1/§3.2 L4: pre-run estimated-cost ceiling per stage, per-build
@@ -177,7 +250,13 @@ function isRoutingCandidate(value: unknown): value is RoutingCandidate {
     typeof value.runtimeId === 'string' &&
     typeof value.model === 'string' &&
     typeof value.effort === 'string' &&
-    (ROUTING_EFFORTS as readonly string[]).includes(value.effort)
+    (ROUTING_EFFORTS as readonly string[]).includes(value.effort) &&
+    typeof value.lane === 'string' &&
+    (ROUTING_LANE_IDS as readonly string[]).includes(value.lane) &&
+    typeof value.transport === 'string' &&
+    (ROUTING_TRANSPORTS as readonly string[]).includes(value.transport) &&
+    typeof value.modelFamily === 'string' &&
+    (ROUTING_MODEL_FAMILIES as readonly string[]).includes(value.modelFamily)
   );
 }
 
@@ -190,13 +269,18 @@ function isRoutingPolicyModelTableEntry(value: unknown): value is RoutingPolicyM
   return true;
 }
 
+function isRoutingTransportArray(value: unknown): value is RoutingTransport[] {
+  return Array.isArray(value) && value.every((v) => typeof v === 'string' && (ROUTING_TRANSPORTS as readonly string[]).includes(v));
+}
+
 function isRoutingPolicyHardConstraint(value: unknown): value is RoutingPolicyHardConstraint {
   if (!isPlainObject(value)) return false;
   return (
     typeof value.id === 'string' &&
     typeof value.description === 'string' &&
     typeof value.modelFamily === 'string' &&
-    isStringArray(value.forbiddenTransports)
+    (ROUTING_MODEL_FAMILIES as readonly string[]).includes(value.modelFamily) &&
+    isRoutingTransportArray(value.forbiddenTransports)
   );
 }
 
