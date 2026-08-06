@@ -19,6 +19,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "@argos-ci/cli": "6.6.1",
     "@aws-sdk/client-s3": "3.1050.0",
     "@axe-core/playwright": "4.12.1",
     "@open-design/contracts": "workspace:*",
