@@ -31,6 +31,7 @@ function row(overrides: Partial<StoredRoutingTelemetryRow>): StoredRoutingTeleme
     runId: 'run-1',
     projectId: 'proj-1',
     attempt: 0,
+    buildId: null,
     stage: 'chat',
     templateId: null,
     designSystem: null,

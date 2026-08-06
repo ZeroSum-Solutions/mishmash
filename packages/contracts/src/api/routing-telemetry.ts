@@ -252,20 +252,37 @@ export function isRoutingMetersResponse(value: unknown): value is RoutingMetersR
  * the SAME logical run under a new attempt rather than mutating history in
  * place -- storage keys on `(runId, attempt)`, not `runId` alone, so a
  * retried run's FIRST attempt's routed-vs-observed outcome survives instead
- * of being silently overwritten by the second. `0` is the first attempt. */
+ * of being silently overwritten by the second. `0` is the first attempt.
+ *
+ * `buildId` (t6, plan §3.1/§3.2 L4 admission control): the per-build spend
+ * lookup ("per-build and per-day caps checked at every dispatch") needs to
+ * group rows by the multi-stage pipeline run they belong to (brief ->
+ * art-direction -> ... -> deploy, plan §3.3), which is NOT the same axis as
+ * either existing identifier -- `runId` is one dispatch/attempt, `projectId`
+ * is the durable managed-project a build lives under and can outlive many
+ * builds (a client asking for a redo re-runs the pipeline against the same
+ * project). Neither telemetry row identifier the P1 tranche shipped carries
+ * "which build," so this is a genuinely new, additive field (not a rename
+ * of an existing one) -- mirrors `attempt`'s own addition pattern:
+ * additive on the STORED extension only (not the wire `RoutingTelemetryRow`
+ * every run reports), nullable so pre-t6 rows and non-build-scoped work
+ * (e.g. general chat, WR-routing.md Fallback B) both migrate/insert cleanly
+ * without inventing a build identity that doesn't exist for them. */
 export interface StoredRoutingTelemetryRow extends RoutingTelemetryRow {
   projectId: string;
   attempt: number;
+  buildId: string | null;
 }
 
 export function isStoredRoutingTelemetryRow(value: unknown): value is StoredRoutingTelemetryRow {
   if (!isRoutingTelemetryRow(value)) return false;
-  const row = value as { projectId?: unknown; attempt?: unknown };
+  const row = value as { projectId?: unknown; attempt?: unknown; buildId?: unknown };
   return (
     isNonEmptyString(row.projectId) &&
     typeof row.attempt === 'number' &&
     Number.isInteger(row.attempt) &&
-    row.attempt >= 0
+    row.attempt >= 0 &&
+    (row.buildId === null || isNonEmptyString(row.buildId))
   );
 }
 

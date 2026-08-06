@@ -114,12 +114,22 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
         <h3 className={styles.sectionTitle}>Decision preview</h3>
         {decision ? (
           <div
-            className={decision.status === 'fail-closed-stop' ? styles.decisionFailClosed : styles.decisionOk}
+            className={
+              decision.status === 'fail-closed-stop' || decision.status === 'denied-admission'
+                ? styles.decisionFailClosed
+                : styles.decisionOk
+            }
             data-testid="routing-decision-status"
             data-status={decision.status}
           >
             <p className={styles.previewPlaceholder}>
-              {decision.status === 'fail-closed-stop' ? 'FAIL-CLOSED — ' : decision.status === 'error' ? 'ERROR — ' : ''}
+              {decision.status === 'fail-closed-stop'
+                ? 'FAIL-CLOSED — '
+                : decision.status === 'denied-admission'
+                  ? 'DENIED (BUDGET) — '
+                  : decision.status === 'error'
+                    ? 'ERROR — '
+                    : ''}
               {decision.rationale}
             </p>
             {decision.reasons.length > 0 ? (
@@ -131,6 +141,22 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
                   </li>
                 ))}
               </ol>
+            ) : null}
+            {decision.admissionResults.length > 0 ? (
+              <div data-testid="routing-admission-results">
+                <h4 className={styles.sectionTitle}>Admission ({decision.admissionVerdict})</h4>
+                <ul className={styles.reasonList}>
+                  {decision.admissionResults.map((r, i) => (
+                    <li key={`${r.model}-${r.lane}-${i}`} className={styles.reasonRow} data-verdict={r.verdict}>
+                      <span className={styles.reasonStep}>{r.verdict}</span>
+                      <span>
+                        {r.model}@{r.lane} ({r.estimatedCostUsd !== null ? `$${r.estimatedCostUsd.toFixed(4)}` : 'unknown cost'}) —{' '}
+                        {r.reason}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ) : null}
           </div>
         ) : (

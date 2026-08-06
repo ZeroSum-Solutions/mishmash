@@ -282,6 +282,23 @@ export interface RoutingPolicyHardConstraint {
   requiredLane?: RoutingLaneId;
 }
 
+/** plan §3.1/§3.2 L4: stream-level runaway heuristics -- CONFIG only. This
+ * type round-trips policy -> `runawayLimitsFor` accessor
+ * (apps/daemon/src/routing/admission.ts, t6); actually killing a run whose
+ * context is growing too fast, whose wall clock exceeded its ceiling, or
+ * whose retry count exceeded its ceiling is t9's dispatch-wiring job, not
+ * evaluated anywhere in this tranche. Every field optional -- a stage (or
+ * the `'default'` fallback key on `RoutingPolicyBudgetCeilings#runawayLimits`)
+ * may set only the heuristics that apply to it. */
+export interface RoutingPolicyRunawayLimits {
+  /** Alarm threshold for composed-context growth, in tokens/minute. */
+  contextGrowthAlarmTokensPerMin?: number;
+  /** Wall-clock ceiling for a single run, in milliseconds. */
+  wallClockCeilingMs?: number;
+  /** Max same-run retries before treating the run as runaway. */
+  retryCeiling?: number;
+}
+
 /** plan §3.1/§3.2 L4: pre-run estimated-cost ceiling per stage, per-build
  * and per-day caps checked at every dispatch, and a metered-lane hard
  * kill-switch flag. */
@@ -290,6 +307,28 @@ export interface RoutingPolicyBudgetCeilings {
   perBuildCapUsd: number;
   perDayCapUsd: number;
   meteredKillSwitch: boolean;
+  /**
+   * t6 addition (plan §3.1 "conservative headroom margin against provider
+   * billing lag", Grok F15): a fraction in `[0, 1)` shaved off every cap
+   * BEFORE comparison (`effectiveCap = cap * (1 - headroomFraction)`) --
+   * billed usage can arrive after a dispatch already ran, so admission
+   * control treats each cap as slightly smaller than its nominal value.
+   * Optional so the P0/P1 fixtures and every pre-t6 policy document keep
+   * validating without it; `apps/daemon/src/routing/admission.ts` treats an
+   * absent value as `0` (no margin), never as "not evaluated" -- this is a
+   * tunable safety margin, not a required config surface.
+   */
+  headroomFraction?: number;
+  /**
+   * t6 addition (plan §3.1/§3.2 L4 "stream-level runaway heuristics
+   * (context-growth alarm, wall-clock ceiling, retry ceiling)") -- CONFIG
+   * only, keyed by stage id, with an optional `'default'` key used when a
+   * routable stage has no stage-specific entry. See
+   * RoutingPolicyRunawayLimits's own doc comment for the enforcement
+   * boundary. Optional for the same backward-compatibility reason as
+   * `headroomFraction`.
+   */
+  runawayLimits?: Record<string, RoutingPolicyRunawayLimits>;
   /** Optional free-text disclosure. t3's v1 content uses this to flag that
    * the ceiling values are conservative operator-tunable placeholders --
    * the plan names no binding dollar figures, only the ceiling mechanism
@@ -504,6 +543,20 @@ function isNumberRecord(value: unknown): value is Record<string, number> {
   return isPlainObject(value) && Object.values(value).every(isFiniteNumber);
 }
 
+function isRoutingPolicyRunawayLimits(value: unknown): value is RoutingPolicyRunawayLimits {
+  if (!isPlainObject(value)) return false;
+  const optionalNonNegativeInteger = (v: unknown) => v === undefined || isFiniteNonNegativeInteger(v);
+  return (
+    optionalNonNegativeInteger(value.contextGrowthAlarmTokensPerMin) &&
+    optionalNonNegativeInteger(value.wallClockCeilingMs) &&
+    optionalNonNegativeInteger(value.retryCeiling)
+  );
+}
+
+function isRunawayLimitsRecord(value: unknown): value is Record<string, RoutingPolicyRunawayLimits> {
+  return isPlainObject(value) && Object.values(value).every(isRoutingPolicyRunawayLimits);
+}
+
 function isRoutingPolicyBudgetCeilings(value: unknown): value is RoutingPolicyBudgetCeilings {
   if (!isPlainObject(value)) return false;
   return (
@@ -511,6 +564,9 @@ function isRoutingPolicyBudgetCeilings(value: unknown): value is RoutingPolicyBu
     isFiniteNumber(value.perBuildCapUsd) &&
     isFiniteNumber(value.perDayCapUsd) &&
     typeof value.meteredKillSwitch === 'boolean' &&
+    (value.headroomFraction === undefined ||
+      (isFiniteNumber(value.headroomFraction) && value.headroomFraction >= 0 && value.headroomFraction < 1)) &&
+    (value.runawayLimits === undefined || isRunawayLimitsRecord(value.runawayLimits)) &&
     (value.notes === undefined || typeof value.notes === 'string')
   );
 }

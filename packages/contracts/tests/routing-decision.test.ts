@@ -28,6 +28,7 @@ const BASE_DECISION_FIELDS = {
   reasons: [{ step: 'selection' as const, message: 'selected default on stub-lane.' }],
   contextEstimateTokens: 0,
   demotions: [],
+  admissionResults: [],
 };
 
 describe('isRoutingKey', () => {
@@ -138,10 +139,28 @@ describe('isRoutingDecision', () => {
     }
   });
 
-  it('accepts every decision status', () => {
-    for (const status of ['ok', 'fail-closed-stop', 'error'] as const) {
+  it('accepts every decision status, including the t6 denied-admission status', () => {
+    for (const status of ['ok', 'fail-closed-stop', 'error', 'denied-admission'] as const) {
       expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', status })).toBe(true);
     }
+  });
+
+  it('accepts admissionResults with entries for every candidate verdict, and rejects a malformed entry (t6)', () => {
+    const admissionResults = [
+      { runtimeId: 'claude', model: 'claude-opus-5', lane: 'claude-code-oauth', verdict: 'admit' as const, estimatedCostUsd: 0.05, reason: 'fits under every cap.' },
+      { runtimeId: 'deepseek', model: 'deepseek-v4-flash', lane: 'deepseek-direct', verdict: 'deny-stage-ceiling' as const, estimatedCostUsd: 9.99, reason: 'exceeds stage ceiling.' },
+      { runtimeId: 'kimi', model: 'moonshotai/kimi-k3', lane: 'moonshot', verdict: 'not-evaluated' as const, estimatedCostUsd: null, reason: 'no price row.' },
+    ];
+    expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', admissionResults })).toBe(true);
+    const malformedVerdict = [{ runtimeId: 'x', model: 'y', lane: 'z', verdict: 'maybe', estimatedCostUsd: null, reason: 'r' }];
+    expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', admissionResults: malformedVerdict })).toBe(false);
+    const malformedCost = [{ runtimeId: 'x', model: 'y', lane: 'z', verdict: 'admit', estimatedCostUsd: 'free', reason: 'r' }];
+    expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', admissionResults: malformedCost })).toBe(false);
+  });
+
+  it('rejects a decision missing admissionResults entirely (t6)', () => {
+    const { admissionResults: _drop, ...missing } = { ...BASE_DECISION_FIELDS, effort: 'low' as const };
+    expect(isRoutingDecision(missing)).toBe(false);
   });
 
   it('rejects an unrecognized status', () => {

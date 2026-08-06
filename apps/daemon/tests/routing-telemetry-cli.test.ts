@@ -56,6 +56,7 @@ function row(overrides: Partial<StoredRoutingTelemetryRow> = {}): StoredRoutingT
     runId: 'run-1',
     projectId: 'proj-a',
     attempt: 0,
+    buildId: null,
     stage: 'chat',
     templateId: null,
     designSystem: null,

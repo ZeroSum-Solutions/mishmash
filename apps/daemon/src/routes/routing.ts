@@ -17,7 +17,7 @@ import type {
   RoutingTelemetryListResponse,
 } from '@open-design/contracts';
 import { decideRouting, estimatePromptTokens, loadRoutingPolicy } from '../routing/index.js';
-import { computeLaneMeters, listRoutingTelemetry } from '../routing/telemetry.js';
+import { computeBuildSpendUsd, computeDaySpendUsd, computeLaneMeters, listRoutingTelemetry } from '../routing/telemetry.js';
 
 const ROUTING_DATA_CLASSIFICATIONS: readonly RoutingDataClassification[] = ['client-confidential', 'internal', 'public'];
 
@@ -113,6 +113,11 @@ interface RawDecisionPreviewInput {
   sensitivityClass: unknown;
   contextEstimateTokens: unknown;
   promptText: unknown;
+  /** t6 (plan §3.1/§3.2 L4 admission control): optional -- omit for
+   * non-build-scoped previews (general chat). When supplied, the preview
+   * engages real budget admission control (see `runDecisionPreview`'s own
+   * comment on why `db` gates this). */
+  buildId: unknown;
 }
 
 type DecisionPreviewResult =
@@ -178,8 +183,43 @@ function runDecisionPreview(raw: RawDecisionPreviewInput, db: Database.Database 
       ? { templateId, buildClass, stage, contextEstimateTokens, laneMeters: laneMetersRecord }
       : { templateId, buildClass: null, stage, contextEstimateTokens, laneMeters: laneMetersRecord };
 
-  const decision = decideRouting({ policy, key, sensitivityClass, laneMeters, taskClass });
+  // t6 (plan §3.1/§3.2 L4 admission control): only engaged when `db` is
+  // available -- the real daemon boot always passes one (see
+  // registerRoutingRoutes's own doc comment), but the bare-express test
+  // harness other routing tests already use may omit it. Without a `db`
+  // there is no spend to look up, so admission stays 'not-evaluated' the
+  // same way `/api/routing/meters` degrades to an empty array without one.
+  const buildId = queryStringOrNull(raw.buildId);
+  const decision = decideRouting({
+    policy,
+    key,
+    sensitivityClass,
+    laneMeters,
+    taskClass,
+    ...(db
+      ? {
+          admission: {
+            buildId,
+            spendLookup: {
+              buildSpentUsd: buildId !== null ? computeBuildSpendUsd(db, buildId).totalCostUsd : 0,
+              daySpentUsd: computeDaySpendUsd(db, ...utcDayWindowMs(new Date())).totalCostUsd,
+            },
+            now: new Date(),
+          },
+        }
+      : {}),
+  });
   return { status: 200, body: { key, decision } };
+}
+
+/** `[dayStartMs, dayEndMsExclusive)` for the UTC calendar day containing
+ * `now` -- the day-cap window `computeDaySpendUsd` aggregates over. A fixed,
+ * deterministic definition of "today" rather than a rolling trailing-24h
+ * window, so two previews issued moments apart against the same day agree
+ * on which rows count. */
+function utcDayWindowMs(now: Date): [number, number] {
+  const dayStartMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return [dayStartMs, dayStartMs + 24 * 60 * 60 * 1000];
 }
 
 /**
@@ -233,6 +273,7 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database): voi
         sensitivityClass: req.query.sensitivityClass,
         contextEstimateTokens: req.query.contextEstimateTokens,
         promptText: undefined,
+        buildId: req.query.buildId,
       },
       db,
     );
@@ -261,6 +302,7 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database): voi
         sensitivityClass: body.sensitivityClass,
         contextEstimateTokens: body.contextEstimateTokens,
         promptText: body.promptText,
+        buildId: body.buildId,
       },
       db,
     );

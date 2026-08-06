@@ -12,6 +12,9 @@
 
 import type http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { mkdtempSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import express from 'express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -21,6 +24,8 @@ import {
 } from '@open-design/contracts';
 
 import { registerRoutingRoutes } from '../src/routes/routing.js';
+import { closeDatabase, openDatabase } from '../src/db.js';
+import { ensureRoutingTelemetryTable } from '../src/routing/telemetry.js';
 
 let server: http.Server;
 let baseUrl: string;
@@ -284,5 +289,57 @@ describe('GET /api/routing/meters', () => {
     const body: unknown = await resp.json();
     expect(isRoutingMetersResponse(body)).toBe(true);
     expect((body as { laneMeters: unknown[] }).laneMeters).toEqual([]);
+  });
+});
+
+describe('GET /api/routing/decision/preview -- admission control engaged with a real db (t6)', () => {
+  let tempDir: string;
+  let admissionServer: http.Server;
+  let admissionBaseUrl: string;
+
+  beforeAll(async () => {
+    tempDir = mkdtempSync(path.join(os.tmpdir(), 'od-routing-preview-admission-'));
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    const app = express();
+    registerRoutingRoutes(app, db);
+    admissionServer = app.listen(0);
+    await new Promise<void>((resolve) => admissionServer.once('listening', () => resolve()));
+    admissionBaseUrl = `http://127.0.0.1:${(admissionServer.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => admissionServer.close(() => resolve()));
+    closeDatabase();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('admits a cheap dispatch and surfaces the per-candidate admissionResults', async () => {
+    const resp = await fetch(
+      `${admissionBaseUrl}/api/routing/decision/preview?taskClass=mechanical-batch&stage=chat&contextEstimateTokens=100000&buildId=build-preview-1`,
+    );
+    expect(resp.status).toBe(200);
+    const body = (await resp.json()) as {
+      decision: { status: string; admissionVerdict: string; admissionResults: Array<{ model: string; verdict: string }> };
+    };
+    expect(body.decision.status).toBe('ok');
+    expect(body.decision.admissionVerdict).toBe('admitted');
+    expect(body.decision.admissionResults.length).toBeGreaterThan(0);
+    expect(body.decision.admissionResults.at(-1)).toMatchObject({ verdict: 'admit' });
+  });
+
+  it('denies dispatch and reports "denied-admission" with a reason per denied candidate when every candidate blows the stage ceiling', async () => {
+    const resp = await fetch(
+      `${admissionBaseUrl}/api/routing/decision/preview?taskClass=mechanical-batch&stage=chat&contextEstimateTokens=8000000&buildId=build-preview-2`,
+    );
+    expect(resp.status).toBe(200);
+    const body = (await resp.json()) as {
+      decision: { status: string; admissionVerdict: string; admissionResults: Array<{ verdict: string }>; reasons: Array<{ step: string }> };
+    };
+    expect(body.decision.status).toBe('denied-admission');
+    expect(body.decision.admissionVerdict).toBe('denied');
+    expect(body.decision.admissionResults.length).toBeGreaterThan(0);
+    expect(body.decision.admissionResults.every((r) => r.verdict === 'deny-stage-ceiling')).toBe(true);
+    expect(body.decision.reasons.some((r) => r.step === 'admission-denied')).toBe(true);
   });
 });

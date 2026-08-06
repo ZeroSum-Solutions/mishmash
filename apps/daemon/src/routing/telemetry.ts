@@ -38,6 +38,7 @@ const ROUTING_TELEMETRY_CURRENT_SHAPE_DDL = `
       run_id TEXT NOT NULL,
       attempt INTEGER NOT NULL DEFAULT 0,
       project_id TEXT NOT NULL,
+      build_id TEXT,
       stage TEXT NOT NULL,
       template_id TEXT,
       design_system TEXT,
@@ -93,11 +94,11 @@ function migrateOldShapeRoutingTelemetryTable(db: Database.Database): void {
     db.exec(ROUTING_TELEMETRY_CURRENT_SHAPE_DDL.replace('routing_telemetry', 'routing_telemetry_migrated'));
     db.exec(`
       INSERT INTO routing_telemetry_migrated
-        (run_id, attempt, project_id, stage, template_id, design_system, routed_model,
+        (run_id, attempt, project_id, build_id, stage, template_id, design_system, routed_model,
          observed_model, routed_lane, observed_lane, tokens_input, tokens_output,
          tokens_cache_read_input, cache_hits, latency_ms, cost_usd, cost_estimated,
          gate_outcomes_json, escalated, policy_version, created_at, recorded_at)
-      SELECT run_id, 0, project_id, stage, template_id, design_system, routed_model,
+      SELECT run_id, 0, project_id, NULL, stage, template_id, design_system, routed_model,
          observed_model, routed_lane, observed_lane, tokens_input, tokens_output,
          tokens_cache_read_input, cache_hits, latency_ms, cost_usd, cost_estimated,
          gate_outcomes_json, escalated, policy_version, created_at, recorded_at
@@ -109,12 +110,34 @@ function migrateOldShapeRoutingTelemetryTable(db: Database.Database): void {
   migrate();
 }
 
+/** t6 addition: a data dir created against the P1-shape table (has `attempt`
+ * but predates this tranche's `build_id` column) needs a narrower migration
+ * than `migrateOldShapeRoutingTelemetryTable` -- `build_id` never
+ * participates in the primary key, so a plain `ALTER TABLE ... ADD COLUMN`
+ * (nullable, no default needed) is sufficient; no rebuild-and-copy dance.
+ * No-ops when the table doesn't exist yet (the fresh CREATE below already
+ * ships the column) or already has it. */
+function migrateMissingBuildIdColumn(db: Database.Database): void {
+  const tableExists = (
+    db
+      .prepare(`SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'routing_telemetry'`)
+      .get() as { n: number }
+  ).n;
+  if (tableExists === 0) return;
+  const columns = db.prepare(`PRAGMA table_info(routing_telemetry)`).all() as Array<{ name: string }>;
+  const hasBuildIdColumn = columns.some((c) => c.name === 'build_id');
+  if (hasBuildIdColumn) return;
+  db.exec(`ALTER TABLE routing_telemetry ADD COLUMN build_id TEXT`);
+}
+
 export function ensureRoutingTelemetryTable(db: Database.Database): void {
   migrateOldShapeRoutingTelemetryTable(db);
+  migrateMissingBuildIdColumn(db);
   db.exec(ROUTING_TELEMETRY_CURRENT_SHAPE_DDL);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_routing_telemetry_project_id ON routing_telemetry(project_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_routing_telemetry_stage ON routing_telemetry(stage)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_routing_telemetry_created_at ON routing_telemetry(created_at)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_routing_telemetry_build_id ON routing_telemetry(build_id)`);
 }
 
 /** Idempotent per `(run_id, attempt)` -- a row written at dispatch time
@@ -134,16 +157,17 @@ export function recordRoutingTelemetry(db: Database.Database, row: StoredRouting
   }
   db.prepare(
     `INSERT INTO routing_telemetry
-       (run_id, attempt, project_id, stage, template_id, design_system, routed_model,
+       (run_id, attempt, project_id, build_id, stage, template_id, design_system, routed_model,
         observed_model, routed_lane, observed_lane, tokens_input, tokens_output,
         tokens_cache_read_input, cache_hits, latency_ms, cost_usd, cost_estimated,
         gate_outcomes_json, escalated, policy_version, created_at, recorded_at)
-     VALUES (@runId, @attempt, @projectId, @stage, @templateId, @designSystem, @routedModel,
+     VALUES (@runId, @attempt, @projectId, @buildId, @stage, @templateId, @designSystem, @routedModel,
              @observedModel, @routedLane, @observedLane, @tokensInput, @tokensOutput,
              @tokensCacheReadInput, @cacheHits, @latencyMs, @costUsd, @costEstimated,
              @gateOutcomesJson, @escalated, @policyVersion, @createdAt, @recordedAt)
      ON CONFLICT(run_id, attempt) DO UPDATE SET
        project_id = excluded.project_id,
+       build_id = excluded.build_id,
        stage = excluded.stage,
        template_id = excluded.template_id,
        design_system = excluded.design_system,
@@ -170,6 +194,7 @@ interface RoutingTelemetryDbRow {
   run_id: string;
   attempt: number;
   project_id: string;
+  build_id: string | null;
   stage: string;
   template_id: string | null;
   design_system: string | null;
@@ -196,6 +221,7 @@ function rowToParams(row: StoredRoutingTelemetryRow) {
     runId: row.runId,
     attempt: row.attempt,
     projectId: row.projectId,
+    buildId: row.buildId,
     stage: row.stage,
     templateId: row.templateId,
     designSystem: row.designSystem,
@@ -232,6 +258,7 @@ function dbRowToStored(row: RoutingTelemetryDbRow): StoredRoutingTelemetryRow {
     runId: row.run_id,
     attempt: row.attempt,
     projectId: row.project_id,
+    buildId: row.build_id,
     stage: row.stage,
     templateId: row.template_id,
     designSystem: row.design_system,
@@ -256,7 +283,7 @@ function dbRowToStored(row: RoutingTelemetryDbRow): StoredRoutingTelemetryRow {
   };
 }
 
-const ROUTING_TELEMETRY_SELECT_COLS = `run_id, attempt, project_id, stage, template_id, design_system, routed_model,
+const ROUTING_TELEMETRY_SELECT_COLS = `run_id, attempt, project_id, build_id, stage, template_id, design_system, routed_model,
   observed_model, routed_lane, observed_lane, tokens_input, tokens_output,
   tokens_cache_read_input, cache_hits, latency_ms, cost_usd, cost_estimated,
   gate_outcomes_json, escalated, policy_version, created_at, recorded_at`;
@@ -288,6 +315,11 @@ export function listRoutingTelemetryAttempts(db: Database.Database, runId: strin
 
 export interface RoutingTelemetryFilters {
   projectId?: string | undefined;
+  /** t6 addition: narrows to one build's rows -- the axis
+   * `computeBuildSpendUsd` filters on for admission control's per-build cap
+   * lookup. See `StoredRoutingTelemetryRow#buildId`'s own doc comment for
+   * why this is a distinct identifier from `projectId`/`runId`. */
+  buildId?: string | undefined;
   runId?: string | undefined;
   /** Narrows to one specific attempt; omit to match every attempt of a run
    * (the default for both `listRoutingTelemetry` and lane-meter
@@ -319,6 +351,10 @@ function buildFilterClause(filters: RoutingTelemetryFilters): { where: string; p
   if (filters.projectId !== undefined) {
     clauses.push('project_id = ?');
     params.push(filters.projectId);
+  }
+  if (filters.buildId !== undefined) {
+    clauses.push('build_id = ?');
+    params.push(filters.buildId);
   }
   if (filters.runId !== undefined) {
     clauses.push('run_id = ?');
@@ -530,6 +566,72 @@ export function computeLaneMeters(db: Database.Database, windowMs?: number): Lan
       };
       return meter;
     });
+}
+
+// ---------------------------------------------------------------------------
+// Spend lookup (t6, plan §3.1/§3.2 L4 admission control): "per-build and
+// per-day caps checked at every dispatch" needs a sum of estimated+exact
+// costs per buildId/day from this table -- daemon-side aggregation that
+// `apps/daemon/src/routing/admission.ts`'s pure `evaluateAdmission` consumes
+// as a plain `{ buildSpentUsd, daySpentUsd }` argument (that module never
+// touches SQLite itself, same "arrives as a plain argument" discipline
+// decision.ts uses for lane meters). Deliberately a NARROWER aggregation
+// than `computeLaneMeters` -- it sums `cost_usd` unconditionally (both
+// estimated and exact rows mix into one running total, per this task's own
+// brief: "estimated+exact mixing") rather than attributing by lane, and
+// reports which rule produced the total via the same cost tri-state
+// `LaneMeter#cost` already uses, for the same reason: a caller must be able
+// to tell "this total includes at least one pre-run estimate" from "every
+// dollar here is billed."
+// ---------------------------------------------------------------------------
+
+export interface RoutingSpendSnapshot {
+  totalCostUsd: number;
+  rowCount: number;
+  cost: 'exact' | 'estimated' | 'mixed';
+}
+
+function emptySpendSnapshot(): RoutingSpendSnapshot {
+  return { totalCostUsd: 0, rowCount: 0, cost: 'exact' };
+}
+
+function sumSpendRows(db: Database.Database, whereClause: string, params: readonly unknown[]): RoutingSpendSnapshot {
+  const rows = db
+    .prepare(`SELECT cost_usd, cost_estimated FROM routing_telemetry ${whereClause}`)
+    .all(...params) as Array<{ cost_usd: number; cost_estimated: number }>;
+  if (rows.length === 0) return emptySpendSnapshot();
+  let totalCostUsd = 0;
+  let sawExact = false;
+  let sawEstimated = false;
+  for (const row of rows) {
+    totalCostUsd += row.cost_usd;
+    if (row.cost_estimated === 1) sawEstimated = true;
+    else sawExact = true;
+  }
+  const cost: RoutingSpendSnapshot['cost'] = sawExact && sawEstimated ? 'mixed' : sawEstimated ? 'estimated' : 'exact';
+  return { totalCostUsd, rowCount: rows.length, cost };
+}
+
+/** Sum of every attempt's `costUsd` (estimated+exact mixed) across every row
+ * whose `buildId` matches -- the per-build cap lookup admission control
+ * checks at every dispatch. `0`/empty when the build has no rows yet (a
+ * brand-new build, or work whose routing key never carried a buildId). */
+export function computeBuildSpendUsd(db: Database.Database, buildId: string): RoutingSpendSnapshot {
+  return sumSpendRows(db, 'WHERE build_id = ?', [buildId]);
+}
+
+/** Sum of every attempt's `costUsd` (estimated+exact mixed) across every row
+ * whose `createdAt` falls in `[dayStartMs, dayEndMsExclusive)` -- the
+ * per-day cap lookup admission control checks at every dispatch. Bounds are
+ * epoch milliseconds so the caller owns the calendar-day/timezone policy
+ * (this function has no opinion on what "a day" means); `dayEndMsExclusive`
+ * is exclusive so back-to-back day windows never double-count a boundary
+ * row. */
+export function computeDaySpendUsd(db: Database.Database, dayStartMs: number, dayEndMsExclusive: number): RoutingSpendSnapshot {
+  return sumSpendRows(db, 'WHERE created_at >= ? AND created_at < ?', [
+    new Date(dayStartMs).toISOString(),
+    new Date(dayEndMsExclusive).toISOString(),
+  ]);
 }
 
 export type RoutingReconciliationStatus = 'match' | 'model-divergence' | 'lane-divergence' | 'unverified';

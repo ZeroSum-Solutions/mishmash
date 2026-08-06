@@ -46,6 +46,7 @@ describe('routing telemetry table falls under the sqlite-database archive class'
       runId: 'run-backup-1',
       projectId: 'proj-1',
       attempt: 0,
+      buildId: null,
       stage: 'chat',
       templateId: null,
       designSystem: null,

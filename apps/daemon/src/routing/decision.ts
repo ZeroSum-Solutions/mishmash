@@ -5,14 +5,21 @@
 // PURE by design: `decideRouting` takes a loaded policy + a routing key + a
 // sensitivity class + a lane-meter snapshot + a task-class identifier, and
 // returns a RoutingDecision. No I/O, no dispatch/spawn side effects (t9's
-// job), no budget/cost math or admission enforcement (t6's job --
-// `admissionVerdict` is always the typed 'not-evaluated' placeholder here),
-// no cooldown persistence (t7's job -- lane meters arrive as a plain
+// job), no cooldown persistence (t7's job -- lane meters arrive as a plain
 // argument, this module never reads or writes telemetry itself). This is
 // what makes the algorithm table-testable: every test in
 // apps/daemon/tests/routing-decision.test.ts constructs its inputs in
 // memory and asserts on the returned RoutingDecision, no daemon boot, no
 // SQLite, no network.
+//
+// t6 update (plan §3.1 budget bullet, §3.2 L4): admission control now wires
+// in through the OPTIONAL `admission` input below, via
+// `apps/daemon/src/routing/admission.ts`'s pure `evaluateAdmission` --
+// itself just as I/O-free as this module (spend numbers and the clock arrive
+// as plain arguments; this file never calls Date.now() or touches SQLite).
+// Omitting `admission` entirely reproduces the exact pre-t6 behavior
+// (`admissionVerdict: 'not-evaluated'`, `admissionResults: []`) for every
+// existing caller/test that never opts in.
 //
 // Selection algorithm (this task's brief, plan §2/§3.1/§3.2 L2):
 //   (a) resolve the §2 model-table row via match rules (task class + stage,
@@ -30,6 +37,8 @@
 import {
   isFiniteNonNegativeInteger,
   type LaneMeter,
+  type RoutingAdmissionCandidateResult,
+  type RoutingAdmissionVerdict,
   type RoutingCandidate,
   type RoutingDataClassification,
   type RoutingDecision,
@@ -45,6 +54,7 @@ import {
   type RoutingPolicyProgramAssignment,
   type RoutingTransport,
 } from '@open-design/contracts';
+import { evaluateAdmission, type AdmissionSpendLookup } from './admission.js';
 
 /** Sol review MED-2: the canonical subscription -> prepaid -> metered ->
  * local tier order (plan §2 "Lane realism"). Used to sort candidates before
@@ -93,6 +103,24 @@ export interface DecideRoutingInput {
    * threshold within that window.
    */
   maxThrottleEvents?: number;
+  /**
+   * t6 (plan §3.1/§3.2 L4 admission control): optional so every pre-t6
+   * caller/test keeps working unchanged with `admissionVerdict:
+   * 'not-evaluated'` and `admissionResults: []` (the exact old behavior).
+   * When present, `decideRouting` evaluates each already-classification-safe,
+   * non-throttled candidate via `evaluateAdmission` (in transport-tier
+   * order, same walk as the lane-throttle demotion loop) and only selects
+   * one that is admitted -- see the walk's own comment below for exactly
+   * how this composes with throttle demotion.
+   */
+  admission?: {
+    buildId: string | null;
+    spendLookup: AdmissionSpendLookup;
+    /** Injected clock, threaded straight through to `evaluateAdmission` --
+     * keeps this module free of `Date.now()` the same way `laneMeters`
+     * keeps it free of a live telemetry query. */
+    now: Date;
+  };
 }
 
 /**
@@ -282,10 +310,16 @@ function terminalDecision(args: {
    * object itself. */
   contextEstimateTokens: number;
   sensitivityClass: RoutingDataClassification;
-  status: 'fail-closed-stop' | 'error';
+  status: 'fail-closed-stop' | 'error' | 'denied-admission';
   reasons: RoutingDecisionReason[];
   demotions: RoutingLaneDemotion[];
   rationale: string;
+  /** t6: only the new 'denied-admission' terminal path passes these;
+   * every pre-existing call site (stage-validation error, no-candidates
+   * error, classification-exhausted fail-closed-stop) omits them and gets
+   * the exact pre-t6 defaults back. */
+  admissionResults?: RoutingAdmissionCandidateResult[];
+  admissionVerdict?: RoutingAdmissionVerdict;
 }): RoutingDecision {
   return {
     runtimeId: 'none',
@@ -293,7 +327,7 @@ function terminalDecision(args: {
     effort: 'inherit',
     lane: 'none',
     rationale: args.rationale,
-    admissionVerdict: 'not-evaluated',
+    admissionVerdict: args.admissionVerdict ?? 'not-evaluated',
     policyVersion: args.policy.policyVersion,
     promptComposition: [],
     sensitivityClass: args.sensitivityClass,
@@ -301,6 +335,7 @@ function terminalDecision(args: {
     reasons: args.reasons,
     contextEstimateTokens: args.contextEstimateTokens,
     demotions: args.demotions,
+    admissionResults: args.admissionResults ?? [],
   };
 }
 
@@ -496,9 +531,21 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
   // different layer's job. Demoting only within the already-filtered list
   // is what makes the (e) fail-closed guarantee below airtight: it can
   // never introduce a lane the classification filter just removed.
+  //
+  // t6: a non-throttled candidate that clears this walk is now ALSO checked
+  // against budget admission control (`evaluateAdmission`, only when the
+  // caller opted in via `input.admission`) before it is accepted as
+  // `selected` -- a denied candidate is skipped in favor of the next one in
+  // tier order (e.g. a build-cap-denied primary falls through to a cheaper
+  // `cheap` candidate that still fits), exactly the same "try the next one"
+  // shape the throttle-demotion loop already has. Every evaluated result is
+  // collected into `admissionResults` regardless of verdict, including ones
+  // for candidates ultimately skipped in favor of a later admit -- that is
+  // the "why NOT the primary" trail plan §3.2 L4's UI surfaces need.
   const tieredCandidates = sortByTransportTier(afterClassification);
   const meterByLane = new Map(laneMeters.map((m) => [m.lane, m] as const));
   const demotions: RoutingLaneDemotion[] = [];
+  const admissionResults: RoutingAdmissionCandidateResult[] = [];
   let selected: RoutingCandidate | null = null;
   for (let i = 0; i < tieredCandidates.length; i += 1) {
     const candidate = tieredCandidates[i]!;
@@ -510,13 +557,59 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
       pushReason(reasons, 'lane-throttle-demotion', `throttled:${candidate.lane}`, reason);
       continue;
     }
+    if (input.admission) {
+      const admissionResult = evaluateAdmission({
+        policy,
+        stage: key.stage,
+        taskClass,
+        candidate,
+        contextEstimateTokens: key.contextEstimateTokens,
+        buildId: input.admission.buildId,
+        spendLookup: input.admission.spendLookup,
+        now: input.admission.now,
+      });
+      admissionResults.push(admissionResult);
+      if (admissionResult.verdict !== 'admit') {
+        const next = tieredCandidates[i + 1] ?? null;
+        pushReason(
+          reasons,
+          'admission-denied',
+          `admission:${admissionResult.verdict}:${candidate.model}@${candidate.lane}`,
+          `${admissionResult.reason}${next ? ` Trying next candidate "${next.model}" on lane "${next.lane}".` : ' No candidate remains.'}`,
+        );
+        continue;
+      }
+    }
     selected = candidate;
     break;
   }
 
-  // (e) FAIL-CLOSED: demotion exhausted the (already classification-safe)
-  // list -- stop, never fall through to a candidate outside this class.
+  // (e) FAIL-CLOSED / DENIED-ADMISSION: the walk above exhausted every
+  // candidate. Two distinct terminal shapes, per this task's own brief
+  // ("fail-closed-stop still takes precedence for class exhaustion"):
+  //   - Every survivor was throttled and NONE ever reached admission
+  //     evaluation (`admissionResults` stays empty, including whenever
+  //     admission was never engaged at all) -- unchanged pre-t6
+  //     'fail-closed-stop' behavior.
+  //   - At least one survivor reached admission and was denied -- the NEW
+  //     'denied-admission' status, carrying every evaluated candidate's
+  //     verdict+reason.
   if (!selected) {
+    if (admissionResults.length > 0) {
+      const message = `every remaining candidate for sensitivity class "${sensitivityClass}" was denied by budget admission control (stage/build/day ceilings or the metered kill-switch); refusing to dispatch.`;
+      pushReason(reasons, 'admission-denied', `admission-exhausted:${sensitivityClass}`, message);
+      return terminalDecision({
+        policy,
+        contextEstimateTokens: key.contextEstimateTokens,
+        sensitivityClass,
+        status: 'denied-admission',
+        reasons,
+        demotions,
+        rationale: message,
+        admissionResults,
+        admissionVerdict: 'denied',
+      });
+    }
     const message = `every remaining candidate for sensitivity class "${sensitivityClass}" is currently throttled; refusing to fall through to an out-of-class or unlisted lane.`;
     pushReason(reasons, 'fail-closed', `throttle-exhausted:${sensitivityClass}`, message);
     return terminalDecision({
@@ -543,7 +636,7 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
     effort: selected.effort,
     lane: selected.lane,
     rationale: buildRationale(selected, demotions.length, assignment, matchedRow, taskClass),
-    admissionVerdict: 'not-evaluated',
+    admissionVerdict: input.admission ? 'admitted' : 'not-evaluated',
     policyVersion: policy.policyVersion,
     promptComposition: [],
     sensitivityClass,
@@ -551,5 +644,6 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
     reasons,
     contextEstimateTokens: key.contextEstimateTokens,
     demotions,
+    admissionResults,
   };
 }

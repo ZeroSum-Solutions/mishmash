@@ -60,11 +60,14 @@ export interface RoutingKeyWithoutBuildClass {
 export type RoutingKey = RoutingKeyWithBuildClass | RoutingKeyWithoutBuildClass;
 
 /**
- * Fail-closed admission result (plan §3.2 L2: "if all allowed lanes for a
- * [data] class are exhausted, the run stops and surfaces to the human; it
- * never falls through to a provider outside the class allowlist"). A P0
- * stub decision always reports 'admitted' with a placeholder rationale;
- * real admission control is P2 (CWR-P2-2).
+ * Coarse summary of `RoutingDecision#admissionResults` (t6, plan §3.2 L2/L4):
+ * `'admitted'` once the selected candidate itself passed admission,
+ * `'denied'` once every evaluated candidate was denied (paired with
+ * `status: 'denied-admission'`), `'not-evaluated'` when admission was never
+ * engaged for this call (see `admissionResults`'s own doc comment) --
+ * `decideRouting`'s optional `admission` input controls which of those two
+ * regimes applies. `'blocked-on-founder'` is reserved for a human-escalation
+ * outcome no current caller produces yet.
  */
 export type RoutingAdmissionVerdict = 'admitted' | 'denied' | 'blocked-on-founder' | 'not-evaluated';
 
@@ -104,6 +107,7 @@ export type RoutingDecisionReasonStep =
   | 'hard-constraint-filter'
   | 'data-classification-filter'
   | 'lane-throttle-demotion'
+  | 'admission-denied'
   | 'fail-closed'
   | 'selection'
   | 'error';
@@ -115,6 +119,7 @@ const ROUTING_DECISION_REASON_STEPS: readonly RoutingDecisionReasonStep[] = [
   'hard-constraint-filter',
   'data-classification-filter',
   'lane-throttle-demotion',
+  'admission-denied',
   'fail-closed',
   'selection',
   'error',
@@ -162,10 +167,79 @@ function isRoutingLaneDemotion(value: unknown): value is RoutingLaneDemotion {
  * through to an out-of-class candidate. `'error'` -- a structural problem
  * with the routing key itself (an unknown stage, or no §2/§15 match at all)
  * that has nothing to do with lane availability or data classification.
+ * `'denied-admission'` (t6, plan §3.1/§3.2 L4 admission control): every
+ * candidate that survived hard-constraint/classification filtering AND
+ * lane-throttle demotion was still denied by budget admission control (a
+ * stage/build/day ceiling or the metered kill-switch) -- distinct from
+ * `'fail-closed-stop'`, which is reserved for classification/throttle
+ * exhaustion where admission was never even reached for any candidate (see
+ * `decideRouting`'s own doc comment on why `'fail-closed-stop'` keeps
+ * precedence there).
  */
-export type RoutingDecisionStatus = 'ok' | 'fail-closed-stop' | 'error';
+export type RoutingDecisionStatus = 'ok' | 'fail-closed-stop' | 'error' | 'denied-admission';
 
-const ROUTING_DECISION_STATUSES: readonly RoutingDecisionStatus[] = ['ok', 'fail-closed-stop', 'error'];
+const ROUTING_DECISION_STATUSES: readonly RoutingDecisionStatus[] = ['ok', 'fail-closed-stop', 'error', 'denied-admission'];
+
+/**
+ * Granular per-candidate admission-control outcome (t6, plan §3.1/§3.2 L4)
+ * -- distinct from the coarse `RoutingAdmissionVerdict` below (which is
+ * `RoutingDecision#admissionVerdict`'s admitted/denied/blocked-on-founder/
+ * not-evaluated summary): this is what
+ * `apps/daemon/src/routing/admission.ts`'s pure `evaluateAdmission` actually
+ * returns for ONE candidate, naming exactly which ceiling denied it (or that
+ * cost admission could not be evaluated at all, e.g. no price row for the
+ * candidate's model -- "never a silent admit").
+ */
+export type RoutingAdmissionCandidateVerdict =
+  | 'admit'
+  | 'deny-stage-ceiling'
+  | 'deny-build-cap'
+  | 'deny-day-cap'
+  | 'deny-metered-killswitch'
+  | 'not-evaluated';
+
+const ROUTING_ADMISSION_CANDIDATE_VERDICTS: readonly RoutingAdmissionCandidateVerdict[] = [
+  'admit',
+  'deny-stage-ceiling',
+  'deny-build-cap',
+  'deny-day-cap',
+  'deny-metered-killswitch',
+  'not-evaluated',
+];
+
+/** One evaluated candidate's admission outcome -- carried on
+ * `RoutingDecision#admissionResults` (t6) so the preview endpoint, `od route
+ * preview --json`, and RoutingPanel can all show exactly which candidates
+ * were considered for budget admission and why each one won or lost,
+ * without re-deriving it from the generic `reasons` trail. */
+export interface RoutingAdmissionCandidateResult {
+  runtimeId: string;
+  model: string;
+  lane: string;
+  verdict: RoutingAdmissionCandidateVerdict;
+  /** Null only when `verdict === 'not-evaluated'` because no price row
+   * exists for this candidate's model (e.g. Kimi K3, which plan §2 gives no
+   * per-token price for) -- never a fabricated number. */
+  estimatedCostUsd: number | null;
+  reason: string;
+}
+
+function isRoutingAdmissionCandidateResult(value: unknown): value is RoutingAdmissionCandidateResult {
+  if (!isPlainObject(value)) return false;
+  return (
+    typeof value.runtimeId === 'string' &&
+    typeof value.model === 'string' &&
+    typeof value.lane === 'string' &&
+    typeof value.verdict === 'string' &&
+    (ROUTING_ADMISSION_CANDIDATE_VERDICTS as readonly string[]).includes(value.verdict) &&
+    (value.estimatedCostUsd === null || typeof value.estimatedCostUsd === 'number') &&
+    typeof value.reason === 'string'
+  );
+}
+
+function isRoutingAdmissionCandidateResultArray(value: unknown): value is RoutingAdmissionCandidateResult[] {
+  return Array.isArray(value) && value.every(isRoutingAdmissionCandidateResult);
+}
 
 /** One named part of the composed prompt, in composition order -- e.g.
  * `{ part: 'system' }`, `{ part: 'design-tokens' }`, `{ part: 'brief' }`.
@@ -216,6 +290,14 @@ export interface RoutingDecision {
    * walking the candidate list, in the order they occurred. Empty when the
    * head candidate was available and no demotion was needed. */
   demotions: RoutingLaneDemotion[];
+  /** t6 (plan §3.1/§3.2 L4 admission control): every candidate the engine
+   * actually evaluated for budget admission, in evaluation order -- empty
+   * when admission was never engaged for this call (the pre-t6 behavior:
+   * `decideRouting` was invoked without its optional `admission` input, or
+   * every candidate was thrown out by lane-throttle demotion before any of
+   * them reached admission evaluation). Always present (never omitted) so a
+   * consumer never has to distinguish "not evaluated" from "field absent." */
+  admissionResults: RoutingAdmissionCandidateResult[];
 }
 
 function isRoutingPromptCompositionPart(value: unknown): value is RoutingPromptCompositionPart {
@@ -291,7 +373,8 @@ export function isRoutingDecision(value: unknown): value is RoutingDecision {
     (ROUTING_DECISION_STATUSES as readonly string[]).includes(decision.status) &&
     isRoutingDecisionReasonArray(decision.reasons) &&
     isFiniteNonNegativeInteger(decision.contextEstimateTokens) &&
-    isRoutingLaneDemotionArray(decision.demotions)
+    isRoutingLaneDemotionArray(decision.demotions) &&
+    isRoutingAdmissionCandidateResultArray(decision.admissionResults)
   );
 }
 

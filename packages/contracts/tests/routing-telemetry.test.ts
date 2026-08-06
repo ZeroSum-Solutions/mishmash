@@ -217,7 +217,7 @@ describe('isLaneMeter / emptyLaneMeter', () => {
 });
 
 describe('isStoredRoutingTelemetryRow / isRoutingTelemetryListResponse', () => {
-  const STORED_ROW: StoredRoutingTelemetryRow = { ...ROW, projectId: 'proj-1', attempt: 0 };
+  const STORED_ROW: StoredRoutingTelemetryRow = { ...ROW, projectId: 'proj-1', attempt: 0, buildId: 'build-1' };
 
   it('accepts a well-formed stored row (RoutingTelemetryRow + projectId + attempt)', () => {
     expect(isStoredRoutingTelemetryRow(STORED_ROW)).toBe(true);
@@ -246,6 +246,19 @@ describe('isStoredRoutingTelemetryRow / isRoutingTelemetryListResponse', () => {
 
   it('rejects a non-integer attempt', () => {
     expect(isStoredRoutingTelemetryRow({ ...STORED_ROW, attempt: 1.5 })).toBe(false);
+  });
+
+  it('accepts a null buildId (t6: non-build-scoped work, e.g. general chat, has no build identity)', () => {
+    expect(isStoredRoutingTelemetryRow({ ...STORED_ROW, buildId: null })).toBe(true);
+  });
+
+  it('rejects a row missing buildId entirely (t6 addition)', () => {
+    const { buildId: _drop, ...missing } = STORED_ROW;
+    expect(isStoredRoutingTelemetryRow(missing)).toBe(false);
+  });
+
+  it('rejects an empty-string buildId', () => {
+    expect(isStoredRoutingTelemetryRow({ ...STORED_ROW, buildId: '' })).toBe(false);
   });
 
   it('accepts a well-shaped RoutingTelemetryListResponse envelope, including an empty page', () => {

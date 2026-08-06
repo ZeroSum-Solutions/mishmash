@@ -598,3 +598,94 @@ describe('estimatePromptTokens', () => {
     expect(estimatePromptTokens('a'.repeat(40))).toBe(10);
   });
 });
+
+describe('decideRouting -- admission control integration (t6)', () => {
+  function admissionFixturePolicy(overrides: Partial<RoutingPolicyDocument> = {}): RoutingPolicyDocument {
+    return {
+      policyVersion: 1,
+      stageVocabulary: ['chat'],
+      modelTable: [
+        {
+          match: { taskClass: 'test-class' },
+          primary: { runtimeId: 'claude', model: 'claude-opus-5', effort: 'inherit', lane: 'claude-code-oauth', transport: 'subscription-oauth', modelFamily: 'anthropic' },
+          cheap: { runtimeId: 'claude', model: 'claude-haiku-4-5', effort: 'inherit', lane: 'claude-code-oauth', transport: 'subscription-oauth', modelFamily: 'anthropic' },
+        },
+      ],
+      hardConstraints: [],
+      laneChains: {},
+      dataClassificationAllowlists: [{ classification: 'public', allowedLanes: ['claude-code-oauth'], failClosed: true }],
+      sonnetPriceRows: [],
+      otherModelPriceRows: [
+        { model: 'claude-opus-5', inputPerMillion: 5, outputPerMillion: 25 },
+        { model: 'claude-haiku-4-5', inputPerMillion: 1, outputPerMillion: 5 },
+      ],
+      budgetCeilings: { perStageEstimatedCostUsd: { chat: 1 }, perBuildCapUsd: 100, perDayCapUsd: 100, meteredKillSwitch: false },
+      ...overrides,
+    };
+  }
+
+  it('omitting the admission input reproduces the exact pre-t6 behavior (not-evaluated, empty admissionResults)', () => {
+    const decision = decideRouting({
+      policy: admissionFixturePolicy(),
+      key: keyFor({ contextEstimateTokens: 900_000 }), // opus-5 alone would cost $4.50 -- way over the $1 stage ceiling
+      sensitivityClass: 'public',
+      laneMeters: [],
+      taskClass: 'test-class',
+    });
+    expect(decision.status).toBe('ok');
+    expect(decision.modelFlag).toBe('claude-opus-5');
+    expect(decision.admissionVerdict).toBe('not-evaluated');
+    expect(decision.admissionResults).toEqual([]);
+  });
+
+  it('an admitted candidate wins: primary denied by the stage ceiling falls through to the cheap candidate that still fits', () => {
+    const decision = decideRouting({
+      policy: admissionFixturePolicy(),
+      // At 300k tokens, opus-5 (input $5/M) estimates to $1.50 -- over the
+      // $1 stage ceiling -- while haiku-4-5 (input $1/M) estimates to $0.30,
+      // still under it.
+      key: keyFor({ contextEstimateTokens: 300_000 }),
+      sensitivityClass: 'public',
+      laneMeters: [],
+      taskClass: 'test-class',
+      admission: { buildId: 'build-1', spendLookup: { buildSpentUsd: 0, daySpentUsd: 0 }, now: new Date('2026-08-05T00:00:00.000Z') },
+    });
+    expect(decision.status).toBe('ok');
+    expect(decision.modelFlag).toBe('claude-haiku-4-5');
+    expect(decision.admissionVerdict).toBe('admitted');
+    expect(decision.admissionResults.map((r) => [r.model, r.verdict])).toEqual([
+      ['claude-opus-5', 'deny-stage-ceiling'],
+      ['claude-haiku-4-5', 'admit'],
+    ]);
+    expect(decision.reasons.some((r) => r.step === 'admission-denied' && r.code?.includes('claude-opus-5'))).toBe(true);
+  });
+
+  it('all candidates denied by admission -> status "denied-admission", carrying per-candidate denial reasons', () => {
+    const decision = decideRouting({
+      policy: admissionFixturePolicy({ budgetCeilings: { perStageEstimatedCostUsd: { chat: 0.01 }, perBuildCapUsd: 100, perDayCapUsd: 100, meteredKillSwitch: false } }),
+      key: keyFor({ contextEstimateTokens: 300_000 }), // both candidates blow the $0.01 stage ceiling
+      sensitivityClass: 'public',
+      laneMeters: [],
+      taskClass: 'test-class',
+      admission: { buildId: 'build-1', spendLookup: { buildSpentUsd: 0, daySpentUsd: 0 }, now: new Date('2026-08-05T00:00:00.000Z') },
+    });
+    expect(decision.status).toBe('denied-admission');
+    expect(decision.admissionVerdict).toBe('denied');
+    expect(decision.runtimeId).toBe('none');
+    expect(decision.admissionResults).toHaveLength(2);
+    expect(decision.admissionResults.every((r) => r.verdict === 'deny-stage-ceiling')).toBe(true);
+  });
+
+  it('fail-closed-stop still takes precedence over denied-admission when every candidate is throttled before admission ever runs', () => {
+    const decision = decideRouting({
+      policy: admissionFixturePolicy(),
+      key: keyFor({ contextEstimateTokens: 0 }),
+      sensitivityClass: 'public',
+      laneMeters: [throttled('claude-code-oauth', 5)], // both candidates share this lane
+      taskClass: 'test-class',
+      admission: { buildId: 'build-1', spendLookup: { buildSpentUsd: 0, daySpentUsd: 0 }, now: new Date('2026-08-05T00:00:00.000Z') },
+    });
+    expect(decision.status).toBe('fail-closed-stop');
+    expect(decision.admissionResults).toEqual([]);
+  });
+});

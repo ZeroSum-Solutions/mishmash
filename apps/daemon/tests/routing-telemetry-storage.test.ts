@@ -35,6 +35,7 @@ function completeRow(overrides: Partial<StoredRoutingTelemetryRow> = {}): Stored
     runId: 'run-1',
     projectId: 'proj-1',
     attempt: 0,
+    buildId: null,
     stage: 'section-component-codegen',
     templateId: 'saas-landing',
     designSystem: 'ds-1',

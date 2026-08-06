@@ -526,6 +526,7 @@ const ROUTE_STRING_FLAGS = new Set([
   'sensitivity-class',
   'context-tokens',
   'prompt-file',
+  'build-id',
   'project-id',
   'run-id',
   'since-ms',
@@ -562,6 +563,11 @@ Options:
                            --context-tokens is also given. Switches preview
                            to POST so the prompt body never rides a query
                            string.
+  --build-id <id>          preview: engages real budget admission control
+                           (t6) against this build's already-recorded
+                           telemetry spend; omit for non-build-scoped work
+                           (general chat) or to leave admission
+                           not-evaluated (no daemon db registered).
   --project-id <id>        telemetry: filter by project id.
   --run-id <id>            telemetry: filter by run id.
   --since-ms <ms>          telemetry: lower bound on createdAt (epoch ms).
@@ -627,6 +633,7 @@ async function runRoute(args) {
             sensitivityClass: flags['sensitivity-class'] ? String(flags['sensitivity-class']) : undefined,
             contextEstimateTokens: flags['context-tokens'] ? Number(flags['context-tokens']) : undefined,
             promptText,
+            buildId: flags['build-id'] ? String(flags['build-id']) : undefined,
           }),
         });
       } else {
@@ -637,6 +644,7 @@ async function runRoute(args) {
         if (flags['task-class']) qs.set('taskClass', String(flags['task-class']));
         if (flags['sensitivity-class']) qs.set('sensitivityClass', String(flags['sensitivity-class']));
         if (flags['context-tokens']) qs.set('contextEstimateTokens', String(flags['context-tokens']));
+        if (flags['build-id']) qs.set('buildId', String(flags['build-id']));
         resp = await fetch(`${base}/api/routing/decision/preview?${qs.toString()}`);
       }
     } catch (err) {
@@ -649,6 +657,19 @@ async function runRoute(args) {
     const data = await resp.json();
     if (flags.json) return writeJson(data);
     console.log(`Routing decision preview [${data?.decision?.status ?? 'unknown'}]: ${data?.decision?.rationale ?? 'unknown'} (lane=${data?.decision?.lane ?? 'unknown'})`);
+    // t6: surface admission control's verdict + per-candidate denial reasons
+    // (deliverable: "Preview endpoint + CLI surface the verdict + denial
+    // reasons") -- silent when admission was never engaged (admissionVerdict
+    // stays 'not-evaluated' and admissionResults stays empty, e.g. no
+    // --build-id or the daemon has no db registered).
+    const admissionResults = Array.isArray(data?.decision?.admissionResults) ? data.decision.admissionResults : [];
+    if (admissionResults.length > 0) {
+      console.log(`Admission [${data?.decision?.admissionVerdict ?? 'unknown'}]:`);
+      for (const r of admissionResults) {
+        const cost = typeof r?.estimatedCostUsd === 'number' ? `$${r.estimatedCostUsd.toFixed(4)}` : 'unknown';
+        console.log(`  ${r?.model ?? 'unknown'}@${r?.lane ?? 'unknown'} [${r?.verdict ?? 'unknown'}] est=${cost} -- ${r?.reason ?? ''}`);
+      }
+    }
     return;
   }
 

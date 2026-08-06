@@ -12,6 +12,8 @@ export { decideRouting, estimatePromptTokens, type DecideRoutingInput } from './
 // L5 telemetry (WR wave, P1 tranche -- plan §3.2 L5, §3.1). See
 // telemetry.ts's own header for the full design rationale.
 export {
+  computeBuildSpendUsd,
+  computeDaySpendUsd,
   computeLaneMeters,
   ensureRoutingTelemetryTable,
   getRoutingTelemetryByRunId,
@@ -20,6 +22,19 @@ export {
   recordRoutingTelemetry,
   type RoutingReconciliation,
   type RoutingReconciliationStatus,
+  type RoutingSpendSnapshot,
   type RoutingTelemetryFilters,
   type RoutingTelemetryPagination,
 } from './telemetry.js';
+
+// L4 admission control (WR wave, P2 tranche -- plan §3.1 budget bullet,
+// §3.2 L4). See admission.ts's own header for the full rationale.
+export {
+  estimatedRunCostUsd,
+  evaluateAdmission,
+  maxVariationFanout,
+  runawayLimitsFor,
+  RoutingAdmissionInputError,
+  type AdmissionSpendLookup,
+  type EvaluateAdmissionInput,
+} from './admission.js';
