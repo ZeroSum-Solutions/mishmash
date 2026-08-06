@@ -168,6 +168,13 @@ describe('GET /api/routing/decision/preview', () => {
     expect(body.error.message).toContain('POST');
   });
 
+  it('rejects repeated promptText GET params (array-valued) the same way (Sol t5 confirm, M5)', async () => {
+    const resp = await fetch(`${baseUrl}/api/routing/decision/preview?promptText=a&promptText=b`);
+    expect(resp.status).toBe(400);
+    const body = (await resp.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('invalid-query-param');
+  });
+
   it('rejects a contextEstimateTokens above the 8,000,000-token bound with a 400 (Sol review MED-4)', async () => {
     const resp = await fetch(`${baseUrl}/api/routing/decision/preview?contextEstimateTokens=8000001`);
     expect(resp.status).toBe(400);

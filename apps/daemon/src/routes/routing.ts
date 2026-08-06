@@ -216,7 +216,9 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database): voi
   // param-only previews (no prompt text involved); a caller that needs
   // `promptText`-derived estimation uses POST below instead.
   app.get('/api/routing/decision/preview', (req: Request, res: Response) => {
-    if (queryStringOrNull(req.query.promptText) !== null) {
+    // Key-presence check, not a scalar check: repeated query params arrive as
+    // arrays and would bypass a string-typed rejection (Sol t5 confirm, M5).
+    if (Object.prototype.hasOwnProperty.call(req.query, 'promptText')) {
       return respondInvalidQuery(
         res,
         '`promptText` is not accepted over GET (query strings are logged in access/proxy/shell history) -- POST JSON to this same path instead.',
