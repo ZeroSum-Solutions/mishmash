@@ -18,14 +18,14 @@
       "primary": { "runtimeId": "claude", "model": "claude-sonnet-5", "effort": "inherit", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" },
       "burst": { "runtimeId": "codex", "model": "gpt-5.6-terra", "effort": "inherit", "lane": "codex-oauth", "transport": "subscription-oauth", "modelFamily": "openai" },
       "cheap": { "runtimeId": "kimi", "model": "moonshotai/kimi-k3", "effort": "inherit", "lane": "moonshot", "transport": "prepaid", "modelFamily": "moonshot" },
-      "notes": "SWE-bench cost-bend: ~75-76% at $0.07-0.55/task [PUBLISHED] -- a coding proxy only, not a design proxy (plan §2, Grok F3)."
+      "notes": "SWE-bench cost-bend: ~75–76% at $0.07–0.55/task `[PUBLISHED]` — a *coding* proxy only, not a design proxy (Grok F3)."
     },
     {
       "match": { "taskClass": "mechanical-batch" },
       "primary": { "runtimeId": "claude", "model": "claude-haiku-4-5", "effort": "inherit", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" },
       "burst": { "runtimeId": "codex", "model": "gpt-5.6-luna", "effort": "inherit", "lane": "codex-oauth", "transport": "subscription-oauth", "modelFamily": "openai" },
       "cheap": { "runtimeId": "deepseek", "model": "deepseek-v4-flash", "effort": "inherit", "lane": "deepseek-direct", "transport": "metered-api", "modelFamily": "deepseek", "dispatchValidation": { "slugRecheckAtDispatch": true } },
-      "notes": "Machine-checkable output -> cascade covers risk (plan §2)."
+      "notes": "Machine-checkable output → cascade covers risk."
     },
     {
       "match": { "taskClass": "token-distill" },
@@ -58,14 +58,14 @@
       "primary": { "runtimeId": "claude", "model": "claude-sonnet-5", "effort": "inherit", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" },
       "burst": { "runtimeId": "kimi", "model": "moonshotai/kimi-k3", "effort": "inherit", "lane": "moonshot", "transport": "prepaid", "modelFamily": "moonshot" },
       "cheap": { "runtimeId": "deepseek", "model": "deepseek-v4-flash", "effort": "inherit", "lane": "deepseek-direct", "transport": "metered-api", "modelFamily": "deepseek", "dispatchValidation": { "slugRecheckAtDispatch": true } },
-      "notes": "Route by pricing structure; never use long context as retrieval (multi-needle degrades [PUBLISHED]) -- chunk + targeted queries (plan §2). Plan §2 primary cell names 'Sonnet/Opus 5 (1M flat)' as a combined option -- represented as two rows sharing this taskClass (see the sibling row whose primary is claude-opus-5), same schema-limit noted on the review-panel rows."
+      "notes": "Route by pricing structure; never use long context as retrieval (multi-needle degrades `[PUBLISHED]`) — chunk + targeted queries."
     },
     {
       "match": { "taskClass": "long-context-ops" },
       "primary": { "runtimeId": "claude", "model": "claude-opus-5", "effort": "inherit", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" },
       "burst": { "runtimeId": "kimi", "model": "moonshotai/kimi-k3", "effort": "inherit", "lane": "moonshot", "transport": "prepaid", "modelFamily": "moonshot" },
       "cheap": { "runtimeId": "deepseek", "model": "deepseek-v4-flash", "effort": "inherit", "lane": "deepseek-direct", "transport": "metered-api", "modelFamily": "deepseek", "dispatchValidation": { "slugRecheckAtDispatch": true } },
-      "notes": "Route by pricing structure; never use long context as retrieval (multi-needle degrades [PUBLISHED]) -- chunk + targeted queries (plan §2)."
+      "notes": "Route by pricing structure; never use long context as retrieval (multi-needle degrades `[PUBLISHED]`) — chunk + targeted queries."
     },
     {
       "match": { "taskClass": "research" },
@@ -190,6 +190,7 @@
     "laneChains encodes the generic subscription-oauth -> prepaid -> metered-api fallback tier order (plan §2 'Lane realism') per starting lane. It does not itself intersect with hardConstraints -- e.g. an anthropic candidate's lane chain still lists 'nous' downstream even though the anthropic hard constraint forbids that transport. Applying hardConstraints (including allowedTransports) before ever consulting a lane chain is the P2 admission-control layer's job (out of this tranche's scope), not this policy document's.",
     "Effort fields are 'inherit' everywhere §2 names a model without a parenthetical effort -- the only §2 cell that states one is Opus 5 '(high)' for art-direction-ia-brief-analysis's primary. Do not read 'inherit' as 'low priority'; it means 'the plan is silent, so this policy does not invent a value.'",
     "Kimi K3 has no published per-token price in plan §2 -- only '1M ctx' is stated. No price row is carried for it (do not invent one); estimated-cost budgeting for Kimi-routed candidates has no policy-level anchor until a price is sourced. DeepSeek V4-Flash's $0.14/$0.28 anchor IS sourced and is at cache-miss (plan §2); one-shot ingestion work earns few cache hits (Grok F5), so cache-miss is the conservative budgeting anchor used here.",
-    "otherModelPriceRows entries omit effectiveDate: plan §2 states these as current verified anchors with no onset date, and only the two sonnetPriceRows entries carry a plan-sourced date (the 2026-08-31 boundary, plus the pre-boundary row it replaces)."
+    "otherModelPriceRows entries omit effectiveDate: plan §2 states these as current verified anchors with no onset date, and only the two sonnetPriceRows entries carry a plan-sourced date (the 2026-08-31 boundary, plus the pre-boundary row it replaces).",
+    "Plan §2's long-context-ops primary cell names 'Sonnet/Opus 5 (1M flat)' as a combined option -- represented as two modelTable rows sharing that taskClass (one with primary claude-sonnet-5, one with primary claude-opus-5), the same schema-limit noted for the review-panel rows' 'Opus 5 + GPT-5.6 Sol' combined cell. Each row's own `notes` field carries only the plan's verbatim per-row text; this schema-limit disclosure lives here instead of appended to that verbatim text."
   ]
 }

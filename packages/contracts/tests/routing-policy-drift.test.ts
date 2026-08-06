@@ -73,6 +73,16 @@ const EXPECTED_STAGES = [
 
 const SUBSCRIPTION_LANES = ['claude-code-oauth', 'codex-oauth', 'agy'] as const;
 
+// Plan §2's three load-bearing per-row notes, copied byte-for-byte from the
+// plan's table cell (only the markdown table-cell pipes are stripped -- Sol
+// review micro-fix). Any clarifying text this policy wants to add about a
+// row lives in the top-level `notes` array instead, never appended here.
+const EXPECTED_CODEGEN_NOTE =
+  'SWE-bench cost-bend: ~75–76% at $0.07–0.55/task `[PUBLISHED]` — a *coding* proxy only, not a design proxy (Grok F3).';
+const EXPECTED_MECHANICAL_NOTE = 'Machine-checkable output → cascade covers risk.';
+const EXPECTED_LONG_CONTEXT_NOTE =
+  'Route by pricing structure; never use long context as retrieval (multi-needle degrades `[PUBLISHED]`) — chunk + targeted queries.';
+
 const EXPECTED_DATA_CLASSES = ['client-confidential', 'internal', 'public'] as const;
 
 // PRD §15's binding sentence, verbatim, expressed as the machine-evaluable
@@ -227,6 +237,29 @@ describe('routing-policy.json (v1) -- every §2 task class present with non-empt
     expect(deepseekCandidates.length).toBeGreaterThan(0);
     for (const candidate of deepseekCandidates) {
       expect(candidate.dispatchValidation).toEqual({ slugRecheckAtDispatch: true });
+    }
+  });
+});
+
+describe('routing-policy.json (v1) -- three load-bearing §2 notes are byte-for-byte verbatim (drift = altered punctuation/markup or appended text)', () => {
+  it('section-component-codegen carries the exact SWE-bench-proxy note, no more, no less', () => {
+    const doc = loadPolicyDocument();
+    const row = doc.modelTable.find((entry) => entry.match.taskClass === 'section-component-codegen');
+    expect(row?.notes).toBe(EXPECTED_CODEGEN_NOTE);
+  });
+
+  it('mechanical-batch carries the exact machine-checkable-cascade note, no more, no less', () => {
+    const doc = loadPolicyDocument();
+    const row = doc.modelTable.find((entry) => entry.match.taskClass === 'mechanical-batch');
+    expect(row?.notes).toBe(EXPECTED_MECHANICAL_NOTE);
+  });
+
+  it('both long-context-ops rows carry the exact never-use-as-retrieval note, no more, no less', () => {
+    const doc = loadPolicyDocument();
+    const rows = doc.modelTable.filter((entry) => entry.match.taskClass === 'long-context-ops');
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    for (const row of rows) {
+      expect(row.notes).toBe(EXPECTED_LONG_CONTEXT_NOTE);
     }
   });
 });
