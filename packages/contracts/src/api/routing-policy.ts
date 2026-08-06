@@ -148,6 +148,13 @@ export interface RoutingPolicyModelTableEntry {
   primary: RoutingCandidate;
   burst?: RoutingCandidate;
   cheap?: RoutingCandidate;
+  /** Optional free-text row annotation -- t3 (v1 policy content) uses this
+   * for runtime-model-id mapping caveats (e.g. a plan model name vs. the
+   * actual runtime def's curated id string) and schema-limit disclosures
+   * (e.g. a plan cell naming two required parallel models where this row
+   * shape only carries one `primary`). Never machine-evaluated; a human/
+   * review-time aid only. */
+  notes?: string;
 }
 
 /** A priced model, carried with the effective date it started applying --
@@ -168,6 +175,13 @@ export interface RoutingPolicyPriceRow {
 export interface RoutingPolicyDataClassAllowlist {
   classification: RoutingDataClassification;
   allowedLanes: string[];
+  /** Fail-closed semantics (plan §3.2 L2, Sol v2-HIGH-1): when every lane in
+   * `allowedLanes` is exhausted, the run stops and surfaces to a human --
+   * it never falls through to a lane outside this list. Optional (not every
+   * historical fixture sets it) so the P0 skeleton's minimal fixtures keep
+   * validating; the v1 policy content sets it `true` on every class it
+   * ships, and the drift test asserts that explicitly. */
+  failClosed?: boolean;
 }
 
 /**
@@ -199,6 +213,11 @@ export interface RoutingPolicyBudgetCeilings {
   perBuildCapUsd: number;
   perDayCapUsd: number;
   meteredKillSwitch: boolean;
+  /** Optional free-text disclosure. t3's v1 content uses this to flag that
+   * the ceiling values are conservative operator-tunable placeholders --
+   * the plan names no binding dollar figures, only the ceiling mechanism
+   * itself (plan §3.1/§3.2 L4). Never machine-evaluated. */
+  notes?: string;
 }
 
 export interface RoutingPolicyDocument {
@@ -218,7 +237,21 @@ export interface RoutingPolicyDocument {
    * plain array so the P0 stub can ship empty-but-typed (t3 fills content).
    */
   sonnetPriceRows: RoutingPolicyPriceRow[];
+  /** Every other §2-verified priced model this policy references (Opus 5,
+   * Haiku 4.5, Fable 5, GPT-5.6 Sol/Terra/Luna, Gemini 3.1 Pro, Grok 4.5,
+   * DeepSeek V4-Flash, Kimi K3). Kept separate from `sonnetPriceRows`
+   * (whose type/doc comment scope it specifically to the two dated Sonnet
+   * rows) rather than repurposing that field for a shape it was not named
+   * for. Optional so the P0 stub and older fixtures keep validating without
+   * it. */
+  otherModelPriceRows?: RoutingPolicyPriceRow[];
   budgetCeilings: RoutingPolicyBudgetCeilings;
+  /** Top-level free-text caveats that don't fit a single row/field: open
+   * questions carried over from the plan (e.g. unconfirmed Nous-hosted Grok
+   * availability), runtime-model-id mapping notes that apply document-wide,
+   * and schema-limit disclosures. Never machine-evaluated -- a human/review
+   * aid only, same spirit as the per-row `notes` fields above. */
+  notes?: string[];
 }
 
 function isRoutingPolicyPriceRow(value: unknown): value is RoutingPolicyPriceRow {
@@ -266,6 +299,7 @@ function isRoutingPolicyModelTableEntry(value: unknown): value is RoutingPolicyM
   if (!isRoutingCandidate(value.primary)) return false;
   if (value.burst !== undefined && !isRoutingCandidate(value.burst)) return false;
   if (value.cheap !== undefined && !isRoutingCandidate(value.cheap)) return false;
+  if (value.notes !== undefined && typeof value.notes !== 'string') return false;
   return true;
 }
 
@@ -289,7 +323,8 @@ function isRoutingPolicyDataClassAllowlist(value: unknown): value is RoutingPoli
   return (
     typeof value.classification === 'string' &&
     (ROUTING_DATA_CLASSIFICATIONS as readonly string[]).includes(value.classification) &&
-    isStringArray(value.allowedLanes)
+    isStringArray(value.allowedLanes) &&
+    (value.failClosed === undefined || typeof value.failClosed === 'boolean')
   );
 }
 
@@ -307,7 +342,8 @@ function isRoutingPolicyBudgetCeilings(value: unknown): value is RoutingPolicyBu
     isNumberRecord(value.perStageEstimatedCostUsd) &&
     isFiniteNumber(value.perBuildCapUsd) &&
     isFiniteNumber(value.perDayCapUsd) &&
-    typeof value.meteredKillSwitch === 'boolean'
+    typeof value.meteredKillSwitch === 'boolean' &&
+    (value.notes === undefined || typeof value.notes === 'string')
   );
 }
 
@@ -333,7 +369,10 @@ export function isRoutingPolicyDocument(value: unknown): value is RoutingPolicyD
     doc.dataClassificationAllowlists.every(isRoutingPolicyDataClassAllowlist) &&
     Array.isArray(doc.sonnetPriceRows) &&
     doc.sonnetPriceRows.every(isRoutingPolicyPriceRow) &&
-    isRoutingPolicyBudgetCeilings(doc.budgetCeilings)
+    (doc.otherModelPriceRows === undefined ||
+      (Array.isArray(doc.otherModelPriceRows) && doc.otherModelPriceRows.every(isRoutingPolicyPriceRow))) &&
+    isRoutingPolicyBudgetCeilings(doc.budgetCeilings) &&
+    (doc.notes === undefined || isStringArray(doc.notes))
   );
 }
 

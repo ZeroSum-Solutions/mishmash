@@ -1,14 +1,153 @@
 {
-  "policyVersion": 0,
-  "modelTable": [],
-  "hardConstraints": [],
-  "laneChains": {},
-  "dataClassificationAllowlists": [],
-  "sonnetPriceRows": [],
+  "policyVersion": 1,
+  "modelTable": [
+    {
+      "match": { "taskClass": "art-direction-ia-brief-analysis" },
+      "primary": { "runtimeId": "claude", "model": "claude-opus-5", "effort": "high", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" },
+      "burst": { "runtimeId": "antigravity", "model": "Gemini 3.1 Pro (High)", "effort": "high", "lane": "agy", "transport": "subscription-oauth", "modelFamily": "google" },
+      "notes": "Design capability is unbenchmarked and provisional (plan §2 note) -- this row is expected to be revised once the L3/L5 telemetry loop (P1/P2, outside this tranche) produces real data."
+    },
+    {
+      "match": { "taskClass": "long-horizon-autonomous-builds" },
+      "primary": { "runtimeId": "claude", "model": "claude-fable-5", "effort": "xhigh", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" },
+      "burst": { "runtimeId": "claude", "model": "claude-opus-5", "effort": "high", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" },
+      "notes": "Fable 5 is Claude Code OAuth only per house lane policy + PRD §15; the anthropic hard constraint (forbiddenTransports: prepaid, metered-api) covers this model too, so no separate constraint row is needed."
+    },
+    {
+      "match": { "taskClass": "section-component-codegen" },
+      "primary": { "runtimeId": "claude", "model": "claude-sonnet-5", "effort": "medium", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" },
+      "burst": { "runtimeId": "codex", "model": "gpt-5.6-terra", "effort": "medium", "lane": "codex-oauth", "transport": "subscription-oauth", "modelFamily": "openai" },
+      "cheap": { "runtimeId": "kimi", "model": "moonshotai/kimi-k3", "effort": "medium", "lane": "moonshot", "transport": "prepaid", "modelFamily": "moonshot" }
+    },
+    {
+      "match": { "taskClass": "mechanical-batch" },
+      "primary": { "runtimeId": "claude", "model": "claude-haiku-4-5", "effort": "low", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" },
+      "burst": { "runtimeId": "codex", "model": "gpt-5.6-luna", "effort": "low", "lane": "codex-oauth", "transport": "subscription-oauth", "modelFamily": "openai" },
+      "cheap": { "runtimeId": "deepseek", "model": "deepseek-v4-flash", "effort": "low", "lane": "deepseek-direct", "transport": "metered-api", "modelFamily": "deepseek" }
+    },
+    {
+      "match": { "taskClass": "token-distill" },
+      "primary": { "runtimeId": "deepseek", "model": "deepseek-v4-flash", "effort": "medium", "lane": "deepseek-direct", "transport": "metered-api", "modelFamily": "deepseek" },
+      "burst": { "runtimeId": "kimi", "model": "moonshotai/kimi-k3", "effort": "medium", "lane": "moonshot", "transport": "prepaid", "modelFamily": "moonshot" },
+      "notes": "Operates on derived token bags only, never kit source (plan §4 rights lane) -- the ingestion pipeline, not this policy row, enforces that a licensed kit's markup/components never reach this task class."
+    },
+    {
+      "match": { "taskClass": "design-md-prose" },
+      "primary": { "runtimeId": "claude", "model": "claude-sonnet-5", "effort": "medium", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" },
+      "burst": { "runtimeId": "claude", "model": "claude-opus-5", "effort": "high", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" }
+    },
+    {
+      "match": { "taskClass": "code-adversary-review-panel" },
+      "primary": { "runtimeId": "claude", "model": "claude-opus-5", "effort": "high", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" },
+      "burst": { "runtimeId": "grok-build", "model": "grok-4.5", "effort": "high", "lane": "nous", "transport": "prepaid", "modelFamily": "xai" },
+      "cheap": { "runtimeId": "claude", "model": "claude-haiku-4-5", "effort": "low", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" },
+      "notes": "Plan §2 requires Opus 5 AND GPT-5.6 Sol as parallel required panelists, not a primary/fallback pair -- this row shape carries one `primary`, so the concern ships as two model-table rows sharing this taskClass (see the sibling row whose primary is gpt-5.6-sol). Schema limit, not an oversight."
+    },
+    {
+      "match": { "taskClass": "code-adversary-review-panel" },
+      "primary": { "runtimeId": "codex", "model": "gpt-5.6-sol", "effort": "xhigh", "lane": "codex-oauth", "transport": "subscription-oauth", "modelFamily": "openai" },
+      "burst": { "runtimeId": "grok-build", "model": "grok-4.5", "effort": "high", "lane": "nous", "transport": "prepaid", "modelFamily": "xai" },
+      "cheap": { "runtimeId": "claude", "model": "claude-haiku-4-5", "effort": "low", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" }
+    },
+    {
+      "match": { "taskClass": "long-context-ops" },
+      "primary": { "runtimeId": "claude", "model": "claude-sonnet-5", "effort": "medium", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" },
+      "burst": { "runtimeId": "kimi", "model": "moonshotai/kimi-k3", "effort": "medium", "lane": "moonshot", "transport": "prepaid", "modelFamily": "moonshot" },
+      "cheap": { "runtimeId": "deepseek", "model": "deepseek-v4-flash", "effort": "low", "lane": "deepseek-direct", "transport": "metered-api", "modelFamily": "deepseek" },
+      "notes": "Plan §2 primary cell names 'Sonnet/Opus 5 (1M flat)' as a combined option -- represented as two rows sharing this taskClass (see the sibling row whose primary is claude-opus-5), same schema-limit noted on the review-panel rows. Route by pricing structure; never use long context as retrieval (plan §2 note)."
+    },
+    {
+      "match": { "taskClass": "long-context-ops" },
+      "primary": { "runtimeId": "claude", "model": "claude-opus-5", "effort": "high", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" },
+      "burst": { "runtimeId": "kimi", "model": "moonshotai/kimi-k3", "effort": "medium", "lane": "moonshot", "transport": "prepaid", "modelFamily": "moonshot" },
+      "cheap": { "runtimeId": "deepseek", "model": "deepseek-v4-flash", "effort": "low", "lane": "deepseek-direct", "transport": "metered-api", "modelFamily": "deepseek" }
+    },
+    {
+      "match": { "taskClass": "research" },
+      "primary": { "runtimeId": "antigravity", "model": "Gemini 3.1 Pro (High)", "effort": "high", "lane": "agy", "transport": "subscription-oauth", "modelFamily": "google" },
+      "notes": "Plan §2's burst/alt for this row is 'WebSearch' -- a built-in tool, not a dispatchable model/runtime, so it cannot be expressed as a RoutingCandidate (every candidate requires runtimeId+model+lane+transport+modelFamily). Left unset rather than forcing a fake model entry; the daemon's existing WebSearch tool remains available through normal tool-use outside this policy's scope."
+    },
+    {
+      "match": { "taskClass": "visual-qa" },
+      "primary": { "runtimeId": "antigravity", "model": "Gemini 3.1 Pro (High)", "effort": "high", "lane": "agy", "transport": "subscription-oauth", "modelFamily": "google" },
+      "burst": { "runtimeId": "claude", "model": "claude-opus-5", "effort": "medium", "lane": "claude-code-oauth", "transport": "subscription-oauth", "modelFamily": "anthropic" },
+      "notes": "Advisory ship-report only (PRD §15 + plan §3.2 L3): this task class must never trigger an automatic cascade/escalation. That behavioral rule belongs to the P2 admission-control/gate-runner layer, not this policy document, which only publishes candidates."
+    }
+  ],
+  "hardConstraints": [
+    {
+      "id": "prd-15-no-anthropic-api-credits",
+      "description": "No Anthropic model may use API credits, Nous, or OpenRouter for this program.",
+      "modelFamily": "anthropic",
+      "forbiddenTransports": ["prepaid", "metered-api"]
+    },
+    {
+      "id": "prd-15-grok-via-nous-lane",
+      "description": "Grok 4.5 dispatches only through the prepaid Nous Portal lane in-program (PRD §15, plan §2). This session's OpenRouter-routed review predates program alignment and is not a standing exception; a future in-program Grok call outside the prepaid transport requires a PRD amendment (plan §6 open question 6 -- Nous-hosted Grok availability is not yet confirmed).",
+      "modelFamily": "xai",
+      "forbiddenTransports": ["subscription-oauth", "metered-api", "local"]
+    },
+    {
+      "id": "prd-15-mechanical-verification-deterministic-only",
+      "description": "Mechanical verification runs via deterministic scripts and tests, never model judgment (PRD §15). This is not one of the ten §2 task classes; it deliberately has zero RoutingCandidate entries anywhere in modelTable. The sentinel modelFamily 'other' is banned on every transport here as a machine-evaluable guarantee that no candidate may ever claim that family for this concern -- see the top-level notes for why this is the schema's closest expression of 'has no model candidates'.",
+      "modelFamily": "other",
+      "forbiddenTransports": ["subscription-oauth", "prepaid", "metered-api", "local"]
+    }
+  ],
+  "laneChains": {
+    "claude-code-oauth": ["claude-code-oauth", "nous", "moonshot", "deepseek-direct", "openrouter"],
+    "codex-oauth": ["codex-oauth", "nous", "moonshot", "deepseek-direct", "openrouter"],
+    "agy": ["agy", "nous", "moonshot", "deepseek-direct", "openrouter"],
+    "nous": ["nous", "moonshot", "deepseek-direct", "openrouter"],
+    "moonshot": ["moonshot", "deepseek-direct", "openrouter"],
+    "deepseek-direct": ["deepseek-direct", "openrouter"],
+    "openrouter": ["openrouter"]
+  },
+  "dataClassificationAllowlists": [
+    { "classification": "client-confidential", "allowedLanes": ["claude-code-oauth", "codex-oauth", "agy"], "failClosed": true },
+    { "classification": "internal", "allowedLanes": ["claude-code-oauth", "codex-oauth", "agy", "nous", "moonshot"], "failClosed": true },
+    { "classification": "public", "allowedLanes": ["claude-code-oauth", "codex-oauth", "agy", "nous", "moonshot", "deepseek-direct", "openrouter"], "failClosed": true }
+  ],
+  "sonnetPriceRows": [
+    { "model": "claude-sonnet-5", "inputPerMillion": 2, "outputPerMillion": 10, "effectiveDate": "2026-01-01" },
+    { "model": "claude-sonnet-5", "inputPerMillion": 3, "outputPerMillion": 15, "effectiveDate": "2026-08-31" }
+  ],
+  "otherModelPriceRows": [
+    { "model": "claude-opus-5", "inputPerMillion": 5, "outputPerMillion": 25, "effectiveDate": "2026-08-05" },
+    { "model": "claude-haiku-4-5", "inputPerMillion": 1, "outputPerMillion": 5, "effectiveDate": "2026-08-05" },
+    { "model": "claude-fable-5", "inputPerMillion": 10, "outputPerMillion": 50, "effectiveDate": "2026-08-05" },
+    { "model": "gpt-5.6-sol", "inputPerMillion": 5, "outputPerMillion": 30, "effectiveDate": "2026-08-05" },
+    { "model": "gpt-5.6-terra", "inputPerMillion": 2, "outputPerMillion": 12, "effectiveDate": "2026-08-05" },
+    { "model": "gpt-5.6-luna", "inputPerMillion": 0.2, "outputPerMillion": 1.2, "effectiveDate": "2026-08-05" },
+    { "model": "Gemini 3.1 Pro (High)", "inputPerMillion": 2, "outputPerMillion": 12, "effectiveDate": "2026-08-05" },
+    { "model": "grok-4.5", "inputPerMillion": 2, "outputPerMillion": 6, "effectiveDate": "2026-08-05" },
+    { "model": "deepseek-v4-flash", "inputPerMillion": 0.14, "outputPerMillion": 0.28, "effectiveDate": "2026-08-05" },
+    { "model": "moonshotai/kimi-k3", "inputPerMillion": 0.6, "outputPerMillion": 2.5, "effectiveDate": "2026-08-05" }
+  ],
   "budgetCeilings": {
-    "perStageEstimatedCostUsd": {},
-    "perBuildCapUsd": 0,
-    "perDayCapUsd": 0,
-    "meteredKillSwitch": false
-  }
+    "perStageEstimatedCostUsd": {
+      "brief-art-direction": 3,
+      "token-freeze": 1,
+      "shell-primitives": 5,
+      "section-fanout": 8,
+      "variations": 4,
+      "review-panel": 3,
+      "deploy": 1,
+      "chat": 0.5,
+      "ingestion": 2,
+      "mobile": 5
+    },
+    "perBuildCapUsd": 50,
+    "perDayCapUsd": 300,
+    "meteredKillSwitch": true,
+    "notes": "All ceilings are conservative operator-tunable placeholders -- plan §5 P1 states 'the router recommends, human confirms' and names no binding dollar figures. Revise once real telemetry (CWR-P1-2/P1-3, outside this tranche) establishes actual per-stage cost distributions."
+  },
+  "notes": [
+    "Runtime model id mapping: claude.ts's curated MODEL_OPTIONS picker still lists 4-5 generation ids (claude-opus-4-5, claude-sonnet-4-5) while apps/daemon/src/runtimes/usage-tracking.ts already prices the 5-generation ids used in this policy (claude-opus-5, claude-sonnet-5, claude-fable-5) -- the claude runtime forwards an arbitrary --model string, so this policy uses the usage-tracking convention (the actual billing-relevant id) rather than the stale picker list. The picker list needs a refresh; that is not this tranche's scope.",
+    "Runtime model id mapping: codex.ts's curated MODEL_OPTIONS picker still lists 5.5-era ids (gpt-5.5, gpt-5.4, ...) while usage-tracking.ts already prices gpt-5.6-sol/terra/luna, used in this policy for the same reason as the Claude note above.",
+    "Runtime model id mapping: apps/daemon/src/runtimes/defs/antigravity.ts has no clean slug for Gemini 3.1 Pro -- its curated model id IS its display label, 'Gemini 3.1 Pro (High)'. This policy uses that exact runtime id rather than inventing a slug like 'gemini-3.1-pro', per this task's instruction to follow the runtime's own id conventions. Gemini's >200k-token price doubling (plan §2) is not representable in the flat RoutingPolicyPriceRow shape and is recorded here as prose only.",
+    "Runtime model id mapping: apps/daemon/src/runtimes/defs/grok-build.ts's curated model list tops out at the grok-4.20 generation and has no dedicated Nous-lane runtime among the daemon's 26 runtime defs; this policy names grok-4.5 (the plan's verified anchor) and lane 'nous' as a forward declaration for when a Nous-routed dispatch path exists. Plan §6 open question 6 explicitly flags that Nous-hosted Grok availability is not yet confirmed at P0 -- this row does not resolve that question, it only encodes the intended target once it is.",
+    "The prd-15-mechanical-verification-deterministic-only hard constraint uses modelFamily 'other' banned on every transport as the closest machine-evaluable expression of 'this concern has zero model candidates' -- the RoutingPolicyHardConstraint shape has no dedicated 'excluded task class' field. As long as no real model in modelTable ever carries modelFamily 'other' (none does here), the constraint holds trivially and by construction.",
+    "laneChains encodes the generic subscription-oauth -> prepaid -> metered-api fallback tier order (plan §2 'Lane realism') per starting lane. It does not itself intersect with hardConstraints -- e.g. an anthropic candidate's lane chain still lists 'nous' downstream even though the anthropic hard constraint forbids that transport. Applying hardConstraints before ever consulting a lane chain is the P2 admission-control layer's job (out of this tranche's scope), not this policy document's."
+  ]
 }

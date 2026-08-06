@@ -91,7 +91,9 @@ describe('od route <policy|preview|meters> --json against a live route', () => {
     expect(stderr).toBe('');
     expect(code).toBe(0);
     const parsed = JSON.parse(stdout) as { policyVersion: number };
-    expect(parsed.policyVersion).toBe(0);
+    // v1 policy content landed (CWR-P1-1) -- see
+    // packages/contracts/tests/routing-policy-drift.test.ts.
+    expect(parsed.policyVersion).toBe(1);
   });
 
   it('od route preview --json forwards --template-id/--build-class/--stage as query params', async () => {

@@ -38,8 +38,14 @@ describe('GET /api/routing/policy', () => {
     const body: unknown = await resp.json();
     expect(isRoutingPolicyResponse(body)).toBe(true);
     const response = body as { policyVersion: number; policy: { modelTable: unknown[]; hardConstraints: unknown[] } };
-    expect(response.policyVersion).toBe(0);
-    expect(response.policy).toMatchObject({ policyVersion: 0, modelTable: [], hardConstraints: [] });
+    // v1 policy content landed (CWR-P1-1): routing-policy.json now carries
+    // the real §2 model table + PRD §15 hard constraints, so this is no
+    // longer the empty P0 stub -- see
+    // packages/contracts/tests/routing-policy-drift.test.ts for the actual
+    // content assertions this route's response only has to echo faithfully.
+    expect(response.policyVersion).toBe(1);
+    expect(response.policy.modelTable.length).toBeGreaterThan(0);
+    expect(response.policy.hardConstraints.length).toBeGreaterThan(0);
   });
 });
 
@@ -55,7 +61,10 @@ describe('GET /api/routing/decision/preview', () => {
     };
     expect(response.key).toMatchObject({ templateId: 't1', buildClass: 'landing-page', stage: 'prototype' });
     expect(response.decision.rationale).toBe('policy-stub-v0');
-    expect(response.decision.policyVersion).toBe(0);
+    // currentRoutingPolicyVersion() now reads the v1 policy (CWR-P1-1); the
+    // decision *content* itself is still the P2 stub -- only the echoed
+    // version number tracks the loaded policy document.
+    expect(response.decision.policyVersion).toBe(1);
     expect(response.decision.admissionVerdict).toBe('admitted');
     expect(response.decision.promptComposition).toEqual([]);
     expect(response.decision.sensitivityClass).toBe('client-confidential');
