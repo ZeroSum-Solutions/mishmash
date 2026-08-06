@@ -203,7 +203,13 @@ fix-round-2, point A.4; hardcoded-map fix-round-3, finding 2).
 |---|---|---|
 | P0 | complete | CWR-P0-1, CWR-P0-2, CWR-P0-3, CWR-P0-4, LEASE, LEASE-INTEGRITY, HEAD-DRIFT, BYTE-PRESERVE, GATE-INTEGRITY, CWR-P2-5, PRE-LANDING-SCOPE |
 | P1 | open | CWR-P1-1, CWR-P1-2, CWR-P1-3 |
-| P2 | open | CWR-P2-1, CWR-P2-2, CWR-P2-3, CWR-P2-4 |
+| P2 | complete | CWR-P2-1, CWR-P2-2, CWR-P2-3, CWR-P2-4 |
+
+P1 remains `open` solely because CWR-P1-3's frozen probe requires a `routingPolicyVersion`
+reference in `apps/daemon/src/backup/create.ts`, which sits outside the WR lease — a governance
+amendment (blocked-on-founder, drafted alongside this wave's landing) must extend the lease before
+a WR tranche can satisfy it. CWR-P1-1 and CWR-P1-2 already pass; P1 flips in the follow-up tranche
+after the amendment lands.
 
 **Grading rule (fix-round-1, HIGH-3, replacing the removed `skip` status):** every criterion in
 every tranche is graded `pass`, `fail`, or `blocked-on-founder` on every verifier run — there is no
