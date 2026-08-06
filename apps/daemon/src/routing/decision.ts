@@ -36,6 +36,7 @@
 //       through to an out-of-class or unlisted candidate.
 import {
   isFiniteNonNegativeInteger,
+  ROUTING_TRANSPORT_TIER as TRANSPORT_TIER,
   type LaneMeter,
   type RoutingAdmissionCandidateResult,
   type RoutingAdmissionVerdict,
@@ -53,7 +54,6 @@ import {
   type RoutingPolicyHardConstraint,
   type RoutingPolicyModelTableEntry,
   type RoutingPolicyProgramAssignment,
-  type RoutingTransport,
 } from '@open-design/contracts';
 import { evaluateAdmission, type AdmissionSpendLookup } from './admission.js';
 import { findActiveCooldown } from './reliability.js';
@@ -66,19 +66,20 @@ import { findActiveCooldown } from './reliability.js';
  * can't by itself tell two same-tier lanes apart; `transport` already
  * carries exactly that grouping on every candidate).
  *
- * Exported (t7): `apps/daemon/src/routing/reliability.ts`'s
- * `laneFallbackChain` reads `policy.laneChains` directly rather than
- * recomputing a tier order at runtime (that JSON is already authored in
- * tier order), so this constant's only OTHER consumer is
- * `routing-reliability.test.ts`, which cross-checks that `policy.laneChains`'
- * ordering is actually consistent with this same map -- one source of truth
- * for "what tier order means," never a second hardcoded copy. */
-export const TRANSPORT_TIER: Record<RoutingTransport, number> = {
-  'subscription-oauth': 0,
-  prepaid: 1,
-  'metered-api': 2,
-  local: 3,
-};
+ * t7 fix-round (Sol MED-6/MED-7): this used to be a LOCAL const declared and
+ * exported from this file. It now lives in `@open-design/contracts`
+ * (`ROUTING_TRANSPORT_TIER`) instead, because contracts' own
+ * `isLaneChains` guard (routing-policy.ts) needs the SAME tier order to
+ * validate `policy.laneChains` tier-monotonicity, and a pure-TypeScript
+ * contract file cannot import from this daemon-only module. Re-exported
+ * here under the original `TRANSPORT_TIER` name so every existing call
+ * site in this file (and `routing-reliability.test.ts`'s cross-check
+ * import) keeps working unchanged -- one source of truth, two names for
+ * the same value, never two separately-maintained maps -- `TRANSPORT_TIER`
+ * is imported-and-aliased above (not redeclared), then re-exported here so
+ * both this file's own call sites and external consumers resolve the
+ * identical binding. */
+export { TRANSPORT_TIER };
 
 export interface DecideRoutingInput {
   policy: RoutingPolicyDocument;
@@ -371,9 +372,17 @@ function pushReason(reasons: RoutingDecisionReason[], step: RoutingDecisionReaso
   reasons.push({ step, code, message });
 }
 
+/**
+ * t7 fix-round (Sol MED-7): the two demotion causes are counted and named
+ * SEPARATELY -- a mixed run (one throttle demotion, one cooldown demotion)
+ * must never read as "2 throttle demotion(s)", which the pre-fix-round
+ * single `demotionCount` parameter (backed by `demotions.length`,
+ * conflating both causes) would have produced.
+ */
 function buildRationale(
   selected: RoutingCandidate,
-  demotionCount: number,
+  throttleDemotionCount: number,
+  cooldownDemotionCount: number,
   assignment: RoutingPolicyProgramAssignment | null,
   matchedRow: RoutingPolicyModelTableEntry | null,
   taskClass: string | null,
@@ -383,7 +392,10 @@ function buildRationale(
     : matchedRow
       ? `§2 task class "${taskClass}" resolved`
       : 'no §2/§15 match';
-  const demotionNote = demotionCount > 0 ? ` after ${demotionCount} throttle demotion(s)` : '';
+  const demotionParts: string[] = [];
+  if (throttleDemotionCount > 0) demotionParts.push(`${throttleDemotionCount} throttle demotion(s)`);
+  if (cooldownDemotionCount > 0) demotionParts.push(`${cooldownDemotionCount} cooldown demotion(s)`);
+  const demotionNote = demotionParts.length > 0 ? ` after ${demotionParts.join(', ')}` : '';
   return `${origin} to ${selected.model} on lane "${selected.lane}"${demotionNote}.`;
 }
 
@@ -725,7 +737,7 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
     modelFlag: selected.model,
     effort: selected.effort,
     lane: selected.lane,
-    rationale: buildRationale(selected, demotions.length, assignment, matchedRow, taskClass),
+    rationale: buildRationale(selected, throttleDemotionCount, cooldownDemotionCount, assignment, matchedRow, taskClass),
     admissionVerdict: input.admission ? 'admitted' : 'not-evaluated',
     policyVersion: policy.policyVersion,
     promptComposition: [],

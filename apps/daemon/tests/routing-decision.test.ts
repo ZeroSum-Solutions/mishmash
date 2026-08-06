@@ -242,6 +242,10 @@ describe('decideRouting -- throttle demotion', () => {
       { fromLane: 'claude-code-oauth', toLane: 'codex-oauth', reason: expect.stringContaining('throttle event') },
     ]);
     expect(decision.reasons.some((r) => r.step === 'lane-throttle-demotion' && r.code === 'throttled:claude-code-oauth')).toBe(true);
+    // t7 fix-round (Sol MED-7 regression guard): a pure-throttle demotion
+    // must still read as "throttle demotion", never mislabeled "cooldown".
+    expect(decision.rationale).toContain('throttle demotion');
+    expect(decision.rationale).not.toContain('cooldown demotion');
   });
 
   it('a throttleEvents count at or below maxThrottleEvents does not demote', () => {
@@ -281,6 +285,12 @@ describe('decideRouting -- cooldown demotion (t7)', () => {
     ]);
     expect(decision.reasons.some((r) => r.step === 'lane-cooldown-demotion')).toBe(true);
     expect(decision.reasons.some((r) => r.step === 'lane-throttle-demotion')).toBe(false);
+    // t7 fix-round (Sol MED-7): the rationale must name the demotion by its
+    // real cause -- a cooldown-only demotion must say "cooldown demotion",
+    // never "throttle demotion" (the two counts were previously conflated
+    // via a single shared `demotions.length`).
+    expect(decision.rationale).toContain('cooldown demotion');
+    expect(decision.rationale).not.toContain('throttle demotion');
   });
 
   it('a cooled RUNTIME (not just a lane) also demotes its candidate', () => {

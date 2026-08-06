@@ -190,7 +190,17 @@ function runDecisionPreview(raw: RawDecisionPreviewInput, db: Database.Database 
   // harness other routing tests already use may omit it. Without a `db`
   // there is no spend to look up, so admission stays 'not-evaluated' the
   // same way `/api/routing/meters` degrades to an empty array without one.
+  //
+  // t7 fix-round (Sol MED-3): the preview endpoint engaged admission control
+  // but never cooldown -- a candidate could be actively cooling (plan §3.2
+  // L1) and the preview would still show it as freely selectable, since
+  // `decideRouting`'s optional `cooldown` input was never populated here.
+  // One timestamped `computeCooldownStatuses` snapshot per request, the same
+  // "arrives as a plain argument" shape `admission`/`laneMeters` already
+  // use -- gated on `db` for the identical reason admission is (no db, no
+  // cooldown table to query).
   const buildId = queryStringOrNull(raw.buildId);
+  const now = new Date();
   const decision = decideRouting({
     policy,
     key,
@@ -206,8 +216,9 @@ function runDecisionPreview(raw: RawDecisionPreviewInput, db: Database.Database 
               buildSpentUsd: buildId !== null ? computeBuildSpendUsd(db, buildId).totalCostUsd : 0,
               daySpentUsd: computeDaySpendUsd(db, ...utcDayWindowMs(new Date())).totalCostUsd,
             },
-            now: new Date(),
+            now,
           },
+          cooldown: { statuses: computeCooldownStatuses(db, resolveCooldownConfig(policy), now) },
         }
       : {}),
   });

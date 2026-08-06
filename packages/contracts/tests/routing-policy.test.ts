@@ -5,8 +5,11 @@ import {
   isRoutingPolicyDocument,
   isRoutingPolicyResponse,
   isStringArray,
+  ROUTING_LANE_TRANSPORT,
+  ROUTING_TRANSPORT_TIER,
   type RoutingCandidate,
   type RoutingCooldownStatus,
+  type RoutingLaneId,
   type RoutingPolicyDocument,
   type RoutingPolicyHardConstraint,
 } from '../src/api/routing-policy';
@@ -120,6 +123,63 @@ describe('isRoutingPolicyDocument', () => {
     expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, laneChains: { x: [1, 2] } })).toBe(false);
     expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, laneChains: { x: 'not-an-array' } })).toBe(false);
   });
+
+  // t7 fix-round (Sol MED-6): structural laneChains validation --
+  // self-rooted, known-lanes-only, tier-monotonic.
+  it('rejects a laneChains entry that is not self-rooted (chain[0] must equal its own key)', () => {
+    expect(
+      isRoutingPolicyDocument({ ...EMPTY_POLICY, laneChains: { nous: ['moonshot', 'deepseek-direct'] } }),
+    ).toBe(false);
+  });
+
+  it('rejects a laneChains entry containing an unknown lane', () => {
+    expect(
+      isRoutingPolicyDocument({
+        ...EMPTY_POLICY,
+        laneChains: { 'claude-code-oauth': ['claude-code-oauth', 'not-a-real-lane'] },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a laneChains entry that violates tier monotonicity (stepping BACKWARD from metered to prepaid)', () => {
+    expect(
+      isRoutingPolicyDocument({ ...EMPTY_POLICY, laneChains: { 'deepseek-direct': ['deepseek-direct', 'nous'] } }),
+    ).toBe(false);
+  });
+
+  it('rejects an empty-array laneChains entry (no self-root possible)', () => {
+    expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, laneChains: { nous: [] } })).toBe(false);
+  });
+
+  it('accepts a tier-monotonic multi-tier chain spanning subscription -> prepaid -> metered', () => {
+    expect(
+      isRoutingPolicyDocument({
+        ...EMPTY_POLICY,
+        laneChains: { 'claude-code-oauth': ['claude-code-oauth', 'nous', 'deepseek-direct'] },
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts same-tier repeats (nous then moonshot, both prepaid) -- monotonicity allows non-decreasing, not strictly increasing', () => {
+    expect(
+      isRoutingPolicyDocument({
+        ...EMPTY_POLICY,
+        laneChains: { 'claude-code-oauth': ['claude-code-oauth', 'nous', 'moonshot'] },
+      }),
+    ).toBe(true);
+  });
+
+  // Sol MED-6's "fix routing-policy.json if any current chain violates" is
+  // verified indirectly, not by reaching across the package boundary into
+  // apps/daemon/src/routing/routing-policy.json from this pure-TypeScript
+  // contracts test suite: `apps/daemon/src/routing/policy.ts`'s
+  // `loadRoutingPolicy()` runs the REAL shipped document through this exact
+  // `isRoutingPolicyDocument` guard (throwing if it fails), and every daemon
+  // routing test that calls `loadRoutingPolicy()` (e.g.
+  // routing-decision.test.ts's `const realPolicy = loadRoutingPolicy();` at
+  // module scope) already exercises that check on every test run -- a
+  // violation in the real laneChains content would fail the ENTIRE daemon
+  // routing suite at import time, not just a single assertion here.
 
   it('accepts a price row with no effectiveDate -- optional (Sol review MED-3b: not every §2-verified price has a plan-sourced onset date)', () => {
     const accepted = {
@@ -410,6 +470,29 @@ describe('isRoutingPolicyDocument', () => {
   it('accepts a fractional factor (e.g. 1.5x growth is a legitimate backoff multiplier)', () => {
     expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, cooldownPolicy: { baseMs: 5000, factor: 1.5, maxMs: 300000 } })).toBe(true);
   });
+
+  // t7 fix-round (Sol MED-5): tightened boundaries -- baseMs must be
+  // STRICTLY positive, factor must be >= 1 (not merely positive), and maxMs
+  // must be >= baseMs.
+  it('rejects a zero baseMs -- a zero base collapses the very first cooldown window to 0', () => {
+    expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, cooldownPolicy: { baseMs: 0, factor: 2, maxMs: 300000 } })).toBe(false);
+  });
+
+  it('rejects a factor between 0 and 1 -- that would SHRINK the window per consecutive failure, not grow it', () => {
+    expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, cooldownPolicy: { baseMs: 5000, factor: 0.5, maxMs: 300000 } })).toBe(false);
+  });
+
+  it('accepts a factor of exactly 1 (a constant, non-growing cooldown window is legal, just not exponential)', () => {
+    expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, cooldownPolicy: { baseMs: 5000, factor: 1, maxMs: 300000 } })).toBe(true);
+  });
+
+  it('rejects a maxMs below baseMs -- the cap can never undercut the base window it is supposed to bound', () => {
+    expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, cooldownPolicy: { baseMs: 5000, factor: 2, maxMs: 4999 } })).toBe(false);
+  });
+
+  it('accepts maxMs exactly equal to baseMs (inclusive boundary -- no growth headroom, but coherent)', () => {
+    expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, cooldownPolicy: { baseMs: 5000, factor: 2, maxMs: 5000 } })).toBe(true);
+  });
 });
 
 describe('isRoutingCooldownStatus (t7, plan §3.2 L1)', () => {
@@ -503,5 +586,21 @@ describe('isPlainObject / isStringArray (shared structural guards)', () => {
   it('isStringArray rejects a mixed-type array', () => {
     expect(isStringArray(['a', 1])).toBe(false);
     expect(isStringArray(['a', 'b'])).toBe(true);
+  });
+});
+
+// t7 fix-round (Sol MED-6): the canonical tier order and the static
+// lane->transport fact `isLaneChains` validates against -- moved here from
+// apps/daemon/src/routing/decision.ts so the guard above and the decision
+// engine's own demotion-walk sort share one constant.
+describe('ROUTING_TRANSPORT_TIER / ROUTING_LANE_TRANSPORT', () => {
+  it('every RoutingLaneId has a transport assignment, and the tier order is subscription < prepaid < metered < local', () => {
+    expect(ROUTING_TRANSPORT_TIER['subscription-oauth']).toBeLessThan(ROUTING_TRANSPORT_TIER.prepaid);
+    expect(ROUTING_TRANSPORT_TIER.prepaid).toBeLessThan(ROUTING_TRANSPORT_TIER['metered-api']);
+    expect(ROUTING_TRANSPORT_TIER['metered-api']).toBeLessThan(ROUTING_TRANSPORT_TIER.local);
+    const lanes: RoutingLaneId[] = ['claude-code-oauth', 'codex-oauth', 'agy', 'nous', 'moonshot', 'deepseek-direct', 'openrouter'];
+    for (const lane of lanes) {
+      expect(ROUTING_LANE_TRANSPORT[lane]).toBeDefined();
+    }
   });
 });

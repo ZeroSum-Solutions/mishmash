@@ -93,6 +93,27 @@ export function ensureRoutingCooldownsTable(db: Database.Database): void {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_routing_cooldowns_scope_type ON routing_cooldowns(scope_type)`);
 }
 
+/**
+ * t7 fix-round (Sol LOW-8): a clear, named failure for a read path called
+ * against a db that never had its table migrated -- distinct from letting
+ * `better-sqlite3`'s own `SqliteError: no such table: X` surface unadorned
+ * (still fails loudly, just without the actionable "call ensure...Table at
+ * startup" pointer). Table creation belongs ONLY at daemon startup
+ * (`apps/daemon/src/server.ts`) and in test setups that need one -- NOT
+ * self-ensured on this hot read path (see `computeCooldownStatuses`'s own
+ * comment for why that self-ensure was removed).
+ */
+function assertTableExists(db: Database.Database, tableName: string, callerFnName: string): void {
+  const exists = (
+    db.prepare(`SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = ?`).get(tableName) as { n: number }
+  ).n;
+  if (exists === 0) {
+    throw new Error(
+      `${callerFnName}: table "${tableName}" does not exist -- call ensureRoutingCooldownsTable(db) at daemon startup (or in this test's setup) before calling ${callerFnName}.`,
+    );
+  }
+}
+
 interface RoutingCooldownDbRow {
   scope_type: RoutingCooldownScopeType;
   scope_id: string;
@@ -149,11 +170,21 @@ export function resolveCooldownConfig(policy: RoutingPolicyDocument): RoutingPol
  * for `consecutiveFailures <= 0` (no window to speak of). Pure arithmetic,
  * no clock involved -- `isInCooldown` below is the only place this combines
  * with an injected `now`.
+ *
+ * t7 fix-round (Sol MED-5): `Math.round` at the very end -- `factor` may be
+ * a fractional operator-tunable value (e.g. `1.5`), and `baseMs *
+ * factor^n` for a fractional `factor` is generally NOT an integer. A
+ * fractional millisecond window is meaningless (every consumer -- the
+ * expiry-instant arithmetic below, `RoutingCooldownStatus#remainingMs` --
+ * treats this as a whole-millisecond duration), so this rounds once, here,
+ * rather than leaving every caller to remember to. Rounds AFTER the
+ * `Math.min` cap so a rounded-up raw value can never exceed the (already
+ * integer, per policy validation) `maxMs` cap.
  */
 export function computeCooldownWindowMs(consecutiveFailures: number, config: RoutingPolicyCooldownConfig): number {
   if (!Number.isFinite(consecutiveFailures) || consecutiveFailures <= 0) return 0;
   const raw = config.baseMs * config.factor ** (Math.floor(consecutiveFailures) - 1);
-  return Math.min(raw, config.maxMs);
+  return Math.round(Math.min(raw, config.maxMs));
 }
 
 function scopeLabel(scopeType: RoutingCooldownScopeType, scopeId: string): string {
@@ -309,15 +340,15 @@ export function clearOnSuccess(db: Database.Database, runtimeId: string, lane: s
  * an empty `laneMeters` list (nothing to report), not a fabricated
  * always-healthy row per known lane/runtime. */
 export function computeCooldownStatuses(db: Database.Database, config: RoutingPolicyCooldownConfig, now: Date): RoutingCooldownStatus[] {
-  // Self-ensuring (unlike telemetry.ts's read paths, which trust a single
-  // startup `ensureRoutingTelemetryTable` call): this is the function the
-  // live `/api/routing/meters` route calls unconditionally whenever a db is
-  // present, including test harnesses that construct a bare-express app
-  // with a real db but never call `ensureRoutingCooldownsTable` themselves
-  // (this table is brand new -- no pre-t7 test could have known to). A
-  // repeated `CREATE TABLE IF NOT EXISTS` is a cheap no-op once the table
-  // already exists, so this costs nothing on the hot path.
-  ensureRoutingCooldownsTable(db);
+  // t7 fix-round (Sol LOW-8): SELECT-only -- this is a hot read path (the
+  // live `/api/routing/meters` route and the decision-preview route both
+  // call it on every request), and a DDL statement (even a cheap `CREATE
+  // TABLE IF NOT EXISTS`) does not belong on a read path a caller might
+  // invoke thousands of times a minute. Table creation is the sole
+  // responsibility of `apps/daemon/src/server.ts`'s startup sequence (and,
+  // in tests, whichever setup constructs the db) -- see
+  // `assertTableExists`'s own doc comment for the resulting failure mode.
+  assertTableExists(db, 'routing_cooldowns', 'computeCooldownStatuses');
   const rows = db
     .prepare(
       `SELECT scope_type, scope_id, category, consecutive_failures, last_failure_at
@@ -397,11 +428,39 @@ export function nextLaneInChain(policy: RoutingPolicyDocument, fromLane: string)
 // Non-redispatchable side-effect marking (plan §3.1)
 // ---------------------------------------------------------------------------
 
+/**
+ * t7 fix-round (Sol MED-4): normalized to ONE ROW PER (run_id, kind), not a
+ * single `kinds_json` blob column. The original blob shape required
+ * `markRunSideEffects` to READ the current JSON array, merge the new kinds
+ * in, and WRITE the merged array back -- a read/merge/overwrite cycle that
+ * loses an update whenever two connections race it: both read the same
+ * "before" state, both compute a merge that's missing the other's kind, and
+ * whichever write lands second silently discards the first connection's
+ * kind. Normalizing to one row per kind makes every write an independent
+ * `INSERT OR IGNORE` keyed on `(run_id, kind)` -- monotonic BY
+ * CONSTRUCTION: two connections marking DIFFERENT kinds for the same run
+ * each insert their own row and never touch the other's, and two
+ * connections racing to mark the SAME kind both succeed (`OR IGNORE` turns
+ * the second, redundant insert into a no-op) rather than one silently
+ * overwriting the other. There is deliberately no UPDATE/DELETE path here --
+ * once a row exists, it exists forever (plan §3.1: "never automatic
+ * re-run"), so there is no unmark operation to race against in the first
+ * place.
+ *
+ * This table was introduced in this same tranche and has never landed to
+ * `main` in its previous (`kinds_json` blob) shape, so this is a direct
+ * schema replacement, not a migration -- `ensureRoutingRunSideEffectsTable`
+ * stays idempotent (`CREATE TABLE IF NOT EXISTS`) the same way it always
+ * has; there is no legacy shape to detect or rebuild-copy away from (unlike
+ * `telemetry.ts`'s `migrateOldShapeRoutingTelemetryTable`, which exists
+ * precisely because ITS old shape once shipped as far as a dev data dir).
+ */
 const ROUTING_RUN_SIDE_EFFECTS_DDL = `
     CREATE TABLE IF NOT EXISTS routing_run_side_effects (
-      run_id TEXT PRIMARY KEY,
-      kinds_json TEXT NOT NULL,
-      marked_at TEXT NOT NULL
+      run_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      marked_at TEXT NOT NULL,
+      PRIMARY KEY (run_id, kind)
     )
 `;
 
@@ -409,15 +468,74 @@ export function ensureRoutingRunSideEffectsTable(db: Database.Database): void {
   db.exec(ROUTING_RUN_SIDE_EFFECTS_DDL);
 }
 
-export function getRunSideEffectKinds(db: Database.Database, runId: string): RoutingSideEffectKind[] {
-  const row = db.prepare(`SELECT kinds_json FROM routing_run_side_effects WHERE run_id = ?`).get(runId) as { kinds_json: string } | undefined;
-  if (!row) return [];
-  try {
-    const parsed: unknown = JSON.parse(row.kinds_json);
-    return Array.isArray(parsed) ? parsed.filter(isRoutingSideEffectKind) : [];
-  } catch {
-    return [];
+/**
+ * t7 fix-round (Sol HIGH-1): the three states a run's persisted side-effect
+ * record can actually be in -- `'none'` (no row at all, the common case for
+ * a run that never performed a side effect), `'valid'` (every persisted
+ * `kind` value passes the closed `RoutingSideEffectKind` vocabulary), and
+ * `'corrupt'` (at least one persisted row's `kind` does NOT pass -- e.g. a
+ * raw SQL seed, a future migration bug, on-disk corruption). The ORIGINAL
+ * (pre-fix-round) `getRunSideEffectKinds` silently `.filter()`ed out any
+ * unrecognized value, which meant a corrupted record with e.g. a single
+ * garbled row read back as `[]` -- INDISTINGUISHABLE from "no side effect
+ * ever happened," which is exactly backwards: an integrity failure on a
+ * SAFETY record (plan §3.1's "escalation... requires human acknowledgment,
+ * never automatic re-run") must fail CLOSED (non-redispatchable), never
+ * silently fail open into "safe to re-run."
+ *
+ * Every persisted row's `kind` is validated by `markRunSideEffects` before
+ * it is ever written (`isRoutingSideEffectKind` filters the input), so
+ * `'corrupt'` is reachable ONLY by a write that bypassed that function
+ * entirely (a raw SQL insert, e.g. `routing-reliability.test.ts`'s HIGH-1
+ * coverage) -- normal operation can never produce it, which is exactly why
+ * a caller must not treat its absence as a real guarantee.
+ */
+type SideEffectState =
+  | { status: 'none' }
+  | { status: 'valid'; kinds: RoutingSideEffectKind[] }
+  | { status: 'corrupt'; kinds: RoutingSideEffectKind[] };
+
+interface SideEffectRawRow {
+  kind: string;
+}
+
+/**
+ * t7 fix-round (Sol HIGH-1): reads every persisted `kind` row for `runId`
+ * and partitions them by validity -- see `SideEffectState`'s own doc
+ * comment for why a single invalid row corrupts the WHOLE run's status
+ * rather than being silently dropped alongside the valid ones. Note that
+ * under the normalized (run_id, kind) schema (Sol MED-4), "a malformed
+ * `kinds_json` blob" and "a row carrying an unrecognized `kind` string" are
+ * the SAME failure mode -- there is no longer a JSON blob to garble
+ * independently of its contents, so a raw-SQL-seeded garbage string (e.g.
+ * `'{not json'`) and a raw-SQL-seeded plausible-but-wrong string (e.g.
+ * `'unknown-kind'`) both fail the identical `isRoutingSideEffectKind` check
+ * and both route through this one branch -- this is intentional
+ * consolidation, not an accidental narrowing of what HIGH-1 originally
+ * described against the pre-MED-4 blob shape.
+ */
+function readSideEffectState(db: Database.Database, runId: string): SideEffectState {
+  const rawRows = db.prepare(`SELECT kind FROM routing_run_side_effects WHERE run_id = ?`).all(runId) as SideEffectRawRow[];
+  if (rawRows.length === 0) return { status: 'none' };
+  const kinds: RoutingSideEffectKind[] = [];
+  let corrupt = false;
+  for (const rawRow of rawRows) {
+    if (isRoutingSideEffectKind(rawRow.kind)) kinds.push(rawRow.kind);
+    else corrupt = true;
   }
+  return corrupt ? { status: 'corrupt', kinds } : { status: 'valid', kinds };
+}
+
+/** The valid `RoutingSideEffectKind`s persisted for `runId` -- keeps the
+ * pre-fix-round read API shape (Sol MED-4's "keep the read API shape")
+ * despite the underlying storage/corruption-detection changes underneath
+ * it. Returns the valid subset even in the `'corrupt'` case (visibility
+ * into what WAS recorded, alongside the corruption) rather than `[]` --
+ * callers that need the fail-closed verdict use `isRedispatchable`/
+ * `getRunRedispatchability` instead of trying to infer it from this list. */
+export function getRunSideEffectKinds(db: Database.Database, runId: string): RoutingSideEffectKind[] {
+  const state = readSideEffectState(db, runId);
+  return state.status === 'none' ? [] : state.kinds;
 }
 
 /**
@@ -425,26 +543,37 @@ export function getRunSideEffectKinds(db: Database.Database, runId: string): Rou
  * §3.1: db-migration, git-push, network-call, supabase-change) -- ACCUMULATES
  * across calls (a run-boundary escalation/retry may discover a new side
  * effect on a later attempt; once ANY attempt records one, the run stays
- * non-redispatchable) rather than overwriting. Any kind failing the closed
- * `RoutingSideEffectKind` vocabulary is silently dropped (never persisted as
- * an unvalidated string); calling with zero valid kinds is a no-op -- there
- * is nothing to record, and the run stays redispatchable.
+ * non-redispatchable) via `INSERT OR IGNORE` per `(run_id, kind)` row (Sol
+ * MED-4) rather than a read/merge/overwrite cycle -- see the DDL's own doc
+ * comment for why that makes concurrent callers safe by construction. Any
+ * kind failing the closed `RoutingSideEffectKind` vocabulary is silently
+ * dropped (never persisted as an unvalidated string) -- the ONLY way an
+ * invalid `kind` value ever reaches storage is by bypassing this function
+ * (see `SideEffectState`'s own doc comment); calling with zero valid kinds
+ * is a no-op -- there is nothing to record, and the run stays redispatchable.
  */
 export function markRunSideEffects(db: Database.Database, runId: string, kinds: RoutingSideEffectKind[], now: Date): void {
   const validKinds = kinds.filter(isRoutingSideEffectKind);
   if (validKinds.length === 0) return;
-  const merged = [...new Set([...getRunSideEffectKinds(db, runId), ...validKinds])];
-  db.prepare(
-    `INSERT INTO routing_run_side_effects (run_id, kinds_json, marked_at) VALUES (@runId, @kindsJson, @now)
-       ON CONFLICT(run_id) DO UPDATE SET kinds_json = excluded.kinds_json, marked_at = excluded.marked_at`,
-  ).run({ runId, kindsJson: JSON.stringify(merged), now: now.toISOString() });
+  const nowIso = now.toISOString();
+  const insertOne = db.prepare(`INSERT OR IGNORE INTO routing_run_side_effects (run_id, kind, marked_at) VALUES (?, ?, ?)`);
+  const insertAll = db.transaction((rowsToInsert: RoutingSideEffectKind[]) => {
+    for (const kind of rowsToInsert) insertOne.run(runId, kind, nowIso);
+  });
+  insertAll(validKinds);
 }
 
-/** `true` when `runId` has never had a side effect recorded against it --
- * the redispatch-eligibility check plan §3.1 requires before any
- * run-boundary escalation re-dispatches a run. */
+/** `true` when `runId` has never had a side effect recorded against it AND
+ * its record is not corrupt -- the redispatch-eligibility check plan §3.1
+ * requires before any run-boundary escalation re-dispatches a run. t7
+ * fix-round (Sol HIGH-1): a `'corrupt'` record returns `false` -- an
+ * integrity failure on this safety record must fail CLOSED, never be
+ * silently treated as "no side effect ever happened." */
 export function isRedispatchable(db: Database.Database, runId: string): boolean {
-  return getRunSideEffectKinds(db, runId).length === 0;
+  const state = readSideEffectState(db, runId);
+  if (state.status === 'none') return true;
+  if (state.status === 'corrupt') return false;
+  return state.kinds.length === 0;
 }
 
 /** Full redispatchability status for one run -- `requiresHumanAck` is the
@@ -452,16 +581,43 @@ export function isRedispatchable(db: Database.Database, runId: string): boolean 
  * §3.1: "escalation for those requires human acknowledgment, never
  * automatic re-run") rather than making every caller re-derive it, the same
  * "never distinguish absent from empty" spirit as
- * `RoutingDecision#admissionResults`. */
+ * `RoutingDecision#admissionResults`. `reason` is a machine-checkable code
+ * for the corrupt case specifically (Sol HIGH-1: literal
+ * `'corrupt-side-effect-record'`, testable via `toBe`), and a short
+ * human-readable sentence for the two normal cases. */
 export interface RunRedispatchability {
   runId: string;
   redispatchable: boolean;
   sideEffectKinds: RoutingSideEffectKind[];
   requiresHumanAck: boolean;
+  reason: string;
 }
 
 export function getRunRedispatchability(db: Database.Database, runId: string): RunRedispatchability {
-  const sideEffectKinds = getRunSideEffectKinds(db, runId);
-  const redispatchable = sideEffectKinds.length === 0;
-  return { runId, redispatchable, sideEffectKinds, requiresHumanAck: !redispatchable };
+  const state = readSideEffectState(db, runId);
+  if (state.status === 'none') {
+    return { runId, redispatchable: true, sideEffectKinds: [], requiresHumanAck: false, reason: 'no side effects recorded for this run.' };
+  }
+  if (state.status === 'corrupt') {
+    // Fails CLOSED regardless of whatever valid kinds also happen to be
+    // present alongside the corrupt row(s) -- an integrity failure on this
+    // record can never be partially trusted.
+    return {
+      runId,
+      redispatchable: false,
+      sideEffectKinds: state.kinds,
+      requiresHumanAck: true,
+      reason: 'corrupt-side-effect-record',
+    };
+  }
+  const redispatchable = state.kinds.length === 0;
+  return {
+    runId,
+    redispatchable,
+    sideEffectKinds: state.kinds,
+    requiresHumanAck: !redispatchable,
+    reason: redispatchable
+      ? 'no side effects recorded for this run.'
+      : `run recorded external side effect(s): ${state.kinds.join(', ')}.`,
+  };
 }

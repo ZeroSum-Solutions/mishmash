@@ -19,6 +19,7 @@ import {
 
 import { closeDatabase, openDatabase } from '../src/db.js';
 import { ensureRoutingTelemetryTable, recordRoutingTelemetry } from '../src/routing/telemetry.js';
+import { ensureRoutingCooldownsTable } from '../src/routing/reliability.js';
 import { registerRoutingRoutes } from '../src/routes/routing.js';
 
 function row(overrides: Partial<StoredRoutingTelemetryRow> = {}): StoredRoutingTelemetryRow {
@@ -63,6 +64,12 @@ describe('GET /api/routing/meters -- real aggregates from telemetry', () => {
   });
 
   async function startServer(db: ReturnType<typeof openDatabase>) {
+    // t7 fix-round (Sol LOW-8): `computeCooldownStatuses` is select-only and
+    // throws a clear error if `routing_cooldowns` doesn't exist -- every
+    // test below hits GET /api/routing/meters against a real db, and t7's
+    // MED-3 fix means that route now unconditionally queries cooldown
+    // status whenever a db is present.
+    ensureRoutingCooldownsTable(db);
     const app = express();
     registerRoutingRoutes(app, db);
     server = app.listen(0);

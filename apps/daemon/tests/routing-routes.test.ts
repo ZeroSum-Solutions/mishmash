@@ -341,6 +341,11 @@ describe('GET /api/routing/decision/preview -- admission control engaged with a 
     tempDir = mkdtempSync(path.join(os.tmpdir(), 'od-routing-preview-admission-'));
     const db = openDatabase(tempDir, { dataDir: tempDir });
     ensureRoutingTelemetryTable(db);
+    // t7 fix-round (Sol MED-3 + LOW-8): the preview endpoint now
+    // unconditionally computes a cooldown snapshot whenever `db` is
+    // present, and `computeCooldownStatuses` is select-only (throws if the
+    // table is missing) -- see reliability.ts's own comments.
+    ensureRoutingCooldownsTable(db);
     const app = express();
     registerRoutingRoutes(app, db);
     admissionServer = app.listen(0);
@@ -381,5 +386,49 @@ describe('GET /api/routing/decision/preview -- admission control engaged with a 
     expect(body.decision.admissionResults.length).toBeGreaterThan(0);
     expect(body.decision.admissionResults.every((r) => r.verdict === 'deny-stage-ceiling')).toBe(true);
     expect(body.decision.reasons.some((r) => r.step === 'admission-denied')).toBe(true);
+  });
+});
+
+// t7 fix-round (Sol MED-3): GET /api/routing/decision/preview must engage
+// cooldown demotion end-to-end whenever a db is present, the same way it
+// already engages admission control -- a recorded failure should visibly
+// demote the cooled lane in a live preview response, not just in the pure
+// decideRouting unit tests.
+describe('GET /api/routing/decision/preview -- cooldown demotion engaged with a real db (t7)', () => {
+  it('a recorded failure against the primary lane demotes the preview decision to the next tier', async () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), 'od-routing-preview-cooldown-'));
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    ensureRoutingCooldownsTable(db);
+    // mechanical-batch's primary candidate is claude-haiku-4-5 on runtime
+    // "claude", lane "claude-code-oauth" (routing-policy.json) -- one
+    // recorded failure is enough to put that lane in cooldown under the
+    // default 5s base window.
+    recordObservedFailure(db, 'claude', 'claude-code-oauth', 'rate_limit', new Date());
+
+    const app = express();
+    registerRoutingRoutes(app, db);
+    const cooldownPreviewServer = app.listen(0);
+    await new Promise<void>((resolve) => cooldownPreviewServer.once('listening', () => resolve()));
+    const cooldownPreviewBaseUrl = `http://127.0.0.1:${(cooldownPreviewServer.address() as AddressInfo).port}`;
+
+    try {
+      const resp = await fetch(`${cooldownPreviewBaseUrl}/api/routing/decision/preview?taskClass=mechanical-batch&stage=chat`);
+      expect(resp.status).toBe(200);
+      const body = (await resp.json()) as {
+        decision: { status: string; modelFlag: string; lane: string; reasons: Array<{ step: string }> };
+      };
+      expect(body.decision.status).toBe('ok');
+      // Demoted past the cooled claude-code-oauth primary to the burst
+      // candidate (gpt-5.6-luna on codex-oauth), never selecting the cooled
+      // lane.
+      expect(body.decision.lane).toBe('codex-oauth');
+      expect(body.decision.modelFlag).toBe('gpt-5.6-luna');
+      expect(body.decision.reasons.some((r) => r.step === 'lane-cooldown-demotion')).toBe(true);
+    } finally {
+      await new Promise<void>((resolve) => cooldownPreviewServer.close(() => resolve()));
+      closeDatabase();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });

@@ -179,6 +179,42 @@ const ROUTING_TRANSPORTS: readonly RoutingTransport[] = [
   'local',
 ];
 
+/**
+ * t7 fix-round (Sol MED-6/MED-7): the canonical subscription -> prepaid ->
+ * metered -> local tier order (plan §2 "Lane realism"). Moved here from
+ * `apps/daemon/src/routing/decision.ts` (which re-exports it under the same
+ * `TRANSPORT_TIER` name for its own existing call sites) so BOTH the
+ * dispatch-time demotion walk (decision.ts) and this file's own
+ * `isLaneChains` tier-monotonicity guard read the SAME constant -- contracts
+ * is the shared base layer both consume, so the tier order belongs here, not
+ * duplicated in a daemon-only module a pure-TypeScript contract file could
+ * never import from.
+ */
+export const ROUTING_TRANSPORT_TIER: Record<RoutingTransport, number> = {
+  'subscription-oauth': 0,
+  prepaid: 1,
+  'metered-api': 2,
+  local: 3,
+};
+
+/**
+ * t7 fix-round (Sol MED-6): the static, closed fact of which transport EVERY
+ * `RoutingLaneId` uses -- not a per-candidate declaration, because a lane IS
+ * its transport by definition (see `RoutingLaneId`'s own doc comment: "the
+ * three subscription pools... the two prepaid lanes... the two metered
+ * lanes"). Used by `isLaneChains` to check tier monotonicity on a
+ * `policy.laneChains` entry without needing a candidate in scope.
+ */
+export const ROUTING_LANE_TRANSPORT: Record<RoutingLaneId, RoutingTransport> = {
+  'claude-code-oauth': 'subscription-oauth',
+  'codex-oauth': 'subscription-oauth',
+  agy: 'subscription-oauth',
+  nous: 'prepaid',
+  moonshot: 'prepaid',
+  'deepseek-direct': 'metered-api',
+  openrouter: 'metered-api',
+};
+
 /** The model vendor family a candidate's `model` belongs to -- what
  * RoutingPolicyHardConstraint#modelFamily is actually compared against. */
 export type RoutingModelFamily = 'anthropic' | 'openai' | 'google' | 'xai' | 'deepseek' | 'moonshot' | 'other';
@@ -716,8 +752,46 @@ function isRoutingPolicyProgramAssignment(value: unknown): value is RoutingPolic
   );
 }
 
+/**
+ * t7 fix-round (Sol MED-6): structural validation for ONE `policy.laneChains`
+ * entry, keyed by `fromLane`. Three independent requirements, all of which
+ * the real `routing-policy.json` content already satisfies by construction
+ * (verified by `packages/contracts/tests/routing-policy-drift.test.ts`):
+ *
+ *   1. Self-rooted -- `chain[0]` must equal the entry's own key. A chain
+ *      that doesn't start with itself isn't "this lane's fallback order,"
+ *      it's a different lane's chain filed under the wrong key.
+ *   2. Every lane in the chain is a known `RoutingLaneId` -- an unrecognized
+ *      lane string can never be dispatched to, so a chain naming one is a
+ *      policy-authoring bug, not a legitimate forward-reference.
+ *   3. Tier-monotonic -- `ROUTING_TRANSPORT_TIER[ROUTING_LANE_TRANSPORT[lane]]`
+ *      must never DECREASE walking the chain (subscription -> prepaid ->
+ *      metered -> local order, plan §2 "Lane realism"). Repeats within the
+ *      same tier are fine (`nous` then `moonshot`, both `prepaid`); a chain
+ *      that steps BACKWARD to a cheaper-tier lane after already naming a
+ *      pricier one is never a legitimate availability fallback.
+ *
+ * Requirement 1 + 2 together also make the OBJECT KEY itself a validated
+ * `RoutingLaneId` -- `chain[0] === fromLane` and `chain[0]` must be a known
+ * lane, so `fromLane` transitively must be one too; no separate key check is
+ * needed.
+ */
+function isValidLaneChainEntry(fromLane: string, chain: unknown): boolean {
+  if (!isStringArray(chain) || chain.length === 0) return false;
+  if (chain[0] !== fromLane) return false;
+  if (!chain.every((lane) => (ROUTING_LANE_IDS as readonly string[]).includes(lane))) return false;
+  let previousTier = -1;
+  for (const lane of chain) {
+    const tier = ROUTING_TRANSPORT_TIER[ROUTING_LANE_TRANSPORT[lane as RoutingLaneId]];
+    if (tier < previousTier) return false;
+    previousTier = tier;
+  }
+  return true;
+}
+
 function isLaneChains(value: unknown): value is Record<string, string[]> {
-  return isPlainObject(value) && Object.values(value).every(isStringArray);
+  if (!isPlainObject(value)) return false;
+  return Object.entries(value).every(([fromLane, chain]) => isValidLaneChainEntry(fromLane, chain));
 }
 
 function isNumberRecord(value: unknown): value is Record<string, number> {
@@ -765,19 +839,27 @@ function isRoutingPolicyBudgetCeilings(value: unknown): value is RoutingPolicyBu
   );
 }
 
-/** t7: `baseMs`/`maxMs` are millisecond DURATIONS (nonnegative integers,
- * same discipline as `RoutingPolicyRunawayLimits#wallClockCeilingMs`);
- * `factor` is a multiplier that must be strictly positive (a zero or
- * negative factor would zero out or invert the exponential growth this
- * config exists to produce -- the same reasoning as
- * `isThresholdedPricing`'s `multiplier` check above). */
+/**
+ * t7 fix-round (Sol MED-5): tightened from the initial pass's plain
+ * nonnegative-integer/positive-number checks. `baseMs` must be a STRICTLY
+ * POSITIVE integer -- a `0` base collapses `computeCooldownWindowMs`'s very
+ * first window to `0`, i.e. no cooldown at all after the first failure,
+ * which is never a legitimate backoff config (a genuine "cooldown disabled"
+ * policy omits `cooldownPolicy` entirely; it does not encode it as a
+ * degenerate `baseMs: 0`). `factor` must be `>= 1` -- a factor below `1`
+ * would SHRINK the window on each additional consecutive failure, the
+ * opposite of exponential backoff. `maxMs` must be `>= baseMs` -- a cap
+ * below the base window would make the very first cooldown already exceed
+ * its own ceiling, which is incoherent (the cap is supposed to bound growth
+ * FROM the base, not undercut it).
+ */
 function isRoutingPolicyCooldownConfig(value: unknown): value is RoutingPolicyCooldownConfig {
   if (!isPlainObject(value)) return false;
+  if (!isFiniteNonNegativeInteger(value.baseMs) || value.baseMs <= 0) return false;
+  if (typeof value.factor !== 'number' || !Number.isFinite(value.factor) || value.factor < 1) return false;
+  if (!isFiniteNonNegativeInteger(value.maxMs) || value.maxMs < value.baseMs) return false;
   return (
-    isFiniteNonNegativeInteger(value.baseMs) &&
-    isPositiveFiniteNumber(value.factor) &&
-    isFiniteNonNegativeInteger(value.maxMs) &&
-    (value.notes === undefined || typeof value.notes === 'string')
+    value.notes === undefined || typeof value.notes === 'string'
   );
 }
 

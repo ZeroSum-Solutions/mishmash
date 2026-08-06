@@ -17,6 +17,12 @@
 // per-message "why this model" render -- a different, P2-scoped surface),
 // and neither is a natural mount point for a standalone policy/meters
 // panel. Exported for a later tranche to wire up once one exists.
+//
+// t7 fix-round disposition (Sol HIGH-2): this component being unreachable
+// from any real view is a t2 lease limitation, not something t7 can fix --
+// reachability lands in t9 via the leased AssistantMessage.tsx "why this
+// model" surface plus a governance amendment to this wave's lease, both
+// tracked outside this tranche.
 
 import { useEffect, useState } from 'react';
 import { Button } from '@open-design/components';

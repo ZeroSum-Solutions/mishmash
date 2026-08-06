@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import Database from 'better-sqlite3';
 import type { RoutingPolicyCooldownConfig } from '@open-design/contracts';
 
 import { closeDatabase, openDatabase } from '../src/db.js';
@@ -184,9 +185,13 @@ describe('computeCooldownStatuses -- meters surface', () => {
     expect(runtimeStatus?.consecutiveFailures).toBe(1); // still listed -- history persists past window expiry.
   });
 
-  it('self-ensures the table -- callable on a fresh db that never called ensureRoutingCooldownsTable itself', () => {
+  // t7 fix-round (Sol LOW-8): computeCooldownStatuses is SELECT-only -- a
+  // hot read path must not carry a DDL statement. Table creation is
+  // server.ts startup's (and each test's own setup's) job; a caller that
+  // forgets gets a clear, actionable error instead of a self-healing no-op.
+  it('throws a clear error (not a silent self-heal) on a fresh db that never called ensureRoutingCooldownsTable', () => {
     const db = openDatabase(tempDir, { dataDir: tempDir });
-    expect(() => computeCooldownStatuses(db, CONFIG, new Date())).not.toThrow();
+    expect(() => computeCooldownStatuses(db, CONFIG, new Date())).toThrow(/routing_cooldowns.*does not exist/);
   });
 });
 
@@ -271,6 +276,7 @@ describe('non-redispatchable side-effect marking (plan §3.1)', () => {
       redispatchable: true,
       sideEffectKinds: [],
       requiresHumanAck: false,
+      reason: 'no side effects recorded for this run.',
     });
   });
 
@@ -311,6 +317,85 @@ describe('non-redispatchable side-effect marking (plan §3.1)', () => {
     ensureRoutingRunSideEffectsTable(db);
     markRunSideEffects(db, 'run-4', [], new Date());
     expect(isRedispatchable(db, 'run-4')).toBe(true);
+  });
+
+  // t7 fix-round (Sol MED-4): storage is normalized to one (run_id, kind)
+  // row per side effect, written via INSERT OR IGNORE -- monotonic by
+  // construction, no read/merge/overwrite cycle to race. Proven here with
+  // TWO SEPARATE better-sqlite3 connections to the SAME underlying file
+  // (not two calls on one connection): under the OLD read-merge-write
+  // design, connection B's write -- computed from a read that predates
+  // connection A's commit -- could have silently discarded A's kind. Under
+  // the normalized schema each connection's INSERT touches only its own
+  // (run_id, kind) row, so both survive regardless of interleaving.
+  it('two separate connections marking different kinds on the same run do not lose either write (no read-merge-write)', () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingRunSideEffectsTable(db);
+    const dbFile = path.join(path.resolve(tempDir), 'app.sqlite');
+    const db2 = new Database(dbFile);
+    db2.pragma('journal_mode = WAL');
+    try {
+      const now = new Date('2026-08-05T00:00:00.000Z');
+      markRunSideEffects(db, 'run-concurrent', ['git-push'], now);
+      markRunSideEffects(db2, 'run-concurrent', ['db-migration'], now);
+      expect(getRunSideEffectKinds(db, 'run-concurrent').sort()).toEqual(['db-migration', 'git-push']);
+    } finally {
+      db2.close();
+    }
+  });
+
+  // t7 fix-round (Sol HIGH-1): a record whose persisted kind fails the
+  // closed vocabulary must fail CLOSED (non-redispatchable, human ack
+  // required), never silently read back as "no side effect" the way the
+  // pre-fix-round `.filter()`-and-forget implementation did. Both scenarios
+  // below are seeded via RAW SQL (bypassing `markRunSideEffects`, which
+  // itself only ever writes validated kinds) -- see `SideEffectState`'s own
+  // doc comment (reliability.ts) for why "literal garbage" and "an unknown
+  // but plausible kind string" collapse to the identical failure mode under
+  // the MED-4-normalized per-row schema (no JSON blob left to garble
+  // independently of its contents).
+  describe('corrupt side-effect record (Sol HIGH-1) -- fails closed, never open', () => {
+    function seedRawKind(db: ReturnType<typeof openDatabase>, runId: string, rawKind: string): void {
+      db.prepare(`INSERT INTO routing_run_side_effects (run_id, kind, marked_at) VALUES (?, ?, ?)`).run(runId, rawKind, new Date().toISOString());
+    }
+
+    it('literal garbage seeded directly into the kind column is non-redispatchable with reason "corrupt-side-effect-record"', () => {
+      const db = openDatabase(tempDir, { dataDir: tempDir });
+      ensureRoutingRunSideEffectsTable(db);
+      seedRawKind(db, 'run-corrupt-garbage', '{not-valid-json{{{');
+
+      expect(isRedispatchable(db, 'run-corrupt-garbage')).toBe(false);
+      const status = getRunRedispatchability(db, 'run-corrupt-garbage');
+      expect(status.redispatchable).toBe(false);
+      expect(status.requiresHumanAck).toBe(true);
+      expect(status.reason).toBe('corrupt-side-effect-record');
+    });
+
+    it('an unknown-but-plausible kind string seeded directly is ALSO non-redispatchable, even alongside a valid kind', () => {
+      const db = openDatabase(tempDir, { dataDir: tempDir });
+      ensureRoutingRunSideEffectsTable(db);
+      markRunSideEffects(db, 'run-corrupt-mixed', ['git-push'], new Date());
+      seedRawKind(db, 'run-corrupt-mixed', 'not-a-real-kind');
+
+      // Fails CLOSED even though ONE of the two rows is a perfectly valid,
+      // API-written kind -- an integrity failure on this safety record is
+      // never partially trusted.
+      expect(isRedispatchable(db, 'run-corrupt-mixed')).toBe(false);
+      const status = getRunRedispatchability(db, 'run-corrupt-mixed');
+      expect(status.requiresHumanAck).toBe(true);
+      expect(status.reason).toBe('corrupt-side-effect-record');
+    });
+
+    it('a corrupt record does not corrupt an UNRELATED run\'s status', () => {
+      const db = openDatabase(tempDir, { dataDir: tempDir });
+      ensureRoutingRunSideEffectsTable(db);
+      seedRawKind(db, 'run-corrupt-isolated', 'garbage');
+      markRunSideEffects(db, 'run-clean', ['git-push'], new Date());
+
+      expect(isRedispatchable(db, 'run-corrupt-isolated')).toBe(false);
+      expect(isRedispatchable(db, 'run-clean')).toBe(false); // has a real side effect, but NOT corrupt
+      expect(getRunRedispatchability(db, 'run-clean').reason).not.toBe('corrupt-side-effect-record');
+    });
   });
 });
 
