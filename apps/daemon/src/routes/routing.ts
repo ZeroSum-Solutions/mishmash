@@ -16,6 +16,8 @@
 // bare-express test harness other routing tests already use, when it does
 // not care about gates) makes `/gates/run` respond 400 rather than ever
 // running a gate against an unvalidated path.
+import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
 import express, { type Express, type Request, type Response } from 'express';
@@ -31,6 +33,8 @@ import type {
   RoutingTelemetryListResponse,
 } from '@open-design/contracts';
 import {
+  admitsUnderCap,
+  advanceGateCascadeState,
   classifyCascadeTrigger,
   DETERMINISTIC_GATE_IDS,
   decideRouting,
@@ -38,12 +42,22 @@ import {
   GATE_REGISTRY,
   GateRunnerInputError,
   GateSelectionError,
+  getGateCascadeState,
+  headroomFractionOf,
   loadRoutingPolicy,
+  recordGateOutcomes,
   runGates,
   type DeterministicGateId,
-  type EscalationTier,
 } from '../routing/index.js';
-import { computeBuildSpendUsd, computeDaySpendUsd, computeStageSpendUsd, computeLaneMeters, listRoutingTelemetry } from '../routing/telemetry.js';
+import {
+  computeBuildSpendUsd,
+  computeDaySpendUsd,
+  computeStageSpendUsd,
+  computeLaneMeters,
+  ensureRoutingTelemetryTable,
+  listRoutingTelemetry,
+  recordRoutingTelemetry,
+} from '../routing/telemetry.js';
 import { computeCooldownStatuses, resolveCooldownConfig } from '../routing/reliability.js';
 
 const ROUTING_DATA_CLASSIFICATIONS: readonly RoutingDataClassification[] = ['client-confidential', 'internal', 'public'];
@@ -262,31 +276,48 @@ function utcDayWindowMs(now: Date): [number, number] {
 }
 
 /**
- * t8 addition: resolves `requested` (absolute or project-relative) and
- * confirms it stays within `root` -- the daemon data contract's "stay
- * under resolved roots" rule (AGENTS.md), applied here so
- * `POST /api/routing/gates/run` can never be pointed at an arbitrary
- * filesystem path via `../../` segments or an absolute path outside the
- * configured project root. Mirrors the string-prefix check
- * `apps/daemon/src/routes/storyboard.ts`/`import-export-routes.ts` already
- * use locally (this file does not import `daemon-paths.ts`'s private
- * `isPathWithin`, which is not exported).
+ * t8 addition (hardened, Sol HIGH-1 fix-round): resolves `requested`
+ * (absolute or project-relative) and confirms its CANONICAL (symlink-
+ * resolved) form stays within `root`'s own canonical form -- the daemon
+ * data contract's "stay under resolved roots" rule (AGENTS.md).
+ *
+ * A purely LEXICAL check (`path.relative`/`startsWith` over
+ * `path.resolve`d strings, this function's pre-fix-round shape) is
+ * defeated by a symlink: e.g. `projectsRoot/proj-1` could itself be a
+ * symlink to `/etc`, in which case `proj-1/anything` looks lexically
+ * contained but resolves on disk to `/etc/anything`. `fs.realpathSync` on
+ * BOTH sides before comparing closes that gap. This also means
+ * `artifactDir` must actually EXIST (realpath fails on a missing path) --
+ * a gate run against a directory that doesn't exist has no legitimate use
+ * case, so requiring existence here (rather than a more complex
+ * longest-existing-ancestor walk) is a deliberate simplification, not an
+ * oversight.
  */
 function resolveArtifactDirWithinRoot(root: string, requested: unknown): { ok: true; resolved: string } | { ok: false; message: string } {
   if (typeof requested !== 'string' || requested.length === 0) {
     return { ok: false, message: '`artifactDir` must be a nonempty string.' };
   }
-  const resolvedRoot = path.resolve(root);
-  const resolvedRequested = path.isAbsolute(requested) ? path.resolve(requested) : path.resolve(resolvedRoot, requested);
-  const relative = path.relative(resolvedRoot, resolvedRequested);
-  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-    return { ok: false, message: '`artifactDir` must resolve within the configured project root -- traversal outside it is rejected.' };
+  let canonicalRoot: string;
+  try {
+    canonicalRoot = fs.realpathSync(path.resolve(root));
+  } catch (err) {
+    return { ok: false, message: `configured project root is not resolvable: ${(err as Error).message}` };
   }
-  return { ok: true, resolved: resolvedRequested };
-}
-
-function isEscalationTier(value: unknown): value is EscalationTier {
-  return value === 'cheap' || value === 'mid' || value === 'frontier';
+  const lexicallyResolved = path.isAbsolute(requested) ? path.resolve(requested) : path.resolve(canonicalRoot, requested);
+  let canonicalRequested: string;
+  try {
+    canonicalRequested = fs.realpathSync(lexicallyResolved);
+  } catch (err) {
+    return { ok: false, message: `\`artifactDir\` does not exist or is not accessible: ${(err as Error).message}` };
+  }
+  const relative = path.relative(canonicalRoot, canonicalRequested);
+  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    return {
+      ok: false,
+      message: '`artifactDir` must resolve within the configured project root (canonical-path check, symlink-safe) -- traversal outside it is rejected.',
+    };
+  }
+  return { ok: true, resolved: canonicalRequested };
 }
 
 function isDeterministicGateId(value: unknown): value is DeterministicGateId {
@@ -467,9 +498,38 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database, proj
   // POST /api/routing/gates/run -- executes selected deterministic gates
   // against a lane-A artifact directory, then classifies the cascade
   // trigger. `artifactDir` is validated to resolve within `projectsRoot`
-  // (see resolveArtifactDirWithinRoot's own doc comment) -- no traversal,
-  // and no `db`/`projectsRoot` configured is an honest 400, never a run
-  // against an unvalidated path or a silent no-op.
+  // (see resolveArtifactDirWithinRoot's own doc comment, symlink-safe) --
+  // no traversal, and no `db`/`projectsRoot` configured is an honest 400,
+  // never a run against an unvalidated path or a silent no-op.
+  //
+  // t8 fix-round (Sol HIGH-5): `currentTier`/`gateSpendSoFarUsd` are NO
+  // LONGER accepted as client input (a caller could otherwise always
+  // assert "cheap"/"$0 spent" and evade both the frontier ceiling and the
+  // gate-tax cap). Cascade state is tracked server-side per `buildId`
+  // (`getGateCascadeState`/`advanceGateCascadeState`, apps/daemon/src/
+  // routing/gates.ts) -- this route reads it, classifies, and (only when
+  // it actually decides to escalate) persists the advance. A caller may
+  // still supply `nextEstimatedVerificationCostUsd`, an ESTIMATE checked
+  // against the remaining gate-tax budget the same way admission.ts checks
+  // a dispatch estimate -- supplying an estimate cannot itself evade
+  // anything, since the SPEND and TIER it's checked against are both
+  // server-truth.
+  //
+  // t8 fix-round (Sol MED-8): gate outcomes are now wired into telemetry.
+  // `runId`/`attempt` may be supplied (a real dispatch's identifiers, whose
+  // telemetry row must already exist) or omitted (a standalone gate probe
+  // with no real dispatch behind it gets a SERVER-SYNTHESIZED
+  // `gates-run-<uuid>` id, `runIdSynthetic: true` in the response) -- the
+  // synthetic case inserts its own minimal telemetry row (sentinel
+  // `routedModel`/`routedLane: 'none'`) so `recordGateOutcomes` always has
+  // a row to attach to. Both writes happen inside one `db.transaction`.
+  //
+  // Scope note (Sol HIGH-4b): this route NEVER calls `recordBootstrapBaseline`
+  // or `runNegativeControlCheck` -- SSIM baseline promotion stays
+  // programmatic-only. See gates.ts's `recordBootstrapBaseline` doc comment
+  // for why (an HTTP request has no trustworthy way to assert "this is the
+  // designated first render," and this tranche adds no per-buildId
+  // concurrency control a promotion race would need).
   app.post('/api/routing/gates/run', express.json({ limit: '64kb' }), async (req: Request, res: Response) => {
     if (!projectsRoot) {
       return res.status(400).json({
@@ -495,11 +555,35 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database, proj
     }
 
     const buildId = body.buildId === undefined ? null : queryStringOrNull(body.buildId);
-    if (body.currentTier !== undefined && !isEscalationTier(body.currentTier)) {
-      return respondInvalidQuery(res, '`currentTier` must be one of: cheap, mid, frontier.');
+
+    if (body.currentTier !== undefined || body.gateSpendSoFarUsd !== undefined) {
+      return respondInvalidQuery(
+        res,
+        '`currentTier`/`gateSpendSoFarUsd` are no longer accepted -- cascade tier and cumulative gate-tax spend are tracked server-side per `buildId`; a client can no longer assert its own progress.',
+      );
     }
-    if (body.gateSpendSoFarUsd !== undefined && (typeof body.gateSpendSoFarUsd !== 'number' || !Number.isFinite(body.gateSpendSoFarUsd) || body.gateSpendSoFarUsd < 0)) {
-      return respondInvalidQuery(res, '`gateSpendSoFarUsd` must be a finite nonnegative number.');
+    let nextEstimatedVerificationCostUsd = 0;
+    if (body.nextEstimatedVerificationCostUsd !== undefined) {
+      if (
+        typeof body.nextEstimatedVerificationCostUsd !== 'number' ||
+        !Number.isFinite(body.nextEstimatedVerificationCostUsd) ||
+        body.nextEstimatedVerificationCostUsd < 0
+      ) {
+        return respondInvalidQuery(res, '`nextEstimatedVerificationCostUsd` must be a finite nonnegative number.');
+      }
+      nextEstimatedVerificationCostUsd = body.nextEstimatedVerificationCostUsd;
+    }
+
+    let runId: string | undefined;
+    let attempt = 0;
+    if (db) {
+      const suppliedRunId = queryStringOrNull(body.runId);
+      if (body.attempt !== undefined) {
+        const attemptResult = parseOptionalQueryInt(body.attempt, 'attempt', { min: 0, integer: true });
+        if (!attemptResult.ok) return respondInvalidQuery(res, attemptResult.message);
+        attempt = attemptResult.value ?? 0;
+      }
+      runId = suppliedRunId ?? undefined;
     }
 
     let results;
@@ -516,18 +600,78 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database, proj
     }
 
     const policy = loadRoutingPolicy();
+    // Server-persisted cascade state, keyed by buildId -- NEVER client
+    // input (Sol HIGH-5). No db or no buildId means there is nothing to
+    // persist against, so every such call is evaluated fresh at cheap/$0.
+    const cascadeState = db && buildId !== null ? getGateCascadeState(db, buildId) : { tier: 'cheap' as const, spentUsd: 0 };
     const cascade = classifyCascadeTrigger({
       gateResults: results,
-      ...(body.currentTier !== undefined ? { currentTier: body.currentTier } : {}),
+      currentTier: cascadeState.tier,
       gateTaxCapUsd: policy.budgetCeilings.gateTaxCapUsd ?? null,
-      gateSpendSoFarUsd: typeof body.gateSpendSoFarUsd === 'number' ? body.gateSpendSoFarUsd : 0,
+      gateSpendSoFarUsd: cascadeState.spentUsd,
+      nextEstimatedVerificationCostUsd,
+      headroomFraction: headroomFractionOf(policy),
     });
+    // Advance ONLY when actually escalating -- an over-cap or already-at-
+    // frontier classification must never move the persisted tier or add
+    // to spend, since nothing was actually escalated in that case.
+    if (cascade.escalate && buildId !== null && db) {
+      advanceGateCascadeState(db, buildId, cascade.tier, nextEstimatedVerificationCostUsd);
+    }
+
+    let runIdSynthetic: boolean | undefined;
+    if (db) {
+      runIdSynthetic = runId === undefined;
+      const resolvedRunId = runId ?? `gates-run-${randomUUID()}`;
+      const resolvedAttempt = attempt;
+      try {
+        const persist = db.transaction(() => {
+          if (runIdSynthetic) {
+            ensureRoutingTelemetryTable(db);
+            const nowIso = new Date().toISOString();
+            recordRoutingTelemetry(db, {
+              runId: resolvedRunId,
+              attempt: resolvedAttempt,
+              projectId: 'gates-run',
+              buildId,
+              stage: 'gates-run',
+              templateId: null,
+              designSystem: null,
+              routedModel: 'none',
+              observedModel: null,
+              routedLane: 'none',
+              observedLane: null,
+              tokens: { input: 0, output: 0, cacheReadInput: 0 },
+              cacheHits: 0,
+              latencyMs: 0,
+              costUsd: 0,
+              costEstimated: true,
+              gateOutcomes: {},
+              escalated: cascade.escalate,
+              policyVersion: policy.policyVersion,
+              createdAt: nowIso,
+              recordedAt: nowIso,
+            });
+          }
+          recordGateOutcomes(db, resolvedRunId, resolvedAttempt, results);
+        });
+        persist();
+        runId = resolvedRunId;
+        attempt = resolvedAttempt;
+      } catch (err) {
+        return respondInvalidQuery(
+          res,
+          `could not record gate outcomes for (runId=${resolvedRunId}, attempt=${resolvedAttempt}): ${(err as Error).message}`,
+        );
+      }
+    }
 
     const resultDtos: GateRunResultDTO[] = results.map((r) => ({ id: r.id, class: r.class, status: r.status, evidence: r.evidence, durationMs: r.durationMs }));
     const response: RoutingGatesRunResponse = {
       artifactDir: path.relative(projectsRoot, pathResult.resolved) || '.',
       results: resultDtos,
       cascade,
+      ...(runId !== undefined ? { runId, attempt, runIdSynthetic: runIdSynthetic ?? false } : {}),
     };
     res.json(response);
   });

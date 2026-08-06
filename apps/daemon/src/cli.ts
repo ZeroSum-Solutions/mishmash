@@ -536,8 +536,8 @@ const ROUTE_STRING_FLAGS = new Set([
   'window-ms',
   'artifact-dir',
   'gates',
-  'current-tier',
-  'gate-spend',
+  'attempt',
+  'next-estimated-cost',
 ]);
 const ROUTE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 
@@ -587,13 +587,24 @@ Options:
                            all-time).
   --artifact-dir <path>    gates run: artifact directory to gate (required;
                            validated to resolve within the daemon's
-                           configured project root -- no traversal).
+                           configured project root, symlink-safe -- no
+                           traversal).
   --gates <a,b,c>          gates run: comma-separated deterministic gate ids
                            to run (default: every deterministic gate).
-  --current-tier <t>       gates run: cheap|mid|frontier -- the tier THIS
-                           attempt already ran at (default: cheap).
-  --gate-spend <usd>       gates run: cumulative gate-tax spend so far for
-                           this build (default: 0).
+  --build-id <id>          gates run: also scopes SERVER-PERSISTED cascade
+                           state (tier + cumulative gate-tax spend) -- the
+                           daemon tracks progress per build; this CLI does
+                           not (and cannot) assert a tier/spend directly.
+  --next-estimated-cost <usd>  gates run: estimate of what the NEXT
+                           escalation tier's re-verification would cost,
+                           checked against the remaining gate-tax budget
+                           (default: 0).
+  --run-id <id>            gates run: attach outcomes to an existing
+                           telemetry (runId, attempt) pair; telemetry:
+                           filter by run id. Omit on a gates run to get a
+                           server-synthesized standalone-probe id back.
+  --attempt <n>            gates run: attempt number paired with --run-id
+                           (default: 0).
   --json                   Print machine-readable JSON.
   --daemon-url <url>`);
 }
@@ -783,8 +794,9 @@ async function runRoute(args) {
         artifactDir: String(flags['artifact-dir']),
         ...(flags.gates ? { gates: String(flags.gates).split(',').map((s) => s.trim()).filter(Boolean) } : {}),
         ...(flags['build-id'] ? { buildId: String(flags['build-id']) } : {}),
-        ...(flags['current-tier'] ? { currentTier: String(flags['current-tier']) } : {}),
-        ...(flags['gate-spend'] ? { gateSpendSoFarUsd: Number(flags['gate-spend']) } : {}),
+        ...(flags['next-estimated-cost'] ? { nextEstimatedVerificationCostUsd: Number(flags['next-estimated-cost']) } : {}),
+        ...(flags['run-id'] ? { runId: String(flags['run-id']) } : {}),
+        ...(flags.attempt ? { attempt: Number(flags.attempt) } : {}),
       };
       let resp;
       try {
@@ -807,6 +819,9 @@ async function runRoute(args) {
         console.log(`  ${r.id} [${r.status}] (${r.durationMs}ms)`);
       }
       console.log(`Cascade: escalate=${data?.cascade?.escalate} tier=${data?.cascade?.tier} -- ${data?.cascade?.reason}`);
+      if (data?.runId) {
+        console.log(`Recorded gate outcomes: runId=${data.runId} attempt=${data.attempt}${data.runIdSynthetic ? ' (server-synthesized standalone probe id)' : ''}`);
+      }
       return;
     }
 

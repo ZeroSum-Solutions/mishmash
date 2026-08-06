@@ -508,11 +508,25 @@ export interface RoutingGatesRunResponse {
   artifactDir: string;
   results: GateRunResultDTO[];
   cascade: GateCascadeClassificationDTO;
+  /**
+   * t8 fix-round (Sol MED-8): the `(runId, attempt)` gate outcomes were
+   * persisted under, when a database was configured for this route.
+   * `runIdSynthetic: true` marks a server-generated id used because the
+   * caller supplied none -- this run has no real dispatch behind it, only
+   * a standalone gate probe. Both fields are omitted (not persisted at
+   * all) when no database is configured.
+   */
+  runId?: string;
+  attempt?: number;
+  runIdSynthetic?: boolean;
 }
 
 export function isRoutingGatesRunResponse(value: unknown): value is RoutingGatesRunResponse {
   return (
     isPlainObject(value) &&
+    (value.runId === undefined || typeof value.runId === 'string') &&
+    (value.attempt === undefined || isFiniteNonNegativeInteger(value.attempt)) &&
+    (value.runIdSynthetic === undefined || typeof value.runIdSynthetic === 'boolean') &&
     typeof value.artifactDir === 'string' &&
     Array.isArray(value.results) &&
     value.results.every(isGateRunResultDTO) &&

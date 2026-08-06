@@ -510,9 +510,24 @@ function newAccumulator(): LaneAccumulator {
   };
 }
 
-function allGatesPass(gateOutcomes: Record<string, RoutingGateOutcome>): boolean {
-  const outcomes = Object.values(gateOutcomes);
-  return outcomes.length > 0 && outcomes.every((outcome) => outcome === 'pass');
+/**
+ * t8 fix-round (Sol MED-8): `'unavailable'` (tool not installed/configured)
+ * and `'skipped-not-applicable'` (the gate genuinely does not apply) are
+ * NOT failures -- a row whose only gate outcome is `'unavailable'` was
+ * never actually gated on anything, and must not count against a lane's
+ * pass rate at all. The ORIGINAL version below treated any non-'pass'
+ * value (including these two) as "this row failed its gates," which
+ * silently penalized a lane every time an inapplicable/unconfigured tool
+ * happened to be in the outcome map -- exactly backwards from "pass rate
+ * over applicable deterministic gates only."
+ */
+function applicableGateOutcomes(gateOutcomes: Record<string, RoutingGateOutcome>): RoutingGateOutcome[] {
+  return Object.values(gateOutcomes).filter((outcome) => outcome !== 'unavailable' && outcome !== 'skipped-not-applicable');
+}
+
+function allApplicableGatesPass(gateOutcomes: Record<string, RoutingGateOutcome>): boolean {
+  const applicable = applicableGateOutcomes(gateOutcomes);
+  return applicable.length > 0 && applicable.every((outcome) => outcome === 'pass');
 }
 
 function resolveCostTriState(acc: LaneAccumulator): LaneMeter['cost'] {
@@ -574,9 +589,12 @@ export function computeLaneMeters(db: Database.Database, windowMs?: number): Lan
     if (row.observedLane !== null) attributed.sawObservedAttribution = true;
     else attributed.sawFallbackAttribution = true;
     if (row.escalated) attributed.attributedEscalated += 1;
-    if (Object.keys(row.gateOutcomes).length > 0) {
+    // t8 fix-round (Sol MED-8): denominator is APPLICABLE gate outcomes
+    // only (excludes 'unavailable'/'skipped-not-applicable') -- see
+    // applicableGateOutcomes'/allApplicableGatesPass's own doc comments.
+    if (applicableGateOutcomes(row.gateOutcomes).length > 0) {
       attributed.attributedGated += 1;
-      if (allGatesPass(row.gateOutcomes)) attributed.attributedGatedPass += 1;
+      if (allApplicableGatesPass(row.gateOutcomes)) attributed.attributedGatedPass += 1;
     }
   }
 

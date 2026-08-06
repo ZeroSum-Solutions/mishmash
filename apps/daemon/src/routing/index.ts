@@ -31,8 +31,10 @@ export {
 // L4 admission control (WR wave, P2 tranche -- plan §3.1 budget bullet,
 // §3.2 L4). See admission.ts's own header for the full rationale.
 export {
+  admitsUnderCap,
   estimatedRunCostUsd,
   evaluateAdmission,
+  headroomFractionOf,
   maxVariationFanout,
   runawayLimitsFor,
   RoutingAdmissionInputError,
@@ -72,16 +74,19 @@ export {
 // (deterministic cascade triggers vs stochastic advisory-only) and the
 // "unavailable over reimplementation" discipline every gate follows.
 export {
+  advanceGateCascadeState,
   baselineState,
   classifyCascadeTrigger,
   DEFAULT_SSIM_FLOOR,
   DETERMINISTIC_GATE_DEFINITIONS,
   DETERMINISTIC_GATE_IDS,
+  ensureGateCascadeStateTable,
   ensureSsimBaselinesTable,
   GATE_REGISTRY,
   GateClassificationError,
   GateRunnerInputError,
   GateSelectionError,
+  getGateCascadeState,
   invalidateSsimBaseline,
   recordBootstrapBaseline,
   recordGateOutcomes,
@@ -96,6 +101,7 @@ export {
   type DeterministicGateId,
   type DeterministicGateResult,
   type EscalationTier,
+  type GateCascadeState,
   type GateClass,
   type GateContext,
   type GateDefinition,

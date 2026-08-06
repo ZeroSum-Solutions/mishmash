@@ -280,7 +280,13 @@ function assertValidEvaluateAdmissionInput(input: EvaluateAdmissionInput): void 
  * policy value is treated as `0` (no margin), never as a reason to skip
  * evaluation; the fraction is a tunable safety knob, not a config
  * requirement. */
-function headroomFractionOf(policy: RoutingPolicyDocument): number {
+/**
+ * Exported (t8 fix-round, Sol HIGH-5): `apps/daemon/src/routing/gates.ts`'s
+ * gate-tax authorization reuses this SAME headroom-margin convention rather
+ * than reimplementing it -- "authorization uses spent + nextEstimate <=
+ * cap × (1 - headroomFraction), consistent with t6's convention."
+ */
+export function headroomFractionOf(policy: RoutingPolicyDocument): number {
   const fraction = policy.budgetCeilings.headroomFraction;
   return typeof fraction === 'number' && Number.isFinite(fraction) && fraction >= 0 && fraction < 1 ? fraction : 0;
 }
@@ -290,8 +296,11 @@ function headroomFractionOf(policy: RoutingPolicyDocument): number {
  * amount) keeps the check monotonic even once `spent` already exceeds
  * `cap` -- an already-over-budget build must never become MORE permissive
  * just because headroom is applied, which a "shrink the remainder" formula
- * would do once the remainder goes negative. */
-function admitsUnderCap(capUsd: number, spentUsd: number, headroomFraction: number, estimatedCostUsd: number): boolean {
+ * would do once the remainder goes negative.
+ *
+ * Exported (t8 fix-round, Sol HIGH-5): see `headroomFractionOf`'s own doc
+ * comment -- gates.ts's gate-tax check reuses this exact formula. */
+export function admitsUnderCap(capUsd: number, spentUsd: number, headroomFraction: number, estimatedCostUsd: number): boolean {
   const effectiveCapUsd = capUsd * (1 - headroomFraction);
   return spentUsd + estimatedCostUsd <= effectiveCapUsd;
 }
