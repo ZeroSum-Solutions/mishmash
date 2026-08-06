@@ -630,6 +630,7 @@ import { TranscriptExportLockedError } from './transcript-export.js';
 import { registerChatRoutes } from './routes/chat.js';
 import { registerRunRoutes } from './routes/runs.js';
 import { registerUsageRoutes } from './routes/usage.js';
+import { registerRoutingRoutes } from './routes/routing.js';
 import { registerTerminalRoutes } from './routes/terminal.js';
 import { createTerminalService } from './terminals.js';
 import { confinePreviewCwd, createPreviewService } from './previews.js';
@@ -8631,6 +8632,7 @@ export async function startServer({
     },
   });
   registerUsageRoutes(app, { db });
+  registerRoutingRoutes(app);
 
   // Each routine fire resolves an agent, prepares project/conversation state,
   // and dispatches into the same chat runner used by manual runs.

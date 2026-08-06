@@ -499,6 +499,102 @@ async function runCover(args) {
   process.exit(2);
 }
 
+// `od route policy|preview|meters` -- routing capability CLI (WR wave, P0
+// skeleton, plan §3.4 capability closure). Thin caller of the same
+// /api/routing/* HTTP surface the web RoutingPanel stub reads. Real
+// dispatch-time routing (a bare `od route --json` returning
+// escalationRate/passRate/laneMeters, CWR-P2-4) lands in a later WR tranche.
+const ROUTE_STRING_FLAGS = new Set(['daemon-url', 'template-id', 'build-class', 'stage']);
+const ROUTE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
+
+function printRouteHelp() {
+  console.log(`Usage: od route <policy|preview|meters> [options]
+
+Subcommands:
+  policy    GET /api/routing/policy -- current routing policy + version.
+  preview   GET /api/routing/decision/preview -- stub routing-decision
+            preview for a routing key.
+  meters    GET /api/routing/meters -- per-lane routing meters.
+
+Options:
+  --template-id <id>   Routing key template id (omit for the null fallback).
+  --build-class <cls>  Routing key build class (omit for the null fallback).
+  --stage <stage>      Routing key stage (default: chat).
+  --json               Print machine-readable JSON.
+  --daemon-url <url>`);
+}
+
+async function runRoute(args) {
+  if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    printRouteHelp();
+    process.exit(args.length === 0 ? 2 : 0);
+  }
+  const sub = args[0];
+  const rest = args.slice(1);
+  let flags;
+  try {
+    flags = parseFlags(rest, { string: ROUTE_STRING_FLAGS, boolean: ROUTE_BOOLEAN_FLAGS });
+  } catch (err) {
+    console.error(err.message);
+    process.exit(2);
+  }
+  const base = await cliDaemonBaseUrl(flags);
+  const writeJson = (data) => process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+
+  if (sub === 'policy') {
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/routing/policy`);
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    console.log(`Routing policy version: ${data?.policyVersion ?? 'unknown'}`);
+    return;
+  }
+
+  if (sub === 'preview') {
+    const qs = new URLSearchParams();
+    if (flags['template-id']) qs.set('templateId', String(flags['template-id']));
+    if (flags['build-class']) qs.set('buildClass', String(flags['build-class']));
+    if (flags.stage) qs.set('stage', String(flags.stage));
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/routing/decision/preview?${qs.toString()}`);
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    console.log(`Routing decision preview: ${data?.decision?.rationale ?? 'unknown'} (lane=${data?.decision?.lane ?? 'unknown'})`);
+    return;
+  }
+
+  if (sub === 'meters') {
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/routing/meters`);
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    console.log(`Lane meters: ${Array.isArray(data?.laneMeters) ? data.laneMeters.length : 0}`);
+    return;
+  }
+
+  console.error(`unknown subcommand: od route ${sub}`);
+  printRouteHelp();
+  process.exit(2);
+}
+
 const SUBCOMMAND_MAP = {
   artifacts: runArtifacts,
   media: runMedia,
@@ -545,6 +641,7 @@ const SUBCOMMAND_MAP = {
   restore: runRestore,
   usage: runUsage,
   cover: runCover,
+  route: runRoute,
 };
 
 const EXPORT_STRING_FLAGS = new Set([
