@@ -17,6 +17,7 @@ import {
 
 const EMPTY_POLICY: RoutingPolicyDocument = {
   policyVersion: 0,
+  stageVocabulary: [],
   modelTable: [],
   hardConstraints: [],
   laneChains: {},
@@ -48,6 +49,7 @@ const PRD_15_HARD_CONSTRAINT: RoutingPolicyHardConstraint = {
 
 const POPULATED: RoutingPolicyDocument = {
   policyVersion: 1,
+  stageVocabulary: ['chat', 'art-direction'],
   modelTable: [
     {
       match: { taskClass: 'chat', stage: 'chat', minContextTokens: 0, maxContextTokens: 8000 },
@@ -83,6 +85,29 @@ describe('isRoutingPolicyDocument', () => {
   it('rejects a document missing a required section', () => {
     const { modelTable: _drop, ...missingModelTable } = EMPTY_POLICY;
     expect(isRoutingPolicyDocument(missingModelTable)).toBe(false);
+  });
+
+  it('rejects a document missing stageVocabulary (Sol review HIGH-1, t5 fix commit)', () => {
+    const { stageVocabulary: _drop, ...missingStageVocabulary } = EMPTY_POLICY;
+    expect(isRoutingPolicyDocument(missingStageVocabulary)).toBe(false);
+  });
+
+  it('rejects a stageVocabulary that is not a string array', () => {
+    expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, stageVocabulary: [1, 2] })).toBe(false);
+    expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, stageVocabulary: 'chat' })).toBe(false);
+  });
+
+  it('accepts a hard constraint carrying requiredLane, and rejects an unrecognized lane value (Sol review MED-3, t5 fix commit)', () => {
+    const withRequiredLane = {
+      ...EMPTY_POLICY,
+      hardConstraints: [{ ...PRD_15_HARD_CONSTRAINT, modelFamily: 'xai' as const, requiredLane: 'nous' as const }],
+    };
+    expect(isRoutingPolicyDocument(withRequiredLane)).toBe(true);
+    const malformedLane = {
+      ...EMPTY_POLICY,
+      hardConstraints: [{ ...PRD_15_HARD_CONSTRAINT, modelFamily: 'xai' as const, requiredLane: 'not-a-real-lane' }],
+    };
+    expect(isRoutingPolicyDocument(malformedLane)).toBe(false);
   });
 
   it('rejects a laneChains that is an array instead of a keyed map', () => {

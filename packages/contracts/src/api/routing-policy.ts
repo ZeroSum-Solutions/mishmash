@@ -27,6 +27,25 @@ function isFiniteNumber(value: unknown): value is number {
 }
 
 /**
+ * Sol review MED-4 (t5 fix commit): a plain `typeof x === 'number'` (or even
+ * `Number.isFinite`) check accepts a NEGATIVE or FRACTIONAL value for a
+ * quantity that can only ever be a whole count -- a context-token bound, a
+ * token estimate, a throttle-event tally. That gap is more than cosmetic:
+ * `NaN` itself is `typeof 'number'`, and a NaN threshold silently fails OPEN
+ * in a comparison (`NaN > 0` is `false`), which is exactly the "is this lane
+ * throttled" check in apps/daemon/src/routing/decision.ts. Shared here (not
+ * duplicated per contract file) so `RoutingMatchRule#{min,max}ContextTokens`
+ * (this file), `RoutingKey#contextEstimateTokens`/`RoutingDecision#
+ * contextEstimateTokens` (routing-decision.ts), and `LaneMeter#
+ * throttleEvents` (routing-telemetry.ts) all reject NaN/Infinity/negative/
+ * fractional values the same way. Deliberately NOT applied to money fields
+ * (`inputPerMillion`, `costUsd`, ...), which are legitimately fractional.
+ */
+export function isFiniteNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 0;
+}
+
+/**
  * plan §3.2 L2: "Data classification is part of the policy" -- every
  * dispatch carries a sensitivity class, and each class has a provider
  * allowlist. Shared with RoutingDecision#sensitivityClass in
@@ -250,6 +269,17 @@ export interface RoutingPolicyHardConstraint {
    * constraints only need the negative form.
    */
   allowedTransports?: RoutingTransport[];
+  /**
+   * Lane-level teeth (Sol review MED-3, t5 fix commit): transport alone
+   * cannot express PRD §15's "Grok 4.5 dispatches only through the prepaid
+   * Nous Portal lane in-program" -- `moonshot` is ALSO `prepaid`, so a
+   * transport-only constraint would happily admit a Grok candidate routed
+   * through Moonshot instead of Nous. When set, a candidate whose
+   * `modelFamily` matches this constraint MUST use exactly this lane; any
+   * other lane is removed by the filter step regardless of its transport.
+   * Optional -- most constraints only need the transport-level form above.
+   */
+  requiredLane?: RoutingLaneId;
 }
 
 /** plan §3.1/§3.2 L4: pre-run estimated-cost ceiling per stage, per-build
@@ -297,6 +327,24 @@ export interface RoutingPolicyDocument {
    * RoutingDecision/telemetry row so a dispatch is traceable to the policy
    * that produced it. */
   policyVersion: number;
+  /**
+   * The CLOSED set of legal `RoutingKey#stage` values (Sol review HIGH-1, t5
+   * fix commit) -- the engine (apps/daemon/src/routing/decision.ts) rejects
+   * any `key.stage` outside this list with a typed 'error' decision. This is
+   * DELIBERATELY separate from `budgetCeilings.perStageEstimatedCostUsd`'s
+   * keys: that record is a cost-ceiling lookup that only needs a *coarse*
+   * bucket per pipeline phase, while this vocabulary must also carry the
+   * WR-routing.md "Routing-key fallback (normative)" Fallback-C GRANULAR
+   * ingestion stage keys (`classify`/`extract`/`distill`/`verify`/
+   * `register`) so that work is routable even though no per-sub-stage
+   * budget ceiling exists for it yet (admission control, t6, is what
+   * eventually enforces a budget -- routability and budget-ceiling
+   * presence are two different questions). A stage present here with no
+   * matching `budgetCeilings` entry is valid and ROUTABLE; the reverse
+   * (a `budgetCeilings` key outside this vocabulary) is a policy bug the
+   * drift test also checks.
+   */
+  stageVocabulary: string[];
   modelTable: RoutingPolicyModelTableEntry[];
   hardConstraints: RoutingPolicyHardConstraint[];
   /** PRD §15's five exact process-role assignments (Sol review MED-1a) --
@@ -350,13 +398,16 @@ function isRoutingPolicyPriceRow(value: unknown): value is RoutingPolicyPriceRow
 function isRoutingMatchRule(value: unknown): value is RoutingMatchRule {
   if (!isPlainObject(value)) return false;
   const optionalString = (v: unknown) => v === undefined || typeof v === 'string';
-  const optionalNumber = (v: unknown) => v === undefined || isFiniteNumber(v);
+  // Sol review MED-4: these are token-count THRESHOLDS, not arbitrary
+  // numbers -- a fractional or negative bound is a policy-authoring bug,
+  // not a value the engine's [min, max) comparison can honor sensibly.
+  const optionalNonNegativeInteger = (v: unknown) => v === undefined || isFiniteNonNegativeInteger(v);
   return (
     optionalString(value.taskClass) &&
     optionalString(value.stage) &&
     optionalString(value.templateId) &&
-    optionalNumber(value.minContextTokens) &&
-    optionalNumber(value.maxContextTokens)
+    optionalNonNegativeInteger(value.minContextTokens) &&
+    optionalNonNegativeInteger(value.maxContextTokens)
   );
 }
 
@@ -417,7 +468,9 @@ function isRoutingPolicyHardConstraint(value: unknown): value is RoutingPolicyHa
     typeof value.modelFamily === 'string' &&
     (ROUTING_MODEL_FAMILIES as readonly string[]).includes(value.modelFamily) &&
     isRoutingTransportArray(value.forbiddenTransports) &&
-    (value.allowedTransports === undefined || isRoutingTransportArray(value.allowedTransports))
+    (value.allowedTransports === undefined || isRoutingTransportArray(value.allowedTransports)) &&
+    (value.requiredLane === undefined ||
+      (typeof value.requiredLane === 'string' && (ROUTING_LANE_IDS as readonly string[]).includes(value.requiredLane)))
   );
 }
 
@@ -475,6 +528,7 @@ export function isRoutingPolicyDocument(value: unknown): value is RoutingPolicyD
   const doc = value;
   return (
     isFiniteNumber(doc.policyVersion) &&
+    isStringArray(doc.stageVocabulary) &&
     Array.isArray(doc.modelTable) &&
     doc.modelTable.every(isRoutingPolicyModelTableEntry) &&
     Array.isArray(doc.hardConstraints) &&

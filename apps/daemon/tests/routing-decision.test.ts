@@ -33,7 +33,16 @@ function throttled(lane: string, throttleEvents: number): LaneMeter {
 }
 
 describe('decideRouting -- §2 task-class resolution against the real policy', () => {
-  const distinctTaskClasses = [...new Set(realPolicy.modelTable.map((entry) => entry.match.taskClass).filter((v): v is string => v !== undefined))];
+  // token-distill is deliberately excluded from this generic loop: its row
+  // declares primary=deepseek-v4-flash (metered, tier 2) BEFORE
+  // burst=kimi-k3 (prepaid, tier 1) -- a non-monotonic transport-tier
+  // declaration order that MED-2's tier-sort (see the dedicated describe
+  // block below) intentionally overrides even absent any throttling. Every
+  // OTHER real task class's row already declares candidates in
+  // tier-ascending order, so this is the one real-policy exception.
+  const distinctTaskClasses = [
+    ...new Set(realPolicy.modelTable.map((entry) => entry.match.taskClass).filter((v): v is string => v !== undefined)),
+  ].filter((taskClass) => taskClass !== 'token-distill');
 
   it('has more than one §2 task class to iterate (sanity: the real policy is loaded, not an empty stub)', () => {
     expect(distinctTaskClasses.length).toBeGreaterThan(0);
@@ -53,6 +62,19 @@ describe('decideRouting -- §2 task-class resolution against the real policy', (
     expect(decision.lane).toBe(firstRow.primary.lane);
     expect(decision.admissionVerdict).toBe('not-evaluated');
     expect(decision.contextEstimateTokens).toBe(0);
+  });
+
+  it('token-distill resolves burst (kimi-k3/moonshot, prepaid) ahead of the row-declared primary (deepseek/metered) -- transport tier wins over declaration order', () => {
+    const decision = decideRouting({
+      policy: realPolicy,
+      key: keyFor(),
+      sensitivityClass: 'public',
+      laneMeters: [],
+      taskClass: 'token-distill',
+    });
+    expect(decision.status).toBe('ok');
+    expect(decision.modelFlag).toBe('moonshotai/kimi-k3');
+    expect(decision.lane).toBe('moonshot');
   });
 });
 
@@ -90,6 +112,7 @@ describe('decideRouting -- constraint filtering', () => {
   function fixturePolicy(overrides: Partial<RoutingPolicyDocument> = {}): RoutingPolicyDocument {
     return {
       policyVersion: 1,
+      stageVocabulary: ['chat'],
       modelTable: [
         {
           match: { taskClass: 'test-class' },
@@ -272,16 +295,36 @@ describe('decideRouting -- all 4 routing-key shapes', () => {
     expect(decision.reasons.some((r) => r.code === 'no-candidates')).toBe(true);
   });
 
-  it('fallback C (non-web pipeline-internal templateId, its own stage) resolves via taskClass', () => {
+  it('fallback C (non-web pipeline-internal templateId, its own GRANULAR ingestion stage) resolves via taskClass -- Sol review HIGH-1', () => {
+    // WR-routing.md's Fallback C: ingestion work keys on its OWN granular
+    // pipeline stage ("classify/extract/distill/verify/register"), never
+    // the coarse "ingestion" bucket -- 'classify' has no budgetCeilings
+    // entry at all, so this only routes if stageVocabulary (not
+    // budgetCeilings' keys) is what the engine validates against.
     const decision = decideRouting({
       policy: realPolicy,
-      key: keyFor({ templateId: 'ingest-classify-pipeline-run-7', buildClass: null, stage: 'ingestion', contextEstimateTokens: 900 }),
+      key: keyFor({ templateId: 'ingest-classify-pipeline-run-7', buildClass: null, stage: 'classify', contextEstimateTokens: 900 }),
       sensitivityClass: 'public',
       laneMeters: [],
       taskClass: 'token-distill',
     });
     expect(decision.status).toBe('ok');
-    expect(decision.modelFlag).toBe('deepseek-v4-flash');
+    // MED-2's transport-tier sort: burst (kimi-k3/moonshot, prepaid) beats
+    // the row-declared primary (deepseek/metered) once nothing is throttled.
+    expect(decision.modelFlag).toBe('moonshotai/kimi-k3');
+  });
+
+  it('a granular ingestion stage with no per-stage cost-ceiling entry is still ROUTABLE (Sol review HIGH-1: routability != cost-ceiling presence)', () => {
+    for (const subStage of ['classify', 'extract', 'distill', 'verify', 'register']) {
+      const decision = decideRouting({
+        policy: realPolicy,
+        key: keyFor({ stage: subStage }),
+        sensitivityClass: 'public',
+        laneMeters: [],
+        taskClass: 'token-distill',
+      });
+      expect(decision.status).toBe('ok');
+    }
   });
 });
 
@@ -289,6 +332,7 @@ describe('decideRouting -- contextMaxTokens / minContextTokens bounds', () => {
   function contextBoundPolicy(): RoutingPolicyDocument {
     return {
       policyVersion: 1,
+      stageVocabulary: ['chat'],
       modelTable: [
         {
           match: { taskClass: 'ctx-test', maxContextTokens: 1000 },
@@ -329,6 +373,221 @@ describe('decideRouting -- contextMaxTokens / minContextTokens bounds', () => {
     });
     expect(decision.status).toBe('ok');
     expect(decision.modelFlag).toBe('large-context-model');
+  });
+});
+
+// ---- Sol review fix-commit red tests (LOW-6: written first, per the
+// coordinator's instruction, before the corresponding fixes below) --------
+
+describe('decideRouting -- transport-tier demotion order (Sol review MED-2)', () => {
+  function tierFixturePolicy(): RoutingPolicyDocument {
+    return {
+      policyVersion: 1,
+      stageVocabulary: ['chat'],
+      modelTable: [
+        {
+          match: { taskClass: 'tier-test' },
+          primary: { runtimeId: 'metered-runtime', model: 'metered-primary', effort: 'inherit', lane: 'deepseek-direct', transport: 'metered-api', modelFamily: 'deepseek' },
+          burst: { runtimeId: 'prepaid-runtime', model: 'prepaid-burst', effort: 'inherit', lane: 'moonshot', transport: 'prepaid', modelFamily: 'moonshot' },
+          cheap: { runtimeId: 'sub-runtime', model: 'sub-cheap', effort: 'inherit', lane: 'claude-code-oauth', transport: 'subscription-oauth', modelFamily: 'anthropic' },
+        },
+      ],
+      hardConstraints: [],
+      laneChains: {
+        'claude-code-oauth': ['claude-code-oauth', 'nous', 'moonshot', 'deepseek-direct', 'openrouter'],
+        moonshot: ['moonshot', 'deepseek-direct', 'openrouter'],
+        'deepseek-direct': ['deepseek-direct', 'openrouter'],
+      },
+      dataClassificationAllowlists: [
+        { classification: 'public', allowedLanes: ['claude-code-oauth', 'moonshot', 'deepseek-direct'], failClosed: true },
+      ],
+      sonnetPriceRows: [],
+      budgetCeilings: { perStageEstimatedCostUsd: { chat: 0.5 }, perBuildCapUsd: 1, perDayCapUsd: 1, meteredKillSwitch: false },
+    };
+  }
+
+  it('with nothing throttled, still prefers the subscription-tier candidate declared LAST in the row over the metered/prepaid ones declared first', () => {
+    const decision = decideRouting({
+      policy: tierFixturePolicy(),
+      key: keyFor(),
+      sensitivityClass: 'public',
+      laneMeters: [],
+      taskClass: 'tier-test',
+    });
+    expect(decision.status).toBe('ok');
+    expect(decision.modelFlag).toBe('sub-cheap');
+    expect(decision.lane).toBe('claude-code-oauth');
+  });
+
+  it("Sol's literal scenario: throttled subscription primary + available subscription burst + available prepaid cheap -> the subscription burst, never nous", () => {
+    const policy: RoutingPolicyDocument = {
+      ...tierFixturePolicy(),
+      modelTable: [
+        {
+          match: { taskClass: 'tier-test-2' },
+          primary: { runtimeId: 'r1', model: 'sub-primary', effort: 'inherit', lane: 'claude-code-oauth', transport: 'subscription-oauth', modelFamily: 'anthropic' },
+          burst: { runtimeId: 'r2', model: 'sub-burst', effort: 'inherit', lane: 'codex-oauth', transport: 'subscription-oauth', modelFamily: 'openai' },
+          cheap: { runtimeId: 'r3', model: 'prepaid-cheap', effort: 'inherit', lane: 'nous', transport: 'prepaid', modelFamily: 'xai' },
+        },
+      ],
+      dataClassificationAllowlists: [
+        { classification: 'public', allowedLanes: ['claude-code-oauth', 'codex-oauth', 'nous'], failClosed: true },
+      ],
+    };
+    const decision = decideRouting({
+      policy,
+      key: keyFor(),
+      sensitivityClass: 'public',
+      laneMeters: [throttled('claude-code-oauth', 3)],
+      taskClass: 'tier-test-2',
+    });
+    expect(decision.status).toBe('ok');
+    expect(decision.modelFlag).toBe('sub-burst');
+    expect(decision.lane).toBe('codex-oauth');
+    expect(decision.lane).not.toBe('nous');
+  });
+});
+
+describe('decideRouting -- hard constraint requiredLane (Sol review MED-3)', () => {
+  it('removes a grok candidate dispatched on the wrong prepaid lane (moonshot instead of nous), falling to a compliant burst', () => {
+    const policy: RoutingPolicyDocument = {
+      policyVersion: 1,
+      stageVocabulary: ['chat'],
+      modelTable: [
+        {
+          match: { taskClass: 'grok-test' },
+          primary: { runtimeId: 'grok-build', model: 'grok-4.5', effort: 'inherit', lane: 'moonshot', transport: 'prepaid', modelFamily: 'xai' },
+          burst: { runtimeId: 'claude', model: 'claude-haiku-4-5', effort: 'inherit', lane: 'claude-code-oauth', transport: 'subscription-oauth', modelFamily: 'anthropic' },
+        },
+      ],
+      hardConstraints: [
+        {
+          id: 'grok-nous-only',
+          description: 'grok dispatches only via nous',
+          modelFamily: 'xai',
+          forbiddenTransports: ['subscription-oauth', 'metered-api', 'local'],
+          requiredLane: 'nous',
+        },
+      ],
+      laneChains: {},
+      dataClassificationAllowlists: [{ classification: 'public', allowedLanes: ['moonshot', 'claude-code-oauth'], failClosed: true }],
+      sonnetPriceRows: [],
+      budgetCeilings: { perStageEstimatedCostUsd: { chat: 0.5 }, perBuildCapUsd: 1, perDayCapUsd: 1, meteredKillSwitch: false },
+    };
+    const decision = decideRouting({
+      policy,
+      key: keyFor(),
+      sensitivityClass: 'public',
+      laneMeters: [],
+      taskClass: 'grok-test',
+    });
+    expect(decision.status).toBe('ok');
+    expect(decision.modelFlag).toBe('claude-haiku-4-5');
+    expect(decision.reasons.some((r) => r.step === 'hard-constraint-filter' && r.code === 'constraint:grok-nous-only')).toBe(true);
+  });
+});
+
+describe('decideRouting -- assignment pin edge cases (Sol review, LOW-6)', () => {
+  it('an unresolved assignment pin (no modelTable candidate anywhere shares its model+lane) is a typed error, never a fabricated candidate', () => {
+    const policy: RoutingPolicyDocument = {
+      policyVersion: 1,
+      stageVocabulary: ['chat'],
+      modelTable: [],
+      hardConstraints: [],
+      programAssignments: [{ taskSelector: 'ghost-selector', model: 'ghost-model', requiredLane: 'nous', note: 'test fixture only' }],
+      laneChains: {},
+      dataClassificationAllowlists: [{ classification: 'public', allowedLanes: [], failClosed: true }],
+      sonnetPriceRows: [],
+      budgetCeilings: { perStageEstimatedCostUsd: { chat: 0.5 }, perBuildCapUsd: 1, perDayCapUsd: 1, meteredKillSwitch: false },
+    };
+    const decision = decideRouting({
+      policy,
+      key: keyFor(),
+      sensitivityClass: 'public',
+      laneMeters: [],
+      taskClass: 'ghost-selector',
+    });
+    expect(decision.status).toBe('error');
+    expect(decision.modelFlag).not.toBe('ghost-model');
+    expect(decision.reasons.some((r) => r.code === 'assignment-unresolved:ghost-selector')).toBe(true);
+  });
+
+  it('an assignment pin resolved but then filtered by the sensitivity class fails closed, never dispatches the confidentiality-violating pin', () => {
+    // scoped-implementation pins deepseek-v4-flash/deepseek-direct (metered)
+    // -- entirely outside the client-confidential allowlist.
+    const decision = decideRouting({
+      policy: realPolicy,
+      key: keyFor(),
+      sensitivityClass: 'client-confidential',
+      laneMeters: [],
+      taskClass: 'scoped-implementation',
+    });
+    expect(decision.status).toBe('fail-closed-stop');
+    expect(decision.modelFlag).not.toBe('deepseek-v4-flash');
+    expect(decision.reasons.some((r) => r.step === 'program-assignment' && r.code === 'assignment:scoped-implementation')).toBe(true);
+    expect(decision.reasons.some((r) => r.step === 'data-classification-filter')).toBe(true);
+    expect(decision.reasons.some((r) => r.step === 'fail-closed')).toBe(true);
+  });
+});
+
+describe('decideRouting -- invalid core input fails closed, never open (Sol review MED-4)', () => {
+  it('a NaN laneMeter throttleEvents count is a typed error, never "ok" (NaN > threshold is always false -- the fail-open bug)', () => {
+    const decision = decideRouting({
+      policy: realPolicy,
+      key: keyFor(),
+      sensitivityClass: 'public',
+      laneMeters: [{ ...emptyLaneMeter('claude-code-oauth'), throttleEvents: NaN }],
+      taskClass: 'mechanical-batch',
+    });
+    expect(decision.status).toBe('error');
+    expect(decision.reasons.some((r) => r.step === 'error' && (r.code ?? '').startsWith('invalid-input'))).toBe(true);
+    expect(decision.modelFlag).not.toBe('claude-haiku-4-5');
+  });
+
+  it('a NaN key.contextEstimateTokens is a typed error, never "ok"', () => {
+    const decision = decideRouting({
+      policy: realPolicy,
+      key: keyFor({ contextEstimateTokens: NaN }),
+      sensitivityClass: 'public',
+      laneMeters: [],
+      taskClass: 'mechanical-batch',
+    });
+    expect(decision.status).toBe('error');
+  });
+
+  it('an Infinity key.contextEstimateTokens is a typed error, never "ok"', () => {
+    const decision = decideRouting({
+      policy: realPolicy,
+      key: keyFor({ contextEstimateTokens: Infinity }),
+      sensitivityClass: 'public',
+      laneMeters: [],
+      taskClass: 'mechanical-batch',
+    });
+    expect(decision.status).toBe('error');
+  });
+
+  it('a negative maxThrottleEvents is a typed error, never "ok"', () => {
+    const decision = decideRouting({
+      policy: realPolicy,
+      key: keyFor(),
+      sensitivityClass: 'public',
+      laneMeters: [],
+      taskClass: 'mechanical-batch',
+      maxThrottleEvents: -1,
+    });
+    expect(decision.status).toBe('error');
+  });
+
+  it('a fractional maxThrottleEvents is a typed error, never "ok"', () => {
+    const decision = decideRouting({
+      policy: realPolicy,
+      key: keyFor(),
+      sensitivityClass: 'public',
+      laneMeters: [],
+      taskClass: 'mechanical-batch',
+      maxThrottleEvents: 1.5,
+    });
+    expect(decision.status).toBe('error');
   });
 });
 

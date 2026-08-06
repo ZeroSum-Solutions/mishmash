@@ -6,7 +6,7 @@
 // return. Durable persistence (SQLite) and real gate-outcome content land
 // in later WR tranches -- see docs/plans/waves/WR-routing.md's Tranche
 // register (CWR-P1-2 for the telemetry row, CWR-P2-4 for lane meters).
-import { isPlainObject } from './routing-policy.js';
+import { isFiniteNonNegativeInteger, isPlainObject } from './routing-policy.js';
 
 export type RoutingGateOutcome = 'pass' | 'fail' | 'blocked-on-founder';
 
@@ -197,7 +197,11 @@ export function isLaneMeter(value: unknown): value is LaneMeter {
     typeof value.costUsd === 'number' &&
     typeof value.cost === 'string' &&
     (COST_STATES as readonly string[]).includes(value.cost) &&
-    typeof value.throttleEvents === 'number' &&
+    // Sol review MED-4: a throttle-event TALLY must be a nonnegative
+    // integer -- NaN is `typeof 'number'` too, and a NaN threshold silently
+    // fails OPEN in decision.ts's `throttleEvents > maxThrottleEvents` check
+    // (comparisons against NaN are always false).
+    isFiniteNonNegativeInteger(value.throttleEvents) &&
     typeof value.attributedRuns === 'number' &&
     typeof value.attribution === 'string' &&
     (ATTRIBUTION_STATES as readonly string[]).includes(value.attribution)

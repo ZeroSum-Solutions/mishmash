@@ -5,7 +5,12 @@
 // section; this file only expresses that shape as a type, it does not
 // implement the fallback classification logic itself -- that is dispatch
 // logic and lands in a later WR tranche (P2).
-import { isPlainObject, type RoutingDataClassification, type RoutingEffort } from './routing-policy.js';
+import {
+  isFiniteNonNegativeInteger,
+  isPlainObject,
+  type RoutingDataClassification,
+  type RoutingEffort,
+} from './routing-policy.js';
 
 /**
  * key = (templateId | NONE) x (buildClass | NONE) x stage x
@@ -241,7 +246,11 @@ export function isRoutingKey(value: unknown): value is RoutingKey {
   if (!isPlainObject(value)) return false;
   const key = value;
   if (typeof key.stage !== 'string') return false;
-  if (typeof key.contextEstimateTokens !== 'number') return false;
+  // Sol review MED-4: a token count is a nonnegative integer, never
+  // NaN/Infinity/negative/fractional -- see isFiniteNonNegativeInteger's
+  // own doc comment for why a plain `typeof === 'number'` check is unsafe
+  // here (NaN IS `typeof 'number'`).
+  if (!isFiniteNonNegativeInteger(key.contextEstimateTokens)) return false;
   if (!isNumberRecord(key.laneMeters)) return false;
 
   if (key.buildClass === null) {
@@ -281,7 +290,7 @@ export function isRoutingDecision(value: unknown): value is RoutingDecision {
     typeof decision.status === 'string' &&
     (ROUTING_DECISION_STATUSES as readonly string[]).includes(decision.status) &&
     isRoutingDecisionReasonArray(decision.reasons) &&
-    typeof decision.contextEstimateTokens === 'number' &&
+    isFiniteNonNegativeInteger(decision.contextEstimateTokens) &&
     isRoutingLaneDemotionArray(decision.demotions)
   );
 }

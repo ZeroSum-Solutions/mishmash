@@ -505,9 +505,18 @@ async function runCover(args) {
 // dispatch-time routing (a bare `od route --json` returning
 // escalationRate/passRate/laneMeters, CWR-P2-4) lands in a later WR tranche.
 //
-// `preview`'s --task-class/--sensitivity-class/--context-tokens/--prompt-text
-// (t5) forward to the real decideRouting engine GET /api/routing/decision/
-// preview now runs -- see apps/daemon/src/routing/decision.ts.
+// `preview`'s --task-class/--sensitivity-class/--context-tokens/--prompt-file
+// (t5) forward to the real decideRouting engine the /api/routing/decision/
+// preview GET+POST pair now runs -- see apps/daemon/src/routing/decision.ts.
+// Sol review MED-5 (confidentiality, fix commit): a raw `--prompt-text
+// <text>` flag would put a potentially client-confidential composed-prompt
+// excerpt directly into argv (visible in shell history and `ps`), so this
+// follows the repo's own `--prompt-file <path|->` CLI contract (AGENTS.md
+// "Capability exposure") instead -- a file path or `-` for stdin, read via
+// the same `readMemoryPromptFile` helper `od memory profile set` already
+// uses (generic despite its name: reads `--prompt-file`, nothing memory-
+// specific). Supplying `--prompt-file` switches `preview` from GET to POST
+// so the prompt body never rides a query string either.
 const ROUTE_STRING_FLAGS = new Set([
   'daemon-url',
   'template-id',
@@ -516,7 +525,7 @@ const ROUTE_STRING_FLAGS = new Set([
   'task-class',
   'sensitivity-class',
   'context-tokens',
-  'prompt-text',
+  'prompt-file',
   'project-id',
   'run-id',
   'since-ms',
@@ -548,8 +557,11 @@ Options:
   --sensitivity-class <c>  preview: client-confidential|internal|public
                            (default: client-confidential).
   --context-tokens <n>     preview: explicit contextEstimateTokens override.
-  --prompt-text <text>     preview: estimate contextEstimateTokens from text
-                           (ignored when --context-tokens is also given).
+  --prompt-file <path|->   preview: estimate contextEstimateTokens from a
+                           file (or - for stdin); ignored when
+                           --context-tokens is also given. Switches preview
+                           to POST so the prompt body never rides a query
+                           string.
   --project-id <id>        telemetry: filter by project id.
   --run-id <id>            telemetry: filter by run id.
   --since-ms <ms>          telemetry: lower bound on createdAt (epoch ms).
@@ -597,17 +609,36 @@ async function runRoute(args) {
   }
 
   if (sub === 'preview') {
-    const qs = new URLSearchParams();
-    if (flags['template-id']) qs.set('templateId', String(flags['template-id']));
-    if (flags['build-class']) qs.set('buildClass', String(flags['build-class']));
-    if (flags.stage) qs.set('stage', String(flags.stage));
-    if (flags['task-class']) qs.set('taskClass', String(flags['task-class']));
-    if (flags['sensitivity-class']) qs.set('sensitivityClass', String(flags['sensitivity-class']));
-    if (flags['context-tokens']) qs.set('contextEstimateTokens', String(flags['context-tokens']));
-    if (flags['prompt-text']) qs.set('promptText', String(flags['prompt-text']));
+    // Sol review MED-5: a supplied --prompt-file switches this to POST
+    // (JSON body) so the prompt text never rides a query string; without
+    // it, GET stays (param-only, cheap, cacheable-by-nature previews).
+    const promptText = await readMemoryPromptFile(flags);
     let resp;
     try {
-      resp = await fetch(`${base}/api/routing/decision/preview?${qs.toString()}`);
+      if (promptText !== undefined) {
+        resp = await fetch(`${base}/api/routing/decision/preview`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            templateId: flags['template-id'] ? String(flags['template-id']) : undefined,
+            buildClass: flags['build-class'] ? String(flags['build-class']) : undefined,
+            stage: flags.stage ? String(flags.stage) : undefined,
+            taskClass: flags['task-class'] ? String(flags['task-class']) : undefined,
+            sensitivityClass: flags['sensitivity-class'] ? String(flags['sensitivity-class']) : undefined,
+            contextEstimateTokens: flags['context-tokens'] ? Number(flags['context-tokens']) : undefined,
+            promptText,
+          }),
+        });
+      } else {
+        const qs = new URLSearchParams();
+        if (flags['template-id']) qs.set('templateId', String(flags['template-id']));
+        if (flags['build-class']) qs.set('buildClass', String(flags['build-class']));
+        if (flags.stage) qs.set('stage', String(flags.stage));
+        if (flags['task-class']) qs.set('taskClass', String(flags['task-class']));
+        if (flags['sensitivity-class']) qs.set('sensitivityClass', String(flags['sensitivity-class']));
+        if (flags['context-tokens']) qs.set('contextEstimateTokens', String(flags['context-tokens']));
+        resp = await fetch(`${base}/api/routing/decision/preview?${qs.toString()}`);
+      }
     } catch (err) {
       return exitWithStructuredError({
         code: 'daemon-not-running',

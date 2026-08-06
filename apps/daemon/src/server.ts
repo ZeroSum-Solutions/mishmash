@@ -2127,6 +2127,13 @@ export async function startServer({
   // (STORYBOARD_FINISH_AUDIO_MAX_BYTES, 32MiB raw), same 48mb headroom
   // (registered before the global parser so it claims the body first).
   app.use('/api/storyboards/:id/assemble', express.json({ limit: '48mb' }));
+  // Routing decision preview's POST body can carry a composed-prompt excerpt
+  // (potentially client-confidential -- WR wave, Sol review MED-3/t5 fix
+  // commit's confidentiality finding: promptText must never ride a query
+  // string). A generous-for-a-prompt, far-below-blanket-default limit,
+  // registered before the global parser so it claims the body first (same
+  // pattern as the routes above).
+  app.use('/api/routing/decision/preview', express.json({ limit: '256kb' }));
   app.use(express.json({ limit: '4mb' }));
   const projectPreviewScopes = createProjectPreviewScopeRegistry();
 

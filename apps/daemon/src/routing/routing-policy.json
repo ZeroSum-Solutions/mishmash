@@ -1,5 +1,22 @@
 {
   "policyVersion": 1,
+  "stageVocabulary": [
+    "brief-art-direction",
+    "token-freeze",
+    "shell-primitives",
+    "section-fanout",
+    "variations",
+    "review-panel",
+    "deploy",
+    "chat",
+    "ingestion",
+    "mobile",
+    "classify",
+    "extract",
+    "distill",
+    "verify",
+    "register"
+  ],
   "modelTable": [
     {
       "match": { "taskClass": "art-direction-ia-brief-analysis" },
@@ -92,7 +109,8 @@
       "id": "prd-15-grok-via-nous-lane",
       "description": "Grok 4.5 dispatches only through the prepaid Nous Portal lane in-program (PRD §15, plan §2). This session's OpenRouter-routed review predates program alignment and is not a standing exception; a future in-program Grok call outside the prepaid transport requires a PRD amendment (plan §6 open question 6 -- Nous-hosted Grok availability is not yet confirmed).",
       "modelFamily": "xai",
-      "forbiddenTransports": ["subscription-oauth", "metered-api", "local"]
+      "forbiddenTransports": ["subscription-oauth", "metered-api", "local"],
+      "requiredLane": "nous"
     },
     {
       "id": "prd-15-mechanical-verification-deterministic-only",

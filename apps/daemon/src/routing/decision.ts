@@ -27,22 +27,38 @@
 //       lane meter shows recent throttle events;
 //   (e) if (c) or (d) empties the list, FAIL-CLOSED: stop, never fall
 //       through to an out-of-class or unlisted candidate.
-import type {
-  LaneMeter,
-  RoutingCandidate,
-  RoutingDataClassification,
-  RoutingDecision,
-  RoutingDecisionReason,
-  RoutingDecisionReasonStep,
-  RoutingKey,
-  RoutingLaneDemotion,
-  RoutingMatchRule,
-  RoutingPolicyDataClassAllowlist,
-  RoutingPolicyDocument,
-  RoutingPolicyHardConstraint,
-  RoutingPolicyModelTableEntry,
-  RoutingPolicyProgramAssignment,
+import {
+  isFiniteNonNegativeInteger,
+  type LaneMeter,
+  type RoutingCandidate,
+  type RoutingDataClassification,
+  type RoutingDecision,
+  type RoutingDecisionReason,
+  type RoutingDecisionReasonStep,
+  type RoutingKey,
+  type RoutingLaneDemotion,
+  type RoutingMatchRule,
+  type RoutingPolicyDataClassAllowlist,
+  type RoutingPolicyDocument,
+  type RoutingPolicyHardConstraint,
+  type RoutingPolicyModelTableEntry,
+  type RoutingPolicyProgramAssignment,
+  type RoutingTransport,
 } from '@open-design/contracts';
+
+/** Sol review MED-2: the canonical subscription -> prepaid -> metered ->
+ * local tier order (plan §2 "Lane realism"). Used to sort candidates before
+ * the demotion walk below -- see `sortByTransportTier`'s own doc comment for
+ * why this beats consulting `policy.laneChains` directly (the three
+ * subscription lanes never co-occur in any one chain array, so a chain
+ * can't by itself tell two same-tier lanes apart; `transport` already
+ * carries exactly that grouping on every candidate). */
+const TRANSPORT_TIER: Record<RoutingTransport, number> = {
+  'subscription-oauth': 0,
+  prepaid: 1,
+  'metered-api': 2,
+  local: 3,
+};
 
 export interface DecideRoutingInput {
   policy: RoutingPolicyDocument;
@@ -164,7 +180,13 @@ function filterByHardConstraints(
       const violatesAllowlist =
         constraint.allowedTransports !== undefined && !constraint.allowedTransports.includes(candidate.transport);
       const violatesForbidden = constraint.forbiddenTransports.includes(candidate.transport);
-      if (violatesAllowlist || violatesForbidden) {
+      // Sol review MED-3: transport alone cannot express "this SPECIFIC
+      // lane, not just any lane on this transport" -- PRD §15's "Grok 4.5
+      // dispatches only through the prepaid Nous Portal lane" would
+      // otherwise happily admit a Grok candidate routed through Moonshot,
+      // which is ALSO `prepaid`.
+      const violatesRequiredLane = constraint.requiredLane !== undefined && candidate.lane !== constraint.requiredLane;
+      if (violatesAllowlist || violatesForbidden || violatesRequiredLane) {
         removed.push({
           step: 'hard-constraint-filter',
           code: `constraint:${constraint.id}`,
@@ -176,6 +198,48 @@ function filterByHardConstraints(
     return true;
   });
   return { survivors, removed };
+}
+
+/** Sol review MED-2: a row's primary/burst/cheap declaration order is a
+ * TASK-FIT preference (which model best suits the work), not necessarily an
+ * AVAILABILITY tier ordering -- token-distill's row, for instance,
+ * legitimately declares primary=deepseek-v4-flash (metered) before
+ * burst=kimi-k3 (prepaid) because deepseek is the right model for token
+ * distillation, not because it is the more available lane. But the
+ * demotion walk's whole PURPOSE is availability fallback (plan §2 "Lane
+ * realism": "observed throttles... advance the chain subscription ->
+ * prepaid -> metered"), so it must walk candidates in TRUE tier order, not
+ * raw declaration order, or it can end up preferring a worse-tier candidate
+ * over a same-or-better-tier one purely because of where it sits in the row.
+ * `Array#sort` is a stable sort (ECMA-262, guaranteed since ES2019), so
+ * candidates within the same tier keep their original primary -> burst ->
+ * cheap relative order -- this only ever reorders ACROSS tiers. */
+function sortByTransportTier(candidates: RoutingCandidate[]): RoutingCandidate[] {
+  return [...candidates].sort((a, b) => TRANSPORT_TIER[a.transport] - TRANSPORT_TIER[b.transport]);
+}
+
+/**
+ * Sol review MED-4: a comparison against `NaN` is ALWAYS `false`
+ * (`NaN > 0` is `false`), which makes an unvalidated `throttleEvents: NaN`
+ * silently FAIL OPEN in the demotion walk below -- a NaN-corrupted meter
+ * would read as "never throttled" instead of raising an alarm. Validating
+ * every numeric core input up front, before any routing logic runs, turns
+ * that into an honest typed 'error' decision instead. Returns a
+ * human-readable reason string on failure, `null` when everything is valid.
+ */
+function findInvalidCoreInputReason(key: RoutingKey, laneMeters: LaneMeter[], maxThrottleEvents: number): string | null {
+  if (!isFiniteNonNegativeInteger(key.contextEstimateTokens)) {
+    return `key.contextEstimateTokens must be a finite nonnegative integer, got ${key.contextEstimateTokens}`;
+  }
+  if (!isFiniteNonNegativeInteger(maxThrottleEvents)) {
+    return `maxThrottleEvents must be a finite nonnegative integer, got ${maxThrottleEvents}`;
+  }
+  for (const meter of laneMeters) {
+    if (!isFiniteNonNegativeInteger(meter.throttleEvents)) {
+      return `laneMeters entry for lane "${meter.lane}" has an invalid throttleEvents (must be a finite nonnegative integer, got ${meter.throttleEvents})`;
+    }
+  }
+  return null;
 }
 
 function filterByDataClassification(
@@ -211,7 +275,12 @@ function filterByDataClassification(
 
 function terminalDecision(args: {
   policy: RoutingPolicyDocument;
-  key: RoutingKey;
+  /** Sol review MED-4: taken as an already-validated plain number (never
+   * `key.contextEstimateTokens` directly) so an input-validation failure
+   * can report a SAFE sentinel (0) instead of propagating the very NaN/
+   * Infinity/negative value that triggered the error into the decision
+   * object itself. */
+  contextEstimateTokens: number;
   sensitivityClass: RoutingDataClassification;
   status: 'fail-closed-stop' | 'error';
   reasons: RoutingDecisionReason[];
@@ -230,7 +299,7 @@ function terminalDecision(args: {
     sensitivityClass: args.sensitivityClass,
     status: args.status,
     reasons: args.reasons,
-    contextEstimateTokens: args.key.contextEstimateTokens,
+    contextEstimateTokens: args.contextEstimateTokens,
     demotions: args.demotions,
   };
 }
@@ -260,14 +329,38 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
   const maxThrottleEvents = input.maxThrottleEvents ?? 0;
   const reasons: RoutingDecisionReason[] = [];
 
+  // (0) Input validation -- Sol review MED-4, runs before ANYTHING else.
+  // A NaN/Infinity/negative/fractional core input (contextEstimateTokens,
+  // maxThrottleEvents, any laneMeters[].throttleEvents) must never reach a
+  // comparison that could silently fail OPEN; it is a typed 'error'
+  // decision instead. `key.contextEstimateTokens` itself may be the
+  // invalid value, so the returned decision reports a safe `0` sentinel
+  // rather than propagating it.
+  const invalidInputReason = findInvalidCoreInputReason(key, laneMeters, maxThrottleEvents);
+  if (invalidInputReason !== null) {
+    pushReason(reasons, 'error', 'invalid-input', invalidInputReason);
+    const safeContextEstimateTokens = isFiniteNonNegativeInteger(key.contextEstimateTokens) ? key.contextEstimateTokens : 0;
+    return terminalDecision({
+      policy,
+      contextEstimateTokens: safeContextEstimateTokens,
+      sensitivityClass,
+      status: 'error',
+      reasons,
+      demotions: [],
+      rationale: invalidInputReason,
+    });
+  }
+
   // (a1) Stage validation -- closed vocabulary, unknown stage is a typed
-  // error, never a fallback row. The closed set IS
-  // policy.budgetCeilings.perStageEstimatedCostUsd's own keys: that object
-  // is already drift-tested as the ten-stage vocabulary by
-  // packages/contracts/tests/routing-policy-drift.test.ts, so reusing it
-  // here gives the vocabulary exactly one source of truth in the policy
-  // document instead of a second hardcoded copy that could silently drift.
-  const closedStages = new Set(Object.keys(policy.budgetCeilings.perStageEstimatedCostUsd));
+  // error, never a fallback row. Sol review HIGH-1 (t5 fix commit): the
+  // closed set is `policy.stageVocabulary`, NOT
+  // `budgetCeilings.perStageEstimatedCostUsd`'s keys -- the latter is a
+  // coarser cost-ceiling bucket set that deliberately omits WR-routing.md's
+  // Fallback-C granular ingestion sub-stages (classify/extract/distill/
+  // verify/register), which must still be ROUTABLE even with no per-
+  // sub-stage budget ceiling (a budget ceiling is t6's admission-control
+  // concern, not a routability gate this engine owns).
+  const closedStages = new Set(policy.stageVocabulary);
   if (!closedStages.has(key.stage)) {
     pushReason(
       reasons,
@@ -277,7 +370,7 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
     );
     return terminalDecision({
       policy,
-      key,
+      contextEstimateTokens: key.contextEstimateTokens,
       sensitivityClass,
       status: 'error',
       reasons,
@@ -338,7 +431,15 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
       ? `neither a §2 model-table row nor a §15 program assignment resolves taskClass "${taskClass}" at stage "${key.stage}".`
       : 'no taskClass supplied and no §15 assignment applies; the dispatch layer must apply its own runtime default (WR-routing.md Fallback B).';
     pushReason(reasons, 'error', 'no-candidates', message);
-    return terminalDecision({ policy, key, sensitivityClass, status: 'error', reasons, demotions: [], rationale: message });
+    return terminalDecision({
+      policy,
+      contextEstimateTokens: key.contextEstimateTokens,
+      sensitivityClass,
+      status: 'error',
+      reasons,
+      demotions: [],
+      rationale: message,
+    });
   }
 
   // (c) Filter: hard constraints, then the sensitivity class's
@@ -359,7 +460,15 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
       ? `every remaining candidate for taskClass "${taskClass}" was removed by hard constraints or the "${sensitivityClass}" data-classification allowlist; refusing to fall through to an out-of-class lane.`
       : `sensitivityClass "${sensitivityClass}" has no allowlist entry in policy version ${policy.policyVersion}; fail-closed by construction.`;
     pushReason(reasons, 'fail-closed', `class-exhausted:${sensitivityClass}`, message);
-    return terminalDecision({ policy, key, sensitivityClass, status: 'fail-closed-stop', reasons, demotions: [], rationale: message });
+    return terminalDecision({
+      policy,
+      contextEstimateTokens: key.contextEstimateTokens,
+      sensitivityClass,
+      status: 'fail-closed-stop',
+      reasons,
+      demotions: [],
+      rationale: message,
+    });
   }
 
   // dispatchValidation flags are carried through, not filtered on -- the
@@ -376,23 +485,26 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
   }
 
   // (d) Lane-availability advance: walk the already-filtered, already
-  // classification-safe candidate list in order (primary -> burst ->
-  // cheap), demoting past any lane whose meter shows recent throttle
-  // events. Deliberately does NOT consult policy.laneChains to synthesize a
-  // NEW candidate outside this list -- routing-policy.json's own top-level
+  // classification-safe candidate list IN TRANSPORT-TIER ORDER (Sol review
+  // MED-2 -- see sortByTransportTier's own doc comment for why raw
+  // primary->burst->cheap declaration order is not always tier-ascending),
+  // demoting past any lane whose meter shows recent throttle events.
+  // Deliberately does NOT consult policy.laneChains to synthesize a NEW
+  // candidate outside this list -- routing-policy.json's own top-level
   // notes say laneChains "does not itself intersect with hardConstraints"
   // and applying it before a hard-constraint/classification check is a
   // different layer's job. Demoting only within the already-filtered list
   // is what makes the (e) fail-closed guarantee below airtight: it can
   // never introduce a lane the classification filter just removed.
+  const tieredCandidates = sortByTransportTier(afterClassification);
   const meterByLane = new Map(laneMeters.map((m) => [m.lane, m] as const));
   const demotions: RoutingLaneDemotion[] = [];
   let selected: RoutingCandidate | null = null;
-  for (let i = 0; i < afterClassification.length; i += 1) {
-    const candidate = afterClassification[i]!;
+  for (let i = 0; i < tieredCandidates.length; i += 1) {
+    const candidate = tieredCandidates[i]!;
     const throttleEvents = meterByLane.get(candidate.lane)?.throttleEvents ?? 0;
     if (throttleEvents > maxThrottleEvents) {
-      const next = afterClassification[i + 1] ?? null;
+      const next = tieredCandidates[i + 1] ?? null;
       const reason = `lane "${candidate.lane}" shows ${throttleEvents} throttle event(s) (> threshold ${maxThrottleEvents}); demoting${next ? ` to "${next.lane}"` : ' -- no candidate remains'}.`;
       demotions.push({ fromLane: candidate.lane, toLane: next?.lane ?? null, reason });
       pushReason(reasons, 'lane-throttle-demotion', `throttled:${candidate.lane}`, reason);
@@ -407,7 +519,15 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
   if (!selected) {
     const message = `every remaining candidate for sensitivity class "${sensitivityClass}" is currently throttled; refusing to fall through to an out-of-class or unlisted lane.`;
     pushReason(reasons, 'fail-closed', `throttle-exhausted:${sensitivityClass}`, message);
-    return terminalDecision({ policy, key, sensitivityClass, status: 'fail-closed-stop', reasons, demotions, rationale: message });
+    return terminalDecision({
+      policy,
+      contextEstimateTokens: key.contextEstimateTokens,
+      sensitivityClass,
+      status: 'fail-closed-stop',
+      reasons,
+      demotions,
+      rationale: message,
+    });
   }
 
   pushReason(

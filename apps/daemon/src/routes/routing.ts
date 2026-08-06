@@ -7,7 +7,7 @@
 // enforcement (t9) still land in later WR tranches -- see
 // docs/plans/waves/WR-routing.md's Tranche register.
 import type Database from 'better-sqlite3';
-import type { Express, Request, Response } from 'express';
+import express, { type Express, type Request, type Response } from 'express';
 import type {
   RoutingDataClassification,
   RoutingDecisionPreviewResponse,
@@ -46,12 +46,30 @@ type QueryIntResult = { ok: true; value: number | undefined } | { ok: false; mes
  * be range-checked here at the boundary, not just finiteness-checked. */
 const MAX_ECMASCRIPT_DATE_MS = 8_640_000_000_000_000;
 
-function parseOptionalQueryInt(raw: unknown, name: string, opts: { min?: number; max?: number } = {}): QueryIntResult {
-  if (raw === undefined) return { ok: true, value: undefined };
-  if (typeof raw !== 'string' || raw.length === 0 || !Number.isFinite(Number(raw))) {
+/** Sol review MED-4 (fix commit): a token-count query/body value must be an
+ * INTEGER within a sane bound, not just any finite number -- `integer: true`
+ * rejects `3.5`; `max` (used by the `contextEstimateTokens` bound below,
+ * 8,000,000) rejects an absurd value before it ever reaches the engine. */
+function parseOptionalQueryInt(
+  raw: unknown,
+  name: string,
+  opts: { min?: number; max?: number; integer?: boolean } = {},
+): QueryIntResult {
+  if (raw === undefined || raw === null) return { ok: true, value: undefined };
+  let n: number;
+  if (typeof raw === 'number') {
+    n = raw;
+  } else if (typeof raw === 'string' && raw.length > 0) {
+    n = Number(raw);
+  } else {
     return { ok: false, message: `\`${name}\` must be a finite number` };
   }
-  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    return { ok: false, message: `\`${name}\` must be a finite number` };
+  }
+  if (opts.integer === true && !Number.isInteger(n)) {
+    return { ok: false, message: `\`${name}\` must be an integer` };
+  }
   if (opts.min !== undefined && n < opts.min) {
     return { ok: false, message: `\`${name}\` must be >= ${opts.min}` };
   }
@@ -60,6 +78,13 @@ function parseOptionalQueryInt(raw: unknown, name: string, opts: { min?: number;
   }
   return { ok: true, value: n };
 }
+
+/** Sol review MED-4: `contextEstimateTokens` is a token COUNT, never
+ * arbitrary -- bounded well above any realistic composed-prompt size so a
+ * malicious/malformed caller can't force a pathological allocation or
+ * comparison downstream, while staying far above what any real prompt would
+ * ever estimate to. */
+const MAX_CONTEXT_ESTIMATE_TOKENS = 8_000_000;
 
 /** Bounds for an epoch-milliseconds query param that ultimately reaches
  * `new Date(v).toISOString()` (sinceMs/untilMs directly; windowMs via
@@ -71,6 +96,90 @@ const EPOCH_MS_BOUNDS = { min: 0, max: MAX_ECMASCRIPT_DATE_MS } as const;
  * `invalid-routing-key` envelope below rather than inventing a second one. */
 function respondInvalidQuery(res: Response, message: string): void {
   res.status(400).json({ error: { code: 'invalid-query-param', message } });
+}
+
+/**
+ * Sol review MED-5: raw (unvalidated, `unknown`-typed) input to the decision
+ * preview, sourced from EITHER `req.query` (GET, values always strings) OR
+ * `req.body` (POST, values may already be the right JS type). Kept as a
+ * plain object so `runDecisionPreview` below is the ONE place that parses/
+ * validates -- GET and POST never duplicate that logic.
+ */
+interface RawDecisionPreviewInput {
+  templateId: unknown;
+  buildClass: unknown;
+  stage: unknown;
+  taskClass: unknown;
+  sensitivityClass: unknown;
+  contextEstimateTokens: unknown;
+  promptText: unknown;
+}
+
+type DecisionPreviewResult =
+  | { status: 200; body: RoutingDecisionPreviewResponse }
+  | { status: 400; body: { error: { code: string; message: string } } };
+
+/**
+ * Shared body for GET and POST `/api/routing/decision/preview` (Sol review
+ * MED-5): validates the routing-key shape, the sensitivity class, and the
+ * context-token bound, then calls the real `decideRouting` engine. Neither
+ * HTTP verb duplicates this logic -- only how they SOURCE `raw` differs.
+ */
+function runDecisionPreview(raw: RawDecisionPreviewInput, db: Database.Database | undefined): DecisionPreviewResult {
+  const templateId = queryStringOrNull(raw.templateId);
+  const buildClass = queryStringOrNull(raw.buildClass);
+  const stage = queryStringOrNull(raw.stage) ?? 'chat';
+  const taskClass = queryStringOrNull(raw.taskClass);
+
+  if (buildClass !== null && templateId === null) {
+    return {
+      status: 400,
+      body: {
+        error: {
+          code: 'invalid-routing-key',
+          message:
+            'buildClass may only be supplied together with templateId -- WR-routing.md\'s fallback table has no build-class-only shape.',
+        },
+      },
+    };
+  }
+
+  const sensitivityClassRaw = queryStringOrNull(raw.sensitivityClass);
+  // Fail-closed placeholder (plan §3.2 L2): an unresolved sensitivity class
+  // defaults to the MOST restrictive value rather than the least.
+  let sensitivityClass: RoutingDataClassification = 'client-confidential';
+  if (sensitivityClassRaw !== null) {
+    if (!isRoutingDataClassification(sensitivityClassRaw)) {
+      return {
+        status: 400,
+        body: { error: { code: 'invalid-query-param', message: `\`sensitivityClass\` must be one of: ${ROUTING_DATA_CLASSIFICATIONS.join(', ')}` } },
+      };
+    }
+    sensitivityClass = sensitivityClassRaw;
+  }
+
+  const promptText = queryStringOrNull(raw.promptText);
+  const contextTokensResult = parseOptionalQueryInt(raw.contextEstimateTokens, 'contextEstimateTokens', {
+    min: 0,
+    max: MAX_CONTEXT_ESTIMATE_TOKENS,
+    integer: true,
+  });
+  if (!contextTokensResult.ok) {
+    return { status: 400, body: { error: { code: 'invalid-query-param', message: contextTokensResult.message } } };
+  }
+  const contextEstimateTokens = contextTokensResult.value ?? (promptText !== null ? estimatePromptTokens(promptText) : 0);
+
+  const policy = loadRoutingPolicy();
+  const laneMeters = db ? computeLaneMeters(db) : [];
+  const laneMetersRecord = Object.fromEntries(laneMeters.map((m) => [m.lane, m.throttleEvents]));
+
+  const key: RoutingKey =
+    templateId !== null && buildClass !== null
+      ? { templateId, buildClass, stage, contextEstimateTokens, laneMeters: laneMetersRecord }
+      : { templateId, buildClass: null, stage, contextEstimateTokens, laneMeters: laneMetersRecord };
+
+  const decision = decideRouting({ policy, key, sensitivityClass, laneMeters, taskClass });
+  return { status: 200, body: { key, decision } };
 }
 
 /**
@@ -99,56 +208,61 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database): voi
   // expressible: primary (templateId+buildClass), fallback A (templateId
   // only), fallback B (neither -- stage defaults to 'chat'), fallback C
   // (templateId + a non-web stage, e.g. an ingestion pipeline stage id).
+  //
+  // Sol review MED-5 (confidentiality): `promptText` is REJECTED over GET --
+  // a query string is logged (access logs, proxy logs, shell/browser
+  // history) far more readily than a request body, and a composed prompt
+  // preview can carry client-confidential content. GET stays for
+  // param-only previews (no prompt text involved); a caller that needs
+  // `promptText`-derived estimation uses POST below instead.
   app.get('/api/routing/decision/preview', (req: Request, res: Response) => {
-    const templateId = queryStringOrNull(req.query.templateId);
-    const buildClass = queryStringOrNull(req.query.buildClass);
-    const stage = queryStringOrNull(req.query.stage) ?? 'chat';
-    const taskClass = queryStringOrNull(req.query.taskClass);
-
-    if (buildClass !== null && templateId === null) {
-      res.status(400).json({
-        error: {
-          code: 'invalid-routing-key',
-          message:
-            'buildClass may only be supplied together with templateId -- WR-routing.md\'s fallback table has no build-class-only shape.',
-        },
-      });
-      return;
+    if (queryStringOrNull(req.query.promptText) !== null) {
+      return respondInvalidQuery(
+        res,
+        '`promptText` is not accepted over GET (query strings are logged in access/proxy/shell history) -- POST JSON to this same path instead.',
+      );
     }
+    const result = runDecisionPreview(
+      {
+        templateId: req.query.templateId,
+        buildClass: req.query.buildClass,
+        stage: req.query.stage,
+        taskClass: req.query.taskClass,
+        sensitivityClass: req.query.sensitivityClass,
+        contextEstimateTokens: req.query.contextEstimateTokens,
+        promptText: undefined,
+      },
+      db,
+    );
+    res.status(result.status).json(result.body);
+  });
 
-    const sensitivityClassRaw = queryStringOrNull(req.query.sensitivityClass);
-    // Fail-closed placeholder (plan §3.2 L2): an unresolved sensitivity
-    // class defaults to the MOST restrictive value rather than the least.
-    let sensitivityClass: RoutingDataClassification = 'client-confidential';
-    if (sensitivityClassRaw !== null) {
-      if (!isRoutingDataClassification(sensitivityClassRaw)) {
-        return respondInvalidQuery(
-          res,
-          `\`sensitivityClass\` must be one of: ${ROUTING_DATA_CLASSIFICATIONS.join(', ')}`,
-        );
-      }
-      sensitivityClass = sensitivityClassRaw;
-    }
-
-    const promptText = queryStringOrNull(req.query.promptText);
-    const contextTokensResult = parseOptionalQueryInt(req.query.contextEstimateTokens, 'contextEstimateTokens', {
-      min: 0,
-    });
-    if (!contextTokensResult.ok) return respondInvalidQuery(res, contextTokensResult.message);
-    const contextEstimateTokens = contextTokensResult.value ?? (promptText !== null ? estimatePromptTokens(promptText) : 0);
-
-    const policy = loadRoutingPolicy();
-    const laneMeters = db ? computeLaneMeters(db) : [];
-    const laneMetersRecord = Object.fromEntries(laneMeters.map((m) => [m.lane, m.throttleEvents]));
-
-    const key: RoutingKey =
-      templateId !== null && buildClass !== null
-        ? { templateId, buildClass, stage, contextEstimateTokens, laneMeters: laneMetersRecord }
-        : { templateId, buildClass: null, stage, contextEstimateTokens, laneMeters: laneMetersRecord };
-
-    const decision = decideRouting({ policy, key, sensitivityClass, laneMeters, taskClass });
-    const response: RoutingDecisionPreviewResponse = { key, decision };
-    res.json(response);
+  // POST /api/routing/decision/preview -- same engine, JSON body instead of
+  // query params, so `promptText` (potentially client-confidential) never
+  // touches a URL. Sol review MED-5: a narrow `express.json({ limit:
+  // '256kb' })` scoped to just this route (mirrors attribution.ts's
+  // per-route body-limit pattern) -- generous for a composed-prompt
+  // preview, far below the daemon's blanket 4mb default. Also mounted
+  // path-scoped in apps/daemon/src/server.ts AHEAD of that blanket parser
+  // so the narrower limit actually applies in the real daemon (a body
+  // parser is a no-op once an earlier one already consumed the body); this
+  // inline copy is what makes the route self-contained for the bare-express
+  // test harness other routing tests already use.
+  app.post('/api/routing/decision/preview', express.json({ limit: '256kb' }), (req: Request, res: Response) => {
+    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? (req.body as Record<string, unknown>) : {};
+    const result = runDecisionPreview(
+      {
+        templateId: body.templateId,
+        buildClass: body.buildClass,
+        stage: body.stage,
+        taskClass: body.taskClass,
+        sensitivityClass: body.sensitivityClass,
+        contextEstimateTokens: body.contextEstimateTokens,
+        promptText: body.promptText,
+      },
+      db,
+    );
+    res.status(result.status).json(result.body);
   });
 
   // GET /api/routing/meters -- per-lane routing meters, aggregated from the

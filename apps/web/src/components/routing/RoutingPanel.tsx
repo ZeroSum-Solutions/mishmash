@@ -49,6 +49,13 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
     Promise.all([
       fetch(`${daemonUrl}/api/routing/policy`).then((r) => (r.ok ? r.json() : null)),
       fetch(`${daemonUrl}/api/routing/meters`).then((r) => (r.ok ? r.json() : null)),
+      // GET, param-only, no `promptText` -- Sol review MED-5 (t5 fix
+      // commit): a composed-prompt excerpt is potentially client-
+      // confidential and must never ride a query string. A caller that
+      // needs promptText-derived estimation uses `POST
+      // /api/routing/decision/preview` (JSON body) instead; this panel is a
+      // plain policy-version/lane-meter/decision-shape overview and never
+      // sends one.
       fetch(`${daemonUrl}/api/routing/decision/preview`).then((r) => (r.ok ? r.json() : null)),
     ])
       .then(([policyData, metersData, previewData]) => {

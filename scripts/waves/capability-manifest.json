@@ -1177,10 +1177,11 @@
     "httpPath": "/api/routing/policy",
     "outputSchema": "{ policy: RoutingPolicyDocument, policyVersion: number }",
     "parityApplicable": false,
-    "reason": "WR wave (docs/plans/waves/WR-routing.md). The `route` capability spans four GET endpoints (policy, decision/preview, meters, telemetry) -- httpPath/outputSchema above describe the `policy` subcommand's representative surface; `preview`/`meters`/`telemetry` are documented in knownNamespaceRoutes below and reachable via `od route preview|meters|telemetry`. `policy`/`preview` are still P0 stubs (no dispatch-time routing yet -- see WR-routing.md's Tranche register P2 rows); `meters` and `telemetry` now read real, persisted L5 telemetry (P1 tranche, plan §3.2 L5) once rows exist. UI parity is not yet checkable either way: RoutingPanel has no mount point granted by this wave's lease (apps/web/src/components/routing/** and AssistantMessage.tsx only), so it is exported but unregistered.",
+    "reason": "WR wave (docs/plans/waves/WR-routing.md). The `route` capability spans policy/decision-preview/meters/telemetry endpoints -- httpPath/outputSchema above describe the `policy` subcommand's representative surface; `preview`/`meters`/`telemetry` are documented in knownNamespaceRoutes below and reachable via `od route preview|meters|telemetry`. `decision/preview` now runs the real advisory decision engine (apps/daemon/src/routing/decision.ts, t5, plan §3.1/§3.2 L2) over the loaded policy + live lane meters; admission control (budgets, t6) and dispatch-time enforcement (t9) still land in later WR tranches. `decision/preview` has BOTH a GET (param-only, no promptText) and a POST (JSON body, promptText allowed) form -- Sol review MED-5: a composed-prompt excerpt is potentially client-confidential and must never ride a query string, so `od route preview --prompt-file <path|->` switches to POST while every other invocation stays GET. `meters` and `telemetry` read real, persisted L5 telemetry (P1 tranche, plan §3.2 L5) once rows exist. UI parity is not yet checkable either way: RoutingPanel has no mount point granted by this wave's lease (apps/web/src/components/routing/** and AssistantMessage.tsx only), so it is exported but unregistered.",
     "knownNamespaceRoutes": [
       "GET /api/routing/policy",
       "GET /api/routing/decision/preview",
+      "POST /api/routing/decision/preview",
       "GET /api/routing/meters",
       "GET /api/routing/telemetry"
     ]

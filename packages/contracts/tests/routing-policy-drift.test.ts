@@ -55,9 +55,12 @@ const EXPECTED_TASK_CLASSES = [
 
 // plan §3.3's seven pipeline stages plus WR-routing.md's "Routing-key
 // fallback (normative)" PRD fallback stage keys (chat/ingestion/mobile).
-// This is the CLOSED set -- a stage outside it is a policy violation,
-// whether it shows up as a budgetCeilings key OR as a modelTable row's
-// match.stage (Sol review drift-gap b).
+// This is the coarse budget-ceiling bucket set -- narrower than
+// EXPECTED_STAGE_VOCABULARY below (Sol review HIGH-1, t5 fix commit): a
+// budget ceiling only needs one entry per pipeline PHASE, not per granular
+// sub-stage, so `budgetCeilings.perStageEstimatedCostUsd` is asserted
+// against exactly THIS set, while `stageVocabulary` (the actual closed set
+// `decideRouting` validates `key.stage` against) is the broader set below.
 const EXPECTED_STAGES = [
   'brief-art-direction',
   'token-freeze',
@@ -70,6 +73,16 @@ const EXPECTED_STAGES = [
   'ingestion',
   'mobile',
 ] as const;
+
+// Sol review HIGH-1 (t5 fix commit): the routing engine's closed stage
+// vocabulary is NOT budgetCeilings' keys -- WR-routing.md's "Routing-key
+// fallback (normative)" Fallback C requires ingestion work to key on its
+// OWN granular pipeline stage ("classify / extract / distill / verify /
+// register"), which has no per-sub-stage budget ceiling entry. This is the
+// full closed set `apps/daemon/src/routing/routing-policy.json`'s
+// `stageVocabulary` field must carry exactly -- EXPECTED_STAGES (the
+// budget-ceiling bucket set) union the five ingestion sub-stages.
+const EXPECTED_STAGE_VOCABULARY = [...EXPECTED_STAGES, 'classify', 'extract', 'distill', 'verify', 'register'] as const;
 
 const SUBSCRIPTION_LANES = ['claude-code-oauth', 'codex-oauth', 'agy'] as const;
 
@@ -106,6 +119,11 @@ const EXPECTED_GROK_NOUS_CONSTRAINT: RoutingPolicyHardConstraint = {
     "Grok 4.5 dispatches only through the prepaid Nous Portal lane in-program (PRD §15, plan §2). This session's OpenRouter-routed review predates program alignment and is not a standing exception; a future in-program Grok call outside the prepaid transport requires a PRD amendment (plan §6 open question 6 -- Nous-hosted Grok availability is not yet confirmed).",
   modelFamily: 'xai',
   forbiddenTransports: ['subscription-oauth', 'metered-api', 'local'],
+  // Sol review MED-3 (t5 fix commit): transport alone cannot express "Nous
+  // specifically" -- moonshot is ALSO a prepaid lane, so a transport-only
+  // constraint would wrongly admit a Grok candidate routed through
+  // Moonshot. requiredLane closes that gap with lane-level teeth.
+  requiredLane: 'nous',
 };
 
 const EXPECTED_MECHANICAL_VERIFICATION_CONSTRAINT: RoutingPolicyHardConstraint = {
@@ -123,6 +141,9 @@ function expectExactConstraint(found: RoutingPolicyHardConstraint | undefined, e
   expect(found?.description).toBe(expected.description);
   expect([...(found?.forbiddenTransports ?? [])].sort()).toEqual([...expected.forbiddenTransports].sort());
   expect([...(found?.allowedTransports ?? [])].sort()).toEqual([...(expected.allowedTransports ?? [])].sort());
+  // Sol review MED-3 (t5 fix commit): assert requiredLane exactly too --
+  // undefined on both sides is a pass (most constraints don't set it).
+  expect(found?.requiredLane).toBe(expected.requiredLane);
 }
 
 describe('routing-policy.json (v1) -- policy version + schema validation', () => {
@@ -134,13 +155,17 @@ describe('routing-policy.json (v1) -- policy version + schema validation', () =>
 });
 
 describe('routing-policy.json (v1) -- closed stage set (drift = unknown stage)', () => {
-  function isKnownStage(stage: string): boolean {
+  function isKnownBudgetStage(stage: string): boolean {
     return (EXPECTED_STAGES as readonly string[]).includes(stage);
   }
 
+  function isKnownVocabularyStage(stage: string): boolean {
+    return (EXPECTED_STAGE_VOCABULARY as readonly string[]).includes(stage);
+  }
+
   it('the stage guard actually discriminates -- rejects an invented stage, accepts a real one', () => {
-    expect(isKnownStage('some-invented-stage')).toBe(false);
-    expect(isKnownStage('brief-art-direction')).toBe(true);
+    expect(isKnownBudgetStage('some-invented-stage')).toBe(false);
+    expect(isKnownBudgetStage('brief-art-direction')).toBe(true);
   });
 
   it('budgetCeilings.perStageEstimatedCostUsd carries exactly the closed 10-stage vocabulary, no more, no fewer', () => {
@@ -148,7 +173,27 @@ describe('routing-policy.json (v1) -- closed stage set (drift = unknown stage)',
     const stageKeys = Object.keys(doc.budgetCeilings.perStageEstimatedCostUsd).sort();
     expect(stageKeys).toEqual([...EXPECTED_STAGES].sort());
     for (const stage of stageKeys) {
-      expect(isKnownStage(stage)).toBe(true);
+      expect(isKnownBudgetStage(stage)).toBe(true);
+    }
+  });
+
+  // Sol review HIGH-1 (t5 fix commit): `stageVocabulary` is the field the
+  // ENGINE (apps/daemon/src/routing/decision.ts) actually validates
+  // `key.stage` against -- it must carry exactly the PRD's normative set
+  // (EXPECTED_STAGES' ten budget buckets union the five ingestion
+  // sub-stages from WR-routing.md's Fallback C), and every one of those
+  // five granular stages must be present even though NONE of them has a
+  // budgetCeilings entry (routable now; a budget ceiling is t6's concern).
+  it('stageVocabulary carries exactly the PRD-normative closed set, no more, no fewer', () => {
+    const doc = loadPolicyDocument();
+    expect([...doc.stageVocabulary].sort()).toEqual([...EXPECTED_STAGE_VOCABULARY].sort());
+  });
+
+  it('every ingestion Fallback-C granular sub-stage is in stageVocabulary despite having no budgetCeilings entry', () => {
+    const doc = loadPolicyDocument();
+    for (const subStage of ['classify', 'extract', 'distill', 'verify', 'register']) {
+      expect(doc.stageVocabulary).toContain(subStage);
+      expect(doc.budgetCeilings.perStageEstimatedCostUsd[subStage]).toBeUndefined();
     }
   });
 
@@ -158,7 +203,7 @@ describe('routing-policy.json (v1) -- closed stage set (drift = unknown stage)',
       .map((entry) => entry.match.stage)
       .filter((stage): stage is string => typeof stage === 'string');
     for (const stage of rowStages) {
-      expect(isKnownStage(stage)).toBe(true);
+      expect(isKnownVocabularyStage(stage)).toBe(true);
     }
   });
 });
@@ -302,6 +347,23 @@ describe('routing-policy.json (v1) -- PRD §15 hard constraints present and exac
         expect(constraint!.forbiddenTransports).not.toContain(candidate.transport);
         expect(constraint!.allowedTransports).toContain(candidate.transport);
       }
+    }
+  });
+
+  // Sol review MED-3 (t5 fix commit): the constraint's own requiredLane
+  // field is necessary but not sufficient evidence -- this asserts the
+  // POLICY CONTENT itself never drifts a grok-4.5 candidate onto any lane
+  // other than 'nous' (the thing requiredLane is there to enforce at
+  // decision time, checked here at authoring time too).
+  it('every grok-4.5 candidate anywhere in modelTable carries lane "nous" (drift = a Grok candidate on the wrong prepaid lane)', () => {
+    const doc = loadPolicyDocument();
+    const allCandidates = doc.modelTable.flatMap((entry) =>
+      [entry.primary, entry.burst, entry.cheap].filter((c): c is NonNullable<typeof c> => c !== undefined),
+    );
+    const grokCandidates = allCandidates.filter((c) => c.model === 'grok-4.5');
+    expect(grokCandidates.length).toBeGreaterThan(0);
+    for (const candidate of grokCandidates) {
+      expect(candidate.lane).toBe('nous');
     }
   });
 
