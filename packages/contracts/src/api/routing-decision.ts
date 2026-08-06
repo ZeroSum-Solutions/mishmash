@@ -421,3 +421,81 @@ export interface RoutingDecisionPreviewResponse {
 export function isRoutingDecisionPreviewResponse(value: unknown): value is RoutingDecisionPreviewResponse {
   return isPlainObject(value) && isRoutingKey(value.key) && isRoutingDecision(value.decision);
 }
+
+// ---------------------------------------------------------------------------
+// Dispatch override request (t9 fix-round, Sol review MED-3)
+//
+// TEMPORARY HOME: this is the wire shape for a future `ChatRequest#
+// routingOverride` field. It cannot be declared on `ChatRequest` itself yet
+// because `packages/contracts/src/api/chat.ts` is OUTSIDE this wave's lease
+// (docs/plans/waves/WR-routing.md's "Lease" section grants only
+// routing-policy.ts/routing-decision.ts/routing-telemetry.ts/index.ts under
+// packages/contracts/src/api). `apps/daemon/src/server.ts`'s chat-dispatch
+// wiring reads a raw chat-body field permissively and validates it against
+// `isRoutingOverrideRequest` before it ever reaches
+// `apps/daemon/src/routing/dispatch.ts`'s `resolveDispatchRouting` -- a
+// malformed shape is rejected with a typed error at that boundary, never
+// silently passed through. Once a governance amendment lands this field on
+// `ChatRequest` (see this wave's task reports for the exact edit shape),
+// `ChatRequest#routingOverride` should reference this type directly instead
+// of `chat.ts` inventing a parallel shape.
+// ---------------------------------------------------------------------------
+
+export interface RoutingOverrideRequest {
+  model: string;
+  lane: string;
+  reason: string;
+}
+
+/** `model`/`lane` must be non-empty (an empty override is indistinguishable
+ * from "no override" and would otherwise silently no-op downstream);
+ * `reason` may be empty (`resolveDispatchRouting` substitutes "no reason
+ * given" for display, but an override's validity never depends on WHY). */
+export function isRoutingOverrideRequest(value: unknown): value is RoutingOverrideRequest {
+  if (!isPlainObject(value)) return false;
+  return (
+    typeof value.model === 'string' &&
+    value.model.trim().length > 0 &&
+    typeof value.lane === 'string' &&
+    value.lane.trim().length > 0 &&
+    typeof value.reason === 'string'
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Routing-blocked error detail (t9 fix-round, Sol review MED-4)
+//
+// `apps/daemon/src/routing/dispatch.ts`'s `DispatchBlockedError#code` reuses
+// this exact closed set (imported, not redeclared) so the daemon's SSE/
+// status error payload for a blocked dispatch carries a TYPED detail object
+// from a leased DTO instead of an ad-hoc inline shape. `packages/contracts/
+// src/errors.ts` (the `ApiErrorCode` closed union) is OUT OF LEASE, so a
+// blocked dispatch is surfaced through an EXISTING legal `ApiErrorCode`
+// (`'FORBIDDEN'` -- the daemon refuses to dispatch, which is what that code
+// already means) with this object riding in `ApiError#details` (a generic
+// `JsonValue` field `errors.ts` already exposes, requiring no edit to that
+// file). Governance-amendment note: a dedicated `'ROUTING_BLOCKED'`
+// `ApiErrorCode` member would be the more precise long-term fix; that edit
+// is out of this wave's lease and is tracked as a governance-amendment item
+// instead of worked around by widening `errors.ts` here.
+// ---------------------------------------------------------------------------
+
+export type RoutingBlockedCode = 'fail-closed-stop' | 'denied-admission' | 'routing-error';
+
+const ROUTING_BLOCKED_CODES: readonly RoutingBlockedCode[] = ['fail-closed-stop', 'denied-admission', 'routing-error'];
+
+export interface RoutingBlockedErrorDetail {
+  kind: 'routing-blocked';
+  code: RoutingBlockedCode;
+  rationale: string;
+}
+
+export function isRoutingBlockedErrorDetail(value: unknown): value is RoutingBlockedErrorDetail {
+  if (!isPlainObject(value)) return false;
+  return (
+    value.kind === 'routing-blocked' &&
+    typeof value.code === 'string' &&
+    (ROUTING_BLOCKED_CODES as readonly string[]).includes(value.code) &&
+    typeof value.rationale === 'string'
+  );
+}

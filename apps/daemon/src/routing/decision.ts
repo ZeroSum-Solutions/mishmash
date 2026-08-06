@@ -193,8 +193,32 @@ function findMatchedRow(
   return policy.modelTable.find((entry) => matchesRule(entry.match, ctx)) ?? null;
 }
 
-function candidatesOf(entry: RoutingPolicyModelTableEntry): RoutingCandidate[] {
+export function candidatesOf(entry: RoutingPolicyModelTableEntry): RoutingCandidate[] {
   return [entry.primary, entry.burst, entry.cheap].filter((c): c is RoutingCandidate => c !== undefined);
+}
+
+/**
+ * t9 fix-round (Sol review HIGH-2): resolves an explicit dispatch override's
+ * `(model, lane)` pair into a full `RoutingCandidate` by finding a candidate
+ * ANYWHERE in `modelTable` that already carries that exact pair -- the same
+ * "reuse verified metadata, never fabricate it" discipline
+ * `findCandidateForAssignment` above already uses for §15 program
+ * assignments. An override naming a `(model, lane)` pair this policy has
+ * never vetted anywhere returns `null`: the dispatch layer (t9) treats that
+ * as "cannot validate against §15 hard constraints or the sensitivity-class
+ * allowlist" and blocks rather than trusting an unverified pair.
+ */
+export function findCandidateByModelAndLane(
+  policy: RoutingPolicyDocument,
+  model: string,
+  lane: string,
+): RoutingCandidate | null {
+  for (const entry of policy.modelTable) {
+    for (const candidate of candidatesOf(entry)) {
+      if (candidate.model === model && candidate.lane === lane) return candidate;
+    }
+  }
+  return null;
 }
 
 /** Resolves a §15 program assignment's `model`+`requiredLane` pair into a
@@ -226,7 +250,13 @@ function findCandidateForAssignment(
   return null;
 }
 
-function filterByHardConstraints(
+/**
+ * Exported (t9 fix-round, Sol review HIGH-2): the dispatch layer's override
+ * path must run a resolved override candidate through this SAME filter,
+ * never a re-implemented copy -- "a human override does not get to violate
+ * a §15 hard rule."
+ */
+export function filterByHardConstraints(
   candidates: RoutingCandidate[],
   hardConstraints: RoutingPolicyHardConstraint[],
 ): { survivors: RoutingCandidate[]; removed: RoutingDecisionReason[] } {
@@ -299,7 +329,10 @@ function findInvalidCoreInputReason(key: RoutingKey, laneMeters: LaneMeter[], ma
   return null;
 }
 
-function filterByDataClassification(
+/** Exported (t9 fix-round, Sol review HIGH-2) for the same reason
+ * `filterByHardConstraints` is -- the dispatch override path reuses this
+ * exact filter instead of re-implementing the allowlist check. */
+export function filterByDataClassification(
   candidates: RoutingCandidate[],
   allowlist: RoutingPolicyDataClassAllowlist | null,
   sensitivityClass: RoutingDataClassification,

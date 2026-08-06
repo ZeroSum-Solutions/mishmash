@@ -462,6 +462,9 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database, proj
         totalRuns: 0,
         escalationRate: 0,
         passRate: 0,
+        gateCascadeRuns: 0,
+        gateCascadeEscalationRate: 0,
+        gateCascadePassRate: 0,
         laneMeters: {},
         byStage: [],
       };

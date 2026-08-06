@@ -343,15 +343,29 @@ function isLaneMeterRecord(value: unknown): value is Record<string, LaneMeter> {
 /** Response envelope for GET /api/routing/rates. `windowMs` echoes the
  * aggregation window the caller requested (`null` for all-time), matching
  * `/api/routing/meters`'s own `?windowMs=` convention. `totalRuns`/
- * `escalationRate`/`passRate` are computed over EVERY row in the window
- * (not lane-attributed, unlike `LaneMeter#escalationRate`/`passRate`) --
- * the single top-level summary CWR-P2-4's probe reads `escalationRate`/
- * `passRate` from directly. */
+ * `escalationRate`/`passRate` are computed over every REAL DISPATCH row in
+ * the window (not lane-attributed, unlike `LaneMeter#escalationRate`/
+ * `passRate`) -- the single top-level summary CWR-P2-4's probe reads
+ * `escalationRate`/`passRate` from directly.
+ *
+ * `gateCascadeRuns`/`gateCascadeEscalationRate`/`gateCascadePassRate` (t9
+ * fix-round, Sol review MED-7) are a SEPARATE rollup over the synthetic
+ * standalone gate-probe rows `POST /api/routing/gates/run` writes when no
+ * real dispatch backs the call (routes/routing.ts's `runIdSynthetic` path,
+ * sentinel `stage: 'gates-run'`). Those rows' `escalated` flag reflects
+ * `classifyCascadeTrigger`'s cheap->mid->frontier verdict, which is a
+ * DIFFERENT signal than a real dispatch escalating -- summing both into one
+ * number would conflate "this gate probe recommended escalating" with "this
+ * routed run actually escalated." The top-level fields above are computed
+ * ONLY over non-`'gates-run'`-stage rows so they never mix the two. */
 export interface RoutingRatesResponse {
   windowMs: number | null;
   totalRuns: number;
   escalationRate: number;
   passRate: number;
+  gateCascadeRuns: number;
+  gateCascadeEscalationRate: number;
+  gateCascadePassRate: number;
   laneMeters: Record<string, LaneMeter>;
   byStage: RoutingRatesByStage[];
 }
@@ -363,6 +377,9 @@ export function isRoutingRatesResponse(value: unknown): value is RoutingRatesRes
     isFiniteNonNegativeInteger(value.totalRuns) &&
     typeof value.escalationRate === 'number' &&
     typeof value.passRate === 'number' &&
+    isFiniteNonNegativeInteger(value.gateCascadeRuns) &&
+    typeof value.gateCascadeEscalationRate === 'number' &&
+    typeof value.gateCascadePassRate === 'number' &&
     isLaneMeterRecord(value.laneMeters) &&
     Array.isArray(value.byStage) &&
     value.byStage.every(isRoutingRatesByStage)

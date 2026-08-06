@@ -19,6 +19,9 @@ import os from 'node:os';
 import net from 'node:net';
 import { executionProfileFromStreamFormat, PLUGIN_SHARE_ACTION_PLUGIN_IDS } from '@open-design/contracts';
 import { isTodoWriteToolName, stopReasonIsTruncation, todoItemsFromTodoWriteInput } from '@open-design/contracts';
+// WR wave (t9 fix-round, Sol review MED-3): validates a raw chat-body
+// `routingOverride` field before it ever reaches resolveDispatchRouting.
+import { isRoutingOverrideRequest } from '@open-design/contracts';
 import {
   composeSystemPrompt,
   detectDeckIntentSignal,
@@ -2633,44 +2636,19 @@ export async function startServer({
           record,
         });
         // WR wave (t9, plan §3.1: "post-run reconciliation flags divergence"):
-        // fills the OBSERVED side of the pre-spawn telemetry intent this run
-        // recorded (startChatRun's resolveDispatchRouting hook below), using
-        // the SAME already-computed usage `record` recordRunUsage just used
-        // -- no second usage scan. Skipped entirely for a run whose dispatch
-        // was blocked (nothing was ever routed to reconcile against) or that
-        // never went through the routing hook at all (best-effort, never a
-        // hard dependency of usage recording succeeding).
-        //
-        // Known gaps, honestly not closed by this wiring (see this wave's
-        // t9 report): `observedLane` stays null -- no run infrastructure
-        // today reports which LANE (as opposed to model) actually executed
-        // a call. `sideEffectKinds` is omitted -- no existing classifier
-        // maps a run's activity onto the db-migration/git-push/network-call/
-        // supabase-change vocabulary (apps/daemon/src/routing/dispatch.ts's
-        // `ReconcilePostRunObserved#sideEffectKinds` doc comment has the
-        // full rationale); both are real capability gaps, not lease
-        // limitations, and both live inside `apps/daemon/src/runtimes/**`
-        // (W1's lease), outside what this wave may implement.
-        try {
-          if (run.wrRoutingDecision && run.wrRoutingDecision.mode !== 'blocked') {
-            reconcilePostRun(db, run.id, run.retryAttemptCount ?? 0, {
-              observedModel: record.reported ?? record.resolved ?? null,
-              observedLane: null,
-              tokens: {
-                input: record.inputTokensEffective ?? 0,
-                output: record.outputTokens ?? 0,
-                cacheReadInput: record.cacheReadInputTokens ?? 0,
-              },
-              costUsd: record.costUsd ?? 0,
-              costEstimated: true,
-              runtimeId: run.agentId ?? null,
-              failureCategory: run.failureCategory ?? null,
-              now: new Date(),
-            });
-          }
-        } catch (err) {
-          console.warn('[routing] reconcilePostRun failed', err);
-        }
+        // stash the already-computed usage `record` for the terminal
+        // reconcilePostRun call registered on `run.onFinalize` (startChatRun's
+        // resolveDispatchRouting hook below) -- no second usage scan. The
+        // actual reconcilePostRun call does NOT happen here: `onRunFinished`
+        // fires BEFORE `finish()` writes the run's terminal status onto
+        // `run.status` (runtimes/runs.ts), so this hook can never honestly
+        // know whether the run succeeded, failed, or was canceled (Sol
+        // review MED-6) -- see the `onFinalize` wrap for why that chokepoint,
+        // not this one, is where `terminalOutcome` is actually derived.
+        // `onRunFinished` always fires strictly before `onFinalize` within
+        // the same `finish()` call, so this stashed value is guaranteed to
+        // be in place by the time the wrap reads it.
+        run.wrUsageRecordForReconcile = record;
       },
     }),
     analytics: analyticsService,
@@ -5244,29 +5222,43 @@ export async function startServer({
     // the CLI's own default, which `buildModelRouting` readers backfill from
     // whatever the CLI later echoes.
     run.model = safeModel;
-    // WR wave (t9, plan §3.1 dispatch-time routing integration): resolve
-    // this dispatch's routing decision BEFORE the spawn below, using
-    // whatever runtime/model resolution just ran above as the
-    // 'runtime-default' fallback (WR-routing.md Fallback B). A fail-closed/
-    // budget-denied/structurally-invalid decision BLOCKS dispatch outright
-    // (plan §3.2 L2: never falls through). Purely additive and fail-OPEN on
-    // its OWN internal errors only (never on a real routing refusal, which
-    // DOES block) -- this integration must never itself crash a chat
-    // dispatch it does not yet own the sole model-flag source for.
-    // `routingOverride` is read permissively off the raw chat body:
-    // packages/contracts/src/api/chat.ts (ChatRequest) sits outside this
-    // wave's lease, so the field is not yet a first-class ChatRequest DTO
-    // member -- see this wave's t9 report for the governance-amendment this
-    // blocks on. Likewise, real /api/chat traffic carries no templateId/
-    // buildClass/taskClass today (ChatRequest has none), so this honestly
-    // resolves 'runtime-default' for ordinary chat -- exactly WR-routing.md
-    // Fallback B, not a bug in this wiring.
+    // WR wave (t9, plan §3.1 dispatch-time routing integration; fix-round
+    // per Sol review): resolve this dispatch's routing decision BEFORE the
+    // spawn below, using whatever runtime/model resolution just ran above
+    // as the 'runtime-default' fallback (WR-routing.md Fallback B). A
+    // fail-closed/budget-denied/structurally-invalid/cross-runtime/failed-
+    // slug-recheck decision BLOCKS dispatch outright (plan §3.2 L2: never
+    // falls through) -- see the `mode === 'blocked'` branch below. Purely
+    // additive and fail-OPEN on its OWN internal errors only (never on a
+    // real routing refusal, which DOES block) -- this integration must
+    // never itself crash a chat dispatch it does not yet own the sole
+    // model-flag source for. `routingOverride` is read permissively off the
+    // raw chat body: packages/contracts/src/api/chat.ts (ChatRequest) sits
+    // outside this wave's lease, so the field is not yet a first-class
+    // ChatRequest DTO member -- see this wave's task reports for the
+    // governance-amendment this blocks on. Likewise, real /api/chat traffic
+    // carries no templateId/buildClass/taskClass today (ChatRequest has
+    // none), so this honestly resolves 'runtime-default' for ordinary chat
+    // -- exactly WR-routing.md Fallback B, not a bug in this wiring.
+    //
+    // Sol review MED-3 (fix-round): the raw override is validated against
+    // `isRoutingOverrideRequest` (a leased contracts guard) BEFORE it ever
+    // reaches `resolveDispatchRouting` -- a malformed shape is rejected with
+    // a typed error immediately, never silently dropped into the broad
+    // catch below or passed through as an unvalidated string pair that
+    // could spoof telemetry/cooldowns.
     /** @type {any} */
     const wrChatBodyAny = chatBody;
-    const wrRoutingOverride =
-      wrChatBodyAny && typeof wrChatBodyAny === 'object' && wrChatBodyAny.routingOverride
-        ? wrChatBodyAny.routingOverride
-        : null;
+    const wrRawRoutingOverride =
+      wrChatBodyAny && typeof wrChatBodyAny === 'object' ? wrChatBodyAny.routingOverride : undefined;
+    if (wrRawRoutingOverride !== undefined && wrRawRoutingOverride !== null && !isRoutingOverrideRequest(wrRawRoutingOverride)) {
+      return design.runs.fail(
+        run,
+        'VALIDATION_FAILED',
+        'routingOverride must be an object with non-empty string `model`/`lane` fields and a string `reason`.',
+      );
+    }
+    const wrRoutingOverride = isRoutingOverrideRequest(wrRawRoutingOverride) ? wrRawRoutingOverride : null;
     try {
       const wrDispatchRouting = resolveDispatchRouting({
         db,
@@ -5290,32 +5282,110 @@ export async function startServer({
         },
         clock: new Date(),
       });
+      // Sol review MED-4: 'FORBIDDEN' is an EXISTING closed ApiErrorCode
+      // member (packages/contracts/src/errors.ts is out of this wave's
+      // lease) -- a dedicated 'ROUTING_BLOCKED' code is a governance-
+      // amendment item, not something this wiring can add. The routing-
+      // specific detail rides in `details` (ApiError's existing generic
+      // JsonValue field, no edit to errors.ts required), shaped as
+      // dispatch.ts's own `DispatchBlockedError` fields so it stays a typed
+      // payload rather than an ad-hoc object.
       if (wrDispatchRouting.mode === 'blocked') {
-        return design.runs.fail(run, 'ROUTING_BLOCKED', wrDispatchRouting.blocked.message);
+        return design.runs.fail(run, 'FORBIDDEN', wrDispatchRouting.blocked.message, {
+          details: { kind: 'routing-blocked', code: wrDispatchRouting.blocked.code, rationale: wrDispatchRouting.blocked.decision.rationale },
+        });
       }
-      recordDispatchIntent(db, runId, run.retryAttemptCount ?? 0, wrDispatchRouting.recordedIntent);
-      run.wrRoutingDecision = wrDispatchRouting;
-      // Apply the routed decision to the actual spawn ONLY when it targets
-      // the SAME runtime the caller already selected (`def.id`) -- swapping
-      // to a genuinely different runtime would require re-selecting `def`/
-      // `def.bin` far earlier in this function (a baseline control-flow
-      // change this additive hook cannot make); see this wave's t9 report
-      // for the governance-amendment full cross-runtime application needs.
-      // A same-runtime model/lane substitution is safe here: `safeModel`/
-      // `agentOptions.model` are already-declared `let`/mutable bindings
-      // this only reassigns, never redeclares.
-      if (
-        wrDispatchRouting.mode === 'routed' &&
-        wrDispatchRouting.decision &&
-        wrDispatchRouting.decision.runtimeId === def.id
-      ) {
-        safeModel = wrDispatchRouting.decision.modelFlag;
+      // Sol review HIGH-1/HIGH-2/MED-8 (fix-round): resolveDispatchRouting
+      // now GUARANTEES that a non-blocked 'routed'/'override' decision
+      // names the SAME runtime this dispatch already selected (`def.id`) --
+      // a cross-runtime decision is blocked above instead of reaching here.
+      // What remains this layer's OWN job (dispatch.ts has no RuntimeAgentDef
+      // to check against) is MED-8's "validate the substituted model against
+      // the selected runtime def's accepted-model mechanism": the SAME
+      // isKnownModel-or-sanitizeCustomModel dance the raw client-requested
+      // model already went through above, applied to the routed/override
+      // model too, so a substitution can never bypass it. `sanitizeCustomModel`
+      // returning null (a string that fails even permissive CLI-arg-safety
+      // sanitization) blocks dispatch -- never spawn with an unvalidated model.
+      if ((wrDispatchRouting.mode === 'routed' || wrDispatchRouting.mode === 'override') && wrDispatchRouting.decision) {
+        const wrCandidateModel = wrDispatchRouting.decision.modelFlag;
+        const wrModelRecognized = isKnownModel(def, wrCandidateModel, requestedLiveModelScope);
+        const wrSanitizedModel = wrModelRecognized ? wrCandidateModel : sanitizeCustomModel(wrCandidateModel);
+        if (!wrModelRecognized && wrSanitizedModel === null) {
+          return design.runs.fail(
+            run,
+            'FORBIDDEN',
+            `routing decision selected model "${wrCandidateModel}" for runtime "${def.id}", but it failed both the runtime's known-model check and custom-model sanitization -- refusing to spawn with an unvalidated model string.`,
+            { details: { kind: 'routing-blocked', code: 'routing-error', rationale: wrDispatchRouting.decision.rationale } },
+          );
+        }
+        safeModel = wrSanitizedModel ?? wrCandidateModel;
         agentOptions.model = safeModel;
         run.model = safeModel;
       }
+      recordDispatchIntent(db, runId, run.retryAttemptCount ?? 0, wrDispatchRouting.recordedIntent);
+      run.wrRoutingDecision = wrDispatchRouting;
     } catch (err) {
       console.warn('[routing] resolveDispatchRouting failed', err);
     }
+    // Sol review MED-6 (fix-round): reconcilePostRun's `terminalOutcome`
+    // must reflect the run's REAL final status, not merely "this hook fired"
+    // -- `onRunFinished(run, status)` above is called BEFORE `finish()`
+    // writes `status` onto `run.status` (runtimes/runs.ts), so reading
+    // `run.status` there would always observe the PRIOR (non-terminal)
+    // value, which is exactly the bug this finding describes (cancellation/
+    // unclassified states being silently treated as success). `run.
+    // onFinalize`, by contrast, fires from inside the SAME `finish()` call
+    // but AFTER `run.status` has already been set to one of
+    // TERMINAL_RUN_STATUSES ('succeeded' | 'failed' | 'canceled') --
+    // chaining onto it here, the same additive "capture the previous
+    // handler, call through" pattern already used a few hundred lines below
+    // this dispatch hook for the filesystem-baseline snapshot, is the only
+    // way to observe the true terminal outcome without editing
+    // `onRunFinished`'s own pre-existing signature (which this wave's file
+    // lease cannot touch: `apps/daemon/src/server.ts` is byte-preserve
+    // outside additive lines). Registered here (inside the try/catch above
+    // having already run) so `run.wrRoutingDecision` reflects THIS attempt's
+    // own dispatch outcome by the time the wrap actually fires.
+    const wrPreviousOnFinalizeForReconcile = run.onFinalize;
+    run.onFinalize = () => {
+      try {
+        wrPreviousOnFinalizeForReconcile?.();
+      } finally {
+        try {
+          if (run.wrRoutingDecision && run.wrRoutingDecision.mode !== 'blocked') {
+            const wrTerminalOutcome =
+              run.status === 'succeeded'
+                ? 'succeeded'
+                : run.status === 'canceled'
+                  ? 'canceled'
+                  : run.status === 'failed'
+                    ? 'failed'
+                    : 'unknown';
+            const wrUsageRecord = run.wrUsageRecordForReconcile ?? null;
+            reconcilePostRun(db, run.id, run.retryAttemptCount ?? 0, {
+              observedModel: wrUsageRecord ? wrUsageRecord.reported ?? wrUsageRecord.resolved ?? null : null,
+              observedLane: null,
+              tokens: wrUsageRecord
+                ? {
+                    input: wrUsageRecord.inputTokensEffective ?? 0,
+                    output: wrUsageRecord.outputTokens ?? 0,
+                    cacheReadInput: wrUsageRecord.cacheReadInputTokens ?? 0,
+                  }
+                : undefined,
+              costUsd: wrUsageRecord ? wrUsageRecord.costUsd ?? 0 : undefined,
+              costEstimated: true,
+              terminalOutcome: wrTerminalOutcome,
+              runtimeId: run.agentId ?? null,
+              failureCategory: wrTerminalOutcome === 'failed' ? run.failureCategory ?? null : null,
+              now: new Date(),
+            });
+          }
+        } catch (err) {
+          console.warn('[routing] reconcilePostRun (terminal) failed', err);
+        }
+      }
+    };
     const agentResumeCtx =
       agentSupportsSessionResume && run.conversationId
         ? resolveAgentResumeContext(db, {
@@ -5845,6 +5915,11 @@ export async function startServer({
         sideEffects,
       });
       if (decision.shouldRetry && !design.runs.isTerminal(run.status)) {
+        // Sol review MED-5 (fix-round): captured BEFORE the reassignment two
+        // lines below overwrites it -- this is the attempt index THIS
+        // failing attempt's own pre-spawn recordDispatchIntent call used,
+        // not the next attempt's.
+        const wrFailedAttemptIndex = run.retryAttemptCount ?? 0;
         run.retryOriginalFailure ??= failure ?? undefined;
         if ((run.retryAttemptCount ?? 0) === 0) {
           run.retryOriginFailure = failure ? { ...failure } : null;
@@ -5858,6 +5933,33 @@ export async function startServer({
           retry_reason: decision.retryReason,
           retry_delay_ms: decision.retryDelayMs,
         });
+        // Sol review MED-5 (fix-round): a retryable attempt returns here
+        // WITHOUT ever reaching the run's terminal onFinalize chokepoint --
+        // the run keeps going (spawnRetryAttempt below re-enters
+        // startChatRun for a fresh attempt). Without this call a
+        // rate-limit/timeout/upstream-unavailable attempt would never feed
+        // t7's cooldowns at all, and a later SUCCESSFUL retry's own
+        // reconcilePostRun (fired from the true terminal onFinalize chain)
+        // would be the ONLY signal ever written for this run -- wrongly
+        // reading as "this lane has always been healthy". Records THIS
+        // ATTEMPT's own failure into the (runtimeId, lane) cooldown before
+        // the retry is scheduled; best-effort/fail-open like every other
+        // routing hook on this dispatch path, and a no-op when this
+        // attempt's dispatch was never routed or was blocked outright.
+        try {
+          if (run.wrRoutingDecision && run.wrRoutingDecision.mode !== 'blocked') {
+            reconcilePostRun(db, run.id, wrFailedAttemptIndex, {
+              observedModel: null,
+              observedLane: null,
+              terminalOutcome: 'failed',
+              runtimeId: run.agentId ?? null,
+              failureCategory: failure?.failure_category ?? null,
+              now: new Date(),
+            });
+          }
+        } catch (err) {
+          console.warn('[routing] reconcilePostRun (retry attempt boundary) failed', err);
+        }
         scheduleRetryRestart(decision.retryDelayMs);
         return true;
       }
