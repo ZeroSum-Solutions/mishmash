@@ -406,9 +406,16 @@ function resolveAndValidateOverrideCandidate(args: {
   sensitivityClass: RoutingDataClassification;
   contextEstimateTokens: number;
   buildId: string | null;
+  /** Sol review H2 residue: the SAME resolved stage `computeKeyAndDecision`
+   * uses for the routed path's admission call (`chatRequest.stage ?? 'chat'`,
+   * resolved once by the caller) -- previously this function hardcoded
+   * `'chat'` internally regardless of what stage the request actually named,
+   * so a non-chat-stage override was always priced/ceilinged against the
+   * wrong stage's spend. */
+  stage: string;
   clock: Date;
 }): { ok: true; candidate: RoutingCandidate } | { ok: false; decision: RoutingDecision } {
-  const { db, policy, override, taskClass, sensitivityClass, contextEstimateTokens, buildId, clock } = args;
+  const { db, policy, override, taskClass, sensitivityClass, contextEstimateTokens, buildId, stage, clock } = args;
 
   const candidate = findCandidateByModelAndLane(policy, override.model, override.lane);
   if (!candidate) {
@@ -465,29 +472,36 @@ function resolveAndValidateOverrideCandidate(args: {
   const [dayStartMs, dayEndMs] = utcDayWindowMs(clock);
   const admissionResult = evaluateAdmission({
     policy,
-    stage: 'chat',
+    stage,
     taskClass,
     candidate,
     contextEstimateTokens,
     buildId,
-    spendLookup: buildSpendLookup(db, policy, buildId, 'chat', dayStartMs, dayEndMs),
+    spendLookup: buildSpendLookup(db, policy, buildId, stage, dayStartMs, dayEndMs),
     now: clock,
   });
-  // Sol review HIGH-2: "an over-budget override is denied like any
-  // candidate." A real `deny-*` verdict blocks; `'not-evaluated'` (e.g. no
-  // price row for this model) does NOT -- an override the policy simply
-  // cannot price is inconclusive, not a confirmed over-budget denial, and
-  // blocking every unpriced override would be overly restrictive for a
-  // deliberate human choice of a genuinely new model.
-  if (admissionResult.verdict !== 'admit' && admissionResult.verdict !== 'not-evaluated') {
+  // Sol review HIGH-2, corrected by the H2 residue: "an over-budget override
+  // is denied like any candidate" means EXACTLY the same admission gate the
+  // routed path applies -- decision.ts's own candidate walk treats ANY
+  // non-'admit' verdict, including 'not-evaluated', as "this candidate does
+  // not clear admission" (it moves on to the next candidate, and pure
+  // not-evaluated exhaustion still terminates the routed decision as
+  // 'fail-closed-stop', never a silent admit). An override has no fallback
+  // candidate to move on to, so the equivalent fail-closed behavior here is
+  // to block outright: an unpriced override model does not get a pass a
+  // routed candidate would never get either.
+  if (admissionResult.verdict !== 'admit') {
+    const isUnpriced = admissionResult.verdict === 'not-evaluated';
     return {
       ok: false,
       decision: syntheticBlockedDecision(
         policy,
         sensitivityClass,
         contextEstimateTokens,
-        'denied-admission',
-        `override to "${override.model}" on lane "${override.lane}" was denied by budget admission control: ${admissionResult.reason}`,
+        isUnpriced ? 'fail-closed-stop' : 'denied-admission',
+        isUnpriced
+          ? `override to "${override.model}" on lane "${override.lane}" could not be evaluated for budget admission (no usable price row for stage "${stage}"): ${admissionResult.reason} -- a fail-closed non-selection, never a silent admit.`
+          : `override to "${override.model}" on lane "${override.lane}" was denied by budget admission control: ${admissionResult.reason}`,
       ),
     };
   }
@@ -599,6 +613,7 @@ export function resolveDispatchRouting(input: ResolveDispatchRoutingInput): Reso
       sensitivityClass,
       contextEstimateTokens,
       buildId,
+      stage,
       clock,
     });
     if (!resolved.ok) {

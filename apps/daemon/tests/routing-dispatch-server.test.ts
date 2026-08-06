@@ -72,16 +72,28 @@ console.log(JSON.stringify({ type: 'step_finish', part: { tokens: { input: 5, ou
 process.exit(0);
 `;
 
-// Minimal Claude Code `--output-format stream-json` success shape (mirrors
-// apps/daemon/tests/claude-sidechain-assistant-error-false-failure.test.ts's
-// fixture): an init frame, one final assistant text frame with
-// `stop_reason: 'end_turn'`, then a clean `result` frame.
-const CLAUDE_SUCCESS_SCRIPT = `
+// Sol review H1 residue: the override server test previously only asserted
+// the TELEMETRY row's routedModel, which proves resolveDispatchRouting
+// decided correctly but NOT that the decision actually reached the real
+// spawn's argv -- a regression in server.ts's `safeModel = ...;
+// agentOptions.model = safeModel;` wiring (the exact HIGH-1 bug this fix
+// round closed) could silently spawn the runtime's OWN default model while
+// telemetry still reported the override, and this test would not catch it.
+// This variant of the success script writes its own real invocation argv
+// (apps/daemon/src/runtimes/defs/claude.ts's buildArgs pushes `['--model',
+// options.model]` onto the real CLI args) to a file the test reads AFTER
+// the run finishes, so the assertion is against what the CHILD PROCESS was
+// actually invoked with, not against a layer that could diverge from it.
+function claudeSuccessScriptRecordingArgv(argvLogPath: string): string {
+  return `
+const fs = require('node:fs');
+fs.writeFileSync(${JSON.stringify(argvLogPath)}, JSON.stringify(process.argv.slice(2)));
 process.stdout.write(JSON.stringify({ type: 'system', subtype: 'init', model: 'fake-claude-model', session_id: 'routing-dispatch-claude-session' }) + '\\n');
 process.stdout.write(JSON.stringify({ type: 'assistant', parent_tool_use_id: null, message: { id: 'm1', content: [{ type: 'text', text: 'hello from the fake claude agent' }], stop_reason: 'end_turn' } }) + '\\n');
 process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, session_id: 'routing-dispatch-claude-session', usage: { input_tokens: 5, output_tokens: 5 }, total_cost_usd: 0.001, duration_ms: 10 }) + '\\n');
 setTimeout(() => process.exit(0), 20);
 `;
+}
 
 // Sol review MED-5/MED-6: a STATEFUL fake claude binary -- unlike the two
 // scripts above, this one must behave differently across the SAME run's two
@@ -206,14 +218,36 @@ describe('dispatch-time routing wiring in the real chat dispatch path', () => {
   it('records a routed-vs-observed telemetry row for an explicit routingOverride naming a REAL, vetted (model, lane) pair, end to end over HTTP', async () => {
     const projectId = await createProject();
     const conversationId = `conv-routing-override-${randomUUID()}`;
-    const text = await runChat('claude', 'claude', CLAUDE_SUCCESS_SCRIPT, projectId, conversationId, {
-      // claude-haiku-4-5 / claude-code-oauth is the shipped policy's
-      // 'mechanical-batch' row primary -- a REAL candidate with runtimeId
-      // 'claude', matching this request's own agentId (HIGH-1's same-
-      // runtime requirement) and passing §15/allowlist/admission (HIGH-2).
-      routingOverride: { model: 'claude-haiku-4-5', lane: 'claude-code-oauth', reason: 'server-level override test' },
-    });
-    expect(text).toContain('"status":"succeeded"');
+    const argvLogDir = await fsp.mkdtemp(join(tmpdir(), 'od-routing-dispatch-argv-'));
+    const argvLogPath = join(argvLogDir, 'claude-argv.json');
+    let text: string;
+    try {
+      text = await runChat(
+        'claude',
+        'claude',
+        claudeSuccessScriptRecordingArgv(argvLogPath),
+        projectId,
+        conversationId,
+        {
+          // claude-haiku-4-5 / claude-code-oauth is the shipped policy's
+          // 'mechanical-batch' row primary -- a REAL candidate with runtimeId
+          // 'claude', matching this request's own agentId (HIGH-1's same-
+          // runtime requirement) and passing §15/allowlist/admission (HIGH-2).
+          routingOverride: { model: 'claude-haiku-4-5', lane: 'claude-code-oauth', reason: 'server-level override test' },
+        },
+      );
+      expect(text).toContain('"status":"succeeded"');
+
+      // Sol review H1 residue: assert the REAL spawn's argv, not telemetry --
+      // the fake agent recorded exactly what it was invoked with.
+      const spawnedArgv = JSON.parse(await fsp.readFile(argvLogPath, 'utf8')) as string[];
+      const modelFlagIndex = spawnedArgv.indexOf('--model');
+      expect(modelFlagIndex).toBeGreaterThanOrEqual(0);
+      expect(spawnedArgv[modelFlagIndex + 1]).toBe('claude-haiku-4-5');
+    } finally {
+      await fsp.rm(argvLogDir, { recursive: true, force: true });
+    }
+
     const run = await getRunRow(conversationId);
     expect(run.status).toBe('succeeded');
 

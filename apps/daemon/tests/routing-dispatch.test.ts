@@ -94,6 +94,19 @@ const SLUG_RECHECK_WELLFORMED_CANDIDATE: RoutingCandidate = {
   dispatchValidation: { slugRecheckAtDispatch: true },
 };
 
+// H2 residue: a vetted (model, lane) pair with NO price row anywhere in the
+// fixture policy (deliberately absent from otherModelPriceRows below) --
+// evaluateAdmission can only return 'not-evaluated' for it, never a real
+// deny-* verdict.
+const UNPRICED_OVERRIDE_CANDIDATE: RoutingCandidate = {
+  runtimeId: 'claude',
+  model: 'unpriced-override-model',
+  effort: 'inherit',
+  lane: 'openrouter',
+  transport: 'metered-api',
+  modelFamily: 'openai',
+};
+
 function fixturePolicy(overrides: Partial<RoutingPolicyDocument> = {}): RoutingPolicyDocument {
   return {
     policyVersion: 7,
@@ -119,6 +132,7 @@ function fixturePolicy(overrides: Partial<RoutingPolicyDocument> = {}): RoutingP
       { match: { taskClass: 'override-cross-runtime' }, primary: CROSS_RUNTIME_CANDIDATE },
       { match: { taskClass: 'override-slug-malformed' }, primary: SLUG_RECHECK_MALFORMED_CANDIDATE },
       { match: { taskClass: 'override-slug-wellformed' }, primary: SLUG_RECHECK_WELLFORMED_CANDIDATE },
+      { match: { taskClass: 'override-unpriced' }, primary: UNPRICED_OVERRIDE_CANDIDATE },
     ],
     hardConstraints: [
       {
@@ -390,6 +404,62 @@ describe('routing dispatch', () => {
       expect(result.mode).toBe('blocked');
       expect(result.blocked?.code).toBe('routing-error');
       expect(result.blocked?.message).toContain('slug');
+      expect(result.recordedIntent).toBeNull();
+    });
+
+    // Sol review H2 residue #1: the override admission check used to
+    // hardcode stage 'chat' internally regardless of what stage the request
+    // actually named, so a generous 'chat' ceiling silently covered every
+    // override no matter which stage it was really dispatched for. Ceiling
+    // 'chat' stays generous ($1000) while 'section-fanout' is starved to $0
+    // -- this can only block if the admission call is actually keyed on the
+    // request's real stage, not the hardcoded default.
+    it("H2 residue: an override's admission check evaluates the REQUEST's stage ceiling, not a hardcoded 'chat'", () => {
+      const result = resolveDispatchRouting({
+        db,
+        policy: fixturePolicy({
+          budgetCeilings: {
+            perStageEstimatedCostUsd: { chat: 1000, 'section-fanout': 0 },
+            perBuildCapUsd: 1000,
+            perDayCapUsd: 1000,
+            meteredKillSwitch: false,
+          },
+        }),
+        chatRequest: chatRequest({
+          sensitivityClass: 'public',
+          stage: 'section-fanout',
+          contextEstimateTokens: 100_000,
+          routingOverride: { model: 'gpt-5.6-sol', lane: 'openrouter', reason: 'test' },
+        }),
+        projectContext: projectContext(),
+        clock: NOW,
+      });
+      expect(result.mode).toBe('blocked');
+      expect(result.blocked?.code).toBe('denied-admission');
+      expect(result.blocked?.message).toContain('section-fanout');
+      expect(result.recordedIntent).toBeNull();
+    });
+
+    // Sol review H2 residue #2: fail-closed parity with the routed path --
+    // decision.ts's own candidate walk treats ANY non-'admit' admission
+    // verdict, including 'not-evaluated' (no price row), as "this candidate
+    // does not clear admission." The override path previously let
+    // 'not-evaluated' straight through as an implicit admit; an unpriced
+    // override model must not get a pass a routed candidate would never get.
+    it('H2 residue: BLOCKS an override whose model has no price row anywhere in policy (admission not-evaluated)', () => {
+      const result = resolveDispatchRouting({
+        db,
+        policy: fixturePolicy(),
+        chatRequest: chatRequest({
+          sensitivityClass: 'public',
+          routingOverride: { model: 'unpriced-override-model', lane: 'openrouter', reason: 'test' },
+        }),
+        projectContext: projectContext(),
+        clock: NOW,
+      });
+      expect(result.mode).toBe('blocked');
+      expect(result.blocked?.code).toBe('fail-closed-stop');
+      expect(result.blocked?.message).toContain('no usable price row');
       expect(result.recordedIntent).toBeNull();
     });
   });
