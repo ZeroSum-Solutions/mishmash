@@ -55,7 +55,9 @@ const EXPECTED_TASK_CLASSES = [
 
 // plan §3.3's seven pipeline stages plus WR-routing.md's "Routing-key
 // fallback (normative)" PRD fallback stage keys (chat/ingestion/mobile).
-// This is the CLOSED set -- a stage outside it is a policy violation.
+// This is the CLOSED set -- a stage outside it is a policy violation,
+// whether it shows up as a budgetCeilings key OR as a modelTable row's
+// match.stage (Sol review drift-gap b).
 const EXPECTED_STAGES = [
   'brief-art-direction',
   'token-freeze',
@@ -74,13 +76,44 @@ const SUBSCRIPTION_LANES = ['claude-code-oauth', 'codex-oauth', 'agy'] as const;
 const EXPECTED_DATA_CLASSES = ['client-confidential', 'internal', 'public'] as const;
 
 // PRD §15's binding sentence, verbatim, expressed as the machine-evaluable
-// shape RoutingPolicyHardConstraint carries (plan §3.2 L2).
+// shape RoutingPolicyHardConstraint carries (plan §3.2 L2). `allowedTransports`
+// is the STRONGER positive form (Sol review MED-1b) that closes the gap a
+// forbidden-list alone leaves open (e.g. `local` was never forbidden).
 const EXPECTED_ANTHROPIC_CONSTRAINT: RoutingPolicyHardConstraint = {
   id: 'prd-15-no-anthropic-api-credits',
   description: 'No Anthropic model may use API credits, Nous, or OpenRouter for this program.',
   modelFamily: 'anthropic',
   forbiddenTransports: ['prepaid', 'metered-api'],
+  allowedTransports: ['subscription-oauth'],
 };
+
+// Sol review drift-gap (a): the grok-nous-lane and mechanical-verification
+// constraints must be asserted exactly, the same way the anthropic one
+// already was -- flipping or removing either must fail this file.
+const EXPECTED_GROK_NOUS_CONSTRAINT: RoutingPolicyHardConstraint = {
+  id: 'prd-15-grok-via-nous-lane',
+  description:
+    "Grok 4.5 dispatches only through the prepaid Nous Portal lane in-program (PRD §15, plan §2). This session's OpenRouter-routed review predates program alignment and is not a standing exception; a future in-program Grok call outside the prepaid transport requires a PRD amendment (plan §6 open question 6 -- Nous-hosted Grok availability is not yet confirmed).",
+  modelFamily: 'xai',
+  forbiddenTransports: ['subscription-oauth', 'metered-api', 'local'],
+};
+
+const EXPECTED_MECHANICAL_VERIFICATION_CONSTRAINT: RoutingPolicyHardConstraint = {
+  id: 'prd-15-mechanical-verification-deterministic-only',
+  description:
+    "Mechanical verification runs via deterministic scripts and tests, never model judgment (PRD §15). This is not one of the ten §2 task classes; it deliberately has zero RoutingCandidate entries anywhere in modelTable. The sentinel modelFamily 'other' is banned on every transport here as a machine-evaluable guarantee that no candidate may ever claim that family for this concern -- see the top-level notes for why this is the schema's closest expression of 'has no model candidates'.",
+  modelFamily: 'other',
+  forbiddenTransports: ['subscription-oauth', 'prepaid', 'metered-api', 'local'],
+};
+
+function expectExactConstraint(found: RoutingPolicyHardConstraint | undefined, expected: RoutingPolicyHardConstraint): void {
+  expect(found).toBeDefined();
+  expect(found?.id).toBe(expected.id);
+  expect(found?.modelFamily).toBe(expected.modelFamily);
+  expect(found?.description).toBe(expected.description);
+  expect([...(found?.forbiddenTransports ?? [])].sort()).toEqual([...expected.forbiddenTransports].sort());
+  expect([...(found?.allowedTransports ?? [])].sort()).toEqual([...(expected.allowedTransports ?? [])].sort());
+}
 
 describe('routing-policy.json (v1) -- policy version + schema validation', () => {
   it('is policyVersion 1 and validates against the RoutingPolicyDocument contract guard', () => {
@@ -105,6 +138,16 @@ describe('routing-policy.json (v1) -- closed stage set (drift = unknown stage)',
     const stageKeys = Object.keys(doc.budgetCeilings.perStageEstimatedCostUsd).sort();
     expect(stageKeys).toEqual([...EXPECTED_STAGES].sort());
     for (const stage of stageKeys) {
+      expect(isKnownStage(stage)).toBe(true);
+    }
+  });
+
+  it('no modelTable row carries a match.stage value outside the closed vocabulary (drift = a rogue stage on a row)', () => {
+    const doc = loadPolicyDocument();
+    const rowStages = doc.modelTable
+      .map((entry) => entry.match.stage)
+      .filter((stage): stage is string => typeof stage === 'string');
+    for (const stage of rowStages) {
       expect(isKnownStage(stage)).toBe(true);
     }
   });
@@ -141,17 +184,75 @@ describe('routing-policy.json (v1) -- every §2 task class present with non-empt
       expect(EXPECTED_TASK_CLASSES as readonly string[]).toContain(taskClass);
     }
   });
+
+  it('only names an effort the plan states verbatim (Opus 5 "high" for art-direction) -- every other candidate is "inherit", never invented', () => {
+    const doc = loadPolicyDocument();
+    const artDirectionRow = doc.modelTable.find((entry) => entry.match.taskClass === 'art-direction-ia-brief-analysis');
+    expect(artDirectionRow?.primary.effort).toBe('high');
+    const allOtherCandidates = doc.modelTable
+      .filter((entry) => entry !== artDirectionRow)
+      .flatMap((entry) => [entry.primary, entry.burst, entry.cheap].filter((c): c is NonNullable<typeof c> => c !== undefined));
+    expect(allOtherCandidates.length).toBeGreaterThan(0);
+    for (const candidate of allOtherCandidates) {
+      expect(candidate.effort).toBe('inherit');
+    }
+    // art-direction's own burst (Gemini) is not plan-specified either.
+    expect(artDirectionRow?.burst?.effort).toBe('inherit');
+  });
+
+  it("the research row carries WebSearch as a toolTargets entry, not a dropped burst cell", () => {
+    const doc = loadPolicyDocument();
+    const researchRow = doc.modelTable.find((entry) => entry.match.taskClass === 'research');
+    expect(researchRow?.toolTargets).toEqual([{ kind: 'tool', id: 'websearch' }]);
+  });
+
+  it('both code-adversary-review-panel rows carry the exact §2 merge rule as a machine field', () => {
+    const doc = loadPolicyDocument();
+    const reviewPanelRows = doc.modelTable.filter((entry) => entry.match.taskClass === 'code-adversary-review-panel');
+    expect(reviewPanelRows.length).toBeGreaterThanOrEqual(2);
+    for (const row of reviewPanelRows) {
+      expect(row.mergeRule).toEqual({
+        deterministicFailures: 'any-veto',
+        stochasticFindings: 'two-of-three-escalates-human',
+      });
+    }
+  });
+
+  it('every deepseek-v4-flash candidate carries dispatchValidation.slugRecheckAtDispatch (PRD §15: slug rechecked at dispatch)', () => {
+    const doc = loadPolicyDocument();
+    const allCandidates = doc.modelTable.flatMap((entry) =>
+      [entry.primary, entry.burst, entry.cheap].filter((c): c is NonNullable<typeof c> => c !== undefined),
+    );
+    const deepseekCandidates = allCandidates.filter((c) => c.model === 'deepseek-v4-flash');
+    expect(deepseekCandidates.length).toBeGreaterThan(0);
+    for (const candidate of deepseekCandidates) {
+      expect(candidate.dispatchValidation).toEqual({ slugRecheckAtDispatch: true });
+    }
+  });
 });
 
 describe('routing-policy.json (v1) -- PRD §15 hard constraints present and exact (drift = missing/altered constraint)', () => {
-  it('carries the exact anthropic-transport-ban constraint, PRD §15 quoted verbatim', () => {
+  it('carries the exact anthropic-transport-ban constraint, PRD §15 quoted verbatim, with the stronger allowedTransports form', () => {
     const doc = loadPolicyDocument();
-    const found = doc.hardConstraints.find((c) => c.id === EXPECTED_ANTHROPIC_CONSTRAINT.id);
-    expect(found).toBeDefined();
-    expect(found?.modelFamily).toBe(EXPECTED_ANTHROPIC_CONSTRAINT.modelFamily);
-    expect(found?.description).toBe(EXPECTED_ANTHROPIC_CONSTRAINT.description);
-    expect([...(found?.forbiddenTransports ?? [])].sort()).toEqual(
-      [...EXPECTED_ANTHROPIC_CONSTRAINT.forbiddenTransports].sort(),
+    expectExactConstraint(
+      doc.hardConstraints.find((c) => c.id === EXPECTED_ANTHROPIC_CONSTRAINT.id),
+      EXPECTED_ANTHROPIC_CONSTRAINT,
+    );
+  });
+
+  it('carries the exact grok-via-nous-lane constraint (drift = flipped/removed)', () => {
+    const doc = loadPolicyDocument();
+    expectExactConstraint(
+      doc.hardConstraints.find((c) => c.id === EXPECTED_GROK_NOUS_CONSTRAINT.id),
+      EXPECTED_GROK_NOUS_CONSTRAINT,
+    );
+  });
+
+  it('carries the exact mechanical-verification-deterministic-only sentinel constraint (drift = flipped/removed)', () => {
+    const doc = loadPolicyDocument();
+    expectExactConstraint(
+      doc.hardConstraints.find((c) => c.id === EXPECTED_MECHANICAL_VERIFICATION_CONSTRAINT.id),
+      EXPECTED_MECHANICAL_VERIFICATION_CONSTRAINT,
     );
   });
 
@@ -166,12 +267,46 @@ describe('routing-policy.json (v1) -- PRD §15 hard constraints present and exac
     for (const candidate of allCandidates) {
       if (candidate.modelFamily === 'anthropic') {
         expect(constraint!.forbiddenTransports).not.toContain(candidate.transport);
+        expect(constraint!.allowedTransports).toContain(candidate.transport);
       }
     }
   });
 
-  it('carries at least the anthropic ban, the grok-nous-lane rule, and the mechanical-verification sentinel', () => {
-    expect(loadPolicyDocument().hardConstraints.length).toBeGreaterThanOrEqual(3);
+  it('carries exactly the anthropic ban, the grok-nous-lane rule, and the mechanical-verification sentinel', () => {
+    const doc = loadPolicyDocument();
+    const ids = doc.hardConstraints.map((c) => c.id).sort();
+    expect(ids).toEqual(
+      [
+        EXPECTED_ANTHROPIC_CONSTRAINT.id,
+        EXPECTED_GROK_NOUS_CONSTRAINT.id,
+        EXPECTED_MECHANICAL_VERIFICATION_CONSTRAINT.id,
+      ].sort(),
+    );
+  });
+});
+
+describe('routing-policy.json (v1) -- PRD §15 program assignments are present and exact (drift = wrong model/lane/scope)', () => {
+  const EXPECTED_ASSIGNMENTS: Record<string, { model: string; requiredLane: string; slugRecheck?: boolean }> = {
+    'product-architecture-adversary': { model: 'grok-4.5', requiredLane: 'nous' },
+    'long-horizon-prd-review': { model: 'claude-fable-5', requiredLane: 'claude-code-oauth' },
+    'scoped-implementation': { model: 'deepseek-v4-flash', requiredLane: 'deepseek-direct', slugRecheck: true },
+    'visual-review': { model: 'Gemini 3.1 Pro (High)', requiredLane: 'agy' },
+    'code-adversary': { model: 'claude-opus-5', requiredLane: 'claude-code-oauth' },
+  };
+
+  it('carries exactly PRD §15\'s five process-role assignments, each with its stated model and required lane', () => {
+    const doc = loadPolicyDocument();
+    const assignments = doc.programAssignments ?? [];
+    expect(assignments.map((a) => a.taskSelector).sort()).toEqual(Object.keys(EXPECTED_ASSIGNMENTS).sort());
+    for (const assignment of assignments) {
+      const expected = EXPECTED_ASSIGNMENTS[assignment.taskSelector];
+      expect(expected).toBeDefined();
+      expect(assignment.model).toBe(expected!.model);
+      expect(assignment.requiredLane).toBe(expected!.requiredLane);
+      if (expected!.slugRecheck) {
+        expect(assignment.dispatchValidation).toEqual({ slugRecheckAtDispatch: true });
+      }
+    }
   });
 });
 
@@ -204,16 +339,35 @@ describe('routing-policy.json (v1) -- data classification (drift = unsafe allowl
 });
 
 describe('routing-policy.json (v1) -- both Sonnet price rows, effective-dated across the 2026-08-31 boundary', () => {
-  it('carries exactly two claude-sonnet-5 price rows, before and after the boundary date', () => {
+  it('carries exactly two claude-sonnet-5 price rows, with BOTH exact effective dates asserted (drift = an edited date on either row)', () => {
     const doc = loadPolicyDocument();
     expect(doc.sonnetPriceRows.length).toBe(2);
-    const byDate = [...doc.sonnetPriceRows].sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
-    expect(byDate[0]).toMatchObject({ model: 'claude-sonnet-5', inputPerMillion: 2, outputPerMillion: 10 });
-    expect(byDate[1]).toMatchObject({
-      model: 'claude-sonnet-5',
-      inputPerMillion: 3,
-      outputPerMillion: 15,
-      effectiveDate: '2026-08-31',
-    });
+    const before = doc.sonnetPriceRows.find((r) => r.effectiveDate === '2026-01-01');
+    const after = doc.sonnetPriceRows.find((r) => r.effectiveDate === '2026-08-31');
+    expect(before).toBeDefined();
+    expect(after).toBeDefined();
+    expect(before).toMatchObject({ model: 'claude-sonnet-5', inputPerMillion: 2, outputPerMillion: 10, effectiveDate: '2026-01-01' });
+    expect(after).toMatchObject({ model: 'claude-sonnet-5', inputPerMillion: 3, outputPerMillion: 15, effectiveDate: '2026-08-31' });
+  });
+});
+
+describe('routing-policy.json (v1) -- pricing exactness (drift = an invented price or unsourced date)', () => {
+  it('does not carry a Kimi K3 price row -- plan §2 gives context size only, never a per-token price', () => {
+    const doc = loadPolicyDocument();
+    const kimiRows = (doc.otherModelPriceRows ?? []).filter((r) => /kimi/i.test(r.model));
+    expect(kimiRows).toEqual([]);
+  });
+
+  it('otherModelPriceRows entries carry no invented effectiveDate -- only the two sonnetPriceRows dates are plan-sourced', () => {
+    const doc = loadPolicyDocument();
+    for (const row of doc.otherModelPriceRows ?? []) {
+      expect(row.effectiveDate).toBeUndefined();
+    }
+  });
+
+  it("Gemini 3.1 Pro's >200k-token price doubling is encoded mechanically via thresholdedPricing", () => {
+    const doc = loadPolicyDocument();
+    const gemini = (doc.otherModelPriceRows ?? []).find((r) => r.model === 'Gemini 3.1 Pro (High)');
+    expect(gemini?.thresholdedPricing).toEqual({ thresholdTokens: 200000, multiplier: 2 });
   });
 });

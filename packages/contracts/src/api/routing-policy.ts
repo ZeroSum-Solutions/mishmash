@@ -41,9 +41,17 @@ const ROUTING_DATA_CLASSIFICATIONS: readonly RoutingDataClassification[] = [
   'public',
 ];
 
-export type RoutingEffort = 'low' | 'medium' | 'high' | 'xhigh';
+/**
+ * `'inherit'` (Sol review MED-2a) means the plan's §2 table names this model
+ * for this cell but does not name an effort -- the candidate defers to the
+ * runtime's own default rather than this policy inventing one. Only cells
+ * the plan states an effort for (verbatim, e.g. "Opus 5 (high)") carry a
+ * concrete `RoutingEffort` value; every other candidate in the v1 content
+ * uses `'inherit'`.
+ */
+export type RoutingEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'inherit';
 
-const ROUTING_EFFORTS: readonly RoutingEffort[] = ['low', 'medium', 'high', 'xhigh'];
+const ROUTING_EFFORTS: readonly RoutingEffort[] = ['low', 'medium', 'high', 'xhigh', 'inherit'];
 
 /**
  * Every lane plan §2/PRD §15 actually name for in-program dispatch: the
@@ -133,6 +141,12 @@ export interface RoutingCandidate {
   lane: RoutingLaneId;
   transport: RoutingTransport;
   modelFamily: RoutingModelFamily;
+  /** PRD §15's "scoped implementation" bullet: `deepseek-v4-flash`'s exact
+   * slug "was live-probed on 2026-08-03 and must be rechecked at dispatch
+   * time" -- not a one-time policy fact, a per-dispatch validation
+   * requirement. Optional so every other candidate (which the PRD does not
+   * flag this way) stays unaffected. */
+  dispatchValidation?: { slugRecheckAtDispatch: boolean };
 }
 
 /**
@@ -155,6 +169,19 @@ export interface RoutingPolicyModelTableEntry {
    * shape only carries one `primary`). Never machine-evaluated; a human/
    * review-time aid only. */
   notes?: string;
+  /** A plan §2 cell can name a built-in TOOL (e.g. "WebSearch" for the
+   * research row's burst/alt), not a dispatchable model/runtime -- every
+   * `RoutingCandidate` requires runtimeId+model+lane+transport+modelFamily,
+   * which a tool has none of. Rather than silently dropping that cell (Sol
+   * review MED-2b), it is carried here as its own typed list so the plan
+   * content is not lost to a schema mismatch. */
+  toolTargets?: Array<{ kind: 'tool'; id: string }>;
+  /** Machine-evaluable form of plan §2's review-panel merge rule (Grok F11):
+   * "any-veto on deterministic-check failures; for stochastic findings,
+   * two-of-three agreement escalates to human." Optional -- only the
+   * review-panel row(s) set it; the P2 admission-control/gate-runner layer
+   * (out of this tranche's scope) is what actually evaluates it. */
+  mergeRule?: { deterministicFailures: string; stochasticFindings: string };
 }
 
 /** A priced model, carried with the effective date it started applying --
@@ -163,8 +190,17 @@ export interface RoutingPolicyPriceRow {
   model: string;
   inputPerMillion: number;
   outputPerMillion: number;
-  /** ISO 8601 date the price took effect. */
-  effectiveDate: string;
+  /** ISO 8601 date the price took effect. Optional (Sol review MED-3b): the
+   * plan sources a dated boundary ONLY for the two Sonnet 5 rows
+   * (2026-08-31); every other §2-verified price is a current anchor with no
+   * stated onset date, and inventing one would misrepresent it as sourced.
+   * Both `sonnetPriceRows` entries keep a concrete date; `otherModelPriceRows`
+   * entries omit it. */
+  effectiveDate?: string;
+  /** plan §2: Gemini 3.1 Pro "doubling >200k" -- a priced model whose rate
+   * changes past a context-length threshold. Optional; only Gemini's row
+   * sets it. */
+  thresholdedPricing?: { thresholdTokens: number; multiplier: number };
 }
 
 /** Data classification is part of the policy (plan §3.2 L2, Sol v2-HIGH-1):
@@ -203,6 +239,17 @@ export interface RoutingPolicyHardConstraint {
   description: string;
   modelFamily: RoutingModelFamily;
   forbiddenTransports: RoutingTransport[];
+  /**
+   * Sol review MED-1b: a positive allowlist is STRONGER than
+   * `forbiddenTransports` alone -- `forbiddenTransports` only bans the
+   * transports it names (PRD §15's list happens to omit `local`, leaving a
+   * gap), while `allowedTransports`, when present, means every transport
+   * NOT in this list is forbidden, closing that gap by construction. Used
+   * for PRD §15's "Claude Code OAuth only" requirement on anthropic models:
+   * `allowedTransports: ['subscription-oauth']`. Optional -- most
+   * constraints only need the negative form.
+   */
+  allowedTransports?: RoutingTransport[];
 }
 
 /** plan §3.1/§3.2 L4: pre-run estimated-cost ceiling per stage, per-build
@@ -220,6 +267,31 @@ export interface RoutingPolicyBudgetCeilings {
   notes?: string;
 }
 
+/**
+ * One of PRD §15's five exact process-role assignments for THIS program's
+ * own meta-development (reviewing/building the routing capability itself),
+ * distinct from the §2 end-user task-class `modelTable` (Sol review MED-1a).
+ * §15 names a role, a specific model, and a required lane verbatim -- e.g.
+ * "Code adversary: Opus 5 through Claude Code OAuth only" -- and this shape
+ * carries that assignment exactly rather than folding it into a `modelTable`
+ * row's `taskClass`, which would blur two different concepts the plan
+ * treats as distinct. §15's sixth bullet ("Mechanical verification:
+ * deterministic scripts and tests, not model judgment") has no model to
+ * assign and is represented instead by the
+ * `prd-15-mechanical-verification-deterministic-only` hard constraint.
+ */
+export interface RoutingPolicyProgramAssignment {
+  taskSelector: string;
+  model: string;
+  requiredLane: RoutingLaneId;
+  note: string;
+  /** Mirrors RoutingCandidate#dispatchValidation -- set on the
+   * "scoped-implementation" assignment (deepseek-v4-flash), whose exact
+   * slug PRD §15 requires rechecking at dispatch time. Optional; the other
+   * four assignments don't carry this concern. */
+  dispatchValidation?: { slugRecheckAtDispatch: boolean };
+}
+
 export interface RoutingPolicyDocument {
   /** Bumped on every policy revision; carried through to every
    * RoutingDecision/telemetry row so a dispatch is traceable to the policy
@@ -227,6 +299,11 @@ export interface RoutingPolicyDocument {
   policyVersion: number;
   modelTable: RoutingPolicyModelTableEntry[];
   hardConstraints: RoutingPolicyHardConstraint[];
+  /** PRD §15's five exact process-role assignments (Sol review MED-1a) --
+   * see RoutingPolicyProgramAssignment's doc comment for why these are kept
+   * separate from `modelTable`. Optional so the P0 stub and older fixtures
+   * keep validating without it. */
+  programAssignments?: RoutingPolicyProgramAssignment[];
   /** Per-runtime fallback chain (plan §3.2 L1), keyed by lane id. */
   laneChains: Record<string, string[]>;
   dataClassificationAllowlists: RoutingPolicyDataClassAllowlist[];
@@ -254,13 +331,19 @@ export interface RoutingPolicyDocument {
   notes?: string[];
 }
 
+function isThresholdedPricing(value: unknown): value is { thresholdTokens: number; multiplier: number } {
+  if (!isPlainObject(value)) return false;
+  return isFiniteNumber(value.thresholdTokens) && isFiniteNumber(value.multiplier);
+}
+
 function isRoutingPolicyPriceRow(value: unknown): value is RoutingPolicyPriceRow {
   if (!isPlainObject(value)) return false;
   return (
     typeof value.model === 'string' &&
     isFiniteNumber(value.inputPerMillion) &&
     isFiniteNumber(value.outputPerMillion) &&
-    typeof value.effectiveDate === 'string'
+    (value.effectiveDate === undefined || typeof value.effectiveDate === 'string') &&
+    (value.thresholdedPricing === undefined || isThresholdedPricing(value.thresholdedPricing))
   );
 }
 
@@ -277,6 +360,10 @@ function isRoutingMatchRule(value: unknown): value is RoutingMatchRule {
   );
 }
 
+function isDispatchValidation(value: unknown): value is { slugRecheckAtDispatch: boolean } {
+  return isPlainObject(value) && typeof value.slugRecheckAtDispatch === 'boolean';
+}
+
 function isRoutingCandidate(value: unknown): value is RoutingCandidate {
   if (!isPlainObject(value)) return false;
   return (
@@ -289,8 +376,21 @@ function isRoutingCandidate(value: unknown): value is RoutingCandidate {
     typeof value.transport === 'string' &&
     (ROUTING_TRANSPORTS as readonly string[]).includes(value.transport) &&
     typeof value.modelFamily === 'string' &&
-    (ROUTING_MODEL_FAMILIES as readonly string[]).includes(value.modelFamily)
+    (ROUTING_MODEL_FAMILIES as readonly string[]).includes(value.modelFamily) &&
+    (value.dispatchValidation === undefined || isDispatchValidation(value.dispatchValidation))
   );
+}
+
+function isToolTargets(value: unknown): value is Array<{ kind: 'tool'; id: string }> {
+  return (
+    Array.isArray(value) &&
+    value.every((v) => isPlainObject(v) && v.kind === 'tool' && typeof v.id === 'string')
+  );
+}
+
+function isMergeRule(value: unknown): value is { deterministicFailures: string; stochasticFindings: string } {
+  if (!isPlainObject(value)) return false;
+  return typeof value.deterministicFailures === 'string' && typeof value.stochasticFindings === 'string';
 }
 
 function isRoutingPolicyModelTableEntry(value: unknown): value is RoutingPolicyModelTableEntry {
@@ -300,6 +400,8 @@ function isRoutingPolicyModelTableEntry(value: unknown): value is RoutingPolicyM
   if (value.burst !== undefined && !isRoutingCandidate(value.burst)) return false;
   if (value.cheap !== undefined && !isRoutingCandidate(value.cheap)) return false;
   if (value.notes !== undefined && typeof value.notes !== 'string') return false;
+  if (value.toolTargets !== undefined && !isToolTargets(value.toolTargets)) return false;
+  if (value.mergeRule !== undefined && !isMergeRule(value.mergeRule)) return false;
   return true;
 }
 
@@ -314,7 +416,8 @@ function isRoutingPolicyHardConstraint(value: unknown): value is RoutingPolicyHa
     typeof value.description === 'string' &&
     typeof value.modelFamily === 'string' &&
     (ROUTING_MODEL_FAMILIES as readonly string[]).includes(value.modelFamily) &&
-    isRoutingTransportArray(value.forbiddenTransports)
+    isRoutingTransportArray(value.forbiddenTransports) &&
+    (value.allowedTransports === undefined || isRoutingTransportArray(value.allowedTransports))
   );
 }
 
@@ -325,6 +428,18 @@ function isRoutingPolicyDataClassAllowlist(value: unknown): value is RoutingPoli
     (ROUTING_DATA_CLASSIFICATIONS as readonly string[]).includes(value.classification) &&
     isStringArray(value.allowedLanes) &&
     (value.failClosed === undefined || typeof value.failClosed === 'boolean')
+  );
+}
+
+function isRoutingPolicyProgramAssignment(value: unknown): value is RoutingPolicyProgramAssignment {
+  if (!isPlainObject(value)) return false;
+  return (
+    typeof value.taskSelector === 'string' &&
+    typeof value.model === 'string' &&
+    typeof value.requiredLane === 'string' &&
+    (ROUTING_LANE_IDS as readonly string[]).includes(value.requiredLane) &&
+    typeof value.note === 'string' &&
+    (value.dispatchValidation === undefined || isDispatchValidation(value.dispatchValidation))
   );
 }
 
@@ -364,6 +479,8 @@ export function isRoutingPolicyDocument(value: unknown): value is RoutingPolicyD
     doc.modelTable.every(isRoutingPolicyModelTableEntry) &&
     Array.isArray(doc.hardConstraints) &&
     doc.hardConstraints.every(isRoutingPolicyHardConstraint) &&
+    (doc.programAssignments === undefined ||
+      (Array.isArray(doc.programAssignments) && doc.programAssignments.every(isRoutingPolicyProgramAssignment))) &&
     isLaneChains(doc.laneChains) &&
     Array.isArray(doc.dataClassificationAllowlists) &&
     doc.dataClassificationAllowlists.every(isRoutingPolicyDataClassAllowlist) &&

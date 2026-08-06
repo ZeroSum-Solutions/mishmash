@@ -94,10 +94,18 @@ describe('isRoutingPolicyDocument', () => {
     expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, laneChains: { x: 'not-an-array' } })).toBe(false);
   });
 
-  it('rejects a malformed price row (missing effectiveDate)', () => {
-    const malformed = {
+  it('accepts a price row with no effectiveDate -- optional (Sol review MED-3b: not every §2-verified price has a plan-sourced onset date)', () => {
+    const accepted = {
       ...EMPTY_POLICY,
       sonnetPriceRows: [{ model: 'claude-sonnet-5', inputPerMillion: 2, outputPerMillion: 10 }],
+    };
+    expect(isRoutingPolicyDocument(accepted)).toBe(true);
+  });
+
+  it('rejects a malformed price row (wrong type for effectiveDate)', () => {
+    const malformed = {
+      ...EMPTY_POLICY,
+      sonnetPriceRows: [{ model: 'claude-sonnet-5', inputPerMillion: 2, outputPerMillion: 10, effectiveDate: 20260831 }],
     };
     expect(isRoutingPolicyDocument(malformed)).toBe(false);
   });
