@@ -216,9 +216,20 @@ export interface RoutingPolicyPriceRow {
    * Both `sonnetPriceRows` entries keep a concrete date; `otherModelPriceRows`
    * entries omit it. */
   effectiveDate?: string;
-  /** plan §2: Gemini 3.1 Pro "doubling >200k" -- a priced model whose rate
+  /**
+   * plan §2: Gemini 3.1 Pro "doubling >200k" -- a priced model whose rate
    * changes past a context-length threshold. Optional; only Gemini's row
-   * sets it. */
+   * sets it.
+   *
+   * Boundary is EXCLUSIVE (Sol review LOW-8): a composed context of exactly
+   * `thresholdTokens` prices at the base rate; `multiplier` applies only
+   * when the actual token count is STRICTLY GREATER than `thresholdTokens`
+   * (`apps/daemon/src/routing/admission.ts`'s `estimatedRunCostUsd`:
+   * `contextEstimateTokens > thresholdedPricing.thresholdTokens`). The
+   * multiplier scales BOTH `inputPerMillion` and `outputPerMillion` once
+   * priced -- Gemini's real long-context surcharge applies symmetrically to
+   * both directions, not just input.
+   */
   thresholdedPricing?: { thresholdTokens: number; multiplier: number };
 }
 
@@ -299,6 +310,31 @@ export interface RoutingPolicyRunawayLimits {
   retryCeiling?: number;
 }
 
+/**
+ * Sol review HIGH-1 (fix-round, admission control): a pre-run cost estimate
+ * that prices ONLY the known input-context tokens systematically
+ * underprices every candidate whose output rate is materially higher than
+ * its input rate (2-6x is typical across the priced models this policy
+ * carries) -- a run that generates a long response is charged as if it
+ * generated none. There is no real pre-run output-token count anywhere in
+ * the routing key, so this bounds the estimate instead of guessing a
+ * ratio: `min(contextEstimateTokens, bound)`, where `bound` is this
+ * operator-tunable conservative default (or a per-taskClass override for a
+ * task class whose typical output shape differs materially, e.g. a review
+ * panel producing much shorter output than the context it read). `default:
+ * 32_000` is chosen because it roughly matches the largest single-response
+ * output ceiling most of this policy's priced runtimes advertise -- a
+ * genuinely long, multi-turn conversation's cumulative output is a
+ * DIFFERENT concern (already covered by the per-build/per-day caps), not
+ * this per-dispatch estimate.
+ */
+export interface RoutingPolicyOutputTokenBound {
+  /** Fallback bound (tokens) when no `perTaskClass` entry applies. */
+  default: number;
+  /** Optional per-taskClass override of `default`. */
+  perTaskClass?: Record<string, number>;
+}
+
 /** plan §3.1/§3.2 L4: pre-run estimated-cost ceiling per stage, per-build
  * and per-day caps checked at every dispatch, and a metered-lane hard
  * kill-switch flag. */
@@ -329,6 +365,15 @@ export interface RoutingPolicyBudgetCeilings {
    * `headroomFraction`.
    */
   runawayLimits?: Record<string, RoutingPolicyRunawayLimits>;
+  /**
+   * Sol review HIGH-1 (fix-round, admission control): see
+   * RoutingPolicyOutputTokenBound's own doc comment. Optional so every
+   * pre-fix-round policy document/fixture keeps validating without it --
+   * `apps/daemon/src/routing/admission.ts`'s cost estimator falls back to
+   * its own hardcoded conservative default (documented there) when this
+   * field is entirely absent, so absence is never "output is free."
+   */
+  outputTokenBound?: RoutingPolicyOutputTokenBound;
   /** Optional free-text disclosure. t3's v1 content uses this to flag that
    * the ceiling values are conservative operator-tunable placeholders --
    * the plan names no binding dollar figures, only the ceiling mechanism
@@ -418,18 +463,41 @@ export interface RoutingPolicyDocument {
   notes?: string[];
 }
 
+/** Sol review MED-4: a rate can never be negative (a `-$1/M` row is a policy
+ * typo, not a real price), and `isFiniteNumber` alone let one through. */
+function isNonNegativeFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+/** Sol review MED-4: a `thresholdedPricing.multiplier` of `0` or negative
+ * would zero out or invert the priced rate past the threshold, which is
+ * never a legitimate "doubling past 200k" style rule -- only a positive
+ * multiplier is accepted. */
+function isPositiveFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+/** Sol review MED-4: `effectiveDate` is read via `Date.parse` at admission
+ * time (apps/daemon/src/routing/admission.ts's `findPriceRow`) -- a string
+ * `Date.parse` cannot resolve to a real instant (`NaN`) must be rejected
+ * here, at the policy boundary, rather than silently sorting as the oldest
+ * possible date downstream. */
+function isIsoParseableDateString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && Number.isFinite(Date.parse(value));
+}
+
 function isThresholdedPricing(value: unknown): value is { thresholdTokens: number; multiplier: number } {
   if (!isPlainObject(value)) return false;
-  return isFiniteNumber(value.thresholdTokens) && isFiniteNumber(value.multiplier);
+  return isFiniteNonNegativeInteger(value.thresholdTokens) && isPositiveFiniteNumber(value.multiplier);
 }
 
 function isRoutingPolicyPriceRow(value: unknown): value is RoutingPolicyPriceRow {
   if (!isPlainObject(value)) return false;
   return (
     typeof value.model === 'string' &&
-    isFiniteNumber(value.inputPerMillion) &&
-    isFiniteNumber(value.outputPerMillion) &&
-    (value.effectiveDate === undefined || typeof value.effectiveDate === 'string') &&
+    isNonNegativeFiniteNumber(value.inputPerMillion) &&
+    isNonNegativeFiniteNumber(value.outputPerMillion) &&
+    (value.effectiveDate === undefined || isIsoParseableDateString(value.effectiveDate)) &&
     (value.thresholdedPricing === undefined || isThresholdedPricing(value.thresholdedPricing))
   );
 }
@@ -557,6 +625,18 @@ function isRunawayLimitsRecord(value: unknown): value is Record<string, RoutingP
   return isPlainObject(value) && Object.values(value).every(isRoutingPolicyRunawayLimits);
 }
 
+function isNonNegativeIntegerRecord(value: unknown): value is Record<string, number> {
+  return isPlainObject(value) && Object.values(value).every(isFiniteNonNegativeInteger);
+}
+
+function isRoutingPolicyOutputTokenBound(value: unknown): value is RoutingPolicyOutputTokenBound {
+  if (!isPlainObject(value)) return false;
+  return (
+    isFiniteNonNegativeInteger(value.default) &&
+    (value.perTaskClass === undefined || isNonNegativeIntegerRecord(value.perTaskClass))
+  );
+}
+
 function isRoutingPolicyBudgetCeilings(value: unknown): value is RoutingPolicyBudgetCeilings {
   if (!isPlainObject(value)) return false;
   return (
@@ -567,6 +647,7 @@ function isRoutingPolicyBudgetCeilings(value: unknown): value is RoutingPolicyBu
     (value.headroomFraction === undefined ||
       (isFiniteNumber(value.headroomFraction) && value.headroomFraction >= 0 && value.headroomFraction < 1)) &&
     (value.runawayLimits === undefined || isRunawayLimitsRecord(value.runawayLimits)) &&
+    (value.outputTokenBound === undefined || isRoutingPolicyOutputTokenBound(value.outputTokenBound)) &&
     (value.notes === undefined || typeof value.notes === 'string')
   );
 }

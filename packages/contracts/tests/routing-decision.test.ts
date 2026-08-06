@@ -158,6 +158,37 @@ describe('isRoutingDecision', () => {
     expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', admissionResults: malformedCost })).toBe(false);
   });
 
+  // Sol review MED-5 (fix-round, admission control): the invariant
+  // `verdict === 'not-evaluated'` IFF `estimatedCostUsd === null`.
+  it('rejects a null-cost "admit" -- the exact silent-admit shape evaluateAdmission is built never to produce', () => {
+    const nullCostAdmit = [{ runtimeId: 'x', model: 'y', lane: 'z', verdict: 'admit', estimatedCostUsd: null, reason: 'r' }];
+    expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', admissionResults: nullCostAdmit })).toBe(false);
+  });
+
+  it('rejects a null-cost deny-* verdict -- every denial must carry the cost that triggered it', () => {
+    const nullCostDeny = [{ runtimeId: 'x', model: 'y', lane: 'z', verdict: 'deny-build-cap', estimatedCostUsd: null, reason: 'r' }];
+    expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', admissionResults: nullCostDeny })).toBe(false);
+  });
+
+  it('rejects a "not-evaluated" verdict carrying a non-null cost -- not-evaluated means no cost was ever established', () => {
+    const notEvaluatedWithCost = [{ runtimeId: 'x', model: 'y', lane: 'z', verdict: 'not-evaluated', estimatedCostUsd: 1.5, reason: 'r' }];
+    expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', admissionResults: notEvaluatedWithCost })).toBe(false);
+  });
+
+  it('rejects a negative or non-finite estimatedCostUsd on any verdict', () => {
+    const negative = [{ runtimeId: 'x', model: 'y', lane: 'z', verdict: 'admit', estimatedCostUsd: -0.01, reason: 'r' }];
+    expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', admissionResults: negative })).toBe(false);
+    const nan = [{ runtimeId: 'x', model: 'y', lane: 'z', verdict: 'admit', estimatedCostUsd: Number.NaN, reason: 'r' }];
+    expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', admissionResults: nan })).toBe(false);
+    const infinite = [{ runtimeId: 'x', model: 'y', lane: 'z', verdict: 'admit', estimatedCostUsd: Number.POSITIVE_INFINITY, reason: 'r' }];
+    expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', admissionResults: infinite })).toBe(false);
+  });
+
+  it('accepts a zero estimatedCostUsd -- nonnegative allows exactly 0', () => {
+    const zeroCost = [{ runtimeId: 'x', model: 'y', lane: 'z', verdict: 'admit', estimatedCostUsd: 0, reason: 'r' }];
+    expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', admissionResults: zeroCost })).toBe(true);
+  });
+
   it('rejects a decision missing admissionResults entirely (t6)', () => {
     const { admissionResults: _drop, ...missing } = { ...BASE_DECISION_FIELDS, effort: 'low' as const };
     expect(isRoutingDecision(missing)).toBe(false);

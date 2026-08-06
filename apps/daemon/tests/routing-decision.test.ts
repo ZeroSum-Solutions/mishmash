@@ -619,10 +619,12 @@ describe('decideRouting -- admission control integration (t6)', () => {
         { model: 'claude-opus-5', inputPerMillion: 5, outputPerMillion: 25 },
         { model: 'claude-haiku-4-5', inputPerMillion: 1, outputPerMillion: 5 },
       ],
-      budgetCeilings: { perStageEstimatedCostUsd: { chat: 1 }, perBuildCapUsd: 100, perDayCapUsd: 100, meteredKillSwitch: false },
+      budgetCeilings: { perStageEstimatedCostUsd: { chat: 1 }, perBuildCapUsd: 100, perDayCapUsd: 100, meteredKillSwitch: false, outputTokenBound: { default: 0 } },
       ...overrides,
     };
   }
+
+  const NO_SPEND = { stageSpentUsd: 0, buildSpentUsd: 0, daySpentUsd: 0 };
 
   it('omitting the admission input reproduces the exact pre-t6 behavior (not-evaluated, empty admissionResults)', () => {
     const decision = decideRouting({
@@ -648,7 +650,7 @@ describe('decideRouting -- admission control integration (t6)', () => {
       sensitivityClass: 'public',
       laneMeters: [],
       taskClass: 'test-class',
-      admission: { buildId: 'build-1', spendLookup: { buildSpentUsd: 0, daySpentUsd: 0 }, now: new Date('2026-08-05T00:00:00.000Z') },
+      admission: { buildId: 'build-1', spendLookup: NO_SPEND, now: new Date('2026-08-05T00:00:00.000Z') },
     });
     expect(decision.status).toBe('ok');
     expect(decision.modelFlag).toBe('claude-haiku-4-5');
@@ -660,14 +662,14 @@ describe('decideRouting -- admission control integration (t6)', () => {
     expect(decision.reasons.some((r) => r.step === 'admission-denied' && r.code?.includes('claude-opus-5'))).toBe(true);
   });
 
-  it('all candidates denied by admission -> status "denied-admission", carrying per-candidate denial reasons', () => {
+  it('all candidates denied by admission (none throttled) -> status "denied-admission", carrying per-candidate denial reasons', () => {
     const decision = decideRouting({
-      policy: admissionFixturePolicy({ budgetCeilings: { perStageEstimatedCostUsd: { chat: 0.01 }, perBuildCapUsd: 100, perDayCapUsd: 100, meteredKillSwitch: false } }),
+      policy: admissionFixturePolicy({ budgetCeilings: { perStageEstimatedCostUsd: { chat: 0.01 }, perBuildCapUsd: 100, perDayCapUsd: 100, meteredKillSwitch: false, outputTokenBound: { default: 0 } } }),
       key: keyFor({ contextEstimateTokens: 300_000 }), // both candidates blow the $0.01 stage ceiling
       sensitivityClass: 'public',
       laneMeters: [],
       taskClass: 'test-class',
-      admission: { buildId: 'build-1', spendLookup: { buildSpentUsd: 0, daySpentUsd: 0 }, now: new Date('2026-08-05T00:00:00.000Z') },
+      admission: { buildId: 'build-1', spendLookup: NO_SPEND, now: new Date('2026-08-05T00:00:00.000Z') },
     });
     expect(decision.status).toBe('denied-admission');
     expect(decision.admissionVerdict).toBe('denied');
@@ -676,16 +678,60 @@ describe('decideRouting -- admission control integration (t6)', () => {
     expect(decision.admissionResults.every((r) => r.verdict === 'deny-stage-ceiling')).toBe(true);
   });
 
-  it('fail-closed-stop still takes precedence over denied-admission when every candidate is throttled before admission ever runs', () => {
+  it('fail-closed-stop takes precedence when every candidate is throttled and NONE ever reaches admission', () => {
     const decision = decideRouting({
       policy: admissionFixturePolicy(),
       key: keyFor({ contextEstimateTokens: 0 }),
       sensitivityClass: 'public',
       laneMeters: [throttled('claude-code-oauth', 5)], // both candidates share this lane
       taskClass: 'test-class',
-      admission: { buildId: 'build-1', spendLookup: { buildSpentUsd: 0, daySpentUsd: 0 }, now: new Date('2026-08-05T00:00:00.000Z') },
+      admission: { buildId: 'build-1', spendLookup: NO_SPEND, now: new Date('2026-08-05T00:00:00.000Z') },
     });
     expect(decision.status).toBe('fail-closed-stop');
     expect(decision.admissionResults).toEqual([]);
+  });
+
+  // Sol review MED-3 (fix-round): a MIX of throttled-and-denied candidates
+  // must report fail-closed-stop (the more conservative, human-surfaced
+  // signal), not denied-admission -- while still retaining whatever
+  // admissionResults WERE collected before the throttle was hit.
+  it('MED-3: a mix of throttled + admission-denied candidates reports fail-closed-stop, with admissionResults retained', () => {
+    const mixedPolicy: RoutingPolicyDocument = {
+      policyVersion: 1,
+      stageVocabulary: ['chat'],
+      modelTable: [
+        {
+          match: { taskClass: 'mixed-class' },
+          primary: { runtimeId: 'claude', model: 'claude-opus-5', effort: 'inherit', lane: 'claude-code-oauth', transport: 'subscription-oauth', modelFamily: 'anthropic' },
+          cheap: { runtimeId: 'kimi', model: 'moonshotai/kimi-k3', effort: 'inherit', lane: 'moonshot', transport: 'prepaid', modelFamily: 'moonshot' },
+        },
+      ],
+      hardConstraints: [],
+      laneChains: {},
+      dataClassificationAllowlists: [{ classification: 'public', allowedLanes: ['claude-code-oauth', 'moonshot'], failClosed: true }],
+      sonnetPriceRows: [],
+      otherModelPriceRows: [{ model: 'claude-opus-5', inputPerMillion: 5, outputPerMillion: 25 }],
+      budgetCeilings: { perStageEstimatedCostUsd: { chat: 0.01 }, perBuildCapUsd: 100, perDayCapUsd: 100, meteredKillSwitch: false, outputTokenBound: { default: 0 } },
+    };
+    const decision = decideRouting({
+      policy: mixedPolicy,
+      // opus-5 (tier0, tried first) blows the tiny $0.01 stage ceiling --
+      // reaches admission and is denied. kimi-k3 (tier1, tried second) is
+      // never evaluated for admission because its lane is throttled first.
+      key: keyFor({ contextEstimateTokens: 1_000_000 }),
+      sensitivityClass: 'public',
+      laneMeters: [throttled('moonshot', 5)],
+      taskClass: 'mixed-class',
+      admission: { buildId: 'build-1', spendLookup: NO_SPEND, now: new Date('2026-08-05T00:00:00.000Z') },
+    });
+    expect(decision.status).toBe('fail-closed-stop');
+    expect(decision.runtimeId).toBe('none');
+    expect(decision.demotions).toHaveLength(1); // kimi-k3's lane was throttled
+    expect(decision.admissionResults).toHaveLength(1); // only opus-5 ever reached admission
+    expect(decision.admissionResults[0]).toMatchObject({ model: 'claude-opus-5', verdict: 'deny-stage-ceiling' });
+    // admissionVerdict reflects that every candidate which DID reach
+    // admission was denied, even though the terminal status is
+    // fail-closed-stop (throttling, not admission, drove the final call).
+    expect(decision.admissionVerdict).toBe('denied');
   });
 });

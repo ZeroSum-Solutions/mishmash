@@ -5,8 +5,29 @@
 // `estimatedRunCostUsd` build every input in memory (no I/O, no SQLite);
 // the spend-lookup describe block at the bottom is the one place this file
 // touches a real database, seeding apps/daemon/src/routing/telemetry.ts's
-// `routing_telemetry` table and asserting `computeBuildSpendUsd`/
-// `computeDaySpendUsd` aggregate exactly what admission control needs.
+// `routing_telemetry` table and asserting `computeStageSpendUsd`/
+// `computeBuildSpendUsd`/`computeDaySpendUsd` aggregate exactly what
+// admission control needs.
+//
+// Sol fix-round (post-t6 adversarial review) folded in here, RED-then-GREEN
+// confirmed against admission.ts before the fix landed:
+//   - HIGH-1: cost estimation now prices BOTH input and output tokens (see
+//     "estimatedRunCostUsd -- pricing" below); the primary pricing test IS
+//     the former red case (opus-5, 300k tokens, default output bound).
+//   - HIGH-2: the stage-ceiling check now accounts for spend already
+//     recorded against this build's this stage (see "denies at the stage
+//     ceiling" and the dedicated HIGH-2 case in the verdict-taxonomy block).
+//   - LOW-7: a clock predating every dated price row is `not-evaluated`,
+//     not a silent fallback to the earliest row.
+//   - LOW-8: the stage-ceiling boundary case below is a true one-cent
+//     overage, and the Gemini threshold boundary is asserted exactly at
+//     200,000 tokens (base rate) vs 200,001 (doubled).
+//
+// Most `evaluateAdmission`/`estimatedRunCostUsd` cases below deliberately
+// zero out `budgetCeilings.outputTokenBound` (`ZERO_OUTPUT_BOUND`) so their
+// numbers isolate the mechanism under test (cap comparison, date-row
+// selection, threshold-on-input) from HIGH-1's output-pricing addition,
+// which has its own dedicated tests.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -24,7 +45,15 @@ import {
   type EvaluateAdmissionInput,
 } from '../src/routing/admission.js';
 import { closeDatabase, openDatabase } from '../src/db.js';
-import { computeBuildSpendUsd, computeDaySpendUsd, ensureRoutingTelemetryTable, recordRoutingTelemetry } from '../src/routing/telemetry.js';
+import {
+  computeBuildSpendUsd,
+  computeDaySpendUsd,
+  computeStageSpendUsd,
+  ensureRoutingTelemetryTable,
+  recordRoutingTelemetry,
+} from '../src/routing/telemetry.js';
+
+const ZERO_OUTPUT_BOUND = { default: 0 };
 
 function candidate(overrides: Partial<RoutingCandidate> = {}): RoutingCandidate {
   return {
@@ -66,12 +95,21 @@ function policy(overrides: Partial<RoutingPolicyDocument> = {}): RoutingPolicyDo
   };
 }
 
+/** A `policy()` fixture with output pricing disabled (`outputTokenBound:
+ * {default: 0}`) -- isolates cap-comparison/date/threshold-selection tests
+ * from HIGH-1's input+output pricing formula, which has its own dedicated
+ * tests below. */
+function policyZeroOutput(overrides: Partial<RoutingPolicyDocument> = {}): RoutingPolicyDocument {
+  const base = policy(overrides);
+  return { ...base, budgetCeilings: { ...base.budgetCeilings, outputTokenBound: overrides.budgetCeilings?.outputTokenBound ?? ZERO_OUTPUT_BOUND } };
+}
+
 const NOW = new Date('2026-08-05T00:00:00.000Z');
-const NO_SPEND: AdmissionSpendLookup = { buildSpentUsd: 0, daySpentUsd: 0 };
+const NO_SPEND: AdmissionSpendLookup = { stageSpentUsd: 0, buildSpentUsd: 0, daySpentUsd: 0 };
 
 function input(overrides: Partial<EvaluateAdmissionInput> = {}): EvaluateAdmissionInput {
   return {
-    policy: policy(),
+    policy: policyZeroOutput(),
     stage: 'chat',
     taskClass: 'test-class',
     candidate: candidate(),
@@ -84,54 +122,86 @@ function input(overrides: Partial<EvaluateAdmissionInput> = {}): EvaluateAdmissi
 }
 
 describe('estimatedRunCostUsd -- pricing', () => {
-  it('prices the input-context estimate only, using the matched otherModelPriceRows row', () => {
-    // opus-5: $5/M input, 100k tokens -> $0.50.
-    expect(estimatedRunCostUsd(candidate({ model: 'claude-opus-5' }), 100_000, policy(), NOW)).toBeCloseTo(0.5, 10);
+  // Sol review HIGH-1 (fix-round): the primary pricing test. opus-5: $5/M
+  // input, $25/M output. 300k input tokens; default output bound (32_000,
+  // since no outputTokenBound is configured) applies. Input-only (the
+  // pre-fix bug) gave $1.50; correctly priced: 1.5 + 32_000/1e6*25 (=0.8)
+  // = $2.30.
+  it('prices BOTH input and output tokens using the matched otherModelPriceRows row', () => {
+    const cost = estimatedRunCostUsd(candidate({ model: 'claude-opus-5' }), 300_000, policy(), NOW);
+    expect(cost).toBeCloseTo(2.3, 10);
   });
 
-  it('DeepSeek V4-Flash prices at its single cache-miss anchor row ($0.14/M) -- no separate cache-hit row exists to mistakenly prefer', () => {
-    const cost = estimatedRunCostUsd(candidate({ model: 'deepseek-v4-flash', transport: 'metered-api', lane: 'deepseek-direct', modelFamily: 'deepseek' }), 1_000_000, policy(), NOW);
+  it('an explicit outputTokenBound.default overrides the hardcoded 32_000 fallback', () => {
+    const p = policy({ budgetCeilings: { ...policy().budgetCeilings, outputTokenBound: { default: 10_000 } } });
+    // opus-5 @ 300k input, 10k output bound: 1.5 + 10_000/1e6*25 (=0.25) = 1.75.
+    expect(estimatedRunCostUsd(candidate({ model: 'claude-opus-5' }), 300_000, p, NOW)).toBeCloseTo(1.75, 10);
+  });
+
+  it('a perTaskClass override wins over outputTokenBound.default for that taskClass', () => {
+    const p = policy({ budgetCeilings: { ...policy().budgetCeilings, outputTokenBound: { default: 32_000, perTaskClass: { chat: 0 } } } });
+    // opus-5 @ 300k input, output bound 0 for taskClass "chat": 1.5 + 0 = 1.5.
+    expect(estimatedRunCostUsd(candidate({ model: 'claude-opus-5' }), 300_000, p, NOW, 'chat')).toBeCloseTo(1.5, 10);
+    // A different (or absent) taskClass still gets the 32_000 default.
+    expect(estimatedRunCostUsd(candidate({ model: 'claude-opus-5' }), 300_000, p, NOW, 'other-class')).toBeCloseTo(2.3, 10);
+  });
+
+  it('DeepSeek V4-Flash prices at its single cache-miss anchor row ($0.14/M input) -- isolated via a zero output bound', () => {
+    const cost = estimatedRunCostUsd(
+      candidate({ model: 'deepseek-v4-flash', transport: 'metered-api', lane: 'deepseek-direct', modelFamily: 'deepseek' }),
+      1_000_000,
+      policyZeroOutput(),
+      NOW,
+    );
     expect(cost).toBeCloseTo(0.14, 10);
   });
 
-  it('Gemini thresholdedPricing: below 200k tokens uses the base rate', () => {
-    const cost = estimatedRunCostUsd(
-      candidate({ model: 'Gemini 3.1 Pro (High)', lane: 'agy', modelFamily: 'google' }),
-      100_000,
-      policy(),
-      NOW,
-    );
+  it('Gemini thresholdedPricing: below 200k tokens uses the base input rate -- isolated via a zero output bound', () => {
+    const cost = estimatedRunCostUsd(candidate({ model: 'Gemini 3.1 Pro (High)', lane: 'agy', modelFamily: 'google' }), 100_000, policyZeroOutput(), NOW);
     expect(cost).toBeCloseTo(0.2, 10); // 100k/1M * $2
   });
 
-  it('Gemini thresholdedPricing: above 200k tokens doubles the effective input rate', () => {
-    const cost = estimatedRunCostUsd(
-      candidate({ model: 'Gemini 3.1 Pro (High)', lane: 'agy', modelFamily: 'google' }),
-      300_000,
-      policy(),
-      NOW,
-    );
+  it('Gemini thresholdedPricing: above 200k tokens doubles the effective input rate -- isolated via a zero output bound', () => {
+    const cost = estimatedRunCostUsd(candidate({ model: 'Gemini 3.1 Pro (High)', lane: 'agy', modelFamily: 'google' }), 300_000, policyZeroOutput(), NOW);
     expect(cost).toBeCloseTo(1.2, 10); // 300k/1M * ($2 * 2)
   });
 
-  it('Sonnet date-boundary row selection: just before 2026-08-31 uses the $2/M row', () => {
-    const cost = estimatedRunCostUsd(
-      candidate({ model: 'claude-sonnet-5' }),
-      1_000_000,
-      policy(),
-      new Date('2026-08-30T23:59:59.999Z'),
-    );
-    expect(cost).toBeCloseTo(2, 10);
+  // Sol review LOW-8: the threshold boundary itself, exact -- documents
+  // which side prices at the base rate (findPriceRow/estimatedRunCostUsd's
+  // own comment: EXCLUSIVE, only STRICTLY GREATER than thresholdTokens
+  // multiplies).
+  it('Gemini thresholdedPricing boundary is exclusive: exactly 200,000 tokens is the base rate, 200,001 is doubled', () => {
+    const atThreshold = estimatedRunCostUsd(candidate({ model: 'Gemini 3.1 Pro (High)', lane: 'agy', modelFamily: 'google' }), 200_000, policyZeroOutput(), NOW);
+    expect(atThreshold).toBeCloseTo(0.4, 10); // 200_000/1e6 * $2, base rate
+    const overThreshold = estimatedRunCostUsd(candidate({ model: 'Gemini 3.1 Pro (High)', lane: 'agy', modelFamily: 'google' }), 200_001, policyZeroOutput(), NOW);
+    expect(overThreshold).toBeCloseTo(0.800004, 10); // 200_001/1e6 * $4 (doubled)
   });
 
-  it('Sonnet date-boundary row selection: exactly at 2026-08-31T00:00:00Z uses the new $3/M row', () => {
-    const cost = estimatedRunCostUsd(
-      candidate({ model: 'claude-sonnet-5' }),
-      1_000_000,
-      policy(),
-      new Date('2026-08-31T00:00:00.000Z'),
-    );
-    expect(cost).toBeCloseTo(3, 10);
+  it('thresholdedPricing multiplies the OUTPUT rate too, not just input (Gemini\'s real long-context surcharge is symmetric)', () => {
+    // Gemini @ 300k tokens, default 32_000 output bound, threshold exceeded:
+    // input 300_000/1e6*4=1.2, output 32_000/1e6*24(=12*2)=0.768 -> 1.968.
+    const cost = estimatedRunCostUsd(candidate({ model: 'Gemini 3.1 Pro (High)', lane: 'agy', modelFamily: 'google' }), 300_000, policy(), NOW);
+    expect(cost).toBeCloseTo(1.968, 10);
+  });
+
+  it('Sonnet date-boundary row selection: just before 2026-08-31 uses the $2/$10-per-M row', () => {
+    // 1,000,000 input tokens, default 32_000 output bound: input=2, output=32_000/1e6*10=0.32 -> 2.32.
+    const cost = estimatedRunCostUsd(candidate({ model: 'claude-sonnet-5' }), 1_000_000, policy(), new Date('2026-08-30T23:59:59.999Z'));
+    expect(cost).toBeCloseTo(2.32, 10);
+  });
+
+  it('Sonnet date-boundary row selection: exactly at 2026-08-31T00:00:00Z uses the new $3/$15-per-M row', () => {
+    // input=3, output=32_000/1e6*15=0.48 -> 3.48.
+    const cost = estimatedRunCostUsd(candidate({ model: 'claude-sonnet-5' }), 1_000_000, policy(), new Date('2026-08-31T00:00:00.000Z'));
+    expect(cost).toBeCloseTo(3.48, 10);
+  });
+
+  // Sol review LOW-7 (fix-round): a clock before EVERY dated row for a
+  // model must never fall back to the earliest row's price -- that would
+  // fabricate a price for an instant this policy never actually priced.
+  it('returns null when now predates every dated price row for the model (never falls back to the earliest row)', () => {
+    const cost = estimatedRunCostUsd(candidate({ model: 'claude-sonnet-5' }), 1_000_000, policy(), new Date('2025-12-31T23:59:59.999Z'));
+    expect(cost).toBeNull();
   });
 
   it('returns null (never a fabricated price) for a model with no price row anywhere in the policy (Kimi K3)', () => {
@@ -163,18 +233,36 @@ describe('estimatedRunCostUsd -- pricing', () => {
 
 describe('evaluateAdmission -- verdict taxonomy', () => {
   it('admits a candidate whose estimated cost fits comfortably under every cap', () => {
-    const r = evaluateAdmission(input({ contextEstimateTokens: 100_000 })); // opus-5 -> $0.50
+    const r = evaluateAdmission(input({ contextEstimateTokens: 100_000 })); // opus-5 (zero-output policy) -> $0.50
     expect(r.verdict).toBe('admit');
     expect(r.estimatedCostUsd).toBeCloseTo(0.5, 10);
     expect(r).toMatchObject({ runtimeId: 'claude', model: 'claude-opus-5', lane: 'claude-code-oauth' });
   });
 
-  it('denies at the stage ceiling, boundary-exact: exactly at the ceiling admits, one cent over denies', () => {
+  // Sol review LOW-8: a true one-cent overage (202k tokens), not merely
+  // "one extra token."
+  it('denies at the stage ceiling, boundary-exact: exactly at the $1.00 ceiling admits, a true one-cent overage denies', () => {
     // opus-5 $5/M -> 200k tokens = exactly $1.00, the stage's ceiling.
     const atBoundary = evaluateAdmission(input({ contextEstimateTokens: 200_000 }));
     expect(atBoundary.verdict).toBe('admit');
-    const overBoundary = evaluateAdmission(input({ contextEstimateTokens: 200_001 }));
+    expect(atBoundary.estimatedCostUsd).toBeCloseTo(1.0, 10);
+    // 202,000 tokens @ $5/M = $1.01 -- a true one-cent overage, not a
+    // one-token rounding artifact.
+    const overBoundary = evaluateAdmission(input({ contextEstimateTokens: 202_000 }));
     expect(overBoundary.verdict).toBe('deny-stage-ceiling');
+    expect(overBoundary.estimatedCostUsd).toBeCloseTo(1.01, 10);
+  });
+
+  // Sol review HIGH-2: the case that used to be a RED probe -- kept here as
+  // the permanent regression test.
+  it('HIGH-2: the stage ceiling accounts for spend already recorded against this build+stage, not a hardcoded 0', () => {
+    const p = policy({ budgetCeilings: { perStageEstimatedCostUsd: { chat: 3.5 }, perBuildCapUsd: 100, perDayCapUsd: 100, meteredKillSwitch: false, outputTokenBound: { default: 100_000 } } });
+    // opus-5 @ 100k tokens with a 100k output bound: input 0.5 + output 2.5 = $3.00.
+    // Stage already spent $3.15 (90% of the $3.50 cap) -- 3.15+3.00=6.15 > 3.50, must deny;
+    // a 0-spend comparison would see 0+3.00 <= 3.50 and wrongly admit.
+    const r = evaluateAdmission(input({ policy: p, contextEstimateTokens: 100_000, spendLookup: { stageSpentUsd: 3.15, buildSpentUsd: 0, daySpentUsd: 0 } }));
+    expect(r.verdict).toBe('deny-stage-ceiling');
+    expect(r.estimatedCostUsd).toBeCloseTo(3.0, 10);
   });
 
   it('a stage with no perStageEstimatedCostUsd entry has no stage ceiling to check (policy decision, not not-evaluated)', () => {
@@ -189,31 +277,31 @@ describe('evaluateAdmission -- verdict taxonomy', () => {
   });
 
   it('denies at the build cap, boundary-exact', () => {
-    const p = policy({ budgetCeilings: { perStageEstimatedCostUsd: { chat: 1000 }, perBuildCapUsd: 10, perDayCapUsd: 1000, meteredKillSwitch: false } });
+    const p = policyZeroOutput({ budgetCeilings: { perStageEstimatedCostUsd: { chat: 1000 }, perBuildCapUsd: 10, perDayCapUsd: 1000, meteredKillSwitch: false } });
     // opus-5 $5/M -> 200k tokens = $1.00; already spent $9 -> exactly at the $10 build cap.
-    const atBoundary = evaluateAdmission(input({ policy: p, contextEstimateTokens: 200_000, spendLookup: { buildSpentUsd: 9, daySpentUsd: 0 } }));
+    const atBoundary = evaluateAdmission(input({ policy: p, contextEstimateTokens: 200_000, spendLookup: { stageSpentUsd: 0, buildSpentUsd: 9, daySpentUsd: 0 } }));
     expect(atBoundary.verdict).toBe('admit');
-    const overBoundary = evaluateAdmission(input({ policy: p, contextEstimateTokens: 200_000, spendLookup: { buildSpentUsd: 9.01, daySpentUsd: 0 } }));
+    const overBoundary = evaluateAdmission(input({ policy: p, contextEstimateTokens: 200_000, spendLookup: { stageSpentUsd: 0, buildSpentUsd: 9.01, daySpentUsd: 0 } }));
     expect(overBoundary.verdict).toBe('deny-build-cap');
   });
 
   it('skips the build cap entirely when buildId is null (non-build-scoped work, e.g. general chat)', () => {
-    const p = policy({ budgetCeilings: { perStageEstimatedCostUsd: { chat: 1000 }, perBuildCapUsd: 0.01, perDayCapUsd: 1000, meteredKillSwitch: false } });
-    const r = evaluateAdmission(input({ policy: p, buildId: null, contextEstimateTokens: 100_000, spendLookup: { buildSpentUsd: 999, daySpentUsd: 0 } }));
+    const p = policyZeroOutput({ budgetCeilings: { perStageEstimatedCostUsd: { chat: 1000 }, perBuildCapUsd: 0.01, perDayCapUsd: 1000, meteredKillSwitch: false } });
+    const r = evaluateAdmission(input({ policy: p, buildId: null, contextEstimateTokens: 100_000, spendLookup: { stageSpentUsd: 0, buildSpentUsd: 999, daySpentUsd: 0 } }));
     expect(r.verdict).toBe('admit');
   });
 
   it('denies at the day cap, boundary-exact', () => {
-    const p = policy({ budgetCeilings: { perStageEstimatedCostUsd: { chat: 1000 }, perBuildCapUsd: 1000, perDayCapUsd: 10, meteredKillSwitch: false } });
-    const atBoundary = evaluateAdmission(input({ policy: p, contextEstimateTokens: 200_000, spendLookup: { buildSpentUsd: 0, daySpentUsd: 9 } }));
+    const p = policyZeroOutput({ budgetCeilings: { perStageEstimatedCostUsd: { chat: 1000 }, perBuildCapUsd: 1000, perDayCapUsd: 10, meteredKillSwitch: false } });
+    const atBoundary = evaluateAdmission(input({ policy: p, contextEstimateTokens: 200_000, spendLookup: { stageSpentUsd: 0, buildSpentUsd: 0, daySpentUsd: 9 } }));
     expect(atBoundary.verdict).toBe('admit');
-    const overBoundary = evaluateAdmission(input({ policy: p, contextEstimateTokens: 200_000, spendLookup: { buildSpentUsd: 0, daySpentUsd: 9.01 } }));
+    const overBoundary = evaluateAdmission(input({ policy: p, contextEstimateTokens: 200_000, spendLookup: { stageSpentUsd: 0, buildSpentUsd: 0, daySpentUsd: 9.01 } }));
     expect(overBoundary.verdict).toBe('deny-day-cap');
   });
 
   it('headroomFraction shifts the effective boundary down from the nominal cap', () => {
-    const p = policy({
-      budgetCeilings: { perStageEstimatedCostUsd: { chat: 1000 }, perBuildCapUsd: 10, perDayCapUsd: 1000, meteredKillSwitch: false, headroomFraction: 0.1 },
+    const p = policyZeroOutput({
+      budgetCeilings: { perStageEstimatedCostUsd: { chat: 1000 }, perBuildCapUsd: 10, perDayCapUsd: 1000, meteredKillSwitch: false, headroomFraction: 0.1, outputTokenBound: ZERO_OUTPUT_BOUND },
     });
     // effective cap = 10 * (1 - 0.1) = 9.
     const atNewBoundary = evaluateAdmission(input({ policy: p, contextEstimateTokens: 1_800_000, spendLookup: NO_SPEND })); // opus-5 -> $9.00
@@ -221,13 +309,13 @@ describe('evaluateAdmission -- verdict taxonomy', () => {
     const justOverNewBoundary = evaluateAdmission(input({ policy: p, contextEstimateTokens: 1_800_100, spendLookup: NO_SPEND })); // -> $9.0005
     expect(justOverNewBoundary.verdict).toBe('deny-build-cap');
     // Without headroom, the same $9.0005 estimate would still fit under the nominal $10 cap.
-    const noHeadroomPolicy = policy({ budgetCeilings: { perStageEstimatedCostUsd: { chat: 1000 }, perBuildCapUsd: 10, perDayCapUsd: 1000, meteredKillSwitch: false } });
+    const noHeadroomPolicy = policyZeroOutput({ budgetCeilings: { perStageEstimatedCostUsd: { chat: 1000 }, perBuildCapUsd: 10, perDayCapUsd: 1000, meteredKillSwitch: false } });
     const wouldHaveAdmitted = evaluateAdmission(input({ policy: noHeadroomPolicy, contextEstimateTokens: 1_800_100, spendLookup: NO_SPEND }));
     expect(wouldHaveAdmitted.verdict).toBe('admit');
   });
 
   it('the metered kill-switch denies a metered-api candidate regardless of cost, but leaves a subscription-oauth candidate untouched', () => {
-    const p = policy({ budgetCeilings: { perStageEstimatedCostUsd: { chat: 1000 }, perBuildCapUsd: 1000, perDayCapUsd: 1000, meteredKillSwitch: true } });
+    const p = policyZeroOutput({ budgetCeilings: { perStageEstimatedCostUsd: { chat: 1000 }, perBuildCapUsd: 1000, perDayCapUsd: 1000, meteredKillSwitch: true } });
     const metered = evaluateAdmission(
       input({
         policy: p,
@@ -236,6 +324,7 @@ describe('evaluateAdmission -- verdict taxonomy', () => {
       }),
     );
     expect(metered.verdict).toBe('deny-metered-killswitch');
+    expect(metered.estimatedCostUsd).not.toBeNull();
 
     const subscription = evaluateAdmission(input({ policy: p, contextEstimateTokens: 100_000 }));
     expect(subscription.verdict).toBe('admit');
@@ -253,8 +342,10 @@ describe('evaluateAdmission -- verdict taxonomy', () => {
     expect(() => evaluateAdmission(input({ contextEstimateTokens: Number.NaN }))).toThrow(RoutingAdmissionInputError);
   });
 
-  it('a negative spendLookup value is a typed error', () => {
-    expect(() => evaluateAdmission(input({ spendLookup: { buildSpentUsd: -1, daySpentUsd: 0 } }))).toThrow(RoutingAdmissionInputError);
+  it('a negative spendLookup value is a typed error (stage, build, or day)', () => {
+    expect(() => evaluateAdmission(input({ spendLookup: { stageSpentUsd: -1, buildSpentUsd: 0, daySpentUsd: 0 } }))).toThrow(RoutingAdmissionInputError);
+    expect(() => evaluateAdmission(input({ spendLookup: { stageSpentUsd: 0, buildSpentUsd: -1, daySpentUsd: 0 } }))).toThrow(RoutingAdmissionInputError);
+    expect(() => evaluateAdmission(input({ spendLookup: { stageSpentUsd: 0, buildSpentUsd: 0, daySpentUsd: -1 } }))).toThrow(RoutingAdmissionInputError);
   });
 
   it('an empty-string buildId is a typed error (use null, not "")', () => {
@@ -317,7 +408,7 @@ describe('runawayLimitsFor -- stream-level runaway heuristics CONFIG round-trip 
   });
 });
 
-describe('spend lookup -- computeBuildSpendUsd / computeDaySpendUsd against seeded telemetry rows', () => {
+describe('spend lookup -- computeStageSpendUsd / computeBuildSpendUsd / computeDaySpendUsd against seeded telemetry rows', () => {
   let tempDir: string;
 
   beforeEach(() => {
@@ -402,5 +493,28 @@ describe('spend lookup -- computeBuildSpendUsd / computeDaySpendUsd against seed
     expect(snapshot.totalCostUsd).toBeCloseTo(3, 10);
     expect(snapshot.rowCount).toBe(2);
     expect(snapshot.cost).toBe('mixed');
+  });
+
+  // Sol review HIGH-2: computeStageSpendUsd itself, the aggregation
+  // evaluateAdmission's stage-ceiling check now reads.
+  it('computeStageSpendUsd sums costUsd for one (buildId, stage) pair, ignoring rows for a different stage or a different build in the same stage', () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    recordRoutingTelemetry(db, seedRow({ buildId: 'build-1', stage: 'section-fanout', costUsd: 1, costEstimated: false }));
+    recordRoutingTelemetry(db, seedRow({ buildId: 'build-1', stage: 'section-fanout', costUsd: 2, costEstimated: true }));
+    recordRoutingTelemetry(db, seedRow({ buildId: 'build-1', stage: 'chat', costUsd: 100, costEstimated: false })); // different stage, same build
+    recordRoutingTelemetry(db, seedRow({ buildId: 'build-2', stage: 'section-fanout', costUsd: 100, costEstimated: false })); // different build, same stage
+
+    const snapshot = computeStageSpendUsd(db, 'build-1', 'section-fanout');
+    expect(snapshot.totalCostUsd).toBeCloseTo(3, 10);
+    expect(snapshot.rowCount).toBe(2);
+    expect(snapshot.cost).toBe('mixed');
+  });
+
+  it('computeStageSpendUsd returns an empty snapshot for a (buildId, stage) pair with no rows yet', () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    recordRoutingTelemetry(db, seedRow({ buildId: 'build-1', stage: 'chat' }));
+    expect(computeStageSpendUsd(db, 'build-1', 'never-seen-stage')).toEqual({ totalCostUsd: 0, rowCount: 0, cost: 'exact' });
   });
 });

@@ -14,6 +14,7 @@ export { decideRouting, estimatePromptTokens, type DecideRoutingInput } from './
 export {
   computeBuildSpendUsd,
   computeDaySpendUsd,
+  computeStageSpendUsd,
   computeLaneMeters,
   ensureRoutingTelemetryTable,
   getRoutingTelemetryByRunId,

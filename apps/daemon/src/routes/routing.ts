@@ -17,7 +17,7 @@ import type {
   RoutingTelemetryListResponse,
 } from '@open-design/contracts';
 import { decideRouting, estimatePromptTokens, loadRoutingPolicy } from '../routing/index.js';
-import { computeBuildSpendUsd, computeDaySpendUsd, computeLaneMeters, listRoutingTelemetry } from '../routing/telemetry.js';
+import { computeBuildSpendUsd, computeDaySpendUsd, computeStageSpendUsd, computeLaneMeters, listRoutingTelemetry } from '../routing/telemetry.js';
 
 const ROUTING_DATA_CLASSIFICATIONS: readonly RoutingDataClassification[] = ['client-confidential', 'internal', 'public'];
 
@@ -201,6 +201,7 @@ function runDecisionPreview(raw: RawDecisionPreviewInput, db: Database.Database 
           admission: {
             buildId,
             spendLookup: {
+              stageSpentUsd: buildId !== null ? computeStageSpendUsd(db, buildId, key.stage).totalCostUsd : 0,
               buildSpentUsd: buildId !== null ? computeBuildSpendUsd(db, buildId).totalCostUsd : 0,
               daySpentUsd: computeDaySpendUsd(db, ...utcDayWindowMs(new Date())).totalCostUsd,
             },

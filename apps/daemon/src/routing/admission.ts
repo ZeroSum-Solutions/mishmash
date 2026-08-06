@@ -5,10 +5,10 @@
 // `evaluateAdmission` takes a loaded policy + a routing context + a
 // candidate + an already-aggregated spend snapshot + an injected clock, and
 // returns a typed per-candidate verdict. No I/O, no SQLite (telemetry.ts's
-// `computeBuildSpendUsd`/`computeDaySpendUsd` own that), no `Date.now()`
-// anywhere in this file (the caller injects `now`) -- every test in
-// apps/daemon/tests/routing-admission.test.ts constructs its inputs in
-// memory, no daemon boot, no SQLite, no network.
+// `computeStageSpendUsd`/`computeBuildSpendUsd`/`computeDaySpendUsd` own
+// that), no `Date.now()` anywhere in this file (the caller injects `now`)
+// -- every test in apps/daemon/tests/routing-admission.test.ts constructs
+// its inputs in memory, no daemon boot, no SQLite, no network.
 //
 // Scope discipline (WR t6): pre-run admission evaluation + cost estimation +
 // fan-out cap math + runaway-heuristics CONFIG round-trip only.
@@ -21,6 +21,15 @@
 //     module into a real decision; the HTTP/CLI/UI surfaces read the result
 //     off `RoutingDecision#admissionResults`, they never call
 //     `evaluateAdmission` directly.
+//
+// Sol fix-round (post-t6 adversarial review): HIGH-1 (cost estimation
+// priced input tokens only -- output rates run 2-6x input, so this was a
+// systematic underestimate), HIGH-2 (the stage-ceiling check ignored
+// already-recorded stage spend, comparing the estimate against the raw cap
+// instead of "spend so far + estimate"), and LOW-7 (a clock that predates
+// every dated price row silently fell back to the earliest row instead of
+// admitting the price is genuinely unknown at that instant) are fixed
+// below; see each finding's own comment at its fix site.
 import {
   isFiniteNonNegativeInteger,
   type RoutingAdmissionCandidateResult,
@@ -48,12 +57,20 @@ export class RoutingAdmissionInputError extends Error {
 }
 
 /** Pre-aggregated spend the caller already computed via
- * `apps/daemon/src/routing/telemetry.ts`'s `computeBuildSpendUsd`/
- * `computeDaySpendUsd` -- this module never queries telemetry itself, the
- * same "arrives as a plain argument" discipline `decideRouting` uses for
- * lane meters (see decision.ts's own doc comment on `DecideRoutingInput
- * #laneMeters`). */
+ * `apps/daemon/src/routing/telemetry.ts`'s `computeStageSpendUsd`/
+ * `computeBuildSpendUsd`/`computeDaySpendUsd` -- this module never queries
+ * telemetry itself, the same "arrives as a plain argument" discipline
+ * `decideRouting` uses for lane meters (see decision.ts's own doc comment
+ * on `DecideRoutingInput#laneMeters`). */
 export interface AdmissionSpendLookup {
+  /**
+   * Sol review HIGH-2: already-spent total (estimated+exact mixed) for
+   * THIS build's THIS stage, via `computeStageSpendUsd` -- the literal
+   * "lane meter + estimate" comparison plan §3.1 asks for at the
+   * stage-ceiling check, not a hardcoded `0`. `0` when `buildId` is `null`
+   * (non-build-scoped work has no stage-spend history to look up).
+   */
+  stageSpentUsd: number;
   /** Already-spent total (estimated+exact mixed) for the current build, or
    * `0` when `buildId` is `null` (non-build-scoped work never fails the
    * per-build check -- see `evaluateAdmission`'s own comment on that). */
@@ -66,23 +83,24 @@ export interface AdmissionSpendLookup {
 export interface EvaluateAdmissionInput {
   policy: RoutingPolicyDocument;
   /** The routing key's stage -- looked up in
-   * `policy.budgetCeilings.perStageEstimatedCostUsd`. */
+   * `policy.budgetCeilings.perStageEstimatedCostUsd`, and the scope
+   * `spendLookup.stageSpentUsd` is assumed to already be filtered to. */
   stage: string;
-  /** Carried through into denial reason text only; v1 has no per-taskClass
-   * budget dimension of its own (every ceiling is keyed by stage/build/day),
-   * so this does not otherwise affect the verdict. Kept on the input shape
-   * so a denial reason can name which task class triggered it, and so a
-   * later tranche can add a taskClass-scoped ceiling without a breaking
-   * signature change. */
+  /** Passed through into `estimatedRunCostUsd`'s output-token-bound
+   * resolution (a taskClass may override `budgetCeilings.outputTokenBound
+   * .default`) and into denial reason text. `null` for work with no §2/§15
+   * task-class identity (general chat). */
   taskClass: string | null;
   candidate: RoutingCandidate;
   /** Plan §3.1's "tokenizer-estimated context of the composed prompt" --
-   * the ONLY token quantity known pre-run (see `estimatedRunCostUsd`'s own
-   * comment on why output tokens are deliberately not estimated). */
+   * the only PRE-RUN input-token count available; see
+   * `estimatedRunCostUsd`'s own comment on how the output side is
+   * estimated from this same number. */
   contextEstimateTokens: number;
   /** `null` for non-build-scoped work (general chat, WR-routing.md
-   * Fallback B) -- the per-build cap check is skipped entirely for those,
-   * since there is no build to charge against. */
+   * Fallback B) -- the per-stage and per-build cap checks are both skipped
+   * entirely for those, since there is no build to charge stage/build
+   * spend against. */
   buildId: string | null;
   spendLookup: AdmissionSpendLookup;
   /** Injected clock (Sol-pattern testability requirement, mirrors this
@@ -94,17 +112,53 @@ export interface EvaluateAdmissionInput {
 
 const USD_PER_MILLION_TOKENS_DIVISOR = 1_000_000;
 
-/** Selects the price row that applies to `model` at instant `now`. Sonnet
+/**
+ * Sol review HIGH-1: the conservative default output-token bound used when
+ * `policy.budgetCeilings.outputTokenBound` is entirely absent (an older or
+ * hand-authored policy document that predates this field) -- chosen to
+ * roughly match the largest single-response output ceiling most of this
+ * policy's priced runtimes advertise. NEVER used when the policy DOES
+ * configure `outputTokenBound`; that config always wins (see
+ * `resolveOutputTokenBound`).
+ */
+const DEFAULT_OUTPUT_TOKEN_BOUND = 32_000;
+
+/**
+ * Sol review HIGH-1: `min(contextEstimateTokens, bound)`, where `bound` is
+ * `outputTokenBound.perTaskClass[taskClass]` when set, else
+ * `outputTokenBound.default`, else the hardcoded
+ * `DEFAULT_OUTPUT_TOKEN_BOUND` when the policy configures no
+ * `outputTokenBound` at all. See `RoutingPolicyOutputTokenBound`'s own doc
+ * comment (packages/contracts/src/api/routing-policy.ts) for why this is a
+ * bound rather than a guessed output/input ratio.
+ */
+function resolveOutputTokenEstimate(policy: RoutingPolicyDocument, taskClass: string | null, contextEstimateTokens: number): number {
+  const config = policy.budgetCeilings.outputTokenBound;
+  const bound = (taskClass !== null ? config?.perTaskClass?.[taskClass] : undefined) ?? config?.default ?? DEFAULT_OUTPUT_TOKEN_BOUND;
+  return Math.min(contextEstimateTokens, bound);
+}
+
+/**
+ * Selects the price row that applies to `model` at instant `now`. Sonnet
  * carries two dated rows (plan §3.2 L2: "Both Sonnet prices carried with an
  * effective date") -- this picks the LATEST row whose `effectiveDate` is
- * `<= now`, falling back to the earliest row when `now` predates every
- * dated row (there is no "no price yet" state for a model the policy
- * prices at all). Every other priced model has at most one row in
- * `otherModelPriceRows`, matched by exact model string. Returns `null` when
- * no row exists at all for this model (e.g. Kimi K3, which plan §2 gives no
- * per-token price for -- "no price row is carried for it; do not invent
- * one" per routing-policy.json's own top-level notes) -- callers must treat
- * that as "cannot estimate," never fabricate a price. */
+ * `<= now`.
+ *
+ * Sol review LOW-7 (fix-round): a clock that predates EVERY dated row for
+ * a model used to fall back to the earliest row, silently assuming that
+ * row's price applied retroactively. That is a fabricated price for an
+ * instant this policy never actually priced -- returns `null` instead
+ * (surfaces as `'not-evaluated'`, the same honest "cannot estimate" outcome
+ * as no price row existing at all), so admission never guesses a rate for
+ * a moment before the policy's own pricing history begins.
+ *
+ * Every other priced model has at most one row in `otherModelPriceRows`,
+ * matched by exact model string (no dated-row history to predate). Returns
+ * `null` when no row exists at all for this model (e.g. Kimi K3, which
+ * plan §2 gives no per-token price for -- "no price row is carried for it;
+ * do not invent one" per routing-policy.json's own top-level notes) --
+ * callers must treat that as "cannot estimate," never fabricate a price.
+ */
 function findPriceRow(policy: RoutingPolicyDocument, model: string, now: Date): RoutingPolicyPriceRow | null {
   const datedRows = policy.sonnetPriceRows
     .filter((row) => row.model === model && row.effectiveDate !== undefined)
@@ -113,28 +167,43 @@ function findPriceRow(policy: RoutingPolicyDocument, model: string, now: Date): 
   if (datedRows.length > 0) {
     const nowMs = now.getTime();
     const applicable = [...datedRows].reverse().find((entry) => entry.effectiveMs <= nowMs);
-    return (applicable ?? datedRows[0]!).row;
+    return applicable ? applicable.row : null;
   }
   return (policy.otherModelPriceRows ?? []).find((row) => row.model === model) ?? null;
 }
 
 /**
  * Estimates the pre-run cost of dispatching `candidate` with a composed
- * prompt of `contextEstimateTokens` tokens, using ONLY the policy's own
- * §2-sourced price anchors ("no invented prices"). Returns `null` when no
- * price row exists for `candidate.model` -- never a fabricated number.
+ * prompt of `contextEstimateTokens` input tokens, using ONLY the policy's
+ * own §2-sourced price anchors ("no invented prices"). Returns `null` when
+ * no usable price row exists for `candidate.model` at `now` -- never a
+ * fabricated number.
  *
- * v1 estimator, disclosed limitation: this prices ONLY the known
- * input-context estimate. There is no pre-run output-token estimate
- * anywhere in the routing key (plan §3.1 defines the key's context term as
- * "tokenizer-estimated context of the composed prompt," which is an INPUT
- * quantity), and inventing an assumed output/input token ratio to cover the
- * gap would violate the "no invented prices" discipline just as surely as
- * inventing a price would. This is therefore a floor on the true cost, not
- * a ceiling-safe upper bound -- revisit once L5 telemetry
- * (`computeLaneMeters`'s token aggregates) has enough real per-stage
- * output-token distributions to source a ratio from instead of guessing
- * one.
+ * Sol review HIGH-1 (fix-round): the original version of this function
+ * priced ONLY the input-context estimate. Every priced model's output rate
+ * runs 2-6x its input rate, so that was a systematic underestimate, not a
+ * conservative floor -- a candidate whose primary cost driver is response
+ * length could sail under a stage ceiling that its real (input+output) cost
+ * would have blown. There is still no real pre-run OUTPUT-token count
+ * anywhere in the routing key (plan §3.1's context term is an INPUT
+ * quantity), so this bounds rather than invents one:
+ * `resolveOutputTokenEstimate` caps the assumed output at
+ * `min(contextEstimateTokens, bound)`, `bound` being an operator-tunable
+ * policy value (see `RoutingPolicyOutputTokenBound`), not a guessed
+ * output/input ratio -- inventing a RATIO would be exactly as much a
+ * fabrication as inventing a price.
+ *
+ * `thresholdedPricing` (Gemini "doubling >200k", plan §2) multiplies BOTH
+ * the input and output rate once `contextEstimateTokens` exceeds the
+ * threshold -- Gemini's real long-context surcharge applies symmetrically,
+ * and now that output is priced at all, applying the multiplier to input
+ * only would have silently exempted the (now-priced) output half from the
+ * same surcharge. The boundary is EXCLUSIVE: exactly `thresholdTokens`
+ * prices at the base rate; only STRICTLY GREATER triggers the multiplier.
+ *
+ * A price row missing a finite `outputPerMillion` (defense in depth --
+ * `isRoutingPolicyDocument` already requires one on every row that loads)
+ * is treated the same as no row at all: `null`, never priced at $0.
  *
  * DeepSeek V4-Flash's row IS priced at cache-miss already (plan §2's
  * verified anchor, $0.14/$0.28) -- there is no separate cache-hit row to
@@ -147,6 +216,7 @@ export function estimatedRunCostUsd(
   contextEstimateTokens: number,
   policy: RoutingPolicyDocument,
   now: Date,
+  taskClass: string | null = null,
 ): number | null {
   if (!isFiniteNonNegativeInteger(contextEstimateTokens)) {
     throw new RoutingAdmissionInputError(
@@ -158,15 +228,19 @@ export function estimatedRunCostUsd(
   }
   const priceRow = findPriceRow(policy, candidate.model, now);
   if (!priceRow) return null;
+  if (!Number.isFinite(priceRow.outputPerMillion) || !Number.isFinite(priceRow.inputPerMillion)) return null;
 
   let inputPerMillion = priceRow.inputPerMillion;
-  // Gemini 3.1 Pro "doubling >200k" (plan §2) -- the only priced model with
-  // thresholdedPricing in v1 content, but this branch is generic over any
-  // future row that sets it.
+  let outputPerMillion = priceRow.outputPerMillion;
   if (priceRow.thresholdedPricing && contextEstimateTokens > priceRow.thresholdedPricing.thresholdTokens) {
     inputPerMillion *= priceRow.thresholdedPricing.multiplier;
+    outputPerMillion *= priceRow.thresholdedPricing.multiplier;
   }
-  return (contextEstimateTokens / USD_PER_MILLION_TOKENS_DIVISOR) * inputPerMillion;
+
+  const outputTokens = resolveOutputTokenEstimate(policy, taskClass, contextEstimateTokens);
+  const inputCostUsd = (contextEstimateTokens / USD_PER_MILLION_TOKENS_DIVISOR) * inputPerMillion;
+  const outputCostUsd = (outputTokens / USD_PER_MILLION_TOKENS_DIVISOR) * outputPerMillion;
+  return inputCostUsd + outputCostUsd;
 }
 
 function assertValidEvaluateAdmissionInput(input: EvaluateAdmissionInput): void {
@@ -180,6 +254,11 @@ function assertValidEvaluateAdmissionInput(input: EvaluateAdmissionInput): void 
   }
   if (input.buildId !== null && (typeof input.buildId !== 'string' || input.buildId.length === 0)) {
     throw new RoutingAdmissionInputError(`buildId must be null or a nonempty string, got ${JSON.stringify(input.buildId)}`);
+  }
+  if (!Number.isFinite(input.spendLookup.stageSpentUsd) || input.spendLookup.stageSpentUsd < 0) {
+    throw new RoutingAdmissionInputError(
+      `spendLookup.stageSpentUsd must be a finite nonnegative number, got ${input.spendLookup.stageSpentUsd}`,
+    );
   }
   if (!Number.isFinite(input.spendLookup.buildSpentUsd) || input.spendLookup.buildSpentUsd < 0) {
     throw new RoutingAdmissionInputError(
@@ -237,16 +316,24 @@ function result(
  * kill-switch"). Check order (first hit wins, cheapest/most-fundamental
  * gate first):
  *
- *   1. Metered kill-switch -- transport-level, needs no cost estimate at
- *      all, so it is checked before cost estimation can possibly fail.
- *   2. Cost estimability -- `estimatedRunCostUsd` returning `null` (no
- *      price row) is `'not-evaluated'`, never a silent admit.
- *   3. Stage ceiling -- `policy.budgetCeilings.perStageEstimatedCostUsd`
- *      has no running "spent so far" term of its own: a stage ceiling is a
- *      PER-DISPATCH cap (this call's own estimate must fit under it), not a
- *      cumulative one, so `spentUsd` is always `0` here. A stage with NO
- *      entry in that record (WR-routing.md Fallback-C's granular ingestion
- *      sub-stages: classify/extract/distill/verify/register --
+ *   1. Cost estimability -- `estimatedRunCostUsd` returning `null` (no
+ *      usable price row) is `'not-evaluated'`, never a silent admit.
+ *      Checked FIRST (Sol review MED-5, fix-round): every OTHER verdict
+ *      this function returns must carry a real, non-null cost figure
+ *      (`RoutingAdmissionCandidateResult`'s own invariant), so resolving
+ *      cost-estimability up front means every later branch can rely on
+ *      `estimatedCostUsd` being a real number without a per-branch
+ *      best-effort fallback.
+ *   2. Metered kill-switch -- transport-level, doesn't need cost
+ *      information to fire, but runs after step 1 purely so it always has
+ *      a real cost figure to attach to its result too.
+ *   3. Stage ceiling -- compared against `spendLookup.stageSpentUsd + this
+ *      estimate` (Sol review HIGH-2, fix-round: previously compared the
+ *      estimate alone against the raw cap, ignoring spend already recorded
+ *      against this build's this stage -- plan §3.1's literal "lane meter
+ *      + estimate" comparison). A stage with NO entry in
+ *      `perStageEstimatedCostUsd` (WR-routing.md Fallback-C's granular
+ *      ingestion sub-stages: classify/extract/distill/verify/register --
  *      routing-policy.json's own notes document this as intentional, not a
  *      gap) has no per-stage ceiling to check at all -- this is a POLICY
  *      DECISION, not `'not-evaluated'`: the check simply does not apply,
@@ -260,25 +347,9 @@ function result(
  */
 export function evaluateAdmission(input: EvaluateAdmissionInput): RoutingAdmissionCandidateResult {
   assertValidEvaluateAdmissionInput(input);
-  const { policy, stage, candidate, contextEstimateTokens, buildId, spendLookup, now } = input;
+  const { policy, stage, taskClass, candidate, contextEstimateTokens, buildId, spendLookup, now } = input;
 
-  if (policy.budgetCeilings.meteredKillSwitch && candidate.transport === 'metered-api') {
-    const estimatedCostUsd = (() => {
-      try {
-        return estimatedRunCostUsd(candidate, contextEstimateTokens, policy, now);
-      } catch {
-        return null;
-      }
-    })();
-    return result(
-      candidate,
-      'deny-metered-killswitch',
-      estimatedCostUsd,
-      `metered-lane kill-switch is ON (budgetCeilings.meteredKillSwitch); candidate "${candidate.model}" on lane "${candidate.lane}" uses the metered-api transport and is denied regardless of estimated cost.`,
-    );
-  }
-
-  const estimatedCostUsd = estimatedRunCostUsd(candidate, contextEstimateTokens, policy, now);
+  const estimatedCostUsd = estimatedRunCostUsd(candidate, contextEstimateTokens, policy, now, taskClass);
   if (estimatedCostUsd === null) {
     return result(
       candidate,
@@ -288,15 +359,24 @@ export function evaluateAdmission(input: EvaluateAdmissionInput): RoutingAdmissi
     );
   }
 
+  if (policy.budgetCeilings.meteredKillSwitch && candidate.transport === 'metered-api') {
+    return result(
+      candidate,
+      'deny-metered-killswitch',
+      estimatedCostUsd,
+      `metered-lane kill-switch is ON (budgetCeilings.meteredKillSwitch); candidate "${candidate.model}" on lane "${candidate.lane}" uses the metered-api transport and is denied regardless of estimated cost.`,
+    );
+  }
+
   const headroomFraction = headroomFractionOf(policy);
 
   const stageCeilingUsd = policy.budgetCeilings.perStageEstimatedCostUsd[stage];
-  if (stageCeilingUsd !== undefined && !admitsUnderCap(stageCeilingUsd, 0, headroomFraction, estimatedCostUsd)) {
+  if (stageCeilingUsd !== undefined && !admitsUnderCap(stageCeilingUsd, spendLookup.stageSpentUsd, headroomFraction, estimatedCostUsd)) {
     return result(
       candidate,
       'deny-stage-ceiling',
       estimatedCostUsd,
-      `estimated cost $${estimatedCostUsd.toFixed(4)} exceeds stage "${stage}"'s $${stageCeilingUsd} ceiling after a ${(headroomFraction * 100).toFixed(0)}% headroom margin (effective cap $${(stageCeilingUsd * (1 - headroomFraction)).toFixed(4)}).`,
+      `estimated cost $${estimatedCostUsd.toFixed(4)} added to $${spendLookup.stageSpentUsd.toFixed(4)} already spent on stage "${stage}" exceeds its $${stageCeilingUsd} ceiling after a ${(headroomFraction * 100).toFixed(0)}% headroom margin (effective cap $${(stageCeilingUsd * (1 - headroomFraction)).toFixed(4)}).`,
     );
   }
 

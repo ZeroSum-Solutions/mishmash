@@ -620,6 +620,22 @@ export function computeBuildSpendUsd(db: Database.Database, buildId: string): Ro
   return sumSpendRows(db, 'WHERE build_id = ?', [buildId]);
 }
 
+/**
+ * Sol review HIGH-2 (fix-round, admission control): the per-STAGE ceiling
+ * ("deny dispatch if lane meter + estimate exceeds cap", plan §3.1) was
+ * being checked against a hardcoded `0` prior spend, so a stage that had
+ * already accumulated 90% of its cap across earlier attempts/retries
+ * within the SAME build would still admit a dispatch whose own estimate
+ * alone fit the raw cap. Sums every attempt's `costUsd` (estimated+exact
+ * mixed) across every row matching BOTH `buildId` AND `stage` (rows carry
+ * `stage` already) -- the stage-spend snapshot `evaluateAdmission` now
+ * compares against the (headroomed) per-stage ceiling. `0`/empty for a
+ * stage this build has no rows for yet.
+ */
+export function computeStageSpendUsd(db: Database.Database, buildId: string, stage: string): RoutingSpendSnapshot {
+  return sumSpendRows(db, 'WHERE build_id = ? AND stage = ?', [buildId, stage]);
+}
+
 /** Sum of every attempt's `costUsd` (estimated+exact mixed) across every row
  * whose `createdAt` falls in `[dayStartMs, dayEndMsExclusive)` -- the
  * per-day cap lookup admission control checks at every dispatch. Bounds are

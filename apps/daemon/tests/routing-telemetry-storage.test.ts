@@ -12,6 +12,8 @@ import type { StoredRoutingTelemetryRow } from '@open-design/contracts';
 
 import { closeDatabase, openDatabase } from '../src/db.js';
 import {
+  computeBuildSpendUsd,
+  computeDaySpendUsd,
   ensureRoutingTelemetryTable,
   getRoutingTelemetryByRunId,
   listRoutingTelemetry,
@@ -160,6 +162,115 @@ describe('ensureRoutingTelemetryTable', () => {
     // is a no-op, not a re-migration.
     expect(() => ensureRoutingTelemetryTable(db)).not.toThrow();
     expect(listRoutingTelemetryAttempts(db, 'pre-existing-run')).toHaveLength(2);
+  });
+
+  // Sol review MED-6 (fix-round, admission control): the P1-shape table
+  // (has `attempt`, predates t6's `build_id` column) is a DIFFERENT
+  // intermediate shape than the pre-attempt shape above -- a real dev data
+  // dir created against this exact repo shape before t6 landed. Verifies
+  // `migrateMissingBuildIdColumn`'s narrower `ALTER TABLE ... ADD COLUMN`
+  // path (not the full rebuild-and-copy the pre-attempt migration needs),
+  // and that the backfilled NULL buildId behaves correctly in BOTH spend
+  // aggregations: included in day-spend (no buildId filter) and excluded
+  // from any specific build's spend (`build_id = ?` never matches NULL).
+  it('self-heals a P1-shape table (attempt present, build_id absent) -- ALTER TABLE backfills NULL buildId, day-spend includes it, build-spend excludes it, and subsequent writes succeed', () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+
+    // Manually create the exact P1 shape this module shipped with before
+    // t6 added build_id: attempt present (PK is run_id+attempt), no
+    // build_id column at all.
+    db.exec(`
+      CREATE TABLE routing_telemetry (
+        run_id TEXT NOT NULL,
+        attempt INTEGER NOT NULL DEFAULT 0,
+        project_id TEXT NOT NULL,
+        stage TEXT NOT NULL,
+        template_id TEXT,
+        design_system TEXT,
+        routed_model TEXT NOT NULL,
+        observed_model TEXT,
+        routed_lane TEXT NOT NULL,
+        observed_lane TEXT,
+        tokens_input INTEGER NOT NULL,
+        tokens_output INTEGER NOT NULL,
+        tokens_cache_read_input INTEGER NOT NULL,
+        cache_hits INTEGER NOT NULL,
+        latency_ms INTEGER NOT NULL,
+        cost_usd REAL NOT NULL,
+        cost_estimated INTEGER NOT NULL,
+        gate_outcomes_json TEXT NOT NULL,
+        escalated INTEGER NOT NULL,
+        policy_version INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        recorded_at TEXT NOT NULL,
+        PRIMARY KEY (run_id, attempt)
+      )
+    `);
+    db.prepare(
+      `INSERT INTO routing_telemetry
+         (run_id, attempt, project_id, stage, template_id, design_system, routed_model,
+          observed_model, routed_lane, observed_lane, tokens_input, tokens_output,
+          tokens_cache_read_input, cache_hits, latency_ms, cost_usd, cost_estimated,
+          gate_outcomes_json, escalated, policy_version, created_at, recorded_at)
+       VALUES (@runId, 0, @projectId, @stage, @templateId, @designSystem, @routedModel,
+               @observedModel, @routedLane, @observedLane, @tokensInput, @tokensOutput,
+               @tokensCacheReadInput, @cacheHits, @latencyMs, @costUsd, @costEstimated,
+               @gateOutcomesJson, @escalated, @policyVersion, @createdAt, @recordedAt)`,
+    ).run({
+      runId: 'p1-shape-run',
+      projectId: 'proj-1',
+      stage: 'chat',
+      templateId: null,
+      designSystem: null,
+      routedModel: 'claude-sonnet-5',
+      observedModel: 'claude-sonnet-5',
+      routedLane: 'claude-code-oauth',
+      observedLane: 'claude-code-oauth',
+      tokensInput: 10,
+      tokensOutput: 5,
+      tokensCacheReadInput: 0,
+      cacheHits: 0,
+      latencyMs: 500,
+      costUsd: 2.5,
+      costEstimated: 0,
+      gateOutcomesJson: '{}',
+      escalated: 0,
+      policyVersion: 1,
+      createdAt: '2026-08-05T12:00:00.000Z',
+      recordedAt: '2026-08-05T12:00:00.000Z',
+    });
+
+    // Would throw "no column named build_id" before this fix -- the
+    // narrower ALTER TABLE path is exactly what's under test here.
+    expect(() => ensureRoutingTelemetryTable(db)).not.toThrow();
+
+    const columns = db.prepare(`PRAGMA table_info(routing_telemetry)`).all() as Array<{ name: string }>;
+    expect(columns.some((c) => c.name === 'build_id')).toBe(true);
+
+    // The pre-existing row survived the migration, backfilled to a NULL buildId.
+    const migrated = getRoutingTelemetryByRunId(db, 'p1-shape-run', 0);
+    expect(migrated).not.toBeNull();
+    expect(migrated?.buildId).toBeNull();
+    expect(migrated?.costUsd).toBeCloseTo(2.5, 10);
+
+    // Day-spend has no buildId filter -- the backfilled-NULL row is included.
+    const dayStart = Date.parse('2026-08-05T00:00:00.000Z');
+    const dayEnd = Date.parse('2026-08-06T00:00:00.000Z');
+    const daySnapshot = computeDaySpendUsd(db, dayStart, dayEnd);
+    expect(daySnapshot.totalCostUsd).toBeCloseTo(2.5, 10);
+    expect(daySnapshot.rowCount).toBe(1);
+
+    // Build-spend filters on an exact buildId string -- NULL never matches,
+    // so the backfilled row is correctly excluded from every build's total.
+    expect(computeBuildSpendUsd(db, 'any-build-id')).toEqual({ totalCostUsd: 0, rowCount: 0, cost: 'exact' });
+
+    // New writes (a real buildId this time) succeed against the migrated table.
+    expect(() =>
+      recordRoutingTelemetry(db, completeRow({ runId: 'p1-shape-run', attempt: 1, buildId: 'build-after-migration' })),
+    ).not.toThrow();
+    const afterMigrationRow = getRoutingTelemetryByRunId(db, 'p1-shape-run', 1);
+    expect(afterMigrationRow?.buildId).toBe('build-after-migration');
+    expect(computeBuildSpendUsd(db, 'build-after-migration').rowCount).toBe(1);
   });
 });
 

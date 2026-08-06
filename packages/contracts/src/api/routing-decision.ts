@@ -62,12 +62,18 @@ export type RoutingKey = RoutingKeyWithBuildClass | RoutingKeyWithoutBuildClass;
 /**
  * Coarse summary of `RoutingDecision#admissionResults` (t6, plan §3.2 L2/L4):
  * `'admitted'` once the selected candidate itself passed admission,
- * `'denied'` once every evaluated candidate was denied (paired with
- * `status: 'denied-admission'`), `'not-evaluated'` when admission was never
- * engaged for this call (see `admissionResults`'s own doc comment) --
- * `decideRouting`'s optional `admission` input controls which of those two
- * regimes applies. `'blocked-on-founder'` is reserved for a human-escalation
- * outcome no current caller produces yet.
+ * `'denied'` once every candidate that reached admission evaluation was
+ * denied -- usually paired with `status: 'denied-admission'`, but ALSO set
+ * when `status: 'fail-closed-stop'` resulted from a MIX of throttled and
+ * admission-denied candidates (Sol review MED-3: the terminal status
+ * conservatively reports throttling as the more severe cause, but
+ * `admissionVerdict` still honestly reflects that every candidate which DID
+ * reach admission was denied). `'not-evaluated'` when admission was never
+ * engaged for this call, or every candidate was thrown out by throttling
+ * before any of them ever reached admission (see `admissionResults`'s own
+ * doc comment) -- `decideRouting`'s optional `admission` input controls
+ * whether admission is engaged at all. `'blocked-on-founder'` is reserved
+ * for a human-escalation outcome no current caller produces yet.
  */
 export type RoutingAdmissionVerdict = 'admitted' | 'denied' | 'blocked-on-founder' | 'not-evaluated';
 
@@ -224,17 +230,35 @@ export interface RoutingAdmissionCandidateResult {
   reason: string;
 }
 
+/**
+ * Sol review MED-5 (fix-round, admission control): a shape-only
+ * `typeof === 'number'` check accepted a negative or `NaN` cost, AND
+ * accepted a `null`/non-null cost on ANY verdict regardless of which one --
+ * so a malformed `{ verdict: 'admit', estimatedCostUsd: null }` (a
+ * "silent admit" with no cost backing it, exactly the failure mode
+ * `evaluateAdmission` itself is built never to produce) passed this guard.
+ * The invariant this now enforces: `verdict === 'not-evaluated'` IFF
+ * `estimatedCostUsd === null` -- every other verdict (`admit` and every
+ * `deny-*`) MUST carry a finite, nonnegative real cost figure.
+ */
 function isRoutingAdmissionCandidateResult(value: unknown): value is RoutingAdmissionCandidateResult {
   if (!isPlainObject(value)) return false;
-  return (
-    typeof value.runtimeId === 'string' &&
-    typeof value.model === 'string' &&
-    typeof value.lane === 'string' &&
-    typeof value.verdict === 'string' &&
-    (ROUTING_ADMISSION_CANDIDATE_VERDICTS as readonly string[]).includes(value.verdict) &&
-    (value.estimatedCostUsd === null || typeof value.estimatedCostUsd === 'number') &&
-    typeof value.reason === 'string'
-  );
+  if (
+    typeof value.runtimeId !== 'string' ||
+    typeof value.model !== 'string' ||
+    typeof value.lane !== 'string' ||
+    typeof value.verdict !== 'string' ||
+    !(ROUTING_ADMISSION_CANDIDATE_VERDICTS as readonly string[]).includes(value.verdict) ||
+    typeof value.reason !== 'string'
+  ) {
+    return false;
+  }
+  const costIsNull = value.estimatedCostUsd === null;
+  const costIsValidNumber =
+    typeof value.estimatedCostUsd === 'number' && Number.isFinite(value.estimatedCostUsd) && value.estimatedCostUsd >= 0;
+  if (!costIsNull && !costIsValidNumber) return false;
+  const isNotEvaluated = value.verdict === 'not-evaluated';
+  return isNotEvaluated === costIsNull;
 }
 
 function isRoutingAdmissionCandidateResultArray(value: unknown): value is RoutingAdmissionCandidateResult[] {

@@ -585,17 +585,29 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
   }
 
   // (e) FAIL-CLOSED / DENIED-ADMISSION: the walk above exhausted every
-  // candidate. Two distinct terminal shapes, per this task's own brief
-  // ("fail-closed-stop still takes precedence for class exhaustion"):
-  //   - Every survivor was throttled and NONE ever reached admission
-  //     evaluation (`admissionResults` stays empty, including whenever
-  //     admission was never engaged at all) -- unchanged pre-t6
-  //     'fail-closed-stop' behavior.
-  //   - At least one survivor reached admission and was denied -- the NEW
-  //     'denied-admission' status, carrying every evaluated candidate's
-  //     verdict+reason.
+  // candidate. Sol review MED-3 (fix-round): the terminal cause per
+  // candidate is one of 'throttled' (recorded in `demotions`) or
+  // 'admission-denied' (recorded in `admissionResults`) -- class/constraint
+  // filtering already produced ITS OWN terminal 'fail-closed-stop'/'error'
+  // earlier, in step (c), before this walk ever starts, so those two causes
+  // never reach this branch. Three distinct combinations of the two causes
+  // that DO reach here:
+  //   - PURE throttle exhaustion (every survivor throttled, `admissionResults`
+  //     stays empty -- including whenever admission was never engaged at
+  //     all): unchanged pre-t6 'fail-closed-stop' behavior.
+  //   - PURE admission exhaustion (`demotions` stays empty, at least one
+  //     candidate reached admission and was denied): the 'denied-admission'
+  //     status, carrying every evaluated candidate's verdict+reason.
+  //   - MIXED (at least one candidate throttled AND at least one reached
+  //     admission and was denied): reported as 'fail-closed-stop' -- the
+  //     more conservative, human-surfaced signal, since availability
+  //     problems (throttling) are graver than a budget problem alone --
+  //     but `admissionResults` is still retained on the terminal decision
+  //     so the "why not this candidate" trail isn't silently dropped.
   if (!selected) {
-    if (admissionResults.length > 0) {
+    const anyThrottled = demotions.length > 0;
+    const anyAdmissionDenied = admissionResults.length > 0;
+    if (!anyThrottled && anyAdmissionDenied) {
       const message = `every remaining candidate for sensitivity class "${sensitivityClass}" was denied by budget admission control (stage/build/day ceilings or the metered kill-switch); refusing to dispatch.`;
       pushReason(reasons, 'admission-denied', `admission-exhausted:${sensitivityClass}`, message);
       return terminalDecision({
@@ -610,8 +622,10 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
         admissionVerdict: 'denied',
       });
     }
-    const message = `every remaining candidate for sensitivity class "${sensitivityClass}" is currently throttled; refusing to fall through to an out-of-class or unlisted lane.`;
-    pushReason(reasons, 'fail-closed', `throttle-exhausted:${sensitivityClass}`, message);
+    const message = anyThrottled && anyAdmissionDenied
+      ? `every remaining candidate for sensitivity class "${sensitivityClass}" was either throttled or denied by budget admission control; refusing to fall through (mixed availability/budget exhaustion reports as fail-closed, the more conservative signal).`
+      : `every remaining candidate for sensitivity class "${sensitivityClass}" is currently throttled; refusing to fall through to an out-of-class or unlisted lane.`;
+    pushReason(reasons, 'fail-closed', `${anyAdmissionDenied ? 'mixed' : 'throttle'}-exhausted:${sensitivityClass}`, message);
     return terminalDecision({
       policy,
       contextEstimateTokens: key.contextEstimateTokens,
@@ -620,6 +634,8 @@ export function decideRouting(input: DecideRoutingInput): RoutingDecision {
       reasons,
       demotions,
       rationale: message,
+      admissionResults,
+      admissionVerdict: anyAdmissionDenied ? 'denied' : 'not-evaluated',
     });
   }
 

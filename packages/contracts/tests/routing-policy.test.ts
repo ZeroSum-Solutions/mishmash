@@ -135,6 +135,111 @@ describe('isRoutingPolicyDocument', () => {
     expect(isRoutingPolicyDocument(malformed)).toBe(false);
   });
 
+  // Sol review MED-4 (fix-round, admission control): price validation must
+  // be nonnegative-finite rates, a positive threshold multiplier, a
+  // nonnegative-integer threshold, and an ISO-parseable effectiveDate.
+  it('rejects a negative inputPerMillion or outputPerMillion rate', () => {
+    expect(
+      isRoutingPolicyDocument({ ...EMPTY_POLICY, sonnetPriceRows: [{ model: 'claude-sonnet-5', inputPerMillion: -2, outputPerMillion: 10 }] }),
+    ).toBe(false);
+    expect(
+      isRoutingPolicyDocument({ ...EMPTY_POLICY, sonnetPriceRows: [{ model: 'claude-sonnet-5', inputPerMillion: 2, outputPerMillion: -10 }] }),
+    ).toBe(false);
+  });
+
+  it('accepts a zero-rate price row -- nonnegative allows exactly 0, only negative is rejected', () => {
+    expect(
+      isRoutingPolicyDocument({ ...EMPTY_POLICY, sonnetPriceRows: [{ model: 'claude-sonnet-5', inputPerMillion: 0, outputPerMillion: 0 }] }),
+    ).toBe(true);
+  });
+
+  it('rejects an unparseable effectiveDate string (Date.parse would return NaN)', () => {
+    expect(
+      isRoutingPolicyDocument({
+        ...EMPTY_POLICY,
+        sonnetPriceRows: [{ model: 'claude-sonnet-5', inputPerMillion: 2, outputPerMillion: 10, effectiveDate: 'not-a-date' }],
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects an empty-string effectiveDate', () => {
+    expect(
+      isRoutingPolicyDocument({
+        ...EMPTY_POLICY,
+        sonnetPriceRows: [{ model: 'claude-sonnet-5', inputPerMillion: 2, outputPerMillion: 10, effectiveDate: '' }],
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects thresholdedPricing with a zero or negative multiplier', () => {
+    expect(
+      isRoutingPolicyDocument({
+        ...EMPTY_POLICY,
+        otherModelPriceRows: [{ model: 'x', inputPerMillion: 2, outputPerMillion: 12, thresholdedPricing: { thresholdTokens: 200000, multiplier: 0 } }],
+      }),
+    ).toBe(false);
+    expect(
+      isRoutingPolicyDocument({
+        ...EMPTY_POLICY,
+        otherModelPriceRows: [{ model: 'x', inputPerMillion: 2, outputPerMillion: 12, thresholdedPricing: { thresholdTokens: 200000, multiplier: -2 } }],
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects thresholdedPricing with a fractional or negative thresholdTokens', () => {
+    expect(
+      isRoutingPolicyDocument({
+        ...EMPTY_POLICY,
+        otherModelPriceRows: [{ model: 'x', inputPerMillion: 2, outputPerMillion: 12, thresholdedPricing: { thresholdTokens: 200000.5, multiplier: 2 } }],
+      }),
+    ).toBe(false);
+    expect(
+      isRoutingPolicyDocument({
+        ...EMPTY_POLICY,
+        otherModelPriceRows: [{ model: 'x', inputPerMillion: 2, outputPerMillion: 12, thresholdedPricing: { thresholdTokens: -1, multiplier: 2 } }],
+      }),
+    ).toBe(false);
+  });
+
+  it('accepts thresholdedPricing with a positive multiplier and nonnegative integer threshold', () => {
+    expect(
+      isRoutingPolicyDocument({
+        ...EMPTY_POLICY,
+        otherModelPriceRows: [{ model: 'x', inputPerMillion: 2, outputPerMillion: 12, thresholdedPricing: { thresholdTokens: 200000, multiplier: 2 } }],
+      }),
+    ).toBe(true);
+  });
+
+  // t6 fix-round HIGH-1: RoutingPolicyOutputTokenBound guard coverage.
+  it('accepts budgetCeilings.outputTokenBound with just a default, and with a perTaskClass override', () => {
+    const withDefault = { ...EMPTY_POLICY, budgetCeilings: { ...EMPTY_POLICY.budgetCeilings, outputTokenBound: { default: 32000 } } };
+    expect(isRoutingPolicyDocument(withDefault)).toBe(true);
+    const withOverride = {
+      ...EMPTY_POLICY,
+      budgetCeilings: { ...EMPTY_POLICY.budgetCeilings, outputTokenBound: { default: 32000, perTaskClass: { chat: 4000 } } },
+    };
+    expect(isRoutingPolicyDocument(withOverride)).toBe(true);
+  });
+
+  it('rejects outputTokenBound.default missing, negative, or fractional', () => {
+    expect(isRoutingPolicyDocument({ ...EMPTY_POLICY, budgetCeilings: { ...EMPTY_POLICY.budgetCeilings, outputTokenBound: {} } })).toBe(false);
+    expect(
+      isRoutingPolicyDocument({ ...EMPTY_POLICY, budgetCeilings: { ...EMPTY_POLICY.budgetCeilings, outputTokenBound: { default: -1 } } }),
+    ).toBe(false);
+    expect(
+      isRoutingPolicyDocument({ ...EMPTY_POLICY, budgetCeilings: { ...EMPTY_POLICY.budgetCeilings, outputTokenBound: { default: 1.5 } } }),
+    ).toBe(false);
+  });
+
+  it('rejects a perTaskClass override with a non-nonnegative-integer value', () => {
+    expect(
+      isRoutingPolicyDocument({
+        ...EMPTY_POLICY,
+        budgetCeilings: { ...EMPTY_POLICY.budgetCeilings, outputTokenBound: { default: 32000, perTaskClass: { chat: -1 } } },
+      }),
+    ).toBe(false);
+  });
+
   it('rejects a modelTable candidate with an arbitrary (non-enum) effort string', () => {
     const malformed = {
       ...EMPTY_POLICY,
