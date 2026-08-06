@@ -24,6 +24,10 @@ const BASE_DECISION_FIELDS = {
   policyVersion: 0,
   promptComposition: [{ part: 'system' }, { part: 'brief', estimatedTokens: 400 }],
   sensitivityClass: 'client-confidential' as const,
+  status: 'ok' as const,
+  reasons: [{ step: 'selection' as const, message: 'selected default on stub-lane.' }],
+  contextEstimateTokens: 0,
+  demotions: [],
 };
 
 describe('isRoutingKey', () => {
@@ -122,10 +126,52 @@ describe('isRoutingDecision', () => {
     expect(isRoutingDecision(decision)).toBe(true);
   });
 
-  it('accepts every admission verdict, including the fail-closed blocked-on-founder state', () => {
-    for (const admissionVerdict of ['admitted', 'denied', 'blocked-on-founder'] as const) {
+  it('accepts every admission verdict, including the fail-closed blocked-on-founder state and the t5 not-evaluated placeholder', () => {
+    for (const admissionVerdict of ['admitted', 'denied', 'blocked-on-founder', 'not-evaluated'] as const) {
       expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', admissionVerdict })).toBe(true);
     }
+  });
+
+  it('accepts every effort value including "inherit" (t5 bug fix: the old ROUTING_EFFORTS guard omitted it)', () => {
+    for (const effort of ['low', 'medium', 'high', 'xhigh', 'inherit'] as const) {
+      expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort })).toBe(true);
+    }
+  });
+
+  it('accepts every decision status', () => {
+    for (const status of ['ok', 'fail-closed-stop', 'error'] as const) {
+      expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', status })).toBe(true);
+    }
+  });
+
+  it('rejects an unrecognized status', () => {
+    expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', status: 'pending' })).toBe(false);
+  });
+
+  it('accepts a reasons entry with an optional code, and rejects one with an unrecognized step', () => {
+    const withCode = { ...BASE_DECISION_FIELDS, effort: 'low' as const, reasons: [{ step: 'fail-closed', message: 'x', code: 'class-exhausted:internal' }] };
+    expect(isRoutingDecision(withCode)).toBe(true);
+    const badStep = { ...BASE_DECISION_FIELDS, effort: 'low' as const, reasons: [{ step: 'not-a-real-step', message: 'x' }] };
+    expect(isRoutingDecision(badStep)).toBe(false);
+  });
+
+  it('rejects a reasons entry missing message', () => {
+    expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', reasons: [{ step: 'selection' }] })).toBe(false);
+  });
+
+  it('accepts demotions with a null toLane (exhausted) and rejects a malformed demotion entry', () => {
+    const withDemotion = {
+      ...BASE_DECISION_FIELDS,
+      effort: 'low' as const,
+      demotions: [{ fromLane: 'claude-code-oauth', toLane: null, reason: 'throttled' }],
+    };
+    expect(isRoutingDecision(withDemotion)).toBe(true);
+    const malformed = { ...BASE_DECISION_FIELDS, effort: 'low' as const, demotions: [{ fromLane: 'x' }] };
+    expect(isRoutingDecision(malformed)).toBe(false);
+  });
+
+  it('rejects a non-numeric contextEstimateTokens', () => {
+    expect(isRoutingDecision({ ...BASE_DECISION_FIELDS, effort: 'low', contextEstimateTokens: '400' })).toBe(false);
   });
 
   it('accepts every data classification', () => {

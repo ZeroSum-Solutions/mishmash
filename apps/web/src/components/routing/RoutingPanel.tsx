@@ -105,9 +105,30 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
 
       <div className={styles.section}>
         <h3 className={styles.sectionTitle}>Decision preview</h3>
-        <p className={styles.previewPlaceholder}>
-          {decision ? decision.rationale : 'No decision preview available yet.'}
-        </p>
+        {decision ? (
+          <div
+            className={decision.status === 'fail-closed-stop' ? styles.decisionFailClosed : styles.decisionOk}
+            data-testid="routing-decision-status"
+            data-status={decision.status}
+          >
+            <p className={styles.previewPlaceholder}>
+              {decision.status === 'fail-closed-stop' ? 'FAIL-CLOSED — ' : decision.status === 'error' ? 'ERROR — ' : ''}
+              {decision.rationale}
+            </p>
+            {decision.reasons.length > 0 ? (
+              <ol className={styles.reasonList} data-testid="routing-decision-reasons">
+                {decision.reasons.map((reason, i) => (
+                  <li key={`${reason.step}-${i}`} className={styles.reasonRow}>
+                    <span className={styles.reasonStep}>{reason.step}</span>
+                    <span>{reason.message}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : null}
+          </div>
+        ) : (
+          <p className={styles.previewPlaceholder}>No decision preview available yet.</p>
+        )}
       </div>
 
       <Button

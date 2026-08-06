@@ -1,21 +1,29 @@
-// /api/routing/* -- routing capability HTTP surface (WR wave, P0 skeleton,
-// plan docs/plans/2026-08-05-model-routing-system.md §3.4 capability
-// closure). Contracts: packages/contracts/src/api/routing-{policy,decision,
-// telemetry}.ts. Every response here is a documented stub: real policy
-// content, admission control, and dispatch-time routing land in later WR
-// tranches (P1/P2) -- see docs/plans/waves/WR-routing.md's Tranche register.
+// /api/routing/* -- routing capability HTTP surface (WR wave, plan
+// docs/plans/2026-08-05-model-routing-system.md §3.4 capability closure).
+// Contracts: packages/contracts/src/api/routing-{policy,decision,
+// telemetry}.ts. /decision/preview now calls the real advisory decision
+// engine (apps/daemon/src/routing/decision.ts, t5) over the loaded policy +
+// live lane meters; admission control (budgets, t6) and dispatch-time
+// enforcement (t9) still land in later WR tranches -- see
+// docs/plans/waves/WR-routing.md's Tranche register.
 import type Database from 'better-sqlite3';
 import type { Express, Request, Response } from 'express';
 import type {
-  RoutingDecision,
+  RoutingDataClassification,
   RoutingDecisionPreviewResponse,
   RoutingKey,
   RoutingMetersResponse,
   RoutingPolicyResponse,
   RoutingTelemetryListResponse,
 } from '@open-design/contracts';
-import { currentRoutingPolicyVersion, loadRoutingPolicy } from '../routing/index.js';
+import { decideRouting, estimatePromptTokens, loadRoutingPolicy } from '../routing/index.js';
 import { computeLaneMeters, listRoutingTelemetry } from '../routing/telemetry.js';
+
+const ROUTING_DATA_CLASSIFICATIONS: readonly RoutingDataClassification[] = ['client-confidential', 'internal', 'public'];
+
+function isRoutingDataClassification(value: string): value is RoutingDataClassification {
+  return (ROUTING_DATA_CLASSIFICATIONS as readonly string[]).includes(value);
+}
 
 function queryStringOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
@@ -80,18 +88,22 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database): voi
     res.json(response);
   });
 
-  // GET /api/routing/decision/preview -- a stub RoutingDecision for a given
-  // routing key. Query params mirror RoutingKey's discriminated fallback
-  // shape (docs/plans/waves/WR-routing.md's "Routing-key fallback
-  // (normative)"): buildClass may only be supplied alongside templateId --
-  // WR-routing.md's fallback table never defines a build-class-only key, so
-  // that combination is rejected here rather than silently coerced. The
-  // decision itself is always a fixed stub until P2 lands real dispatch
-  // logic; only the echoed `key` reflects the caller's input.
+  // GET /api/routing/decision/preview -- runs the real advisory decision
+  // engine (apps/daemon/src/routing/decision.ts, t5) over the loaded policy
+  // + live lane meters + the caller's query params. Query params mirror
+  // RoutingKey's discriminated fallback shape (docs/plans/waves/
+  // WR-routing.md's "Routing-key fallback (normative)"): buildClass may
+  // only be supplied alongside templateId -- WR-routing.md's fallback table
+  // never defines a build-class-only key, so that combination is rejected
+  // here rather than silently coerced. All four frozen key shapes are
+  // expressible: primary (templateId+buildClass), fallback A (templateId
+  // only), fallback B (neither -- stage defaults to 'chat'), fallback C
+  // (templateId + a non-web stage, e.g. an ingestion pipeline stage id).
   app.get('/api/routing/decision/preview', (req: Request, res: Response) => {
     const templateId = queryStringOrNull(req.query.templateId);
     const buildClass = queryStringOrNull(req.query.buildClass);
     const stage = queryStringOrNull(req.query.stage) ?? 'chat';
+    const taskClass = queryStringOrNull(req.query.taskClass);
 
     if (buildClass !== null && templateId === null) {
       res.status(400).json({
@@ -104,26 +116,37 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database): voi
       return;
     }
 
+    const sensitivityClassRaw = queryStringOrNull(req.query.sensitivityClass);
+    // Fail-closed placeholder (plan §3.2 L2): an unresolved sensitivity
+    // class defaults to the MOST restrictive value rather than the least.
+    let sensitivityClass: RoutingDataClassification = 'client-confidential';
+    if (sensitivityClassRaw !== null) {
+      if (!isRoutingDataClassification(sensitivityClassRaw)) {
+        return respondInvalidQuery(
+          res,
+          `\`sensitivityClass\` must be one of: ${ROUTING_DATA_CLASSIFICATIONS.join(', ')}`,
+        );
+      }
+      sensitivityClass = sensitivityClassRaw;
+    }
+
+    const promptText = queryStringOrNull(req.query.promptText);
+    const contextTokensResult = parseOptionalQueryInt(req.query.contextEstimateTokens, 'contextEstimateTokens', {
+      min: 0,
+    });
+    if (!contextTokensResult.ok) return respondInvalidQuery(res, contextTokensResult.message);
+    const contextEstimateTokens = contextTokensResult.value ?? (promptText !== null ? estimatePromptTokens(promptText) : 0);
+
+    const policy = loadRoutingPolicy();
+    const laneMeters = db ? computeLaneMeters(db) : [];
+    const laneMetersRecord = Object.fromEntries(laneMeters.map((m) => [m.lane, m.throttleEvents]));
+
     const key: RoutingKey =
       templateId !== null && buildClass !== null
-        ? { templateId, buildClass, stage, contextEstimateTokens: 0, laneMeters: {} }
-        : { templateId, buildClass: null, stage, contextEstimateTokens: 0, laneMeters: {} };
+        ? { templateId, buildClass, stage, contextEstimateTokens, laneMeters: laneMetersRecord }
+        : { templateId, buildClass: null, stage, contextEstimateTokens, laneMeters: laneMetersRecord };
 
-    const decision: RoutingDecision = {
-      runtimeId: 'stub-runtime',
-      modelFlag: 'default',
-      effort: 'medium',
-      lane: 'stub-lane',
-      rationale: 'policy-stub-v0',
-      admissionVerdict: 'admitted',
-      policyVersion: currentRoutingPolicyVersion(),
-      promptComposition: [],
-      // Fail-closed placeholder (plan §3.2 L2): an unresolved sensitivity
-      // class defaults to the MOST restrictive value rather than the least,
-      // until a later tranche wires this from the real request/brief
-      // context.
-      sensitivityClass: 'client-confidential',
-    };
+    const decision = decideRouting({ policy, key, sensitivityClass, laneMeters, taskClass });
     const response: RoutingDecisionPreviewResponse = { key, decision };
     res.json(response);
   });

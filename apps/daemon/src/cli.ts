@@ -504,11 +504,19 @@ async function runCover(args) {
 // /api/routing/* HTTP surface the web RoutingPanel stub reads. Real
 // dispatch-time routing (a bare `od route --json` returning
 // escalationRate/passRate/laneMeters, CWR-P2-4) lands in a later WR tranche.
+//
+// `preview`'s --task-class/--sensitivity-class/--context-tokens/--prompt-text
+// (t5) forward to the real decideRouting engine GET /api/routing/decision/
+// preview now runs -- see apps/daemon/src/routing/decision.ts.
 const ROUTE_STRING_FLAGS = new Set([
   'daemon-url',
   'template-id',
   'build-class',
   'stage',
+  'task-class',
+  'sensitivity-class',
+  'context-tokens',
+  'prompt-text',
   'project-id',
   'run-id',
   'since-ms',
@@ -524,26 +532,33 @@ function printRouteHelp() {
 
 Subcommands:
   policy     GET /api/routing/policy -- current routing policy + version.
-  preview    GET /api/routing/decision/preview -- stub routing-decision
-             preview for a routing key.
+  preview    GET /api/routing/decision/preview -- runs the advisory
+             decision engine for a routing key.
   meters     GET /api/routing/meters -- per-lane routing meters (L5
              telemetry aggregation).
   telemetry  GET /api/routing/telemetry -- filtered, paginated telemetry
              rows (L5 storage).
 
 Options:
-  --template-id <id>   Routing key template id (omit for the null fallback).
-  --build-class <cls>  Routing key build class (omit for the null fallback).
-  --stage <stage>      Routing key stage (default: chat); also a telemetry
-                        filter.
-  --project-id <id>    telemetry: filter by project id.
-  --run-id <id>        telemetry: filter by run id.
-  --since-ms <ms>      telemetry: lower bound on createdAt (epoch ms).
-  --until-ms <ms>      telemetry: upper bound on createdAt (epoch ms).
-  --limit <n>          telemetry: page size (default 50, max 500).
-  --offset <n>         telemetry: page offset (default 0).
-  --window-ms <ms>     meters: trailing aggregation window (omit for all-time).
-  --json               Print machine-readable JSON.
+  --template-id <id>       Routing key template id (omit for the null fallback).
+  --build-class <cls>      Routing key build class (omit for the null fallback).
+  --stage <stage>          Routing key stage (default: chat); also a telemetry
+                           filter.
+  --task-class <cls>       preview: §2 taskClass / §15 taskSelector to route.
+  --sensitivity-class <c>  preview: client-confidential|internal|public
+                           (default: client-confidential).
+  --context-tokens <n>     preview: explicit contextEstimateTokens override.
+  --prompt-text <text>     preview: estimate contextEstimateTokens from text
+                           (ignored when --context-tokens is also given).
+  --project-id <id>        telemetry: filter by project id.
+  --run-id <id>            telemetry: filter by run id.
+  --since-ms <ms>          telemetry: lower bound on createdAt (epoch ms).
+  --until-ms <ms>          telemetry: upper bound on createdAt (epoch ms).
+  --limit <n>              telemetry: page size (default 50, max 500).
+  --offset <n>             telemetry: page offset (default 0).
+  --window-ms <ms>         meters: trailing aggregation window (omit for
+                           all-time).
+  --json                   Print machine-readable JSON.
   --daemon-url <url>`);
 }
 
@@ -586,6 +601,10 @@ async function runRoute(args) {
     if (flags['template-id']) qs.set('templateId', String(flags['template-id']));
     if (flags['build-class']) qs.set('buildClass', String(flags['build-class']));
     if (flags.stage) qs.set('stage', String(flags.stage));
+    if (flags['task-class']) qs.set('taskClass', String(flags['task-class']));
+    if (flags['sensitivity-class']) qs.set('sensitivityClass', String(flags['sensitivity-class']));
+    if (flags['context-tokens']) qs.set('contextEstimateTokens', String(flags['context-tokens']));
+    if (flags['prompt-text']) qs.set('promptText', String(flags['prompt-text']));
     let resp;
     try {
       resp = await fetch(`${base}/api/routing/decision/preview?${qs.toString()}`);
@@ -598,7 +617,7 @@ async function runRoute(args) {
     if (!resp.ok) return structuredHttpFailure(resp);
     const data = await resp.json();
     if (flags.json) return writeJson(data);
-    console.log(`Routing decision preview: ${data?.decision?.rationale ?? 'unknown'} (lane=${data?.decision?.lane ?? 'unknown'})`);
+    console.log(`Routing decision preview [${data?.decision?.status ?? 'unknown'}]: ${data?.decision?.rationale ?? 'unknown'} (lane=${data?.decision?.lane ?? 'unknown'})`);
     return;
   }
 

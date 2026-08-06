@@ -61,9 +61,106 @@ export type RoutingKey = RoutingKeyWithBuildClass | RoutingKeyWithoutBuildClass;
  * stub decision always reports 'admitted' with a placeholder rationale;
  * real admission control is P2 (CWR-P2-2).
  */
-export type RoutingAdmissionVerdict = 'admitted' | 'denied' | 'blocked-on-founder';
+export type RoutingAdmissionVerdict = 'admitted' | 'denied' | 'blocked-on-founder' | 'not-evaluated';
 
-const ROUTING_EFFORTS: readonly RoutingEffort[] = ['low', 'medium', 'high', 'xhigh'];
+/**
+ * Bug fix (t5): this array used to omit `'inherit'`, even though
+ * `RoutingEffort` (imported above from routing-policy.ts) has always
+ * included it and the vast majority of v1 policy candidates (CWR-P1-1) carry
+ * exactly that value. A real decision built from `decideRouting`
+ * (apps/daemon/src/routing/decision.ts) passes a candidate's own `effort`
+ * straight through -- "candidate's effort or 'inherit' passthrough" per this
+ * task's brief -- so a decision honestly reporting `'inherit'` must not fail
+ * its own shape guard. Harmless at P0 because the stub decision always used
+ * a concrete value ('medium'/'low'); load-bearing now that real candidates
+ * flow through.
+ */
+const ROUTING_EFFORTS: readonly RoutingEffort[] = ['low', 'medium', 'high', 'xhigh', 'inherit'];
+
+const ROUTING_ADMISSION_VERDICTS_ALL: readonly RoutingAdmissionVerdict[] = [
+  'admitted',
+  'denied',
+  'blocked-on-founder',
+  'not-evaluated',
+];
+
+/**
+ * One evaluated step of the decision algorithm (apps/daemon/src/routing/
+ * decision.ts) -- the "why this model" surface (plan §3.1). `code` is an
+ * optional machine-checkable narrowing id (a hard constraint's `id`, a data
+ * classification, `unknown-stage:<value>`, etc.) so a test or a UI can key
+ * off WHICH rule fired without parsing `message` prose; `message` is always
+ * a complete human sentence on its own.
+ */
+export type RoutingDecisionReasonStep =
+  | 'stage-validation'
+  | 'model-table-match'
+  | 'program-assignment'
+  | 'hard-constraint-filter'
+  | 'data-classification-filter'
+  | 'lane-throttle-demotion'
+  | 'fail-closed'
+  | 'selection'
+  | 'error';
+
+const ROUTING_DECISION_REASON_STEPS: readonly RoutingDecisionReasonStep[] = [
+  'stage-validation',
+  'model-table-match',
+  'program-assignment',
+  'hard-constraint-filter',
+  'data-classification-filter',
+  'lane-throttle-demotion',
+  'fail-closed',
+  'selection',
+  'error',
+];
+
+export interface RoutingDecisionReason {
+  step: RoutingDecisionReasonStep;
+  message: string;
+  code?: string;
+}
+
+function isRoutingDecisionReason(value: unknown): value is RoutingDecisionReason {
+  if (!isPlainObject(value)) return false;
+  return (
+    typeof value.step === 'string' &&
+    (ROUTING_DECISION_REASON_STEPS as readonly string[]).includes(value.step) &&
+    typeof value.message === 'string' &&
+    (value.code === undefined || typeof value.code === 'string')
+  );
+}
+
+/** One lane-availability demotion (plan §3.1 L1: "observed throttles...
+ * advance the chain"). `toLane` is null when demotion exhausted the
+ * candidate list with nowhere left to advance to (the fail-closed case). */
+export interface RoutingLaneDemotion {
+  fromLane: string;
+  toLane: string | null;
+  reason: string;
+}
+
+function isRoutingLaneDemotion(value: unknown): value is RoutingLaneDemotion {
+  if (!isPlainObject(value)) return false;
+  return (
+    typeof value.fromLane === 'string' &&
+    (value.toLane === null || typeof value.toLane === 'string') &&
+    typeof value.reason === 'string'
+  );
+}
+
+/**
+ * First-class decision outcome (plan §3.2 L2's fail-closed requirement):
+ * `'ok'` -- a real candidate was selected. `'fail-closed-stop'` -- filtering
+ * and/or lane-throttle demotion exhausted every candidate for the
+ * sensitivity class; the run stops and surfaces to a human, it never falls
+ * through to an out-of-class candidate. `'error'` -- a structural problem
+ * with the routing key itself (an unknown stage, or no §2/§15 match at all)
+ * that has nothing to do with lane availability or data classification.
+ */
+export type RoutingDecisionStatus = 'ok' | 'fail-closed-stop' | 'error';
+
+const ROUTING_DECISION_STATUSES: readonly RoutingDecisionStatus[] = ['ok', 'fail-closed-stop', 'error'];
 
 /** One named part of the composed prompt, in composition order -- e.g.
  * `{ part: 'system' }`, `{ part: 'design-tokens' }`, `{ part: 'brief' }`.
@@ -98,6 +195,22 @@ export interface RoutingDecision {
    * has a provider allowlist enforced by admission control. Shared with
    * RoutingPolicyDataClassAllowlist#classification in routing-policy.ts. */
   sensitivityClass: RoutingDataClassification;
+  /** First-class outcome of the decision algorithm (t5) -- see
+   * RoutingDecisionStatus's own doc comment. */
+  status: RoutingDecisionStatus;
+  /** Structured "why this model" trail: one entry per evaluated step
+   * (matched row, assignment pin, filtered candidates + why, meter
+   * demotions, final selection), in evaluation order. `rationale` above
+   * stays the one-line human summary; this is the full evidence behind it. */
+  reasons: RoutingDecisionReason[];
+  /** Echoes RoutingKey#contextEstimateTokens -- carried on the decision too
+   * (not just the key) so a consumer that only persists/displays the
+   * decision still has it without also keeping the key around. */
+  contextEstimateTokens: number;
+  /** Every lane-throttle demotion the decision algorithm applied while
+   * walking the candidate list, in the order they occurred. Empty when the
+   * head candidate was available and no demotion was needed. */
+  demotions: RoutingLaneDemotion[];
 }
 
 function isRoutingPromptCompositionPart(value: unknown): value is RoutingPromptCompositionPart {
@@ -141,11 +254,13 @@ export function isRoutingKey(value: unknown): value is RoutingKey {
   return typeof key.buildClass === 'string' && typeof key.templateId === 'string';
 }
 
-const ROUTING_ADMISSION_VERDICTS: readonly RoutingAdmissionVerdict[] = [
-  'admitted',
-  'denied',
-  'blocked-on-founder',
-];
+function isRoutingDecisionReasonArray(value: unknown): value is RoutingDecisionReason[] {
+  return Array.isArray(value) && value.every(isRoutingDecisionReason);
+}
+
+function isRoutingLaneDemotionArray(value: unknown): value is RoutingLaneDemotion[] {
+  return Array.isArray(value) && value.every(isRoutingLaneDemotion);
+}
 
 export function isRoutingDecision(value: unknown): value is RoutingDecision {
   if (!isPlainObject(value)) return false;
@@ -158,11 +273,16 @@ export function isRoutingDecision(value: unknown): value is RoutingDecision {
     typeof decision.lane === 'string' &&
     typeof decision.rationale === 'string' &&
     typeof decision.admissionVerdict === 'string' &&
-    (ROUTING_ADMISSION_VERDICTS as readonly string[]).includes(decision.admissionVerdict) &&
+    (ROUTING_ADMISSION_VERDICTS_ALL as readonly string[]).includes(decision.admissionVerdict) &&
     typeof decision.policyVersion === 'number' &&
     isRoutingPromptComposition(decision.promptComposition) &&
     typeof decision.sensitivityClass === 'string' &&
-    (ROUTING_DATA_CLASSIFICATIONS as readonly string[]).includes(decision.sensitivityClass)
+    (ROUTING_DATA_CLASSIFICATIONS as readonly string[]).includes(decision.sensitivityClass) &&
+    typeof decision.status === 'string' &&
+    (ROUTING_DECISION_STATUSES as readonly string[]).includes(decision.status) &&
+    isRoutingDecisionReasonArray(decision.reasons) &&
+    typeof decision.contextEstimateTokens === 'number' &&
+    isRoutingLaneDemotionArray(decision.demotions)
   );
 }
 
