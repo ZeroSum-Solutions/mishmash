@@ -33,8 +33,7 @@ import {
   type StoredRoutingTelemetryRow,
 } from '@open-design/contracts';
 
-export function ensureRoutingTelemetryTable(db: Database.Database): void {
-  db.exec(`
+const ROUTING_TELEMETRY_CURRENT_SHAPE_DDL = `
     CREATE TABLE IF NOT EXISTS routing_telemetry (
       run_id TEXT NOT NULL,
       attempt INTEGER NOT NULL DEFAULT 0,
@@ -60,7 +59,59 @@ export function ensureRoutingTelemetryTable(db: Database.Database): void {
       recorded_at TEXT NOT NULL,
       PRIMARY KEY (run_id, attempt)
     )
-  `);
+`;
+
+/** Sol review MED-4 (fix round 2): `CREATE TABLE IF NOT EXISTS` alone is a
+ * no-op against a table that already exists in the OLD pre-attempt shape
+ * (`run_id TEXT PRIMARY KEY`, no `attempt` column) -- the shape this same
+ * module shipped as of commit `9bd640e45`. That schema never reached
+ * `main`, but a daemon data dir created against it (e.g. a long-running
+ * dev instance on this branch) would otherwise have every subsequent
+ * `recordRoutingTelemetry` call fail with "no column named attempt".
+ * Detects that exact case via `PRAGMA table_info` and rebuild-migrates in
+ * place: new-shape table -> copy every existing row in with `attempt = 0`
+ * (the only attempt an old-shape row could ever represent) -> drop the old
+ * table -> rename, all inside one transaction so a crash mid-migration
+ * cannot leave the database in a table-less state. */
+function migrateOldShapeRoutingTelemetryTable(db: Database.Database): void {
+  const tableExists = (
+    db
+      .prepare(`SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'routing_telemetry'`)
+      .get() as { n: number }
+  ).n;
+  if (tableExists === 0) return; // nothing to migrate -- the CREATE below makes the current shape fresh.
+
+  const columns = db.prepare(`PRAGMA table_info(routing_telemetry)`).all() as Array<{ name: string }>;
+  const hasAttemptColumn = columns.some((c) => c.name === 'attempt');
+  if (hasAttemptColumn) return; // already current shape.
+
+  const migrate = db.transaction(() => {
+    // Defensive: a prior migration attempt that crashed mid-way could have
+    // left a stale scratch table around -- clear it before rebuilding so
+    // this migration is itself idempotent/retriable.
+    db.exec(`DROP TABLE IF EXISTS routing_telemetry_migrated`);
+    db.exec(ROUTING_TELEMETRY_CURRENT_SHAPE_DDL.replace('routing_telemetry', 'routing_telemetry_migrated'));
+    db.exec(`
+      INSERT INTO routing_telemetry_migrated
+        (run_id, attempt, project_id, stage, template_id, design_system, routed_model,
+         observed_model, routed_lane, observed_lane, tokens_input, tokens_output,
+         tokens_cache_read_input, cache_hits, latency_ms, cost_usd, cost_estimated,
+         gate_outcomes_json, escalated, policy_version, created_at, recorded_at)
+      SELECT run_id, 0, project_id, stage, template_id, design_system, routed_model,
+         observed_model, routed_lane, observed_lane, tokens_input, tokens_output,
+         tokens_cache_read_input, cache_hits, latency_ms, cost_usd, cost_estimated,
+         gate_outcomes_json, escalated, policy_version, created_at, recorded_at
+        FROM routing_telemetry
+    `);
+    db.exec(`DROP TABLE routing_telemetry`);
+    db.exec(`ALTER TABLE routing_telemetry_migrated RENAME TO routing_telemetry`);
+  });
+  migrate();
+}
+
+export function ensureRoutingTelemetryTable(db: Database.Database): void {
+  migrateOldShapeRoutingTelemetryTable(db);
+  db.exec(ROUTING_TELEMETRY_CURRENT_SHAPE_DDL);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_routing_telemetry_project_id ON routing_telemetry(project_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_routing_telemetry_stage ON routing_telemetry(stage)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_routing_telemetry_created_at ON routing_telemetry(created_at)`);

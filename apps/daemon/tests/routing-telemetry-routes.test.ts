@@ -135,6 +135,19 @@ describe('GET /api/routing/meters -- real aggregates from telemetry', () => {
     const resp = await fetch(`${baseUrl}/api/routing/meters?windowMs=-5`);
     expect(resp.status).toBe(400);
   });
+
+  // --- Sol review MED-5 (fix round 2): a FINITE but out-of-Date-range epoch
+  // (e.g. 1e100) must not reach `new Date(v).toISOString()` and 500 --------
+  it('returns 400 (not a 500) for a finite but out-of-range ?windowMs=1e100', async () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    ensureRoutingTelemetryTable(db);
+    await startServer(db);
+
+    const resp = await fetch(`${baseUrl}/api/routing/meters?windowMs=1e100`);
+    expect(resp.status).toBe(400);
+    const body = (await resp.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('invalid-query-param');
+  });
 });
 
 describe('GET /api/routing/telemetry -- filtered, paginated list', () => {
@@ -182,6 +195,11 @@ describe('GET /api/routing/telemetry -- filtered, paginated list', () => {
     ['limit', 'abc'],
     ['limit', '0'], // limit must be >= 1
     ['offset', '-1'],
+    // fix round 2: FINITE but out-of-ECMAScript-Date-range values must not
+    // reach `new Date(v).toISOString()` and crash into a 500.
+    ['sinceMs', '1e100'],
+    ['sinceMs', '-1'], // below the [0, MAX] epoch bound
+    ['untilMs', '1e100'],
   ])('returns 400 with the house error shape for a malformed ?%s=%s', async (param, value) => {
     const db = openDatabase(tempDir, { dataDir: tempDir });
     ensureRoutingTelemetryTable(db);

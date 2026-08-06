@@ -28,7 +28,17 @@ function queryStringOrNull(value: unknown): string | null {
  * }` so the caller's own default applies. */
 type QueryIntResult = { ok: true; value: number | undefined } | { ok: false; message: string };
 
-function parseOptionalQueryInt(raw: unknown, name: string, opts: { min?: number } = {}): QueryIntResult {
+/** The maximum epoch-millisecond value `Date`/`Date#toISOString` can
+ * represent (ECMA-262 Date Time String Format, ±100,000,000 days from the
+ * epoch); the minimum is its negation. Sol review MED-5 (fix round 2): a
+ * value that is finite (passes the basic parse) but outside this range
+ * still crashes `new Date(v).toISOString()` in
+ * apps/daemon/src/routing/telemetry.ts's `buildFilterClause` with an
+ * uncaught RangeError -- a 500, not a 400 -- so an epoch-shaped param must
+ * be range-checked here at the boundary, not just finiteness-checked. */
+const MAX_ECMASCRIPT_DATE_MS = 8_640_000_000_000_000;
+
+function parseOptionalQueryInt(raw: unknown, name: string, opts: { min?: number; max?: number } = {}): QueryIntResult {
   if (raw === undefined) return { ok: true, value: undefined };
   if (typeof raw !== 'string' || raw.length === 0 || !Number.isFinite(Number(raw))) {
     return { ok: false, message: `\`${name}\` must be a finite number` };
@@ -37,8 +47,17 @@ function parseOptionalQueryInt(raw: unknown, name: string, opts: { min?: number 
   if (opts.min !== undefined && n < opts.min) {
     return { ok: false, message: `\`${name}\` must be >= ${opts.min}` };
   }
+  if (opts.max !== undefined && n > opts.max) {
+    return { ok: false, message: `\`${name}\` must be <= ${opts.max}` };
+  }
   return { ok: true, value: n };
 }
+
+/** Bounds for an epoch-milliseconds query param that ultimately reaches
+ * `new Date(v).toISOString()` (sinceMs/untilMs directly; windowMs via
+ * `Date.now() - windowMs` in `fetchRowsForAggregation`) -- see
+ * MAX_ECMASCRIPT_DATE_MS's doc comment. */
+const EPOCH_MS_BOUNDS = { min: 0, max: MAX_ECMASCRIPT_DATE_MS } as const;
 
 /** House 400 error shape -- matches `/decision/preview`'s existing
  * `invalid-routing-key` envelope below rather than inventing a second one. */
@@ -116,7 +135,7 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database): voi
   // supplied (see registerRoutingRoutes's doc comment) or no rows are in
   // range yet -- same well-shaped-empty-array contract the P0 stub shipped.
   app.get('/api/routing/meters', (req: Request, res: Response) => {
-    const windowMsResult = parseOptionalQueryInt(req.query.windowMs, 'windowMs', { min: 0 });
+    const windowMsResult = parseOptionalQueryInt(req.query.windowMs, 'windowMs', EPOCH_MS_BOUNDS);
     if (!windowMsResult.ok) return respondInvalidQuery(res, windowMsResult.message);
     const laneMeters = db ? computeLaneMeters(db, windowMsResult.value) : [];
     const response: RoutingMetersResponse = { laneMeters };
@@ -128,9 +147,9 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database): voi
   // per WR t4's deliverable list; wired here because the response-envelope
   // pattern (RoutingTelemetryListResponse) is already cheap to reuse.
   app.get('/api/routing/telemetry', (req: Request, res: Response) => {
-    const sinceMsResult = parseOptionalQueryInt(req.query.sinceMs, 'sinceMs');
+    const sinceMsResult = parseOptionalQueryInt(req.query.sinceMs, 'sinceMs', EPOCH_MS_BOUNDS);
     if (!sinceMsResult.ok) return respondInvalidQuery(res, sinceMsResult.message);
-    const untilMsResult = parseOptionalQueryInt(req.query.untilMs, 'untilMs');
+    const untilMsResult = parseOptionalQueryInt(req.query.untilMs, 'untilMs', EPOCH_MS_BOUNDS);
     if (!untilMsResult.ok) return respondInvalidQuery(res, untilMsResult.message);
     const limitResult = parseOptionalQueryInt(req.query.limit, 'limit', { min: 1 });
     if (!limitResult.ok) return respondInvalidQuery(res, limitResult.message);

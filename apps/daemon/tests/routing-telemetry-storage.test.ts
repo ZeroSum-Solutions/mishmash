@@ -68,6 +68,98 @@ describe('ensureRoutingTelemetryTable', () => {
     ).n;
     expect(tableCount).toBe(1);
   });
+
+  it('self-heals an old-shape table (commit 9bd640e45: run_id-only PK, no attempt column) -- migrates existing rows to attempt=0 and leaves the table writable (Sol MED-4, fix round 2)', () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+
+    // Manually create the OLD pre-attempt shape this module shipped with
+    // before MED-4's fix, and seed a row the way that era's
+    // recordRoutingTelemetry would have written it.
+    db.exec(`
+      CREATE TABLE routing_telemetry (
+        run_id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        stage TEXT NOT NULL,
+        template_id TEXT,
+        design_system TEXT,
+        routed_model TEXT NOT NULL,
+        observed_model TEXT,
+        routed_lane TEXT NOT NULL,
+        observed_lane TEXT,
+        tokens_input INTEGER NOT NULL,
+        tokens_output INTEGER NOT NULL,
+        tokens_cache_read_input INTEGER NOT NULL,
+        cache_hits INTEGER NOT NULL,
+        latency_ms INTEGER NOT NULL,
+        cost_usd REAL NOT NULL,
+        cost_estimated INTEGER NOT NULL,
+        gate_outcomes_json TEXT NOT NULL,
+        escalated INTEGER NOT NULL,
+        policy_version INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        recorded_at TEXT NOT NULL
+      )
+    `);
+    db.prepare(
+      `INSERT INTO routing_telemetry
+         (run_id, project_id, stage, template_id, design_system, routed_model,
+          observed_model, routed_lane, observed_lane, tokens_input, tokens_output,
+          tokens_cache_read_input, cache_hits, latency_ms, cost_usd, cost_estimated,
+          gate_outcomes_json, escalated, policy_version, created_at, recorded_at)
+       VALUES (@runId, @projectId, @stage, @templateId, @designSystem, @routedModel,
+               @observedModel, @routedLane, @observedLane, @tokensInput, @tokensOutput,
+               @tokensCacheReadInput, @cacheHits, @latencyMs, @costUsd, @costEstimated,
+               @gateOutcomesJson, @escalated, @policyVersion, @createdAt, @recordedAt)`,
+    ).run({
+      runId: 'pre-existing-run',
+      projectId: 'proj-1',
+      stage: 'chat',
+      templateId: null,
+      designSystem: null,
+      routedModel: 'claude-sonnet-5',
+      observedModel: 'claude-sonnet-5',
+      routedLane: 'claude-code-oauth',
+      observedLane: 'claude-code-oauth',
+      tokensInput: 10,
+      tokensOutput: 5,
+      tokensCacheReadInput: 0,
+      cacheHits: 0,
+      latencyMs: 500,
+      costUsd: 0.01,
+      costEstimated: 1,
+      gateOutcomesJson: '{}',
+      escalated: 0,
+      policyVersion: 1,
+      createdAt: '2026-08-05T00:00:00.000Z',
+      recordedAt: '2026-08-05T00:00:00.000Z',
+    });
+
+    // Would throw "no column named attempt" before this table existed in
+    // the old shape, since PRAGMA table_info would find no attempt column
+    // and the migration path is exactly what's under test here.
+    expect(() => ensureRoutingTelemetryTable(db)).not.toThrow();
+
+    const columns = db.prepare(`PRAGMA table_info(routing_telemetry)`).all() as Array<{ name: string }>;
+    expect(columns.some((c) => c.name === 'attempt')).toBe(true);
+
+    // The pre-existing row survived the migration, backfilled to attempt 0.
+    const migrated = getRoutingTelemetryByRunId(db, 'pre-existing-run', 0);
+    expect(migrated).not.toBeNull();
+    expect(migrated?.attempt).toBe(0);
+    expect(migrated?.routedModel).toBe('claude-sonnet-5');
+
+    // New writes (including a second attempt) work against the migrated table.
+    expect(() =>
+      recordRoutingTelemetry(db, completeRow({ runId: 'pre-existing-run', attempt: 1, routedLane: 'codex-oauth' })),
+    ).not.toThrow();
+    const attempts = listRoutingTelemetryAttempts(db, 'pre-existing-run');
+    expect(attempts.map((r) => r.attempt)).toEqual([0, 1]);
+
+    // Idempotent: a second ensure call against the now-current-shape table
+    // is a no-op, not a re-migration.
+    expect(() => ensureRoutingTelemetryTable(db)).not.toThrow();
+    expect(listRoutingTelemetryAttempts(db, 'pre-existing-run')).toHaveLength(2);
+  });
 });
 
 describe('recordRoutingTelemetry + listRoutingTelemetry round-trip', () => {
