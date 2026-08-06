@@ -1,12 +1,24 @@
 // `od route` must not crash on dispatch (mirrors cli-usage-dispatch.test.ts's
 // TDZ regression guard: ROUTE_STRING_FLAGS/ROUTE_BOOLEAN_FLAGS must be
 // declared before the top-of-file SUBCOMMAND_MAP dispatcher runs, or --help
-// throws "Cannot access '...' before initialization" instead of printing).
+// throws "Cannot access '...' before initialization" instead of printing),
+// plus real end-to-end coverage of the `policy|preview|meters` subcommands:
+// JSON success against a live route (mirrors host-tools-open-in-route.test.ts's
+// bare-express harness -- no full daemon boot needed since the P0 routing
+// route has no SQLite/project dependency), and a structured error on
+// transport failure (MED-7: --json must emit the same
+// exitWithStructuredError envelope runUsage/runWhatsNew use, not a plain
+// stderr line).
 
+import type http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { spawn } from 'node:child_process';
+import express from 'express';
 import path from 'node:path';
 import url from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import { registerRoutingRoutes } from '../src/routes/routing.js';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../../..');
@@ -55,5 +67,86 @@ describe('od route dispatch', () => {
     expect(stderr).not.toContain('ReferenceError');
     expect(stderr).toContain('unknown subcommand');
     expect(code).toBe(2);
+  });
+});
+
+describe('od route <policy|preview|meters> --json against a live route', () => {
+  let server: http.Server;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    const app = express();
+    registerRoutingRoutes(app);
+    server = app.listen(0);
+    await new Promise<void>((resolve) => server.once('listening', () => resolve()));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it('od route policy --json prints the same envelope GET /api/routing/policy returns', async () => {
+    const { stdout, stderr, code } = await runCli(['route', 'policy', '--json', '--daemon-url', baseUrl]);
+    expect(stderr).toBe('');
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout) as { policyVersion: number };
+    expect(parsed.policyVersion).toBe(0);
+  });
+
+  it('od route preview --json forwards --template-id/--build-class/--stage as query params', async () => {
+    const { stdout, stderr, code } = await runCli([
+      'route', 'preview', '--json', '--daemon-url', baseUrl,
+      '--template-id', 't1', '--build-class', 'landing-page', '--stage', 'prototype',
+    ]);
+    expect(stderr).toBe('');
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout) as { key: { templateId: string; buildClass: string; stage: string } };
+    expect(parsed.key).toMatchObject({ templateId: 't1', buildClass: 'landing-page', stage: 'prototype' });
+  });
+
+  it('od route meters --json prints an empty laneMeters array', async () => {
+    const { stdout, stderr, code } = await runCli(['route', 'meters', '--json', '--daemon-url', baseUrl]);
+    expect(stderr).toBe('');
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout) as { laneMeters: unknown[] };
+    expect(parsed.laneMeters).toEqual([]);
+  });
+});
+
+describe('od route <policy|preview|meters> --json on transport failure', () => {
+  // Nothing listens on this port (an ephemeral, momentarily-bound-then-closed
+  // port), so every fetch() in runRoute hits ECONNREFUSED -- the transport
+  // failure MED-7 asks the CLI to report as a structured --json error rather
+  // than a plain stderr line.
+  let deadPortUrl: string;
+
+  beforeAll(async () => {
+    const probe = express().listen(0);
+    await new Promise<void>((resolve) => probe.once('listening', () => resolve()));
+    const { port } = probe.address() as AddressInfo;
+    await new Promise<void>((resolve) => probe.close(() => resolve()));
+    deadPortUrl = `http://127.0.0.1:${port}`;
+  });
+
+  async function expectStructuredTransportFailure(sub: string, extraArgs: string[] = []) {
+    const { stdout, stderr, code } = await runCli(['route', sub, '--json', '--daemon-url', deadPortUrl, ...extraArgs]);
+    expect(stdout).toBe('');
+    expect(code).toBe(64); // RECOVERABLE_EXIT_CODES['daemon-not-running']
+    const envelope = JSON.parse(stderr) as { error: { code: string; message: string } };
+    expect(envelope.error.code).toBe('daemon-not-running');
+    expect(envelope.error.message).toContain(deadPortUrl);
+  }
+
+  it('od route policy --json emits a structured daemon-not-running error', async () => {
+    await expectStructuredTransportFailure('policy');
+  });
+
+  it('od route preview --json emits a structured daemon-not-running error', async () => {
+    await expectStructuredTransportFailure('preview');
+  });
+
+  it('od route meters --json emits a structured daemon-not-running error', async () => {
+    await expectStructuredTransportFailure('meters');
   });
 });

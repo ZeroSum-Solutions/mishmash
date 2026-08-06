@@ -546,8 +546,10 @@ async function runRoute(args) {
     try {
       resp = await fetch(`${base}/api/routing/policy`);
     } catch (err) {
-      surfaceFetchError(err, base);
-      process.exit(3);
+      return exitWithStructuredError({
+        code: 'daemon-not-running',
+        message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+      });
     }
     if (!resp.ok) return structuredHttpFailure(resp);
     const data = await resp.json();
@@ -565,8 +567,10 @@ async function runRoute(args) {
     try {
       resp = await fetch(`${base}/api/routing/decision/preview?${qs.toString()}`);
     } catch (err) {
-      surfaceFetchError(err, base);
-      process.exit(3);
+      return exitWithStructuredError({
+        code: 'daemon-not-running',
+        message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+      });
     }
     if (!resp.ok) return structuredHttpFailure(resp);
     const data = await resp.json();
@@ -580,8 +584,10 @@ async function runRoute(args) {
     try {
       resp = await fetch(`${base}/api/routing/meters`);
     } catch (err) {
-      surfaceFetchError(err, base);
-      process.exit(3);
+      return exitWithStructuredError({
+        code: 'daemon-not-running',
+        message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+      });
     }
     if (!resp.ok) return structuredHttpFailure(resp);
     const data = await resp.json();

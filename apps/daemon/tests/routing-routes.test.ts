@@ -8,6 +8,11 @@ import type http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  isRoutingDecisionPreviewResponse,
+  isRoutingMetersResponse,
+  isRoutingPolicyResponse,
+} from '@open-design/contracts';
 
 import { registerRoutingRoutes } from '../src/routes/routing.js';
 
@@ -27,44 +32,67 @@ afterAll(async () => {
 });
 
 describe('GET /api/routing/policy', () => {
-  it('returns the loaded policy and its version', async () => {
+  it('returns a well-shaped RoutingPolicyResponse', async () => {
     const resp = await fetch(`${baseUrl}/api/routing/policy`);
     expect(resp.status).toBe(200);
-    const body = (await resp.json()) as { policy: unknown; policyVersion: number };
-    expect(body.policyVersion).toBe(0);
-    expect(body.policy).toMatchObject({ policyVersion: 0, modelTable: [], hardConstraints: [] });
+    const body: unknown = await resp.json();
+    expect(isRoutingPolicyResponse(body)).toBe(true);
+    const response = body as { policyVersion: number; policy: { modelTable: unknown[]; hardConstraints: unknown[] } };
+    expect(response.policyVersion).toBe(0);
+    expect(response.policy).toMatchObject({ policyVersion: 0, modelTable: [], hardConstraints: [] });
   });
 });
 
 describe('GET /api/routing/decision/preview', () => {
-  it('echoes the routing key and returns a stub decision with the P0 rationale', async () => {
+  it('echoes the routing key and returns a well-shaped RoutingDecisionPreviewResponse (primary shape)', async () => {
     const resp = await fetch(`${baseUrl}/api/routing/decision/preview?templateId=t1&buildClass=landing-page&stage=prototype`);
     expect(resp.status).toBe(200);
-    const body = (await resp.json()) as {
+    const body: unknown = await resp.json();
+    expect(isRoutingDecisionPreviewResponse(body)).toBe(true);
+    const response = body as {
       key: { templateId: string | null; buildClass: string | null; stage: string };
-      decision: { rationale: string; policyVersion: number; admissionVerdict: string };
+      decision: { rationale: string; policyVersion: number; admissionVerdict: string; promptComposition: unknown[]; sensitivityClass: string };
     };
-    expect(body.key).toMatchObject({ templateId: 't1', buildClass: 'landing-page', stage: 'prototype' });
-    expect(body.decision.rationale).toBe('policy-stub-v0');
-    expect(body.decision.policyVersion).toBe(0);
-    expect(body.decision.admissionVerdict).toBe('admitted');
+    expect(response.key).toMatchObject({ templateId: 't1', buildClass: 'landing-page', stage: 'prototype' });
+    expect(response.decision.rationale).toBe('policy-stub-v0');
+    expect(response.decision.policyVersion).toBe(0);
+    expect(response.decision.admissionVerdict).toBe('admitted');
+    expect(response.decision.promptComposition).toEqual([]);
+    expect(response.decision.sensitivityClass).toBe('client-confidential');
   });
 
   it('falls back to null templateId/buildClass and stage "chat" when omitted (fallback B)', async () => {
     const resp = await fetch(`${baseUrl}/api/routing/decision/preview`);
     expect(resp.status).toBe(200);
-    const body = (await resp.json()) as {
-      key: { templateId: string | null; buildClass: string | null; stage: string };
-    };
-    expect(body.key).toMatchObject({ templateId: null, buildClass: null, stage: 'chat' });
+    const body: unknown = await resp.json();
+    expect(isRoutingDecisionPreviewResponse(body)).toBe(true);
+    const response = body as { key: { templateId: string | null; buildClass: string | null; stage: string } };
+    expect(response.key).toMatchObject({ templateId: null, buildClass: null, stage: 'chat' });
+  });
+
+  it('accepts a templateId with no buildClass (fallback A)', async () => {
+    const resp = await fetch(`${baseUrl}/api/routing/decision/preview?templateId=saved-prompt`);
+    expect(resp.status).toBe(200);
+    const body: unknown = await resp.json();
+    expect(isRoutingDecisionPreviewResponse(body)).toBe(true);
+    const response = body as { key: { templateId: string | null; buildClass: string | null } };
+    expect(response.key).toMatchObject({ templateId: 'saved-prompt', buildClass: null });
+  });
+
+  it('rejects buildClass supplied without templateId -- the one shape WR-routing.md\'s fallback table forbids', async () => {
+    const resp = await fetch(`${baseUrl}/api/routing/decision/preview?buildClass=landing-page`);
+    expect(resp.status).toBe(400);
+    const body = (await resp.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('invalid-routing-key');
   });
 });
 
 describe('GET /api/routing/meters', () => {
-  it('returns an empty lane-meters array until telemetry/dispatch land', async () => {
+  it('returns a well-shaped, empty RoutingMetersResponse until telemetry/dispatch land', async () => {
     const resp = await fetch(`${baseUrl}/api/routing/meters`);
     expect(resp.status).toBe(200);
-    const body = (await resp.json()) as { laneMeters: unknown[] };
-    expect(body.laneMeters).toEqual([]);
+    const body: unknown = await resp.json();
+    expect(isRoutingMetersResponse(body)).toBe(true);
+    expect((body as { laneMeters: unknown[] }).laneMeters).toEqual([]);
   });
 });

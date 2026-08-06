@@ -4,5 +4,11 @@
   "hardConstraints": [],
   "laneChains": {},
   "dataClassificationAllowlists": [],
-  "sonnetPriceRows": []
+  "sonnetPriceRows": [],
+  "budgetCeilings": {
+    "perStageEstimatedCostUsd": {},
+    "perBuildCapUsd": 0,
+    "perDayCapUsd": 0,
+    "meteredKillSwitch": false
+  }
 }

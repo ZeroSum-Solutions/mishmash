@@ -20,24 +20,14 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@open-design/components';
+import {
+  isRoutingDecisionPreviewResponse,
+  isRoutingMetersResponse,
+  isRoutingPolicyResponse,
+  type LaneMeter,
+  type RoutingDecision,
+} from '@open-design/contracts';
 import styles from './RoutingPanel.module.css';
-
-interface RoutingPolicySummary {
-  policyVersion: number;
-}
-
-interface LaneMeterView {
-  lane: string;
-  runsRouted: number;
-  runsObserved: number;
-  escalationRate: number;
-  passRate: number;
-}
-
-interface RoutingDecisionPreviewView {
-  rationale: string;
-  lane: string;
-}
 
 export interface RoutingPanelProps {
   /** Base daemon URL for the fetch calls below; empty string performs a
@@ -47,9 +37,9 @@ export interface RoutingPanelProps {
 }
 
 export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
-  const [policy, setPolicy] = useState<RoutingPolicySummary | null>(null);
-  const [laneMeters, setLaneMeters] = useState<LaneMeterView[]>([]);
-  const [preview, setPreview] = useState<RoutingDecisionPreviewView | null>(null);
+  const [policyVersion, setPolicyVersion] = useState<number | null>(null);
+  const [laneMeters, setLaneMeters] = useState<LaneMeter[]>([]);
+  const [decision, setDecision] = useState<RoutingDecision | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
 
@@ -63,19 +53,15 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
     ])
       .then(([policyData, metersData, previewData]) => {
         if (cancelled) return;
-        setPolicy(
-          policyData && typeof policyData.policyVersion === 'number'
-            ? { policyVersion: policyData.policyVersion }
-            : null,
-        );
-        setLaneMeters(Array.isArray(metersData?.laneMeters) ? metersData.laneMeters : []);
-        setPreview(previewData?.decision ?? null);
+        setPolicyVersion(isRoutingPolicyResponse(policyData) ? policyData.policyVersion : null);
+        setLaneMeters(isRoutingMetersResponse(metersData) ? metersData.laneMeters : []);
+        setDecision(isRoutingDecisionPreviewResponse(previewData) ? previewData.decision : null);
       })
       .catch(() => {
         if (cancelled) return;
-        setPolicy(null);
+        setPolicyVersion(null);
         setLaneMeters([]);
-        setPreview(null);
+        setDecision(null);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -95,7 +81,7 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
 
       <dl className={styles.summary}>
         <dt>Policy version</dt>
-        <dd data-testid="routing-policy-version">{policy?.policyVersion ?? '—'}</dd>
+        <dd data-testid="routing-policy-version">{policyVersion ?? '—'}</dd>
       </dl>
 
       <div className={styles.section}>
@@ -120,7 +106,7 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
       <div className={styles.section}>
         <h3 className={styles.sectionTitle}>Decision preview</h3>
         <p className={styles.previewPlaceholder}>
-          {preview ? preview.rationale : 'No decision preview available yet.'}
+          {decision ? decision.rationale : 'No decision preview available yet.'}
         </p>
       </div>
 
