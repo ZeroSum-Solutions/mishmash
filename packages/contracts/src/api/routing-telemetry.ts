@@ -6,11 +6,35 @@
 // return. Durable persistence (SQLite) and real gate-outcome content land
 // in later WR tranches -- see docs/plans/waves/WR-routing.md's Tranche
 // register (CWR-P1-2 for the telemetry row, CWR-P2-4 for lane meters).
-import { isFiniteNonNegativeInteger, isPlainObject, isRoutingCooldownStatus, type RoutingCooldownStatus } from './routing-policy.js';
+import { isFiniteNonNegativeInteger, isPlainObject, isRoutingCooldownStatus, isStringArray, type RoutingCooldownStatus } from './routing-policy.js';
 
-export type RoutingGateOutcome = 'pass' | 'fail' | 'blocked-on-founder';
+/**
+ * t8 addition (plan §3.2 L3, deterministic gate runner): widened from the
+ * original `'pass' | 'fail' | 'blocked-on-founder'` to add `'unavailable'`
+ * and `'skipped-not-applicable'` -- both are distinct, HONEST outcomes a
+ * deterministic L3 gate can report (apps/daemon/src/routing/gates.ts's
+ * `GateExecutionStatus`), and this closed enum is exactly what a telemetry
+ * row's `gateOutcomes` map is allowed to persist. Collapsing either into
+ * `'pass'` would be a fake pass (a tool that never ran is not "passing");
+ * collapsing either into `'fail'` would wrongly cascade-escalate a build
+ * whose gate simply could not run in this environment (e.g. Lighthouse CI
+ * not configured) -- `classifyCascadeTrigger` treats `'unavailable'` and
+ * `'skipped-not-applicable'` identically to "never trigger escalation,"
+ * which requires the outcome to be stored as what it actually was, not
+ * approximated into the pre-existing three values. `'blocked-on-founder'`
+ * is retained for a gate outcome that genuinely needs human judgment (kept
+ * distinct from `'unavailable'`, which means "the tool could not run,"
+ * not "a human must decide").
+ */
+export type RoutingGateOutcome = 'pass' | 'fail' | 'blocked-on-founder' | 'unavailable' | 'skipped-not-applicable';
 
-const ROUTING_GATE_OUTCOMES: readonly RoutingGateOutcome[] = ['pass', 'fail', 'blocked-on-founder'];
+const ROUTING_GATE_OUTCOMES: readonly RoutingGateOutcome[] = [
+  'pass',
+  'fail',
+  'blocked-on-founder',
+  'unavailable',
+  'skipped-not-applicable',
+];
 
 /**
  * t7 (WR wave, plan §3.1 side-effect redispatch limits): "Runs that perform
@@ -339,5 +363,159 @@ export function isRoutingTelemetryListResponse(value: unknown): value is Routing
     typeof value.total === 'number' &&
     typeof value.limit === 'number' &&
     typeof value.offset === 'number'
+  );
+}
+
+// ---------------------------------------------------------------------------
+// L3 gate contracts (WR wave, t8 -- plan §3.2 L3: deterministic-vs-
+// stochastic gate classes, cascade classification, gate-tax). The wire DTOs
+// below use plain `id: string` (never the daemon-internal closed `GateId`
+// union apps/daemon/src/routing/gates.ts defines for its own type safety)
+// because AGENTS.md's boundary rule forbids apps/web importing apps/daemon's
+// private src -- a contracts-level union would have to be the SAME union
+// gates.ts uses internally, which would require gates.ts to import ITS OWN
+// vocabulary from contracts instead of owning it, inverting the dependency
+// for no real benefit (the gate id set is daemon-internal registry content,
+// not a cross-surface protocol negotiation like RoutingLaneId/RoutingEffort
+// are). The daemon route handler is the one place that maps the internal
+// union onto these plain-string DTOs.
+// ---------------------------------------------------------------------------
+
+/**
+ * Deterministic gates feed the cascade/escalation decision (cheap -> mid ->
+ * frontier); stochastic gates produce an advisory ship-report ONLY and must
+ * never reach that decision (plan §3.2 L3). This distinction is enforced at
+ * the daemon's type level (gates.ts's `DeterministicGateResult` vs
+ * `StochasticGateResult`) AND at runtime (`classifyCascadeTrigger` throws on
+ * a non-deterministic result) -- this wire type is the read-only reflection
+ * of that same closed vocabulary for the registry/run response DTOs below.
+ */
+export type GateClass = 'deterministic' | 'stochastic';
+
+const GATE_CLASSES: readonly GateClass[] = ['deterministic', 'stochastic'];
+
+export function isGateClass(value: unknown): value is GateClass {
+  return typeof value === 'string' && (GATE_CLASSES as readonly string[]).includes(value);
+}
+
+/** One entry of the L3 gate registry -- GET /api/routing/gates' shape.
+ * `runnable` distinguishes the two classes at the DTO level without
+ * exposing a `run()` function over the wire: every `deterministic` gate in
+ * the real registry is runnable (`runGates` executes it); every
+ * `stochastic` gate is definition-only (advisory, never executed by this
+ * surface) -- see gates.ts's own doc comment for why stochastic gates have
+ * no `run()` in the daemon-internal registry at all. */
+export interface GateDefinitionDTO {
+  id: string;
+  class: GateClass;
+  label: string;
+  description: string;
+  runnable: boolean;
+}
+
+function isGateDefinitionDTO(value: unknown): value is GateDefinitionDTO {
+  if (!isPlainObject(value)) return false;
+  return (
+    typeof value.id === 'string' &&
+    value.id.length > 0 &&
+    isGateClass(value.class) &&
+    typeof value.label === 'string' &&
+    typeof value.description === 'string' &&
+    typeof value.runnable === 'boolean'
+  );
+}
+
+/** Response envelope for GET /api/routing/gates. */
+export interface RoutingGatesRegistryResponse {
+  gates: GateDefinitionDTO[];
+}
+
+export function isRoutingGatesRegistryResponse(value: unknown): value is RoutingGatesRegistryResponse {
+  return isPlainObject(value) && Array.isArray(value.gates) && value.gates.every(isGateDefinitionDTO);
+}
+
+/** One gate's execution outcome -- see `RoutingGateOutcome`'s own doc
+ * comment for why this closed set has five values, not three. Reused
+ * verbatim as the wire status (not a second parallel enum) since the
+ * telemetry row's `gateOutcomes` map and a gate run's own per-gate status
+ * are the same vocabulary by construction (`recordGateOutcomes` writes
+ * exactly this value into that map). */
+export interface GateRunResultDTO {
+  id: string;
+  class: GateClass;
+  status: RoutingGateOutcome;
+  evidence: string[];
+  durationMs: number;
+}
+
+function isGateRunResultDTO(value: unknown): value is GateRunResultDTO {
+  if (!isPlainObject(value)) return false;
+  return (
+    typeof value.id === 'string' &&
+    value.id.length > 0 &&
+    isGateClass(value.class) &&
+    typeof value.status === 'string' &&
+    (ROUTING_GATE_OUTCOMES as readonly string[]).includes(value.status) &&
+    isStringArray(value.evidence) &&
+    isFiniteNonNegativeInteger(value.durationMs)
+  );
+}
+
+/** plan §3.2 L3's cheap -> mid -> frontier escalation ladder, stepped ONLY
+ * on deterministic gate failures (never on `'unavailable'`/
+ * `'skipped-not-applicable'`, never by a stochastic result). */
+export type GateEscalationTier = 'cheap' | 'mid' | 'frontier';
+
+const GATE_ESCALATION_TIERS: readonly GateEscalationTier[] = ['cheap', 'mid', 'frontier'];
+
+export function isGateEscalationTier(value: unknown): value is GateEscalationTier {
+  return typeof value === 'string' && (GATE_ESCALATION_TIERS as readonly string[]).includes(value);
+}
+
+/** `classifyCascadeTrigger`'s wire shape -- see gates.ts for the full
+ * decision rationale (frontier ceiling, gate-tax cap surfacing). */
+export interface GateCascadeClassificationDTO {
+  escalate: boolean;
+  tier: GateEscalationTier;
+  triggeringGates: string[];
+  reason: string;
+  gateTax: { capUsd: number | null; spentUsd: number; overCap: boolean };
+}
+
+function isGateTax(value: unknown): value is { capUsd: number | null; spentUsd: number; overCap: boolean } {
+  if (!isPlainObject(value)) return false;
+  return (
+    (value.capUsd === null || (typeof value.capUsd === 'number' && Number.isFinite(value.capUsd))) &&
+    typeof value.spentUsd === 'number' &&
+    Number.isFinite(value.spentUsd) &&
+    typeof value.overCap === 'boolean'
+  );
+}
+
+function isGateCascadeClassificationDTO(value: unknown): value is GateCascadeClassificationDTO {
+  if (!isPlainObject(value)) return false;
+  return (
+    typeof value.escalate === 'boolean' &&
+    isGateEscalationTier(value.tier) &&
+    isStringArray(value.triggeringGates) &&
+    typeof value.reason === 'string' &&
+    isGateTax(value.gateTax)
+  );
+}
+
+/** Response envelope for POST /api/routing/gates/run. */
+export interface RoutingGatesRunResponse {
+  artifactDir: string;
+  results: GateRunResultDTO[];
+  cascade: GateCascadeClassificationDTO;
+}
+
+export function isRoutingGatesRunResponse(value: unknown): value is RoutingGatesRunResponse {
+  return (
+    isPlainObject(value) &&
+    typeof value.artifactDir === 'string' &&
+    Array.isArray(value.results) &&
+    value.results.every(isGateRunResultDTO) &&
+    isGateCascadeClassificationDTO(value.cascade)
   );
 }

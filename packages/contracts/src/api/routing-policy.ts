@@ -480,6 +480,17 @@ export interface RoutingPolicyBudgetCeilings {
    * the plan names no binding dollar figures, only the ceiling mechanism
    * itself (plan §3.1/§3.2 L4). Never machine-evaluated. */
   notes?: string;
+  /**
+   * t8 addition (plan §3.2 L3, "gate-tax budget: verifier spend capped per
+   * build"): cumulative deterministic-gate-triggered VERIFIER spend
+   * (cheap/mid/frontier model-based re-verification cost, NOT the gates'
+   * own near-zero compute cost) ceiling for a single build. Operator-tunable,
+   * same absence contract as `headroomFraction`/`outputTokenBound`: absent
+   * means "no gate-tax cap configured" -- `apps/daemon/src/routing/gates.ts`'
+   * `classifyCascadeTrigger` treats that as "gate-tax not evaluated," never
+   * as an implicit zero cap that would block every escalation.
+   */
+  gateTaxCapUsd?: number;
 }
 
 /**
@@ -835,7 +846,8 @@ function isRoutingPolicyBudgetCeilings(value: unknown): value is RoutingPolicyBu
       (isFiniteNumber(value.headroomFraction) && value.headroomFraction >= 0 && value.headroomFraction < 1)) &&
     (value.runawayLimits === undefined || isRunawayLimitsRecord(value.runawayLimits)) &&
     (value.outputTokenBound === undefined || isRoutingPolicyOutputTokenBound(value.outputTokenBound)) &&
-    (value.notes === undefined || typeof value.notes === 'string')
+    (value.notes === undefined || typeof value.notes === 'string') &&
+    (value.gateTaxCapUsd === undefined || isNonNegativeFiniteNumber(value.gateTaxCapUsd))
   );
 }
 

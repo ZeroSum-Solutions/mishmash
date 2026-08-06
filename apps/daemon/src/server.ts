@@ -8653,7 +8653,10 @@ export async function startServer({
     },
   });
   registerUsageRoutes(app, { db });
-  registerRoutingRoutes(app, db);
+  // t8: PROJECTS_DIR is the root POST /api/routing/gates/run's artifactDir
+  // must resolve within (path-traversal guard, plan §3.2 L3) -- additive
+  // 3rd argument, same call site WR's own P1 tranche added.
+  registerRoutingRoutes(app, db, PROJECTS_DIR);
 
   // Each routine fire resolves an agent, prepares project/conversation state,
   // and dispatches into the same chat runner used by manual runs.

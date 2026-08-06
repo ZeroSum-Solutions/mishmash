@@ -190,6 +190,42 @@ export function recordRoutingTelemetry(db: Database.Database, row: StoredRouting
   ).run(rowToParams(row));
 }
 
+/**
+ * t8 addition (plan §3.2 L3, deterministic gate runner): patches ONLY the
+ * `gate_outcomes_json` column of an ALREADY-RECORDED telemetry row -- L3
+ * gates run after dispatch-time telemetry is written
+ * (`recordRoutingTelemetry` establishes the row via the dispatch path), so
+ * this is a targeted UPDATE, not a second full-row INSERT..ON CONFLICT DO
+ * UPDATE round trip (which would also require re-supplying every other
+ * column this caller has no reason to know at gate-run time).
+ *
+ * Throws when no row exists for `(runId, attempt)`: recording gate outcomes
+ * for a run that was never routed/recorded is a caller bug, not a silent
+ * no-op -- mirrors `recordRoutingTelemetry`'s and `loadRoutingPolicy`'s own
+ * fail-loud stance elsewhere in this package ("never a silent pass, never a
+ * fake pass" extends to "never a silent no-write" here).
+ *
+ * `apps/daemon/src/routing/gates.ts`'s `recordGateOutcomes` is the only
+ * caller -- it maps a run's `GateResult[]` into the `Record<string,
+ * RoutingGateOutcome>` shape this function persists.
+ */
+export function updateGateOutcomes(
+  db: Database.Database,
+  runId: string,
+  attempt: number,
+  gateOutcomes: Record<string, RoutingGateOutcome>,
+): void {
+  ensureRoutingTelemetryTable(db);
+  const result = db
+    .prepare(`UPDATE routing_telemetry SET gate_outcomes_json = @gateOutcomesJson WHERE run_id = @runId AND attempt = @attempt`)
+    .run({ gateOutcomesJson: JSON.stringify(gateOutcomes), runId, attempt });
+  if (result.changes === 0) {
+    throw new Error(
+      `updateGateOutcomes: no routing_telemetry row for (runId=${runId}, attempt=${attempt}) -- record the routing telemetry row (recordRoutingTelemetry) before recording gate outcomes.`,
+    );
+  }
+}
+
 interface RoutingTelemetryDbRow {
   run_id: string;
   attempt: number;

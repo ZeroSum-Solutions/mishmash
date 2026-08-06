@@ -66,3 +66,48 @@ export {
   type CooldownRecord,
   type RunRedispatchability,
 } from './reliability.js';
+
+// L3 deterministic gate runner + cascade classification (WR wave, t8 --
+// plan §3.2 L3). See gates.ts's own header for the full class split
+// (deterministic cascade triggers vs stochastic advisory-only) and the
+// "unavailable over reimplementation" discipline every gate follows.
+export {
+  baselineState,
+  classifyCascadeTrigger,
+  DEFAULT_SSIM_FLOOR,
+  DETERMINISTIC_GATE_DEFINITIONS,
+  DETERMINISTIC_GATE_IDS,
+  ensureSsimBaselinesTable,
+  GATE_REGISTRY,
+  GateClassificationError,
+  GateRunnerInputError,
+  GateSelectionError,
+  invalidateSsimBaseline,
+  recordBootstrapBaseline,
+  recordGateOutcomes,
+  runGates,
+  runNegativeControlCheck,
+  SsimLifecycleError,
+  STOCHASTIC_GATE_DEFINITIONS,
+  STOCHASTIC_GATE_IDS,
+  type CascadeClassification,
+  type ClassifyCascadeTriggerInput,
+  type DeterministicGateDefinition,
+  type DeterministicGateId,
+  type DeterministicGateResult,
+  type EscalationTier,
+  type GateClass,
+  type GateContext,
+  type GateDefinition,
+  type GateExecutionStatus,
+  type GateId,
+  type GateResult,
+  type NegativeControlCheckResult,
+  type RecordBootstrapBaselineInput,
+  type RunGatesOptions,
+  type RunNegativeControlCheckInput,
+  type SsimLifecycleState,
+  type StochasticGateDefinition,
+  type StochasticGateId,
+  type StochasticGateResult,
+} from './gates.js';

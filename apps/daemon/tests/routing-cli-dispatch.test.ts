@@ -58,7 +58,7 @@ describe('od route dispatch', () => {
     const { stdout, stderr, code } = await runCli(['route', '--help']);
     expect(stderr).not.toContain('ReferenceError');
     expect(stderr).not.toContain('before initialization');
-    expect(stdout).toContain('od route <policy|preview|meters|telemetry>');
+    expect(stdout).toContain('od route <policy|preview|meters|telemetry|gates>');
     expect(code).toBe(0);
   });
 

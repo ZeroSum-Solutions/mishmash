@@ -6,17 +6,43 @@
 // live lane meters; admission control (budgets, t6) and dispatch-time
 // enforcement (t9) still land in later WR tranches -- see
 // docs/plans/waves/WR-routing.md's Tranche register.
+//
+// t8 addition (plan §3.2 L3): GET /api/routing/gates (registry) and POST
+// /api/routing/gates/run (execute selected deterministic gates + classify
+// the cascade trigger). `projectsRoot`, a new optional 4th
+// `registerRoutingRoutes` parameter, is the ONLY root `/gates/run`'s
+// `artifactDir` may resolve within -- see `resolveArtifactDirWithinRoot`'s
+// own doc comment for the traversal check. Omitting `projectsRoot` (the
+// bare-express test harness other routing tests already use, when it does
+// not care about gates) makes `/gates/run` respond 400 rather than ever
+// running a gate against an unvalidated path.
+import path from 'node:path';
 import type Database from 'better-sqlite3';
 import express, { type Express, type Request, type Response } from 'express';
 import type {
+  GateRunResultDTO,
   RoutingDataClassification,
   RoutingDecisionPreviewResponse,
+  RoutingGatesRegistryResponse,
+  RoutingGatesRunResponse,
   RoutingKey,
   RoutingMetersResponse,
   RoutingPolicyResponse,
   RoutingTelemetryListResponse,
 } from '@open-design/contracts';
-import { decideRouting, estimatePromptTokens, loadRoutingPolicy } from '../routing/index.js';
+import {
+  classifyCascadeTrigger,
+  DETERMINISTIC_GATE_IDS,
+  decideRouting,
+  estimatePromptTokens,
+  GATE_REGISTRY,
+  GateRunnerInputError,
+  GateSelectionError,
+  loadRoutingPolicy,
+  runGates,
+  type DeterministicGateId,
+  type EscalationTier,
+} from '../routing/index.js';
 import { computeBuildSpendUsd, computeDaySpendUsd, computeStageSpendUsd, computeLaneMeters, listRoutingTelemetry } from '../routing/telemetry.js';
 import { computeCooldownStatuses, resolveCooldownConfig } from '../routing/reliability.js';
 
@@ -236,13 +262,49 @@ function utcDayWindowMs(now: Date): [number, number] {
 }
 
 /**
+ * t8 addition: resolves `requested` (absolute or project-relative) and
+ * confirms it stays within `root` -- the daemon data contract's "stay
+ * under resolved roots" rule (AGENTS.md), applied here so
+ * `POST /api/routing/gates/run` can never be pointed at an arbitrary
+ * filesystem path via `../../` segments or an absolute path outside the
+ * configured project root. Mirrors the string-prefix check
+ * `apps/daemon/src/routes/storyboard.ts`/`import-export-routes.ts` already
+ * use locally (this file does not import `daemon-paths.ts`'s private
+ * `isPathWithin`, which is not exported).
+ */
+function resolveArtifactDirWithinRoot(root: string, requested: unknown): { ok: true; resolved: string } | { ok: false; message: string } {
+  if (typeof requested !== 'string' || requested.length === 0) {
+    return { ok: false, message: '`artifactDir` must be a nonempty string.' };
+  }
+  const resolvedRoot = path.resolve(root);
+  const resolvedRequested = path.isAbsolute(requested) ? path.resolve(requested) : path.resolve(resolvedRoot, requested);
+  const relative = path.relative(resolvedRoot, resolvedRequested);
+  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    return { ok: false, message: '`artifactDir` must resolve within the configured project root -- traversal outside it is rejected.' };
+  }
+  return { ok: true, resolved: resolvedRequested };
+}
+
+function isEscalationTier(value: unknown): value is EscalationTier {
+  return value === 'cheap' || value === 'mid' || value === 'frontier';
+}
+
+function isDeterministicGateId(value: unknown): value is DeterministicGateId {
+  return typeof value === 'string' && (DETERMINISTIC_GATE_IDS as readonly string[]).includes(value);
+}
+
+/**
  * `db` is optional so a route-level test (or a future caller with no
  * durable telemetry yet) can register these routes without a database --
  * `/api/routing/meters` and `/api/routing/telemetry` degrade to an honest
  * empty result rather than throwing. The real daemon boot
  * (apps/daemon/src/server.ts) always passes its resolved db.
+ *
+ * `projectsRoot` (t8 addition) is optional for the same reason: a caller
+ * that never exercises `/gates/run` can omit it, and that route responds
+ * 400 rather than resolving `artifactDir` against an undefined root.
  */
-export function registerRoutingRoutes(app: Express, db?: Database.Database): void {
+export function registerRoutingRoutes(app: Express, db?: Database.Database, projectsRoot?: string): void {
   // GET /api/routing/policy -- the loaded policy document + its version.
   app.get('/api/routing/policy', (_req: Request, res: Response) => {
     const policy = loadRoutingPolicy();
@@ -381,6 +443,92 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database): voi
         offset: offsetResult.value,
       },
     );
+    res.json(response);
+  });
+
+  // GET /api/routing/gates -- the L3 gate registry (deterministic +
+  // stochastic class definitions, t8, plan §3.2 L3). `runnable` mirrors
+  // gates.ts's own split: every deterministic entry is executable by
+  // POST /gates/run below; every stochastic entry is advisory-only and has
+  // no run() anywhere in the daemon (never executed by this surface).
+  app.get('/api/routing/gates', (_req: Request, res: Response) => {
+    const response: RoutingGatesRegistryResponse = {
+      gates: GATE_REGISTRY.map((gate) => ({
+        id: gate.id,
+        class: gate.class,
+        label: gate.label,
+        description: gate.description,
+        runnable: gate.class === 'deterministic',
+      })),
+    };
+    res.json(response);
+  });
+
+  // POST /api/routing/gates/run -- executes selected deterministic gates
+  // against a lane-A artifact directory, then classifies the cascade
+  // trigger. `artifactDir` is validated to resolve within `projectsRoot`
+  // (see resolveArtifactDirWithinRoot's own doc comment) -- no traversal,
+  // and no `db`/`projectsRoot` configured is an honest 400, never a run
+  // against an unvalidated path or a silent no-op.
+  app.post('/api/routing/gates/run', express.json({ limit: '64kb' }), async (req: Request, res: Response) => {
+    if (!projectsRoot) {
+      return res.status(400).json({
+        error: { code: 'gates-run-unavailable', message: 'this daemon instance has no configured project root -- POST /api/routing/gates/run is unavailable.' },
+      });
+    }
+    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? (req.body as Record<string, unknown>) : {};
+
+    const pathResult = resolveArtifactDirWithinRoot(projectsRoot, body.artifactDir);
+    if (!pathResult.ok) {
+      return respondInvalidQuery(res, pathResult.message);
+    }
+
+    let gateSelection: readonly DeterministicGateId[] | 'all' = 'all';
+    if (body.gates !== undefined) {
+      if (!Array.isArray(body.gates) || body.gates.length === 0 || !body.gates.every(isDeterministicGateId)) {
+        return respondInvalidQuery(
+          res,
+          `\`gates\` must be a nonempty array drawn from: ${DETERMINISTIC_GATE_IDS.join(', ')}.`,
+        );
+      }
+      gateSelection = body.gates;
+    }
+
+    const buildId = body.buildId === undefined ? null : queryStringOrNull(body.buildId);
+    if (body.currentTier !== undefined && !isEscalationTier(body.currentTier)) {
+      return respondInvalidQuery(res, '`currentTier` must be one of: cheap, mid, frontier.');
+    }
+    if (body.gateSpendSoFarUsd !== undefined && (typeof body.gateSpendSoFarUsd !== 'number' || !Number.isFinite(body.gateSpendSoFarUsd) || body.gateSpendSoFarUsd < 0)) {
+      return respondInvalidQuery(res, '`gateSpendSoFarUsd` must be a finite nonnegative number.');
+    }
+
+    let results;
+    try {
+      results = await runGates(pathResult.resolved, gateSelection, {
+        buildId,
+        ...(db ? { db } : {}),
+      });
+    } catch (err) {
+      if (err instanceof GateRunnerInputError || err instanceof GateSelectionError) {
+        return respondInvalidQuery(res, err.message);
+      }
+      throw err;
+    }
+
+    const policy = loadRoutingPolicy();
+    const cascade = classifyCascadeTrigger({
+      gateResults: results,
+      ...(body.currentTier !== undefined ? { currentTier: body.currentTier } : {}),
+      gateTaxCapUsd: policy.budgetCeilings.gateTaxCapUsd ?? null,
+      gateSpendSoFarUsd: typeof body.gateSpendSoFarUsd === 'number' ? body.gateSpendSoFarUsd : 0,
+    });
+
+    const resultDtos: GateRunResultDTO[] = results.map((r) => ({ id: r.id, class: r.class, status: r.status, evidence: r.evidence, durationMs: r.durationMs }));
+    const response: RoutingGatesRunResponse = {
+      artifactDir: path.relative(projectsRoot, pathResult.resolved) || '.',
+      results: resultDtos,
+      cascade,
+    };
     res.json(response);
   });
 }

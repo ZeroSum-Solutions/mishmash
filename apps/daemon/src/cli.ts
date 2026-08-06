@@ -534,11 +534,15 @@ const ROUTE_STRING_FLAGS = new Set([
   'limit',
   'offset',
   'window-ms',
+  'artifact-dir',
+  'gates',
+  'current-tier',
+  'gate-spend',
 ]);
 const ROUTE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 
 function printRouteHelp() {
-  console.log(`Usage: od route <policy|preview|meters|telemetry> [options]
+  console.log(`Usage: od route <policy|preview|meters|telemetry|gates> [options]
 
 Subcommands:
   policy     GET /api/routing/policy -- current routing policy + version.
@@ -549,6 +553,10 @@ Subcommands:
              Also carries per-runtime/per-lane reliability cooldown status (L1, t7).
   telemetry  GET /api/routing/telemetry -- filtered, paginated telemetry
              rows (L5 storage).
+  gates list        GET /api/routing/gates -- the L3 gate registry (t8).
+  gates run         POST /api/routing/gates/run -- executes selected
+                     deterministic gates against --artifact-dir and
+                     classifies the cascade trigger (t8).
 
 Options:
   --template-id <id>       Routing key template id (omit for the null fallback).
@@ -577,6 +585,15 @@ Options:
   --offset <n>             telemetry: page offset (default 0).
   --window-ms <ms>         meters: trailing aggregation window (omit for
                            all-time).
+  --artifact-dir <path>    gates run: artifact directory to gate (required;
+                           validated to resolve within the daemon's
+                           configured project root -- no traversal).
+  --gates <a,b,c>          gates run: comma-separated deterministic gate ids
+                           to run (default: every deterministic gate).
+  --current-tier <t>       gates run: cheap|mid|frontier -- the tier THIS
+                           attempt already ran at (default: cheap).
+  --gate-spend <usd>       gates run: cumulative gate-tax spend so far for
+                           this build (default: 0).
   --json                   Print machine-readable JSON.
   --daemon-url <url>`);
 }
@@ -728,6 +745,73 @@ async function runRoute(args) {
     if (flags.json) return writeJson(data);
     console.log(`Telemetry rows: ${Array.isArray(data?.rows) ? data.rows.length : 0} of ${data?.total ?? 0}`);
     return;
+  }
+
+  if (sub === 'gates') {
+    // `rest[0]` (list|run) is a positional, ignored by parseFlags -- see
+    // cli-args.ts's own doc comment on why positionals are read directly
+    // from `rest` rather than through the parsed `flags` object.
+    const gatesSub = rest[0];
+
+    if (gatesSub === 'list' || gatesSub === undefined) {
+      let resp;
+      try {
+        resp = await fetch(`${base}/api/routing/gates`);
+      } catch (err) {
+        return exitWithStructuredError({
+          code: 'daemon-not-running',
+          message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+        });
+      }
+      if (!resp.ok) return structuredHttpFailure(resp);
+      const data = await resp.json();
+      if (flags.json) return writeJson(data);
+      const gates = Array.isArray(data?.gates) ? data.gates : [];
+      console.log(`Gate registry: ${gates.length} gate(s)`);
+      for (const g of gates) {
+        console.log(`  ${g.id} [${g.class}]${g.runnable ? '' : ' (advisory only)'} -- ${g.label}`);
+      }
+      return;
+    }
+
+    if (gatesSub === 'run') {
+      if (!flags['artifact-dir']) {
+        console.error('od route gates run requires --artifact-dir <path>');
+        process.exit(2);
+      }
+      const body = {
+        artifactDir: String(flags['artifact-dir']),
+        ...(flags.gates ? { gates: String(flags.gates).split(',').map((s) => s.trim()).filter(Boolean) } : {}),
+        ...(flags['build-id'] ? { buildId: String(flags['build-id']) } : {}),
+        ...(flags['current-tier'] ? { currentTier: String(flags['current-tier']) } : {}),
+        ...(flags['gate-spend'] ? { gateSpendSoFarUsd: Number(flags['gate-spend']) } : {}),
+      };
+      let resp;
+      try {
+        resp = await fetch(`${base}/api/routing/gates/run`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      } catch (err) {
+        return exitWithStructuredError({
+          code: 'daemon-not-running',
+          message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+        });
+      }
+      if (!resp.ok) return structuredHttpFailure(resp);
+      const data = await resp.json();
+      if (flags.json) return writeJson(data);
+      console.log(`Gate run for ${data?.artifactDir ?? 'unknown'}:`);
+      for (const r of data?.results ?? []) {
+        console.log(`  ${r.id} [${r.status}] (${r.durationMs}ms)`);
+      }
+      console.log(`Cascade: escalate=${data?.cascade?.escalate} tier=${data?.cascade?.tier} -- ${data?.cascade?.reason}`);
+      return;
+    }
+
+    console.error(`unknown subcommand: od route gates ${gatesSub}`);
+    process.exit(2);
   }
 
   console.error(`unknown subcommand: od route ${sub}`);

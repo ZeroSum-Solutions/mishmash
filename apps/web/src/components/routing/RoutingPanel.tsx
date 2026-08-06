@@ -28,8 +28,10 @@ import { useEffect, useState } from 'react';
 import { Button } from '@open-design/components';
 import {
   isRoutingDecisionPreviewResponse,
+  isRoutingGatesRegistryResponse,
   isRoutingMetersResponse,
   isRoutingPolicyResponse,
+  type GateDefinitionDTO,
   type LaneMeter,
   type RoutingCooldownStatus,
   type RoutingDecision,
@@ -53,6 +55,12 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
   // doc comment.
   const [cooldowns, setCooldowns] = useState<RoutingCooldownStatus[] | undefined>(undefined);
   const [decision, setDecision] = useState<RoutingDecision | null>(null);
+  // t8 addition (plan §3.2 L3): the L3 gate registry -- read-only display
+  // of GET /api/routing/gates. Running a gate needs an artifactDir this
+  // overview panel has no natural input for yet, so this section shows the
+  // registry only; `od route gates run` / POST /api/routing/gates/run
+  // cover execution.
+  const [gates, setGates] = useState<GateDefinitionDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
 
@@ -70,13 +78,15 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
       // plain policy-version/lane-meter/decision-shape overview and never
       // sends one.
       fetch(`${daemonUrl}/api/routing/decision/preview`).then((r) => (r.ok ? r.json() : null)),
+      fetch(`${daemonUrl}/api/routing/gates`).then((r) => (r.ok ? r.json() : null)),
     ])
-      .then(([policyData, metersData, previewData]) => {
+      .then(([policyData, metersData, previewData, gatesData]) => {
         if (cancelled) return;
         setPolicyVersion(isRoutingPolicyResponse(policyData) ? policyData.policyVersion : null);
         setLaneMeters(isRoutingMetersResponse(metersData) ? metersData.laneMeters : []);
         setCooldowns(isRoutingMetersResponse(metersData) ? metersData.cooldowns : undefined);
         setDecision(isRoutingDecisionPreviewResponse(previewData) ? previewData.decision : null);
+        setGates(isRoutingGatesRegistryResponse(gatesData) ? gatesData.gates : []);
       })
       .catch(() => {
         if (cancelled) return;
@@ -84,6 +94,7 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
         setLaneMeters([]);
         setCooldowns(undefined);
         setDecision(null);
+        setGates([]);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -204,6 +215,27 @@ export function RoutingPanel({ daemonUrl = '' }: RoutingPanelProps) {
           </div>
         ) : (
           <p className={styles.previewPlaceholder}>No decision preview available yet.</p>
+        )}
+      </div>
+
+      <div className={styles.section} data-testid="routing-gates">
+        <h3 className={styles.sectionTitle}>L3 gates</h3>
+        {loading ? (
+          <p className={styles.empty}>Loading…</p>
+        ) : gates.length === 0 ? (
+          <p className={styles.empty}>No gate registry available.</p>
+        ) : (
+          <ul className={styles.reasonList}>
+            {gates.map((gate) => (
+              <li key={gate.id} className={styles.reasonRow} data-testid="routing-gate-row" data-gate-class={gate.class}>
+                <span className={styles.reasonStep}>{gate.id}</span>
+                <span>
+                  [{gate.class}
+                  {gate.runnable ? '' : ', advisory only'}] {gate.label}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
 
