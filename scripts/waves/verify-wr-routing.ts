@@ -56,7 +56,7 @@ const VERIFIER_PATH = 'scripts/waves/verify-wr-routing.ts';
 // See header comment above: 'PENDING-PIN' is the sentinel used only in the
 // commit that introduces this fix round. The immediately-following commit
 // changes ONLY this line's right-hand side to that commit's real sha.
-const GOVERNANCE_COMMIT: string = 'PENDING-PIN';
+const GOVERNANCE_COMMIT: string = 'dca6afa1d7001323dae6fd7c83fbfddaf334bc48';
 const PIN_LINE_PATTERN = /^const GOVERNANCE_COMMIT: string = /;
 
 // ---------------------------------------------------------------- helpers --
