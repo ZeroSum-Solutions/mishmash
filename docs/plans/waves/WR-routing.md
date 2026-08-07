@@ -149,16 +149,22 @@ flip from `open` to `complete` — asserted mechanically by the verifier at the 
    rebased onto (or merged with) the latest `main` immediately before landing, not built against a
    stale base. Checked by `HEAD-DRIFT` below (fix-round-1, HIGH-5(a); hardened fix-round-2, new-HIGH-4).
 2. **Byte-preservation on every overlap file.** Every line present in a shared/overlap file (the
-   twelve named in `OVERLAP_FILES` — six original plus the six Amendment 1 additions listed under
-   "Lease") at the wave's own base commit (merge-base with `origin/main`) is still
+   fourteen named in `OVERLAP_FILES` — six original, six Amendment 1 additions, two Amendment 2
+   additions, all listed under "Lease") at the wave's own base commit (merge-base with
+   `origin/main`) is still
    present, unmodified, at the tranche-completing commit, and the file itself still exists — the
    diff for that file may only add lines, never delete, rewrite, or remove the file. Checked by
    `BYTE-PRESERVE` below (fix-round-1, MED-7; hardened fix-round-2, new-HIGH-3). **One-line
    exception process:** if a shared file's existing line genuinely must change (not just have lines
    added around it — e.g. a function signature the new routing call site needs), that is `human:`
    judgment (`VERIFICATION-CONTRACT.md` §3 R7) and resolves to `blocked-on-founder`; it is never
-   silently downgraded to "additive" by the implementing agent. No such exception is expected for
-   any of the named files' documented change types below.
+   silently downgraded to "additive" by the implementing agent.
+   **Exercised once, by Amendment 2 (2026-08-07)**, for five lines across `server.ts`,
+   `backup/create.ts` and the shared app-config DTO (see "Lease" → "Line-level exceptions"). A granted exception is recorded
+   verbatim in the verifier's `BYTE_PRESERVE_EXCEPTIONS` and consumed at most once, so the
+   criterion keeps gating every other line rather than going red and losing the distinction
+   between the sanctioned edits and an unsanctioned one. An exception that is not declared there
+   is not an exception — it is a failure.
 3. **W6a untouched.** The tranche-completing commit's diff contains none of the deny-listed W6a
    paths. Checked by `LEASE`'s deny-glob assertion (below), same mechanism as every other deny.
 4. **P0 (governance) must have landed to `main` first.** No product tranche may ever be declared
@@ -536,7 +542,9 @@ Canonical copy: `docs/plans/waves/leases.json`, key `WR`. The block below must m
     "apps/web/src/components/SettingsDialog.tsx",
     "docs/plans/waves/DECISIONS.md",
     "apps/web/tests/settings-dialog-routing.test.tsx",
-    "apps/daemon/src/app-config.ts"
+    "apps/daemon/src/app-config.ts",
+    "packages/contracts/src/api/app-config.ts",
+    "apps/daemon/src/http/response.ts"
   ],
   "deny": [
     "apps/web/src/providers/registry.ts",
@@ -567,7 +575,30 @@ HIGH-2).** Two kinds:
 | `apps/web/src/components/SettingsDialog.tsx` | no other wave | *(Amendment 1, 2026-08-06)* mount the `RoutingPanel` as an additive settings section alongside the existing sections — closes the t7 H2 disposition; never modify an existing section |
 | `docs/plans/waves/DECISIONS.md` | W-C, W0, W7 (`docs/plans/waves/**`); W9-ingest (exact file) | *(Amendment 1, 2026-08-06)* append amendment-trail records only — append-only is mechanical (`OVERLAP_FILES` / BYTE-PRESERVE), never edit or remove an existing entry |
 | `apps/web/tests/settings-dialog-routing.test.tsx` | W1, W3, W4 (`apps/web/tests/**`) | *(Amendment 1, 2026-08-06)* the RoutingPanel mount/discoverability regression test for the `SettingsDialog.tsx` grant — this single exact file, deliberately not a broad web-test glob |
-| `apps/daemon/src/app-config.ts` | no other wave | *(Amendment 1, 2026-08-06, Sol r2-P1)* add `routingPolicyVersion?: number \| null` to `AppConfigPrefs`, its entry in `ALLOWED_KEYS`, and its value validation — additive allowlist entries only, so the archived marker survives `filterAllowedKeys` and normal config writes after restore; never touch any existing key's handling |
+| `apps/daemon/src/app-config.ts` | no other wave | *(Amendment 1, 2026-08-06, Sol r2-P1)* add `routingPolicyVersion?: number \| null` to `AppConfigPrefs`, its entry in `ALLOWED_KEYS`, and its value validation — additive allowlist entries only, so the archived marker survives `filterAllowedKeys` and normal config writes after restore; never touch any existing key's handling. *(Amendment 2, 2026-08-07)* additionally add the `CONFIG_KEY_OWNERSHIP` total `Record` and one inserted guard line in `doWrite`, so the marker stops being settable through `PUT /api/app-config` — still additive only |
+| `packages/contracts/src/api/app-config.ts` | W1, W4 (`packages/contracts/**`) | *(Amendment 2, 2026-08-07)* add `routingPolicyVersion?: number \| null` to the shared `AppConfigPrefs` **and** redefine `UpdateAppConfigRequest` as `Partial<Omit<AppConfigPrefs, ServerOwnedAppConfigKey>>`. Both halves are required together: adding the field alone would declare a server-owned key writable, re-opening at the contract level the surface the `app-config.ts` grant closes at runtime |
+| `apps/daemon/src/http/response.ts` | no other wave | *(Amendment 2, 2026-08-07)* one additive `ERROR_STATUS_BY_CODE` row, `ROUTING_BLOCKED: 422` — `statusForError` answers `500` for any unmapped code, so the code Amendment 1 declared would otherwise report a policy refusal as a server fault on the first endpoint to return it over HTTP. Never change an existing mapping |
+
+**Line-level exceptions (Amendment 2, 2026-08-07).** The five pre-existing lines below are the
+*only* ones this wave may change, and they are the first use of the "one-line exception process" in
+the Tranche-entry gate. The founder delegated the judgment explicitly and asked that GPT-5.6 Sol
+arbitrate each item, which supplies the `human:` decision that process requires.
+
+They are declared **verbatim** in the verifier's `BYTE_PRESERVE_EXCEPTIONS` as `{ from, to }` pairs
+— the grant authorises a *specific replacement*, not merely a deletion, and a declared `from` whose
+authorised `to` is absent from the diff counts as uncovered. Each is consumed at most once, and the
+criterion refuses any `from` matching more than one line at `baseCommit`, since a content-addressed
+exception cannot say which copy it meant. `BYTE-PRESERVE` therefore stays **green** while still
+failing on any *other* changed line in these files. That is deliberate: letting the criterion go red would stop distinguishing these four
+sanctioned edits from a fifth unsanctioned one, discarding the guarantee exactly where the wave is
+cutting into it. The entries go inert once this amendment lands, because `baseCommit` then carries
+the new lines.
+
+| File | Lines | Why the line must change rather than be added around |
+|---|---|---|
+| `apps/daemon/src/server.ts` | the two `'FORBIDDEN'` literals in the blocked-dispatch and unvalidated-routed-model `runs.fail` calls | The emitted code *is* the value being corrected; there is no way to add a line that changes which code an existing call passes. `'FORBIDDEN'` means an authorization refusal, but a blocked dispatch is a caller who **is** entitled to the operation being stopped by policy — the distinction `'ROUTING_BLOCKED'` exists to carry |
+| `apps/daemon/src/backup/create.ts` | `} catch {` and `return JSON.stringify({});` in `redactAppConfig` | Logging the parse failure needs the error binding, and the archived body must stop being a bare `{}` that is indistinguishable from a legitimately empty config. The raw malformed source is deliberately **not** archived: V8's JSON errors quote the offending fragment and this is the file that holds BYOK keys |
+| `packages/contracts/src/api/app-config.ts` | `export type UpdateAppConfigRequest = Partial<AppConfigPrefs>;` | The update DTO is *derived* from the full prefs shape, so adding `routingPolicyVersion` to `AppConfigPrefs` would by itself have declared a server-owned key writable. Narrowing the derivation to `Partial<Omit<…, ServerOwnedAppConfigKey>>` is the fix, and a derived type alias cannot be narrowed by adding a line next to it |
 
 **B — structural glob overlaps** (this wave's specific path falls inside another wave's *broader*
 directory grant; additive-only in the same sense — new files/exports/tests inside the shared
@@ -642,7 +673,7 @@ verifier's exit code — **except** `LEASE-INTEGRITY`, `GATE-INTEGRITY`, `CWR-P2
 | LEASE-INTEGRITY | always-gating | Other waves' leases are untouched | Every non-`WR` entry in `leases.json` is byte-identical between `baseCommit` and `HEAD` |
 | PRE-LANDING-SCOPE | always-gating | Pre-landing diffs are governance-only | While `mode: "pre-landing"`: `git diff --name-only <base>...HEAD` is a subset of exactly `{WR-routing.md, leases.json, verify-wr-routing.ts}` — any other path is an unconditional fail. Passes trivially once `mode: "post-landing"` |
 | HEAD-DRIFT | P0 | Base is fresh, not stale, and git errors are fatal | `baseCommit`/`HEAD` resolved at start, re-checked after all behavioral probes, and re-resolved a FINAL, authoritative time immediately before the manifest write; the live remote's `main` tip is fetched and confirmed an ancestor of `HEAD` (fail-closed — an unreachable remote is a fail, recorded as `freshMain: "unverifiable"`, not a pass); any git command error fails the run |
-| BYTE-PRESERVE | P0 | Overlap files are additive-only and never deleted | For each of the twelve named overlap files (`OVERLAP_FILES`; six original plus the six Amendment 1 additions — `backup/create.ts`, `chat.ts`, `errors.ts`, `SettingsDialog.tsx`, `DECISIONS.md`, `app-config.ts`) that existed at `baseCommit`: it still exists at `HEAD` (missing = unconditional fail), and `git diff --unified=0 <base>..HEAD` contains zero removed/changed lines |
+| BYTE-PRESERVE | P0 | Overlap files are additive-only and never deleted | For each of the fourteen named overlap files (`OVERLAP_FILES`; six original, six Amendment 1 additions — `backup/create.ts`, `chat.ts`, `errors.ts`, `SettingsDialog.tsx`, `DECISIONS.md`, `app-config.ts` — and two Amendment 2 additions: `packages/contracts/src/api/app-config.ts`, `apps/daemon/src/http/response.ts`) that existed at `baseCommit`: it still exists at `HEAD` (missing = unconditional fail), and `git diff --unified=0 <base>..HEAD` contains zero removed/changed lines, **except** the five lines Amendment 2 declares verbatim in `BYTE_PRESERVE_EXCEPTIONS` (each consumed at most once, so a declared line cannot license removing several copies of itself) |
 | GATE-INTEGRITY | always-gating | Manifest and register are self-consistent | Runs last, after every other criterion including the final `HEAD-DRIFT` re-read; every criterion ID above has exactly one manifest entry with a non-empty, hash-matched artifact, verified via a two-phase write that re-reads its own artifact from disk; the Tranche register's rows are cross-checked against the hardcoded `CRITERION_TRANCHE` map |
 
 ## Adversarial review

@@ -20,7 +20,7 @@
 //      time the restored config was read or rewritten -- a marker that cannot
 //      survive a restore does not actually record anything.
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -105,5 +105,106 @@ describe('CWR-P1-3: the active routing policy version is in the backup set', () 
 
     expect(prefs.routingPolicyVersion).toBeUndefined();
     expect(prefs.onboardingCompleted).toBe(true);
+  });
+});
+
+// Amendment 2, item 4. `redactAppConfig` used to answer an unparseable
+// app-config.json with a bare `JSON.stringify({})`: the archive then held a
+// config that is indistinguishable from a legitimately empty one, and nothing
+// anywhere recorded that the original had been unreadable. That is the worst
+// possible place for a silent failure -- the operator only finds out during a
+// restore, which is exactly when the rest of the system is already broken.
+//
+// The archive must therefore SAY SO in-band, because daemon logs from the
+// machine that produced a months-old archive are routinely gone by the time
+// anyone reads it. It must also say so without echoing the malformed source:
+// V8's JSON parse errors quote the offending fragment, and app-config.json is
+// precisely the file that holds BYOK provider keys.
+describe('redactAppConfig: an unparseable app-config is reported, never silently emptied', () => {
+  const CORRUPT_WITH_SECRET =
+    '{"agentCliEnv":{"claude":{"ANTHROPIC_API_KEY":"sk-must-not-leak-into-archive"}},,,';
+
+  it('archives a diagnostic marker instead of a bare {} and still records the policy version', async () => {
+    writeFileSync(path.join(dataDir, 'app-config.json'), CORRUPT_WITH_SECRET);
+
+    await createBackupArchive({ dataDir, outPath: archiveDir });
+
+    const archivedConfig = readArchivedAppConfig();
+    expect((archivedConfig.__mishmashBackupError as Record<string, unknown> | undefined)?.code).toBe(
+      'APP_CONFIG_UNPARSEABLE',
+    );
+    expect(archivedConfig.routingPolicyVersion).toBe(currentRoutingPolicyVersion());
+  });
+
+  it('never copies the malformed source (or the BYOK key inside it) into the archive', async () => {
+    writeFileSync(path.join(dataDir, 'app-config.json'), CORRUPT_WITH_SECRET);
+
+    await createBackupArchive({ dataDir, outPath: archiveDir });
+
+    const archivedRaw = readFileSync(
+      path.join(archiveDir, RELPATH_BY_CLASS['app-config']),
+      'utf8',
+    );
+    expect(archivedRaw).not.toContain('sk-must-not-leak-into-archive');
+    expect(archivedRaw).not.toContain('ANTHROPIC_API_KEY');
+  });
+
+  it('logs a usable parse diagnostic rather than swallowing the failure', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    writeFileSync(path.join(dataDir, 'app-config.json'), CORRUPT_WITH_SECRET);
+
+    await createBackupArchive({ dataDir, outPath: archiveDir });
+
+    // Something must reach the log -- silence would leave an operator with no
+    // signal at all that the file they are about to rely on was unreadable.
+    const logged = errorSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+    expect(logged).toContain('unparseable');
+    expect(logged).toMatch(/SyntaxError/);
+    errorSpy.mockRestore();
+  });
+
+  it('never logs the parse error verbatim, because V8 quotes the offending source', async () => {
+    // The realistic leak shape: corruption that leaves a BYOK value unquoted.
+    // V8 answers with `Unexpected token 's', ..."_API_KEY":sk-live-ab"... is
+    // not valid JSON` -- a window of the source that carries a credential
+    // PREFIX. Logging the raw message would put that in the daemon log, which
+    // is collectible via diagnostics export.
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    writeFileSync(
+      path.join(dataDir, 'app-config.json'),
+      '{"agentCliEnv":{"claude":{"ANTHROPIC_API_KEY":sk-live-abc123XYZ}}}',
+    );
+
+    await createBackupArchive({ dataDir, outPath: archiveDir });
+
+    const logged = errorSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+    expect(logged).not.toContain('sk-live-ab');
+    expect(logged).not.toContain('ANTHROPIC_API_KEY');
+    errorSpy.mockRestore();
+  });
+
+  it('does not fail the backup -- the rest of the archive still has to be recoverable', async () => {
+    writeFileSync(path.join(dataDir, 'app-config.json'), CORRUPT_WITH_SECRET);
+
+    const result = await createBackupArchive({ dataDir, outPath: archiveDir });
+
+    expect(result.manifest.some((entry) => entry.class === 'app-config')).toBe(true);
+  });
+
+  it('leaves the diagnostic marker out of the prefs a restored config reads back', async () => {
+    // The marker is deliberately not an AppConfigPrefs key, so the normal read
+    // path drops it while keeping the policy-version marker beside it.
+    writeFileSync(
+      path.join(dataDir, 'app-config.json'),
+      JSON.stringify({
+        __mishmashBackupError: { code: 'APP_CONFIG_UNPARSEABLE', message: 'x' },
+        routingPolicyVersion: currentRoutingPolicyVersion(),
+      }),
+    );
+
+    const prefs = await readAppConfig(dataDir);
+
+    expect((prefs as Record<string, unknown>).__mishmashBackupError).toBeUndefined();
+    expect(prefs.routingPolicyVersion).toBe(currentRoutingPolicyVersion());
   });
 });

@@ -468,16 +468,19 @@ export function isRoutingOverrideRequest(value: unknown): value is RoutingOverri
 // `apps/daemon/src/routing/dispatch.ts`'s `DispatchBlockedError#code` reuses
 // this exact closed set (imported, not redeclared) so the daemon's SSE/
 // status error payload for a blocked dispatch carries a TYPED detail object
-// from a leased DTO instead of an ad-hoc inline shape. `packages/contracts/
-// src/errors.ts` (the `ApiErrorCode` closed union) is OUT OF LEASE, so a
-// blocked dispatch is surfaced through an EXISTING legal `ApiErrorCode`
-// (`'FORBIDDEN'` -- the daemon refuses to dispatch, which is what that code
-// already means) with this object riding in `ApiError#details` (a generic
-// `JsonValue` field `errors.ts` already exposes, requiring no edit to that
-// file). Governance-amendment note: a dedicated `'ROUTING_BLOCKED'`
-// `ApiErrorCode` member would be the more precise long-term fix; that edit
-// is out of this wave's lease and is tracked as a governance-amendment item
-// instead of worked around by widening `errors.ts` here.
+// from a leased DTO instead of an ad-hoc inline shape. This object rides in
+// `ApiError#details` (a generic `JsonValue` field `errors.ts` already
+// exposes).
+//
+// The accompanying `ApiErrorCode` is `'ROUTING_BLOCKED'`. Both halves of that
+// took a governance amendment, because `packages/contracts/src/errors.ts` and
+// the daemon's emission sites were outside this wave's lease: t9 shipped the
+// interim `'FORBIDDEN'` code, Amendment 1 (2026-08-06) added the
+// `'ROUTING_BLOCKED'` member, and Amendment 2 (2026-08-07) granted the two
+// `apps/daemon/src/server.ts` literals that actually emit it. `'FORBIDDEN'`
+// was only ever a stand-in: it means an authorization refusal, whereas a
+// blocked dispatch is a caller who IS entitled to the operation being stopped
+// by policy. `statusForError` maps the code to 422.
 // ---------------------------------------------------------------------------
 
 export type RoutingBlockedCode = 'fail-closed-stop' | 'denied-admission' | 'routing-error';

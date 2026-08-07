@@ -157,6 +157,44 @@ const ALLOWED_KEYS: ReadonlySet<keyof AppConfigPrefs> = new Set([
   'routingPolicyVersion',
 ] as const);
 
+/**
+ * Who is allowed to WRITE each key (Amendment 2, item 2). `ALLOWED_KEYS` above
+ * governs what may be read back off disk, which is a different question: the
+ * archived `routingPolicyVersion` marker has to survive a restore (CWR-P1-3),
+ * but it is daemon-produced provenance that no client may set.
+ *
+ * Declared as a TOTAL Record rather than a second hand-maintained set, so that
+ * adding a field to `AppConfigPrefs` without deciding who owns it is a compile
+ * error instead of an accidental new write surface. That is the whole point --
+ * the marker became client-writable in the first place precisely because a key
+ * was added to the read allowlist and the write path silently inherited it.
+ *
+ * - 'client': an ordinary user preference. `PUT /api/app-config` may set it.
+ * - 'server': daemon-owned. Still read, still persisted, still restored from an
+ *   archive -- but a client-supplied value is discarded.
+ */
+const CONFIG_KEY_OWNERSHIP: Record<keyof AppConfigPrefs, 'client' | 'server'> = {
+  onboardingCompleted: 'client',
+  agentId: 'client',
+  agentModels: 'client',
+  agentCliEnv: 'client',
+  agentCliEnvIntent: 'client',
+  skillId: 'client',
+  designSystemId: 'client',
+  disabledSkills: 'client',
+  disabledDesignSystems: 'client',
+  installationId: 'client',
+  telemetry: 'client',
+  privacyDecisionAt: 'client',
+  allowSilentUpdates: 'client',
+  orbit: 'client',
+  customInstructions: 'client',
+  projectLocations: 'client',
+  defaultProjectLocationId: 'client',
+  recentLinkedDirs: 'client',
+  routingPolicyVersion: 'server',
+};
+
 function configFile(dataDir: string): string {
   return path.join(dataDir, 'app-config.json');
 }
@@ -798,6 +836,10 @@ async function doWrite(
   const next: Record<string, unknown> = { ...existing };
   for (const key of Object.keys(partial)) {
     if (!ALLOWED_KEYS.has(key as keyof AppConfigPrefs)) continue;
+    // Server-owned provenance is readable and restorable but never settable by
+    // a caller. Skipped silently rather than rejected, because GET returns the
+    // whole config and clients legitimately PUT the same object back.
+    if (CONFIG_KEY_OWNERSHIP[key as keyof AppConfigPrefs] === 'server') continue;
     applyConfigValue(next, key as keyof AppConfigPrefs, partial[key]);
   }
   const nextWithInferredIntent = Object.prototype.hasOwnProperty.call(partial, 'agentCliEnv')

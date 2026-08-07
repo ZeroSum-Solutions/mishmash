@@ -5392,8 +5392,14 @@ export async function startServer({
       // JsonValue field, no edit to errors.ts required), shaped as
       // dispatch.ts's own `DispatchBlockedError` fields so it stays a typed
       // payload rather than an ad-hoc object.
+      //
+      // SUPERSEDED by Amendment 2 (2026-08-07): that governance amendment
+      // landed and granted these two literals, so both sites below now emit
+      // the dedicated 'ROUTING_BLOCKED' code the paragraph above was waiting
+      // for. The `details` payload is unchanged -- it was never the interim
+      // part. `statusForError` maps the new code to 422.
       if (wrDispatchRouting.mode === 'blocked') {
-        return design.runs.fail(run, 'FORBIDDEN', wrDispatchRouting.blocked.message, {
+        return design.runs.fail(run, 'ROUTING_BLOCKED', wrDispatchRouting.blocked.message, {
           details: { kind: 'routing-blocked', code: wrDispatchRouting.blocked.code, rationale: wrDispatchRouting.blocked.decision.rationale },
         });
       }
@@ -5416,7 +5422,7 @@ export async function startServer({
         if (!wrModelRecognized && wrSanitizedModel === null) {
           return design.runs.fail(
             run,
-            'FORBIDDEN',
+            'ROUTING_BLOCKED',
             `routing decision selected model "${wrCandidateModel}" for runtime "${def.id}", but it failed both the runtime's known-model check and custom-model sanitization -- refusing to spawn with an unvalidated model string.`,
             { details: { kind: 'routing-blocked', code: 'routing-error', rationale: wrDispatchRouting.decision.rationale } },
           );

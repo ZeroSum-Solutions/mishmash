@@ -1182,3 +1182,146 @@ and `templateId` findings (both fixed above) plus two more:
   turn is not a build, and there is no build identity at this call site to supply. The per-stage
   ceiling — the control that does apply to chat — is now live because `promptText` yields a real
   token estimate, and recorded telemetry now carries real costs, so day/stage accumulation works.
+
+## 2026-08-07 — WR lease Amendment 2: the four deferred items, resolved
+
+The four items the P1 tranche recorded as `blocked-on-founder` are closed. Each needed either a
+byte-frozen line changed or a file outside the lease, so none was autonomous work; the founder
+delegated all four explicitly and asked that GPT-5.6 Sol arbitrate each. That delegation is the
+`human:` judgment the Tranche-entry gate's one-line exception process requires, and this is the
+first time that process has been exercised.
+
+**Grants.** Two new files — `packages/contracts/src/api/app-config.ts` (W1/W4 via
+`packages/contracts/**`) and `apps/daemon/src/http/response.ts` (no other wave) — plus four
+verbatim line-level exceptions across `server.ts`, `backup/create.ts` and the contracts
+DTO. As with Amendment 1, the
+verifier's `CANONICAL_ALLOW` / `EXPECTED_OVERLAPS` / `OVERLAP_FILES` were amended in the same diff.
+
+**The line exceptions are enumerated, not blanket.** The obvious path was to let `BYTE-PRESERVE` go
+red for this diff the way `CWR-P0-4` does. It was rejected: a red criterion says only "something in
+these files changed" and stops distinguishing the five sanctioned edits from a sixth unsanctioned
+one — it discards the guarantee precisely where the wave is cutting into it. `BYTE_PRESERVE_EXCEPTIONS`
+records each line's pre-amendment content verbatim and consumes it at most once, so a declared line
+cannot license removing several copies of itself, and the criterion stays green while still gating
+every other line of all fourteen overlap files. The entries go inert after merge, when `baseCommit`
+carries the new lines.
+
+### Item 1 — `ROUTING_BLOCKED` is now emitted, not just declared
+
+Both refusal sites in `server.ts` migrated off `'FORBIDDEN'`. The two codes are not
+interchangeable: `'FORBIDDEN'` is an authorization refusal, whereas a blocked dispatch is a caller
+who **is** entitled to the operation being stopped by policy. Reporting the latter as the former
+sends an operator to fix permissions for a problem that lives in `routing-policy.json`.
+
+The second site (a routed model failing both `isKnownModel` and `sanitizeCustomModel`) migrated
+too. It is a policy misconfiguration the operator can actually fix, so `'ROUTING_BLOCKED'` with
+`details.code: 'routing-error'` is a truer signal than `INTERNAL_ERROR`'s "the server is broken".
+
+`ROUTING_BLOCKED: 422` was added to `ERROR_STATUS_BY_CODE`. `statusForError` answers `500` for any
+unmapped code, so declaring a code in the shared contract without a mapping is a latent "policy
+refused your request" → "the server crashed" bug for the first endpoint that returns it over HTTP.
+The two dispatch sites report over SSE and never consult that table, so this is defence for a path
+that does not exist yet — cheap, and the alternative is leaving a trap inside the very migration
+that exists to stop half-finished error semantics.
+
+No first-party consumer branches on `'FORBIDDEN'` for this path (checked: the three matches in
+`apps/web` and `cli.ts` are the finalize-project, deploy, and desktop-import flows). External
+clients keying on the old code will fall back to a generic error presentation, which is the correct
+trade against continuing to report a false security classification.
+
+### Item 2 — the marker is server-owned, enforced by the type system
+
+`routingPolicyVersion` was settable through `PUT /api/app-config`, because `doWrite` merges any
+`ALLOWED_KEYS` member and Amendment 1 had to put the marker there so `filterAllowedKeys` would not
+drop it on restore (CWR-P1-3). One entry served both the read and the write path.
+
+Fixed **without** an exception: a `CONFIG_KEY_OWNERSHIP` total `Record<keyof AppConfigPrefs, 'client' | 'server'>`
+plus one inserted guard line in the existing loop — purely additive. Declaring it as a total Record
+rather than a second key set is the point: adding a field to `AppConfigPrefs` without deciding who
+owns it is now a **compile** error. The marker became writable in the first place because a key was
+added to the read allowlist and the write path silently inherited it; the type makes that
+impossible to repeat.
+
+A rejected value is skipped silently rather than 400'd. `GET` returns the whole config including
+the marker and clients legitimately `PUT` the same object back — rejecting would break that real
+round trip to punish a client that did nothing wrong.
+
+### Item 3 — the shared DTO, with the write boundary declared
+
+`AppConfigPrefs` in `packages/contracts` gained the field, and `UpdateAppConfigRequest` became
+`Partial<Omit<AppConfigPrefs, ServerOwnedAppConfigKey>>`. Both halves are one decision: because the
+update type was defined as `Partial<AppConfigPrefs>`, adding the field alone would have declared a
+server-owned key writable and re-opened at the contract level exactly what item 2 closes at
+runtime. `UpdateAppConfigRequest` had zero consumers, so the narrowing has no blast radius.
+
+This does not unify the daemon's duplicate local `AppConfigPrefs` with the shared one — that
+refactor is out of scope and out of lease — but it does reduce the divergence: both now agree on
+the persisted shape, and the request type documents the mutation boundary that was previously
+implicit.
+
+### Item 4 — a corrupt app-config is reported, never silently emptied
+
+`redactAppConfig` answered an unparseable `app-config.json` with `JSON.stringify({})` and a bare
+`catch`. The archive then held a config indistinguishable from a legitimately empty one, and the
+operator found out during a restore — the one moment they are relying on the file.
+
+The backup still succeeds, on the same reasoning already recorded in this file for
+`archivedRoutingPolicyVersion()`: failing the snapshot over one corrupt preference file would
+forfeit every other recoverable artifact. But the archive now carries an in-band
+`__mishmashBackupError` marker, because daemon logs from the machine that produced a months-old
+archive are routinely gone by the time anyone reads it. The marker is deliberately not an
+`AppConfigPrefs` key, so `filterAllowedKeys` drops it on restore while keeping
+`routingPolicyVersion` beside it.
+
+The raw malformed source is **not** archived. V8's JSON parse errors quote the offending fragment,
+and `app-config.json` is precisely the file that holds BYOK provider keys; the exception goes to
+the local log only, and a test asserts the archive contains neither the fragment nor the key name.
+
+### Sol findings not adopted
+
+- Sol placed the new tests in `apps/daemon/tests/backup.test.ts` and `app-config.test.ts`. Neither
+  is in the WR lease (`apps/daemon/tests/routing*.test.ts` is). Tests went into the leased
+  `routing-policy-version-*` files instead — no extra grant needed, and they sit beside the
+  criterion they defend.
+- Sol asserted the status-map insertion needed no amendment. `apps/daemon/src/http/response.ts` was
+  not leased; it is granted here.
+- Sol recommended a positive `CLIENT_WRITABLE_KEYS` set duplicating ~20 key names. Rejected for the
+  total `Record`: the duplicate set drifts silently, and its failure mode (a new user preference
+  quietly ceasing to persist) is both likelier and more user-visible than the one it prevents.
+
+### Addendum — adversarial review of Amendment 2 (2026-08-07)
+
+A GPT-5.6 Sol review of the branch diff returned two findings. Both were real, both verified
+against the code before acting, and both are fixed in this same diff.
+
+**P1 — the exception mechanism approved the deletion but not the replacement.** The first cut of
+`BYTE_PRESERVE_EXCEPTIONS` recorded only the pre-amendment line. Nothing checked what replaced it,
+so swapping the second `'FORBIDDEN'` for `'INTERNAL_ERROR'` rather than the granted
+`'ROUTING_BLOCKED'` would still have produced a **green** BYTE-PRESERVE — a P0 criterion reporting
+that an unauthorised change was authorised. This is worse than the blanket red the enumerated
+mechanism was introduced to avoid, because it is a false green rather than a loud one.
+
+Fixed by pinning both sides as `{ from, to }` pairs and requiring the authorised `to` to be present
+among the file's added lines; a declared `from` whose `to` is missing now counts as *uncovered*.
+Verified by tampering: pointing one exception at `'INTERNAL_ERROR'` while the tree still contained
+`'ROUTING_BLOCKED'` flipped BYTE-PRESERVE to FAIL, then restored.
+
+A second hole was closed at the same time, found while probing the same mechanism: exceptions are
+content-addressed, so a `from` that appears more than once at `baseCommit` cannot say which copy it
+licenses. The criterion now self-checks that every declared `from` matches **exactly one** line at
+`baseCommit` and fails on an ambiguous or stale entry. All five current entries match exactly once
+at `baseCommit` and zero times at `HEAD`, which is also what makes them provably inert after merge.
+
+**P2 — the parse-failure log could carry a credential prefix.** Item 4 deliberately kept the raw
+malformed source out of the *archive*, but then passed the exception object to `console.error`,
+and daemon logs are collectible through diagnostics export. Measured rather than assumed: V8
+truncates the quoted window, so the full key never appears, but
+`{"ANTHROPIC_API_KEY":sk-live-abc123XYZ}` yields
+``Unexpected token 's', ..."_API_KEY":sk-live-ab"... is not valid JSON`` — a credential **prefix**
+in the log. Sol's finding stands with that precision correction.
+
+Fixed with `redactedParseFailure()`, which logs the error name and byte offset only — the parts
+useful to an operator repairing the file by hand, and the parts that cannot echo file content. The
+original test asserted the `SyntaxError` object reached the log, i.e. it *enforced* the leak; it
+was replaced by a test of the security property, proven non-vacuous by reintroducing the raw log
+and watching it fail.

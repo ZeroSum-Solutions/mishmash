@@ -506,11 +506,14 @@ describe('dispatch-time routing wiring in the real chat dispatch path', () => {
     });
     expect(text).not.toContain('hello from the fake agent');
     expect(text).toContain('"status":"failed"');
-    expect(text).toContain('FORBIDDEN');
+    // Amendment 2, item 1: policy refusal is ROUTING_BLOCKED, not FORBIDDEN.
+    // The caller IS entitled to dispatch here -- routing policy is what
+    // stopped it -- so reporting an authorization failure misclassified it.
+    expect(text).toContain('ROUTING_BLOCKED');
 
     const run = await getRunRow(conversationId);
     expect(run.status).toBe('failed');
-    expect(run.errorCode).toBe('FORBIDDEN');
+    expect(run.errorCode).toBe('ROUTING_BLOCKED');
 
     // No routed telemetry intent was ever recorded for a blocked dispatch.
     const telemetryResponse = await fetch(`${baseUrl}/api/routing/telemetry?runId=${encodeURIComponent(run.id)}`);

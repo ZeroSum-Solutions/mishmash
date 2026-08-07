@@ -61,13 +61,31 @@ export interface AppConfigPrefs {
    * most-recent-first and capped by the daemon.
    */
   recentLinkedDirs?: string[];
+  /**
+   * Which routing-policy generation produced the archive this config came from.
+   * Written only by the daemon's backup path (`apps/daemon/src/backup/create.ts`)
+   * into the ARCHIVED copy, and preserved on the way back in so a restored
+   * config still says which policy its telemetry should be read against.
+   *
+   * Server-owned: it appears in `GET` responses but is absent from
+   * `UpdateAppConfigRequest`, and the daemon discards a client-supplied value.
+   * `null` records "policy version unavailable when the archive was produced".
+   */
+  routingPolicyVersion?: number | null;
 }
 
 export interface AppConfigResponse {
   config: AppConfigPrefs;
 }
 
-export type UpdateAppConfigRequest = Partial<AppConfigPrefs>;
+/**
+ * Keys the daemon owns outright. They are part of the persisted/read config
+ * shape above, but a client may not set them, so they are omitted from the
+ * update request rather than left implicitly writable.
+ */
+export type ServerOwnedAppConfigKey = 'routingPolicyVersion';
+
+export type UpdateAppConfigRequest = Partial<Omit<AppConfigPrefs, ServerOwnedAppConfigKey>>;
 
 /** Response body for `GET /api/recent-dirs` — recent working directories
  *  pruned to those that still exist on disk, most-recent-first. */
