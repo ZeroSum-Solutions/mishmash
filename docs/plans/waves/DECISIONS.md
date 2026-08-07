@@ -1087,3 +1087,98 @@ overlapping waves are landed, no live concurrent writer). Deliberately NOT grant
 cross-runtime routed-application hook move before `getAgentDef` in `server.ts` (baseline
 control-flow change — remains a founder-reviewed edit) and `runtimes/**` side-effect/lane
 observability (future W1/WR coordination).
+
+## 2026-08-06 — WR P1 tranche closed: routing policy marker, chat wire fields, RoutingPanel mount
+
+The follow-on tranche Amendment 1 existed to unblock. Landed against `main` at `acf235cc9`
+(the amendment's own squash), consuming five of the seven grants:
+
+- **`apps/daemon/src/backup/create.ts` + `apps/daemon/src/app-config.ts`** — the archived
+  `app-config.json` now carries `routingPolicyVersion` (the active policy generation), and
+  `routingPolicyVersion?: number | null` is allowlisted so the marker survives
+  `filterAllowedKeys` on the way back in. A policy-loader failure degrades the marker to `null`
+  rather than failing the backup: recovery must keep working when the thing being recovered from
+  is broken. **This flips CWR-P1-3, and with it the P1 tranche register entry `open` → `complete`.**
+- **`packages/contracts/src/api/chat.ts`** — `routingOverride?: RoutingOverrideRequest | null`
+  (referencing the existing export, not a parallel shape) plus `templateId`/`buildClass`/
+  `taskClass`. `server.ts`'s dispatch hook reads them off the chat body, so ordinary `/api/chat`
+  traffic can now resolve a genuinely routed decision instead of always landing on Fallback B.
+  Non-string or blank values degrade to `null`; a supplied task class still passes through the
+  same §15 hard-constraint, data-classification, and admission filters.
+- **`apps/web/src/components/SettingsDialog.tsx`** — the RoutingPanel mount, closing the t7 Sol
+  HIGH-2 disposition (the panel had been built, tested, and unreachable from any real view since
+  t2). Guarded by `apps/web/tests/settings-dialog-routing.test.tsx`, which asserts both direct
+  render and sidebar reachability.
+
+Every edit to a BYTE-PRESERVE overlap file is strictly additive (zero removed or modified lines),
+including `server.ts`, where the dispatch call site's frozen `templateId`/`buildClass`/`taskClass`
+nulls are left in place and overridden by a spread inserted after them.
+
+**Deferred, and why.** `packages/contracts/src/errors.ts` received its `'ROUTING_BLOCKED'` member
+as granted, but the daemon still *emits* `'FORBIDDEN'` + `RoutingBlockedErrorDetail` at
+`server.ts`'s two block points. Switching the emitted code would modify existing `server.ts` lines,
+which BYTE-PRESERVE forbids — by the "one-line exception process" in "Tranche-entry gate for P1/P2"
+that is `human:` judgment resolving to `blocked-on-founder`, never an agent-side downgrade to
+"additive". The member is therefore landed and legal for consumers, and the emission migration is
+left to a founder-reviewed amendment. Also still deferred: the i18n keys for the routing section
+(`apps/web/src/i18n/**` remains outside the lease, so the strings are hardcoded English, matching
+RoutingPanel's own existing TODO) and the analytics mapper entry for the new settings section
+(`packages/contracts/src/analytics/events/mappers.ts` is unleased; `'routing'` falls through to the
+mapper's default bucket).
+
+### Addendum — adversarial review of the P1 tranche (2026-08-07)
+
+Three defects were found in the first cut of the chat-identity wiring and fixed before landing.
+All three were consequences of the same mistake: turning `templateId`/`buildClass`/`taskClass`
+into caller-supplied input without treating them as untrusted.
+
+1. **An unknown `taskClass` failed the whole chat turn.** `decideRouting` grades "named but
+   nothing matched" as a terminal `'error'`, which the dispatch layer surfaces as a BLOCKED run.
+   One stale or garbage string from a client would therefore take down an ordinary chat turn.
+   Fixed with a new `knownTaskClasses(policy)` membership helper in `routing/policy.ts`
+   (model-table match values plus §15 program-assignment selectors): an unrecognized class is
+   dropped to `null` at the request boundary, keeping the turn on Fallback B.
+2. **Admission control was structurally blind on this path.** `promptText` and
+   `contextEstimateTokens` both stayed `null`, so `resolveContextEstimateTokens` returned `0`,
+   every `estimatedRunCostUsd` was `$0`, and the per-stage ceiling could never trip — i.e. the
+   tranche made expensive candidates selectable at exactly the moment the cost gate stopped
+   constraining them. Fixed by moving the additive spread to *after* the frozen
+   `promptText`/`buildId` defaults and supplying the user's message as the estimate source.
+   `sensitivityClass` is deliberately still not in the spread, so dispatch keeps applying its
+   fail-closed `'client-confidential'` default.
+3. **`templateId` was an unbounded sink into `routing_telemetry.template_id`.** It is recorded on
+   every turn including runtime-default ones, bounded only by the route's 4mb JSON limit. Now
+   capped at 200 characters (over-long degrades to `null`) and trimmed.
+
+Also added: the `archivedRoutingPolicyVersion()` catch now logs. `null` doubles as the legitimate
+"unavailable" marker, so a silent catch made a broken policy document indistinguishable from
+intended semantics.
+
+**Known and accepted, not fixed here.** (a) `redactAppConfig`'s pre-existing parse-failure branch
+returns `{}` without logging, dropping the marker along with the whole config for a corrupt
+`app-config.json`; the line is frozen by BYTE-PRESERVE and the behavior predates this wave.
+(b) `packages/contracts/src/api/app-config.ts`'s `AppConfigPrefs` DTO does not declare
+`routingPolicyVersion`, so after a restore the field rides in the `GET /api/app-config` response
+undeclared; that file is outside the WR lease. (c) A restored marker persists in the live config
+until the next restore and is therefore provenance, not a live reading — every backup overwrites
+it with the true current version, so archives are never stale. No consumer reads the field today;
+whichever one does first should read it as "the generation that produced the archive this config
+came from", never as "the current policy generation".
+
+An independent GPT-5.6 Sol pass over the same pre-fix commit raised the identical admission-blindness
+and `templateId` findings (both fixed above) plus two more:
+
+- **`routingPolicyVersion` is writable through `PUT /api/app-config`.** `ALLOWED_KEYS` and
+  `applyConfigValue` serve both the read and the write path, so a caller can submit
+  `{routingPolicyVersion: 999}` and falsify the live marker despite the comment calling it
+  provenance rather than a preference. **Accepted, not fixed:** excluding it from the write path
+  means editing `doWrite`'s frozen key loop, and the route handler lives in `routes/media.ts`,
+  outside the WR lease — the same `human:`/`blocked-on-founder` class as the `errors.ts` emission
+  migration. Impact is contained: `create.ts` overwrites the marker with the true current version on
+  every backup, so a falsified live value can never reach an archive, and no consumer reads the live
+  value today. Whoever adds the first consumer must treat it as untrusted until the write path is
+  closed.
+- **`buildId` stays `null`, so the per-build cap is skipped.** Deliberate, not an oversight: a chat
+  turn is not a build, and there is no build identity at this call site to supply. The per-stage
+  ceiling — the control that does apply to chat — is now live because `promptText` yields a real
+  token estimate, and recorded telemetry now carries real costs, so day/stage accumulation works.

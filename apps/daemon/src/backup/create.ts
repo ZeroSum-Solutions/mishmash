@@ -22,6 +22,7 @@ import {
   type ArchiveManifestEntry,
 } from './manifest.js';
 import { copyDirWithChecksums, sha256Bytes, sha256File } from './fs-helpers.js';
+import { currentRoutingPolicyVersion } from '../routing/policy.js';
 
 export interface CreateBackupOptions {
   /** The daemon's resolved RUNTIME_DATA_DIR (never a raw OD_DATA_DIR -- callers resolve first). */
@@ -38,6 +39,28 @@ export interface CreateBackupResult {
 /** BYOK provider-key material embedded in app-config.json. Stripped before the config is archived -- see the "byok-keys" excluded class. */
 const APP_CONFIG_BYOK_KEYS = ['agentCliEnv', 'agentCliEnvIntent'] as const;
 
+/**
+ * Which routing-policy generation produced this archive (WR wave, CWR-P1-3).
+ * The archived `routing_telemetry` rows are only interpretable against the
+ * policy that emitted them, so the archive has to say which one that was.
+ *
+ * A policy problem must never fail a backup -- recovery is exactly the moment
+ * the rest of the system is untrustworthy -- so a throwing loader degrades to
+ * `null` ("unavailable") instead of aborting the snapshot.
+ */
+function archivedRoutingPolicyVersion(): number | null {
+  try {
+    return currentRoutingPolicyVersion();
+  } catch (error) {
+    // Logged, never swallowed: `null` is also the legitimate "policy version
+    // unavailable" marker value, so without this line an operator inspecting a
+    // restored archive could not tell a broken policy document apart from the
+    // intended semantics.
+    console.error('[backup] routing policy version unavailable; archiving null marker', error);
+    return null;
+  }
+}
+
 function redactAppConfig(raw: string): string {
   let parsed: Record<string, unknown>;
   try {
@@ -47,6 +70,7 @@ function redactAppConfig(raw: string): string {
   }
   const clone = { ...parsed };
   for (const key of APP_CONFIG_BYOK_KEYS) delete clone[key];
+  clone.routingPolicyVersion = archivedRoutingPolicyVersion();
   return JSON.stringify(clone, null, 2);
 }
 

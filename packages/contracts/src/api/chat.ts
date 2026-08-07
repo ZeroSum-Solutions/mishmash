@@ -9,6 +9,7 @@ import type {
   PreviewVisualMarkKind,
 } from './comments';
 import type { ResearchOptions } from './research';
+import type { RoutingOverrideRequest } from './routing-decision.js';
 import type { RunContextSelection } from './context.js';
 import type { MediaExecutionPolicy } from './media.js';
 import type { AppliedPluginSnapshot } from '../plugins/apply.js';
@@ -130,6 +131,26 @@ export interface ChatRequest {
    * bucket, DS origin) used by the design_system_project run shape.
    */
   analyticsHints?: ChatAnalyticsHints;
+  /**
+   * Model-routing inputs for this turn (WR wave, Amendment 1). Together these
+   * are what let a real chat send participate in routing at all: without them
+   * the daemon can only ever see the Fallback-B "general chat" identity, so
+   * dispatch routing was honest-but-dormant for real traffic until they landed.
+   *
+   * `routingOverride` is a deliberate user CHOICE of candidate, never a bypass
+   * — the daemon resolves it into a real policy candidate and runs it through
+   * the SAME §15 hard-constraint, data-classification, and admission filters a
+   * routed decision goes through (`resolveDispatchRouting`). A malformed shape
+   * is rejected at the route boundary by `isRoutingOverrideRequest`.
+   */
+  routingOverride?: RoutingOverrideRequest | null;
+  /** Field names and types mirror `DispatchChatRequest` in
+   * `apps/daemon/src/routing/dispatch.ts` exactly, so the wire shape and the
+   * dispatcher cannot drift. `taskClass` is the one field that decides
+   * 'routed' vs 'runtime-default'; `null` means no §2/§15 identity. */
+  templateId?: string | null;
+  buildClass?: string | null;
+  taskClass?: string | null;
 }
 
 export type ChatAnalyticsEntryFrom =

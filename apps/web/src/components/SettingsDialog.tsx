@@ -152,6 +152,10 @@ import {
   type UpdaterRestartSafety,
 } from '../lib/updater';
 import { PetSettings } from './pet/PetSettings';
+// WR wave, Amendment 1: the RoutingPanel's mount point. Until this line the
+// component was built, tested, and completely unreachable from any real view
+// (t7 Sol HIGH-2) because SettingsDialog.tsx sat outside the wave's lease.
+import { RoutingPanel } from './routing/RoutingPanel';
 import { McpClientSection } from './McpClientSection';
 import { DesignSystemsSection } from './DesignSystemsSection';
 import { PrivacySection } from './PrivacySection';
@@ -198,6 +202,7 @@ import {
 } from '../utils/notifications';
 
 export type SettingsSection =
+  | 'routing'
   | 'execution'
   | 'instructions'
   | 'media'
@@ -3661,6 +3666,13 @@ export function SettingsDialog({
     // render it but SettingsSection must accept the token (see type def).
     library: { title: '', subtitle: '' },
     about: { title: t('settings.about'), subtitle: t('settings.aboutHint') },
+    // Hardcoded English, matching RoutingPanel's own strings: this wave's
+    // lease does not cover apps/web/src/i18n/**, so a real t() key cannot be
+    // added until a tranche gets that grant. Same limitation, same TODO.
+    routing: {
+      title: 'Model routing',
+      subtitle: 'Policy version, lane meters, and decision preview',
+    },
   };
   const activeHeader = sectionHeader[activeSection];
   const visibleAgents = agents.filter(isVisibleLocalCliAgent);
@@ -4060,6 +4072,17 @@ export function SettingsDialog({
               <span>
                 <strong>{t('settings.envConfigure')}</strong>
                 <small>{`${t('settings.localCli')} / ${t('settings.modeApiMeta')}`}</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              className={`settings-nav-item${activeSection === 'routing' ? ' active' : ''}`}
+              onClick={() => setActiveSection('routing')}
+            >
+              <Icon name="fork" size={18} />
+              <span>
+                <strong>Model routing</strong>
+                <small>Policy / lanes / decisions</small>
               </span>
             </button>
             <button
@@ -5515,6 +5538,8 @@ export function SettingsDialog({
               }}
             />
           ) : null}
+          {activeSection === 'routing' ? <RoutingPanel /> : null}
+
           {activeSection === 'integrations' ? <IntegrationsSection /> : null}
 
           {activeSection === 'mcpClient' ? <McpClientSection surface="settings" /> : null}

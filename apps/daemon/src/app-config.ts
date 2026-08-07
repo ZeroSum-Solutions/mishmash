@@ -123,6 +123,12 @@ export interface AppConfigPrefs {
   // `metadata.linkedDirs` (read-only `--add-dir` awareness, no Design Files
   // import). Stored most-recent-first; capped at RECENT_LINKED_DIRS_MAX.
   recentLinkedDirs?: string[];
+  // Which routing-policy generation the surrounding config belongs to. Written
+  // into the ARCHIVED copy by apps/daemon/src/backup/create.ts (never a user
+  // preference), and allowlisted here so a restored config keeps the marker
+  // instead of having it silently dropped by filterAllowedKeys. `null` records
+  // "policy version unavailable when this archive was produced".
+  routingPolicyVersion?: number | null;
 }
 
 // Cap on how many recent working directories we remember. Keeps the picker's
@@ -148,6 +154,7 @@ const ALLOWED_KEYS: ReadonlySet<keyof AppConfigPrefs> = new Set([
   'projectLocations',
   'defaultProjectLocationId',
   'recentLinkedDirs',
+  'routingPolicyVersion',
 ] as const);
 
 function configFile(dataDir: string): string {
@@ -625,6 +632,18 @@ function applyConfigValue(
         if (cleaned.length >= RECENT_LINKED_DIRS_MAX) break;
       }
       target[key] = cleaned;
+    } else {
+      delete target[key];
+    }
+    return;
+  }
+  if (key === 'routingPolicyVersion') {
+    // A backup-provenance marker, so it is only ever trusted as a whole
+    // non-negative integer; anything else (a string, NaN, a float) means the
+    // file was hand-edited or corrupted and the marker is discarded rather
+    // than propagated as a bogus policy generation.
+    if (value === null || (typeof value === 'number' && Number.isInteger(value) && value >= 0)) {
+      target[key] = value;
     } else {
       delete target[key];
     }

@@ -39,3 +39,33 @@ export function loadRoutingPolicy(): RoutingPolicyDocument {
 export function currentRoutingPolicyVersion(): number {
   return loadRoutingPolicy().policyVersion;
 }
+
+/**
+ * Every `taskClass` this policy can actually resolve: the §2 model-table rows'
+ * own match values plus the §15 program assignments' selectors. Membership
+ * only -- this deliberately does NOT reimplement `decideRouting`'s matching
+ * (stage, context-window bounds, template narrowing all still apply). It
+ * exists so a CALLER-SUPPLIED task class can be checked at the request
+ * boundary and dropped when the policy has no row for it.
+ *
+ * Why that matters: `decideRouting` treats "a task class was named but nothing
+ * matched" as a terminal `'error'`, which the dispatch layer surfaces as a
+ * BLOCKED run. That is correct for an internal caller naming a class it should
+ * know, but wrong for an untrusted `/api/chat` body, where a stale or garbage
+ * value would take down an otherwise ordinary chat turn. Filtering to known
+ * values at the boundary keeps the unknown case on WR-routing.md Fallback B
+ * (plain runtime-default chat) instead.
+ */
+export function knownTaskClasses(policy: RoutingPolicyDocument): ReadonlySet<string> {
+  const known = new Set<string>();
+  for (const row of policy.modelTable) {
+    const taskClass = row.match.taskClass;
+    if (typeof taskClass === 'string' && taskClass.length > 0) known.add(taskClass);
+  }
+  for (const assignment of policy.programAssignments ?? []) {
+    if (typeof assignment.taskSelector === 'string' && assignment.taskSelector.length > 0) {
+      known.add(assignment.taskSelector);
+    }
+  }
+  return known;
+}
