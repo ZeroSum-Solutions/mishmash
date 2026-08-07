@@ -640,6 +640,9 @@ import { ensureRoutingCooldownsTable, ensureRoutingRunSideEffectsTable } from '.
 // apps/daemon/src/routing/dispatch.ts's own header for the full rationale.
 import { recordDispatchIntent, reconcilePostRun, resolveDispatchRouting } from './routing/dispatch.js';
 import { loadRoutingPolicy } from './routing/policy.js';
+// Amendment 1: membership check for a caller-supplied taskClass (see the
+// dispatch hook). Separate statement because the line above is byte-frozen.
+import { knownTaskClasses } from './routing/policy.js';
 import { registerTerminalRoutes } from './routes/terminal.js';
 import { createTerminalService } from './terminals.js';
 import { confinePreviewCwd, createPreviewService } from './previews.js';
@@ -5293,19 +5296,46 @@ export async function startServer({
     // resolve a genuinely 'routed' decision instead of always landing on
     // WR-routing.md Fallback B.
     //
-    // Read off the same raw body as `routingOverride` and normalized to
-    // `string | null`: a non-string or blank value becomes null (no §2/§15
-    // identity) rather than being trusted, so a malformed field degrades to
-    // the pre-Amendment behavior instead of spoofing a policy row. Selecting
-    // a task class is not a privilege escalation -- the resolved candidate
-    // still passes through the same §15 hard-constraint, data-classification
-    // (fail-closed 'client-confidential' default) and admission filters.
-    const wrIdentityField = (value: unknown): string | null =>
-      typeof value === 'string' && value.trim().length > 0 ? value : null;
+    // Everything below treats the chat body as UNTRUSTED input:
+    //   * non-string or blank -> null (no §2/§15 identity), so a malformed
+    //     field degrades to the pre-Amendment behavior instead of spoofing a
+    //     policy row;
+    //   * over-long -> null. `templateId` reaches the routing_telemetry
+    //     `template_id` column on EVERY turn (runtime-default ones included),
+    //     and this route's 4mb JSON body limit is not a sane bound for a
+    //     single telemetry column;
+    //   * an UNKNOWN taskClass -> null, not passed through. decideRouting
+    //     treats "a task class was named but nothing matched" as a terminal
+    //     error, which the dispatch layer surfaces as a BLOCKED run -- so a
+    //     stale or garbage value from a client would take down an otherwise
+    //     ordinary chat turn. Membership-checking it here keeps the unknown
+    //     case on Fallback B instead.
+    //
+    // Naming a KNOWN task class is a deliberate caller choice, not a privilege
+    // bypass: the resolved candidate still passes the same §15 hard-constraint,
+    // data-classification, and admission filters as any routed decision.
+    const WR_IDENTITY_MAX_LEN = 200;
+    const wrIdentityField = (value: unknown): string | null => {
+      if (typeof value !== 'string') return null;
+      const trimmed = value.trim();
+      if (trimmed.length === 0 || trimmed.length > WR_IDENTITY_MAX_LEN) return null;
+      return trimmed;
+    };
+    const wrRequestedTaskClass = wrIdentityField(wrChatBodyAny?.taskClass);
     const wrRoutingIdentity = {
       templateId: wrIdentityField(wrChatBodyAny?.templateId),
       buildClass: wrIdentityField(wrChatBodyAny?.buildClass),
-      taskClass: wrIdentityField(wrChatBodyAny?.taskClass),
+      taskClass:
+        wrRequestedTaskClass && knownTaskClasses(loadRoutingPolicy()).has(wrRequestedTaskClass)
+          ? wrRequestedTaskClass
+          : null,
+      // Admission control needs a real token estimate. Left null,
+      // resolveContextEstimateTokens() yields 0, every estimatedRunCostUsd()
+      // is $0, and the per-stage / per-build ceilings stop constraining
+      // anything -- routing would be free to select expensive candidates with
+      // cost containment silently disabled. The user's own message text is the
+      // honest estimate source available at this point.
+      promptText: typeof wrChatBodyAny?.message === 'string' ? wrChatBodyAny.message : null,
     };
     try {
       const wrDispatchRouting = resolveDispatchRouting({
@@ -5317,16 +5347,18 @@ export async function startServer({
           buildClass: null,
           stage: null,
           taskClass: null,
-          // Amendment 1: the four lines above are the frozen pre-Amendment
-          // defaults (BYTE-PRESERVE makes every overlap-file edit additive, so
-          // they stay put). This spread lands AFTER them and therefore wins,
-          // carrying the real ChatRequest-supplied identity when the client
-          // sent one and re-asserting `null` when it did not.
-          ...wrRoutingIdentity,
           sensitivityClass: null,
           contextEstimateTokens: null,
           promptText: null,
           buildId: null,
+          // Amendment 1: every line above is a frozen pre-Amendment default
+          // (BYTE-PRESERVE keeps overlap-file edits additive, so they stay
+          // put). This spread lands AFTER them and therefore wins, supplying
+          // the real ChatRequest identity plus the promptText admission
+          // control needs. Anything it does not name keeps its frozen value --
+          // notably `sensitivityClass`, deliberately left null so dispatch
+          // applies its fail-closed 'client-confidential' default.
+          ...wrRoutingIdentity,
           designSystemId: typeof designSystemId === 'string' ? designSystemId : null,
           runtimeDefault: { runtimeId: def.id, model: safeModel ?? 'default', lane: 'runtime-default' },
         },

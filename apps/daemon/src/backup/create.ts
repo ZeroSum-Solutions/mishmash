@@ -51,7 +51,12 @@ const APP_CONFIG_BYOK_KEYS = ['agentCliEnv', 'agentCliEnvIntent'] as const;
 function archivedRoutingPolicyVersion(): number | null {
   try {
     return currentRoutingPolicyVersion();
-  } catch {
+  } catch (error) {
+    // Logged, never swallowed: `null` is also the legitimate "policy version
+    // unavailable" marker value, so without this line an operator inspecting a
+    // restored archive could not tell a broken policy document apart from the
+    // intended semantics.
+    console.error('[backup] routing policy version unavailable; archiving null marker', error);
     return null;
   }
 }

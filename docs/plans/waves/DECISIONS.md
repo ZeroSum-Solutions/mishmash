@@ -1125,3 +1125,42 @@ left to a founder-reviewed amendment. Also still deferred: the i18n keys for the
 RoutingPanel's own existing TODO) and the analytics mapper entry for the new settings section
 (`packages/contracts/src/analytics/events/mappers.ts` is unleased; `'routing'` falls through to the
 mapper's default bucket).
+
+### Addendum — adversarial review of the P1 tranche (2026-08-07)
+
+Three defects were found in the first cut of the chat-identity wiring and fixed before landing.
+All three were consequences of the same mistake: turning `templateId`/`buildClass`/`taskClass`
+into caller-supplied input without treating them as untrusted.
+
+1. **An unknown `taskClass` failed the whole chat turn.** `decideRouting` grades "named but
+   nothing matched" as a terminal `'error'`, which the dispatch layer surfaces as a BLOCKED run.
+   One stale or garbage string from a client would therefore take down an ordinary chat turn.
+   Fixed with a new `knownTaskClasses(policy)` membership helper in `routing/policy.ts`
+   (model-table match values plus §15 program-assignment selectors): an unrecognized class is
+   dropped to `null` at the request boundary, keeping the turn on Fallback B.
+2. **Admission control was structurally blind on this path.** `promptText` and
+   `contextEstimateTokens` both stayed `null`, so `resolveContextEstimateTokens` returned `0`,
+   every `estimatedRunCostUsd` was `$0`, and the per-stage ceiling could never trip — i.e. the
+   tranche made expensive candidates selectable at exactly the moment the cost gate stopped
+   constraining them. Fixed by moving the additive spread to *after* the frozen
+   `promptText`/`buildId` defaults and supplying the user's message as the estimate source.
+   `sensitivityClass` is deliberately still not in the spread, so dispatch keeps applying its
+   fail-closed `'client-confidential'` default.
+3. **`templateId` was an unbounded sink into `routing_telemetry.template_id`.** It is recorded on
+   every turn including runtime-default ones, bounded only by the route's 4mb JSON limit. Now
+   capped at 200 characters (over-long degrades to `null`) and trimmed.
+
+Also added: the `archivedRoutingPolicyVersion()` catch now logs. `null` doubles as the legitimate
+"unavailable" marker, so a silent catch made a broken policy document indistinguishable from
+intended semantics.
+
+**Known and accepted, not fixed here.** (a) `redactAppConfig`'s pre-existing parse-failure branch
+returns `{}` without logging, dropping the marker along with the whole config for a corrupt
+`app-config.json`; the line is frozen by BYTE-PRESERVE and the behavior predates this wave.
+(b) `packages/contracts/src/api/app-config.ts`'s `AppConfigPrefs` DTO does not declare
+`routingPolicyVersion`, so after a restore the field rides in the `GET /api/app-config` response
+undeclared; that file is outside the WR lease. (c) A restored marker persists in the live config
+until the next restore and is therefore provenance, not a live reading — every backup overwrites
+it with the true current version, so archives are never stale. No consumer reads the field today;
+whichever one does first should read it as "the generation that produced the archive this config
+came from", never as "the current policy generation".
