@@ -463,9 +463,10 @@ const OVERLAP_FILES: readonly string[] = [
 // that file's ADDED lines.
 //
 // Each entry is consumed at most once per file, so declaring a line does not
-// license removing several copies of it. A `from` that matches more than one
+// license removing several copies of it. A `from` that matches MORE THAN ONE
 // line at baseCommit is rejected outright by the self-check below, because
-// content-addressed exceptions cannot say WHICH copy they meant.
+// content-addressed exceptions cannot say WHICH copy they meant. A `from`
+// matching ZERO lines is the spent/inert state described below and is fine.
 //
 // These entries go inert the moment the amendment lands: baseCommit then
 // carries the `to` lines, so the `from` content is no longer present to be
@@ -915,13 +916,19 @@ safely(
         ? BYTE_PRESERVE_EXCEPTIONS[f]!
         : [];
       // Self-check: a content-addressed exception cannot say WHICH copy of a
-      // repeated line it meant, so an ambiguous `from` is refused rather than
+      // repeated line it meant, so an AMBIGUOUS `from` is refused rather than
       // silently licensing the wrong one.
+      //
+      // Zero matches is the opposite case and is expected: once the amendment
+      // lands, baseCommit carries the `to` lines and every spent entry matches
+      // nothing. That is precisely the documented "goes inert after merge"
+      // state, so it must not be an error -- a spent entry cannot sanction
+      // anything either way, because no removal can match it.
       const baseLines = existedAtBase ? gitOrFail(['show', `${baseCommit}:${f}`]).split('\n') : [];
       for (const ex of declared) {
         const occurrences = baseLines.filter((l) => l === ex.from).length;
-        if (occurrences !== 1) {
-          problems.push(`${f}: exception \`from\` matches ${occurrences} line(s) at baseCommit, must match exactly 1 (ambiguous or stale): ${ex.from}`);
+        if (occurrences > 1) {
+          problems.push(`${f}: exception \`from\` matches ${occurrences} lines at baseCommit and cannot say which one it licenses (ambiguous): ${ex.from}`);
         }
       }
       const additions = diffAdditions(baseCommit, 'HEAD', f);
