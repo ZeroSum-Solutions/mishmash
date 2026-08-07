@@ -1164,3 +1164,21 @@ until the next restore and is therefore provenance, not a live reading — every
 it with the true current version, so archives are never stale. No consumer reads the field today;
 whichever one does first should read it as "the generation that produced the archive this config
 came from", never as "the current policy generation".
+
+An independent GPT-5.6 Sol pass over the same pre-fix commit raised the identical admission-blindness
+and `templateId` findings (both fixed above) plus two more:
+
+- **`routingPolicyVersion` is writable through `PUT /api/app-config`.** `ALLOWED_KEYS` and
+  `applyConfigValue` serve both the read and the write path, so a caller can submit
+  `{routingPolicyVersion: 999}` and falsify the live marker despite the comment calling it
+  provenance rather than a preference. **Accepted, not fixed:** excluding it from the write path
+  means editing `doWrite`'s frozen key loop, and the route handler lives in `routes/media.ts`,
+  outside the WR lease — the same `human:`/`blocked-on-founder` class as the `errors.ts` emission
+  migration. Impact is contained: `create.ts` overwrites the marker with the true current version on
+  every backup, so a falsified live value can never reach an archive, and no consumer reads the live
+  value today. Whoever adds the first consumer must treat it as untrusted until the write path is
+  closed.
+- **`buildId` stays `null`, so the per-build cap is skipped.** Deliberate, not an oversight: a chat
+  turn is not a build, and there is no build identity at this call site to supply. The per-stage
+  ceiling — the control that does apply to chat — is now live because `promptText` yields a real
+  token estimate, and recorded telemetry now carries real costs, so day/stage accumulation works.
