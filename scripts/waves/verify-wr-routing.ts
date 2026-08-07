@@ -317,6 +317,7 @@ const CANONICAL_ALLOW: readonly string[] = [
   'apps/web/src/components/SettingsDialog.tsx',
   'docs/plans/waves/DECISIONS.md',
   'apps/web/tests/settings-dialog-routing.test.tsx',
+  'apps/daemon/src/app-config.ts',
 ];
 const CANONICAL_DENY: readonly string[] = [
   'apps/web/src/providers/registry.ts',
@@ -405,6 +406,10 @@ const OVERLAP_FILES: readonly string[] = [
   'packages/contracts/src/errors.ts',
   'apps/web/src/components/SettingsDialog.tsx',
   'docs/plans/waves/DECISIONS.md',
+  // Sol round-2 P1: the archived routingPolicyVersion key must survive
+  // filterAllowedKeys, so the allowlist file itself is granted additively.
+  // Like SettingsDialog.tsx it intersects no other wave's lease.
+  'apps/daemon/src/app-config.ts',
 ];
 
 // fix-round-3, finding 4: extended to cover every remaining normative
