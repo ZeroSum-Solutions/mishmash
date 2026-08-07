@@ -1087,3 +1087,41 @@ overlapping waves are landed, no live concurrent writer). Deliberately NOT grant
 cross-runtime routed-application hook move before `getAgentDef` in `server.ts` (baseline
 control-flow change — remains a founder-reviewed edit) and `runtimes/**` side-effect/lane
 observability (future W1/WR coordination).
+
+## 2026-08-06 — WR P1 tranche closed: routing policy marker, chat wire fields, RoutingPanel mount
+
+The follow-on tranche Amendment 1 existed to unblock. Landed against `main` at `acf235cc9`
+(the amendment's own squash), consuming five of the seven grants:
+
+- **`apps/daemon/src/backup/create.ts` + `apps/daemon/src/app-config.ts`** — the archived
+  `app-config.json` now carries `routingPolicyVersion` (the active policy generation), and
+  `routingPolicyVersion?: number | null` is allowlisted so the marker survives
+  `filterAllowedKeys` on the way back in. A policy-loader failure degrades the marker to `null`
+  rather than failing the backup: recovery must keep working when the thing being recovered from
+  is broken. **This flips CWR-P1-3, and with it the P1 tranche register entry `open` → `complete`.**
+- **`packages/contracts/src/api/chat.ts`** — `routingOverride?: RoutingOverrideRequest | null`
+  (referencing the existing export, not a parallel shape) plus `templateId`/`buildClass`/
+  `taskClass`. `server.ts`'s dispatch hook reads them off the chat body, so ordinary `/api/chat`
+  traffic can now resolve a genuinely routed decision instead of always landing on Fallback B.
+  Non-string or blank values degrade to `null`; a supplied task class still passes through the
+  same §15 hard-constraint, data-classification, and admission filters.
+- **`apps/web/src/components/SettingsDialog.tsx`** — the RoutingPanel mount, closing the t7 Sol
+  HIGH-2 disposition (the panel had been built, tested, and unreachable from any real view since
+  t2). Guarded by `apps/web/tests/settings-dialog-routing.test.tsx`, which asserts both direct
+  render and sidebar reachability.
+
+Every edit to a BYTE-PRESERVE overlap file is strictly additive (zero removed or modified lines),
+including `server.ts`, where the dispatch call site's frozen `templateId`/`buildClass`/`taskClass`
+nulls are left in place and overridden by a spread inserted after them.
+
+**Deferred, and why.** `packages/contracts/src/errors.ts` received its `'ROUTING_BLOCKED'` member
+as granted, but the daemon still *emits* `'FORBIDDEN'` + `RoutingBlockedErrorDetail` at
+`server.ts`'s two block points. Switching the emitted code would modify existing `server.ts` lines,
+which BYTE-PRESERVE forbids — by the "one-line exception process" in "Tranche-entry gate for P1/P2"
+that is `human:` judgment resolving to `blocked-on-founder`, never an agent-side downgrade to
+"additive". The member is therefore landed and legal for consumers, and the emission migration is
+left to a founder-reviewed amendment. Also still deferred: the i18n keys for the routing section
+(`apps/web/src/i18n/**` remains outside the lease, so the strings are hardcoded English, matching
+RoutingPanel's own existing TODO) and the analytics mapper entry for the new settings section
+(`packages/contracts/src/analytics/events/mappers.ts` is unleased; `'routing'` falls through to the
+mapper's default bucket).

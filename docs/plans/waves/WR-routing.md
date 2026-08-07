@@ -210,14 +210,18 @@ fix-round-2, point A.4; hardcoded-map fix-round-3, finding 2).
 | Tranche | Status | Owns criteria |
 |---|---|---|
 | P0 | complete | CWR-P0-1, CWR-P0-2, CWR-P0-3, CWR-P0-4, LEASE, LEASE-INTEGRITY, HEAD-DRIFT, BYTE-PRESERVE, GATE-INTEGRITY, CWR-P2-5, PRE-LANDING-SCOPE |
-| P1 | open | CWR-P1-1, CWR-P1-2, CWR-P1-3 |
+| P1 | complete | CWR-P1-1, CWR-P1-2, CWR-P1-3 |
 | P2 | complete | CWR-P2-1, CWR-P2-2, CWR-P2-3, CWR-P2-4 |
 
-P1 remains `open` solely because CWR-P1-3's frozen probe requires a `routingPolicyVersion`
-reference in `apps/daemon/src/backup/create.ts`, which sits outside the WR lease — a governance
-amendment (blocked-on-founder, drafted alongside this wave's landing) must extend the lease before
-a WR tranche can satisfy it. CWR-P1-1 and CWR-P1-2 already pass; P1 flips in the follow-up tranche
-after the amendment lands.
+**P1 closed 2026-08-06** (Amendment 1 follow-on tranche). It had remained `open` solely because
+CWR-P1-3's frozen probe requires a `routingPolicyVersion` reference in
+`apps/daemon/src/backup/create.ts`, which sat outside the WR lease; Amendment 1 (merged to `main`
+as `acf235cc9`) granted that file plus `apps/daemon/src/app-config.ts`, and this tranche used both:
+`create.ts` stamps the active policy version into the archived `app-config.json`, and the
+allowlist entry stops `filterAllowedKeys` from silently dropping the marker on the way back in.
+CWR-P1-1 and CWR-P1-2 were already passing. All four "Tranche-entry gate for P1/P2" conditions
+were satisfied at the flipping commit: `post-landing` mode, fresh-main ancestry, zero removed or
+modified lines on all twelve `OVERLAP_FILES`, and no W6a path touched.
 
 **Grading rule (fix-round-1, HIGH-3, replacing the removed `skip` status):** every criterion in
 every tranche is graded `pass`, `fail`, or `blocked-on-founder` on every verifier run — there is no

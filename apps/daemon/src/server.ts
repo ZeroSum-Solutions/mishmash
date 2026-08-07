@@ -5286,6 +5286,27 @@ export async function startServer({
       );
     }
     const wrRoutingOverride = isRoutingOverrideRequest(wrRawRoutingOverride) ? wrRawRoutingOverride : null;
+    // AMENDMENT 1 (2026-08-06) -- SUPERSEDES the "ChatRequest has none" claim
+    // in the comment block above, which was accurate only while chat.ts sat
+    // outside this wave's lease. `templateId`/`buildClass`/`taskClass` are now
+    // first-class ChatRequest members, so ordinary /api/chat traffic can
+    // resolve a genuinely 'routed' decision instead of always landing on
+    // WR-routing.md Fallback B.
+    //
+    // Read off the same raw body as `routingOverride` and normalized to
+    // `string | null`: a non-string or blank value becomes null (no §2/§15
+    // identity) rather than being trusted, so a malformed field degrades to
+    // the pre-Amendment behavior instead of spoofing a policy row. Selecting
+    // a task class is not a privilege escalation -- the resolved candidate
+    // still passes through the same §15 hard-constraint, data-classification
+    // (fail-closed 'client-confidential' default) and admission filters.
+    const wrIdentityField = (value: unknown): string | null =>
+      typeof value === 'string' && value.trim().length > 0 ? value : null;
+    const wrRoutingIdentity = {
+      templateId: wrIdentityField(wrChatBodyAny?.templateId),
+      buildClass: wrIdentityField(wrChatBodyAny?.buildClass),
+      taskClass: wrIdentityField(wrChatBodyAny?.taskClass),
+    };
     try {
       const wrDispatchRouting = resolveDispatchRouting({
         db,
@@ -5296,6 +5317,12 @@ export async function startServer({
           buildClass: null,
           stage: null,
           taskClass: null,
+          // Amendment 1: the four lines above are the frozen pre-Amendment
+          // defaults (BYTE-PRESERVE makes every overlap-file edit additive, so
+          // they stay put). This spread lands AFTER them and therefore wins,
+          // carrying the real ChatRequest-supplied identity when the client
+          // sent one and re-asserting `null` when it did not.
+          ...wrRoutingIdentity,
           sensitivityClass: null,
           contextEstimateTokens: null,
           promptText: null,

@@ -124,6 +124,15 @@ export const API_ERROR_CODES = [
   'CONNECTOR_RATE_LIMITED',
   'CONNECTOR_OUTPUT_TOO_LARGE',
   'CONNECTOR_EXECUTION_FAILED',
+  // Model routing refused to dispatch: a PRD §15 hard constraint, a data
+  // classification rule, or an admission-control ceiling ruled out every
+  // candidate lane. The precise cause rides in `ApiError#details` as a
+  // `RoutingBlockedErrorDetail` (`packages/contracts/src/api/routing-decision.ts`).
+  // Distinct from 'FORBIDDEN' (an authorization refusal): here the caller is
+  // entitled to the operation and the POLICY, not the permission model, is what
+  // stopped it. t9 shipped the interim 'FORBIDDEN' + detail shape only because
+  // this file was outside the WR lease; Amendment 1 granted the line.
+  'ROUTING_BLOCKED',
   'INTERNAL_ERROR',
 ] as const;
 
