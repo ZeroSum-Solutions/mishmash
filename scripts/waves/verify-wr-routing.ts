@@ -283,6 +283,19 @@ function diffRemovals(fromRef: string, toRef: string, filePath: string, ignorePa
   return removals;
 }
 
+// Mirror of diffRemovals for the '+' side. Used only by BYTE-PRESERVE, to
+// confirm that a sanctioned line change installed the replacement the
+// amendment actually authorised rather than an arbitrary one.
+function diffAdditions(fromRef: string, toRef: string, filePath: string): string[] {
+  const diff = gitOrFail(['diff', '--unified=0', `${fromRef}..${toRef}`, '--', filePath]);
+  const additions: string[] = [];
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('--- ') || line.startsWith('+++ ') || line.startsWith('diff --git') || line.startsWith('index ') || line.startsWith('@@')) continue;
+    if (line.startsWith('+')) additions.push(line.slice(1));
+  }
+  return additions;
+}
+
 function sameSet(a: readonly string[], b: readonly string[]): boolean {
   const sa = [...a].sort();
   const sb = [...b].sort();
@@ -318,6 +331,11 @@ const CANONICAL_ALLOW: readonly string[] = [
   'docs/plans/waves/DECISIONS.md',
   'apps/web/tests/settings-dialog-routing.test.tsx',
   'apps/daemon/src/app-config.ts',
+  // Amendment 2 (2026-08-07, founder-granted): two additive grants, plus the
+  // five verbatim line exceptions in BYTE_PRESERVE_EXCEPTIONS above (which
+  // apply to already-granted files and add no new paths).
+  'packages/contracts/src/api/app-config.ts',
+  'apps/daemon/src/http/response.ts',
 ];
 const CANONICAL_DENY: readonly string[] = [
   'apps/web/src/providers/registry.ts',
@@ -388,6 +406,12 @@ const EXPECTED_OVERLAPS: readonly Overlap[] = [
   { file: 'apps/web/tests/settings-dialog-routing.test.tsx', pattern: 'apps/web/tests/**', wave: 'W1' },
   { file: 'apps/web/tests/settings-dialog-routing.test.tsx', pattern: 'apps/web/tests/**', wave: 'W3' },
   { file: 'apps/web/tests/settings-dialog-routing.test.tsx', pattern: 'apps/web/tests/**', wave: 'W4' },
+  // Amendment 2 (2026-08-07) -- the contracts app-config DTO falls inside W1's
+  // and W4's packages/contracts/** the same way chat.ts and errors.ts do.
+  // apps/daemon/src/http/response.ts intersects no other wave's lease (checked
+  // by glob against every non-WR entry), so it has no row.
+  { file: 'packages/contracts/src/api/app-config.ts', pattern: 'packages/contracts/**', wave: 'W1' },
+  { file: 'packages/contracts/src/api/app-config.ts', pattern: 'packages/contracts/**', wave: 'W4' },
 ];
 
 const OVERLAP_FILES: readonly string[] = [
@@ -411,7 +435,73 @@ const OVERLAP_FILES: readonly string[] = [
   // filterAllowedKeys, so the allowlist file itself is granted additively.
   // Like SettingsDialog.tsx it intersects no other wave's lease.
   'apps/daemon/src/app-config.ts',
+  // Amendment 2 (2026-08-07): both new grants are byte-preserved on the same
+  // terms. The contracts app-config DTO is additive (a field + a derived
+  // request type); the status map gains one row.
+  'packages/contracts/src/api/app-config.ts',
+  'apps/daemon/src/http/response.ts',
 ];
+
+// Amendment 2 (2026-08-07, founder-granted): the ONLY pre-existing lines this
+// wave may change, declared VERBATIM so that the lease's "one-line exception
+// process" is a machine-checked artifact instead of prose in a PR body.
+//
+// BYTE-PRESERVE still fails on every other removed or changed line in these
+// files. That is the entire reason the exception is enumerated rather than the
+// criterion being allowed to go red: a blanket red says "something in here
+// changed" and stops distinguishing the five sanctioned edits from a sixth
+// unsanctioned one, throwing away the guarantee exactly where the wave is
+// carving into it.
+//
+// Each entry pins BOTH sides: `from` is the verbatim pre-amendment line, `to`
+// is the replacement the grant actually authorises. Recording only `from`
+// would let any replacement through -- swapping the second `'FORBIDDEN'` for
+// `'INTERNAL_ERROR'` rather than `'ROUTING_BLOCKED'` would still have produced
+// a green BYTE-PRESERVE, so a P0 criterion would be reporting that an
+// unauthorised change was authorised (GPT-5.6 Sol adversarial review, P1).
+// A removal is sanctioned only when its `to` line is genuinely present among
+// that file's ADDED lines.
+//
+// Each entry is consumed at most once per file, so declaring a line does not
+// license removing several copies of it. A `from` that matches more than one
+// line at baseCommit is rejected outright by the self-check below, because
+// content-addressed exceptions cannot say WHICH copy they meant.
+//
+// These entries go inert the moment the amendment lands: baseCommit then
+// carries the `to` lines, so the `from` content is no longer present to be
+// removed and no later diff can match them.
+interface LineException {
+  readonly from: string;
+  readonly to: string;
+}
+const BYTE_PRESERVE_EXCEPTIONS: Readonly<Record<string, readonly LineException[]>> = {
+  // Item 1 -- emit the dedicated 'ROUTING_BLOCKED' code Amendment 1 declared,
+  // instead of the interim 'FORBIDDEN' (an authorization refusal) for what is
+  // actually a policy refusal.
+  'apps/daemon/src/server.ts': [
+    {
+      from: "        return design.runs.fail(run, 'FORBIDDEN', wrDispatchRouting.blocked.message, {",
+      to: "        return design.runs.fail(run, 'ROUTING_BLOCKED', wrDispatchRouting.blocked.message, {",
+    },
+    { from: "            'FORBIDDEN',", to: "            'ROUTING_BLOCKED'," },
+  ],
+  // Item 4 -- an unparseable app-config must not be archived as a bare `{}`
+  // with the exception swallowed. Needs the error binding and the return.
+  'apps/daemon/src/backup/create.ts': [
+    { from: '  } catch {', to: '  } catch (error) {' },
+    { from: '    return JSON.stringify({});', to: '    return JSON.stringify(' },
+  ],
+  // Item 3 -- the update DTO was DERIVED from the full prefs shape, so adding
+  // `routingPolicyVersion` to `AppConfigPrefs` would have silently declared a
+  // server-owned key writable. Narrowing the derivation is the fix, and a
+  // derived type alias cannot be narrowed by adding a line beside it.
+  'packages/contracts/src/api/app-config.ts': [
+    {
+      from: 'export type UpdateAppConfigRequest = Partial<AppConfigPrefs>;',
+      to: 'export type UpdateAppConfigRequest = Partial<Omit<AppConfigPrefs, ServerOwnedAppConfigKey>>;',
+    },
+  ],
+};
 
 // fix-round-3, finding 4: extended to cover every remaining normative
 // prose section, not just the data-shaped ones. fix-round-4, finding 1:
@@ -808,9 +898,10 @@ safely(
 safely(
   'BYTE-PRESERVE',
   `git cat-file -e <ref>:<file>; git diff --unified=0 ${baseCommit}..HEAD -- <each overlap file>`,
-  'every overlap file that existed at baseCommit still exists at HEAD (missing = unconditional fail) and has zero removed/changed lines since baseCommit',
+  'every overlap file that existed at baseCommit still exists at HEAD (missing = unconditional fail) and has zero removed/changed lines since baseCommit, except the lines Amendment 2 declares verbatim in BYTE_PRESERVE_EXCEPTIONS',
   () => {
     const problems: string[] = [];
+    let sanctionedCount = 0;
     for (const f of OVERLAP_FILES) {
       const existedAtBase = existsAtRef(baseCommit, f);
       if (!existedAtBase) continue;
@@ -820,11 +911,38 @@ safely(
         continue;
       }
       const removals = diffRemovals(baseCommit, 'HEAD', f);
-      if (removals.length > 0) problems.push(`${f}: ${removals.length} removed/changed line(s):\n${removals.slice(0, 5).join('\n')}`);
+      const declared = Object.prototype.hasOwnProperty.call(BYTE_PRESERVE_EXCEPTIONS, f)
+        ? BYTE_PRESERVE_EXCEPTIONS[f]!
+        : [];
+      // Self-check: a content-addressed exception cannot say WHICH copy of a
+      // repeated line it meant, so an ambiguous `from` is refused rather than
+      // silently licensing the wrong one.
+      const baseLines = existedAtBase ? gitOrFail(['show', `${baseCommit}:${f}`]).split('\n') : [];
+      for (const ex of declared) {
+        const occurrences = baseLines.filter((l) => l === ex.from).length;
+        if (occurrences !== 1) {
+          problems.push(`${f}: exception \`from\` matches ${occurrences} line(s) at baseCommit, must match exactly 1 (ambiguous or stale): ${ex.from}`);
+        }
+      }
+      const additions = diffAdditions(baseCommit, 'HEAD', f);
+      // Each declared exception is consumed at most once, so a single granted
+      // line cannot license removing several identical copies of itself.
+      const unclaimed = [...declared];
+      const unsanctioned = removals.filter((line) => {
+        const at = unclaimed.findIndex((ex) => ex.from === line.slice(1));
+        if (at === -1) return true;
+        // The grant authorises a SPECIFIC replacement, not merely the deletion.
+        if (!additions.includes(unclaimed[at]!.to)) return true;
+        unclaimed.splice(at, 1);
+        sanctionedCount += 1;
+        return false;
+      });
+      if (unsanctioned.length > 0) problems.push(`${f}: ${unsanctioned.length} removed/changed line(s) NOT covered by an Amendment 2 exception (a declared \`from\` whose authorised \`to\` is absent from the diff counts as uncovered):\n${unsanctioned.slice(0, 5).join('\n')}`);
     }
+    const sanctionedNote = sanctionedCount > 0 ? `; ${sanctionedCount} Amendment 2 sanctioned line change(s) accounted for` : '';
     return {
       status: problems.length === 0 ? 'pass' : 'fail',
-      evidence: problems.length === 0 ? `zero removed/changed lines and zero deletions across all ${OVERLAP_FILES.length} overlap files since baseCommit=${baseCommit}` : problems.join('\n\n'),
+      evidence: problems.length === 0 ? `zero unsanctioned removed/changed lines and zero deletions across all ${OVERLAP_FILES.length} overlap files since baseCommit=${baseCommit}${sanctionedNote}` : problems.join('\n\n'),
     };
   },
 );

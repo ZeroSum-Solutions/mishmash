@@ -61,12 +61,60 @@ function archivedRoutingPolicyVersion(): number | null {
   }
 }
 
+/**
+ * In-band diagnostic written into the ARCHIVED app-config when the live file
+ * could not be parsed (Amendment 2, item 4). It is deliberately not an
+ * `AppConfigPrefs` key, so `filterAllowedKeys` drops it the moment a restored
+ * config is read -- it is a message to the operator reading the archive, never
+ * state the daemon consumes.
+ */
+const APP_CONFIG_UNPARSEABLE_MARKER = {
+  code: 'APP_CONFIG_UNPARSEABLE',
+  message:
+    'The live app-config.json was unparseable when this archive was created; preferences were not archived.',
+} as const;
+
+/**
+ * A parse failure reduced to the parts that cannot carry secrets.
+ *
+ * V8's JSON `SyntaxError` messages quote a window of the offending source --
+ * e.g. `Unexpected token 's', ..."_API_KEY":sk-live-ab"... is not valid JSON`.
+ * app-config.json is exactly the file that holds BYOK provider keys, so that
+ * window can contain a credential prefix and the message must never be logged
+ * verbatim (GPT-5.6 Sol adversarial review, P2). The error's name and byte
+ * offset are the genuinely useful parts for an operator repairing the file by
+ * hand, and neither can echo file content.
+ */
+function redactedParseFailure(error: unknown): string {
+  if (!(error instanceof Error)) return 'unknown parse failure';
+  const offset = /position (\d+)/.exec(error.message)?.[1];
+  return offset === undefined ? error.name : `${error.name} at position ${offset}`;
+}
+
 function redactAppConfig(raw: string): string {
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    return JSON.stringify({});
+  } catch (error) {
+    // Never silent, and never `{}`: an empty object is indistinguishable from a
+    // legitimately empty config, so the operator would discover the loss during
+    // a restore -- the one moment they are relying on this file. The archive
+    // carries the marker because the daemon logs from the machine that produced
+    // a months-old archive are typically long gone by then.
+    //
+    // The raw source is NOT copied in, and the exception is NOT logged
+    // verbatim: V8's JSON errors quote a window of the offending source, which
+    // in this file can be a BYOK provider key. Only the redacted name/offset
+    // goes anywhere -- neither the archive nor the log sees file content.
+    console.error(
+      '[backup] app-config.json is unparseable; archiving a diagnostic marker',
+      redactedParseFailure(error),
+    );
+    return JSON.stringify(
+      { __mishmashBackupError: APP_CONFIG_UNPARSEABLE_MARKER, routingPolicyVersion: archivedRoutingPolicyVersion() },
+      null,
+      2,
+    );
   }
   const clone = { ...parsed };
   for (const key of APP_CONFIG_BYOK_KEYS) delete clone[key];

@@ -18,6 +18,11 @@ const ERROR_STATUS_BY_CODE: Partial<Record<ApiErrorCode, number>> = {
   PAYLOAD_TOO_LARGE: 413,
   UNSUPPORTED_MEDIA_TYPE: 415,
   VALIDATION_FAILED: 422,
+  // Routing policy refused to dispatch. 422 rather than 403: the caller is
+  // entitled to the operation, so this is not an authorization failure, and
+  // rather than the unmapped-code 500 default, because nothing is broken --
+  // the request was well-formed and policy declined it.
+  ROUTING_BLOCKED: 422,
   RATE_LIMITED: 429,
   PROJECT_NOT_FOUND: 404,
   FILE_NOT_FOUND: 404,
