@@ -1010,7 +1010,28 @@ async function runFormSmokeGate(ctx: GateContext): Promise<DeterministicGateResu
 //      separately and closes every attempted connection immediately
 //      (an unhandled registration already mocks the connection rather than
 //      reaching a real server -- explicit `close()` denies even that).
-//   4. Hangs -- "a page that hangs is a failing artifact," not a harness
+//   4. WebRTC/STUN UDP egress (Sol review MED-3, fix-round): `context.
+//      route()`/`routeWebSocket()` only intercept HTTP(S)/WS(S) requests --
+//      an `RTCPeerConnection`'s ICE gathering opens raw UDP sockets to
+//      STUN/TURN servers that never go through Playwright's request-routing
+//      layer at all, so #1's network-egress block does not cover it. Closed
+//      at the browser boundary instead: the single combined launch arg
+//      `--force-webrtc-ip-handling-policy=disable_non_proxied_udp`
+//      (`AXE_GATE_WEBRTC_LAUNCH_ARGS` below -- see its own doc comment for
+//      why this is ONE flag with the policy value attached, not two
+//      separate flags) suppresses every non-proxied UDP candidate (STUN
+//      reflexive and TURN relay both require exactly that), plus an
+//      explicit empty `permissions: []` on the context (defense in depth;
+//      does not by itself block ICE, which needs no permission grant).
+//   5. Process sandbox (Sol review HIGH-2, fix-round): launched WITHOUT
+//      `--no-sandbox` and with `chromiumSandbox: true` explicit -- the
+//      artifact executes inside Chromium's OS-level renderer sandbox, not
+//      merely behind request interception (which was never a process
+//      isolation boundary; #1-#4 stop network/data access, not a renderer
+//      exploit escaping to the host). A sandboxed launch failure reports
+//      the gate 'unavailable' with the launch error -- it NEVER retries
+//      unsandboxed; see the launch try/catch below.
+//   6. Hangs -- "a page that hangs is a failing artifact," not a harness
 //      problem: a navigation or `axe.run()` timeout is classified as a
 //      gate FAILURE (with evidence naming the likely cause), never
 //      'unavailable'. 'unavailable' is reserved for HARNESS problems only
@@ -1063,6 +1084,24 @@ function withHardTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+/**
+ * Sol review MED-3 (fix-round): exported (not an inline literal in
+ * `runAxeGate`) so the egress regression test can launch Chromium with the
+ * SAME hardened args this gate actually uses in production and prove
+ * WebRTC/STUN ICE gathering is really blocked, instead of asserting against
+ * a hand-retyped copy of the flags that could silently drift from what
+ * `runAxeGate` itself passes to `chromium.launch()`.
+ *
+ * `--force-webrtc-ip-handling-policy` takes the policy value directly
+ * (`=disable_non_proxied_udp`), NOT as a separate boolean flag alongside a
+ * plain `--webrtc-ip-handling-policy=...` -- empirically verified against
+ * this repo's actual installed Chromium build (a real `RTCPeerConnection`
+ * against a live STUN server produced a `srflx` candidate, i.e. a real
+ * network round trip, with the two-separate-flags form; the combined single
+ * flag below produces none).
+ */
+export const AXE_GATE_WEBRTC_LAUNCH_ARGS = ['--force-webrtc-ip-handling-policy=disable_non_proxied_udp'] as const;
+
 async function runAxeGate(ctx: GateContext): Promise<DeterministicGateResult> {
   const start = performance.now();
   const entryHtml = findEntryHtmlFile(ctx.artifactDir);
@@ -1091,13 +1130,42 @@ async function runAxeGate(ctx: GateContext): Promise<DeterministicGateResult> {
 
   let browser: Browser;
   try {
-    browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+    // Sol review HIGH-2 (fix-round): NO `--no-sandbox` -- that flag disables
+    // Chromium's OS-level renderer sandbox entirely, and request
+    // interception (this gate's #1-#4 defenses) is not a substitute for
+    // process isolation against a compromised renderer. `chromiumSandbox:
+    // true` is explicit (not merely the absence of the disabling flag) so a
+    // future edit can never silently reintroduce `--no-sandbox` without
+    // also having to remove this line. A launch failure here (some sandboxed
+    // environments genuinely cannot support the Chromium sandbox, e.g.
+    // certain unprivileged containers) reports the gate 'unavailable' with
+    // the real launch error -- it never falls back to an unsandboxed
+    // relaunch, which would silently trade this gate's entire process-
+    // isolation guarantee for availability.
+    //
+    // Sol review MED-3 (fix-round): AXE_GATE_WEBRTC_LAUNCH_ARGS closes the
+    // WebRTC/STUN UDP egress path -- see this gate's threat-model comment
+    // above (point 4) for why `context.route()` cannot see it at all (ICE
+    // gathering is raw UDP, never an HTTP(S)/WS(S) request), and that
+    // constant's own doc comment for why it is one combined flag.
+    browser = await chromium.launch({
+      headless: true,
+      chromiumSandbox: true,
+      args: [...AXE_GATE_WEBRTC_LAUNCH_ARGS],
+    });
   } catch (err) {
     return finishDeterministic('axe', 'unavailable', [`chromium failed to launch: ${errorMessage(err)}`], start);
   }
 
   try {
-    const context = await browser.newContext();
+    // Sol review MED-3 (fix-round): `permissions: []` is explicit defense
+    // in depth alongside the launch-arg WebRTC restriction above -- it does
+    // not by itself stop ICE gathering (which needs no permission grant),
+    // but it does ensure this context can never be handed a camera/
+    // microphone/other capability an artifact could otherwise combine with
+    // WebRTC, and documents the intent for any future reader/editor of this
+    // context's configuration.
+    const context = await browser.newContext({ permissions: [] });
 
     await context.route('**/*', (route: Route) => {
       const reqUrl = route.request().url();
@@ -1760,14 +1828,24 @@ export function advanceGateCascadeState(
  * pure persistence, not escalation, so both classes may be recorded here
  * even though only deterministic results may ever reach
  * `classifyCascadeTrigger`) onto the telemetry row's `gateOutcomes` map and
- * persists it via `telemetry.ts`'s `updateGateOutcomes`.
+ * persists it, together with whether THIS cascade classification escalated,
+ * via `telemetry.ts`'s `updateGateOutcomes` (Sol review MED-4: escalated
+ * must reach the row atomically alongside gateOutcomes, or an attached
+ * run's real gate-driven escalations never surface in the rates the
+ * telemetry table exists to report).
  */
-export function recordGateOutcomes(db: Database.Database, runId: string, attempt: number, results: readonly GateResult[]): void {
+export function recordGateOutcomes(
+  db: Database.Database,
+  runId: string,
+  attempt: number,
+  results: readonly GateResult[],
+  escalated: boolean,
+): void {
   const outcomes: Record<string, RoutingGateOutcome> = {};
   for (const result of results) {
     outcomes[result.id] = result.status;
   }
-  updateGateOutcomes(db, runId, attempt, outcomes);
+  updateGateOutcomes(db, runId, attempt, outcomes, escalated);
 }
 
 // ---------------------------------------------------------------------------

@@ -5328,30 +5328,53 @@ export async function startServer({
     } catch (err) {
       console.warn('[routing] resolveDispatchRouting failed', err);
     }
-    // Sol review MED-6 (fix-round): reconcilePostRun's `terminalOutcome`
-    // must reflect the run's REAL final status, not merely "this hook fired"
-    // -- `onRunFinished(run, status)` above is called BEFORE `finish()`
-    // writes `status` onto `run.status` (runtimes/runs.ts), so reading
-    // `run.status` there would always observe the PRIOR (non-terminal)
-    // value, which is exactly the bug this finding describes (cancellation/
-    // unclassified states being silently treated as success). `run.
-    // onFinalize`, by contrast, fires from inside the SAME `finish()` call
-    // but AFTER `run.status` has already been set to one of
-    // TERMINAL_RUN_STATUSES ('succeeded' | 'failed' | 'canceled') --
-    // chaining onto it here, the same additive "capture the previous
-    // handler, call through" pattern already used a few hundred lines below
-    // this dispatch hook for the filesystem-baseline snapshot, is the only
-    // way to observe the true terminal outcome without editing
+    // Sol review MED-6 (fix-round, corrected): `run.onFinalize` must be
+    // re-wrapped on EVERY `startChatRun` invocation, not installed once --
+    // a few hundred lines above this hook, baseline code
+    // (`if (toolTokenGrant) { run.onFinalize = () => {...}; }`) UNCONDITIONALLY
+    // OVERWRITES `run.onFinalize` on every attempt (it is a plain
+    // assignment, not a chain), which runs on every retry re-entry too.
+    // Installing this wrap only once (an earlier version of this fix-round)
+    // meant a SECOND attempt's baseline reassignment silently discarded the
+    // FIRST attempt's entire onFinalize chain, wrap included -- the
+    // reconcile then never fired at all once a retry happened. Re-wrapping
+    // every time restores correctness for that (common, toolTokenGrant
+    // present) case; the guard below (`run.wrReconcileAlreadyFired`) instead
+    // handles the OTHER case this finding actually describes -- a request
+    // with no toolTokenGrant (no cwd/projectId), where baseline does NOT
+    // reassign `run.onFinalize` and consecutive attempts' wraps genuinely
+    // chain onto each other, which would otherwise fire `reconcilePostRun`
+    // once per retry instead of once per run.
+    //
+    // The guard-and-reconcile runs BEFORE delegating to the previous chain
+    // (not after, in a `finally`, as this fix-round's first draft had it):
+    // by construction, the MOST RECENTLY installed wrap is whichever value
+    // `run.onFinalize` actually holds at the run's one true terminal
+    // `finish()` call, so running the guard check first ensures the LATEST
+    // attempt's own (correct, final) `run.status`/`run.retryAttemptCount`/
+    // `run.wrRoutingDecision` win the race to set the guard, while any
+    // OLDER, staler wrap still reachable further down the chain sees the
+    // guard already set and skips its own (stale) reconcile -- but still
+    // gets called, so it still runs whatever OTHER finalizer behavior (tool-
+    // token revocation, resolveRunArtifactOutcomeBeforeFinish) it owns.
+    //
+    // reconcilePostRun's `terminalOutcome` must reflect the run's REAL final
+    // status, not merely "this hook fired" -- `onRunFinished(run, status)`
+    // above is called BEFORE `finish()` writes `status` onto `run.status`
+    // (runtimes/runs.ts), so reading `run.status` there would always
+    // observe the PRIOR (non-terminal) value (cancellation/unclassified
+    // states being silently treated as success). `run.onFinalize`, by
+    // contrast, fires from inside the SAME `finish()` call but AFTER
+    // `run.status` has already been set to one of TERMINAL_RUN_STATUSES
+    // ('succeeded' | 'failed' | 'canceled') -- chaining onto it here is the
+    // only way to observe the true terminal outcome without editing
     // `onRunFinished`'s own pre-existing signature (which this wave's file
     // lease cannot touch: `apps/daemon/src/server.ts` is byte-preserve
-    // outside additive lines). Registered here (inside the try/catch above
-    // having already run) so `run.wrRoutingDecision` reflects THIS attempt's
-    // own dispatch outcome by the time the wrap actually fires.
+    // outside additive lines).
     const wrPreviousOnFinalizeForReconcile = run.onFinalize;
     run.onFinalize = () => {
-      try {
-        wrPreviousOnFinalizeForReconcile?.();
-      } finally {
+      if (!run.wrReconcileAlreadyFired) {
+        run.wrReconcileAlreadyFired = true;
         try {
           if (run.wrRoutingDecision && run.wrRoutingDecision.mode !== 'blocked') {
             const wrTerminalOutcome =
@@ -5385,6 +5408,7 @@ export async function startServer({
           console.warn('[routing] reconcilePostRun (terminal) failed', err);
         }
       }
+      wrPreviousOnFinalizeForReconcile?.();
     };
     const agentResumeCtx =
       agentSupportsSessionResume && run.conversationId
@@ -5946,11 +5970,43 @@ export async function startServer({
         // the retry is scheduled; best-effort/fail-open like every other
         // routing hook on this dispatch path, and a no-op when this
         // attempt's dispatch was never routed or was blocked outright.
+        //
+        // Sol review MED-5 residue (fix-round 2): `observedModel`/tokens/
+        // cost were previously hardcoded absent here -- the terminal
+        // onFinalize reconcile (below, elsewhere in this file) computes its
+        // own `computeRunUsageRecord` from `run.events`, but `run.events`
+        // is a SHARED ring buffer this same run's NEXT attempt keeps
+        // appending onto (`tearDownAttemptForRetry` never clears it), so by
+        // the time a later attempt finally succeeds, this failed attempt's
+        // OWN usage is either gone (evicted from a size-bounded ring) or
+        // misattributed as if it belonged to the attempt that actually
+        // finished. `run.events`/`run.model`/`run.modelReported` at THIS
+        // exact point -- before `tearDownAttemptForRetry`/
+        // `spawnRetryAttempt` ever run -- reflect ONLY this failing
+        // attempt's own activity, so snapshotting the SAME
+        // `computeRunUsageRecord` the terminal path uses, right here,
+        // attributes this attempt's real observed data to its OWN
+        // `(runId, wrFailedAttemptIndex)` telemetry row instead of losing it
+        // or bleeding it into whichever attempt happens to end the run.
         try {
           if (run.wrRoutingDecision && run.wrRoutingDecision.mode !== 'blocked') {
+            const wrFailedAttemptRecord = computeRunUsageRecord({
+              requestedRaw: run.modelRequested,
+              resolvedRaw: run.model,
+              reportedRaw: run.modelReported,
+              agentId: run.agentId ?? null,
+              events: Array.isArray(run.events) ? run.events : [],
+            });
             reconcilePostRun(db, run.id, wrFailedAttemptIndex, {
-              observedModel: null,
+              observedModel: wrFailedAttemptRecord.reported ?? wrFailedAttemptRecord.resolved ?? null,
               observedLane: null,
+              tokens: {
+                input: wrFailedAttemptRecord.inputTokensEffective ?? 0,
+                output: wrFailedAttemptRecord.outputTokens ?? 0,
+                cacheReadInput: wrFailedAttemptRecord.cacheReadInputTokens ?? 0,
+              },
+              costUsd: wrFailedAttemptRecord.costUsd ?? 0,
+              costEstimated: true,
               terminalOutcome: 'failed',
               runtimeId: run.agentId ?? null,
               failureCategory: failure?.failure_category ?? null,

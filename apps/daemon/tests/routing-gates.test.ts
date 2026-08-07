@@ -28,6 +28,7 @@ import { loadRoutingPolicy } from '../src/routing/policy.js';
 import { registerRoutingRoutes } from '../src/routes/routing.js';
 import { computeLaneMeters, ensureRoutingTelemetryTable, getRoutingTelemetryByRunId, recordRoutingTelemetry } from '../src/routing/telemetry.js';
 import {
+  AXE_GATE_WEBRTC_LAUNCH_ARGS,
   baselineState,
   classifyCascadeTrigger,
   DETERMINISTIC_GATE_DEFINITIONS,
@@ -47,6 +48,7 @@ import {
   type RunGatesOptions,
   type StochasticGateResult,
 } from '../src/routing/gates.js';
+import { chromium } from 'playwright';
 
 /** Every fixture in this file runs exactly one gate at a time -- this
  * unwraps `runGates`' array result (and asserts the array actually has an
@@ -607,6 +609,93 @@ describe('skipped-not-applicable vs unavailable distinction', () => {
       expect(result.evidence.join(' ')).toMatch(/hang|infinite loop|did not (finish loading|complete)/i);
     }
   }, 10_000);
+
+  // Sol review HIGH-2 (fix-round): a sandboxed Chromium launch failure must
+  // report 'unavailable' with the real launch error -- it must NEVER
+  // silently retry unsandboxed (which would trade this gate's entire
+  // process-isolation guarantee for availability without telling anyone).
+  // `gates.ts` imports the SAME `chromium` singleton from 'playwright' this
+  // test does (one resolved module instance per process), so spying on its
+  // `launch` method directly exercises `runAxeGate`'s real catch branch --
+  // more deterministic than trying to provoke a genuine environmental
+  // launch failure (e.g. a bogus PLAYWRIGHT_BROWSERS_PATH, which this
+  // Playwright version does not consistently honor post-import).
+  it("axe: a chromium launch failure reports 'unavailable' with the launch error, never a silent unsandboxed fallback", async () => {
+    writeFileSync(
+      path.join(tempDir, 'index.html'),
+      '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>t</title></head><body>ok</body></html>',
+    );
+    const launchSpy = vi.spyOn(chromium, 'launch').mockRejectedValueOnce(new Error('sandboxed launch refused by test double'));
+    try {
+      const result = await runOneGate(tempDir, ['axe'], { timeoutMs: 5_000 });
+      expect(result.status).toBe('unavailable');
+      expect(result.evidence.join(' ')).toMatch(/chromium failed to launch/i);
+      expect(result.evidence.join(' ')).toMatch(/sandboxed launch refused by test double/);
+      // Never a retried/second launch attempt -- one call, one failure, one
+      // honest 'unavailable', never a silent unsandboxed relaunch.
+      expect(launchSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      launchSpy.mockRestore();
+    }
+  }, 10_000);
+
+  // Sol review MED-3 (fix-round): WebRTC/STUN ICE gathering opens raw UDP
+  // sockets that never pass through Playwright's request-routing layer
+  // (this gate's `context.route()`/`routeWebSocket()` network-egress
+  // block), so it needs its own regression proof. Launches Chromium with
+  // the EXACT `AXE_GATE_WEBRTC_LAUNCH_ARGS` gates.ts's real axe gate uses
+  // (imported, not retyped, so this test tracks the production
+  // configuration) and drives an `RTCPeerConnection` configured with a
+  // real-shaped STUN URL. Hermetic: this asserts no non-host ICE candidate
+  // is ever produced within a short, bounded wait -- it does NOT depend on
+  // the STUN server actually being reachable (the whole point is that it
+  // must never get the chance to be).
+  it('WebRTC/STUN ICE gathering produces no external candidate under the axe gate\'s hardened launch args (Sol review MED-3)', async () => {
+    const browser = await chromium.launch({ headless: true, chromiumSandbox: true, args: [...AXE_GATE_WEBRTC_LAUNCH_ARGS] });
+    try {
+      const context = await browser.newContext({ permissions: [] });
+      const page = await context.newPage();
+      await page.goto('about:blank');
+      const candidateTypes = await page.evaluate(async () => {
+        // This tsconfig has no DOM lib -- `globalThis` is cast to `any` here
+        // (mirrors gates.ts's own `runAxeInPage` pattern for the same
+        // isolated-world/no-DOM-lib reason) rather than pulling DOM types
+        // into a Node test config.
+        type RTCPeerConnectionLike = {
+          createDataChannel(label: string): unknown;
+          onicecandidate: ((event: { candidate: { type?: string } | null }) => void) | null;
+          createOffer(): Promise<unknown>;
+          setLocalDescription(desc: unknown): Promise<void>;
+          close(): void;
+        };
+        const w = globalThis as unknown as { RTCPeerConnection: new (config: unknown) => RTCPeerConnectionLike };
+        const pc = new w.RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+        pc.createDataChannel('probe');
+        const types: string[] = [];
+        pc.onicecandidate = (event: { candidate: { type?: string } | null }) => {
+          if (event.candidate) types.push(event.candidate.type ?? 'unknown');
+        };
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        // Bounded wait for ICE gathering to either produce candidates or
+        // time out -- this is the hermetic budget, not a real-network
+        // expectation (disable_non_proxied_udp means a real STUN round
+        // trip should never even start).
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        pc.close();
+        return types;
+      });
+      // `disable_non_proxied_udp` suppresses every non-proxied UDP
+      // candidate -- srflx (STUN-reflexive) and relay (TURN) candidates
+      // both require exactly that, so none may appear. A bare loopback
+      // 'host' candidate reflects no external reachability and is not the
+      // egress this policy exists to close, so it is explicitly tolerated
+      // if the local Chromium build still emits one.
+      expect(candidateTypes.filter((t) => t !== 'host')).toEqual([]);
+    } finally {
+      await browser.close().catch(() => {});
+    }
+  }, 15_000);
 });
 
 // ---------------------------------------------------------------------------
@@ -1049,21 +1138,42 @@ describe('recordGateOutcomes telemetry round-trip', () => {
   it('persists a mix of deterministic and stochastic gate results onto the telemetry row', () => {
     ensureRoutingTelemetryTable(db);
     recordRoutingTelemetry(db, completeRow());
-    recordGateOutcomes(db, 'run-gates-1', 0, [
-      det('link-smoke', 'pass'),
-      det('form-smoke', 'fail'),
-      { id: 'vision-conformance', class: 'stochastic', status: 'unavailable', evidence: [], durationMs: 1 },
-    ]);
+    recordGateOutcomes(
+      db,
+      'run-gates-1',
+      0,
+      [
+        det('link-smoke', 'pass'),
+        det('form-smoke', 'fail'),
+        { id: 'vision-conformance', class: 'stochastic', status: 'unavailable', evidence: [], durationMs: 1 },
+      ],
+      false,
+    );
     const stored = getRoutingTelemetryByRunId(db, 'run-gates-1', 0);
     expect(stored?.gateOutcomes).toEqual({
       'link-smoke': 'pass',
       'form-smoke': 'fail',
       'vision-conformance': 'unavailable',
     });
+    expect(stored?.escalated).toBe(false);
   });
 
   it('throws when recording outcomes for a run/attempt that was never recorded', () => {
-    expect(() => recordGateOutcomes(db, 'never-recorded', 0, [det('link-smoke', 'pass')])).toThrow();
+    expect(() => recordGateOutcomes(db, 'never-recorded', 0, [det('link-smoke', 'pass')], false)).toThrow();
+  });
+
+  // Sol review MED-4: `escalated` must reach the row ATOMICALLY alongside
+  // gateOutcomes on the SAME UPDATE, and monotonically -- a later call that
+  // itself does not escalate must never un-mark a row an earlier call in the
+  // same attempt legitimately escalated.
+  it('persists escalated=true atomically with gateOutcomes, and a later non-escalating call does not clear it', () => {
+    ensureRoutingTelemetryTable(db);
+    recordRoutingTelemetry(db, completeRow({ runId: 'run-escalate-1', escalated: false }));
+    recordGateOutcomes(db, 'run-escalate-1', 0, [det('form-smoke', 'fail')], true);
+    expect(getRoutingTelemetryByRunId(db, 'run-escalate-1', 0)?.escalated).toBe(true);
+
+    recordGateOutcomes(db, 'run-escalate-1', 0, [det('form-smoke', 'fail')], false);
+    expect(getRoutingTelemetryByRunId(db, 'run-escalate-1', 0)?.escalated).toBe(true);
   });
 
   // Sol MED-8: pass rate must be computed over APPLICABLE gates only --
@@ -1447,14 +1557,94 @@ describe('POST /api/routing/gates/run -- server-persisted cascade state and gate
   it('attaches outcomes to an EXISTING (runId, attempt) telemetry row when supplied, transactionally', async () => {
     const runId = `real-dispatch-${randomUUID()}`;
     ensureRoutingTelemetryTable(db);
-    recordRoutingTelemetry(db, completeRow({ runId, attempt: 0, gateOutcomes: {} }));
+    // completeRow's default projectId is 'proj-1' -- Sol review MED-7 scopes
+    // `artifactDir` containment to THIS run's owning project subtree
+    // (`projectsRoot/<projectId>/...`, the daemon data contract's real
+    // project-root shape) once a `runId` is supplied, so the artifact must
+    // actually live there, not directly under the bare `projectsRoot` the
+    // no-runId tests in this block use.
+    mkdirSync(path.join(projectsRoot, 'proj-1', 'build-out'), { recursive: true });
+    writeFileSync(path.join(projectsRoot, 'proj-1', 'build-out', 'index.html'), '<a href="#ok">ok</a>');
+    recordRoutingTelemetry(db, completeRow({ runId, attempt: 0, buildId: null, gateOutcomes: {} }));
 
-    const { status, body } = await runGatesHttp({ artifactDir: 'build-out', gates: ['link-smoke'], runId, attempt: 0 });
+    const { status, body } = await runGatesHttp({ artifactDir: 'build-out', gates: ['link-smoke'], runId, attempt: 0, buildId: null });
     expect(status).toBe(200);
     expect(body.runId).toBe(runId);
     expect(body.runIdSynthetic).toBe(false);
     const stored = getRoutingTelemetryByRunId(db, runId, 0);
     expect(stored?.gateOutcomes).toEqual({ 'link-smoke': 'pass' });
+  });
+
+  // Sol review MED-4: a gate cascade attached to an EXISTING dispatch row
+  // (runIdSynthetic: false) must persist a REAL escalation onto that row's
+  // own `escalated` field, not just `gateOutcomes` -- before this fix,
+  // `computeRoutingRates`'s escalation-rate aggregation could never see an
+  // attached run's escalation at all, staying falsely zero regardless of
+  // how many real cascades it drove.
+  it('persists escalated=true on an EXISTING telemetry row when its attached gate cascade actually escalates', async () => {
+    const runId = `real-dispatch-escalates-${randomUUID()}`;
+    const buildId = `build-escalate-${randomUUID()}`;
+    ensureRoutingTelemetryTable(db);
+    mkdirSync(path.join(projectsRoot, 'proj-1', 'escalate-out'), { recursive: true });
+    // A form with no handler -- deterministically fails form-smoke, driving
+    // a cheap -> mid escalation on the first call for this fresh buildId.
+    writeFileSync(path.join(projectsRoot, 'proj-1', 'escalate-out', 'index.html'), '<form id="f"></form>');
+    recordRoutingTelemetry(db, completeRow({ runId, attempt: 0, buildId, escalated: false, gateOutcomes: {} }));
+
+    const { status, body } = await runGatesHttp({
+      artifactDir: 'escalate-out',
+      gates: ['form-smoke'],
+      runId,
+      attempt: 0,
+      buildId,
+    });
+    expect(status).toBe(200);
+    expect((body.cascade as { escalate: boolean }).escalate).toBe(true);
+    const stored = getRoutingTelemetryByRunId(db, runId, 0);
+    expect(stored?.escalated).toBe(true);
+  });
+
+  // Sol review MED-7: buildId is independently caller-selected from runId --
+  // without server-side ownership binding, a request could name a REAL
+  // runId belonging to one build while supplying an unrelated buildId,
+  // silently advancing that OTHER build's cascade tier off of this run's
+  // gate results.
+  it('rejects a supplied buildId that does not match the (runId, attempt) row\'s own recorded buildId', async () => {
+    const runId = `mismatched-build-${randomUUID()}`;
+    ensureRoutingTelemetryTable(db);
+    mkdirSync(path.join(projectsRoot, 'proj-1', 'build-out'), { recursive: true });
+    writeFileSync(path.join(projectsRoot, 'proj-1', 'build-out', 'index.html'), '<a href="#ok">ok</a>');
+    recordRoutingTelemetry(db, completeRow({ runId, attempt: 0, buildId: 'build-owner', gateOutcomes: {} }));
+
+    const { status, body } = await runGatesHttp({
+      artifactDir: 'build-out',
+      gates: ['link-smoke'],
+      runId,
+      attempt: 0,
+      buildId: 'build-intruder',
+    });
+    expect(status).toBe(400);
+    expect((body.error as { message: string }).message).toMatch(/does not match the buildId/i);
+  });
+
+  // Sol review MED-7: artifactDir is independently caller-selected too --
+  // without scoping its containment check to the run's OWN project
+  // subtree, a request naming a real (runId, attempt) could point
+  // artifactDir at an unrelated project's directory and attach that
+  // project's gate evidence to this run's telemetry row.
+  it("rejects an artifactDir outside the (runId, attempt) row's own owning project directory", async () => {
+    const runId = `mismatched-project-${randomUUID()}`;
+    ensureRoutingTelemetryTable(db);
+    // An (otherwise empty) 'proj-1' directory so the SCOPED root itself
+    // resolves; the shared 'build-out' fixture lives one level up, directly
+    // under the bare projectsRoot -- reached only by escaping 'proj-1' via
+    // '../', exactly the cross-project artifactDir this finding describes.
+    mkdirSync(path.join(projectsRoot, 'proj-1'), { recursive: true });
+    recordRoutingTelemetry(db, completeRow({ runId, attempt: 0, projectId: 'proj-1', buildId: null, gateOutcomes: {} }));
+
+    const { status, body } = await runGatesHttp({ artifactDir: '../build-out', gates: ['link-smoke'], runId, attempt: 0, buildId: null });
+    expect(status).toBe(400);
+    expect((body.error as { message: string }).message).toMatch(/must resolve within the configured project root/i);
   });
 
   it('rejects a supplied runId/attempt with no matching telemetry row (never silently drops the outcomes)', async () => {

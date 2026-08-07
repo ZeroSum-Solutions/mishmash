@@ -58,6 +58,7 @@ import {
   computeStageSpendUsd,
   computeLaneMeters,
   ensureRoutingTelemetryTable,
+  getRoutingTelemetryByRunId,
   listRoutingTelemetry,
   recordRoutingTelemetry,
 } from '../routing/telemetry.js';
@@ -575,11 +576,6 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database, proj
     }
     const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? (req.body as Record<string, unknown>) : {};
 
-    const pathResult = resolveArtifactDirWithinRoot(projectsRoot, body.artifactDir);
-    if (!pathResult.ok) {
-      return respondInvalidQuery(res, pathResult.message);
-    }
-
     let gateSelection: readonly DeterministicGateId[] | 'all' = 'all';
     if (body.gates !== undefined) {
       if (!Array.isArray(body.gates) || body.gates.length === 0 || !body.gates.every(isDeterministicGateId)) {
@@ -610,6 +606,56 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database, proj
         attempt = attemptResult.value ?? 0;
       }
       runId = suppliedRunId ?? undefined;
+    }
+
+    // Sol review MED-7 (fix-round): `artifactDir`, `buildId`, and
+    // `(runId, attempt)` were each independently caller-selected -- nothing
+    // stopped one request from naming a REAL `runId` belonging to build A
+    // while supplying build B's `buildId` (advancing build B's cascade tier
+    // off of build A's artifact/gate results) or an `artifactDir` under a
+    // project the named run never touched (attaching another project's
+    // artifact evidence to this run's telemetry row). When `runId` is
+    // supplied, this binds ownership BEFORE ever resolving `artifactDir` or
+    // running a single gate: the existing telemetry row for
+    // `(runId, attempt)` is the source of truth for which build/project
+    // this request is allowed to touch, not the caller's own claims about
+    // them.
+    let artifactRoot = projectsRoot;
+    if (db && runId !== undefined) {
+      const existingRow = getRoutingTelemetryByRunId(db, runId, attempt);
+      if (!existingRow) {
+        return respondInvalidQuery(
+          res,
+          `no routing_telemetry row for (runId=${runId}, attempt=${attempt}) -- a supplied \`runId\` must already have a recorded dispatch (recordDispatchIntent) before gate outcomes/ownership can be bound to it; omit \`runId\` for a standalone probe.`,
+        );
+      }
+      if (existingRow.buildId !== buildId) {
+        return respondInvalidQuery(
+          res,
+          `\`buildId\` ("${buildId ?? 'null'}") does not match the buildId ("${existingRow.buildId ?? 'null'}") already recorded for (runId=${runId}, attempt=${attempt}) -- refusing to advance a different build's cascade state or attach outcomes under a mismatched buildId.`,
+        );
+      }
+      const requestedProjectId = queryStringOrNull(body.projectId);
+      if (requestedProjectId !== null && requestedProjectId !== existingRow.projectId) {
+        return respondInvalidQuery(
+          res,
+          `\`projectId\` ("${requestedProjectId}") does not match the projectId ("${existingRow.projectId}") already recorded for (runId=${runId}, attempt=${attempt}).`,
+        );
+      }
+      // The daemon data contract's project root shape (AGENTS.md, "Daemon
+      // data directory contract"): every managed project's own artifacts
+      // live under `PROJECTS_DIR/<projectId>/...`. Scoping `artifactDir`'s
+      // containment check to THIS run's owning project subtree (rather than
+      // the global `projectsRoot`) closes the cross-project artifact
+      // injection this finding describes -- a caller can no longer name a
+      // real `(runId, attempt)` from project A while pointing `artifactDir`
+      // into project B's directory.
+      artifactRoot = path.join(projectsRoot, existingRow.projectId);
+    }
+
+    const pathResult = resolveArtifactDirWithinRoot(artifactRoot, body.artifactDir);
+    if (!pathResult.ok) {
+      return respondInvalidQuery(res, pathResult.message);
     }
 
     let results;
@@ -685,7 +731,7 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database, proj
               recordedAt: nowIso,
             });
           }
-          recordGateOutcomes(db, resolvedRunId, resolvedAttempt, results);
+          recordGateOutcomes(db, resolvedRunId, resolvedAttempt, results, cascade.escalate);
         });
         persist();
         runId = resolvedRunId;

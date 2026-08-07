@@ -192,12 +192,27 @@ export function recordRoutingTelemetry(db: Database.Database, row: StoredRouting
 
 /**
  * t8 addition (plan §3.2 L3, deterministic gate runner): patches ONLY the
- * `gate_outcomes_json` column of an ALREADY-RECORDED telemetry row -- L3
- * gates run after dispatch-time telemetry is written
- * (`recordRoutingTelemetry` establishes the row via the dispatch path), so
- * this is a targeted UPDATE, not a second full-row INSERT..ON CONFLICT DO
- * UPDATE round trip (which would also require re-supplying every other
- * column this caller has no reason to know at gate-run time).
+ * `gate_outcomes_json` (and, since the MED-4 fix-round, `escalated`) columns
+ * of an ALREADY-RECORDED telemetry row -- L3 gates run after dispatch-time
+ * telemetry is written (`recordRoutingTelemetry` establishes the row via the
+ * dispatch path), so this is a targeted UPDATE, not a second full-row
+ * INSERT..ON CONFLICT DO UPDATE round trip (which would also require
+ * re-supplying every other column this caller has no reason to know at
+ * gate-run time).
+ *
+ * Sol review MED-4 (fix-round): a gate cascade attached to an EXISTING
+ * dispatch row (the `runIdSynthetic: false` path in routes/routing.ts) used
+ * to update only `gate_outcomes_json`, never `escalated` -- the caller's own
+ * `classifyCascadeTrigger` verdict was computed and used to advance the
+ * server-side cascade tier, but never actually reached the telemetry row
+ * `computeRoutingRates`' escalation-rate aggregation reads, so real
+ * gate-driven escalations on an attached run silently never counted. `SET
+ * escalated = MAX(escalated, @escalated)` (SQLite booleans are 0/1
+ * integers) is a single atomic UPDATE alongside `gate_outcomes_json`, and is
+ * monotonic ONE-WAY -- `/gates/run` may be called more than once against the
+ * same `(runId, attempt)` as a cascade climbs tiers, and a later call that
+ * itself does not escalate (e.g. already at the frontier tier) must never
+ * un-mark a row an earlier call in the same attempt legitimately escalated.
  *
  * Throws when no row exists for `(runId, attempt)`: recording gate outcomes
  * for a run that was never routed/recorded is a caller bug, not a silent
@@ -214,11 +229,14 @@ export function updateGateOutcomes(
   runId: string,
   attempt: number,
   gateOutcomes: Record<string, RoutingGateOutcome>,
+  escalated: boolean,
 ): void {
   ensureRoutingTelemetryTable(db);
   const result = db
-    .prepare(`UPDATE routing_telemetry SET gate_outcomes_json = @gateOutcomesJson WHERE run_id = @runId AND attempt = @attempt`)
-    .run({ gateOutcomesJson: JSON.stringify(gateOutcomes), runId, attempt });
+    .prepare(
+      `UPDATE routing_telemetry SET gate_outcomes_json = @gateOutcomesJson, escalated = MAX(escalated, @escalated) WHERE run_id = @runId AND attempt = @attempt`,
+    )
+    .run({ gateOutcomesJson: JSON.stringify(gateOutcomes), escalated: escalated ? 1 : 0, runId, attempt });
   if (result.changes === 0) {
     throw new Error(
       `updateGateOutcomes: no routing_telemetry row for (runId=${runId}, attempt=${attempt}) -- record the routing telemetry row (recordRoutingTelemetry) before recording gate outcomes.`,

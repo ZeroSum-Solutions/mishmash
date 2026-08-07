@@ -142,6 +142,39 @@ if (attempts === 0) {
   }
 }
 
+// Sol review MED-6: unlike `withFlakyClaudeBin` (fails once, then succeeds),
+// this fixture ALWAYS fails the same cooldown-recordable way -- attempt 0
+// is retried once (run-retry-policy.ts's DEFAULT_SAFE_RUN_RETRY_MAX_ATTEMPTS
+// = 1), attempt 1's identical failure hits the retry cap and becomes the
+// run's real TERMINAL failure. Exactly two cooldown-recording events should
+// ever fire for this run: the MED-5 retry-attempt-boundary call (attempt 0)
+// and the MED-6 terminal onFinalize call (attempt 1) -- proving the
+// terminal finalizer installs (and fires) exactly once, not once per retry
+// re-entry.
+async function withAlwaysFailingClaudeBin<T>(run: () => Promise<T>): Promise<T> {
+  const dir = await fsp.mkdtemp(join(tmpdir(), 'od-routing-dispatch-alwaysfail-bin-'));
+  const oldPath = process.env.PATH;
+  try {
+    const bin = join(dir, 'claude');
+    await fsp.writeFile(
+      bin,
+      `#!/usr/bin/env node
+if (process.argv.includes('--version')) { console.log('claude-code 1.0.0-always-fail'); process.exit(0); }
+if (process.argv.includes('--help')) { console.log('Usage: claude -p'); process.exit(0); }
+if (process.argv.includes('auth')) { console.log('Logged in (fixture)'); process.exit(0); }
+process.stderr.write('HTTP 503 Service Unavailable: upstream provider unavailable before first token.\\n');
+setTimeout(() => process.exit(1), 20);
+`,
+    );
+    await fsp.chmod(bin, 0o755);
+    process.env.PATH = `${dir}${delimiter}${oldPath ?? ''}`;
+    return await run();
+  } finally {
+    process.env.PATH = oldPath;
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+}
+
 describe('dispatch-time routing wiring in the real chat dispatch path', () => {
   let server: http.Server;
   let baseUrl: string;
@@ -364,6 +397,59 @@ describe('dispatch-time routing wiring in the real chat dispatch path', () => {
       expect(sawRecordedDuringRetry).toBe(true);
       const finalRecord = getCooldownRecord(sqlite, 'runtime', 'claude');
       expect(finalRecord?.consecutiveFailures ?? 0).toBe(0);
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  // Sol review MED-6: a run that fails, retries once (per run-retry-
+  // policy.ts's own attempt cap), and fails again TERMINALLY must record
+  // the cooldown failure EXACTLY ONCE PER REAL FAILURE (attempt 0's
+  // MED-5 retry-boundary call + attempt 1's MED-6 terminal onFinalize
+  // call = 2 total) -- never more. Before the install-once guard, each
+  // retry re-entered startChatRun and wrapped ANOTHER onFinalize layer
+  // around the previous one; all of them fired at the run's one true
+  // terminal moment, so attempt 1's own failure alone would have recorded
+  // 2+ extra times on top of attempt 0's 1, over-incrementing
+  // consecutiveFailures past the real failure count. Reads the BEFORE
+  // count (not an assumed 0) so this test stays correct regardless of
+  // what earlier tests in this file left in the shared 'claude' runtime
+  // scope.
+  it('a run that retries once and then fails terminally records the cooldown exactly once per real failure (Sol review MED-6)', async () => {
+    if (!process.env.OD_DATA_DIR) {
+      throw new Error('OD_DATA_DIR is required to read the cooldowns table directly');
+    }
+    const dbFile = resolve(process.env.OD_DATA_DIR, 'app.sqlite');
+    const sqlite = new Database(dbFile);
+    try {
+      const beforeCount = getCooldownRecord(sqlite, 'runtime', 'claude')?.consecutiveFailures ?? 0;
+
+      const projectId = await createProject();
+      const conversationId = `conv-routing-cooldown-terminal-fail-${randomUUID()}`;
+
+      const text = await withAlwaysFailingClaudeBin(async () => {
+        const response = await fetch(`${baseUrl}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentId: 'claude', projectId, conversationId, message: 'hello' }),
+        });
+        expect(response.ok).toBe(true);
+        return response.text();
+      });
+
+      expect(text).toContain('"status":"failed"');
+      const run = await getRunRow(conversationId);
+      expect(run.status).toBe('failed');
+
+      // Two attempts, one retry: attempt 0's own pre-spawn intent row and
+      // attempt 1's (the one whose terminal failure the once-only MED-6
+      // finalizer reconciled).
+      const telemetryResponse = await fetch(`${baseUrl}/api/routing/telemetry?runId=${encodeURIComponent(run.id)}`);
+      const telemetryBody = (await telemetryResponse.json()) as { rows: StoredRoutingTelemetryRow[] };
+      expect(telemetryBody.rows.length).toBeGreaterThanOrEqual(2);
+
+      const afterCount = getCooldownRecord(sqlite, 'runtime', 'claude')?.consecutiveFailures ?? 0;
+      expect(afterCount - beforeCount).toBe(2);
     } finally {
       sqlite.close();
     }
