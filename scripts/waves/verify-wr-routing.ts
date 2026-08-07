@@ -310,6 +310,14 @@ const CANONICAL_ALLOW: readonly string[] = [
   'scripts/guard.ts',
   'packages/contracts/src/index.ts',
   'apps/web/src/components/AssistantMessage.tsx',
+  // Amendment 1 (2026-08-06, founder-gated): seven additive-only grants.
+  'apps/daemon/src/backup/create.ts',
+  'packages/contracts/src/api/chat.ts',
+  'packages/contracts/src/errors.ts',
+  'apps/web/src/components/SettingsDialog.tsx',
+  'docs/plans/waves/DECISIONS.md',
+  'apps/web/tests/settings-dialog-routing.test.tsx',
+  'apps/daemon/src/app-config.ts',
 ];
 const CANONICAL_DENY: readonly string[] = [
   'apps/web/src/providers/registry.ts',
@@ -364,6 +372,22 @@ const EXPECTED_OVERLAPS: readonly Overlap[] = [
   { file: 'apps/daemon/tests/routing/**', pattern: 'apps/daemon/tests/**', wave: 'W1' },
   { file: 'apps/daemon/tests/routing/**', pattern: 'apps/daemon/tests/**', wave: 'W3' },
   { file: 'apps/daemon/tests/routing/**', pattern: 'apps/daemon/tests/**', wave: 'W4' },
+  // Amendment 1 (2026-08-06) -- overlaps for the seven new grants; only the
+  // five below have rows -- SettingsDialog.tsx and app-config.ts intersect
+  // no other wave's lease, so they have none.
+  { file: 'apps/daemon/src/backup/create.ts', pattern: 'apps/daemon/src/backup/**', wave: 'W0' },
+  { file: 'apps/daemon/src/backup/create.ts', pattern: 'apps/daemon/src/backup/create.ts', wave: 'W4' },
+  { file: 'packages/contracts/src/api/chat.ts', pattern: 'packages/contracts/**', wave: 'W1' },
+  { file: 'packages/contracts/src/api/chat.ts', pattern: 'packages/contracts/**', wave: 'W4' },
+  { file: 'packages/contracts/src/errors.ts', pattern: 'packages/contracts/**', wave: 'W1' },
+  { file: 'packages/contracts/src/errors.ts', pattern: 'packages/contracts/**', wave: 'W4' },
+  { file: 'docs/plans/waves/DECISIONS.md', pattern: 'docs/plans/waves/**', wave: 'W-C' },
+  { file: 'docs/plans/waves/DECISIONS.md', pattern: 'docs/plans/waves/**', wave: 'W0' },
+  { file: 'docs/plans/waves/DECISIONS.md', pattern: 'docs/plans/waves/**', wave: 'W7' },
+  { file: 'docs/plans/waves/DECISIONS.md', pattern: 'docs/plans/waves/DECISIONS.md', wave: 'W9-ingest' },
+  { file: 'apps/web/tests/settings-dialog-routing.test.tsx', pattern: 'apps/web/tests/**', wave: 'W1' },
+  { file: 'apps/web/tests/settings-dialog-routing.test.tsx', pattern: 'apps/web/tests/**', wave: 'W3' },
+  { file: 'apps/web/tests/settings-dialog-routing.test.tsx', pattern: 'apps/web/tests/**', wave: 'W4' },
 ];
 
 const OVERLAP_FILES: readonly string[] = [
@@ -373,6 +397,20 @@ const OVERLAP_FILES: readonly string[] = [
   'scripts/guard.ts',
   'packages/contracts/src/index.ts',
   'apps/web/src/components/AssistantMessage.tsx',
+  // Amendment 1 (2026-08-06): every new grant that existed at baseCommit is
+  // byte-preserved, so "additive only" is mechanical, not prose. DECISIONS.md
+  // inclusion makes the amendment trail append-only by the same check. The
+  // settings-dialog-routing test file is new (absent at baseCommit) and is
+  // therefore additive by construction.
+  'apps/daemon/src/backup/create.ts',
+  'packages/contracts/src/api/chat.ts',
+  'packages/contracts/src/errors.ts',
+  'apps/web/src/components/SettingsDialog.tsx',
+  'docs/plans/waves/DECISIONS.md',
+  // Sol round-2 P1: the archived routingPolicyVersion key must survive
+  // filterAllowedKeys, so the allowlist file itself is granted additively.
+  // Like SettingsDialog.tsx it intersects no other wave's lease.
+  'apps/daemon/src/app-config.ts',
 ];
 
 // fix-round-3, finding 4: extended to cover every remaining normative

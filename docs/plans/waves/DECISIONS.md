@@ -1041,3 +1041,49 @@ reviewer-independence, exact-file lease, or active-Claude-worktree isolation req
 W6a product implementation remains gated behind the existing W3 → W5 → W6a sequence.
 Any non-APPROVE verdict or new blocking finding in the final confirmation parks W6a-P with
 no further autonomous fix round.
+
+## 2026-08-06 — WR lease Amendment 1: seven additive-only grants (founder-gated)
+
+**Trigger.** WR P0–P2 landed via PR #92 (squash `f84fc8a0e`) with four capabilities left
+honest-but-dormant because the files they need were out of lease, each recorded during the
+wave's Sol review cycles: CWR-P1-3's frozen probe targets `apps/daemon/src/backup/create.ts`
+(t4 governance defect); dispatch-time routing for real traffic needs additive optional
+fields on `packages/contracts/src/api/chat.ts` (t9 report); the typed `ROUTING_BLOCKED`
+code belongs in `packages/contracts/src/errors.ts` (t9 round-1 M4, shipped interim as
+`FORBIDDEN`+`RoutingBlockedErrorDetail`); and no leased web view could mount `RoutingPanel`
+(t7 H2 disposition) — `apps/web/src/components/SettingsDialog.tsx` is the section owner.
+
+**Mechanism.** Per the WR verifier's own doctrine (base-anchored governance), this
+amendment lands as a governance-only diff whose verifier run is red BY DESIGN — the
+recorded red state is the blocked-on-founder signal. The exact red set on the amendment
+branch, observed by running `verify-wr-routing.ts` at its tip (recorded per the Sol
+governance review, WARN-5): **CWR-P0-4 only** — the frozen governance bytes (leases.json
+WR entry, WR-routing.md frozen sections, the verifier file itself) diverge from their
+`baseCommit` versions. CWR-P0-2, CWR-P0-3, and LEASE evaluate against the amended
+governance at `HEAD` and pass, because the canonical constants were amended in the same
+diff; **LEASE-INTEGRITY stays green** — no other wave's entry is touched. Verifier
+tally on the branch: 16 pass, CWR-P0-4 blocking, CWR-P1-3 non-gating (open tranche). The
+founder reviews and merges despite the CWR-P0-4 red; every later branch then verifies
+mechanically green against the amended `baseCommit`.
+
+**Scope.** Seven additive-only grants added to WR's `allow` in `leases.json`, mirrored
+byte-identically in WR-routing.md's Lease section with per-file "may only" bounds, **and
+the verifier's `CANONICAL_ALLOW`/`EXPECTED_OVERLAPS`/`OVERLAP_FILES` constants amended in
+the same diff** so the governance is self-consistent at `HEAD` and post-merge tranches
+verify green (Sol BLOCK-2). The four capability grants: `backup/create.ts` (archived
+`app-config.json` `routingPolicyVersion` key only — the `manifest.ts` contract stays
+ungranted, Sol BLOCK-4), `chat.ts` (pinned types: `RoutingOverrideRequest | null` +
+`string | null` fields, Sol WARN-6), `errors.ts` (`'ROUTING_BLOCKED'` line), and
+`SettingsDialog.tsx` (RoutingPanel mount). Three further grants forced by the review:
+`docs/plans/waves/DECISIONS.md` (this trail itself — append-only, mechanically enforced
+via `OVERLAP_FILES`, Sol BLOCK-1), the single test file
+`apps/web/tests/settings-dialog-routing.test.tsx` (Sol WARN-7), and
+`apps/daemon/src/app-config.ts` (Sol round-2 P1: `filterAllowedKeys` would silently drop
+the archived `routingPolicyVersion` key, so the marker needs additive
+`AppConfigPrefs`/`ALLOWED_KEYS`/validator entries to survive restore). All six granted
+files that exist at `baseCommit` are BYTE-PRESERVE-guarded (Sol BLOCK-3). Cross-wave notes: W1
+is notified of the `chat.ts`/`errors.ts` grants (their `packages/contracts/**` lease; all
+overlapping waves are landed, no live concurrent writer). Deliberately NOT granted: the
+cross-runtime routed-application hook move before `getAgentDef` in `server.ts` (baseline
+control-flow change — remains a founder-reviewed edit) and `runtimes/**` side-effect/lane
+observability (future W1/WR coordination).

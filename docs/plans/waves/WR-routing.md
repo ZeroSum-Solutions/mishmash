@@ -85,6 +85,13 @@ support for arbitrary `app-config` keys), amending `apps/daemon/src/backup/manif
 (`apps/daemon/src/backup/manifest.ts`, `apps/daemon/src/backup/create.ts` specifically) is the
 fallback, decided then with evidence, not now on spec.
 
+*(Amendment 1, 2026-08-06, Sol r2-P1 correction to the "zero code change" claim above:
+`app-config.ts`'s `filterAllowedKeys` drops unknown keys on read and normal settings writes
+re-serialize only the filtered object, so a `routingPolicyVersion` key written into
+`app-config.json` would be silently lost after restore. The marker therefore requires additive
+`AppConfigPrefs`/`ALLOWED_KEYS`/validator entries — granted in the Lease as the exact-file
+`apps/daemon/src/app-config.ts` addition, additive allowlist entries only.)*
+
 *Gate (plan §5): every run logs a complete telemetry row including routed-vs-observed model.*
 
 ### P2 — Dispatch routing + admission control + deterministic gates
@@ -142,7 +149,8 @@ flip from `open` to `complete` — asserted mechanically by the verifier at the 
    rebased onto (or merged with) the latest `main` immediately before landing, not built against a
    stale base. Checked by `HEAD-DRIFT` below (fix-round-1, HIGH-5(a); hardened fix-round-2, new-HIGH-4).
 2. **Byte-preservation on every overlap file.** Every line present in a shared/overlap file (the
-   six named under "Lease") at the wave's own base commit (merge-base with `origin/main`) is still
+   twelve named in `OVERLAP_FILES` — six original plus the six Amendment 1 additions listed under
+   "Lease") at the wave's own base commit (merge-base with `origin/main`) is still
    present, unmodified, at the tranche-completing commit, and the file itself still exists — the
    diff for that file may only add lines, never delete, rewrite, or remove the file. Checked by
    `BYTE-PRESERVE` below (fix-round-1, MED-7; hardened fix-round-2, new-HIGH-3). **One-line
@@ -150,7 +158,7 @@ flip from `open` to `complete` — asserted mechanically by the verifier at the 
    added around it — e.g. a function signature the new routing call site needs), that is `human:`
    judgment (`VERIFICATION-CONTRACT.md` §3 R7) and resolves to `blocked-on-founder`; it is never
    silently downgraded to "additive" by the implementing agent. No such exception is expected for
-   any of the six named files' documented change types below.
+   any of the named files' documented change types below.
 3. **W6a untouched.** The tranche-completing commit's diff contains none of the deny-listed W6a
    paths. Checked by `LEASE`'s deny-glob assertion (below), same mechanism as every other deny.
 4. **P0 (governance) must have landed to `main` first.** No product tranche may ever be declared
@@ -403,7 +411,8 @@ of unenforced guarantee `VERIFICATION-CONTRACT.md` §3 R5 forbids.
 
 ### Byte-preservation, unconditional (fix-round-1, MED-7; hardened fix-round-2, new-HIGH-3)
 
-`BYTE-PRESERVE` checks, for each of the six named overlap files under "Lease", whether the file
+`BYTE-PRESERVE` checks, for each of the twelve named overlap files (`OVERLAP_FILES`, listed under
+"Lease"), whether the file
 existed at `baseCommit`. If it did not, there is nothing to preserve and the file is skipped. **If
 it did, the file MUST still exist at `HEAD` — a missing file is an unconditional fail**, and
 `git diff --unified=0 <baseCommit>..HEAD -- <file>` must contain zero removed/changed lines (only
@@ -516,7 +525,14 @@ Canonical copy: `docs/plans/waves/leases.json`, key `WR`. The block below must m
     "scripts/waves/capability-manifest.json",
     "scripts/guard.ts",
     "packages/contracts/src/index.ts",
-    "apps/web/src/components/AssistantMessage.tsx"
+    "apps/web/src/components/AssistantMessage.tsx",
+    "apps/daemon/src/backup/create.ts",
+    "packages/contracts/src/api/chat.ts",
+    "packages/contracts/src/errors.ts",
+    "apps/web/src/components/SettingsDialog.tsx",
+    "docs/plans/waves/DECISIONS.md",
+    "apps/web/tests/settings-dialog-routing.test.tsx",
+    "apps/daemon/src/app-config.ts"
   ],
   "deny": [
     "apps/web/src/providers/registry.ts",
@@ -541,6 +557,13 @@ HIGH-2).** Two kinds:
 | `scripts/waves/capability-manifest.json` | W1, W4 (landed) | append the routing capability's manifest row — additive entry only, per the same C1-8/C4-12 ruling that put this file under W1 and W4's leases |
 | `scripts/guard.ts` | W0, W2 (landed) | additive test-wiring for the routing module only, never change an existing guard rule |
 | `apps/web/src/components/AssistantMessage.tsx` | W1 (landed) | add the "why this model" routing-decision detail render inside the existing per-message model-detail area (`assistantModelDetail`, the `displayState` rendering block) — additive only, must not modify the existing `substituted`/`unverified` rendering W1 shipped |
+| `apps/daemon/src/backup/create.ts` | W0 (`apps/daemon/src/backup/**`), W4 (exact file; both landed) | *(Amendment 1, 2026-08-06)* inject the `routingPolicyVersion` key into the **archived `app-config.json`** — the marker CWR-P1-3's criterion actually verifies. The `ArchiveManifestEntry` contract (`apps/daemon/src/backup/manifest.ts`) is **not** granted and must not change |
+| `packages/contracts/src/api/chat.ts` | W1, W4 (`packages/contracts/**`, landed; W1 notified via the amendment PR) | *(Amendment 1, 2026-08-06)* add optional wire fields with these exact pinned types: `routingOverride?: RoutingOverrideRequest \| null` (referencing the existing export in `routing-decision.ts` — never a parallel inline shape) and `templateId?`/`buildClass?`/`taskClass?: string \| null` (matching `DispatchChatRequest` in `apps/daemon/src/routing/dispatch.ts`) — additive only, never change an existing field |
+| `packages/contracts/src/errors.ts` | W1, W4 (`packages/contracts/**`, landed) | *(Amendment 1, 2026-08-06)* add one `'ROUTING_BLOCKED'` line to the one-member-per-line `API_ERROR_CODES` array — additive member only, migration path from the interim `FORBIDDEN`+`RoutingBlockedErrorDetail` shape t9 shipped |
+| `apps/web/src/components/SettingsDialog.tsx` | no other wave | *(Amendment 1, 2026-08-06)* mount the `RoutingPanel` as an additive settings section alongside the existing sections — closes the t7 H2 disposition; never modify an existing section |
+| `docs/plans/waves/DECISIONS.md` | W-C, W0, W7 (`docs/plans/waves/**`); W9-ingest (exact file) | *(Amendment 1, 2026-08-06)* append amendment-trail records only — append-only is mechanical (`OVERLAP_FILES` / BYTE-PRESERVE), never edit or remove an existing entry |
+| `apps/web/tests/settings-dialog-routing.test.tsx` | W1, W3, W4 (`apps/web/tests/**`) | *(Amendment 1, 2026-08-06)* the RoutingPanel mount/discoverability regression test for the `SettingsDialog.tsx` grant — this single exact file, deliberately not a broad web-test glob |
+| `apps/daemon/src/app-config.ts` | no other wave | *(Amendment 1, 2026-08-06, Sol r2-P1)* add `routingPolicyVersion?: number \| null` to `AppConfigPrefs`, its entry in `ALLOWED_KEYS`, and its value validation — additive allowlist entries only, so the archived marker survives `filterAllowedKeys` and normal config writes after restore; never touch any existing key's handling |
 
 **B — structural glob overlaps** (this wave's specific path falls inside another wave's *broader*
 directory grant; additive-only in the same sense — new files/exports/tests inside the shared
@@ -615,7 +638,7 @@ verifier's exit code — **except** `LEASE-INTEGRITY`, `GATE-INTEGRITY`, `CWR-P2
 | LEASE-INTEGRITY | always-gating | Other waves' leases are untouched | Every non-`WR` entry in `leases.json` is byte-identical between `baseCommit` and `HEAD` |
 | PRE-LANDING-SCOPE | always-gating | Pre-landing diffs are governance-only | While `mode: "pre-landing"`: `git diff --name-only <base>...HEAD` is a subset of exactly `{WR-routing.md, leases.json, verify-wr-routing.ts}` — any other path is an unconditional fail. Passes trivially once `mode: "post-landing"` |
 | HEAD-DRIFT | P0 | Base is fresh, not stale, and git errors are fatal | `baseCommit`/`HEAD` resolved at start, re-checked after all behavioral probes, and re-resolved a FINAL, authoritative time immediately before the manifest write; the live remote's `main` tip is fetched and confirmed an ancestor of `HEAD` (fail-closed — an unreachable remote is a fail, recorded as `freshMain: "unverifiable"`, not a pass); any git command error fails the run |
-| BYTE-PRESERVE | P0 | Overlap files are additive-only and never deleted | For each of the six named overlap files that existed at `baseCommit`: it still exists at `HEAD` (missing = unconditional fail), and `git diff --unified=0 <base>..HEAD` contains zero removed/changed lines |
+| BYTE-PRESERVE | P0 | Overlap files are additive-only and never deleted | For each of the twelve named overlap files (`OVERLAP_FILES`; six original plus the six Amendment 1 additions — `backup/create.ts`, `chat.ts`, `errors.ts`, `SettingsDialog.tsx`, `DECISIONS.md`, `app-config.ts`) that existed at `baseCommit`: it still exists at `HEAD` (missing = unconditional fail), and `git diff --unified=0 <base>..HEAD` contains zero removed/changed lines |
 | GATE-INTEGRITY | always-gating | Manifest and register are self-consistent | Runs last, after every other criterion including the final `HEAD-DRIFT` re-read; every criterion ID above has exactly one manifest entry with a non-empty, hash-matched artifact, verified via a two-phase write that re-reads its own artifact from disk; the Tranche register's rows are cross-checked against the hardcoded `CRITERION_TRANCHE` map |
 
 ## Adversarial review
