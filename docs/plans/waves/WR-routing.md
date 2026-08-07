@@ -520,7 +520,9 @@ Canonical copy: `docs/plans/waves/leases.json`, key `WR`. The block below must m
     "apps/daemon/src/backup/create.ts",
     "packages/contracts/src/api/chat.ts",
     "packages/contracts/src/errors.ts",
-    "apps/web/src/components/SettingsDialog.tsx"
+    "apps/web/src/components/SettingsDialog.tsx",
+    "docs/plans/waves/DECISIONS.md",
+    "apps/web/tests/settings-dialog-routing.test.tsx"
   ],
   "deny": [
     "apps/web/src/providers/registry.ts",
@@ -545,10 +547,12 @@ HIGH-2).** Two kinds:
 | `scripts/waves/capability-manifest.json` | W1, W4 (landed) | append the routing capability's manifest row — additive entry only, per the same C1-8/C4-12 ruling that put this file under W1 and W4's leases |
 | `scripts/guard.ts` | W0, W2 (landed) | additive test-wiring for the routing module only, never change an existing guard rule |
 | `apps/web/src/components/AssistantMessage.tsx` | W1 (landed) | add the "why this model" routing-decision detail render inside the existing per-message model-detail area (`assistantModelDetail`, the `displayState` rendering block) — additive only, must not modify the existing `substituted`/`unverified` rendering W1 shipped |
-| `apps/daemon/src/backup/create.ts` | W0, W4 (landed) | *(Amendment 1, 2026-08-06)* include `routingPolicyVersion` in the backup manifest plus the app-config write — the additive marker CWR-P1-3's frozen probe greps for, nothing else |
-| `packages/contracts/src/api/chat.ts` | W1, W4 (landed; W1 notified via the amendment PR) | *(Amendment 1, 2026-08-06)* add optional wire fields `routingOverride?: { model; lane; reason } \| null`, `templateId?`, `buildClass?`, `taskClass?` — additive only, never change an existing field |
-| `packages/contracts/src/errors.ts` | W1, W4 (landed) | *(Amendment 1, 2026-08-06)* add `'ROUTING_BLOCKED'` to the closed `ApiErrorCode` union — additive member only, migration path from the interim `FORBIDDEN`+`RoutingBlockedErrorDetail` shape t9 shipped |
+| `apps/daemon/src/backup/create.ts` | W0 (`apps/daemon/src/backup/**`), W4 (exact file; both landed) | *(Amendment 1, 2026-08-06)* inject the `routingPolicyVersion` key into the **archived `app-config.json`** — the marker CWR-P1-3's criterion actually verifies. The `ArchiveManifestEntry` contract (`apps/daemon/src/backup/manifest.ts`) is **not** granted and must not change |
+| `packages/contracts/src/api/chat.ts` | W1, W4 (`packages/contracts/**`, landed; W1 notified via the amendment PR) | *(Amendment 1, 2026-08-06)* add optional wire fields with these exact pinned types: `routingOverride?: RoutingOverrideRequest \| null` (referencing the existing export in `routing-decision.ts` — never a parallel inline shape) and `templateId?`/`buildClass?`/`taskClass?: string \| null` (matching `DispatchChatRequest` in `apps/daemon/src/routing/dispatch.ts`) — additive only, never change an existing field |
+| `packages/contracts/src/errors.ts` | W1, W4 (`packages/contracts/**`, landed) | *(Amendment 1, 2026-08-06)* add one `'ROUTING_BLOCKED'` line to the one-member-per-line `API_ERROR_CODES` array — additive member only, migration path from the interim `FORBIDDEN`+`RoutingBlockedErrorDetail` shape t9 shipped |
 | `apps/web/src/components/SettingsDialog.tsx` | no other wave | *(Amendment 1, 2026-08-06)* mount the `RoutingPanel` as an additive settings section alongside the existing sections — closes the t7 H2 disposition; never modify an existing section |
+| `docs/plans/waves/DECISIONS.md` | W-C, W0, W7 (`docs/plans/waves/**`); W9-ingest (exact file) | *(Amendment 1, 2026-08-06)* append amendment-trail records only — append-only is mechanical (`OVERLAP_FILES` / BYTE-PRESERVE), never edit or remove an existing entry |
+| `apps/web/tests/settings-dialog-routing.test.tsx` | W1, W3, W4 (`apps/web/tests/**`) | *(Amendment 1, 2026-08-06)* the RoutingPanel mount/discoverability regression test for the `SettingsDialog.tsx` grant — this single exact file, deliberately not a broad web-test glob |
 
 **B — structural glob overlaps** (this wave's specific path falls inside another wave's *broader*
 directory grant; additive-only in the same sense — new files/exports/tests inside the shared
@@ -623,7 +627,7 @@ verifier's exit code — **except** `LEASE-INTEGRITY`, `GATE-INTEGRITY`, `CWR-P2
 | LEASE-INTEGRITY | always-gating | Other waves' leases are untouched | Every non-`WR` entry in `leases.json` is byte-identical between `baseCommit` and `HEAD` |
 | PRE-LANDING-SCOPE | always-gating | Pre-landing diffs are governance-only | While `mode: "pre-landing"`: `git diff --name-only <base>...HEAD` is a subset of exactly `{WR-routing.md, leases.json, verify-wr-routing.ts}` — any other path is an unconditional fail. Passes trivially once `mode: "post-landing"` |
 | HEAD-DRIFT | P0 | Base is fresh, not stale, and git errors are fatal | `baseCommit`/`HEAD` resolved at start, re-checked after all behavioral probes, and re-resolved a FINAL, authoritative time immediately before the manifest write; the live remote's `main` tip is fetched and confirmed an ancestor of `HEAD` (fail-closed — an unreachable remote is a fail, recorded as `freshMain: "unverifiable"`, not a pass); any git command error fails the run |
-| BYTE-PRESERVE | P0 | Overlap files are additive-only and never deleted | For each of the six named overlap files that existed at `baseCommit`: it still exists at `HEAD` (missing = unconditional fail), and `git diff --unified=0 <base>..HEAD` contains zero removed/changed lines |
+| BYTE-PRESERVE | P0 | Overlap files are additive-only and never deleted | For each of the eleven named overlap files (`OVERLAP_FILES`; six original plus the five Amendment 1 additions — `backup/create.ts`, `chat.ts`, `errors.ts`, `SettingsDialog.tsx`, `DECISIONS.md`) that existed at `baseCommit`: it still exists at `HEAD` (missing = unconditional fail), and `git diff --unified=0 <base>..HEAD` contains zero removed/changed lines |
 | GATE-INTEGRITY | always-gating | Manifest and register are self-consistent | Runs last, after every other criterion including the final `HEAD-DRIFT` re-read; every criterion ID above has exactly one manifest entry with a non-empty, hash-matched artifact, verified via a two-phase write that re-reads its own artifact from disk; the Tranche register's rows are cross-checked against the hardcoded `CRITERION_TRANCHE` map |
 
 ## Adversarial review
