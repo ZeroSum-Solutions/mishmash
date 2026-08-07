@@ -705,7 +705,14 @@ describe('skipped-not-applicable vs unavailable distinction', () => {
   it("axe gate: WebRTC/STUN produces no leaked candidate through the PRODUCTION launch options and gate execution (Sol review MED-3, M3 residue fix-round 2)", async () => {
     const launchOptions = buildAxeGateChromiumLaunchOptions();
     expect(launchOptions.chromiumSandbox).toBe(true);
-    expect(launchOptions.args.some((a) => a.includes('disable_non_proxied_udp'))).toBe(true);
+    // EXACT literal, not a substring (Sol final round: a substring check is
+    // satisfied by a semantically-bogus arg like
+    // `--bogus=disable_non_proxied_udp`). The residual beyond this — Chromium
+    // silently ignoring a correctly-spelled policy flag — is hermetically
+    // unprovable by construction and is the documented enforcement boundary;
+    // the flag's live effectiveness was verified empirically once against a
+    // real STUN round-trip when the two-separate-flags bug was found.
+    expect(launchOptions.args).toContain('--force-webrtc-ip-handling-policy=disable_non_proxied_udp');
     expect(launchOptions.args).toEqual(expect.arrayContaining([...AXE_GATE_WEBRTC_LAUNCH_ARGS]));
 
     // Pass-through spy: the real chromium.launch call still happens (the
