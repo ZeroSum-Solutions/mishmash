@@ -1041,3 +1041,28 @@ reviewer-independence, exact-file lease, or active-Claude-worktree isolation req
 W6a product implementation remains gated behind the existing W3 → W5 → W6a sequence.
 Any non-APPROVE verdict or new blocking finding in the final confirmation parks W6a-P with
 no further autonomous fix round.
+
+## 2026-08-06 — WR lease Amendment 1: four additive-only overlap grants (founder-gated)
+
+**Trigger.** WR P0–P2 landed via PR #92 (squash `f84fc8a0e`) with four capabilities left
+honest-but-dormant because the files they need were out of lease, each recorded during the
+wave's Sol review cycles: CWR-P1-3's frozen probe targets `apps/daemon/src/backup/create.ts`
+(t4 governance defect); dispatch-time routing for real traffic needs additive optional
+fields on `packages/contracts/src/api/chat.ts` (t9 report); the typed `ROUTING_BLOCKED`
+code belongs in `packages/contracts/src/errors.ts` (t9 round-1 M4, shipped interim as
+`FORBIDDEN`+`RoutingBlockedErrorDetail`); and no leased web view could mount `RoutingPanel`
+(t7 H2 disposition) — `apps/web/src/components/SettingsDialog.tsx` is the section owner.
+
+**Mechanism.** Per the WR verifier's own doctrine (base-anchored governance), this
+amendment lands as a governance-only diff whose verifier run reports CWR-P0-4 and
+LEASE-INTEGRITY failures BY DESIGN — that recorded red state is the blocked-on-founder
+signal. The founder reviews and merges despite it; every later branch then verifies
+mechanically against the amended baseCommit.
+
+**Scope.** Exactly four additive-only exact-file grants added to WR's `allow` in
+`leases.json`, mirrored byte-identically in WR-routing.md's Lease section with per-file
+"may only" bounds. Cross-wave notes: W1 is notified of the `chat.ts`/`errors.ts` grants
+(their `packages/contracts/**` lease; all overlapping waves are landed, no live concurrent
+writer). Deliberately NOT granted: the cross-runtime routed-application hook move before
+`getAgentDef` in `server.ts` (baseline control-flow change — remains a founder-reviewed
+edit) and `runtimes/**` side-effect/lane observability (future W1/WR coordination).

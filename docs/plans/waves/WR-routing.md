@@ -516,7 +516,11 @@ Canonical copy: `docs/plans/waves/leases.json`, key `WR`. The block below must m
     "scripts/waves/capability-manifest.json",
     "scripts/guard.ts",
     "packages/contracts/src/index.ts",
-    "apps/web/src/components/AssistantMessage.tsx"
+    "apps/web/src/components/AssistantMessage.tsx",
+    "apps/daemon/src/backup/create.ts",
+    "packages/contracts/src/api/chat.ts",
+    "packages/contracts/src/errors.ts",
+    "apps/web/src/components/SettingsDialog.tsx"
   ],
   "deny": [
     "apps/web/src/providers/registry.ts",
@@ -541,6 +545,10 @@ HIGH-2).** Two kinds:
 | `scripts/waves/capability-manifest.json` | W1, W4 (landed) | append the routing capability's manifest row — additive entry only, per the same C1-8/C4-12 ruling that put this file under W1 and W4's leases |
 | `scripts/guard.ts` | W0, W2 (landed) | additive test-wiring for the routing module only, never change an existing guard rule |
 | `apps/web/src/components/AssistantMessage.tsx` | W1 (landed) | add the "why this model" routing-decision detail render inside the existing per-message model-detail area (`assistantModelDetail`, the `displayState` rendering block) — additive only, must not modify the existing `substituted`/`unverified` rendering W1 shipped |
+| `apps/daemon/src/backup/create.ts` | W0, W4 (landed) | *(Amendment 1, 2026-08-06)* include `routingPolicyVersion` in the backup manifest plus the app-config write — the additive marker CWR-P1-3's frozen probe greps for, nothing else |
+| `packages/contracts/src/api/chat.ts` | W1, W4 (landed; W1 notified via the amendment PR) | *(Amendment 1, 2026-08-06)* add optional wire fields `routingOverride?: { model; lane; reason } \| null`, `templateId?`, `buildClass?`, `taskClass?` — additive only, never change an existing field |
+| `packages/contracts/src/errors.ts` | W1, W4 (landed) | *(Amendment 1, 2026-08-06)* add `'ROUTING_BLOCKED'` to the closed `ApiErrorCode` union — additive member only, migration path from the interim `FORBIDDEN`+`RoutingBlockedErrorDetail` shape t9 shipped |
+| `apps/web/src/components/SettingsDialog.tsx` | no other wave | *(Amendment 1, 2026-08-06)* mount the `RoutingPanel` as an additive settings section alongside the existing sections — closes the t7 H2 disposition; never modify an existing section |
 
 **B — structural glob overlaps** (this wave's specific path falls inside another wave's *broader*
 directory grant; additive-only in the same sense — new files/exports/tests inside the shared
