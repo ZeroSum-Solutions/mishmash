@@ -499,6 +499,370 @@ async function runCover(args) {
   process.exit(2);
 }
 
+// `od route policy|preview|meters` -- routing capability CLI (WR wave, P0
+// skeleton, plan §3.4 capability closure). Thin caller of the same
+// /api/routing/* HTTP surface the web RoutingPanel stub reads. Real
+// dispatch-time routing (a bare `od route --json` returning
+// escalationRate/passRate/laneMeters, CWR-P2-4) lands in a later WR tranche.
+//
+// `preview`'s --task-class/--sensitivity-class/--context-tokens/--prompt-file
+// (t5) forward to the real decideRouting engine the /api/routing/decision/
+// preview GET+POST pair now runs -- see apps/daemon/src/routing/decision.ts.
+// Sol review MED-5 (confidentiality, fix commit): a raw `--prompt-text
+// <text>` flag would put a potentially client-confidential composed-prompt
+// excerpt directly into argv (visible in shell history and `ps`), so this
+// follows the repo's own `--prompt-file <path|->` CLI contract (AGENTS.md
+// "Capability exposure") instead -- a file path or `-` for stdin, read via
+// the same `readMemoryPromptFile` helper `od memory profile set` already
+// uses (generic despite its name: reads `--prompt-file`, nothing memory-
+// specific). Supplying `--prompt-file` switches `preview` from GET to POST
+// so the prompt body never rides a query string either.
+const ROUTE_STRING_FLAGS = new Set([
+  'daemon-url',
+  'template-id',
+  'build-class',
+  'stage',
+  'task-class',
+  'sensitivity-class',
+  'context-tokens',
+  'prompt-file',
+  'build-id',
+  'project-id',
+  'run-id',
+  'since-ms',
+  'until-ms',
+  'limit',
+  'offset',
+  'window-ms',
+  'artifact-dir',
+  'gates',
+  'attempt',
+]);
+const ROUTE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
+
+function printRouteHelp() {
+  console.log(`Usage: od route <policy|preview|meters|telemetry|gates|rates> [options]
+       od route --json                 (bare invocation -- same as \`od route rates --json\`)
+
+Subcommands:
+  policy     GET /api/routing/policy -- current routing policy + version.
+  preview    GET /api/routing/decision/preview -- runs the advisory
+             decision engine for a routing key.
+  meters     GET /api/routing/meters -- per-lane routing meters (L5
+             telemetry aggregation).
+             Also carries per-runtime/per-lane reliability cooldown status (L1, t7).
+  telemetry  GET /api/routing/telemetry -- filtered, paginated telemetry
+             rows (L5 storage).
+  gates list        GET /api/routing/gates -- the L3 gate registry (t8).
+  gates run         POST /api/routing/gates/run -- executes selected
+                     deterministic gates against --artifact-dir and
+                     classifies the cascade trigger (t8).
+  rates      GET /api/routing/rates -- escalation rate + gate pass rate
+             (overall and by stage/template) + every lane's own meter, in
+             one response (t9, plan §5 P2 gate). A bare \`od route --json\`
+             with no subcommand resolves to this same call.
+
+Options:
+  --template-id <id>       Routing key template id (omit for the null fallback).
+  --build-class <cls>      Routing key build class (omit for the null fallback).
+  --stage <stage>          Routing key stage (default: chat); also a telemetry
+                           filter.
+  --task-class <cls>       preview: §2 taskClass / §15 taskSelector to route.
+  --sensitivity-class <c>  preview: client-confidential|internal|public
+                           (default: client-confidential).
+  --context-tokens <n>     preview: explicit contextEstimateTokens override.
+  --prompt-file <path|->   preview: estimate contextEstimateTokens from a
+                           file (or - for stdin); ignored when
+                           --context-tokens is also given. Switches preview
+                           to POST so the prompt body never rides a query
+                           string.
+  --build-id <id>          preview: engages real budget admission control
+                           (t6) against this build's already-recorded
+                           telemetry spend; omit for non-build-scoped work
+                           (general chat) or to leave admission
+                           not-evaluated (no daemon db registered).
+  --project-id <id>        telemetry: filter by project id.
+  --run-id <id>            telemetry: filter by run id.
+  --since-ms <ms>          telemetry: lower bound on createdAt (epoch ms).
+  --until-ms <ms>          telemetry: upper bound on createdAt (epoch ms).
+  --limit <n>              telemetry: page size (default 50, max 500).
+  --offset <n>             telemetry: page offset (default 0).
+  --window-ms <ms>         meters: trailing aggregation window (omit for
+                           all-time).
+  --artifact-dir <path>    gates run: artifact directory to gate (required;
+                           validated to resolve within the daemon's
+                           configured project root, symlink-safe -- no
+                           traversal).
+  --gates <a,b,c>          gates run: comma-separated deterministic gate ids
+                           to run (default: every deterministic gate).
+  --build-id <id>          gates run: also scopes SERVER-PERSISTED cascade
+                           state (tier + cumulative gate-tax spend, PRICED
+                           server-side from policy) -- the daemon tracks
+                           progress and cost per build; this CLI cannot (and
+                           does not try to) assert a tier/spend/cost itself.
+  --run-id <id>            gates run: attach outcomes to an existing
+                           telemetry (runId, attempt) pair; telemetry:
+                           filter by run id. Omit on a gates run to get a
+                           server-synthesized standalone-probe id back.
+  --attempt <n>            gates run: attempt number paired with --run-id
+                           (default: 0).
+  --json                   Print machine-readable JSON.
+  --daemon-url <url>`);
+}
+
+async function runRoute(args) {
+  if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    printRouteHelp();
+    process.exit(args.length === 0 ? 2 : 0);
+  }
+  // A bare `od route --json` (no subcommand at all -- CWR-P2-4's exact
+  // invocation, `tsx apps/daemon/src/cli.ts route --json`) leaves `args[0]`
+  // as the flag token itself. Default that shape to `rates` and parse flags
+  // from the WHOLE `args` array (not `args.slice(1)`, which would silently
+  // drop `--json`) -- there is no other bare-flag subcommand today, so any
+  // leading `-`-prefixed token takes this same path.
+  const bareFlagsOnly = args[0].startsWith('-');
+  const sub = bareFlagsOnly ? 'rates' : args[0];
+  const rest = bareFlagsOnly ? args : args.slice(1);
+  let flags;
+  try {
+    flags = parseFlags(rest, { string: ROUTE_STRING_FLAGS, boolean: ROUTE_BOOLEAN_FLAGS });
+  } catch (err) {
+    console.error(err.message);
+    process.exit(2);
+  }
+  const base = await cliDaemonBaseUrl(flags);
+  const writeJson = (data) => process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+
+  if (sub === 'rates') {
+    const qs = new URLSearchParams();
+    if (flags['window-ms']) qs.set('windowMs', String(flags['window-ms']));
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/routing/rates?${qs.toString()}`);
+    } catch (err) {
+      return exitWithStructuredError({
+        code: 'daemon-not-running',
+        message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+      });
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    const laneCount = data && typeof data.laneMeters === 'object' && data.laneMeters !== null ? Object.keys(data.laneMeters).length : 0;
+    const escalationPct = ((data?.escalationRate ?? 0) * 100).toFixed(1);
+    const passPct = ((data?.passRate ?? 0) * 100).toFixed(1);
+    console.log(`Escalation rate: ${escalationPct}% -- Pass rate: ${passPct}% -- ${laneCount} lane(s) tracked.`);
+    return;
+  }
+
+  if (sub === 'policy') {
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/routing/policy`);
+    } catch (err) {
+      return exitWithStructuredError({
+        code: 'daemon-not-running',
+        message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+      });
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    console.log(`Routing policy version: ${data?.policyVersion ?? 'unknown'}`);
+    return;
+  }
+
+  if (sub === 'preview') {
+    // Sol review MED-5: a supplied --prompt-file switches this to POST
+    // (JSON body) so the prompt text never rides a query string; without
+    // it, GET stays (param-only, cheap, cacheable-by-nature previews).
+    const promptText = await readMemoryPromptFile(flags);
+    let resp;
+    try {
+      if (promptText !== undefined) {
+        resp = await fetch(`${base}/api/routing/decision/preview`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            templateId: flags['template-id'] ? String(flags['template-id']) : undefined,
+            buildClass: flags['build-class'] ? String(flags['build-class']) : undefined,
+            stage: flags.stage ? String(flags.stage) : undefined,
+            taskClass: flags['task-class'] ? String(flags['task-class']) : undefined,
+            sensitivityClass: flags['sensitivity-class'] ? String(flags['sensitivity-class']) : undefined,
+            contextEstimateTokens: flags['context-tokens'] ? Number(flags['context-tokens']) : undefined,
+            promptText,
+            buildId: flags['build-id'] ? String(flags['build-id']) : undefined,
+          }),
+        });
+      } else {
+        const qs = new URLSearchParams();
+        if (flags['template-id']) qs.set('templateId', String(flags['template-id']));
+        if (flags['build-class']) qs.set('buildClass', String(flags['build-class']));
+        if (flags.stage) qs.set('stage', String(flags.stage));
+        if (flags['task-class']) qs.set('taskClass', String(flags['task-class']));
+        if (flags['sensitivity-class']) qs.set('sensitivityClass', String(flags['sensitivity-class']));
+        if (flags['context-tokens']) qs.set('contextEstimateTokens', String(flags['context-tokens']));
+        if (flags['build-id']) qs.set('buildId', String(flags['build-id']));
+        resp = await fetch(`${base}/api/routing/decision/preview?${qs.toString()}`);
+      }
+    } catch (err) {
+      return exitWithStructuredError({
+        code: 'daemon-not-running',
+        message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+      });
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    console.log(`Routing decision preview [${data?.decision?.status ?? 'unknown'}]: ${data?.decision?.rationale ?? 'unknown'} (lane=${data?.decision?.lane ?? 'unknown'})`);
+    // t6: surface admission control's verdict + per-candidate denial reasons
+    // (deliverable: "Preview endpoint + CLI surface the verdict + denial
+    // reasons") -- silent when admission was never engaged (admissionVerdict
+    // stays 'not-evaluated' and admissionResults stays empty, e.g. no
+    // --build-id or the daemon has no db registered).
+    const admissionResults = Array.isArray(data?.decision?.admissionResults) ? data.decision.admissionResults : [];
+    if (admissionResults.length > 0) {
+      console.log(`Admission [${data?.decision?.admissionVerdict ?? 'unknown'}]:`);
+      for (const r of admissionResults) {
+        const cost = typeof r?.estimatedCostUsd === 'number' ? `$${r.estimatedCostUsd.toFixed(4)}` : 'unknown';
+        console.log(`  ${r?.model ?? 'unknown'}@${r?.lane ?? 'unknown'} [${r?.verdict ?? 'unknown'}] est=${cost} -- ${r?.reason ?? ''}`);
+      }
+    }
+    return;
+  }
+
+  if (sub === 'meters') {
+    const metersQs = new URLSearchParams();
+    if (flags['window-ms']) metersQs.set('windowMs', String(flags['window-ms']));
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/routing/meters?${metersQs.toString()}`);
+    } catch (err) {
+      return exitWithStructuredError({
+        code: 'daemon-not-running',
+        message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+      });
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    console.log(`Lane meters: ${Array.isArray(data?.laneMeters) ? data.laneMeters.length : 0}`);
+    // t7 (plan §3.2 L1 reliability): `cooldowns` is additive/optional on the
+    // response (omitted when the daemon has no db) -- silent when absent,
+    // same discipline the admission-results summary above already uses.
+    if (Array.isArray(data?.cooldowns) && data.cooldowns.length > 0) {
+      const activeCount = data.cooldowns.filter((c) => c?.inCooldown).length;
+      console.log(`Reliability cooldowns: ${data.cooldowns.length} scope(s) with recorded failures, ${activeCount} currently cooling.`);
+      for (const c of data.cooldowns) {
+        if (c?.inCooldown) {
+          console.log(`  ${c.scopeType}:${c.scopeId} -- cooling, ${c.remainingMs}ms remaining (${c.consecutiveFailures} consecutive failures)`);
+        }
+      }
+    }
+    return;
+  }
+
+  if (sub === 'telemetry') {
+    const qs = new URLSearchParams();
+    if (flags['project-id']) qs.set('projectId', String(flags['project-id']));
+    if (flags['run-id']) qs.set('runId', String(flags['run-id']));
+    if (flags.stage) qs.set('stage', String(flags.stage));
+    if (flags['since-ms']) qs.set('sinceMs', String(flags['since-ms']));
+    if (flags['until-ms']) qs.set('untilMs', String(flags['until-ms']));
+    if (flags.limit) qs.set('limit', String(flags.limit));
+    if (flags.offset) qs.set('offset', String(flags.offset));
+    let resp;
+    try {
+      resp = await fetch(`${base}/api/routing/telemetry?${qs.toString()}`);
+    } catch (err) {
+      return exitWithStructuredError({
+        code: 'daemon-not-running',
+        message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+      });
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return writeJson(data);
+    console.log(`Telemetry rows: ${Array.isArray(data?.rows) ? data.rows.length : 0} of ${data?.total ?? 0}`);
+    return;
+  }
+
+  if (sub === 'gates') {
+    // `rest[0]` (list|run) is a positional, ignored by parseFlags -- see
+    // cli-args.ts's own doc comment on why positionals are read directly
+    // from `rest` rather than through the parsed `flags` object.
+    const gatesSub = rest[0];
+
+    if (gatesSub === 'list' || gatesSub === undefined) {
+      let resp;
+      try {
+        resp = await fetch(`${base}/api/routing/gates`);
+      } catch (err) {
+        return exitWithStructuredError({
+          code: 'daemon-not-running',
+          message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+        });
+      }
+      if (!resp.ok) return structuredHttpFailure(resp);
+      const data = await resp.json();
+      if (flags.json) return writeJson(data);
+      const gates = Array.isArray(data?.gates) ? data.gates : [];
+      console.log(`Gate registry: ${gates.length} gate(s)`);
+      for (const g of gates) {
+        console.log(`  ${g.id} [${g.class}]${g.runnable ? '' : ' (advisory only)'} -- ${g.label}`);
+      }
+      return;
+    }
+
+    if (gatesSub === 'run') {
+      if (!flags['artifact-dir']) {
+        console.error('od route gates run requires --artifact-dir <path>');
+        process.exit(2);
+      }
+      const body = {
+        artifactDir: String(flags['artifact-dir']),
+        ...(flags.gates ? { gates: String(flags.gates).split(',').map((s) => s.trim()).filter(Boolean) } : {}),
+        ...(flags['build-id'] ? { buildId: String(flags['build-id']) } : {}),
+        ...(flags['run-id'] ? { runId: String(flags['run-id']) } : {}),
+        ...(flags.attempt ? { attempt: Number(flags.attempt) } : {}),
+      };
+      let resp;
+      try {
+        resp = await fetch(`${base}/api/routing/gates/run`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      } catch (err) {
+        return exitWithStructuredError({
+          code: 'daemon-not-running',
+          message: `Cannot reach daemon at ${base}: ${err?.message ?? err}`,
+        });
+      }
+      if (!resp.ok) return structuredHttpFailure(resp);
+      const data = await resp.json();
+      if (flags.json) return writeJson(data);
+      console.log(`Gate run for ${data?.artifactDir ?? 'unknown'}:`);
+      for (const r of data?.results ?? []) {
+        console.log(`  ${r.id} [${r.status}] (${r.durationMs}ms)`);
+      }
+      console.log(`Cascade: escalate=${data?.cascade?.escalate} tier=${data?.cascade?.tier} -- ${data?.cascade?.reason}`);
+      if (data?.runId) {
+        console.log(`Recorded gate outcomes: runId=${data.runId} attempt=${data.attempt}${data.runIdSynthetic ? ' (server-synthesized standalone probe id)' : ''}`);
+      }
+      return;
+    }
+
+    console.error(`unknown subcommand: od route gates ${gatesSub}`);
+    process.exit(2);
+  }
+
+  console.error(`unknown subcommand: od route ${sub}`);
+  printRouteHelp();
+  process.exit(2);
+}
+
 const SUBCOMMAND_MAP = {
   artifacts: runArtifacts,
   media: runMedia,
@@ -545,6 +909,7 @@ const SUBCOMMAND_MAP = {
   restore: runRestore,
   usage: runUsage,
   cover: runCover,
+  route: runRoute,
 };
 
 const EXPORT_STRING_FLAGS = new Set([
