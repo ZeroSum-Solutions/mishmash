@@ -242,6 +242,92 @@ if (attempts === 0) {
   }
 }
 
+// Sol review M5 residue (fix-round 2): `run.events` is a BOUNDED ring
+// (runtimes/runs.ts's `emit()` splices from the front once it exceeds
+// `maxEvents` = 2000) -- an array-index/length snapshot silently drifts
+// once real eviction happens between the retry boundary and the terminal
+// reconcile, since every later element's POSITION shifts but a stored
+// index does not know that.
+//
+// This fixture is deliberately shaped to DISCRIMINATE the two designs, not
+// merely exercise the code path: attempt 0 emits ~1000 events of its own
+// (inflating the array-index/length value an offset-based design would
+// have stored) before reporting usage and failing; attempt 1 reports its
+// OWN distinct usage IMMEDIATELY (before any filler), then emits ~1200
+// trailing filler -- enough that total events comfortably exceed 2000 (so
+// the ring genuinely evicts attempt 0's entire history) while attempt 1's
+// early usage frame still lands within the surviving ~2000-event window
+// (so it is not itself evicted). A stale array-index snapshot, taken
+// BEFORE eviction, is now too LARGE relative to the post-eviction array
+// (which no longer contains attempt 0 at all) -- `.slice(thatStaleIndex)`
+// would skip past attempt 1's own early usage frame entirely, reporting
+// null/zero. The id-based design (each event's `.id` is stamped at push
+// time and never renumbered by eviction) finds it correctly regardless.
+async function withRingEvictingRetryOpencodeBin<T>(run: () => Promise<T>): Promise<T> {
+  const dir = await fsp.mkdtemp(join(tmpdir(), 'od-routing-dispatch-ring-evict-bin-'));
+  const oldPath = process.env.PATH;
+  try {
+    const bin = join(dir, 'opencode');
+    const counterPath = join(dir, 'opencode-attempts');
+    await fsp.writeFile(
+      bin,
+      `#!/usr/bin/env node
+const fs = require('node:fs');
+const argv = process.argv.slice(2);
+const counterPath = ${JSON.stringify(counterPath)};
+if (argv.includes('--version')) { console.log('1.17.7'); process.exit(0); }
+if (argv.includes('--help')) { console.log('opencode run [message..]'); process.exit(0); }
+if (argv[0] === 'models') { console.log('anthropic/claude-sonnet-4-5'); process.exit(0); }
+let attempts = 0;
+try { attempts = Number(fs.readFileSync(counterPath, 'utf8')) || 0; } catch {}
+fs.writeFileSync(counterPath, String(attempts + 1));
+if (attempts === 0) {
+  // ~1000 events of its own BEFORE failing -- inflates whatever
+  // array-index/length value a (buggy) offset-based design would have
+  // stored at the retry boundary.
+  for (let i = 0; i < 1000; i++) {
+    console.log(JSON.stringify({ type: 'step_start', sessionID: 'ring-evict-attempt0-filler-' + i }));
+  }
+  console.log(JSON.stringify({ type: 'step_finish', sessionID: 'ring-evict-session-0', part: { tokens: { input: 40, output: 15, reasoning: 0, cache: { read: 0, write: 0 } }, cost: 0.002 } }));
+  console.log(JSON.stringify({ type: 'error', error: { data: { message: 'synthetic upstream drop' } } }));
+  setTimeout(() => process.exit(1), 20);
+} else {
+  // Reports its OWN usage IMMEDIATELY -- before any filler -- so this
+  // frame sits early in attempt 1's own event range. It must survive
+  // physical eviction (fewer than maxEvents=2000 events may follow it)
+  // while still landing inside the zone a stale attempt-0-sized offset
+  // would wrongly skip.
+  console.log(JSON.stringify({ type: 'step_start', sessionID: 'ring-evict-session-1' }));
+  console.log(JSON.stringify({ type: 'step_finish', sessionID: 'ring-evict-session-1', part: { tokens: { input: 7, output: 3, reasoning: 0, cache: { read: 0, write: 0 } }, cost: 0.0005 } }));
+  // Attempt 0 ALONE already exceeds maxEvents=2000 (empirically confirmed:
+  // its own ~1000 script lines produce ~2007 internal events, each real
+  // frame fanning out into more than one daemon-side event) -- the ring is
+  // ALREADY at its cap by the time attempt 1 starts, so every event
+  // attempt 1 pushes evicts one of attempt 0's from the front on a 1:1
+  // basis. A modest trailing filler is enough to demonstrate "activity
+  // after the usage frame" without pushing attempt 1's OWN early usage
+  // frame back out of the (fixed-size) surviving window itself.
+  for (let i = 0; i < 50; i++) {
+    console.log(JSON.stringify({ type: 'step_start', sessionID: 'ring-evict-attempt1-filler-' + i }));
+  }
+  // A real text frame: without any visible assistant output, the daemon's
+  // own empty-answer safety net classifies this as a FAILED
+  // (empty_output) attempt despite exit(0), defeating this fixture's
+  // point entirely (it needs attempt 1 to genuinely SUCCEED).
+  console.log(JSON.stringify({ type: 'text', sessionID: 'ring-evict-session-1', part: { text: 'Recovered after the ring evicted attempt 0.' } }));
+  setTimeout(() => process.exit(0), 20);
+}
+`,
+    );
+    await fsp.chmod(bin, 0o755);
+    process.env.PATH = `${dir}${delimiter}${oldPath ?? ''}`;
+    return await run();
+  } finally {
+    process.env.PATH = oldPath;
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+}
+
 describe('dispatch-time routing wiring in the real chat dispatch path', () => {
   let server: http.Server;
   let baseUrl: string;
@@ -590,5 +676,57 @@ describe('dispatch-time routing wiring in the real chat dispatch path', () => {
     // ring.
     expect(attempt1Row?.tokens.input ?? 0).toBe(0);
     expect(attempt1Row?.tokens.output ?? 0).toBe(0);
+  });
+
+  // Sol review M5 residue (fix-round 2): forces GENUINE ring eviction
+  // (>2000 events, runtimes/runs.ts's default maxEvents) between the retry
+  // boundary and the terminal reconcile -- proving the id-based scoping
+  // (not an array-index/length snapshot, which would silently drift once
+  // eviction shifts every later element's position) still attributes each
+  // attempt's own usage correctly.
+  it('attributes correct per-attempt usage even after the shared event ring evicts across a retry (Sol review M5 residue, fix-round 2)', async () => {
+    const projectId = await createProject();
+    const conversationId = `conv-routing-ring-evict-${randomUUID()}`;
+
+    const text = await withRingEvictingRetryOpencodeBin(async () => {
+      const response = await fetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId: 'opencode', projectId, conversationId, message: 'hello' }),
+      });
+      expect(response.ok).toBe(true);
+      return response.text();
+    });
+
+    expect(text).toContain('"status":"succeeded"');
+    const run = await getRunRow(conversationId);
+    expect(run.status).toBe('succeeded');
+
+    const telemetryResponse = await fetch(`${baseUrl}/api/routing/telemetry?runId=${encodeURIComponent(run.id)}`);
+    const telemetryBody = (await telemetryResponse.json()) as { rows: StoredRoutingTelemetryRow[] };
+    expect(telemetryBody.rows.length).toBeGreaterThanOrEqual(2);
+
+    const attempt0Row = telemetryBody.rows.find((r) => r.attempt === 0);
+    const attempt1Row = telemetryBody.rows.find((r) => r.attempt === 1);
+    expect(attempt0Row).toBeDefined();
+    expect(attempt1Row).toBeDefined();
+
+    // Attempt 0's usage was persisted to its OWN row at the retry boundary,
+    // before any of attempt 1's >2000 filler events existed to evict
+    // anything -- this is a control assertion (a plain DB read is not
+    // itself at risk from later in-memory ring eviction), confirming the
+    // write from the earlier test's mechanism still holds under this
+    // fixture's heavier load.
+    expect(attempt0Row?.tokens.input).toBe(40);
+    expect(attempt0Row?.tokens.output).toBe(15);
+
+    // Attempt 1's OWN distinct usage (7/3, reported near the end of >2000
+    // filler events) must survive the terminal reconcile's scan even
+    // though attempt 0's entire history -- and a chunk of attempt 1's own
+    // leading filler -- has been evicted from the live ring by the time
+    // this fires. Never 40/15 (attempt 0 leaking in), never null/zero (the
+    // real usage frame missed by a mis-scoped scan).
+    expect(attempt1Row?.tokens.input).toBe(7);
+    expect(attempt1Row?.tokens.output).toBe(3);
   });
 });

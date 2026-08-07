@@ -2649,27 +2649,32 @@ export async function startServer({
         // `finish()` call, so this stashed value is guaranteed to be in
         // place by the time the wrap reads it.
         //
-        // Sol review M5 residue: this canNOT reuse the `record` just
-        // computed above for `recordRunUsage` -- that one intentionally
-        // scans the FULL `run.events` (a project's real cost total must
-        // include every attempt's spend, wasted retries included), while
-        // the routing telemetry row for the attempt that actually FINISHED
-        // the run must report ONLY that attempt's own observed usage. Scans
-        // from `run.wrEventRingOffsetForReconcile` (defaulting to 0 when
-        // there was no retry) onward -- the same offset the retry-boundary
-        // hook above advances to the ring's length right after recording
-        // its own failed attempt's snapshot, so a final attempt that
-        // emitted nothing of its own correctly reconciles as null/zero
-        // observed usage instead of inheriting a prior attempt's numbers.
-        const wrEventsForReconcile = Array.isArray(run.events)
-          ? run.events.slice(run.wrEventRingOffsetForReconcile ?? 0)
-          : [];
+        // Sol review M5 residue (fix-round 2): this canNOT reuse the
+        // `record` just computed above for `recordRunUsage` -- that one
+        // intentionally scans the FULL `run.events` (a project's real cost
+        // total must include every attempt's spend, wasted retries
+        // included), while the routing telemetry row for the attempt that
+        // actually FINISHED the run must report ONLY that attempt's own
+        // observed usage.
+        //
+        // Filters by each event's own `.id` (runtimes/runs.ts's `emit()`
+        // stamps `record.id = run.nextEventId++` on every push, BEFORE
+        // `run.events.splice(0, ...)` ever evicts from the front once the
+        // ring exceeds its capacity) rather than an array-index/length
+        // offset -- an index/length snapshot silently drifts once eviction
+        // shifts every later element's position, while `.id` is baked into
+        // the record at push time and is never renumbered by eviction. Only
+        // a READ of two already-baseline, already-public run fields
+        // (`event.id`, `run.nextEventId`) -- runtimes/runs.ts itself is not
+        // touched or reinterpreted.
         run.wrUsageRecordForReconcile = computeRunUsageRecord({
           requestedRaw: run.modelRequested,
           resolvedRaw: run.model,
           reportedRaw: run.modelReported,
           agentId: run.agentId ?? null,
-          events: wrEventsForReconcile,
+          events: Array.isArray(run.events)
+            ? run.events.filter((e) => (e?.id ?? 0) >= (run.wrEventRingStartId ?? 0))
+            : [],
         });
       },
     }),
@@ -6028,26 +6033,43 @@ export async function startServer({
         // or bleeding it into whichever attempt happens to end the run.
         try {
           if (run.wrRoutingDecision && run.wrRoutingDecision.mode !== 'blocked') {
-            // Sol review M5 residue: scoped to events from THIS attempt's own
-            // start (`run.wrEventRingOffsetForReconcile`, defaulting to 0 for
-            // attempt 0) onward, not the whole shared ring -- if a future
-            // policy change ever allows more than one retry, a second
-            // retry-boundary call must not re-count the FIRST failed
+            // Sol review M5 residue (fix-round 2): scoped to events from
+            // THIS attempt's own start (`run.wrEventRingStartId`, defaulting
+            // to 0 for attempt 0) onward, not the whole shared ring -- if a
+            // future policy change ever allows more than one retry, a
+            // second retry-boundary call must not re-count the FIRST failed
             // attempt's already-recorded events into the SECOND attempt's
-            // own snapshot. Advances the offset to the ring's current length
-            // immediately after computing, marking where the NEXT attempt's
-            // own events begin (see the terminal onFinalize's matching read
-            // of this same field below).
-            const wrEvents = Array.isArray(run.events) ? run.events : [];
-            const wrAttemptStartOffset = run.wrEventRingOffsetForReconcile ?? 0;
+            // own snapshot.
+            //
+            // An array-index/length snapshot (this fix-round's FIRST draft)
+            // silently drifts: `run.events` is a bounded ring
+            // (runtimes/runs.ts's `emit()`, `run.events.splice(0,
+            // run.events.length - maxEvents)`) that evicts from the FRONT
+            // once it overflows, so a stored `.length` value stops
+            // corresponding to any stable position the moment eviction
+            // happens between the retry boundary and the terminal reconcile
+            // -- a `.slice(offset)` against the POST-eviction array reads
+            // from the wrong place entirely. `.id`, by contrast, is stamped
+            // onto each record at push time (`record.id = run.nextEventId++`,
+            // both already-baseline, already-public fields on `run` this
+            // hook only READS) and is never renumbered by eviction, so
+            // filtering by `.id >= startId` stays correct regardless of how
+            // much of the ring has been evicted by the time this fires.
+            // Advances the stored id to `run.nextEventId` (the id the NEXT
+            // event will receive) immediately after computing, marking
+            // where the NEXT attempt's own events begin (see the terminal
+            // onFinalize's matching read of this same field below).
+            const wrAttemptStartId = run.wrEventRingStartId ?? 0;
             const wrFailedAttemptRecord = computeRunUsageRecord({
               requestedRaw: run.modelRequested,
               resolvedRaw: run.model,
               reportedRaw: run.modelReported,
               agentId: run.agentId ?? null,
-              events: wrEvents.slice(wrAttemptStartOffset),
+              events: Array.isArray(run.events)
+                ? run.events.filter((e) => (e?.id ?? 0) >= wrAttemptStartId)
+                : [],
             });
-            run.wrEventRingOffsetForReconcile = wrEvents.length;
+            run.wrEventRingStartId = run.nextEventId ?? 0;
             reconcilePostRun(db, run.id, wrFailedAttemptIndex, {
               observedModel: wrFailedAttemptRecord.reported ?? wrFailedAttemptRecord.resolved ?? null,
               observedLane: null,

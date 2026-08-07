@@ -1102,6 +1102,39 @@ function withHardTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
  */
 export const AXE_GATE_WEBRTC_LAUNCH_ARGS = ['--force-webrtc-ip-handling-policy=disable_non_proxied_udp'] as const;
 
+/**
+ * Sol review HIGH-2/MED-3, M3 residue: the ACTUAL options object
+ * `runAxeGate` passes to `chromium.launch()` -- exported (not just the
+ * launch-args array) so the security regression test can call THIS
+ * function and assert on its real return value, rather than asserting a
+ * hand-built copy of what the options "should" look like. A test built
+ * against a copy cannot detect a regression where `runAxeGate` itself stops
+ * calling this function, or where this function's own body is edited
+ * in a way a copy-paste test would never see; a test built against this
+ * function's OWN return value is bound to whatever `runAxeGate` actually
+ * passes to `chromium.launch()`, by construction, since it is the exact
+ * same call.
+ */
+export function buildAxeGateChromiumLaunchOptions(): { headless: true; chromiumSandbox: true; args: string[] } {
+  return {
+    headless: true,
+    // Sol review HIGH-2 (fix-round): NO `--no-sandbox` -- that flag
+    // disables Chromium's OS-level renderer sandbox entirely, and request
+    // interception (this gate's #1-#4 defenses) is not a substitute for
+    // process isolation against a compromised renderer. `chromiumSandbox:
+    // true` is explicit (not merely the absence of the disabling flag) so a
+    // future edit can never silently reintroduce `--no-sandbox` without
+    // also having to remove this line.
+    chromiumSandbox: true,
+    // Sol review MED-3 (fix-round): AXE_GATE_WEBRTC_LAUNCH_ARGS closes the
+    // WebRTC/STUN UDP egress path -- see this gate's threat-model comment
+    // above (point 4) for why `context.route()` cannot see it at all (ICE
+    // gathering is raw UDP, never an HTTP(S)/WS(S) request), and that
+    // constant's own doc comment for why it is one combined flag.
+    args: [...AXE_GATE_WEBRTC_LAUNCH_ARGS],
+  };
+}
+
 async function runAxeGate(ctx: GateContext): Promise<DeterministicGateResult> {
   const start = performance.now();
   const entryHtml = findEntryHtmlFile(ctx.artifactDir);
@@ -1130,29 +1163,14 @@ async function runAxeGate(ctx: GateContext): Promise<DeterministicGateResult> {
 
   let browser: Browser;
   try {
-    // Sol review HIGH-2 (fix-round): NO `--no-sandbox` -- that flag disables
-    // Chromium's OS-level renderer sandbox entirely, and request
-    // interception (this gate's #1-#4 defenses) is not a substitute for
-    // process isolation against a compromised renderer. `chromiumSandbox:
-    // true` is explicit (not merely the absence of the disabling flag) so a
-    // future edit can never silently reintroduce `--no-sandbox` without
-    // also having to remove this line. A launch failure here (some sandboxed
-    // environments genuinely cannot support the Chromium sandbox, e.g.
-    // certain unprivileged containers) reports the gate 'unavailable' with
-    // the real launch error -- it never falls back to an unsandboxed
-    // relaunch, which would silently trade this gate's entire process-
-    // isolation guarantee for availability.
-    //
-    // Sol review MED-3 (fix-round): AXE_GATE_WEBRTC_LAUNCH_ARGS closes the
-    // WebRTC/STUN UDP egress path -- see this gate's threat-model comment
-    // above (point 4) for why `context.route()` cannot see it at all (ICE
-    // gathering is raw UDP, never an HTTP(S)/WS(S) request), and that
-    // constant's own doc comment for why it is one combined flag.
-    browser = await chromium.launch({
-      headless: true,
-      chromiumSandbox: true,
-      args: [...AXE_GATE_WEBRTC_LAUNCH_ARGS],
-    });
+    // A launch failure here (some sandboxed environments genuinely cannot
+    // support the Chromium sandbox, e.g. certain unprivileged containers)
+    // reports the gate 'unavailable' with the real launch error -- it
+    // never falls back to an unsandboxed relaunch, which would silently
+    // trade this gate's entire process-isolation guarantee for
+    // availability. See `buildAxeGateChromiumLaunchOptions`'s own doc
+    // comment for the sandbox/WebRTC rationale.
+    browser = await chromium.launch(buildAxeGateChromiumLaunchOptions());
   } catch (err) {
     return finishDeterministic('axe', 'unavailable', [`chromium failed to launch: ${errorMessage(err)}`], start);
   }

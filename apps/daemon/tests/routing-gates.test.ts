@@ -29,6 +29,7 @@ import { registerRoutingRoutes } from '../src/routes/routing.js';
 import { computeLaneMeters, ensureRoutingTelemetryTable, getRoutingTelemetryByRunId, recordRoutingTelemetry } from '../src/routing/telemetry.js';
 import {
   AXE_GATE_WEBRTC_LAUNCH_ARGS,
+  buildAxeGateChromiumLaunchOptions,
   baselineState,
   classifyCascadeTrigger,
   DETERMINISTIC_GATE_DEFINITIONS,
@@ -639,90 +640,160 @@ describe('skipped-not-applicable vs unavailable distinction', () => {
     }
   }, 10_000);
 
-  // Sol review MED-3 (fix-round), M3 residue: WebRTC/STUN ICE gathering
-  // opens raw UDP sockets that never pass through Playwright's
+  // Sol review MED-3 (fix-round), M3 residue (fix-round 2): WebRTC/STUN ICE
+  // gathering opens raw UDP sockets that never pass through Playwright's
   // request-routing layer (this gate's `context.route()`/
   // `routeWebSocket()` network-egress block), so it needs its own
-  // regression proof.
+  // regression proof. This version fixes the M3 residue's two concrete
+  // complaints about the prior draft:
   //
-  // HERMETIC BOUNDARY (M3 residue -- this is the load-bearing point of this
-  // test, spelled out because the earlier version silently depended on it):
-  // the original draft pointed at the real `stun.l.google.com`, which
-  // false-greens in ANY offline/network-isolated environment (no candidate
-  // ever appears whether or not the flag actually works, because there is
-  // no network to reach it over in the first place). Pointing at
-  // `stun:127.0.0.1:1` instead -- a guaranteed-unroutable local address no
-  // sandbox/firewall/offline state can accidentally make "reachable" -- and
-  // separately asserting the ACTUAL LAUNCH ARGS contain the exported
-  // `AXE_GATE_WEBRTC_LAUNCH_ARGS` constant (not just spreading it into this
-  // test's own launch call, which a copy-paste-and-edit could silently drop
-  // without failing) makes this a genuine regression test for the POLICY +
-  // FLAG WIRING, not a live-network absence check: it cannot tell a working
-  // `disable_non_proxied_udp` apart from "no network path exists at all,"
-  // but it CAN catch (a) the flag being removed/renamed from the gate's own
-  // launch call, since this test imports and asserts against the same
-  // exported constant, and (b) a real srflx candidate appearing (which
-  // would mean the flag is present but not actually taking effect, exactly
-  // the empirically-discovered two-separate-flags bug this fix-round found
-  // once already).
-  it('WebRTC/STUN ICE gathering produces no server-reflexive candidate under the axe gate\'s hardened launch args (Sol review MED-3, M3 residue)', async () => {
-    const launchArgs = [...AXE_GATE_WEBRTC_LAUNCH_ARGS];
-    // Regression-proofs the launch ARGS THEMSELVES, independent of the
-    // network assertion below -- a future edit that silently drops or
-    // renames the flag from gates.ts's real launch call (and this test's
-    // own copy) would otherwise still pass the network assertion in an
-    // offline CI runner with no way to tell the difference.
-    expect(launchArgs).toEqual(expect.arrayContaining([...AXE_GATE_WEBRTC_LAUNCH_ARGS]));
-    expect(launchArgs.some((a) => a.includes('disable_non_proxied_udp'))).toBe(true);
+  //   (a) launch-options tautology -- the prior test launched its OWN
+  //       chromium with a COPY of the args and compared that copy to
+  //       itself. This one calls `buildAxeGateChromiumLaunchOptions()` --
+  //       the EXACT function `runAxeGate` itself calls -- and asserts on
+  //       ITS return value (catches the exported flag/sandbox regressing),
+  //       AND separately spies on `chromium.launch` (pass-through, the real
+  //       launch still happens) during the REAL gate run below to capture
+  //       the options `runAxeGate` ACTUALLY passed, asserting those match
+  //       the builder's current output -- closing the gap calling the
+  //       builder directly cannot reach on its own (a `runAxeGate` edit
+  //       that stops calling the builder at all, hardcoding its own launch
+  //       options instead, would still pass a builder-only assertion).
+  //   (b) production-path bypass -- the prior test called `chromium.launch()`
+  //       directly, never touching `runAxeGate` at all. This one runs the
+  //       REAL gate (`runOneGate` -> `runGates` -> `runAxeGate`, unmodified)
+  //       against a fixture artifact whose own inline script performs the
+  //       RTCPeerConnection(stun:127.0.0.1:1) probe and, ONLY if a leaked
+  //       (srflx/relay) candidate appears, injects a genuine `image-alt`
+  //       violation into the DOM before axe-core ever scans it -- so the
+  //       GATE'S OWN evidence (its violations list) carries the leak
+  //       signal, not a side-channel this test invents. Synchronization is
+  //       the hard part: `runAxeGate` calls `page.goto(..., {waitUntil:
+  //       'load'})` then almost immediately injects axe-core and evaluates
+  //       it, long before a ~1.5s ICE-gathering wait would resolve on its
+  //       own. The fixture solves this WITHOUT any change to `runAxeGate`
+  //       by intercepting axe-core's own `window.axe = ...` UMD assignment
+  //       (a plain property write) behind a getter/setter pair defined in
+  //       the page's own inline script (which runs during initial parse,
+  //       well before `page.addScriptTag` injects axe-core after 'load'):
+  //       the setter captures the REAL axe implementation; the getter
+  //       (what `runAxeInPage`'s `w.axe.run(...)` actually reads) returns a
+  //       thin wrapper whose `run()` awaits the probe's own promise FIRST,
+  //       then delegates to the real axe.run(). `runAxeGate`'s call
+  //       sequence never changes; only the fixture's own DOM/JS decides
+  //       when the real scan actually starts.
+  //
+  // HERMETIC BOUNDARY, corrected and made more precise (M3 residue fix-round
+  // 2 -- honest correction of the fix-round-1 comment, found while
+  // sanity-checking this exact test against a deliberately-broken
+  // `AXE_GATE_WEBRTC_LAUNCH_ARGS`): `stun:127.0.0.1:1` is guaranteed-
+  // unroutable regardless of the test environment's real network/offline
+  // state, which is what makes it hermetic -- but empirically, Chromium
+  // produces NO srflx/relay candidate for a loopback "STUN server" address
+  // EITHER WAY, flag present or absent (unlike a real external STUN host,
+  // which DOES produce a real srflx candidate without the flag -- verified
+  // when this flag was first chosen, fix-round 1). So the network-probe
+  // half of this test (the DOM-injection fixture below) is a genuine
+  // functional check that nothing leaks through to the page in this
+  // specific configuration, but it is NOT independently sensitive to the
+  // WebRTC flag's own presence/absence against this hermetic target --
+  // that regression is what the launch-options assertions above (both the
+  // direct builder call AND the `chromium.launch` spy below) exist to
+  // catch instead. Neither half proves kernel-level UDP absence against a
+  // REAL external network path -- that would need a live capture/
+  // firewall-level assertion this test does not attempt.
+  it("axe gate: WebRTC/STUN produces no leaked candidate through the PRODUCTION launch options and gate execution (Sol review MED-3, M3 residue fix-round 2)", async () => {
+    const launchOptions = buildAxeGateChromiumLaunchOptions();
+    expect(launchOptions.chromiumSandbox).toBe(true);
+    expect(launchOptions.args.some((a) => a.includes('disable_non_proxied_udp'))).toBe(true);
+    expect(launchOptions.args).toEqual(expect.arrayContaining([...AXE_GATE_WEBRTC_LAUNCH_ARGS]));
 
-    const browser = await chromium.launch({ headless: true, chromiumSandbox: true, args: launchArgs });
+    // Pass-through spy: the real chromium.launch call still happens (the
+    // gate must actually run), but this captures the EXACT options object
+    // runAxeGate passed, so a wiring regression (runAxeGate silently
+    // stopping using buildAxeGateChromiumLaunchOptions()) fails this test
+    // even though calling the builder directly above cannot see it.
+    const originalLaunch = chromium.launch.bind(chromium);
+    const launchSpy = vi
+      .spyOn(chromium, 'launch')
+      .mockImplementation((options?: Parameters<typeof chromium.launch>[0]) => originalLaunch(options));
+
+    writeFileSync(
+      path.join(tempDir, 'index.html'),
+      `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>t</title>
+<script>
+  window.__wrtcCandidateTypes = [];
+  window.__wrtcProbeDone = new Promise(function (resolve) {
     try {
-      const context = await browser.newContext({ permissions: [] });
-      const page = await context.newPage();
-      await page.goto('about:blank');
-      const candidateTypes = await page.evaluate(async () => {
-        // This tsconfig has no DOM lib -- `globalThis` is cast to `any` here
-        // (mirrors gates.ts's own `runAxeInPage` pattern for the same
-        // isolated-world/no-DOM-lib reason) rather than pulling DOM types
-        // into a Node test config.
-        type RTCPeerConnectionLike = {
-          createDataChannel(label: string): unknown;
-          onicecandidate: ((event: { candidate: { type?: string } | null }) => void) | null;
-          createOffer(): Promise<unknown>;
-          setLocalDescription(desc: unknown): Promise<void>;
-          close(): void;
-        };
-        const w = globalThis as unknown as { RTCPeerConnection: new (config: unknown) => RTCPeerConnectionLike };
-        // Sol review M3 residue: 127.0.0.1:1 -- a loopback address on a
-        // port no STUN server can ever bind -- is guaranteed-unroutable
-        // REGARDLESS of the test environment's network/offline state,
-        // unlike a real public STUN host.
-        const pc = new w.RTCPeerConnection({ iceServers: [{ urls: 'stun:127.0.0.1:1' }] });
-        pc.createDataChannel('probe');
-        const types: string[] = [];
-        pc.onicecandidate = (event: { candidate: { type?: string } | null }) => {
-          if (event.candidate) types.push(event.candidate.type ?? 'unknown');
-        };
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        // Bounded wait for ICE gathering to either produce candidates or
-        // time out -- this is the hermetic budget, not a real-network
-        // expectation (disable_non_proxied_udp means a STUN round trip
-        // should never even be attempted).
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        pc.close();
-        return types;
-      });
-      // `disable_non_proxied_udp` suppresses every non-proxied UDP
-      // candidate -- srflx (STUN-reflexive) and relay (TURN) candidates
-      // both require exactly that, so neither may ever appear. A bare
-      // loopback 'host' candidate reflects no external reachability and is
-      // not the egress this policy exists to close, so it is explicitly
-      // tolerated if the local Chromium build still emits one.
-      expect(candidateTypes).not.toContain('srflx');
-      expect(candidateTypes).not.toContain('relay');
+      var pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:127.0.0.1:1' }] });
+      pc.createDataChannel('probe');
+      pc.onicecandidate = function (e) {
+        if (e.candidate) window.__wrtcCandidateTypes.push(e.candidate.type);
+      };
+      pc.createOffer().then(function (offer) { return pc.setLocalDescription(offer); }).catch(function () {});
+      setTimeout(function () {
+        try { pc.close(); } catch (e) {}
+        resolve();
+      }, 300);
+    } catch (e) {
+      resolve();
+    }
+  });
+  var __realAxe;
+  Object.defineProperty(window, 'axe', {
+    configurable: true,
+    get: function () {
+      return {
+        run: function () {
+          var args = arguments;
+          return window.__wrtcProbeDone.then(function () {
+            var leaked =
+              window.__wrtcCandidateTypes.indexOf('srflx') !== -1 ||
+              window.__wrtcCandidateTypes.indexOf('relay') !== -1;
+            if (leaked) {
+              // A genuine image-alt violation -- deliberately injected ONLY
+              // when a leak is detected -- so the REAL axe-core scan below
+              // (via __realAxe, captured by the setter from axe-core's own
+              // UMD assignment) reports it as an actual violation. This is
+              // "the gate's own evidence," not a synthetic pass/fail this
+              // test fabricates.
+              var img = document.createElement('img');
+              img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7';
+              document.body.appendChild(img);
+            }
+            return __realAxe.run.apply(__realAxe, args);
+          });
+        },
+      };
+    },
+    set: function (v) { __realAxe = v; },
+  });
+</script>
+</head><body><p>WebRTC egress probe fixture (Sol review M3 residue).</p></body></html>`,
+    );
+
+    let result;
+    let observedLaunchCallCount: number;
+    let observedLaunchOptions: unknown;
+    try {
+      result = await runOneGate(tempDir, ['axe'], { timeoutMs: 10_000 });
+      // Captured BEFORE mockRestore() -- restoring clears the mock's own
+      // call history, so these must be read while the spy is still live.
+      observedLaunchCallCount = launchSpy.mock.calls.length;
+      observedLaunchOptions = launchSpy.mock.calls[0]?.[0];
     } finally {
-      await browser.close().catch(() => {});
+      launchSpy.mockRestore();
+    }
+    // Environment-tolerant only at the 'unavailable' edge (no launchable
+    // Chromium at all, e.g. a container without the sandbox) -- when a
+    // browser IS available, a leak MUST surface as a real axe FAILURE (the
+    // injected image-alt violation), never a silent pass.
+    if (result.status !== 'unavailable') {
+      expect(result.status).toBe('pass');
+      // The wiring check: runAxeGate really did call chromium.launch with
+      // THIS run's builder output, not a hardcoded/drifted copy.
+      expect(observedLaunchCallCount).toBe(1);
+      expect(observedLaunchOptions).toEqual(buildAxeGateChromiumLaunchOptions());
     }
   }, 15_000);
 });
