@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
 import express, { type Express, type Request, type Response } from 'express';
+import { isSafeId } from '../projects.js';
 import type {
   GateRunResultDTO,
   RoutingDataClassification,
@@ -642,6 +643,25 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database, proj
           `\`projectId\` ("${requestedProjectId}") does not match the projectId ("${existingRow.projectId}") already recorded for (runId=${runId}, attempt=${attempt}).`,
         );
       }
+      // Sol review M7 residue: `existingRow.projectId` came out of the
+      // telemetry table, not directly off the wire -- but it was written by
+      // WHATEVER caller recorded that dispatch's intent, and this route has
+      // no way to know that value was ever validated at write time. Blindly
+      // `path.join(projectsRoot, existingRow.projectId)`-ing it would let a
+      // crafted id like `../../../tmp` (or an absolute path -- `path.join`
+      // does not stop a `..`-laden segment from walking back out of
+      // `projectsRoot`) escape the project root entirely. `isSafeId` is the
+      // SAME single-path-segment validator `POST /api/projects` (apps/
+      // daemon/src/routes/project/index.ts) already requires of every
+      // caller-supplied project id at creation time -- reusing it here means
+      // a projectId this route would ever accept is held to the identical
+      // bar a real project id was created under.
+      if (!isSafeId(existingRow.projectId)) {
+        return respondInvalidQuery(
+          res,
+          `the (runId=${runId}, attempt=${attempt}) telemetry row's recorded projectId ("${existingRow.projectId}") is not a valid single-path-segment project id -- refusing to resolve an artifact root from it.`,
+        );
+      }
       // The daemon data contract's project root shape (AGENTS.md, "Daemon
       // data directory contract"): every managed project's own artifacts
       // live under `PROJECTS_DIR/<projectId>/...`. Scoping `artifactDir`'s
@@ -650,7 +670,23 @@ export function registerRoutingRoutes(app: Express, db?: Database.Database, proj
       // injection this finding describes -- a caller can no longer name a
       // real `(runId, attempt)` from project A while pointing `artifactDir`
       // into project B's directory.
-      artifactRoot = path.join(projectsRoot, existingRow.projectId);
+      //
+      // Sol review M7 residue: `resolveArtifactDirWithinRoot` -- the SAME
+      // realpath-symlink-safe canonical-containment helper this route
+      // already uses for `artifactDir` itself -- re-verifies the
+      // (now format-validated) projectId actually resolves to a real
+      // directory contained within `projectsRoot`'s own canonical form,
+      // defense in depth on top of the format check above (a format-valid
+      // id could still theoretically be a symlink escape if the project
+      // directory itself were ever tampered with on disk).
+      const projectRootResult = resolveArtifactDirWithinRoot(projectsRoot, existingRow.projectId);
+      if (!projectRootResult.ok) {
+        return respondInvalidQuery(
+          res,
+          `the (runId=${runId}, attempt=${attempt}) telemetry row's recorded projectId ("${existingRow.projectId}") does not resolve to a valid project directory: ${projectRootResult.message}`,
+        );
+      }
+      artifactRoot = projectRootResult.resolved;
     }
 
     const pathResult = resolveArtifactDirWithinRoot(artifactRoot, body.artifactDir);

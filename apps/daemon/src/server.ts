@@ -2636,19 +2636,41 @@ export async function startServer({
           record,
         });
         // WR wave (t9, plan §3.1: "post-run reconciliation flags divergence"):
-        // stash the already-computed usage `record` for the terminal
-        // reconcilePostRun call registered on `run.onFinalize` (startChatRun's
-        // resolveDispatchRouting hook below) -- no second usage scan. The
-        // actual reconcilePostRun call does NOT happen here: `onRunFinished`
-        // fires BEFORE `finish()` writes the run's terminal status onto
-        // `run.status` (runtimes/runs.ts), so this hook can never honestly
-        // know whether the run succeeded, failed, or was canceled (Sol
-        // review MED-6) -- see the `onFinalize` wrap for why that chokepoint,
-        // not this one, is where `terminalOutcome` is actually derived.
-        // `onRunFinished` always fires strictly before `onFinalize` within
-        // the same `finish()` call, so this stashed value is guaranteed to
-        // be in place by the time the wrap reads it.
-        run.wrUsageRecordForReconcile = record;
+        // stash a usage record for the terminal reconcilePostRun call
+        // registered on `run.onFinalize` (startChatRun's
+        // resolveDispatchRouting hook below). The actual reconcilePostRun
+        // call does NOT happen here: `onRunFinished` fires BEFORE `finish()`
+        // writes the run's terminal status onto `run.status`
+        // (runtimes/runs.ts), so this hook can never honestly know whether
+        // the run succeeded, failed, or was canceled (Sol review MED-6) --
+        // see the `onFinalize` wrap for why that chokepoint, not this one,
+        // is where `terminalOutcome` is actually derived. `onRunFinished`
+        // always fires strictly before `onFinalize` within the same
+        // `finish()` call, so this stashed value is guaranteed to be in
+        // place by the time the wrap reads it.
+        //
+        // Sol review M5 residue: this canNOT reuse the `record` just
+        // computed above for `recordRunUsage` -- that one intentionally
+        // scans the FULL `run.events` (a project's real cost total must
+        // include every attempt's spend, wasted retries included), while
+        // the routing telemetry row for the attempt that actually FINISHED
+        // the run must report ONLY that attempt's own observed usage. Scans
+        // from `run.wrEventRingOffsetForReconcile` (defaulting to 0 when
+        // there was no retry) onward -- the same offset the retry-boundary
+        // hook above advances to the ring's length right after recording
+        // its own failed attempt's snapshot, so a final attempt that
+        // emitted nothing of its own correctly reconciles as null/zero
+        // observed usage instead of inheriting a prior attempt's numbers.
+        const wrEventsForReconcile = Array.isArray(run.events)
+          ? run.events.slice(run.wrEventRingOffsetForReconcile ?? 0)
+          : [];
+        run.wrUsageRecordForReconcile = computeRunUsageRecord({
+          requestedRaw: run.modelRequested,
+          resolvedRaw: run.model,
+          reportedRaw: run.modelReported,
+          agentId: run.agentId ?? null,
+          events: wrEventsForReconcile,
+        });
       },
     }),
     analytics: analyticsService,
@@ -5277,7 +5299,23 @@ export async function startServer({
           runtimeDefault: { runtimeId: def.id, model: safeModel ?? 'default', lane: 'runtime-default' },
         },
         projectContext: {
-          projectId: typeof projectId === 'string' && projectId ? projectId : (run.projectId ?? 'unknown-project'),
+          // Sol review M7 residue: validated with the SAME `isSafeId`
+          // single-path-segment check `resolveProjectDir`/`ensureProject`
+          // already enforce before ever writing to disk (apps/daemon/src/
+          // projects.ts) -- defense in depth so an unvalidated/traversal-
+          // shaped projectId can never reach the routing_telemetry row's
+          // `projectId` column in the first place, additive to (not a
+          // replacement for) POST /api/routing/gates/run's own read-time
+          // isSafeId check on whatever a telemetry row already contains.
+          // Falls back to the same 'unknown-project' sentinel this hook
+          // already used for a genuinely absent projectId, never a raw
+          // unvalidated string.
+          projectId:
+            typeof projectId === 'string' && projectId && isSafeId(projectId)
+              ? projectId
+              : run.projectId && isSafeId(run.projectId)
+                ? run.projectId
+                : 'unknown-project',
           buildId: null,
         },
         clock: new Date(),
@@ -5990,13 +6028,26 @@ export async function startServer({
         // or bleeding it into whichever attempt happens to end the run.
         try {
           if (run.wrRoutingDecision && run.wrRoutingDecision.mode !== 'blocked') {
+            // Sol review M5 residue: scoped to events from THIS attempt's own
+            // start (`run.wrEventRingOffsetForReconcile`, defaulting to 0 for
+            // attempt 0) onward, not the whole shared ring -- if a future
+            // policy change ever allows more than one retry, a second
+            // retry-boundary call must not re-count the FIRST failed
+            // attempt's already-recorded events into the SECOND attempt's
+            // own snapshot. Advances the offset to the ring's current length
+            // immediately after computing, marking where the NEXT attempt's
+            // own events begin (see the terminal onFinalize's matching read
+            // of this same field below).
+            const wrEvents = Array.isArray(run.events) ? run.events : [];
+            const wrAttemptStartOffset = run.wrEventRingOffsetForReconcile ?? 0;
             const wrFailedAttemptRecord = computeRunUsageRecord({
               requestedRaw: run.modelRequested,
               resolvedRaw: run.model,
               reportedRaw: run.modelReported,
               agentId: run.agentId ?? null,
-              events: Array.isArray(run.events) ? run.events : [],
+              events: wrEvents.slice(wrAttemptStartOffset),
             });
+            run.wrEventRingOffsetForReconcile = wrEvents.length;
             reconcilePostRun(db, run.id, wrFailedAttemptIndex, {
               observedModel: wrFailedAttemptRecord.reported ?? wrFailedAttemptRecord.resolved ?? null,
               observedLane: null,

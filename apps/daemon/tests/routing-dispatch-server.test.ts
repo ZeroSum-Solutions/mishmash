@@ -175,6 +175,73 @@ setTimeout(() => process.exit(1), 20);
   }
 }
 
+// Sol review M5 residue: attempt 0 emits REAL usage (an opencode
+// step_finish frame with token counts) before failing; attempt 1 emits NO
+// usage at all and succeeds. Proves the terminal reconcile's usage snapshot
+// is scoped to events AFTER the retry-boundary offset -- without that
+// scoping, attempt 1's telemetry row would inherit attempt 0's token counts
+// from the shared event ring instead of reporting its own (null/zero)
+// observed usage.
+//
+// Uses OPENCODE, not claude, for a structural reason discovered while
+// building this fixture: claude-stream.ts's ONLY source of a `usage` event
+// is the CLI's single terminal `result` frame, and that frame's `is_error`
+// flag is dual-purpose -- `is_error:false` marks the turn CLEANLY completed
+// (`applyClaudeStreamJsonRunBookkeeping`'s `turnCompletedCleanly`, which
+// makes `classifyChatRunCloseStatus` report 'succeeded' regardless of a
+// later nonzero exit), while `is_error:true` emits a terminal, ALWAYS
+// non-retryable `AGENT_EXECUTION_FAILED` error event -- so a claude fixture
+// can never emit real usage on an attempt that ALSO ends up both 'failed'
+// AND retryable. OpenCode's json-event-stream.ts, by contrast, emits
+// `step_finish`'s `usage` event as an ordinary progress signal decoupled
+// from turn-completion/error semantics (mirrors apps/daemon/tests/
+// run-retry-runtime.test.ts's own `writeStreamErrorThenSuccessfulOpenCode`
+// retryable-opencode-failure shape, here with usage added to attempt 0).
+async function withUsageThenEmptyRetryOpencodeBin<T>(run: () => Promise<T>): Promise<T> {
+  const dir = await fsp.mkdtemp(join(tmpdir(), 'od-routing-dispatch-usage-offset-bin-'));
+  const oldPath = process.env.PATH;
+  try {
+    const bin = join(dir, 'opencode');
+    const counterPath = join(dir, 'opencode-attempts');
+    await fsp.writeFile(
+      bin,
+      `#!/usr/bin/env node
+const fs = require('node:fs');
+const argv = process.argv.slice(2);
+const counterPath = ${JSON.stringify(counterPath)};
+if (argv.includes('--version')) { console.log('1.17.7'); process.exit(0); }
+if (argv.includes('--help')) { console.log('opencode run [message..]'); process.exit(0); }
+if (argv[0] === 'models') { console.log('anthropic/claude-sonnet-4-5'); process.exit(0); }
+let attempts = 0;
+try { attempts = Number(fs.readFileSync(counterPath, 'utf8')) || 0; } catch {}
+fs.writeFileSync(counterPath, String(attempts + 1));
+if (attempts === 0) {
+  // Deliberately NO 'text' frame here: run-retry-policy.ts's
+  // decideSafeRunRetry suppresses same-run retry once the user has seen
+  // ANY visible output (sideEffects.userVisibleOutputSeen), regardless of
+  // how retryable the failure category itself is. step_finish's usage
+  // signal is decoupled from visible text, so real token counts can still
+  // be reported without tripping that guard.
+  console.log(JSON.stringify({ type: 'step_start', sessionID: 'usage-offset-session-0' }));
+  console.log(JSON.stringify({ type: 'step_finish', sessionID: 'usage-offset-session-0', part: { tokens: { input: 40, output: 15, reasoning: 0, cache: { read: 0, write: 0 } }, cost: 0.002 } }));
+  console.log(JSON.stringify({ type: 'error', error: { data: { message: 'synthetic upstream drop' } } }));
+  setTimeout(() => process.exit(1), 20);
+} else {
+  console.log(JSON.stringify({ type: 'step_start', sessionID: 'usage-offset-session-1' }));
+  console.log(JSON.stringify({ type: 'text', sessionID: 'usage-offset-session-1', part: { text: 'Recovered, no usage reported this attempt.' } }));
+  setTimeout(() => process.exit(0), 20);
+}
+`,
+    );
+    await fsp.chmod(bin, 0o755);
+    process.env.PATH = `${dir}${delimiter}${oldPath ?? ''}`;
+    return await run();
+  } finally {
+    process.env.PATH = oldPath;
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+}
+
 describe('dispatch-time routing wiring in the real chat dispatch path', () => {
   let server: http.Server;
   let baseUrl: string;
@@ -312,6 +379,31 @@ describe('dispatch-time routing wiring in the real chat dispatch path', () => {
     const row = telemetryBody.rows[0]!;
     expect(row.routedLane).toBe('runtime-default');
     expect(row.stage).toBe('chat');
+  });
+
+  // Sol review M7 residue (write-path defense in depth): a raw,
+  // traversal-shaped `projectId` on the /api/chat request body must never
+  // reach the routing_telemetry row's own `projectId` column -- server.ts's
+  // dispatch hook now validates with the SAME `isSafeId` single-path-segment
+  // check `resolveProjectDir`/`ensureProject` (apps/daemon/src/projects.ts)
+  // already enforce before ever writing to disk, falling back to a safe
+  // sentinel instead of persisting the unvalidated string. This is additive
+  // to (not a replacement for) POST /api/routing/gates/run's own read-time
+  // isSafeId check on whatever a telemetry row already contains.
+  it('sanitizes a traversal-shaped raw projectId before it ever reaches the telemetry row (Sol review M7 residue)', async () => {
+    const conversationId = `conv-routing-projectid-traversal-${randomUUID()}`;
+    const text = await runChat('opencode', 'opencode', OPENCODE_SUCCESS_SCRIPT, '../../../tmp', conversationId, {});
+    expect(text).toContain('"status":"succeeded"');
+    const run = await getRunRow(conversationId);
+    expect(run.status).toBe('succeeded');
+
+    const telemetryResponse = await fetch(`${baseUrl}/api/routing/telemetry?runId=${encodeURIComponent(run.id)}`);
+    expect(telemetryResponse.status).toBe(200);
+    const telemetryBody = (await telemetryResponse.json()) as { rows: StoredRoutingTelemetryRow[] };
+    expect(telemetryBody.rows).toHaveLength(1);
+    const row = telemetryBody.rows[0]!;
+    expect(row.projectId).not.toBe('../../../tmp');
+    expect(row.projectId).not.toContain('..');
   });
 
   // Sol review MED-4: a blocked dispatch must finalize the SSE/status
@@ -453,5 +545,50 @@ describe('dispatch-time routing wiring in the real chat dispatch path', () => {
     } finally {
       sqlite.close();
     }
+  });
+
+  // Sol review M5 residue: attempt 0 reports REAL usage before failing;
+  // attempt 1 reports NO usage at all and succeeds. Without scoping the
+  // terminal reconcile's usage scan to events recorded AFTER the retry
+  // boundary, attempt 1's telemetry row would inherit attempt 0's token
+  // counts from the shared event ring instead of its own null/zero
+  // observed usage.
+  it("a final attempt that reports no usage of its own does not inherit a prior failed attempt's usage (Sol review M5 residue)", async () => {
+    const projectId = await createProject();
+    const conversationId = `conv-routing-usage-offset-${randomUUID()}`;
+
+    const text = await withUsageThenEmptyRetryOpencodeBin(async () => {
+      const response = await fetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId: 'opencode', projectId, conversationId, message: 'hello' }),
+      });
+      expect(response.ok).toBe(true);
+      return response.text();
+    });
+
+    expect(text).toContain('"status":"succeeded"');
+    const run = await getRunRow(conversationId);
+    expect(run.status).toBe('succeeded');
+
+    const telemetryResponse = await fetch(`${baseUrl}/api/routing/telemetry?runId=${encodeURIComponent(run.id)}`);
+    const telemetryBody = (await telemetryResponse.json()) as { rows: StoredRoutingTelemetryRow[] };
+    expect(telemetryBody.rows.length).toBeGreaterThanOrEqual(2);
+
+    const attempt0Row = telemetryBody.rows.find((r) => r.attempt === 0);
+    const attempt1Row = telemetryBody.rows.find((r) => r.attempt === 1);
+    expect(attempt0Row).toBeDefined();
+    expect(attempt1Row).toBeDefined();
+
+    // Attempt 0's own reported usage survives in ITS OWN row, unaffected by
+    // attempt 1 ever having run at all.
+    expect(attempt0Row?.tokens.input).toBe(40);
+    expect(attempt0Row?.tokens.output).toBe(15);
+
+    // Attempt 1 emitted no usage of its own -- its row must report
+    // null/zero, never attempt 0's 40/15 leaking across the shared event
+    // ring.
+    expect(attempt1Row?.tokens.input ?? 0).toBe(0);
+    expect(attempt1Row?.tokens.output ?? 0).toBe(0);
   });
 });

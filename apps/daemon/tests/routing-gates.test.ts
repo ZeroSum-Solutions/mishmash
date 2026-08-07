@@ -639,19 +639,43 @@ describe('skipped-not-applicable vs unavailable distinction', () => {
     }
   }, 10_000);
 
-  // Sol review MED-3 (fix-round): WebRTC/STUN ICE gathering opens raw UDP
-  // sockets that never pass through Playwright's request-routing layer
-  // (this gate's `context.route()`/`routeWebSocket()` network-egress
-  // block), so it needs its own regression proof. Launches Chromium with
-  // the EXACT `AXE_GATE_WEBRTC_LAUNCH_ARGS` gates.ts's real axe gate uses
-  // (imported, not retyped, so this test tracks the production
-  // configuration) and drives an `RTCPeerConnection` configured with a
-  // real-shaped STUN URL. Hermetic: this asserts no non-host ICE candidate
-  // is ever produced within a short, bounded wait -- it does NOT depend on
-  // the STUN server actually being reachable (the whole point is that it
-  // must never get the chance to be).
-  it('WebRTC/STUN ICE gathering produces no external candidate under the axe gate\'s hardened launch args (Sol review MED-3)', async () => {
-    const browser = await chromium.launch({ headless: true, chromiumSandbox: true, args: [...AXE_GATE_WEBRTC_LAUNCH_ARGS] });
+  // Sol review MED-3 (fix-round), M3 residue: WebRTC/STUN ICE gathering
+  // opens raw UDP sockets that never pass through Playwright's
+  // request-routing layer (this gate's `context.route()`/
+  // `routeWebSocket()` network-egress block), so it needs its own
+  // regression proof.
+  //
+  // HERMETIC BOUNDARY (M3 residue -- this is the load-bearing point of this
+  // test, spelled out because the earlier version silently depended on it):
+  // the original draft pointed at the real `stun.l.google.com`, which
+  // false-greens in ANY offline/network-isolated environment (no candidate
+  // ever appears whether or not the flag actually works, because there is
+  // no network to reach it over in the first place). Pointing at
+  // `stun:127.0.0.1:1` instead -- a guaranteed-unroutable local address no
+  // sandbox/firewall/offline state can accidentally make "reachable" -- and
+  // separately asserting the ACTUAL LAUNCH ARGS contain the exported
+  // `AXE_GATE_WEBRTC_LAUNCH_ARGS` constant (not just spreading it into this
+  // test's own launch call, which a copy-paste-and-edit could silently drop
+  // without failing) makes this a genuine regression test for the POLICY +
+  // FLAG WIRING, not a live-network absence check: it cannot tell a working
+  // `disable_non_proxied_udp` apart from "no network path exists at all,"
+  // but it CAN catch (a) the flag being removed/renamed from the gate's own
+  // launch call, since this test imports and asserts against the same
+  // exported constant, and (b) a real srflx candidate appearing (which
+  // would mean the flag is present but not actually taking effect, exactly
+  // the empirically-discovered two-separate-flags bug this fix-round found
+  // once already).
+  it('WebRTC/STUN ICE gathering produces no server-reflexive candidate under the axe gate\'s hardened launch args (Sol review MED-3, M3 residue)', async () => {
+    const launchArgs = [...AXE_GATE_WEBRTC_LAUNCH_ARGS];
+    // Regression-proofs the launch ARGS THEMSELVES, independent of the
+    // network assertion below -- a future edit that silently drops or
+    // renames the flag from gates.ts's real launch call (and this test's
+    // own copy) would otherwise still pass the network assertion in an
+    // offline CI runner with no way to tell the difference.
+    expect(launchArgs).toEqual(expect.arrayContaining([...AXE_GATE_WEBRTC_LAUNCH_ARGS]));
+    expect(launchArgs.some((a) => a.includes('disable_non_proxied_udp'))).toBe(true);
+
+    const browser = await chromium.launch({ headless: true, chromiumSandbox: true, args: launchArgs });
     try {
       const context = await browser.newContext({ permissions: [] });
       const page = await context.newPage();
@@ -669,7 +693,11 @@ describe('skipped-not-applicable vs unavailable distinction', () => {
           close(): void;
         };
         const w = globalThis as unknown as { RTCPeerConnection: new (config: unknown) => RTCPeerConnectionLike };
-        const pc = new w.RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+        // Sol review M3 residue: 127.0.0.1:1 -- a loopback address on a
+        // port no STUN server can ever bind -- is guaranteed-unroutable
+        // REGARDLESS of the test environment's network/offline state,
+        // unlike a real public STUN host.
+        const pc = new w.RTCPeerConnection({ iceServers: [{ urls: 'stun:127.0.0.1:1' }] });
         pc.createDataChannel('probe');
         const types: string[] = [];
         pc.onicecandidate = (event: { candidate: { type?: string } | null }) => {
@@ -679,19 +707,20 @@ describe('skipped-not-applicable vs unavailable distinction', () => {
         await pc.setLocalDescription(offer);
         // Bounded wait for ICE gathering to either produce candidates or
         // time out -- this is the hermetic budget, not a real-network
-        // expectation (disable_non_proxied_udp means a real STUN round
-        // trip should never even start).
+        // expectation (disable_non_proxied_udp means a STUN round trip
+        // should never even be attempted).
         await new Promise((resolve) => setTimeout(resolve, 1500));
         pc.close();
         return types;
       });
       // `disable_non_proxied_udp` suppresses every non-proxied UDP
       // candidate -- srflx (STUN-reflexive) and relay (TURN) candidates
-      // both require exactly that, so none may appear. A bare loopback
-      // 'host' candidate reflects no external reachability and is not the
-      // egress this policy exists to close, so it is explicitly tolerated
-      // if the local Chromium build still emits one.
-      expect(candidateTypes.filter((t) => t !== 'host')).toEqual([]);
+      // both require exactly that, so neither may ever appear. A bare
+      // loopback 'host' candidate reflects no external reachability and is
+      // not the egress this policy exists to close, so it is explicitly
+      // tolerated if the local Chromium build still emits one.
+      expect(candidateTypes).not.toContain('srflx');
+      expect(candidateTypes).not.toContain('relay');
     } finally {
       await browser.close().catch(() => {});
     }
@@ -1651,6 +1680,22 @@ describe('POST /api/routing/gates/run -- server-persisted cascade state and gate
     const { status, body } = await runGatesHttp({ artifactDir: 'build-out', gates: ['link-smoke'], runId: 'never-recorded-run', attempt: 0 });
     expect(status).toBe(400);
     expect((body.error as { message: string }).message).toMatch(/no routing_telemetry row/i);
+  });
+
+  // Sol review M7 residue: `path.join(projectsRoot, existingRow.projectId)`
+  // with an unvalidated projectId lets a crafted id like '../../../tmp'
+  // escape projectsRoot entirely. Simulates a telemetry row whose projectId
+  // was somehow never validated at write time (defense in depth: this route
+  // must not trust it blindly even though the dispatch-time write path now
+  // ALSO validates with isSafeId -- see server.ts's dispatch hook).
+  it('rejects a traversal-shaped projectId recorded on the (runId, attempt) telemetry row', async () => {
+    const runId = `traversal-project-${randomUUID()}`;
+    ensureRoutingTelemetryTable(db);
+    recordRoutingTelemetry(db, completeRow({ runId, attempt: 0, projectId: '../../../tmp', buildId: null, gateOutcomes: {} }));
+
+    const { status, body } = await runGatesHttp({ artifactDir: 'build-out', gates: ['link-smoke'], runId, attempt: 0, buildId: null });
+    expect(status).toBe(400);
+    expect((body.error as { message: string }).message).toMatch(/not a valid single-path-segment project id/i);
   });
 });
 
