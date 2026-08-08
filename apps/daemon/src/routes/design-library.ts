@@ -403,7 +403,10 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
   };
 
   app.options('/api/design-library/promotions', requireLocalDaemonRequest, (_req, res) => res.status(204).end());
-  app.options('/api/design-library/promotions/:id', requireLocalDaemonRequest, (_req, res) => res.status(204).end());
+  app.options('/api/design-library/promotions/:id', requireLocalDaemonRequest, (_req, res) => {
+    res.setHeader('Access-Control-Allow-Methods', 'PATCH, OPTIONS');
+    return res.status(204).end();
+  });
 
   app.post('/api/design-library/promotions', requireLocalDaemonRequest, async (req, res) => {
     try {

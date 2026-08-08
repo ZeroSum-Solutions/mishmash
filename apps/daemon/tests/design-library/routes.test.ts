@@ -555,7 +555,7 @@ describe('design library routes', () => {
       headers: { Origin: daemonUrl },
     });
     expect(options.status).toBe(204);
-    expect(options.headers.get('access-control-allow-methods')).toContain('PATCH');
+    expect(options.headers.get('access-control-allow-methods')).toBe('PATCH, OPTIONS');
   });
 
   it('serves a thumb file directly under the thumbs directory', async () => {
