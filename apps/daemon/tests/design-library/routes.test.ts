@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { startServer } from '../../src/server.js';
+import { designLibraryTreeSha256 } from '../../src/design-library/rights.js';
 
 // Mirrors tests/media/tasks-routes.test.ts: boot the REAL server via
 // startServer({port:0, returnServer:true}) and hit it with plain fetch().
@@ -241,7 +242,7 @@ describe('design library routes', () => {
   // two-file kit, a restricted one-file kit, an escape kit whose own
   // directory entry is a symlink pointing outside the root, and a permitted
   // kit whose contents include an internal symlinked file.
-  function makeStartProjectFixture(): { dir: string; outside: string } {
+  async function makeStartProjectFixture(): Promise<{ dir: string; outside: string }> {
     const dir = mkdtempSync(path.join(tmpdir(), 'od-design-library-start-project-'));
     const outside = mkdtempSync(path.join(tmpdir(), 'od-design-library-start-project-outside-'));
     writeFileSync(path.join(dir, 'catalog.json'), JSON.stringify(START_PROJECT_CATALOG, null, 2), 'utf8');
@@ -309,6 +310,43 @@ describe('design library routes', () => {
       // (permitted-kit/assets), which is not itself a symlink.
       symlinkSync(permittedKit, path.join(kitsRoot, 'nested-link'));
     }
+
+    const ceilingItems = {
+      '01 Kits/permitted-kit': 'licensed-source-review',
+      '01 Kits/restricted-kit': 'human-local-only',
+      '01 Kits/cached-kit': 'licensed-source-review',
+      ...(canSymlink ? { '01 Kits/symlinked-kit': 'licensed-source-review' } : {}),
+    } as const;
+    const records = Object.fromEntries(await Promise.all(
+      Object.entries(ceilingItems).map(async ([rel, allowedUse]) => [
+        rel,
+        {
+          tree_sha256: await designLibraryTreeSha256(path.join(dir, rel)),
+          allowed_use: allowedUse,
+          licence_ref: allowedUse === 'licensed-source-review' ? 'synthetic-test-licence' : null,
+          source_url: null,
+          captured_at: '2026-08-07T00:00:00.000Z',
+          notes: 'Synthetic route-test record.',
+        },
+      ]),
+    ));
+    mkdirSync(path.join(dir, '.catalog'), { recursive: true });
+    writeFileSync(
+      path.join(dir, '.catalog', 'rights.json'),
+      JSON.stringify({ version: 1, records }, null, 2),
+      'utf8',
+    );
+    writeFileSync(
+      path.join(dir, 'RIGHTS.md'),
+      [
+        '# Synthetic rights ceiling',
+        '<!-- OD_RIGHTS_SOURCE_LEDGER_V1',
+        JSON.stringify({ version: 1, prefixes: {}, items: ceilingItems }, null, 2),
+        'OD_RIGHTS_SOURCE_LEDGER_V1 -->',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
 
     return { dir, outside };
   }
@@ -462,7 +500,7 @@ describe('design library routes', () => {
   });
 
   it('starts a project from a permitted kit and copies its files', async () => {
-    const fixture = makeStartProjectFixture();
+    const fixture = await makeStartProjectFixture();
     fixtureDir = fixture.dir;
     outsideDir = fixture.outside;
     process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
@@ -499,7 +537,7 @@ describe('design library routes', () => {
   });
 
   it('honors a custom project name on start-project', async () => {
-    const fixture = makeStartProjectFixture();
+    const fixture = await makeStartProjectFixture();
     fixtureDir = fixture.dir;
     outsideDir = fixture.outside;
     process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
@@ -516,7 +554,7 @@ describe('design library routes', () => {
   });
 
   it('403s a start-project request for a restricted allowed_use tier', async () => {
-    const fixture = makeStartProjectFixture();
+    const fixture = await makeStartProjectFixture();
     fixtureDir = fixture.dir;
     outsideDir = fixture.outside;
     process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
@@ -530,8 +568,56 @@ describe('design library routes', () => {
     expect(res.status).toBe(403);
   });
 
+  it('rejects changed kit bytes after catalog generation without completing a copied project', async () => {
+    const fixture = await makeStartProjectFixture();
+    fixtureDir = fixture.dir;
+    outsideDir = fixture.outside;
+    writeFileSync(
+      path.join(fixtureDir, '01 Kits', 'permitted-kit', 'assets', 'app.js'),
+      'console.log("changed after authorization snapshot");',
+      'utf8',
+    );
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel: '01 Kits/permitted-kit', name: 'Must Not Copy Changed Kit' }),
+    });
+    expect(res.status).toBe(403);
+    const listRes = await fetch(`${daemonUrl}/api/projects`);
+    expect(JSON.stringify(await listRes.json())).not.toContain('Must Not Copy Changed Kit');
+  });
+
+  it('rejects newly added reference bytes after catalog generation without completing a project', async () => {
+    const fixture = await makeStartProjectFixture();
+    fixtureDir = fixture.dir;
+    outsideDir = fixture.outside;
+    writeFileSync(
+      path.join(fixtureDir, '01 Kits', 'restricted-kit', 'added-after-catalog.txt'),
+      'new unreviewed bytes',
+      'utf8',
+    );
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+
+    const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rel: '01 Kits/restricted-kit',
+        mode: 'reference',
+        name: 'Must Not Reference New Bytes',
+      }),
+    });
+    expect(res.status).toBe(403);
+    const listRes = await fetch(`${daemonUrl}/api/projects`);
+    expect(JSON.stringify(await listRes.json())).not.toContain('Must Not Reference New Bytes');
+  });
+
   it('starts a prompt-only project from a private reference without copying source files', async () => {
-    const fixture = makeStartProjectFixture();
+    const fixture = await makeStartProjectFixture();
     fixtureDir = fixture.dir;
     outsideDir = fixture.outside;
     process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
@@ -561,7 +647,7 @@ describe('design library routes', () => {
   });
 
   it('rejects an undeclared reference aspect', async () => {
-    const fixture = makeStartProjectFixture();
+    const fixture = await makeStartProjectFixture();
     fixtureDir = fixture.dir;
     outsideDir = fixture.outside;
     process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
@@ -577,7 +663,7 @@ describe('design library routes', () => {
   });
 
   it('404s a start-project request for a rel unknown in the catalog', async () => {
-    const fixture = makeStartProjectFixture();
+    const fixture = await makeStartProjectFixture();
     fixtureDir = fixture.dir;
     outsideDir = fixture.outside;
     process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
@@ -592,7 +678,7 @@ describe('design library routes', () => {
   });
 
   it('rejects a path-traversal start-project request with 400', async () => {
-    const fixture = makeStartProjectFixture();
+    const fixture = await makeStartProjectFixture();
     fixtureDir = fixture.dir;
     outsideDir = fixture.outside;
     process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
@@ -609,7 +695,7 @@ describe('design library routes', () => {
   it.runIf(canSymlink)(
     'rejects a start-project request whose catalog item symlinks outside the root with 400',
     async () => {
-      const fixture = makeStartProjectFixture();
+      const fixture = await makeStartProjectFixture();
       fixtureDir = fixture.dir;
       outsideDir = fixture.outside;
       process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
@@ -627,7 +713,7 @@ describe('design library routes', () => {
   it.runIf(canSymlink)(
     'rejects a start-project request whose catalog item folder symlinks to a restricted collection inside the same library with 400',
     async () => {
-      const fixture = makeStartProjectFixture();
+      const fixture = await makeStartProjectFixture();
       fixtureDir = fixture.dir;
       outsideDir = fixture.outside;
       process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
@@ -651,7 +737,7 @@ describe('design library routes', () => {
   it.runIf(canSymlink)(
     'rejects a start-project request whose rel path resolves through a symlinked intermediate directory with 400',
     async () => {
-      const fixture = makeStartProjectFixture();
+      const fixture = await makeStartProjectFixture();
       fixtureDir = fixture.dir;
       outsideDir = fixture.outside;
       process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
@@ -669,7 +755,7 @@ describe('design library routes', () => {
   it.runIf(canSymlink)(
     'rejects a start-project copy that would skip an internal symlinked file with 422',
     async () => {
-      const fixture = makeStartProjectFixture();
+      const fixture = await makeStartProjectFixture();
       fixtureDir = fixture.dir;
       outsideDir = fixture.outside;
       process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
@@ -690,7 +776,7 @@ describe('design library routes', () => {
   // with "size limit would skip a required file (.next/.../NN.pack)" even
   // though the kit's actual design content fit comfortably.
   it('copies a kit whose derived build cache alone would breach the byte cap', async () => {
-    const fixture = makeStartProjectFixture();
+    const fixture = await makeStartProjectFixture();
     fixtureDir = fixture.dir;
     outsideDir = fixture.outside;
     process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
@@ -713,7 +799,7 @@ describe('design library routes', () => {
   });
 
   it('enforces the copy file cap during start-project', async () => {
-    const fixture = makeStartProjectFixture();
+    const fixture = await makeStartProjectFixture();
     fixtureDir = fixture.dir;
     outsideDir = fixture.outside;
     process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;

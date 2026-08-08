@@ -30,6 +30,11 @@ import type {
 import { mimeFor } from '../projects.js';
 import { copyDirectoryContents, type CopyDirectoryState } from '../copy-directory.js';
 import { DESIGN_LIBRARY_PRIVATE_METADATA_NAMES } from '../design-library/private-metadata.js';
+import {
+  designLibraryTreeSha256,
+  resolveCurrentDesignLibraryRights,
+  type DesignLibraryRightsSnapshot,
+} from '../design-library/rights.js';
 import type { RouteDeps } from '../server-context.js';
 
 export interface RegisterDesignLibraryRoutesDeps
@@ -424,16 +429,6 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
     if (!item) {
       return res.status(404).json({ error: 'item not found in catalog' });
     }
-    if (mode === 'copy' && !COPYABLE_ALLOWED_USE.has(item.allowed_use)) {
-      return res.status(403).json({
-        error: `items with allowed_use "${item.allowed_use}" cannot be copied into a project`,
-      });
-    }
-    if (mode === 'reference' && !REFERENCEABLE_ALLOWED_USE.has(item.allowed_use)) {
-      return res.status(403).json({
-        error: `items with allowed_use "${item.allowed_use}" cannot be used as a project reference`,
-      });
-    }
     if (!fs.existsSync(target)) {
       return res.status(404).json({ error: 'path not found' });
     }
@@ -446,6 +441,40 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
     // window between validation and copy.
     if (!(await isRealDirectoryWithNoSymlinkIndirection(root, target))) {
       return res.status(400).json({ error: 'invalid path' });
+    }
+
+    // The catalog is presentation data, not an authorization source. Re-read
+    // the private record and public ceiling, then hash the CURRENT source
+    // tree at the action boundary. Requiring catalog agreement also makes a
+    // half-reconciled generation fail closed in either direction.
+    const authorizedRights = await resolveCurrentDesignLibraryRights(root, rel);
+    const catalogIsCurrent = item.allowed_use === authorizedRights.allowedUse;
+    if (mode === 'copy'
+      && (!catalogIsCurrent || !COPYABLE_ALLOWED_USE.has(authorizedRights.allowedUse))) {
+      return res.status(403).json({
+        error: `current rights do not allow this item to be copied into a project`,
+      });
+    }
+    if (mode === 'reference'
+      && (!catalogIsCurrent || !REFERENCEABLE_ALLOWED_USE.has(authorizedRights.allowedUse))) {
+      return res.status(403).json({
+        error: `current rights do not allow this item to be used as a project reference`,
+      });
+    }
+    let authorizedCopySha256: string | null = null;
+    if (mode === 'copy') {
+      try {
+        // The destination deliberately omits private metadata, VCS/dependency
+        // trees, and derived caches. Hash that exact authorized projection so
+        // the copied bytes can be verified without weakening the full-tree
+        // rights hash above.
+        authorizedCopySha256 = await designLibraryTreeSha256(target, {
+          excludedDirNames: START_PROJECT_EXCLUDED_DIR_NAMES,
+          excludedFileNames: START_PROJECT_EXCLUDED_FILE_NAMES,
+        });
+      } catch {
+        return res.status(403).json({ error: 'current rights could not be verified for this item' });
+      }
     }
 
     const { db, paths, ids, projectStore, projectFiles, conversations } = ctx;
@@ -500,8 +529,27 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
             );
           },
         });
+        const copiedTreeSha256 = await designLibraryTreeSha256(projectRoot);
+        if (!authorizedCopySha256 || copiedTreeSha256 !== authorizedCopySha256) {
+          throw new DesignLibraryStartProjectError(
+            409,
+            'Copied project bytes did not match the authorized Design Library item.',
+          );
+        }
       } else {
         state.warnings.push('Private reference files remain in the Design Library and were not copied.');
+      }
+
+      // Detect changes made while files were copied or reference material was
+      // read. This happens before database insertion, so a mismatch removes
+      // the partial managed directory and cannot leak a completed project.
+      const completedRights: DesignLibraryRightsSnapshot = await resolveCurrentDesignLibraryRights(root, rel);
+      if (completedRights.allowedUse !== authorizedRights.allowedUse
+        || completedRights.treeSha256 !== authorizedRights.treeSha256) {
+        throw new DesignLibraryStartProjectError(
+          409,
+          'Design Library item changed while the project was being prepared; try again after catalog reconciliation.',
+        );
       }
 
       const entryFile = mode === 'copy' ? await detectEntryFile(projectRoot) : undefined;
