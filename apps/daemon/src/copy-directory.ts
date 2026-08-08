@@ -129,5 +129,8 @@ async function walkAndCopy(
 }
 
 function shouldSkipEntry(name: string, isDirectory: boolean, options: CopyDirectoryOptions): boolean {
-  return isDirectory ? options.excludedDirNames.has(name) : options.excludedFileNames.has(name);
+  const normalized = name.toLowerCase();
+  const contains = (names: Set<string>): boolean =>
+    [...names].some((candidate) => candidate.toLowerCase() === normalized);
+  return isDirectory ? contains(options.excludedDirNames) : contains(options.excludedFileNames);
 }

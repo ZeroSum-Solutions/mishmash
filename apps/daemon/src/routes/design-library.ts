@@ -29,6 +29,7 @@ import type {
 } from '@open-design/contracts';
 import { mimeFor } from '../projects.js';
 import { copyDirectoryContents, type CopyDirectoryState } from '../copy-directory.js';
+import { DESIGN_LIBRARY_PRIVATE_METADATA_NAMES } from '../design-library/private-metadata.js';
 import type { RouteDeps } from '../server-context.js';
 
 export interface RegisterDesignLibraryRoutesDeps
@@ -74,6 +75,9 @@ function startProjectMaxBytes(): number {
 // `build`, `out` — kits legitimately ship their deliverable there (see
 // ENTRY_FILE_CANDIDATES).
 const START_PROJECT_EXCLUDED_DIR_NAMES = new Set([
+  // Private library metadata may occur at any depth inside a collection.
+  // It is never project input and never counts against copy caps.
+  ...DESIGN_LIBRARY_PRIVATE_METADATA_NAMES,
   '.git',
   'node_modules',
   '__MACOSX',
@@ -84,7 +88,10 @@ const START_PROJECT_EXCLUDED_DIR_NAMES = new Set([
   '.parcel-cache',
   '.vite',
 ]);
-const START_PROJECT_EXCLUDED_FILE_NAMES = new Set(['.DS_Store']);
+const START_PROJECT_EXCLUDED_FILE_NAMES = new Set([
+  ...DESIGN_LIBRARY_PRIVATE_METADATA_NAMES,
+  '.DS_Store',
+]);
 
 // First of these relative to the copied project root wins; otherwise the
 // first *.html found at depth <= 2 (project root, then its immediate

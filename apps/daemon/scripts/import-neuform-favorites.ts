@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomUUID, type Hash } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { copyFile, mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { copyFile, lstat, mkdir, readFile, readdir, readlink, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,6 +11,7 @@ import { pathToFileURL } from 'node:url';
 import { chromium, type Browser } from 'playwright';
 import sharp from 'sharp';
 import type { DesignLibraryGroup, DesignLibraryItem } from '@open-design/contracts';
+import { isDesignLibraryPrivateMetadataName } from '../src/design-library/private-metadata.js';
 
 export type NeuformEntry = {
   id: string;
@@ -63,6 +65,150 @@ export const CATALOG_LOCK_FILENAME = 'catalog.lock';
 const INDEX_TEMPLATE_FILENAME = 'index-template.html';
 const INDEX_DATA_TOKEN = '__OD_CATALOG_BASE64__';
 const LOCK_READY = 'OD_CATALOG_LOCK_READY';
+const RIGHTS_LEDGER = /<!-- OD_RIGHTS_SOURCE_LEDGER_V1\n(?<json>.*?)\nOD_RIGHTS_SOURCE_LEDGER_V1 -->/s;
+const ALLOWED_USES = new Set(['own-code', 'licensed-source-review', 'human-local-only', 'blocked-pending-license']);
+const RIGHTS_RECORD_FIELDS = new Set(['tree_sha256', 'allowed_use', 'licence_ref', 'source_url', 'captured_at', 'notes']);
+const ITEM_FIELDS = new Set([
+  'id', 'label', 'rel', 'thumb', 'kind', 'files', 'size', 'category', 'domains', 'allowed_use',
+  'duplicate_of', 'description', 'aspects', 'stacks', 'reference',
+]);
+
+type RightsRecord = {
+  tree_sha256: string;
+  allowed_use: DesignLibraryItem['allowed_use'];
+  licence_ref: string | null;
+  source_url: string | null;
+  captured_at: string | null;
+  notes: string | null;
+};
+
+type RightsLedger = { prefixes: Record<string, DesignLibraryItem['allowed_use']>; items: Record<string, DesignLibraryItem['allowed_use']> };
+
+function framed(hash: Hash, value: string | Buffer): void {
+  const bytes = Buffer.isBuffer(value) ? value : Buffer.from(value, 'utf8');
+  const length = Buffer.alloc(8);
+  length.writeBigUInt64BE(BigInt(bytes.length));
+  hash.update(length).update(bytes);
+}
+
+export async function designLibraryTreeSha256(root: string): Promise<string> {
+  const hash = createHash('sha256');
+  const visit = async (directory: string, relative: string): Promise<void> => {
+    const entries = await readdir(directory, { withFileTypes: true });
+    entries.sort((left, right) => Buffer.compare(Buffer.from(left.name), Buffer.from(right.name)));
+    for (const entry of entries) {
+      if (isDesignLibraryPrivateMetadataName(entry.name)) continue;
+      const absolute = path.join(directory, entry.name);
+      const rel = relative ? path.posix.join(relative, entry.name) : entry.name;
+      const info = await lstat(absolute);
+      if (info.isDirectory() && !info.isSymbolicLink()) {
+        framed(hash, 'D');
+        framed(hash, rel);
+        await visit(absolute, rel);
+      } else if (info.isFile()) {
+        framed(hash, 'F');
+        framed(hash, rel);
+        framed(hash, String(info.size));
+        for await (const chunk of createReadStream(absolute)) hash.update(chunk as Buffer);
+      } else if (info.isSymbolicLink()) {
+        framed(hash, 'L');
+        framed(hash, rel);
+        framed(hash, await readlink(absolute));
+      } else {
+        framed(hash, 'S');
+        framed(hash, rel);
+        framed(hash, String(info.mode & 0o170000));
+      }
+    }
+  };
+  await visit(root, '');
+  return hash.digest('hex');
+}
+
+function exactObject(value: unknown, fields: Set<string>): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+    && Object.keys(value as object).length === fields.size
+    && Object.keys(value as object).every((key) => fields.has(key));
+}
+
+async function loadRightsRecords(targetRoot: string): Promise<Record<string, unknown>> {
+  try {
+    const value: unknown = JSON.parse(await readFile(path.join(targetRoot, '.catalog', 'rights.json'), 'utf8'));
+    if (!exactObject(value, new Set(['version', 'records'])) || value.version !== 1
+      || !value.records || typeof value.records !== 'object' || Array.isArray(value.records)) return {};
+    return value.records as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+async function loadRightsLedger(targetRoot: string): Promise<RightsLedger> {
+  try {
+    const match = RIGHTS_LEDGER.exec(await readFile(path.join(targetRoot, 'RIGHTS.md'), 'utf8'));
+    const value: unknown = match?.groups?.json ? JSON.parse(match.groups.json) : null;
+    if (!exactObject(value, new Set(['version', 'prefixes', 'items'])) || value.version !== 1) throw new Error();
+    const prefixes = value.prefixes;
+    const items = value.items;
+    if (!prefixes || typeof prefixes !== 'object' || Array.isArray(prefixes)
+      || !items || typeof items !== 'object' || Array.isArray(items)) throw new Error();
+    const validMapping = (mapping: Record<string, unknown>, prefix: boolean) => Object.entries(mapping).every(
+      ([key, allowed]) => key.length > 0 && (!prefix || key.endsWith('/')) && ALLOWED_USES.has(String(allowed)),
+    );
+    if (!validMapping(prefixes as Record<string, unknown>, true)
+      || !validMapping(items as Record<string, unknown>, false)) throw new Error();
+    return { prefixes, items } as RightsLedger;
+  } catch {
+    return { prefixes: {}, items: {} };
+  }
+}
+
+function ledgerAllowedUse(rel: string, ledger: RightsLedger): DesignLibraryItem['allowed_use'] | null {
+  if (ledger.items[rel]) return ledger.items[rel];
+  const matches = Object.entries(ledger.prefixes).filter(([prefix]) => rel.startsWith(prefix));
+  matches.sort(([left], [right]) => right.length - left.length);
+  return matches[0]?.[1] ?? null;
+}
+
+function validRightsRecord(value: unknown, rel: string, ledger: RightsLedger): RightsRecord | null {
+  if (!exactObject(value, RIGHTS_RECORD_FIELDS)) return null;
+  if (typeof value.tree_sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(value.tree_sha256)) return null;
+  if (!ALLOWED_USES.has(String(value.allowed_use)) || ledgerAllowedUse(rel, ledger) !== value.allowed_use) return null;
+  if (['licence_ref', 'source_url', 'captured_at', 'notes'].some(
+    (field) => value[field] !== null && typeof value[field] !== 'string',
+  )) return null;
+  return value as RightsRecord;
+}
+
+async function resolvePublishedGroups(targetRoot: string, groups: DesignLibraryGroup[]): Promise<DesignLibraryGroup[]> {
+  const [records, ledger, rootReal] = await Promise.all([
+    loadRightsRecords(targetRoot),
+    loadRightsLedger(targetRoot),
+    realpath(targetRoot),
+  ]);
+  const resolved: DesignLibraryGroup[] = [];
+  for (const group of groups) {
+    const items: DesignLibraryItem[] = [];
+    for (const rawItem of group.items) {
+      const rel = rawItem.rel;
+      let allowedUse: DesignLibraryItem['allowed_use'] = 'blocked-pending-license';
+      const record = validRightsRecord(records[rel], rel, ledger);
+      if (record) {
+        const candidate = await realpath(path.resolve(rootReal, rel)).catch(() => null);
+        if (candidate && (candidate === rootReal || candidate.startsWith(`${rootReal}${path.sep}`))) {
+          const info = await stat(candidate).catch(() => null);
+          if (info?.isDirectory() && await designLibraryTreeSha256(candidate) === record.tree_sha256) {
+            allowedUse = record.allowed_use;
+          }
+        }
+      }
+      const item = Object.fromEntries(Object.entries(rawItem).filter(([key]) => ITEM_FIELDS.has(key))) as unknown as DesignLibraryItem;
+      item.allowed_use = allowedUse;
+      items.push(item);
+    }
+    resolved.push({ ...group, items });
+  }
+  return resolved;
+}
 
 export interface CatalogLockCommand {
   executable: string;
@@ -355,7 +501,7 @@ async function prepareEntry(sourceRoot: string, targetRoot: string, entry: Neufo
       size: humanBytes((htmlBuffer?.byteLength ?? 0) + (designBuffer?.byteLength ?? 0)),
       category: meta.folder,
       domains: itemDomains(category, aspects, stacks),
-      allowed_use: 'human-local-only',
+      allowed_use: 'blocked-pending-license',
       description: descriptionFromDesign(entry, design, category),
       aspects,
       stacks,
@@ -531,7 +677,10 @@ async function main() {
   await withCatalogWriterLock(options.target, async () => {
     const existingPath = path.join(options.target, 'catalog.json');
     const existing = JSON.parse(await readFile(existingPath, 'utf8')) as { groups: DesignLibraryGroup[]; [key: string]: unknown };
-    const mergedGroups = mergeOwnedCatalogGroups(existing.groups, groups);
+    const mergedGroups = await resolvePublishedGroups(
+      options.target,
+      mergeOwnedCatalogGroups(existing.groups, groups),
+    );
     const next = {
       ...existing,
       note: `${String(existing.note ?? '')

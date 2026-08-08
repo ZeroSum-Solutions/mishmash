@@ -251,8 +251,20 @@ describe('design library routes', () => {
 
     const permittedKit = path.join(kitsRoot, 'permitted-kit');
     mkdirSync(path.join(permittedKit, 'assets'), { recursive: true });
+    mkdirSync(path.join(permittedKit, '.catalog', 'nested'), { recursive: true });
+    mkdirSync(path.join(permittedKit, 'assets', '.CATALOG'), { recursive: true });
+    mkdirSync(path.join(permittedKit, 'metadata-link'), { recursive: true });
     writeFileSync(path.join(permittedKit, 'index.html'), '<!doctype html><title>Permitted</title>', 'utf8');
     writeFileSync(path.join(permittedKit, 'assets', 'app.js'), 'console.log("kit");', 'utf8');
+    writeFileSync(path.join(permittedKit, '.catalog', 'nested', 'private.json'), '{"private":true}', 'utf8');
+    writeFileSync(path.join(permittedKit, 'assets', '.CATALOG', 'private.json'), '{"private":true}', 'utf8');
+    writeFileSync(path.join(permittedKit, 'RIGHTS.JSON'), '{"private":true}', 'utf8');
+    writeFileSync(path.join(permittedKit, 'assets', 'rights.json'), '{"private":true}', 'utf8');
+    writeFileSync(path.join(permittedKit, '.design-library-item.json'), '{"private":true}', 'utf8');
+    writeFileSync(path.join(permittedKit, 'assets', '.DESIGN-LIBRARY-ITEM.JSON'), '{"private":true}', 'utf8');
+    if (canSymlink) {
+      symlinkSync(outside, path.join(permittedKit, 'metadata-link', '.CaTaLoG'));
+    }
 
     const restrictedKit = path.join(kitsRoot, 'restricted-kit');
     mkdirSync(restrictedKit, { recursive: true });
@@ -468,7 +480,7 @@ describe('design library routes', () => {
     expect(typeof body.conversationId).toBe('string');
     expect(body.entryFile).toBe('index.html');
     expect(body.copiedFiles).toBe(2);
-    expect(body.skippedFiles).toBe(0);
+    expect(body.skippedFiles).toBe(canSymlink ? 7 : 6);
     expect(body.warnings).toEqual([]);
     expect(body.project?.id).toBe(body.projectId);
     expect(body.project?.name).toBe('Permitted Kit');
@@ -481,6 +493,9 @@ describe('design library routes', () => {
     const filesJson = JSON.stringify(filesBody);
     expect(filesJson).toContain('index.html');
     expect(filesJson).toContain('app.js');
+    expect(filesJson.toLowerCase()).not.toContain('.catalog');
+    expect(filesJson.toLowerCase()).not.toContain('rights.json');
+    expect(filesJson.toLowerCase()).not.toContain('.design-library-item.json');
   });
 
   it('honors a custom project name on start-project', async () => {
