@@ -164,6 +164,25 @@ describe('DesignLibrarySection', () => {
     expect(within(restrictedCard).queryByText('Use as template')).toBeNull();
   });
 
+  it('removes the Use as template affordance when a catalog item is rights-blocked', async () => {
+    fetchDesignLibraryCatalog.mockResolvedValue({
+      ok: true,
+      catalog: {
+        ...CATALOG,
+        total_collections: 1,
+        groups: [{
+          ...CATALOG.groups[0]!,
+          items: [{ ...CATALOG.groups[0]!.items[0]!, allowed_use: 'blocked-pending-license' }],
+        }],
+      },
+    });
+
+    render(<DesignLibrarySection active onOpenProject={vi.fn()} />);
+    const card = (await screen.findByText('Neon Dashboard Kit')).closest('article') as HTMLElement;
+    expect(card.getAttribute('data-allowed-use')).toBe('blocked-pending-license');
+    expect(within(card).queryByText('Use as template')).toBeNull();
+  });
+
   it('renders the description on the card when present and omits it when absent', async () => {
     render(<DesignLibrarySection active />);
     const label = await screen.findByText('Neon Dashboard Kit');

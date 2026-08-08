@@ -29,10 +29,20 @@ import type {
 } from '@open-design/contracts';
 import { mimeFor } from '../projects.js';
 import { copyDirectoryContents, type CopyDirectoryState } from '../copy-directory.js';
+import { DESIGN_LIBRARY_PRIVATE_METADATA_NAMES } from '../design-library/private-metadata.js';
+import {
+  designLibraryTreeSha256,
+  resolveCurrentDesignLibraryRights,
+  type DesignLibraryRightsSnapshot,
+} from '../design-library/rights.js';
 import type { RouteDeps } from '../server-context.js';
 
 export interface RegisterDesignLibraryRoutesDeps
-  extends RouteDeps<'http' | 'db' | 'paths' | 'ids' | 'projectStore' | 'projectFiles' | 'conversations'> {}
+  extends RouteDeps<'http' | 'db' | 'paths' | 'ids' | 'projectStore' | 'projectFiles' | 'conversations'> {
+  rights?: {
+    resolveCurrent: typeof resolveCurrentDesignLibraryRights;
+  };
+}
 
 // allowed_use tiers that may be copied out of the library into a project.
 // Everything else (`human-local-only`, `blocked-pending-license`) stays
@@ -74,6 +84,9 @@ function startProjectMaxBytes(): number {
 // `build`, `out` — kits legitimately ship their deliverable there (see
 // ENTRY_FILE_CANDIDATES).
 const START_PROJECT_EXCLUDED_DIR_NAMES = new Set([
+  // Private library metadata may occur at any depth inside a collection.
+  // It is never project input and never counts against copy caps.
+  ...DESIGN_LIBRARY_PRIVATE_METADATA_NAMES,
   '.git',
   'node_modules',
   '__MACOSX',
@@ -84,7 +97,10 @@ const START_PROJECT_EXCLUDED_DIR_NAMES = new Set([
   '.parcel-cache',
   '.vite',
 ]);
-const START_PROJECT_EXCLUDED_FILE_NAMES = new Set(['.DS_Store']);
+const START_PROJECT_EXCLUDED_FILE_NAMES = new Set([
+  ...DESIGN_LIBRARY_PRIVATE_METADATA_NAMES,
+  '.DS_Store',
+]);
 
 // First of these relative to the copied project root wins; otherwise the
 // first *.html found at depth <= 2 (project root, then its immediate
@@ -291,6 +307,7 @@ async function buildReferencePrompt(
 export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLibraryRoutesDeps) {
   const { isLocalSameOrigin, resolvedPortRef } = ctx.http;
   const getResolvedPort = () => resolvedPortRef.current;
+  const resolveCurrentRights = ctx.rights?.resolveCurrent ?? resolveCurrentDesignLibraryRights;
 
   app.get('/api/design-library/catalog', async (req, res) => {
     if (!isLocalSameOrigin(req, getResolvedPort())) {
@@ -417,16 +434,6 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
     if (!item) {
       return res.status(404).json({ error: 'item not found in catalog' });
     }
-    if (mode === 'copy' && !COPYABLE_ALLOWED_USE.has(item.allowed_use)) {
-      return res.status(403).json({
-        error: `items with allowed_use "${item.allowed_use}" cannot be copied into a project`,
-      });
-    }
-    if (mode === 'reference' && !REFERENCEABLE_ALLOWED_USE.has(item.allowed_use)) {
-      return res.status(403).json({
-        error: `items with allowed_use "${item.allowed_use}" cannot be used as a project reference`,
-      });
-    }
     if (!fs.existsSync(target)) {
       return res.status(404).json({ error: 'path not found' });
     }
@@ -439,6 +446,40 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
     // window between validation and copy.
     if (!(await isRealDirectoryWithNoSymlinkIndirection(root, target))) {
       return res.status(400).json({ error: 'invalid path' });
+    }
+
+    // The catalog is presentation data, not an authorization source. Re-read
+    // the private record and public ceiling, then hash the CURRENT source
+    // tree at the action boundary. Requiring catalog agreement also makes a
+    // half-reconciled generation fail closed in either direction.
+    const authorizedRights = await resolveCurrentRights(root, rel);
+    const catalogIsCurrent = item.allowed_use === authorizedRights.allowedUse;
+    if (mode === 'copy'
+      && (!catalogIsCurrent || !COPYABLE_ALLOWED_USE.has(authorizedRights.allowedUse))) {
+      return res.status(403).json({
+        error: `current rights do not allow this item to be copied into a project`,
+      });
+    }
+    if (mode === 'reference'
+      && (!catalogIsCurrent || !REFERENCEABLE_ALLOWED_USE.has(authorizedRights.allowedUse))) {
+      return res.status(403).json({
+        error: `current rights do not allow this item to be used as a project reference`,
+      });
+    }
+    let authorizedCopySha256: string | null = null;
+    if (mode === 'copy') {
+      try {
+        // The destination deliberately omits private metadata, VCS/dependency
+        // trees, and derived caches. Hash that exact authorized projection so
+        // the copied bytes can be verified without weakening the full-tree
+        // rights hash above.
+        authorizedCopySha256 = await designLibraryTreeSha256(target, {
+          excludedDirNames: START_PROJECT_EXCLUDED_DIR_NAMES,
+          excludedFileNames: START_PROJECT_EXCLUDED_FILE_NAMES,
+        });
+      } catch {
+        return res.status(403).json({ error: 'current rights could not be verified for this item' });
+      }
     }
 
     const { db, paths, ids, projectStore, projectFiles, conversations } = ctx;
@@ -493,8 +534,27 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
             );
           },
         });
+        const copiedTreeSha256 = await designLibraryTreeSha256(projectRoot);
+        if (!authorizedCopySha256 || copiedTreeSha256 !== authorizedCopySha256) {
+          throw new DesignLibraryStartProjectError(
+            409,
+            'Copied project bytes did not match the authorized Design Library item.',
+          );
+        }
       } else {
         state.warnings.push('Private reference files remain in the Design Library and were not copied.');
+      }
+
+      // Detect changes made while files were copied or reference material was
+      // read. This happens before database insertion, so a mismatch removes
+      // the partial managed directory and cannot leak a completed project.
+      const completedRights: DesignLibraryRightsSnapshot = await resolveCurrentRights(root, rel);
+      if (completedRights.allowedUse !== authorizedRights.allowedUse
+        || completedRights.treeSha256 !== authorizedRights.treeSha256) {
+        throw new DesignLibraryStartProjectError(
+          409,
+          'Design Library item changed while the project was being prepared; try again after catalog reconciliation.',
+        );
       }
 
       const entryFile = mode === 'copy' ? await detectEntryFile(projectRoot) : undefined;

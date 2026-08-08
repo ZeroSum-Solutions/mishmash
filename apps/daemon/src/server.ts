@@ -621,6 +621,7 @@ import { registerDesignSystemToolRoutes } from './routes/design-system-tool.js';
 import { registerDeployRoutes, registerDeploymentCheckRoutes } from './routes/deploy.js';
 import { registerMediaRoutes } from './routes/media.js';
 import { registerDesignLibraryRoutes } from './routes/design-library.js';
+import { resolveCurrentDesignLibraryRights } from './design-library/rights.js';
 import { registerStoryboardRoutes } from './routes/storyboard.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes } from './routes/project/index.js';
 import { registerCoverRoutes } from './routes/covers.js';
@@ -2065,6 +2066,7 @@ export interface StartServerOptions {
   port?: number;
   returnServer?: boolean;
   runtime?: DaemonRuntimeContext | null;
+  designLibraryRightsResolver?: typeof resolveCurrentDesignLibraryRights;
 }
 
 export interface StartServerResult {
@@ -2081,6 +2083,7 @@ export async function startServer({
   desktopPdfExporter = null,
   desktopSlideRenderer = null,
   desktopArtifactExporter = null,
+  designLibraryRightsResolver = resolveCurrentDesignLibraryRights,
   runtime = null,
 }: StartServerOptions = {}) {
   host = normalizeDaemonBindHost(host);
@@ -3470,6 +3473,7 @@ export async function startServer({
     projectStore: projectStoreDeps,
     projectFiles: projectFileDeps,
     conversations: conversationDeps,
+    rights: { resolveCurrent: designLibraryRightsResolver },
   });
 
   // Storyboard — Seedance keyframe-pair workflow. Generated stills/clips
