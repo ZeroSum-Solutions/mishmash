@@ -1325,3 +1325,23 @@ useful to an operator repairing the file by hand, and the parts that cannot echo
 original test asserted the `SyntaxError` object reached the log, i.e. it *enforced* the leak; it
 was replaced by a test of the security property, proven non-vacuous by reintroducing the raw log
 and watching it fail.
+
+---
+
+## 2026-08-08 — Interface Program adoption (founder, in-session; plan: `docs/plans/2026-08-07-interface-program.md` v9 FINAL)
+
+Grilled over three rounds, then adversarially reviewed by GPT-5.6 Sol over **eight rounds** (three
+stop-rule escalations, each resolved by founder ruling — plan §10/§10b/§10c/§10d). The founder
+closed the review arc at round 8 ("this will be our final round") and adopted the plan by
+authority; the round-8 REVISE residuals are dispositioned in the plan text or carried as binding
+freeze-time obligations on the owning waves. Verbatim review artifacts:
+`~/.claude/goal-state/interface-program/reviews/`.
+
+| ID | Ruling |
+|---|---|
+| **IP-D3 (W8 ordering)** | W8 Selector runs inside the Interface Program, superseding `GLOBAL-GOAL.md`'s `W5 → W6a → W6b → W8` order for this program. Basis: W6a-P permanently parked (spent §21 one-shot, terminal REVISE); W5 unexpanded; W8 execution-ready. W8 keeps its own PRD gates: D2 amendment → freeze re-review → lease → implementation, after WU/WS/WO land. |
+| **IP-D2 (C8-8 sealed scoring)** | AUTHORIZED: the full sealed-scoring amendment under an amended W7 lease — `evals/selector/scorer/corpus-loader.ts` decrypted-data loader **paired with** `scoreSealedComposition`/injectable `scoreComposition` **and** the `verify-w8.ts` C8-8 rewrite — landed as one adversarially-reviewed change, re-pinned before the W8 freeze re-review. Scope per Sol round-3 finding 3: loader-only is insufficient. |
+| **IP-D4 (capability-closure amendment)** | Program-scoped amendment to `AGENTS.md` "Capability exposure" same-PR closure, for waves WU/WS/WO/WI/WH activated via the WX integration wave: a capability may land as (1) an implementation-wave PR of **inert modules only** (compiling, fully tested, unreachable — no route, no subcommand, no UI mount) + (2) **exactly one** WX tranche PR that atomically activates it with endpoint + UI + CLI together. No partial surface is ever live on `main`; the live-surface count per capability only steps 0 → 3, preserving the rule's intent. W8 is exempt (self-contained closure in its own landing). `AGENTS.md` carries a pointer to this record. |
+| **IP-COMPANION** | Apple desktop companion DEFERRED entirely. No build work; Electron removal stands. Intended future shape, recorded for whenever it fires: native Swift menu-bar companion over the daemon's existing HTTP API. Reopen only by explicit founder instruction. |
+| **IP-MEMORY** | Founder-list memory item WITHDRAWN at founder instruction. NM-21 (Library embeddings only) remains the binding memory ruling, untouched. |
+| **IP-D1 (W6a)** | Default stands: W6a-P remains permanently parked per the client-website-studio PRD §21 spent one-shot. Revival requires a new superseding founder record; none requested. |
