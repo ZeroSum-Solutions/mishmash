@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-import { createHash } from 'node:crypto';
-import { copyFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { copyFile, mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -58,6 +59,187 @@ const COMPONENT_TITLE = /\b(component|cards?|elements?|widgets?|mobile (ui|flow)
 const TOOL_TITLE = /\b(webgl|three[ .-]?js|shader|fluid|particle|render|3d|simulation|field engine|interactive gestures|motion|animation)\b/i;
 const PREVIEW_WIDTH = 1440;
 const PREVIEW_HEIGHT = 900;
+export const CATALOG_LOCK_FILENAME = 'catalog.lock';
+const INDEX_TEMPLATE_FILENAME = 'index-template.html';
+const INDEX_DATA_TOKEN = '__OD_CATALOG_BASE64__';
+const LOCK_READY = 'OD_CATALOG_LOCK_READY';
+
+export interface CatalogLockCommand {
+  executable: string;
+  args: string[];
+}
+
+export function catalogLockCommand(
+  platform: NodeJS.Platform,
+  lockPath: string,
+  command: string,
+  commandArgs: readonly string[],
+): CatalogLockCommand {
+  if (platform === 'darwin') {
+    return {
+      executable: '/usr/bin/lockf',
+      args: ['-k', '-t', '0', lockPath, command, ...commandArgs],
+    };
+  }
+  if (platform === 'linux') {
+    return {
+      executable: '/usr/bin/flock',
+      args: ['-n', lockPath, command, ...commandArgs],
+    };
+  }
+  if (platform === 'win32') {
+    throw new Error('Catalog writer locking is unsupported on native Windows; use WSL2');
+  }
+  throw new Error(`Catalog writer locking is unsupported on ${platform}`);
+}
+
+export function resolveConfiguredTarget(rawTarget: string, source: string): string {
+  const trimmed = rawTarget.trim();
+  if (!trimmed) throw new Error(`${source} must not be blank`);
+  const expanded = trimmed === '~'
+    ? os.homedir()
+    : trimmed.startsWith('~/')
+      ? path.join(os.homedir(), trimmed.slice(2))
+      : trimmed;
+  if (!path.isAbsolute(expanded)) throw new Error(`${source} must be an absolute path`);
+  return path.normalize(expanded);
+}
+
+export async function validateLibraryTargetRoot(target: string): Promise<string> {
+  const canonical = await realpath(target).catch(() => {
+    throw new Error(`Invalid Design Assets library root: ${target}`);
+  });
+  const sentinels = [
+    'catalog.json',
+    'index.html',
+    path.join('.catalog', 'groups.json'),
+    path.join('.catalog', INDEX_TEMPLATE_FILENAME),
+  ];
+  for (const sentinel of sentinels) {
+    const details = await stat(path.join(canonical, sentinel)).catch(() => null);
+    if (!details?.isFile()) throw new Error(`Invalid Design Assets library root: missing ${sentinel}`);
+  }
+  return canonical;
+}
+
+export async function renderCatalogIndex(targetRoot: string, catalogContent: string): Promise<string> {
+  const templatePath = path.join(targetRoot, '.catalog', INDEX_TEMPLATE_FILENAME);
+  const template = await readFile(templatePath, 'utf8');
+  if (template.split(INDEX_DATA_TOKEN).length !== 2) {
+    throw new Error(`${templatePath} must contain exactly one ${INDEX_DATA_TOKEN}`);
+  }
+  return template.replace(INDEX_DATA_TOKEN, Buffer.from(catalogContent, 'utf8').toString('base64'));
+}
+
+export function mergeOwnedCatalogGroups(
+  existingGroups: DesignLibraryGroup[],
+  replacementGroups: DesignLibraryGroup[],
+): DesignLibraryGroup[] {
+  const ownedFolders = new Set(replacementGroups.map((group) => group.folder));
+  const remaining = new Map(replacementGroups.map((group) => [group.folder, group]));
+  const merged: DesignLibraryGroup[] = [];
+  for (const group of existingGroups) {
+    if (!ownedFolders.has(group.folder)) {
+      merged.push(group);
+      continue;
+    }
+    const replacement = remaining.get(group.folder);
+    if (replacement) {
+      merged.push(replacement);
+      remaining.delete(group.folder);
+    }
+  }
+  for (const group of replacementGroups) {
+    if (remaining.delete(group.folder)) merged.push(group);
+  }
+  return merged;
+}
+
+async function tryKernelCatalogLock(
+  lockPath: string,
+  ownerPid: number,
+): Promise<ChildProcessWithoutNullStreams | null> {
+  const helperBody = [
+    `const ownerPid = ${ownerPid};`,
+    `process.stdout.write('${LOCK_READY}\\n');`,
+    `process.stdin.on('end', () => process.exit(0));`,
+    `process.stdin.resume();`,
+    `setInterval(() => { try { process.kill(ownerPid, 0); } catch { process.exit(0); } }, 50);`,
+  ].join(' ');
+  const command = catalogLockCommand(process.platform, lockPath, process.execPath, ['-e', helperBody]);
+  const helper = spawn(
+    command.executable,
+    command.args,
+    { stdio: ['pipe', 'pipe', 'pipe'] },
+  );
+  return new Promise((resolve, reject) => {
+    let output = '';
+    const timer = setTimeout(() => {
+      helper.kill('SIGKILL');
+      reject(new Error(`Timed out starting catalog lock helper: ${lockPath}`));
+    }, 2_000);
+    const cleanup = () => {
+      clearTimeout(timer);
+      helper.stdout.off('data', onData);
+      helper.off('error', onError);
+      helper.off('exit', onExit);
+    };
+    const onData = (chunk: Buffer) => {
+      output += chunk.toString('utf8');
+      if (!output.includes(`${LOCK_READY}\n`)) return;
+      cleanup();
+      resolve(helper);
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const onExit = () => {
+      cleanup();
+      resolve(null);
+    };
+    helper.stdout.on('data', onData);
+    helper.once('error', onError);
+    helper.once('exit', onExit);
+  });
+}
+
+async function stopKernelCatalogLock(helper: ChildProcessWithoutNullStreams): Promise<void> {
+  if (helper.exitCode !== null) return;
+  const exited = new Promise<void>((resolve) => helper.once('exit', () => resolve()));
+  helper.stdin.end();
+  await exited;
+}
+
+export async function withCatalogWriterLock<T>(
+  targetRoot: string,
+  action: () => Promise<T>,
+  options: { timeoutMs?: number; retryMs?: number } = {},
+): Promise<T> {
+  const catalogDir = path.join(targetRoot, '.catalog');
+  const lockPath = path.join(catalogDir, CATALOG_LOCK_FILENAME);
+  const timeoutMs = options.timeoutMs ?? 30_000;
+  const retryMs = options.retryMs ?? 50;
+  const deadline = Date.now() + timeoutMs;
+  const token = randomUUID();
+  catalogLockCommand(process.platform, lockPath, process.execPath, []);
+  await mkdir(catalogDir, { recursive: true });
+
+  let helper: ChildProcessWithoutNullStreams | null = null;
+  while (true) {
+    helper = await tryKernelCatalogLock(lockPath, process.pid);
+    if (helper) break;
+    if (Date.now() >= deadline) throw new Error(`Timed out waiting for catalog writer lock: ${lockPath}`);
+    await new Promise((resolve) => setTimeout(resolve, retryMs));
+  }
+
+  try {
+    await writeFile(lockPath, `${JSON.stringify({ version: 1, token, pid: process.pid, created_at: Date.now() / 1000 })}\n`);
+    return await action();
+  } finally {
+    await stopKernelCatalogLock(helper);
+  }
+}
 
 export function classifyNeuformEntry(entry: NeuformEntry, design: string, html: string): Category {
   const combined = `${entry.title}\n${design}\n${html}`;
@@ -300,11 +482,20 @@ async function renderPreviews(sourceRoot: string, targetRoot: string, entries: N
 function parseArgs(argv: string[]) {
   const value = (name: string) => {
     const index = argv.indexOf(name);
-    return index >= 0 ? argv[index + 1] : undefined;
+    if (index < 0) return undefined;
+    const result = argv[index + 1];
+    if (result === undefined || result.startsWith('--')) throw new Error(`${name} requires a value`);
+    return result;
   };
+  const explicitTarget = value('--target');
+  const configuredTarget = explicitTarget !== undefined
+    ? resolveConfiguredTarget(explicitTarget, '--target')
+    : process.env.OD_DESIGN_LIBRARY_DIR !== undefined
+      ? resolveConfiguredTarget(process.env.OD_DESIGN_LIBRARY_DIR, 'OD_DESIGN_LIBRARY_DIR')
+      : path.join(os.homedir(), 'Desktop', 'Design Assets');
   return {
     source: value('--source') ?? path.join(os.homedir(), 'Desktop', 'neuform-favorites-design-library'),
-    target: value('--target') ?? path.join(os.homedir(), 'Desktop', 'Design Assets'),
+    target: configuredTarget,
     skipPreviews: argv.includes('--skip-previews'),
     refreshPreviews: argv.includes('--refresh-previews'),
     concurrency: Number(value('--concurrency') ?? '4'),
@@ -313,6 +504,7 @@ function parseArgs(argv: string[]) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
+  options.target = await validateLibraryTargetRoot(options.target);
   const manifest = JSON.parse(await readFile(path.join(options.source, 'manifest.json'), 'utf8')) as NeuformManifest;
   if (manifest.schemaVersion !== 1 || manifest.entries.length !== manifest.counts.uniqueEntries) {
     throw new Error('Unsupported or inconsistent NeuForm manifest');
@@ -324,8 +516,6 @@ async function main() {
 
   const prepared: Array<Awaited<ReturnType<typeof prepareEntry>>> = [];
   for (const entry of manifest.entries) prepared.push(await prepareEntry(options.source, options.target, entry));
-  const existingPath = path.join(options.target, 'catalog.json');
-  const existing = JSON.parse(await readFile(existingPath, 'utf8')) as { groups: DesignLibraryGroup[]; [key: string]: unknown };
   const groups = (Object.keys(CATEGORY_META) as Category[]).map((category) => {
     const meta = CATEGORY_META[category];
     return {
@@ -338,22 +528,39 @@ async function main() {
         .sort((a, b) => a.label.localeCompare(b.label)),
     } satisfies DesignLibraryGroup;
   });
-  const preservedGroups = existing.groups.filter((group) => !group.folder.startsWith('05 NeuForm Favorites/'));
-  const next = {
-    ...existing,
-    note: `${String(existing.note ?? '')
-      .replaceAll('NeuForm favorites stay private, local, prompt-reference only.', '')
-      .trim()} NeuForm favorites stay private, local, prompt-reference only.`,
-    groups: [...preservedGroups, ...groups],
-    total_collections: [...preservedGroups, ...groups].reduce((sum, group) => sum + group.items.length, 0),
-  };
+  await withCatalogWriterLock(options.target, async () => {
+    const existingPath = path.join(options.target, 'catalog.json');
+    const existing = JSON.parse(await readFile(existingPath, 'utf8')) as { groups: DesignLibraryGroup[]; [key: string]: unknown };
+    const mergedGroups = mergeOwnedCatalogGroups(existing.groups, groups);
+    const next = {
+      ...existing,
+      note: `${String(existing.note ?? '')
+        .replaceAll('NeuForm favorites stay private, local, prompt-reference only.', '')
+        .trim()} NeuForm favorites stay private, local, prompt-reference only.`,
+      groups: mergedGroups,
+      total_collections: mergedGroups.reduce((sum, group) => sum + group.items.length, 0),
+    };
+    const catalogContent = `${JSON.stringify(next, null, 2)}\n`;
+    const indexContent = await renderCatalogIndex(options.target, catalogContent);
 
-  const backupDir = path.join(os.homedir(), 'Backups', 'mishmash');
-  await mkdir(backupDir, { recursive: true });
-  await copyFile(existingPath, path.join(backupDir, `design-assets-catalog-${Date.now()}.json`));
-  const tempCatalog = `${existingPath}.neuform-${process.pid}.tmp`;
-  await writeFile(tempCatalog, `${JSON.stringify(next, null, 2)}\n`);
-  await rename(tempCatalog, existingPath);
+    const backupDir = path.join(os.homedir(), 'Backups', 'mishmash');
+    await mkdir(backupDir, { recursive: true });
+    await copyFile(existingPath, path.join(backupDir, `design-assets-catalog-${Date.now()}.json`));
+    const indexPath = path.join(options.target, 'index.html');
+    await copyFile(existingPath, `${existingPath}.bak`);
+    await copyFile(indexPath, `${indexPath}.bak`);
+    const tempCatalog = `${existingPath}.neuform-${process.pid}.tmp`;
+    const tempIndex = `${indexPath}.neuform-${process.pid}.tmp`;
+    try {
+      await writeFile(tempCatalog, catalogContent);
+      await writeFile(tempIndex, indexContent);
+      await rename(tempCatalog, existingPath);
+      await rename(tempIndex, indexPath);
+    } finally {
+      await rm(tempCatalog, { force: true });
+      await rm(tempIndex, { force: true });
+    }
+  });
   await writeFile(
     path.join(options.target, '05 NeuForm Favorites', 'RIGHTS.md'),
     '# NeuForm Favorites\n\nPrivate, user-owned reference material from a NeuForm Pro account. Keep local. Do not redistribute, commit, or ship the source HTML/DESIGN files. MishMash may use them as bounded prompt and visual references for original implementations.\n',
