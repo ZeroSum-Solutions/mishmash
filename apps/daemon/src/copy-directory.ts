@@ -21,6 +21,10 @@
 
 import { copyFile, lstat, mkdir, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
+import type {
+  FilesystemWriteCapability,
+  FilesystemWriteGateway,
+} from './filesystem/write-gateway.js';
 
 export interface CopyDirectoryLimits {
   maxFiles: number;
@@ -52,6 +56,11 @@ export interface CopyDirectoryOptions {
    * caller decides the concrete error type (HTTP status, code, message).
    */
   onIncomplete: (reason: string, relPath: string) => never;
+  /** Capability-scoped destination writer for migrated daemon flows. */
+  destinationWrites?: {
+    gateway: FilesystemWriteGateway;
+    capability: FilesystemWriteCapability;
+  };
 }
 
 export async function copyDirectoryContents(
@@ -93,7 +102,7 @@ async function walkAndCopy(
     options.onIncomplete('symbolic links are not supported', relFromRoot(sourceDir, '.'));
   }
   const entries = await readdir(sourceDir, { withFileTypes: true });
-  await mkdir(destDir, { recursive: true });
+  await mkdirDestination(destDir, options);
   for (const entry of entries) {
     if (shouldSkipEntry(entry.name, entry.isDirectory(), options)) {
       state.skippedFiles += 1;
@@ -121,11 +130,39 @@ async function walkAndCopy(
     if (state.copiedBytes + sourceInfo.size > options.limits.maxBytes) {
       options.onIncomplete('size limit would skip a required file', relFromRoot(source, entry.name));
     }
-    await mkdir(path.dirname(destination), { recursive: true });
-    await copyFile(source, destination);
+    await mkdirDestination(path.dirname(destination), options);
+    await copyDestination(source, destination, options);
     state.copiedFiles += 1;
     state.copiedBytes += sourceInfo.size;
   }
+}
+
+async function mkdirDestination(target: string, options: CopyDirectoryOptions): Promise<void> {
+  if (options.destinationWrites) {
+    await options.destinationWrites.gateway.mkdir(
+      options.destinationWrites.capability,
+      target,
+      { recursive: true },
+    );
+    return;
+  }
+  await mkdir(target, { recursive: true });
+}
+
+async function copyDestination(
+  source: string,
+  destination: string,
+  options: CopyDirectoryOptions,
+): Promise<void> {
+  if (options.destinationWrites) {
+    await options.destinationWrites.gateway.copyFile(
+      options.destinationWrites.capability,
+      source,
+      destination,
+    );
+    return;
+  }
+  await copyFile(source, destination);
 }
 
 function shouldSkipEntry(name: string, isDirectory: boolean, options: CopyDirectoryOptions): boolean {

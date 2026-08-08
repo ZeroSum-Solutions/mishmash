@@ -2168,8 +2168,16 @@ async function main(): Promise<void> {
   // -- a declared value like "https://cb.example/x?project=<nonceProjectId>"
   // (an embedded URL token) previously stayed completely literal because
   // only `value === '<nonceProjectId>'` ever matched.
+  function nonceUuid(nonce: string): string {
+    const hex = crypto.createHash('sha256').update(`privileged-route:${nonce}`).digest('hex');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  }
   function substituteNoncePlaceholder(value: unknown, nonce: string): unknown {
-    if (typeof value === 'string') return value.split('<nonceProjectId>').join(nonce);
+    if (typeof value === 'string') {
+      return value
+        .split('<nonceProjectId>').join(nonce)
+        .split('<nonceUuid>').join(nonceUuid(nonce));
+    }
     if (Array.isArray(value)) return value.map((v) => substituteNoncePlaceholder(v, nonce));
     if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value as object).map(([k, v]) => [k, substituteNoncePlaceholder(v, nonce)]));
     return value;

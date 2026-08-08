@@ -158,6 +158,26 @@
     "probeBody": {}
   },
   {
+    "method": "GET",
+    "path": "/api/design-library/promotions",
+    "file": "apps/daemon/src/routes/design-library.ts"
+  },
+  {
+    "method": "POST",
+    "path": "/api/design-library/promotions",
+    "file": "apps/daemon/src/routes/design-library.ts",
+    "probeBody": { "assetId": "missing", "proposedGroup": "app-captures", "idempotencyKey": "<nonceUuid>" },
+    "note": "The isolated inventory boot contains no owned Library asset, so local POST reaches the loopback-gated handler and returns the genuine missing-asset response. No expectedLocalStatus is forced because 404 is structurally forbidden by the inventory gate."
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/design-library/promotions/:id",
+    "probePath": "/api/design-library/promotions/missing",
+    "file": "apps/daemon/src/routes/design-library.ts",
+    "probeBody": { "action": "claim", "curatorId": "inventory-probe" },
+    "note": "The isolated inventory boot contains no promotion row, so local PATCH reaches the loopback-gated handler and returns the genuine missing-promotion response. No expectedLocalStatus is forced because 404 is structurally forbidden by the inventory gate."
+  },
+  {
     "method": "POST",
     "path": "/api/plugins/:id/duplicate-project",
     "file": "apps/daemon/src/routes/plugins/index.ts",

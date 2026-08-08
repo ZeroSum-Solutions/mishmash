@@ -7,6 +7,7 @@
 // All paths flowing in from HTTP handlers are validated against the project
 // directory to prevent path traversal — see resolveSafe().
 
+import { realpathSync } from 'node:fs';
 import { link, lstat, mkdir, readdir, readFile, realpath, rename, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import JSZip from 'jszip';
@@ -33,6 +34,11 @@ import {
   SANDBOX_IMPORTED_PROJECT_UNAVAILABLE_MESSAGE,
 } from './sandbox-mode.js';
 import { isOrchestratorScratchWorkspace } from './workspace-contract.js';
+import type {
+  FilesystemWriteCapability,
+  FilesystemWriteGateway,
+} from './filesystem/write-gateway.js';
+import { designLibraryRoot } from './design-library/root.js';
 
 const FORBIDDEN_SEGMENT = /^$|^\.\.?$/;
 const RESERVED_PROJECT_FILE_SEGMENTS = new Set(['.file-versions', '.live-artifacts']);
@@ -111,6 +117,46 @@ function usesExternalProjectRoot(metadata?) {
   return isSandboxImportedProjectRootAllowed(metadata.baseDir);
 }
 
+function isPathWithin(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return relative === '' || (
+    relative !== '..'
+    && !relative.startsWith(`..${path.sep}`)
+    && !path.isAbsolute(relative)
+  );
+}
+
+function canonicalizeFromExistingParentSync(target) {
+  const suffix = [];
+  let cursor = path.resolve(target);
+  for (;;) {
+    try {
+      return path.join(realpathSync(cursor), ...suffix.reverse());
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      const parent = path.dirname(cursor);
+      if (parent === cursor) throw error;
+      suffix.push(path.basename(cursor));
+      cursor = parent;
+    }
+  }
+}
+
+/**
+ * Project file operations are legacy direct-fs sinks, so their common root
+ * resolver is the authoritative deny for the active Design Library. Reject a
+ * baseDir inside, containing, or symlink-aliasing that root before any caller
+ * can derive a mutation target from it.
+ */
+export function assertProjectRootOutsideDesignLibrary(metadata?) {
+  if (!hasExternalProjectRoot(metadata)) return;
+  const projectRoot = canonicalizeFromExistingParentSync(metadata.baseDir);
+  const assetsRoot = canonicalizeFromExistingParentSync(designLibraryRoot());
+  if (isPathWithin(assetsRoot, projectRoot) || isPathWithin(projectRoot, assetsRoot)) {
+    throw new Error('imported project root overlaps the active Design Library and is read-only');
+  }
+}
+
 // Returns the folder a project's files live in. For git-linked projects
 // (metadata.baseDir set), this is the user's own folder. Otherwise falls
 // back to the standard computed path under projectsRoot.
@@ -119,17 +165,25 @@ export function resolveProjectDir(projectsRoot, projectId, metadata?, opts = {})
     assertSandboxProjectRootAvailable(metadata);
   }
   if (usesExternalProjectRoot(metadata)) {
+    assertProjectRootOutsideDesignLibrary(metadata);
     return path.normalize(metadata.baseDir);
   }
   if (!isSafeId(projectId)) throw new Error('invalid project id');
   return path.join(projectsRoot, projectId);
 }
 
-export async function ensureProject(projectsRoot, projectId, metadata?) {
+export async function ensureProject(projectsRoot, projectId, metadata?, destinationWrites?: {
+  gateway: FilesystemWriteGateway;
+  capability: FilesystemWriteCapability;
+}) {
   const dir = resolveProjectDir(projectsRoot, projectId, metadata);
   // Git-linked folders already exist; skip mkdir to avoid side-effects.
   if (!usesExternalProjectRoot(metadata)) {
-    await mkdir(dir, { recursive: true });
+    if (destinationWrites) {
+      await destinationWrites.gateway.mkdir(destinationWrites.capability, dir, { recursive: true });
+    } else {
+      await mkdir(dir, { recursive: true });
+    }
   }
   return dir;
 }
@@ -252,13 +306,20 @@ export async function createProjectFolder(projectsRoot, projectId, name, metadat
 // forward-slash relative path ('' when no subdir was requested). Used by the
 // upload route so attachments dropped/picked while viewing a folder land in
 // that folder instead of the project root.
-export async function ensureProjectSubdir(projectsRoot, projectId, subdir, metadata?) {
-  const dir = await ensureProject(projectsRoot, projectId, metadata);
+export async function ensureProjectSubdir(projectsRoot, projectId, subdir, metadata?, destinationWrites?: {
+  gateway: FilesystemWriteGateway;
+  capability: FilesystemWriteCapability;
+}) {
+  const dir = await ensureProject(projectsRoot, projectId, metadata, destinationWrites);
   const raw = typeof subdir === 'string' ? subdir.trim() : '';
   if (!raw) return { absDir: dir, relDir: '' };
   const relDir = sanitizePath(raw);
   const target = await resolveSafeReal(dir, relDir);
-  await mkdir(target, { recursive: true });
+  if (destinationWrites) {
+    await destinationWrites.gateway.mkdir(destinationWrites.capability, target, { recursive: true });
+  } else {
+    await mkdir(target, { recursive: true });
+  }
   return { absDir: target, relDir };
 }
 
@@ -1376,9 +1437,16 @@ function normalizeManifestProjectRef(ref, ownerName) {
   return normalized;
 }
 
-export async function removeProjectDir(projectsRoot, projectId) {
+export async function removeProjectDir(projectsRoot, projectId, destinationWrites?: {
+  gateway: FilesystemWriteGateway;
+  capability: FilesystemWriteCapability;
+}) {
   const dir = projectDir(projectsRoot, projectId);
-  await rm(dir, { recursive: true, force: true });
+  if (destinationWrites) {
+    await destinationWrites.gateway.rm(destinationWrites.capability, dir, { recursive: true, force: true });
+  } else {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 function resolveSafe(dir, name) {

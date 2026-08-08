@@ -107,7 +107,7 @@ export function requireLocalDaemonRequest(req: Request, res: Response, next: Nex
   if (validation.origin) {
     res.setHeader('Access-Control-Allow-Origin', validation.origin);
   }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Access-Control-Max-Age', '600');
   next();

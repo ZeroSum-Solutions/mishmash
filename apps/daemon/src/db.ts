@@ -13,6 +13,7 @@ import { eventsEndedWithUnfinishedWork } from '@open-design/contracts';
 import { migrateCritique } from './critique/persistence.js';
 import { migrateMediaTasks } from './media/tasks.js';
 import { migrateLibrary } from './library-store.js';
+import { migrateDesignLibraryPromotions } from './design-library/promotions-store.js';
 import { migratePlugins } from './plugins/persistence.js';
 
 type SqliteDb = Database.Database;
@@ -33,10 +34,16 @@ function rows(value: unknown[]): DbRow[] {
 
 export function openDatabase(projectRoot: string, { dataDir }: { dataDir?: string } = {}): SqliteDb {
   const dir = dataDir ? path.resolve(dataDir) : path.join(projectRoot, '.od');
-  const file = path.join(dir, 'app.sqlite');
+  fs.mkdirSync(dir, { recursive: true });
+  const canonicalDir = fs.realpathSync(dir);
+  const file = path.join(canonicalDir, 'app.sqlite');
+  for (const sqlitePath of [file, `${file}-wal`, `${file}-shm`]) {
+    if (path.dirname(sqlitePath) !== canonicalDir) {
+      throw new Error('SQLite persistence escaped the resolved daemon data directory');
+    }
+  }
   if (dbInstance && dbFile === file) return dbInstance;
   if (dbInstance) closeDatabase();
-  fs.mkdirSync(dir, { recursive: true });
   const db = new Database(file);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
@@ -384,6 +391,7 @@ function migrate(db: SqliteDb): void {
   migrateCritique(db);
   migrateMediaTasks(db);
   migrateLibrary(db);
+  migrateDesignLibraryPromotions(db);
   migratePlugins(db);
 }
 

@@ -622,6 +622,10 @@ import { registerDeployRoutes, registerDeploymentCheckRoutes } from './routes/de
 import { registerMediaRoutes } from './routes/media.js';
 import { registerDesignLibraryRoutes } from './routes/design-library.js';
 import { resolveCurrentDesignLibraryRights } from './design-library/rights.js';
+import {
+  createFilesystemWriteGateway,
+  type FilesystemWriteAuditSink,
+} from './filesystem/write-gateway.js';
 import { registerStoryboardRoutes } from './routes/storyboard.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes } from './routes/project/index.js';
 import { registerCoverRoutes } from './routes/covers.js';
@@ -2067,6 +2071,8 @@ export interface StartServerOptions {
   returnServer?: boolean;
   runtime?: DaemonRuntimeContext | null;
   designLibraryRightsResolver?: typeof resolveCurrentDesignLibraryRights;
+  /** Test-only observation hook for route-level gateway integration proofs. */
+  filesystemWriteAuditSink?: FilesystemWriteAuditSink;
 }
 
 export interface StartServerResult {
@@ -2084,11 +2090,17 @@ export async function startServer({
   desktopSlideRenderer = null,
   desktopArtifactExporter = null,
   designLibraryRightsResolver = resolveCurrentDesignLibraryRights,
+  filesystemWriteAuditSink,
   runtime = null,
 }: StartServerOptions = {}) {
   host = normalizeDaemonBindHost(host);
   let resolvedPort = port;
   let daemonShuttingDown = false;
+  const createRouteFilesystemWriteGateway: typeof createFilesystemWriteGateway = (options) =>
+    createFilesystemWriteGateway({
+      ...options,
+      ...(filesystemWriteAuditSink ? { auditSink: filesystemWriteAuditSink } : {}),
+    });
   const extraAllowedOrigins = configuredAllowedOrigins();
 
   // Plan §3.K1 / spec §15.7 — bound-API-token guard.
@@ -3131,6 +3143,7 @@ export async function startServer({
     projectFiles: projectFileDeps,
     conversations: conversationDeps,
     auth: authDeps,
+    filesystem: { create: createRouteFilesystemWriteGateway },
   });
   app.post('/api/projects/:id/figma/import', (req, res) => {
     figmaUpload.single('file')(req, res, async (err) => {
@@ -3474,6 +3487,7 @@ export async function startServer({
     projectFiles: projectFileDeps,
     conversations: conversationDeps,
     rights: { resolveCurrent: designLibraryRightsResolver },
+    filesystem: { create: createRouteFilesystemWriteGateway },
   });
 
   // Storyboard — Seedance keyframe-pair workflow. Generated stills/clips

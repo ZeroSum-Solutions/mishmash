@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -11,6 +11,7 @@ import {
   resolveProjectDir,
   SandboxImportedProjectError,
 } from '../src/projects.js';
+import { designLibraryRoot } from '../src/design-library/root.js';
 
 function withSandboxMode<T>(run: () => T): T {
   const previous = process.env.OD_SANDBOX_MODE;
@@ -55,6 +56,50 @@ describe('resolveProjectDir', () => {
     expect(
       resolveProjectDir(projectsRoot, projectId, { kind: 'prototype', baseDir }),
     ).toBe(path.normalize(baseDir));
+  });
+
+  it('rejects imported roots inside, containing, or aliasing the active Design Library root', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'od-import-design-library-boundary-'));
+    const assets = path.join(root, 'Design Assets');
+    const child = path.join(assets, '02 App UI Captures');
+    const sibling = path.join(root, 'legitimate-project');
+    const alias = path.join(root, 'assets-alias');
+    mkdirSync(assets, { recursive: true });
+    mkdirSync(child, { recursive: true });
+    mkdirSync(sibling, { recursive: true });
+    symlinkSync(assets, alias, 'dir');
+    const previous = process.env.OD_DESIGN_LIBRARY_DIR;
+    process.env.OD_DESIGN_LIBRARY_DIR = assets;
+    try {
+      for (const baseDir of [assets, child, root, alias]) {
+        expect(
+          () => resolveProjectDir(projectsRoot, projectId, { kind: 'prototype', baseDir }),
+          baseDir,
+        ).toThrow(/Design Library/i);
+      }
+      expect(
+        resolveProjectDir(projectsRoot, projectId, { kind: 'prototype', baseDir: sibling }),
+      ).toBe(path.normalize(sibling));
+    } finally {
+      if (previous === undefined) delete process.env.OD_DESIGN_LIBRARY_DIR;
+      else process.env.OD_DESIGN_LIBRARY_DIR = previous;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves and denies the hardcoded Design Library fallback when the env override is absent', () => {
+    const previous = process.env.OD_DESIGN_LIBRARY_DIR;
+    delete process.env.OD_DESIGN_LIBRARY_DIR;
+    try {
+      const fallback = designLibraryRoot();
+      expect(fallback).toMatch(/Desktop[/\\]Design Assets$/);
+      expect(() => resolveProjectDir(projectsRoot, projectId, {
+        kind: 'prototype',
+        baseDir: path.join(fallback, 'nested-import'),
+      })).toThrow(/Design Library/i);
+    } finally {
+      if (previous !== undefined) process.env.OD_DESIGN_LIBRARY_DIR = previous;
+    }
   });
 
   it('falls back to the standard path when baseDir is relative', () => {

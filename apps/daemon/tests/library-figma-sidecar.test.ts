@@ -17,14 +17,23 @@ import {
   writeElementSidecar,
   writeFigmaSidecar,
 } from '../src/library.js';
+import {
+  createFilesystemWriteGateway,
+  type FilesystemWriteCapability,
+  type FilesystemWriteGateway,
+} from '../src/filesystem/write-gateway.js';
 
 let db: Database.Database;
 let libraryDir: string;
+let writeGateway: FilesystemWriteGateway;
+let writeCapability: FilesystemWriteCapability;
 
 beforeEach(async () => {
   db = new Database(':memory:');
   migrateLibrary(db);
   libraryDir = await mkdtemp(path.join(os.tmpdir(), 'od-library-figma-'));
+  writeGateway = createFilesystemWriteGateway({ runtimeDataRoot: libraryDir });
+  writeCapability = await writeGateway.runtimeData();
 });
 
 afterEach(async () => {
@@ -54,6 +63,7 @@ describe('library figma capture sidecar', () => {
       tags: ['page-capture'],
       metadata: { figmaCapture: figmaMeta },
       source: { sourceKind: 'clipper' },
+      destinationWrites: { gateway: writeGateway, capability: writeCapability },
     });
 
     expect(deduped).toBe(false);
@@ -61,7 +71,12 @@ describe('library figma capture sidecar', () => {
     expect(asset.metadata?.figmaCapture).toEqual(figmaMeta);
 
     // The IR sidecar lives next to the owned object and reads back verbatim.
-    const wrote = await writeFigmaSidecar(libraryDir, asset.contentHash, IR);
+    const wrote = await writeFigmaSidecar(
+      libraryDir,
+      asset.contentHash,
+      IR,
+      { gateway: writeGateway, capability: writeCapability },
+    );
     expect(wrote).toBe(true);
     const sidecar = resolveAssetFigmaSidecarPath(asset, libraryDir);
     expect(sidecar).toBeTruthy();
@@ -81,10 +96,16 @@ describe('library figma capture sidecar', () => {
       tags: ['element', 'section'],
       metadata: { element: { tag: 'section', selector: 'section.hero', width: 800, height: 400, hasHtml: true } },
       source: { sourceKind: 'clipper' },
+      destinationWrites: { gateway: writeGateway, capability: writeCapability },
     });
 
     expect((asset.metadata?.element as { selector?: string } | undefined)?.selector).toBe('section.hero');
-    expect(await writeElementSidecar(libraryDir, asset.contentHash, html)).toBe(true);
+    expect(await writeElementSidecar(
+      libraryDir,
+      asset.contentHash,
+      html,
+      { gateway: writeGateway, capability: writeCapability },
+    )).toBe(true);
     const sidecar = resolveAssetElementSidecarPath(asset, libraryDir);
     expect(sidecar).toBeTruthy();
     expect(sidecar!.endsWith('.element.html')).toBe(true);

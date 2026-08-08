@@ -4414,6 +4414,17 @@ export interface Dict {
   'designLibrary.selectedAspects': string;
   'designLibrary.preview': string;
   'designLibrary.previewClose': string;
+  'designLibrary.promotions.title': string;
+  'designLibrary.promotions.policy': string;
+  'designLibrary.promotions.bulkError': string;
+  'designLibrary.promotions.groupApp': string;
+  'designLibrary.promotions.groupSite': string;
+  'designLibrary.promotions.groupClone': string;
+  'designLibrary.promotions.note': string;
+  'designLibrary.promotions.drop': string;
+  'designLibrary.promotions.uploading': string;
+  'designLibrary.promotions.queued': string;
+  'designLibrary.promotions.failed': string;
   // Storyboard — Seedance 2.0 image-first keyframe workflow.
   'storyboard.title': string;
   'storyboard.newStoryboard': string;

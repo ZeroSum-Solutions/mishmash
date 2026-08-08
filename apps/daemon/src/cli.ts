@@ -9315,6 +9315,8 @@ function printDesignLibraryHelp() {
   od design-library catalog [--json]
   od design-library show <rel> [--json]
   od design-library start-project --rel <rel> [--name <name>] [--mode copy|reference] [--aspects hero,webgl] [--json]
+  od design-library promote --asset <id> --group app-captures|site-capture|site-clone [--note <text>] [--json]
+  od design-library promotions [--status claimable|pending|claimed|succeeded|failed|all] [--json]
 
 Reads the local Design Library catalog (~/Desktop/Design Assets/catalog.json
 by default, or OD_DESIGN_LIBRARY_DIR) over the same GET
@@ -9335,6 +9337,10 @@ Options:
   --name <name>        Project name override (defaults to the item's label)
   --mode <mode>        copy (default) or reference
   --aspects <list>     Comma-separated reference aspects; omit for full design
+  --asset <id>         Owned OD Library asset id
+  --group <group>      Fixed small-asset promotion destination
+  --note <text>        Optional curator note
+  --status <status>    Promotion queue status filter
   --json               Print the raw response envelope
   --daemon-url <url>   Override daemon URL`);
 }
@@ -9358,6 +9364,12 @@ async function runDesignLibrary(args) {
   }
   if (sub === 'start-project') {
     return runDesignLibraryStartProject(subArgs);
+  }
+  if (sub === 'promote') {
+    return runDesignLibraryPromote(subArgs);
+  }
+  if (sub === 'promotions') {
+    return runDesignLibraryPromotions(subArgs);
   }
   console.error(`unknown subcommand: od design-library ${sub}`);
   printDesignLibraryHelp();
@@ -9482,6 +9494,98 @@ async function runDesignLibraryStartProject(rawArgs) {
   if (data.entryFile) console.log(`Entry file: ${data.entryFile}`);
   console.log(`Copied ${data.copiedFiles} file(s), skipped ${data.skippedFiles}.`);
   for (const warning of data.warnings ?? []) console.log(`Warning: ${warning}`);
+}
+
+async function runDesignLibraryPromote(rawArgs) {
+  const stringFlags = new Set([...LIBRARY_STRING_FLAGS, 'asset', 'group', 'note']);
+  assertDesignLibraryPromotionArgs(rawArgs, stringFlags);
+  const flags = parseFlags(rawArgs, { string: stringFlags, boolean: LIBRARY_BOOLEAN_FLAGS });
+  if (flags.help || flags.h) return printDesignLibraryHelp();
+  const assetId = typeof flags.asset === 'string' ? flags.asset : undefined;
+  const group = typeof flags.group === 'string' ? flags.group : undefined;
+  if (!assetId || !group) {
+    console.error('Usage: od design-library promote --asset <id> --group app-captures|site-capture|site-clone [--note <text>] [--json]');
+    process.exit(2);
+  }
+  if (!['app-captures', 'site-capture', 'site-clone'].includes(group)) {
+    console.error('--group must be app-captures, site-capture, or site-clone');
+    process.exit(2);
+  }
+  const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
+  const body = {
+    assetId,
+    proposedGroup: group,
+    ...(typeof flags.note === 'string' ? { requesterNote: flags.note } : {}),
+    idempotencyKey: crypto.randomUUID(),
+  };
+  let resp;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      resp = await fetch(`${base}/api/design-library/promotions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      break;
+    } catch (error) {
+      if (attempt === 1) {
+        return exitWithStructuredError({
+          code: 'daemon-not-running',
+          message: `Cannot reach daemon at ${base}: ${error?.message ?? error}`,
+        });
+      }
+    }
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  const data = await resp.json();
+  if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+  console.log(`${data.deduped ? 'Existing' : 'Created'} promotion ${data.promotion.id} for ${assetId}.`);
+}
+
+async function runDesignLibraryPromotions(rawArgs) {
+  const stringFlags = new Set([...LIBRARY_STRING_FLAGS, 'status']);
+  assertDesignLibraryPromotionArgs(rawArgs, stringFlags);
+  const flags = parseFlags(rawArgs, { string: stringFlags, boolean: LIBRARY_BOOLEAN_FLAGS });
+  if (flags.help || flags.h) return printDesignLibraryHelp();
+  const status = typeof flags.status === 'string' ? flags.status : 'claimable';
+  if (!['claimable', 'pending', 'claimed', 'succeeded', 'failed', 'all'].includes(status)) {
+    console.error('--status must be claimable, pending, claimed, succeeded, failed, or all');
+    process.exit(2);
+  }
+  const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/design-library/promotions?status=${encodeURIComponent(status)}`);
+  } catch (error) {
+    return exitWithStructuredError({
+      code: 'daemon-not-running',
+      message: `Cannot reach daemon at ${base}: ${error?.message ?? error}`,
+    });
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  const data = await resp.json();
+  if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+  if (!data.promotions?.length) return console.log(`No ${status} promotions.`);
+  for (const promotion of data.promotions) {
+    console.log(`${promotion.id}  ${promotion.status}  ${promotion.assetId}  ${promotion.proposedGroup}${promotion.finalRel ? `  ${promotion.finalRel}` : ''}`);
+  }
+}
+
+function assertDesignLibraryPromotionArgs(rawArgs, stringFlags) {
+  const seen = new Set();
+  for (const arg of rawArgs) {
+    if (!arg.startsWith('--')) continue;
+    const key = arg.slice(2).split('=', 1)[0];
+    if (seen.has(key)) {
+      console.error(`duplicate flag: --${key}`);
+      process.exit(2);
+    }
+    seen.add(key);
+  }
+  if (positionalArgs(rawArgs, stringFlags).length > 0) {
+    console.error('unexpected positional argument');
+    process.exit(2);
+  }
 }
 
 // ---------------------------------------------------------------------------

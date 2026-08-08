@@ -14,17 +14,23 @@
 // routes/static-resource.ts.
 
 import fs from 'node:fs';
-import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
-import os from 'node:os';
+import { lstat, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import type { Express } from 'express';
+import {
+  DESIGN_LIBRARY_PROMOTION_GROUPS,
+  LIBRARY_UPLOAD_MAX_BYTES,
+} from '@open-design/contracts';
 import type {
   DesignLibraryAllowedUse,
   DesignLibraryCatalog,
   DesignLibraryItem,
   DesignLibraryStartProjectRequest,
   DesignLibraryStartProjectResponse,
+  CreateDesignLibraryPromotionRequest,
+  DesignLibraryPromotionListStatus,
+  PatchDesignLibraryPromotionRequest,
   ProjectMetadata,
 } from '@open-design/contracts';
 import { mimeFor } from '../projects.js';
@@ -36,9 +42,20 @@ import {
   type DesignLibraryRightsSnapshot,
 } from '../design-library/rights.js';
 import type { RouteDeps } from '../server-context.js';
+import { getLibraryAsset } from '../library-store.js';
+import {
+  acknowledgeDesignLibraryPromotion,
+  claimDesignLibraryPromotion,
+  createDesignLibraryPromotion,
+  listDesignLibraryPromotions,
+  PromotionStoreError,
+} from '../design-library/promotions-store.js';
+import { designLibraryRoot } from '../design-library/root.js';
+import type { createFilesystemWriteGateway } from '../filesystem/write-gateway.js';
 
 export interface RegisterDesignLibraryRoutesDeps
   extends RouteDeps<'http' | 'db' | 'paths' | 'ids' | 'projectStore' | 'projectFiles' | 'conversations'> {
+  filesystem: { create: typeof createFilesystemWriteGateway };
   rights?: {
     resolveCurrent: typeof resolveCurrentDesignLibraryRights;
   };
@@ -53,6 +70,77 @@ const REFERENCEABLE_ALLOWED_USE = new Set<DesignLibraryAllowedUse>([
   'licensed-source-review',
   'human-local-only',
 ]);
+
+const PROMOTION_GROUPS = new Set<string>(DESIGN_LIBRARY_PROMOTION_GROUPS);
+const PROMOTION_LIST_STATUSES = new Set<DesignLibraryPromotionListStatus>([
+  'claimable', 'pending', 'claimed', 'succeeded', 'failed', 'all',
+]);
+const SHA256_RE = /^[a-f0-9]{64}$/;
+const CATALOG_GENERATION_RE = /^sha256:[a-f0-9]{64}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function boundedString(value: unknown, max: number, { optional = false } = {}): string | undefined {
+  if (value === undefined && optional) return undefined;
+  if (typeof value !== 'string') throw new DesignLibraryStartProjectError(400, 'expected a string');
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > max) throw new DesignLibraryStartProjectError(400, `string must be 1-${max} characters`);
+  return trimmed;
+}
+
+function validPromotionRel(value: string): boolean {
+  if (path.isAbsolute(value) || value.includes('\\')) return false;
+  const parts = value.split('/');
+  return parts.length >= 2 && parts.every((part) => part !== '' && part !== '.' && part !== '..');
+}
+
+function validatePromotionPatch(value: unknown): PatchDesignLibraryPromotionRequest {
+  if (!value || typeof value !== 'object') throw new DesignLibraryStartProjectError(400, 'request body is required');
+  const body = value as Record<string, unknown>;
+  if (body.action === 'claim') {
+    const curatorId = boundedString(body.curatorId, 128)!;
+    const leaseMs = body.leaseMs === undefined ? undefined : Number(body.leaseMs);
+    if (leaseMs !== undefined && (!Number.isInteger(leaseMs) || leaseMs < 30_000 || leaseMs > 900_000)) {
+      throw new DesignLibraryStartProjectError(400, 'leaseMs must be between 30000 and 900000');
+    }
+    return { action: 'claim', curatorId, ...(leaseMs === undefined ? {} : { leaseMs }) };
+  }
+  if (body.action !== 'acknowledge') throw new DesignLibraryStartProjectError(400, 'unknown promotion action');
+  const leaseToken = boundedString(body.leaseToken, 128)!;
+  if (body.outcome === 'succeeded') {
+    const finalRel = boundedString(body.finalRel, 1000)!;
+    const sourceSha256 = boundedString(body.sourceSha256, 64)!;
+    const treeSha256 = boundedString(body.treeSha256, 64)!;
+    const catalogGeneration = boundedString(body.catalogGeneration, 71)!;
+    if (!validPromotionRel(finalRel) || !SHA256_RE.test(sourceSha256)
+      || !SHA256_RE.test(treeSha256) || !CATALOG_GENERATION_RE.test(catalogGeneration)) {
+      throw new DesignLibraryStartProjectError(400, 'invalid promotion acknowledgement fields');
+    }
+    return { action: 'acknowledge', leaseToken, outcome: 'succeeded', finalRel, sourceSha256, treeSha256, catalogGeneration };
+  }
+  if (body.outcome !== 'failed' || !body.error || typeof body.error !== 'object') {
+    throw new DesignLibraryStartProjectError(400, 'invalid promotion outcome');
+  }
+  const error = body.error as Record<string, unknown>;
+  const result: Extract<PatchDesignLibraryPromotionRequest, { outcome: 'failed' }> = {
+    action: 'acknowledge',
+    leaseToken,
+    outcome: 'failed',
+    error: { code: boundedString(error.code, 80)!, message: boundedString(error.message, 2000)! },
+  };
+  for (const field of ['sourceSha256', 'treeSha256'] as const) {
+    if (body[field] !== undefined) {
+      const hash = boundedString(body[field], 64)!;
+      if (!SHA256_RE.test(hash)) throw new DesignLibraryStartProjectError(400, `invalid ${field}`);
+      result[field] = hash;
+    }
+  }
+  if (body.catalogGeneration !== undefined) {
+    const generation = boundedString(body.catalogGeneration, 71)!;
+    if (!CATALOG_GENERATION_RE.test(generation)) throw new DesignLibraryStartProjectError(400, 'invalid catalogGeneration');
+    result.catalogGeneration = generation;
+  }
+  return result;
+}
 const REFERENCE_PROMPT_MAX_CHARS = 48_000;
 const REFERENCE_ASPECT_MAX = 12;
 
@@ -146,16 +234,6 @@ async function detectEntryFile(projectRoot: string): Promise<string | undefined>
     if (nestedFile) return `${dirName}/${nestedFile}`;
   }
   return undefined;
-}
-
-// Root resolution mirrors the OD_MEDIA_CONFIG_DIR precedent (media/config.ts):
-// a narrow, single-purpose env override, not a second daemon data root. Read
-// fresh on every call (never cached at registration) so a test can point
-// OD_DESIGN_LIBRARY_DIR at a fixture directory per run.
-function designLibraryRoot(): string {
-  const raw = process.env.OD_DESIGN_LIBRARY_DIR;
-  if (typeof raw === 'string' && raw.trim()) return raw.trim();
-  return path.join(os.homedir(), 'Desktop', 'Design Assets');
 }
 
 // Thumbnails are generated images; anything else under thumbs/ (an .html or
@@ -305,9 +383,103 @@ async function buildReferencePrompt(
 }
 
 export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLibraryRoutesDeps) {
-  const { isLocalSameOrigin, resolvedPortRef } = ctx.http;
+  const { isLocalSameOrigin, resolvedPortRef, requireLocalDaemonRequest, sendApiError } = ctx.http;
   const getResolvedPort = () => resolvedPortRef.current;
   const resolveCurrentRights = ctx.rights?.resolveCurrent ?? resolveCurrentDesignLibraryRights;
+
+  const promotionError = (res: Parameters<typeof sendApiError>[0], error: unknown) => {
+    if (error instanceof DesignLibraryStartProjectError) {
+      return sendApiError(res, error.status, 'INVALID_PROMOTION_REQUEST', error.message);
+    }
+    if (error instanceof PromotionStoreError) {
+      return sendApiError(
+        res,
+        error.kind === 'not-found' ? 404 : 409,
+        error.kind === 'not-found' ? 'PROMOTION_NOT_FOUND' : 'PROMOTION_CONFLICT',
+        error.message,
+      );
+    }
+    return sendApiError(res, 500, 'PROMOTION_FAILED', error instanceof Error ? error.message : String(error));
+  };
+
+  app.options('/api/design-library/promotions', requireLocalDaemonRequest, (_req, res) => res.status(204).end());
+  app.options('/api/design-library/promotions/:id', requireLocalDaemonRequest, (_req, res) => res.status(204).end());
+
+  app.post('/api/design-library/promotions', requireLocalDaemonRequest, async (req, res) => {
+    try {
+      const body = req.body as Partial<CreateDesignLibraryPromotionRequest> | null;
+      if (!body || typeof body !== 'object') throw new DesignLibraryStartProjectError(400, 'request body is required');
+      const assetId = boundedString(body.assetId, 128)!;
+      const idempotencyKey = boundedString(body.idempotencyKey, 128)!;
+      if (!UUID_RE.test(idempotencyKey)) {
+        throw new DesignLibraryStartProjectError(400, 'idempotencyKey must be a UUID');
+      }
+      const requesterNote = boundedString(body.requesterNote, 2000, { optional: true });
+      if (typeof body.proposedGroup !== 'string' || !PROMOTION_GROUPS.has(body.proposedGroup)) {
+        throw new DesignLibraryStartProjectError(400, 'invalid proposedGroup');
+      }
+      const asset = getLibraryAsset(ctx.db, assetId);
+      if (!asset) return sendApiError(res, 404, 'ASSET_NOT_FOUND', 'library asset not found');
+      if (asset.storage !== 'owned' || !asset.filePath) {
+        return sendApiError(res, 409, 'ASSET_NOT_OWNED', 'only daemon-owned asset bytes can be promoted');
+      }
+      if (asset.kind !== 'image' && asset.kind !== 'html') {
+        return sendApiError(res, 415, 'ASSET_KIND_UNSUPPORTED', 'only image or HTML assets can be promoted');
+      }
+      const info = await stat(asset.filePath).catch(() => null);
+      if (!info?.isFile()) return sendApiError(res, 404, 'ASSET_BYTES_UNAVAILABLE', 'asset bytes are unavailable');
+      if (info.size > LIBRARY_UPLOAD_MAX_BYTES || (asset.size ?? info.size) > LIBRARY_UPLOAD_MAX_BYTES) {
+        return sendApiError(res, 413, 'ASSET_TOO_LARGE', 'asset exceeds the 3 MB small-asset promotion limit');
+      }
+      if (!SHA256_RE.test(asset.contentHash)) {
+        return sendApiError(res, 409, 'ASSET_HASH_INVALID', 'asset content hash is unavailable');
+      }
+      const result = createDesignLibraryPromotion(ctx.db, {
+        assetId,
+        assetContentSha256: asset.contentHash,
+        proposedGroup: body.proposedGroup as typeof DESIGN_LIBRARY_PROMOTION_GROUPS[number],
+        ...(requesterNote === undefined ? {} : { requesterNote }),
+        idempotencyKey,
+      });
+      res.status(result.deduped ? 200 : 201).json(result);
+    } catch (error) {
+      promotionError(res, error);
+    }
+  });
+
+  app.get('/api/design-library/promotions', requireLocalDaemonRequest, (req, res) => {
+    try {
+      const rawStatus = req.query.status ?? 'claimable';
+      if (typeof rawStatus !== 'string' || !PROMOTION_LIST_STATUSES.has(rawStatus as DesignLibraryPromotionListStatus)) {
+        throw new DesignLibraryStartProjectError(400, 'invalid promotion status');
+      }
+      const rawLimit = req.query.limit ?? '100';
+      const limit = Number(rawLimit);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
+        throw new DesignLibraryStartProjectError(400, 'limit must be between 1 and 500');
+      }
+      res.json({ promotions: listDesignLibraryPromotions(
+        ctx.db,
+        rawStatus as DesignLibraryPromotionListStatus,
+        limit,
+      ) });
+    } catch (error) {
+      promotionError(res, error);
+    }
+  });
+
+  app.patch('/api/design-library/promotions/:id', requireLocalDaemonRequest, (req, res) => {
+    try {
+      const id = boundedString(req.params.id, 128)!;
+      const body = validatePromotionPatch(req.body);
+      if (body.action === 'claim') {
+        return res.json(claimDesignLibraryPromotion(ctx.db, id, body.curatorId, body.leaseMs ?? 300_000));
+      }
+      return res.json({ promotion: acknowledgeDesignLibraryPromotion(ctx.db, id, body) });
+    } catch (error) {
+      return promotionError(res, error);
+    }
+  });
 
   app.get('/api/design-library/catalog', async (req, res) => {
     if (!isLocalSameOrigin(req, getResolvedPort())) {
@@ -483,6 +655,11 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
     }
 
     const { db, paths, ids, projectStore, projectFiles, conversations } = ctx;
+    const writeGateway = ctx.filesystem.create({
+      runtimeDataRoot: paths.RUNTIME_DATA_DIR,
+      forbiddenWriteRoots: [root],
+    });
+    const managedProjectCapability = await writeGateway.managedProject(paths.PROJECTS_DIR);
     let cleanupProjectId: string | null = null;
     let insertedProject = false;
     try {
@@ -519,7 +696,13 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
             }),
         skipDiscoveryBrief: true,
       };
-      const projectRoot: string = await projectFiles.ensureProject(paths.PROJECTS_DIR, projectId, metadata);
+      const destinationWrites = { gateway: writeGateway, capability: managedProjectCapability };
+      const projectRoot: string = await projectFiles.ensureProject(
+        paths.PROJECTS_DIR,
+        projectId,
+        metadata,
+        destinationWrites,
+      );
 
       const state: CopyDirectoryState = { copiedFiles: 0, copiedBytes: 0, skippedFiles: 0, warnings: [] };
       if (mode === 'copy') {
@@ -533,6 +716,7 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
               `This kit cannot be copied completely: ${reason} (${relPath}).`,
             );
           },
+          destinationWrites,
         });
         const copiedTreeSha256 = await designLibraryTreeSha256(projectRoot);
         if (!authorizedCopySha256 || copiedTreeSha256 !== authorizedCopySha256) {
@@ -597,7 +781,11 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
     } catch (err: unknown) {
       if (cleanupProjectId) {
         if (insertedProject) projectStore.dbDeleteProject(db, cleanupProjectId);
-        await projectStore.removeProjectDir(paths.PROJECTS_DIR, cleanupProjectId).catch(() => {});
+        await projectStore.removeProjectDir(
+          paths.PROJECTS_DIR,
+          cleanupProjectId,
+          { gateway: writeGateway, capability: managedProjectCapability },
+        ).catch(() => {});
       }
       if (err instanceof DesignLibraryStartProjectError) {
         return res.status(err.status).json({ error: err.message });
