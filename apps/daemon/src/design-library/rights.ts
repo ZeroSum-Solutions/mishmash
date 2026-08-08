@@ -201,8 +201,11 @@ function ledgerAllowedUse(rel: string, ledger: RightsLedger): DesignLibraryAllow
 function validRightsRecord(value: unknown, rel: string, ledger: RightsLedger): RightsRecord | null {
   if (!exactObject(value, RIGHTS_RECORD_FIELDS)) return null;
   if (typeof value.tree_sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(value.tree_sha256)) return null;
-  if (!ALLOWED_USES.has(value.allowed_use as DesignLibraryAllowedUse)
-    || ledgerAllowedUse(rel, ledger) !== value.allowed_use) return null;
+  if (!ALLOWED_USES.has(value.allowed_use as DesignLibraryAllowedUse)) return null;
+  // A private blocked record is always a safe downgrade. Non-blocked records
+  // still require an exact public source-ledger ceiling.
+  if (value.allowed_use !== 'blocked-pending-license'
+    && ledgerAllowedUse(rel, ledger) !== value.allowed_use) return null;
   if (['licence_ref', 'source_url', 'captured_at', 'notes'].some(
     (field) => value[field] !== null && typeof value[field] !== 'string',
   )) return null;
