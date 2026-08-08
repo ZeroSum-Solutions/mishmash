@@ -2,7 +2,7 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { copyFile, lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,7 +10,6 @@ import { pathToFileURL } from 'node:url';
 import { chromium, type Browser } from 'playwright';
 import sharp from 'sharp';
 import type { DesignLibraryGroup, DesignLibraryItem } from '@open-design/contracts';
-import { isDesignLibraryPrivateMetadataName } from '../src/design-library/private-metadata.js';
 import { resolvePublishedDesignLibraryGroups } from '../src/design-library/rights.js';
 
 export type NeuformEntry = {

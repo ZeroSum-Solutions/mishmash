@@ -1,11 +1,14 @@
 import type http from 'node:http';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { startServer } from '../../src/server.js';
-import { designLibraryTreeSha256 } from '../../src/design-library/rights.js';
+import {
+  designLibraryTreeSha256,
+  resolveCurrentDesignLibraryRights,
+} from '../../src/design-library/rights.js';
 
 // Mirrors tests/media/tasks-routes.test.ts: boot the REAL server via
 // startServer({port:0, returnServer:true}) and hit it with plain fetch().
@@ -218,8 +221,10 @@ describe('design library routes', () => {
     else process.env.OD_DESIGN_LIBRARY_COPY_MAX_BYTES = PREV_MAX_BYTES;
   });
 
-  async function start(): Promise<string> {
-    const started = (await startServer({ port: 0, returnServer: true })) as {
+  async function start(
+    options: Parameters<typeof startServer>[0] = {},
+  ): Promise<string> {
+    const started = (await startServer({ ...options, port: 0, returnServer: true })) as {
       url: string;
       server: http.Server;
       shutdown?: () => Promise<void> | void;
@@ -588,6 +593,44 @@ describe('design library routes', () => {
     expect(res.status).toBe(403);
     const listRes = await fetch(`${daemonUrl}/api/projects`);
     expect(JSON.stringify(await listRes.json())).not.toContain('Must Not Copy Changed Kit');
+  });
+
+  it('returns 409 and removes the partial managed directory when rights drift after copy', async () => {
+    const fixture = await makeStartProjectFixture();
+    fixtureDir = fixture.dir;
+    outsideDir = fixture.outside;
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const projectsRoot = path.join(process.env.OD_DATA_DIR!, 'projects');
+    const beforeDirs = new Set(readdirSync(projectsRoot));
+    let resolverCalls = 0;
+    let partialProjectDir: string | null = null;
+    const daemonUrl = await start({
+      designLibraryRightsResolver: async (root, rel) => {
+        const snapshot = await resolveCurrentDesignLibraryRights(root, rel);
+        resolverCalls += 1;
+        if (resolverCalls === 2) {
+          const created = readdirSync(projectsRoot).filter((name) => !beforeDirs.has(name));
+          expect(created).toHaveLength(1);
+          partialProjectDir = path.join(projectsRoot, created[0]!);
+          expect(existsSync(partialProjectDir)).toBe(true);
+          return { ...snapshot, treeSha256: 'f'.repeat(64) };
+        }
+        return snapshot;
+      },
+    });
+
+    const res = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel: '01 Kits/permitted-kit', name: 'Must Clean Partial Copy' }),
+    });
+    expect(res.status).toBe(409);
+    expect(resolverCalls).toBe(2);
+    expect(partialProjectDir).not.toBeNull();
+    expect(existsSync(partialProjectDir!)).toBe(false);
+    expect(new Set(readdirSync(projectsRoot))).toEqual(beforeDirs);
+    const listRes = await fetch(`${daemonUrl}/api/projects`);
+    expect(JSON.stringify(await listRes.json())).not.toContain('Must Clean Partial Copy');
   });
 
   it('rejects newly added reference bytes after catalog generation without completing a project', async () => {

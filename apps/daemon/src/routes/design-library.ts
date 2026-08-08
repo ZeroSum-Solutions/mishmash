@@ -38,7 +38,11 @@ import {
 import type { RouteDeps } from '../server-context.js';
 
 export interface RegisterDesignLibraryRoutesDeps
-  extends RouteDeps<'http' | 'db' | 'paths' | 'ids' | 'projectStore' | 'projectFiles' | 'conversations'> {}
+  extends RouteDeps<'http' | 'db' | 'paths' | 'ids' | 'projectStore' | 'projectFiles' | 'conversations'> {
+  rights?: {
+    resolveCurrent: typeof resolveCurrentDesignLibraryRights;
+  };
+}
 
 // allowed_use tiers that may be copied out of the library into a project.
 // Everything else (`human-local-only`, `blocked-pending-license`) stays
@@ -303,6 +307,7 @@ async function buildReferencePrompt(
 export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLibraryRoutesDeps) {
   const { isLocalSameOrigin, resolvedPortRef } = ctx.http;
   const getResolvedPort = () => resolvedPortRef.current;
+  const resolveCurrentRights = ctx.rights?.resolveCurrent ?? resolveCurrentDesignLibraryRights;
 
   app.get('/api/design-library/catalog', async (req, res) => {
     if (!isLocalSameOrigin(req, getResolvedPort())) {
@@ -447,7 +452,7 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
     // the private record and public ceiling, then hash the CURRENT source
     // tree at the action boundary. Requiring catalog agreement also makes a
     // half-reconciled generation fail closed in either direction.
-    const authorizedRights = await resolveCurrentDesignLibraryRights(root, rel);
+    const authorizedRights = await resolveCurrentRights(root, rel);
     const catalogIsCurrent = item.allowed_use === authorizedRights.allowedUse;
     if (mode === 'copy'
       && (!catalogIsCurrent || !COPYABLE_ALLOWED_USE.has(authorizedRights.allowedUse))) {
@@ -543,7 +548,7 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
       // Detect changes made while files were copied or reference material was
       // read. This happens before database insertion, so a mismatch removes
       // the partial managed directory and cannot leak a completed project.
-      const completedRights: DesignLibraryRightsSnapshot = await resolveCurrentDesignLibraryRights(root, rel);
+      const completedRights: DesignLibraryRightsSnapshot = await resolveCurrentRights(root, rel);
       if (completedRights.allowedUse !== authorizedRights.allowedUse
         || completedRights.treeSha256 !== authorizedRights.treeSha256) {
         throw new DesignLibraryStartProjectError(

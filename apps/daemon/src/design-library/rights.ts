@@ -271,5 +271,17 @@ export async function resolvePublishedDesignLibraryGroups(
     }
     resolved.push({ ...group, items });
   }
+  const completedContext = await loadRightsContext(targetRoot);
+  if (context.rootReal !== completedContext.rootReal
+    || context.sourceFingerprint !== completedContext.sourceFingerprint) {
+    // Never publish a batch assembled across private-record / public-ceiling
+    // generations. The caller holds the catalog writer lock, so drift here
+    // means an out-of-protocol writer changed rights metadata mid-build.
+    // Blocking the complete batch is safer than emitting mixed permissions.
+    return resolved.map((group) => ({
+      ...group,
+      items: group.items.map((item) => ({ ...item, allowed_use: 'blocked-pending-license' })),
+    }));
+  }
   return resolved;
 }
