@@ -939,8 +939,11 @@
     "parityApplicable": true,
     "knownNamespaceRoutes": [
       "GET /api/design-library/catalog",
+      "GET /api/design-library/promotions",
       "GET /api/design-library/thumb/:param",
       "POST /api/design-library/open",
+      "POST /api/design-library/promotions",
+      "PATCH /api/design-library/promotions/:param",
       "POST /api/design-library/start-project"
     ]
   },

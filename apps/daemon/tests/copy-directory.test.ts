@@ -5,6 +5,10 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { copyDirectoryContents, type CopyDirectoryState } from '../src/copy-directory.js';
+import {
+  createFilesystemWriteGateway,
+  type FilesystemWriteAuditEntry,
+} from '../src/filesystem/write-gateway.js';
 
 const tempRoots: string[] = [];
 
@@ -59,6 +63,33 @@ const canSymlink = (() => {
 })();
 
 describe('copyDirectoryContents', () => {
+  it('routes destination creation and copies through a managed-project capability', async () => {
+    const root = await makeTempRoot('od-copy-directory-gateway-');
+    const runtime = path.join(root, 'runtime');
+    const projects = path.join(runtime, 'projects');
+    const source = path.join(root, 'source');
+    const dest = path.join(projects, 'project-1');
+    await mkdir(projects, { recursive: true });
+    await mkdir(source, { recursive: true });
+    await writeFile(path.join(source, 'asset.txt'), 'asset', 'utf8');
+    const audit: FilesystemWriteAuditEntry[] = [];
+    const gateway = createFilesystemWriteGateway({
+      runtimeDataRoot: runtime,
+      auditSink: (entry) => audit.push(entry),
+    });
+    const capability = await gateway.managedProject(projects);
+
+    await copyDirectoryContents(source, dest, freshState(), {
+      ...DEFAULT_OPTIONS,
+      onIncomplete,
+      destinationWrites: { gateway, capability },
+    });
+
+    await expect(readFile(path.join(dest, 'asset.txt'), 'utf8')).resolves.toBe('asset');
+    expect(audit.some((entry) => entry.operation === 'copyFile')).toBe(true);
+    expect(audit.every((entry) => entry.capability === 'managedProject')).toBe(true);
+  });
+
   it('copies nested files and reports the final counts', async () => {
     const root = await makeTempRoot('od-copy-directory-basic-');
     const source = path.join(root, 'source');

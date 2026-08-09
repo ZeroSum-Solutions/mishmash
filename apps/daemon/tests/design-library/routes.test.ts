@@ -1,10 +1,12 @@
 import type http from 'node:http';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { startServer } from '../../src/server.js';
+import type { FilesystemWriteAuditEntry } from '../../src/filesystem/write-gateway.js';
 import {
   designLibraryTreeSha256,
   resolveCurrentDesignLibraryRights,
@@ -377,6 +379,183 @@ describe('design library routes', () => {
       // reach consumers (web cards, preview dialog, `od design-library show`).
       description: 'Synthetic style blurb. Best for passthrough tests.',
     });
+  });
+
+  it('ingests, queues, claims, downloads, and explicitly acknowledges a small promotion', async () => {
+    fixtureDir = makeFixture();
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const catalogBefore = readFileSync(path.join(fixtureDir, 'catalog.json'));
+    const daemonUrl = await start();
+
+    const ingest = await fetch(`${daemonUrl}/api/library/ingest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dataUrl: `data:image/png;base64,${TINY_PNG_BASE64}`,
+        filename: 'synthetic-promotion.png',
+        mime: 'image/png',
+      }),
+    });
+    expect([200, 201]).toContain(ingest.status);
+    const ingested = await ingest.json() as { asset: { id: string; contentHash: string } };
+
+    const requestBody = {
+      assetId: ingested.asset.id,
+      proposedGroup: 'app-captures',
+      requesterNote: 'synthetic route test',
+      idempotencyKey: randomUUID(),
+    };
+    const created = await fetch(`${daemonUrl}/api/design-library/promotions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+    expect(created.status).toBe(201);
+    const createdBody = await created.json() as any;
+    expect(createdBody).toMatchObject({ deduped: false, promotion: { status: 'pending', claimable: true } });
+    expect(createdBody.promotion).not.toHaveProperty('leaseToken');
+
+    const replay = await fetch(`${daemonUrl}/api/design-library/promotions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({ deduped: true, promotion: { id: createdBody.promotion.id } });
+
+    const claim = await fetch(`${daemonUrl}/api/design-library/promotions/${createdBody.promotion.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'claim', curatorId: 'synthetic-curator', leaseMs: 30_000 }),
+    });
+    expect(claim.status).toBe(200);
+    const claimed = await claim.json() as any;
+    expect(claimed.promotion.status).toBe('claimed');
+    expect(claimed.leaseToken).toMatch(/^[A-Za-z0-9_-]+$/);
+
+    const raw = await fetch(`${daemonUrl}/api/library/assets/${ingested.asset.id}/raw`);
+    expect(raw.status).toBe(200);
+    expect(Buffer.from(await raw.arrayBuffer())).toEqual(Buffer.from(TINY_PNG_BASE64, 'base64'));
+
+    const acknowledgement = {
+      action: 'acknowledge',
+      leaseToken: claimed.leaseToken,
+      outcome: 'succeeded',
+      finalRel: '02 App UI Captures/synthetic-promotion',
+      sourceSha256: ingested.asset.contentHash,
+      treeSha256: 'b'.repeat(64),
+      catalogGeneration: `sha256:${'c'.repeat(64)}`,
+    };
+    const acknowledged = await fetch(`${daemonUrl}/api/design-library/promotions/${createdBody.promotion.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(acknowledgement),
+    });
+    expect(acknowledged.status).toBe(200);
+    expect(await acknowledged.json()).toMatchObject({
+      promotion: { status: 'succeeded', finalRel: acknowledgement.finalRel },
+    });
+
+    const terminal = await fetch(`${daemonUrl}/api/design-library/promotions?status=succeeded`);
+    expect(terminal.status).toBe(200);
+    const terminalBody = await terminal.json() as any;
+    expect(terminalBody.promotions).toHaveLength(1);
+    expect(terminalBody.promotions[0]).not.toHaveProperty('leaseToken');
+    expect(readFileSync(path.join(fixtureDir, 'catalog.json'))).toEqual(catalogBefore);
+  });
+
+  it('audits route-level ingest, DB-only promotion, cleanup, and start-project mutations', async () => {
+    const fixture = await makeStartProjectFixture();
+    fixtureDir = fixture.dir;
+    outsideDir = fixture.outside;
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const audit: FilesystemWriteAuditEntry[] = [];
+    const daemonUrl = await start({ filesystemWriteAuditSink: (entry) => audit.push(entry) });
+    const auditPng = Buffer.concat([
+      Buffer.from(TINY_PNG_BASE64, 'base64'),
+      Buffer.from(randomUUID(), 'utf8'),
+    ]).toString('base64');
+
+    const ingest = await fetch(`${daemonUrl}/api/library/ingest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dataUrl: `data:image/png;base64,${auditPng}`,
+        filename: 'gateway-audit.png',
+        mime: 'image/png',
+      }),
+    });
+    expect([200, 201]).toContain(ingest.status);
+    const ingested = await ingest.json() as { asset: { id: string; contentHash: string } };
+    expect(audit.some((entry) => entry.capability === 'runtimeData' && entry.operation === 'writeFile')).toBe(true);
+
+    const beforePromotion = audit.length;
+    const created = await fetch(`${daemonUrl}/api/design-library/promotions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        assetId: ingested.asset.id,
+        proposedGroup: 'app-captures',
+        idempotencyKey: randomUUID(),
+      }),
+    });
+    expect(created.status).toBe(201);
+    const promotion = await created.json() as { promotion: { id: string } };
+    const claim = await fetch(`${daemonUrl}/api/design-library/promotions/${promotion.promotion.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'claim', curatorId: 'gateway-audit', leaseMs: 30_000 }),
+    });
+    const claimed = await claim.json() as { leaseToken: string };
+    const acknowledged = await fetch(`${daemonUrl}/api/design-library/promotions/${promotion.promotion.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'acknowledge',
+        leaseToken: claimed.leaseToken,
+        outcome: 'succeeded',
+        finalRel: '02 App UI Captures/gateway-audit',
+        sourceSha256: ingested.asset.contentHash,
+        treeSha256: 'b'.repeat(64),
+        catalogGeneration: `sha256:${'c'.repeat(64)}`,
+      }),
+    });
+    expect(acknowledged.status).toBe(200);
+    expect(audit).toHaveLength(beforePromotion);
+
+    const removed = await fetch(`${daemonUrl}/api/library/assets/${ingested.asset.id}`, { method: 'DELETE' });
+    expect(removed.status).toBe(200);
+    expect(audit.at(-1)).toMatchObject({ capability: 'runtimeData', operation: 'unlink' });
+
+    const started = await fetch(`${daemonUrl}/api/design-library/start-project`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rel: '01 Kits/permitted-kit', name: 'Gateway Audit Project' }),
+    });
+    expect(started.status).toBe(201);
+    expect(audit.some((entry) => entry.capability === 'managedProject' && entry.operation === 'copyFile')).toBe(true);
+    const runtimeRoot = realpathSync(process.env.OD_DATA_DIR!);
+    const assetsRoot = realpathSync(fixtureDir);
+    for (const entry of audit) {
+      expect(path.relative(runtimeRoot, entry.destination)).not.toMatch(/^\.\.(?:\/|$)/);
+      expect(path.relative(assetsRoot, entry.destination)).toMatch(/^\.\.(?:\/|$)/);
+    }
+  });
+
+  it('loopback-gates promotion collection and PATCH preflight advertises PATCH', async () => {
+    fixtureDir = makeFixture();
+    process.env.OD_DESIGN_LIBRARY_DIR = fixtureDir;
+    const daemonUrl = await start();
+    const hostile = await fetch(`${daemonUrl}/api/design-library/promotions`, {
+      headers: { Origin: 'https://evil.example' },
+    });
+    expect(hostile.status).toBe(403);
+    const options = await fetch(`${daemonUrl}/api/design-library/promotions/synthetic`, {
+      method: 'OPTIONS',
+      headers: { Origin: daemonUrl },
+    });
+    expect(options.status).toBe(204);
+    expect(options.headers.get('access-control-allow-methods')).toBe('PATCH, OPTIONS');
   });
 
   it('serves a thumb file directly under the thumbs directory', async () => {

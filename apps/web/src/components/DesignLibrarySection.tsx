@@ -26,6 +26,7 @@ import {
   type DesignLibraryCatalogResult,
 } from '../providers/registry';
 import { Icon } from './Icon';
+import { DesignLibraryPromotionPanel } from './DesignLibraryPromotionPanel';
 import { useT } from '../i18n';
 import styles from './DesignLibrarySection.module.css';
 
@@ -162,6 +163,7 @@ export function DesignLibrarySection({ active, onOpenProject }: Props) {
         </div>
       ) : catalog ? (
         <>
+          <DesignLibraryPromotionPanel inboxPath={`${catalog.root}/_inbox`} />
           <div className={styles.toolbar}>
             <div className={styles.searchWrap}>
               <Icon name="search" size={15} className={styles.searchIcon} />

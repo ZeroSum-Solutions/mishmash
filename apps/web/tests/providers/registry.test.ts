@@ -14,6 +14,8 @@ import {
   fetchConnectorDetail,
   fetchConnectorDiscovery,
   fetchDesignLibraryCatalog,
+  createDesignLibraryPromotion,
+  fetchDesignLibraryPromotions,
   fetchPluginExampleHtml,
   fetchPluginPreviewHtml,
   fetchProjectDesignSystemPackageAudit,
@@ -1222,6 +1224,64 @@ describe('fetchDesignLibraryCatalog', () => {
     })));
     const result = await fetchDesignLibraryCatalog();
     expect(result).toEqual({ ok: true, catalog });
+  });
+});
+
+describe('design library promotion DTO guards', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  const promotion = {
+    id: 'promotion-1',
+    assetId: 'asset-1',
+    assetContentSha256: 'a'.repeat(64),
+    proposedGroup: 'app-captures',
+    status: 'pending',
+    createdAt: 1,
+    updatedAt: 1,
+    claimable: true,
+  };
+
+  it('rejects malformed list records and never accepts a leaked lease token', async () => {
+    for (const malformed of [
+      { promotions: [{}] },
+      { promotions: [{ ...promotion, assetContentSha256: 'BAD' }] },
+      { promotions: [{ ...promotion, leaseToken: 'secret' }] },
+    ]) {
+      vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(malformed), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })));
+      await expect(fetchDesignLibraryPromotions()).resolves.toEqual({
+        ok: false,
+        message: 'Malformed promotion queue response',
+      });
+    }
+  });
+
+  it('rejects malformed create envelopes', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      deduped: false,
+      promotion: { ...promotion, catalogGeneration: 'not-a-generation' },
+    }), { status: 201, headers: { 'content-type': 'application/json' } })));
+    await expect(createDesignLibraryPromotion({
+      assetId: 'asset-1',
+      proposedGroup: 'app-captures',
+      idempotencyKey: 'stable-key',
+    })).resolves.toEqual({ ok: false, message: 'Malformed promotion response' });
+  });
+
+  it('accepts a bounded public queue record', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ promotions: [promotion] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })));
+    await expect(fetchDesignLibraryPromotions('all')).resolves.toEqual({
+      ok: true,
+      response: { promotions: [promotion] },
+    });
   });
 });
 

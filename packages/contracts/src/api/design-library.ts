@@ -93,3 +93,84 @@ export interface DesignLibraryStartProjectResponse {
   skippedFiles: number;
   warnings: string[];
 }
+
+export const DESIGN_LIBRARY_PROMOTION_GROUPS = [
+  'app-captures',
+  'site-capture',
+  'site-clone',
+] as const;
+
+export type DesignLibraryPromotionGroup =
+  (typeof DESIGN_LIBRARY_PROMOTION_GROUPS)[number];
+
+export type DesignLibraryPromotionStatus =
+  | 'pending'
+  | 'claimed'
+  | 'succeeded'
+  | 'failed';
+
+export interface DesignLibraryPromotion {
+  id: string;
+  assetId: string;
+  assetContentSha256: string;
+  proposedGroup: DesignLibraryPromotionGroup;
+  requesterNote?: string;
+  status: DesignLibraryPromotionStatus;
+  createdAt: number;
+  updatedAt: number;
+  curatorId?: string;
+  leaseExpiresAt?: number;
+  claimable: boolean;
+  completedAt?: number;
+  finalRel?: string;
+  sourceSha256?: string;
+  treeSha256?: string;
+  catalogGeneration?: string;
+  error?: { code: string; message: string };
+}
+
+export interface CreateDesignLibraryPromotionRequest {
+  assetId: string;
+  proposedGroup: DesignLibraryPromotionGroup;
+  requesterNote?: string;
+  idempotencyKey: string;
+}
+
+export interface CreateDesignLibraryPromotionResponse {
+  promotion: DesignLibraryPromotion;
+  deduped: boolean;
+}
+
+export type DesignLibraryPromotionListStatus =
+  | 'claimable'
+  | DesignLibraryPromotionStatus
+  | 'all';
+
+export interface DesignLibraryPromotionsResponse {
+  promotions: DesignLibraryPromotion[];
+}
+
+export type PatchDesignLibraryPromotionRequest =
+  | { action: 'claim'; curatorId: string; leaseMs?: number }
+  | {
+      action: 'acknowledge';
+      leaseToken: string;
+      outcome: 'succeeded';
+      finalRel: string;
+      sourceSha256: string;
+      treeSha256: string;
+      catalogGeneration: string;
+    }
+  | {
+      action: 'acknowledge';
+      leaseToken: string;
+      outcome: 'failed';
+      error: { code: string; message: string };
+      sourceSha256?: string;
+      treeSha256?: string;
+      catalogGeneration?: string;
+    };
+
+export type PatchDesignLibraryPromotionResponse =
+  | { promotion: DesignLibraryPromotion; leaseToken: string }
+  | { promotion: DesignLibraryPromotion };

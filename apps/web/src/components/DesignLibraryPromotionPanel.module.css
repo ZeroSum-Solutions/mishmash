@@ -1,0 +1,18 @@
+.panel {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0 18px;
+  padding: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-raised);
+}
+
+.title { margin: 0 0 4px; font-size: 14px; }
+.policy, .message { margin: 0; color: var(--text-secondary); font-size: 12px; }
+.controls { display: grid; grid-template-columns: minmax(150px, 0.35fr) 1fr; gap: 8px; }
+.controls select, .controls input { min-width: 0; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--surface); color: inherit; }
+.dropZone { padding: 20px; border: 1px dashed var(--border-strong); border-radius: 10px; text-align: center; font-size: 13px; }
+.queue { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.queue li { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 8px; font-size: 12px; }
+.queue code { overflow: hidden; text-overflow: ellipsis; }

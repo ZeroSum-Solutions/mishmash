@@ -19,6 +19,7 @@
 // process.
 
 import type http from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -74,10 +75,16 @@ const DOCUMENTED_NON_2XX_STATUS: Record<string, number> = {
   'GET /api/live-artifacts/:artifactId/preview': 404, // LIVE_ARTIFACT_NOT_FOUND -- no persisted live artifact exists
   'POST /api/live-artifacts/:artifactId/refresh': 404, // same root cause as GET .../preview
   'POST /api/applied-plugins/export': 404, // no AppliedPluginSnapshot exists for the probe project
+  'POST /api/design-library/promotions': 404, // no owned Library asset exists for the probe body
+  'PATCH /api/design-library/promotions/:id': 404, // no promotion row exists for the probe id
 };
 
 function substituteNonce(value: unknown, nonce: string): unknown {
-  if (typeof value === 'string') return value.split('<nonceProjectId>').join(nonce);
+  if (typeof value === 'string') {
+    return value
+      .split('<nonceProjectId>').join(nonce)
+      .split('<nonceUuid>').join(randomUUID());
+  }
   if (Array.isArray(value)) return value.map((v) => substituteNonce(v, nonce));
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, substituteNonce(v, nonce)]));
@@ -145,6 +152,14 @@ afterAll(async () => {
 });
 
 describe('privileged routes inventory (C0-7)', () => {
+  it('resolves the typed nonce UUID placeholder to a valid UUID', () => {
+    const row = routes.find((candidate) =>
+      candidate.method === 'POST' && candidate.path === '/api/design-library/promotions');
+    const { body } = resolveRow(row!, nonceProjectId) as { body: { idempotencyKey: string } };
+    expect(body.idempotencyKey).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+  });
   it('(C0-7/control) a known guarded route rejects a hostile Origin AND accepts the CLI\'s own origin-less shape', async () => {
     // Baseline proving the methodology itself distinguishes pass from fail
     // on a single well-known row before trusting the full per-row sweep

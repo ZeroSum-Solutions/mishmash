@@ -2929,6 +2929,10 @@ import type {
   DesignLibraryCatalog,
   DesignLibraryGroup,
   DesignLibraryItem,
+  CreateDesignLibraryPromotionResponse,
+  DesignLibraryPromotionGroup,
+  DesignLibraryPromotionListStatus,
+  DesignLibraryPromotionsResponse,
   DesignLibraryStartProjectResponse,
 } from '@open-design/contracts';
 
@@ -3033,6 +3037,111 @@ export async function fetchDesignLibraryCatalog(): Promise<DesignLibraryCatalogR
     return { ok: true, catalog: payload };
   } catch (err) {
     return { ok: false, notFound: false, message: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
+async function designLibraryPromotionError(resp: Response): Promise<string> {
+  const payload = await resp.json().catch(() => null) as
+    | { error?: string | { message?: string } }
+    | null;
+  if (typeof payload?.error === 'string') return payload.error;
+  if (payload?.error && typeof payload.error.message === 'string') return payload.error.message;
+  return `Request failed (${resp.status})`;
+}
+
+const PROMOTION_GROUPS = new Set(['app-captures', 'site-capture', 'site-clone']);
+const PROMOTION_STATUSES = new Set(['pending', 'claimed', 'succeeded', 'failed']);
+const LOWER_HASH = /^[a-f0-9]{64}$/;
+const CATALOG_GENERATION = /^sha256:[a-f0-9]{64}$/;
+
+function isDesignLibraryPromotionShape(value: unknown): value is DesignLibraryPromotionsResponse['promotions'][number] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const item = value as Record<string, unknown>;
+  if ('leaseToken' in item) return false;
+  if (typeof item.id !== 'string' || item.id.length < 1 || item.id.length > 128
+    || typeof item.assetId !== 'string' || item.assetId.length < 1 || item.assetId.length > 128
+    || typeof item.assetContentSha256 !== 'string' || !LOWER_HASH.test(item.assetContentSha256)
+    || typeof item.proposedGroup !== 'string' || !PROMOTION_GROUPS.has(item.proposedGroup)
+    || typeof item.status !== 'string' || !PROMOTION_STATUSES.has(item.status)
+    || typeof item.createdAt !== 'number' || !Number.isFinite(item.createdAt)
+    || typeof item.updatedAt !== 'number' || !Number.isFinite(item.updatedAt)
+    || typeof item.claimable !== 'boolean') return false;
+  if (item.requesterNote !== undefined && (typeof item.requesterNote !== 'string' || item.requesterNote.length > 2000)) return false;
+  if (item.curatorId !== undefined && (typeof item.curatorId !== 'string' || item.curatorId.length > 128)) return false;
+  for (const field of ['leaseExpiresAt', 'completedAt'] as const) {
+    if (item[field] !== undefined && (typeof item[field] !== 'number' || !Number.isFinite(item[field]))) return false;
+  }
+  if (item.finalRel !== undefined && typeof item.finalRel !== 'string') return false;
+  for (const field of ['sourceSha256', 'treeSha256'] as const) {
+    if (item[field] !== undefined && (typeof item[field] !== 'string' || !LOWER_HASH.test(item[field]))) return false;
+  }
+  if (item.catalogGeneration !== undefined
+    && (typeof item.catalogGeneration !== 'string' || !CATALOG_GENERATION.test(item.catalogGeneration))) return false;
+  if (item.error !== undefined) {
+    if (!item.error || typeof item.error !== 'object') return false;
+    const error = item.error as Record<string, unknown>;
+    if (typeof error.code !== 'string' || error.code.length > 80
+      || typeof error.message !== 'string' || error.message.length > 2000) return false;
+  }
+  return true;
+}
+
+function isPromotionListEnvelope(value: unknown): value is DesignLibraryPromotionsResponse {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const envelope = value as Record<string, unknown>;
+  return Object.keys(envelope).every((key) => key === 'promotions')
+    && Array.isArray(envelope.promotions)
+    && envelope.promotions.every(isDesignLibraryPromotionShape);
+}
+
+function isPromotionCreateEnvelope(value: unknown): value is CreateDesignLibraryPromotionResponse {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const envelope = value as Record<string, unknown>;
+  return Object.keys(envelope).every((key) => key === 'promotion' || key === 'deduped')
+    && typeof envelope.deduped === 'boolean'
+    && isDesignLibraryPromotionShape(envelope.promotion);
+}
+
+export async function createDesignLibraryPromotion(input: {
+  assetId: string;
+  proposedGroup: DesignLibraryPromotionGroup;
+  requesterNote?: string;
+  idempotencyKey?: string;
+}): Promise<{ ok: true; response: CreateDesignLibraryPromotionResponse } | { ok: false; message: string }> {
+  try {
+    const idempotencyKey = input.idempotencyKey ?? crypto.randomUUID();
+    const resp = await fetch('/api/design-library/promotions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        assetId: input.assetId,
+        proposedGroup: input.proposedGroup,
+        ...(input.requesterNote ? { requesterNote: input.requesterNote } : {}),
+        idempotencyKey,
+      }),
+    });
+    if (!resp.ok) return { ok: false, message: await designLibraryPromotionError(resp) };
+    const payload: unknown = await resp.json();
+    if (!isPromotionCreateEnvelope(payload)) return { ok: false, message: 'Malformed promotion response' };
+    return { ok: true, response: payload };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'Network error' };
+  }
+}
+
+export async function fetchDesignLibraryPromotions(
+  status: DesignLibraryPromotionListStatus = 'all',
+): Promise<{ ok: true; response: DesignLibraryPromotionsResponse } | { ok: false; message: string }> {
+  try {
+    const resp = await fetch(`/api/design-library/promotions?status=${encodeURIComponent(status)}`);
+    if (!resp.ok) return { ok: false, message: await designLibraryPromotionError(resp) };
+    const payload: unknown = await resp.json();
+    if (!isPromotionListEnvelope(payload)) {
+      return { ok: false, message: 'Malformed promotion queue response' };
+    }
+    return { ok: true, response: payload };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'Network error' };
   }
 }
 

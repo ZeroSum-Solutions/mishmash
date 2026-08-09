@@ -7,11 +7,17 @@ import type { DesignLibraryCatalog } from '@open-design/contracts';
 const fetchDesignLibraryCatalog = vi.fn();
 const openDesignLibraryPath = vi.fn(async () => true);
 const startDesignLibraryProject = vi.fn();
+const fetchDesignLibraryPromotions = vi.fn(async () => ({ ok: true, response: { promotions: [] } }));
+const createDesignLibraryPromotion = vi.fn();
+const uploadLibraryFile = vi.fn();
 vi.mock('../../src/providers/registry', () => ({
   fetchDesignLibraryCatalog: (...args: unknown[]) => fetchDesignLibraryCatalog(...(args as [])),
   designLibraryThumbUrl: (thumb: string) => `/api/design-library/thumb/${thumb.split('/').pop()}`,
   openDesignLibraryPath: (...args: unknown[]) => openDesignLibraryPath(...(args as [])),
   startDesignLibraryProject: (...args: unknown[]) => startDesignLibraryProject(...(args as [])),
+  fetchDesignLibraryPromotions: (...args: unknown[]) => fetchDesignLibraryPromotions(...(args as [])),
+  createDesignLibraryPromotion: (...args: unknown[]) => createDesignLibraryPromotion(...args),
+  uploadLibraryFile: (...args: unknown[]) => uploadLibraryFile(...args),
 }));
 
 import { DesignLibrarySection } from '../../src/components/DesignLibrarySection';

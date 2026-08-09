@@ -14,7 +14,7 @@
 
 import type Database from 'better-sqlite3';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   LibraryAssetKind,
@@ -30,6 +30,10 @@ import {
   updateLibraryAsset,
   type LibraryAssetRecord,
 } from './library-store.js';
+import type {
+  FilesystemWriteCapability,
+  FilesystemWriteGateway,
+} from './filesystem/write-gateway.js';
 
 type SqliteDb = Database.Database;
 
@@ -62,11 +66,21 @@ async function writeAssetSidecar(
   contentHash: string,
   ext: string,
   content: string,
+  destinationWrites: LibraryDestinationWrites,
 ): Promise<boolean> {
   try {
     const sidecar = libraryObjectPath(libraryDir, contentHash, ext);
-    await mkdir(path.dirname(sidecar), { recursive: true });
-    await writeFile(sidecar, content, 'utf8');
+    await destinationWrites.gateway.mkdir(
+      destinationWrites.capability,
+      path.dirname(sidecar),
+      { recursive: true },
+    );
+    await destinationWrites.gateway.writeFile(
+      destinationWrites.capability,
+      sidecar,
+      content,
+      'utf8',
+    );
     return true;
   } catch {
     return false;
@@ -90,8 +104,13 @@ export function resolveAssetFigmaSidecarPath(
 }
 
 /** Write a Figma IR sidecar next to an owned object. Best-effort, never throws. */
-export function writeFigmaSidecar(libraryDir: string, contentHash: string, ir: string): Promise<boolean> {
-  return writeAssetSidecar(libraryDir, contentHash, FIGMA_SIDECAR_EXT, ir);
+export function writeFigmaSidecar(
+  libraryDir: string,
+  contentHash: string,
+  ir: string,
+  destinationWrites: LibraryDestinationWrites,
+): Promise<boolean> {
+  return writeAssetSidecar(libraryDir, contentHash, FIGMA_SIDECAR_EXT, ir, destinationWrites);
 }
 
 /**
@@ -107,8 +126,13 @@ export function resolveAssetElementSidecarPath(
 }
 
 /** Write an element-HTML sidecar next to an owned object. Best-effort. */
-export function writeElementSidecar(libraryDir: string, contentHash: string, html: string): Promise<boolean> {
-  return writeAssetSidecar(libraryDir, contentHash, ELEMENT_SIDECAR_EXT, html);
+export function writeElementSidecar(
+  libraryDir: string,
+  contentHash: string,
+  html: string,
+  destinationWrites: LibraryDestinationWrites,
+): Promise<boolean> {
+  return writeAssetSidecar(libraryDir, contentHash, ELEMENT_SIDECAR_EXT, html, destinationWrites);
 }
 
 /** Local `YYYY-MM-DD` for the daily archive feed. */
@@ -278,6 +302,13 @@ export interface RegisterLibraryAssetInput {
   originProjectId?: string | undefined;
   relPath?: string | undefined;
   metadata?: Record<string, unknown> | undefined;
+  /** Required for owned bytes; referenced assets never write through it. */
+  destinationWrites?: LibraryDestinationWrites | undefined;
+}
+
+export interface LibraryDestinationWrites {
+  gateway: FilesystemWriteGateway;
+  capability: FilesystemWriteCapability;
 }
 
 export interface RegisterLibraryAssetResult {
@@ -358,10 +389,21 @@ export async function registerLibraryAsset(
 
   let filePath: string | undefined;
   if (input.storage === 'owned') {
+    if (!input.destinationWrites) {
+      throw new Error('owned Library storage requires a filesystem write capability');
+    }
     const ext = extForMime(mime, input.filename);
     filePath = libraryObjectPath(libraryDir, contentHash, ext);
-    await mkdir(path.dirname(filePath), { recursive: true });
-    await writeFile(filePath, bytes);
+    await input.destinationWrites.gateway.mkdir(
+      input.destinationWrites.capability,
+      path.dirname(filePath),
+      { recursive: true },
+    );
+    await input.destinationWrites.gateway.writeFile(
+      input.destinationWrites.capability,
+      filePath,
+      bytes,
+    );
   } else {
     // referenced: the bytes already live somewhere; point at the existing file.
     filePath = input.absPath;

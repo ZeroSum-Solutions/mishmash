@@ -13,7 +13,7 @@
 // loopback binding + same-origin middleware like the rest of `/api`.
 
 import { createReadStream } from 'node:fs';
-import { copyFile, readFile, stat, unlink } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { Express, Request, Response } from 'express';
@@ -57,11 +57,15 @@ import {
 } from '../library-tokens.js';
 import { revokeLibraryTokenByHash, rotateLibraryToken } from '../security/library-token-lifecycle.js';
 import { registerBackupRoutes } from '../backup/routes.js';
+import { designLibraryRoot } from '../design-library/root.js';
+import type { createFilesystemWriteGateway } from '../filesystem/write-gateway.js';
 
 export interface RegisterLibraryRoutesDeps
   extends RouteDeps<
     'db' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'auth'
-  > {}
+  > {
+  filesystem: { create: typeof createFilesystemWriteGateway };
+}
 
 const MAX_REMOTE_BYTES = 25 * 1024 * 1024;
 
@@ -257,9 +261,15 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
     ctx.http;
   const { LIBRARY_DIR, PROJECTS_DIR, USER_DESIGN_SYSTEMS_DIR } = ctx.paths;
   const { getProject, insertProject } = ctx.projectStore;
-  const { writeProjectFile } = ctx.projectFiles;
+  const { writeProjectFile, resolveProjectDir } = ctx.projectFiles;
   const { insertConversation } = ctx.conversations;
   const { authorizeToolRequest } = ctx.auth;
+  const createWriteGateway = () => {
+    return ctx.filesystem.create({
+      runtimeDataRoot: ctx.paths.RUNTIME_DATA_DIR,
+      forbiddenWriteRoots: [designLibraryRoot()],
+    });
+  };
 
   // Copy an asset's bytes into a project (under a `library/` subdir) and record
   // the project usage as a source back-link. Shared by the loopback apply route
@@ -276,16 +286,25 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
     const project = getProject(db, projectId);
     if (!project) throw new Error('project not found');
     const subdir = dir && dir.trim() ? dir.trim() : 'library';
+    const projectRoot = resolveProjectDir(PROJECTS_DIR, projectId, project.metadata);
+    const gateway = createWriteGateway();
+    const projectRelative = path.relative(path.resolve(PROJECTS_DIR), path.resolve(projectRoot));
+    const capability = projectRelative === ''
+      || (!projectRelative.startsWith(`..${path.sep}`) && projectRelative !== '..' && !path.isAbsolute(projectRelative))
+      ? await gateway.managedProject(PROJECTS_DIR)
+      : await gateway.importedProject(projectRoot);
+    const destinationWrites = { gateway, capability };
     const { absDir, relDir } = await ensureProjectSubdir(
       PROJECTS_DIR,
       projectId,
       subdir,
       project.metadata,
+      destinationWrites,
     );
     const stem = asset.contentHash.slice(0, 12);
     const ext = extForMime(asset.mime, undefined);
     const name = `${stem}${ext}`;
-    await copyFile(bytesPath, path.join(absDir, name));
+    await gateway.copyFile(capability, bytesPath, path.join(absDir, name));
     addLibraryAssetSource(db, { assetId: asset.id, sourceKind, projectId });
     const relPath = relDir ? `${relDir}/${name}` : name;
 
@@ -298,7 +317,11 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
       if (sidecar) {
         const elName = `${stem}.element.html`;
         try {
-          await copyFile(sidecar, path.join(absDir, elName));
+          await gateway.copyFile(
+            capability,
+            sidecar,
+            path.join(absDir, elName),
+          );
           elementRelPath = relDir ? `${relDir}/${elName}` : elName;
         } catch {
           // No stored markup (older capture / missing sidecar) — image only.
@@ -635,6 +658,8 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
     }
 
     try {
+      const gateway = createWriteGateway();
+      const capability = await gateway.runtimeData();
       const result = await registerLibraryAsset({
         db,
         libraryDir: LIBRARY_DIR,
@@ -649,6 +674,7 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
         tags: Array.isArray(body.tags) ? body.tags.filter((t: unknown) => typeof t === 'string') : undefined,
         metadata,
         source: { sourceKind },
+        destinationWrites: { gateway, capability },
       });
 
       // Persist derived sidecars (idempotent overwrite). On dedup the registrar
@@ -656,7 +682,12 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
       // asset gains a capture it didn't have before.
       let assetRecord = result.asset;
       if (figmaIr) {
-        await writeFigmaSidecar(LIBRARY_DIR, assetRecord.contentHash, figmaIr);
+        await writeFigmaSidecar(
+          LIBRARY_DIR,
+          assetRecord.contentHash,
+          figmaIr,
+          { gateway, capability },
+        );
         if (result.deduped && !assetRecord.metadata?.figmaCapture && figmaMeta) {
           updateLibraryAsset(db, assetRecord.id, {
             metadata: { ...(assetRecord.metadata ?? {}), figmaCapture: figmaMeta },
@@ -665,7 +696,12 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
         }
       }
       if (elementHtml) {
-        await writeElementSidecar(LIBRARY_DIR, assetRecord.contentHash, elementHtml);
+        await writeElementSidecar(
+          LIBRARY_DIR,
+          assetRecord.contentHash,
+          elementHtml,
+          { gateway, capability },
+        );
         if (result.deduped && !assetRecord.metadata?.element && reqMetadata?.element) {
           updateLibraryAsset(db, assetRecord.id, {
             metadata: { ...(assetRecord.metadata ?? {}), element: reqMetadata.element },
@@ -786,7 +822,8 @@ export function registerLibraryRoutes(app: Express, ctx: RegisterLibraryRoutesDe
     if (asset.storage === 'owned' && asset.filePath) {
       const abs = path.resolve(asset.filePath);
       if (abs.startsWith(path.resolve(LIBRARY_DIR))) {
-        await unlink(abs).catch(() => {});
+        const gateway = createWriteGateway();
+        await gateway.unlink(await gateway.runtimeData(), abs).catch(() => {});
       }
     }
     deleteLibraryAsset(db, asset.id);

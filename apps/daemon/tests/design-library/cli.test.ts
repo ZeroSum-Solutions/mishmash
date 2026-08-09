@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import type http from 'node:http';
+import { createServer } from 'node:http';
 
 import { startServer } from '../../src/server.js';
 
@@ -110,5 +111,57 @@ describe('design-library CLI privacy', () => {
     expect(stdout).not.toContain('licence_ref');
     expect(stdout).not.toContain('source_url');
     expect(stdout).not.toContain('captured_at');
+  });
+
+  it('promote and promotions use the shared HTTP contracts with JSON parity', async () => {
+    const seen: Array<{ method: string; url: string; body: unknown }> = [];
+    const mock = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+      req.on('end', () => {
+        const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : null;
+        seen.push({ method: req.method ?? '', url: req.url ?? '', body });
+        res.setHeader('Content-Type', 'application/json');
+        if (req.method === 'POST') {
+          res.statusCode = 201;
+          res.end(JSON.stringify({ deduped: false, promotion: { id: 'promotion-1', assetId: 'asset-1', status: 'pending' } }));
+        } else {
+          res.end(JSON.stringify({ promotions: [{ id: 'promotion-1', assetId: 'asset-1', status: 'pending' }] }));
+        }
+      });
+    });
+    await new Promise<void>((resolve) => mock.listen(0, '127.0.0.1', resolve));
+    server = mock;
+    const address = mock.address();
+    if (!address || typeof address === 'string') throw new Error('mock server did not bind');
+    const daemonUrl = `http://127.0.0.1:${address.port}`;
+    const env = { ...process.env };
+    delete env.NODE_OPTIONS;
+
+    const promoted = await execFileP(process.execPath, [
+      tsxCli, cliSource, 'design-library', 'promote', '--asset', 'asset-1',
+      '--group', 'app-captures', '--note', 'synthetic', '--json', '--daemon-url', daemonUrl,
+    ], { cwd: daemonRoot, env, timeout: 15_000 });
+    expect(JSON.parse(promoted.stdout)).toMatchObject({ deduped: false, promotion: { id: 'promotion-1' } });
+    expect(seen[0]).toMatchObject({
+      method: 'POST',
+      url: '/api/design-library/promotions',
+      body: { assetId: 'asset-1', proposedGroup: 'app-captures', requesterNote: 'synthetic' },
+    });
+    expect((seen[0]?.body as { idempotencyKey?: string }).idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
+
+    const listed = await execFileP(process.execPath, [
+      tsxCli, cliSource, 'design-library', 'promotions', '--status', 'all', '--json', '--daemon-url', daemonUrl,
+    ], { cwd: daemonRoot, env, timeout: 15_000 });
+    expect(JSON.parse(listed.stdout)).toEqual({ promotions: [{ id: 'promotion-1', assetId: 'asset-1', status: 'pending' }] });
+    expect(seen[1]).toMatchObject({ method: 'GET', url: '/api/design-library/promotions?status=all' });
+
+    await expect(execFileP(process.execPath, [
+      tsxCli, cliSource, 'design-library', 'promote', '--asset', 'one', '--asset', 'two',
+      '--group', 'app-captures', '--daemon-url', daemonUrl,
+    ], { cwd: daemonRoot, env, timeout: 15_000 })).rejects.toMatchObject({ code: 2 });
+    await expect(execFileP(process.execPath, [
+      tsxCli, cliSource, 'design-library', 'promotions', 'unexpected', '--daemon-url', daemonUrl,
+    ], { cwd: daemonRoot, env, timeout: 15_000 })).rejects.toMatchObject({ code: 2 });
   });
 });
