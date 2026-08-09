@@ -1,7 +1,7 @@
 // A lightweight modal wrapper around BrandReferencePicker.
 //
-// Unlike NewBrandModal (which owns its own URL field + extraction kickoff),
-// this modal is a pure picker: it surfaces the full searchable brand gallery
+// This modal is a pure picker (no URL field or extraction kickoff of its
+// own): it surfaces the full searchable brand gallery
 // (hundreds of references) and calls `onPick` with the chosen brand, then
 // closes. Hosts decide what picking means — e.g. the Design System create flow
 // drops the brand's domain into its source-URL list rather than extracting

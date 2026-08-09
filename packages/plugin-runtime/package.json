@@ -21,8 +21,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit"
   },
   "dependencies": {
-    "@open-design/contracts": "workspace:*",
-    "zod": "3.25.76"
+    "@open-design/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "20.19.39",
