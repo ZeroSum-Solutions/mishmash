@@ -412,58 +412,8 @@ export function EntryView({
   );
 }
 
-// Map a skill's declared mode to project metadata. Falls back to the same
-// defaults the new-project form would apply (high-fidelity prototype, no
-// speaker notes on decks, no template animations) so 'Use this prompt'
-// produces a project indistinguishable from one created via the form. Per-
-// skill hints in SKILL.md frontmatter (od.fidelity, od.speaker_notes,
-// od.animations) override the defaults so each example reproduces the
-// shipped example.html — e.g. wireframe-sketch declares fidelity:wireframe.
-//
-// Kept exported (and the kindForSkill helper too) so the New project modal
-// and any future skill-driven creation surface can share the mapping.
-export function metadataForSkill(skill: SkillSummary): ProjectMetadata {
-  const kind = kindForSkill(skill);
-  if (kind === 'prototype') {
-    return { kind, fidelity: skill.fidelity ?? 'high-fidelity' };
-  }
-  if (kind === 'deck') {
-    return {
-      kind,
-      speakerNotes:
-        typeof skill.speakerNotes === 'boolean' ? skill.speakerNotes : false,
-    };
-  }
-  if (kind === 'template') {
-    return {
-      kind,
-      animations:
-        typeof skill.animations === 'boolean' ? skill.animations : false,
-    };
-  }
-  if (kind === 'image') {
-    return { kind, imageModel: DEFAULT_IMAGE_MODEL, imageAspect: '1:1' };
-  }
-  if (kind === 'video') {
-    return { kind, videoModel: DEFAULT_VIDEO_MODEL, videoAspect: '16:9', videoLength: 5 };
-  }
-  if (kind === 'audio') {
-    return {
-      kind,
-      audioKind: 'speech',
-      audioModel: DEFAULT_AUDIO_MODEL.speech,
-      audioDuration: 10,
-    };
-  }
-  return { kind: 'other' };
-}
-
-export function kindForSkill(skill: SkillSummary): ProjectKind {
-  if (skill.mode === 'deck') return 'deck';
-  if (skill.mode === 'prototype') return 'prototype';
-  if (skill.mode === 'template') return 'template';
-  if (skill.mode === 'image' || skill.surface === 'image') return 'image';
-  if (skill.mode === 'video' || skill.surface === 'video') return 'video';
-  if (skill.mode === 'audio' || skill.surface === 'audio') return 'audio';
-  return 'other';
-}
+// The skill → project-metadata mapping now lives in a React-free module so
+// EntryShell (which renders the Templates gallery) can use it without
+// importing back through EntryView and closing a cycle. Re-exported here so
+// existing callers keep their import path.
+export { kindForSkill, metadataForSkill } from './skill-project-metadata';

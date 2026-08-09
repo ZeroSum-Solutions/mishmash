@@ -1,0 +1,386 @@
+/* ============================================================
+   Templates gallery (/templates → TemplatesSection).
+
+   Card grammar follows marketplace.css so the two catalogue views
+   read as one product. What is specific here is the thumbnail: each
+   card renders the template's real `example.html` in a sandboxed
+   iframe, laid out at desktop width and scaled down, because a
+   design template's identity is what it looks like — an icon would
+   make 300 entries indistinguishable.
+   ============================================================ */
+
+.templates-view {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: min(1240px, 100%);
+  margin: 0 auto;
+  padding: 16px 4px 96px;
+}
+
+/* ---------- Header ---------- */
+.templates-view__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.templates-view__header h1 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-strong);
+}
+.templates-view__subtitle {
+  margin: 4px 0 0;
+  max-width: 62ch;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.templates-view__count {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Controls ---------- */
+.templates-view__controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.templates-view__search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 260px;
+  max-width: 420px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-panel);
+  color: var(--text-faint);
+}
+.templates-view__search:focus-within {
+  border-color: var(--border-strong, var(--border));
+}
+.templates-view__search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+}
+.templates-view__search input::-webkit-search-cancel-button {
+  filter: grayscale(1);
+}
+
+.templates-view__filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-soft);
+}
+.templates-view__filters button {
+  appearance: none;
+  height: 28px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-quick) var(--ease-out),
+    color var(--dur-quick) var(--ease-out);
+}
+.templates-view__filters button:hover:not([data-active='true']) {
+  color: var(--text);
+}
+.templates-view__filters button[data-active='true'] {
+  background: var(--bg-elevated);
+  color: var(--text-strong);
+  box-shadow: var(--shadow-xs);
+}
+
+/* ---------- Card grid ---------- */
+.templates-view__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.templates-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: inherit;
+  cursor: pointer;
+  transition: border-color var(--dur-quick) var(--ease-out),
+    transform var(--dur-quick) var(--ease-out);
+}
+.templates-card:hover {
+  border-color: var(--border-strong, var(--text-faint));
+  transform: translateY(-2px);
+}
+.templates-card:focus-visible {
+  outline: 2px solid var(--accent, currentColor);
+  outline-offset: 2px;
+}
+
+/* The thumbnail is a 1280px-wide render scaled to fit the card, so the
+   template is previewed at the desktop breakpoint it was designed for
+   rather than at a ~260px mobile layout. */
+.templates-card__thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border-soft);
+}
+/* Poster path: a real screenshot of the template, cropped to the card. */
+.templates-card__thumb--poster img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+.templates-card__thumb iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 960px;
+  border: 0;
+  transform: scale(0.25);
+  transform-origin: top left;
+  pointer-events: none;
+}
+/* Transparent overlay: keeps stray pointer/scroll events inside the frame
+   from reaching the template and guarantees the card owns every click. */
+.templates-card__thumb-veil {
+  position: absolute;
+  inset: 0;
+}
+
+/* Entries whose preview is not HTML (a handful are markdown) have no
+   rendered example to show. */
+.templates-card__thumb--none,
+.templates-viewer__no-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+.templates-viewer__no-preview {
+  height: 100%;
+  font-size: 13px;
+}
+
+.templates-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px 14px;
+}
+.templates-card__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.templates-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.templates-card__meta > span + span::before {
+  content: '·';
+  margin: 0 6px;
+}
+.templates-card__mode {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.templates-view__empty {
+  padding: 40px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ---------- Detail viewer ---------- */
+.templates-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(6px);
+}
+.templates-viewer__panel {
+  display: flex;
+  flex-direction: column;
+  width: min(1180px, 100%);
+  height: min(880px, 100%);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, var(--radius));
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-lg, var(--shadow-xs));
+}
+
+.templates-viewer__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.templates-viewer__ident h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-strong);
+}
+.templates-viewer__ident p {
+  margin: 6px 0 0;
+  max-width: 90ch;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.templates-viewer__close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.templates-viewer__close:hover {
+  color: var(--text-strong);
+}
+
+.templates-viewer__stage {
+  flex: 1;
+  min-height: 0;
+  background: var(--bg-subtle);
+}
+.templates-viewer__stage iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.templates-viewer__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border-soft);
+}
+.templates-viewer__facts {
+  display: flex;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.templates-viewer__facts > span + span::before {
+  content: '·';
+  margin: 0 6px;
+}
+.templates-viewer__buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.templates-viewer__link,
+.templates-viewer__use {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+.templates-viewer__link {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+}
+.templates-viewer__link:hover {
+  color: var(--text-strong);
+  border-color: var(--text-faint);
+}
+.templates-viewer__use {
+  border: 0;
+  background: var(--accent, var(--text-strong));
+  color: var(--accent-contrast, var(--bg));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .templates-card {
+    transition: none;
+  }
+  .templates-card:hover {
+    transform: none;
+  }
+}

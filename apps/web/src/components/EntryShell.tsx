@@ -96,6 +96,8 @@ import { EntryNavRail, type EntryView as EntryViewKind } from './EntryNavRail';
 import { LibrarySection } from './LibrarySection';
 import { DesignLibrarySection } from './DesignLibrarySection';
 import { StoryboardSection } from './storyboard/StoryboardSection';
+import { TemplatesSection } from './TemplatesSection';
+import { metadataForSkill } from './skill-project-metadata';
 import { UpdaterPopup } from './UpdaterPopup';
 import { WhatsNewPopup } from './WhatsNewPopup';
 import { AmrBalanceDialog } from './AmrBalanceDialog';
@@ -750,6 +752,22 @@ export function EntryShell({
     setNewProjectOpen(true);
   }
 
+  // Templates gallery → "Start a project". Mirrors the blank-project rail:
+  // create directly rather than reopening the new-project form, since the
+  // user has already chosen the one thing that form would ask for.
+  function startProjectFromTemplate(template: SkillSummary) {
+    void Promise.resolve(
+      onCreateProject({
+        name: template.name,
+        skillId: template.id,
+        designSystemId: null,
+        metadata: metadataForSkill(template),
+      }),
+    ).catch((err) => {
+      console.warn('Failed to create project from template', err);
+    });
+  }
+
   function startBlankProjectFromRail() {
     void Promise.resolve(
       onCreateProject({
@@ -1280,6 +1298,13 @@ export function EntryShell({
                 onOpenProject={(projectId, conversationId) =>
                   navigate({ kind: 'project', projectId, conversationId: conversationId ?? null, fileName: null })
                 }
+              />
+            </div>
+            <div data-testid="entry-view-templates" data-active={view === 'templates' ? 'true' : 'false'} {...inactiveViewProps(view === 'templates')}>
+              <TemplatesSection
+                templates={designTemplates}
+                active={view === 'templates'}
+                onUseTemplate={startProjectFromTemplate}
               />
             </div>
             <div data-testid="entry-view-storyboard" data-active={view === 'storyboard' ? 'true' : 'false'} {...inactiveViewProps(view === 'storyboard')}>
