@@ -14,7 +14,7 @@
 // its paths at module import time, hence `vi.resetModules()`.
 
 import http from 'node:http';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -37,6 +37,14 @@ beforeAll(async () => {
   const entryDir = path.join(dataDir, 'design-templates', ENTRY_ID);
   mkdirSync(path.join(entryDir, 'assets'), { recursive: true });
   writeFileSync(path.join(entryDir, 'assets', 'index.html'), ASSET_BODY);
+  // A skill folder is user-supplied content, so the route must not follow a
+  // symlink out of the entry, and must not hand over a dot-prefixed leaf.
+  writeFileSync(path.join(tmpRoot, 'outside-the-entry.txt'), 'SECRET');
+  symlinkSync(
+    path.join(tmpRoot, 'outside-the-entry.txt'),
+    path.join(entryDir, 'assets', 'leak.txt'),
+  );
+  writeFileSync(path.join(entryDir, 'assets', '.env'), 'TOKEN=secret');
   writeFileSync(
     path.join(entryDir, 'example.html'),
     '<!DOCTYPE html><body><iframe src="./assets/index.html"></iframe></body>',
@@ -67,7 +75,9 @@ beforeAll(async () => {
   const started = (await startServer({ port: 0, returnServer: true })) as StartedServer;
   server = started.server;
   baseUrl = started.url;
-});
+  // Booting the whole daemon (and, on a cold worktree, building the contracts
+  // package first) overruns Vitest's 10s default hook timeout.
+}, 120_000);
 
 afterAll(async () => {
   await new Promise((resolve, reject) => {
@@ -89,5 +99,16 @@ it('still refuses traversal out of the entry assets directory', async () => {
   const resp = await fetch(
     `${baseUrl}/api/skills/${ENTRY_ID}/assets/..%2F..%2FSKILL.md`,
   );
+  expect(resp.status).not.toBe(200);
+});
+
+it('refuses a symlink that resolves outside the entry assets directory', async () => {
+  const resp = await fetch(`${baseUrl}/api/skills/${ENTRY_ID}/assets/leak.txt`);
+  expect(resp.status).not.toBe(200);
+  await expect(resp.text()).resolves.not.toContain('SECRET');
+});
+
+it('refuses a dot-prefixed leaf inside the entry assets directory', async () => {
+  const resp = await fetch(`${baseUrl}/api/skills/${ENTRY_ID}/assets/.env`);
   expect(resp.status).not.toBe(200);
 });
