@@ -652,33 +652,11 @@ jobs:
           retention-days: 7
 
       # The capture gallery asserts nothing on its own (see e2e/AGENTS.md); the
-      # artifact above preserves it, and Argos diffs it against the baseline so a
-      # change nobody went looking for still gets reviewed.
-      - name: Upload visual shard to Argos
-        # steps.visual has continue-on-error, so its *conclusion* is success even
-        # when it failed — gate on outcome, as the strict-fail step below does.
-        if: ${{ success() && github.event_name == 'pull_request' && steps.visual.outcome == 'success' }}
-        env:
-          ARGOS_TOKEN: ${{ secrets.ARGOS_TOKEN }}
-          GITHUB_TOKEN: ${{ github.token }}
-          # Stable across every shard of one attempt; a rerun gets its own build.
-          VISUAL_ARGOS_NONCE: visual-${{ github.run_id }}-${{ github.run_attempt }}
-          # strategy.job-* describe the *expanded* matrix, so this keeps working if
-          # visualCiMatrix grows. GitHub's index is 0-based, Argos wants 1-based.
-          SHARD_TOTAL: ${{ strategy.job-total }}
-          SHARD_INDEX_ZERO_BASED: ${{ strategy.job-index }}
-        run: |
-          set -euo pipefail
-          if [ -z "$(find e2e/ui/reports/visual-screenshots -type f -name '*.png' -print -quit 2>/dev/null)" ]; then
-            echo "::error::visual capture reported success but produced no PNGs; refusing to upload an empty Argos shard"
-            exit 1
-          fi
-          pnpm -C e2e exec argos upload ui/reports/visual-screenshots \
-            --parallel \
-            --parallel-nonce "$VISUAL_ARGOS_NONCE" \
-            --parallel-total "$SHARD_TOTAL" \
-            --parallel-index "$((SHARD_INDEX_ZERO_BASED + 1))"
-
+      # artifact above preserves it for anyone who wants to eyeball a change.
+      # Argos hosted visual diffing was removed 2026-08-08: it gated every PR on
+      # a manual approval click, and a catalog change legitimately rewrites dozens
+      # of shots at once, so the signal was noise. The strict visual tests below
+      # still fail the build on their own assertions.
       - name: Fail when strict visual tests fail
         if: ${{ steps.visual.outcome != 'success' }}
         run: exit 1
