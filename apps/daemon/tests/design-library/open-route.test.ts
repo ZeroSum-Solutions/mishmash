@@ -16,6 +16,23 @@ vi.mock('node:child_process', async (importOriginal) => {
 });
 
 import { startServer } from '../../src/server.js';
+import { createBrowserOpenInvocation } from '../../src/browser/browser-open.js';
+
+// Both routes hand off through the platform's own opener, so the expected
+// argv is `open` on macOS and `xdg-open` on the Linux CI runner. Deriving it
+// from the same helper the routes use keeps this from re-pinning the
+// macOS-only hardcode these tests were originally written against.
+function openerCallsFor(target: string): { command: string; args: string[] }[] {
+  const expected = createBrowserOpenInvocation(process.platform, target);
+  return spawnMock.mock.calls
+    .filter(([cmd]) => cmd === expected.command)
+    .map(([command, args]) => ({ command: command as string, args: args as string[] }));
+}
+
+function openerCallCount(): number {
+  const opener = createBrowserOpenInvocation(process.platform, 'probe').command;
+  return spawnMock.mock.calls.filter(([cmd]) => cmd === opener).length;
+}
 
 describe('design library open route (spawn mocked)', () => {
   let server: http.Server | null = null;
@@ -61,11 +78,10 @@ describe('design library open route (spawn mocked)', () => {
 
     // Argument-array form is the injection-safety contract: the target path
     // must be a spawn argv entry, never interpolated into a shell string.
-    const openCalls = spawnMock.mock.calls.filter(([cmd]) => cmd === 'open');
-    expect(openCalls).toHaveLength(1);
-    const [, args, opts] = openCalls[0]!;
-    expect(args).toEqual([path.join(fixtureDir, 'catalog.json')]);
-    expect(opts).toMatchObject({ detached: true });
+    const target = path.join(fixtureDir, 'catalog.json');
+    const calls = openerCallsFor(target);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.args).toEqual(createBrowserOpenInvocation(process.platform, target).args);
   });
 
   // Live preview builds a rights-bearing fixture of its own: the route
@@ -162,13 +178,12 @@ describe('design library open route (spawn mocked)', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, entryFile: 'reference.html' });
 
-    const openCalls = spawnMock.mock.calls.filter(([cmd]) => cmd === 'open');
-    expect(openCalls).toHaveLength(1);
-    const [, args, opts] = openCalls[0]!;
     // The entry FILE, not the containing folder — and as an argv entry, never
     // interpolated into a shell string.
-    expect(args).toEqual([path.join(fixtureDir!, '01 Kits', 'licensed-kit', 'reference.html')]);
-    expect(opts).toMatchObject({ detached: true });
+    const target = path.join(fixtureDir!, '01 Kits', 'licensed-kit', 'reference.html');
+    const calls = openerCallsFor(target);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.args).toEqual(createBrowserOpenInvocation(process.platform, target).args);
   });
 
   it('reports the catalog\'s live-preview entry so the UI only offers the action where it works', async () => {
@@ -188,7 +203,7 @@ describe('design library open route (spawn mocked)', () => {
 
     const res = await livePreview(daemonUrl, '01 Kits/fig-only-kit');
     expect(res.status).toBe(404);
-    expect(spawnMock.mock.calls.filter(([cmd]) => cmd === 'open')).toHaveLength(0);
+    expect(openerCallCount()).toBe(0);
   });
 
   it('403s a collection with no rights record even though the catalog lists it', async () => {
@@ -196,7 +211,7 @@ describe('design library open route (spawn mocked)', () => {
 
     const res = await livePreview(daemonUrl, '01 Kits/unlicensed-kit');
     expect(res.status).toBe(403);
-    expect(spawnMock.mock.calls.filter(([cmd]) => cmd === 'open')).toHaveLength(0);
+    expect(openerCallCount()).toBe(0);
   });
 
   // Rendering runs the author's scripts, so the reference-only tier that
@@ -207,7 +222,7 @@ describe('design library open route (spawn mocked)', () => {
 
     const res = await livePreview(daemonUrl, '01 Kits/capture-kit');
     expect(res.status).toBe(403);
-    expect(spawnMock.mock.calls.filter(([cmd]) => cmd === 'open')).toHaveLength(0);
+    expect(openerCallCount()).toBe(0);
   });
 
   it('400s a path-traversal rel without spawning anything', async () => {
@@ -217,6 +232,6 @@ describe('design library open route (spawn mocked)', () => {
       const res = await livePreview(daemonUrl, rel);
       expect(res.status).toBe(400);
     }
-    expect(spawnMock.mock.calls.filter(([cmd]) => cmd === 'open')).toHaveLength(0);
+    expect(openerCallCount()).toBe(0);
   });
 });

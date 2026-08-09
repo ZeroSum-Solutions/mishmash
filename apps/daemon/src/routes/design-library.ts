@@ -16,7 +16,6 @@
 import fs from 'node:fs';
 import { lstat, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import type { Express } from 'express';
 import {
   DESIGN_LIBRARY_PROMOTION_GROUPS,
@@ -52,6 +51,7 @@ import {
   PromotionStoreError,
 } from '../design-library/promotions-store.js';
 import { designLibraryRoot } from '../design-library/root.js';
+import { openBrowser } from '../browser/browser-open.js';
 import type { createFilesystemWriteGateway } from '../filesystem/write-gateway.js';
 
 export interface RegisterDesignLibraryRoutesDeps
@@ -610,14 +610,13 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
     if (!(await withinReal(root, target))) {
       return res.status(400).json({ error: 'invalid path' });
     }
-    // Detached, fire-and-forget — same shape as host-tools.ts's launch of an
-    // external editor. macOS `open` hands off to Finder immediately.
-    const child = spawn('open', [target], { detached: true, stdio: 'ignore' });
-    // A spawn failure (e.g. ENOENT) emits an unhandled 'error' event with no
-    // listener otherwise, which crashes the daemon — the 204 below may
-    // already be on the wire by the time it fires, which is fine.
-    child.on('error', () => {});
-    child.unref();
+    // Detached, fire-and-forget. `openBrowser` picks the platform's opener —
+    // `open` on macOS, `xdg-open` elsewhere, `start` via cmd.exe on Windows —
+    // so this is not a silent no-op off macOS. It also attaches the 'error'
+    // listener a detached spawn needs (an unhandled 'error' would otherwise
+    // crash the daemon) and logs the failure instead of discarding it; the 204
+    // below may already be on the wire by then, which is fine.
+    openBrowser(target);
     res.status(204).end();
   });
 
@@ -674,10 +673,9 @@ export function registerDesignLibraryRoutes(app: Express, ctx: RegisterDesignLib
       return res.status(400).json({ error: 'invalid path' });
     }
 
-    // Detached, fire-and-forget — identical shape to the /open route above.
-    const child = spawn('open', [entryPath], { detached: true, stdio: 'ignore' });
-    child.on('error', () => {});
-    child.unref();
+    // Detached, fire-and-forget — identical shape to the /open route above,
+    // and platform-correct for the same reason.
+    openBrowser(entryPath);
     res.json({ ok: true, entryFile } satisfies DesignLibraryLivePreviewResponse);
   });
 
