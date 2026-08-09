@@ -16,8 +16,9 @@ import { isGalleryVisiblePlugin } from '../../src/components/plugins-home/galler
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const BUNDLED_ROOT = path.join(REPO_ROOT, 'plugins', '_official');
 
-// The complete curated gallery — Devin's 80-item keep list. Any bundled
-// catalog change (add, retire, tag flip) must consciously update this pin.
+// The complete curated gallery — Devin's keep list, 80 items at the 2026-07-30
+// curation and 66 after the 2026-08-08 catalog prune retired 14 more. Any
+// bundled catalog change (add, retire, tag flip) must consciously update this pin.
 const VISIBLE_ROSTER = [
   'design-system-airbnb',
   'design-system-apple',
@@ -47,12 +48,7 @@ const VISIBLE_ROSTER = [
   'example-agency-marquee-reveal',
   'example-archive-elastic-gallery',
   'example-aurora-launch-glass',
-  'example-blog-post',
   'example-curl-field-hero',
-  'example-dashboard',
-  'example-doc-kami-parchment',
-  'example-finance-report',
-  'example-flowai-live-dashboard-template',
   'example-gamified-app',
   'example-hyperframes',
   'example-kanban-board',
@@ -60,12 +56,9 @@ const VISIBLE_ROSTER = [
   'example-live-dashboard',
   'example-mobile-app',
   'example-mobile-onboarding',
-  'example-mockup-device-3d',
   'example-motion-frames',
   'example-pricing-spring-tiers',
   'example-saas-landing',
-  'example-social-carousel',
-  'example-social-media-matrix-tracker-template',
   'example-trading-analysis-dashboard-template',
   'example-velar-luxury-real-estate',
   'example-video-hyperframes',
@@ -87,16 +80,10 @@ const VISIBLE_ROSTER = [
   'example-webgl-particle-galaxy',
   'example-webgl-raymarched-hero',
   'example-webgl-voronoi-cells',
-  'example-wireframe-annotated',
-  'example-wireframe-greybox',
-  'example-wireframe-mobile-flow',
-  'example-wireframe-sketch',
   'image-template-notion-team-dashboard-live-artifact',
   'video-template-frame-arc-voltage',
   'video-template-frame-chroma-glitch',
-  'video-template-frame-data-chart-nyt',
   'video-template-frame-data-rollup',
-  'video-template-frame-liquid-bg-hero',
   'video-template-frame-shuffle-kinetic-type',
   'video-template-frame-takram-organic',
 ] as const;
@@ -153,7 +140,7 @@ function bundledManifests(): BundledManifest[] {
 }
 
 describe('bundled gallery roster', () => {
-  it('renders exactly the 80 curated bundled tiles and hides every flow plugin', () => {
+  it('renders exactly the 66 curated bundled tiles and hides every flow plugin', () => {
     const manifests = bundledManifests();
     const visible = manifests
       .filter((manifest) => isGalleryVisiblePlugin({ manifest }))

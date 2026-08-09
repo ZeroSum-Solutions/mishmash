@@ -22,6 +22,17 @@
 // weekly refresh workflow is not part of this fork — refresh manually
 // after catalog changes.
 // See pluginPopularity.RUNBOOK.md here.
+//
+// 2026-08-08 catalog prune: 13 entries for pruned templates were DELETED in
+// place, applying only the "RETIRED plugins are dropped" rule above (31 -> 16).
+// This is the deletion half of the transform and is deterministic — it needs no
+// PostHog credentials, so it does not go through the regenerate path, and it
+// does not refresh the frozen upstream snapshot that docs/FORK-PIN.md pins.
+// Surviving scores are NOT re-normalized and so still carry their pre-prune
+// min-max range. That is deliberate: min-max is monotonic, this table is only
+// ever read for ORDERING, and re-normalizing would silently fabricate values
+// that no longer trace to the 2026-07-20 snapshot. A future credentialed
+// refresh will restore exact normalization.
 
 export interface PluginPopularityMeta {
   readonly generatedAt: string;
@@ -36,7 +47,7 @@ export const PLUGIN_POPULARITY_META: PluginPopularityMeta = {
   windowDays: 28,
   weights: { users: 0.6, runs: 0.4 },
   minUsers: 20,
-  count: 31,
+  count: 16,
 };
 
 // Plugin id -> blended popularity score in [0, 1], most-popular first.
@@ -47,29 +58,16 @@ export const PLUGIN_POPULARITY: Readonly<Record<string, number>> = {
   'example-web-clone': 0.6679,
   'example-gamified-app': 0.6248,
   'example-kanban-board': 0.5899,
-  'example-wireframe-mobile-flow': 0.5811,
-  'example-wireframe-sketch': 0.5784,
-  'example-dashboard': 0.5505,
   'example-mobile-onboarding': 0.5456,
   'example-video-hyperframes': 0.5249,
-  'example-wireframe-greybox': 0.5198,
-  'example-social-carousel': 0.5154,
-  'example-social-media-matrix-tracker-template': 0.5122,
   'example-motion-frames': 0.5065,
   'example-webgl-experience': 0.5031,
   'example-velar-luxury-real-estate': 0.4877,
-  'example-wireframe-annotated': 0.4709,
-  'example-blog-post': 0.4425,
-  'example-doc-kami-parchment': 0.4396,
-  'example-mockup-device-3d': 0.4381,
   'image-template-notion-team-dashboard-live-artifact': 0.3997,
-  'example-finance-report': 0.3962,
   'example-trading-analysis-dashboard-template': 0.394,
   'example-web-prototype-taste-soft': 0.391,
-  'video-template-frame-liquid-bg-hero': 0.3843,
   'example-webgl-caustic-pool': 0.3768,
   'example-web-prototype-taste-brutalist': 0.3705,
-  'example-flowai-live-dashboard-template': 0.3364,
 };
 
 // Templates with no renderable preview — suppressed from the visual gallery

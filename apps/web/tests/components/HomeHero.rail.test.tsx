@@ -366,10 +366,13 @@ describe('HomeHero intent rail', () => {
     });
 
     const presets = screen.getAllByTestId('home-hero-plugin-preset');
+    // example-social-carousel left CURATED_PROTOTYPE_PLUGIN_IDS in the
+    // 2026-08-08 catalog prune, so it now sorts with the uncurated tail.
+    // The assertion that matters is that the curated pick still leads.
     expect(presets.map((preset) => preset.getAttribute('data-plugin-id'))).toEqual([
       'example-kanban-board',
-      'example-social-carousel',
       'example-ordinary-prototype',
+      'example-social-carousel',
     ]);
   });
 

@@ -316,7 +316,7 @@ describe('marketplaces', () => {
     };
 
     expect(officialManifest.trust).toBe('official');
-    expect(officialManifest.plugins?.length).toBe(60);
+    expect(officialManifest.plugins?.length).toBe(49);
     expect(officialManifest.metadata?.bundledPreinstallCount).toBe(
       officialManifest.plugins?.length,
     );

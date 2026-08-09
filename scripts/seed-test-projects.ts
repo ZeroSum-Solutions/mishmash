@@ -155,7 +155,7 @@ const WEBS: SeedFixture[] = [
       'Print-grade kami landing — parchment canvas, ink-blue accent. Treat it like a studio one-pager.',
   },
   {
-    skillId: 'dashboard',
+    skillId: 'saas-landing',
     sourceKind: 'skill',
     kind: 'prototype',
     name: 'Admin dashboard — analytics',
@@ -175,22 +175,22 @@ const DEFAULT_PLUGINS: SeedFixture[] = [
       'Run the bundled simple-deck plugin for a seed-stage AI design product and produce the HTML slide artifact.',
   },
   {
-    skillId: 'dashboard',
+    skillId: 'saas-landing',
     sourceKind: 'default-plugin',
-    pluginId: 'example-dashboard',
+    pluginId: 'example-saas-landing',
     kind: 'prototype',
-    name: 'Default plugin — analytics dashboard',
+    name: 'Default plugin — SaaS landing page',
     pendingPrompt:
-      'Run the bundled dashboard plugin for a product analytics control panel with KPIs and a weekly trend chart.',
+      'Run the bundled saas-landing plugin for an AI design product: strong hero, feature grid, pricing tiers.',
   },
   {
-    skillId: 'social-carousel',
+    skillId: 'mobile-app',
     sourceKind: 'default-plugin',
-    pluginId: 'example-social-carousel',
+    pluginId: 'example-mobile-app',
     kind: 'prototype',
-    name: 'Default plugin — social carousel',
+    name: 'Default plugin — mobile app',
     pendingPrompt:
-      'Run the bundled social carousel plugin for a three-card product launch announcement.',
+      'Run the bundled mobile-app plugin for a three-screen iOS habit tracker: onboarding, home, detail.',
   },
 ];
 

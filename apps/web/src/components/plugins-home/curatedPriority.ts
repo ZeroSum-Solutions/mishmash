@@ -8,20 +8,13 @@ import type { InstalledPluginRecord } from '@open-design/contracts';
 
 const CURATED_PROTOTYPE_PLUGIN_IDS = [
   'example-kanban-board',
-  'example-social-carousel',
-  'example-blog-post',
-  'example-doc-kami-parchment',
 ] as const;
 
-// Wireframe scenario: lo-fi / sketch explorations across distinct styles —
-// hand-drawn sketch, crisp greybox/blueprint, a multi-screen mobile flow, and
-// an annotated/redline landing wireframe. The chip's tag-matching surfaces any
-// other lo-fi templates behind these.
+// Wireframe scenario: the 2026-08-08 catalog prune retired all four curated
+// wireframe picks (sketch, greybox, mobile-flow, annotated). Deliberately left
+// empty rather than deleted — the chip still works, falling back to tag-matching
+// over any remaining lo-fi templates. Repopulate if wireframe templates return.
 const CURATED_WIREFRAME_PLUGIN_IDS = [
-  'example-wireframe-sketch',
-  'example-wireframe-greybox',
-  'example-wireframe-mobile-flow',
-  'example-wireframe-annotated',
 ] as const;
 
 // Mobile scenario: real native-app prototype mockups (iOS / Android phone
@@ -31,21 +24,18 @@ const CURATED_MOBILE_PLUGIN_IDS = [
   'example-mobile-app',
   'example-mobile-onboarding',
   'example-gamified-app',
-  'example-mockup-device-3d',
 ] as const;
 
-// Document scenario: polished, print-ready documents chosen for visual
-// quality. The 2026-07-30 gallery curation retired most of the original
-// document picks; only the keep-list members remain.
+// Document scenario: the 2026-07-30 gallery curation retired most of the
+// original document picks, and the 2026-08-08 catalog prune retired the rest.
+// Deliberately left empty rather than deleted — same fallback-to-tag-matching
+// rationale as the wireframe list above.
 const CURATED_DOCUMENT_PLUGIN_IDS = [
-  'example-doc-kami-parchment',
-  'example-finance-report',
 ] as const;
 
 export const CURATED_LIVE_ARTIFACT_PLUGIN_IDS = [
   'example-live-dashboard',
   'image-template-notion-team-dashboard-live-artifact',
-  'example-social-media-matrix-tracker-template',
   'example-trading-analysis-dashboard-template',
   'example-live-artifact',
 ] as const;
