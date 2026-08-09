@@ -73,12 +73,12 @@ describe('project skillId validation', () => {
       const resp = await createProject({
         id,
         name: 'Template skill',
-        skillId: 'dashboard',
+        skillId: 'saas-landing',
       });
       expect(resp.status).toBe(200);
       projectsToClean.push(id);
       const body = (await resp.json()) as { project: { skillId: string } };
-      expect(body.project.skillId).toBe('dashboard');
+      expect(body.project.skillId).toBe('saas-landing');
     });
 
     it('canonicalizes an aliased skill id (taste-skill → design-taste-frontend)', async () => {

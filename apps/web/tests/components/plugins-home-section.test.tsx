@@ -307,7 +307,6 @@ describe('PluginsHomeSection (category bar)', () => {
     expect(pluginIds().sort()).toEqual([
       'example-live-artifact',
       'example-live-dashboard',
-      'example-social-media-matrix-tracker-template',
       'example-trading-analysis-dashboard-template',
       'image-template-notion-team-dashboard-live-artifact',
     ]);

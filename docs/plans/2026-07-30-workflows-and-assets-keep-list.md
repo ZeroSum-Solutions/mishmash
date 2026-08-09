@@ -124,3 +124,50 @@ Full machine list preserved in the curation commit itself (git history) and in t
 - example-social*: 4
 - example-deck*: 3
 - od-plugin*: 3
+
+---
+
+## 2026-08-08 round-2 prune (80 → 66)
+
+Cut line set at judge score **≤ 6**, with an explicit carve-out: score-6 items that
+directly serve websites / mobile apps / dashboards were **kept**, because that is the
+standing product criterion.
+
+**Removed (14):** `example-wireframe-sketch` (2) · `example-wireframe-mobile-flow` (2) ·
+`example-wireframe-annotated` (3) · `example-wireframe-greybox` (3) ·
+`example-social-media-matrix-tracker-template` (5) · `example-social-carousel` (5) ·
+`example-dashboard` (6) · `example-flowai-live-dashboard-template` (6) ·
+`example-blog-post` (6) · `example-finance-report` (6) · `example-doc-kami-parchment` (0) ·
+`example-mockup-device-3d` (7, removed by explicit request) ·
+`video-template-frame-data-chart-nyt` · `video-template-frame-liquid-bg-hero` (neither was a keeper).
+Also `live-artifact/examples/baby-health-live.html` (one example, template retained).
+
+**Kept despite scoring 6** (on-brief carve-out): `design-system-editorial` ·
+`design-system-glassmorphism` · `design-system-minimal` · `design-system-neobrutalism` ·
+`example-mobile-onboarding` · `example-kanban-board` ·
+`image-template-notion-team-dashboard-live-artifact`.
+
+Same-pass reconciliation per §2 of the curation plan: marketplace registry pruned 60 → 49
+(`bundledPreinstallCount` and its daemon assertion both moved to 49); bundled roster 80 → 66;
+e2e catalog pins and the bundled-manifest count (113 → 99 = 66 visible + 19 flows + 14 atoms);
+curated-priority arrays realigned — the wireframe and document lists are now deliberately
+empty, kept rather than deleted so their chips fall back to tag-matching; generated-popularity
+table reduced 31 → 16 by the documented "retired plugins are dropped" rule only, with no
+re-normalization and no upstream refresh; daemon + seed fixtures repointed off deleted ids
+(`example-dashboard` → `example-saas-landing`, `example-social-carousel` → `example-mobile-app`);
+README catalog rows dropped; three orphan screenshots removed (FlowAI, doc-kami-parchment,
+social-carousel). The manifest-count floor moved 100 → 50, restoring that constant's documented
+anti-vacuous-pass purpose rather than pinning catalog size.
+Originals archived to `~/Inbox/deletions/mishmash-catalog-2026-08-08/`.
+
+**Known pre-existing defect, deliberately NOT fixed here** (out of scope per the AGENTS.md
+follow-up rule): every `sourceKind: 'skill'` fixture in `scripts/seed-test-projects.ts` resolves
+through `SKILLS_DIR` (`skills/`), but all six referenced ids (`html-ppt-*`, `kami-deck`,
+`kami-landing`, `saas-landing`) live under `design-templates/`. This is equally true on the
+pre-prune commit and is not a regression from this pass.
+
+**Verified before commit**: `pnpm guard` · `pnpm typecheck` · the four affected web suites
+(63 tests) · the two affected daemon suites (34 tests) · the e2e bundled-manifest suite.
+Reviewed by GPT-5.6 (initial verdict NOT-SAFE, 7 required fixes) and adversarially by Grok,
+which rated items 4, 5 and 8 overreach; both reviews were re-verified against the tree before
+acting, and two of their specific claims did not survive that check.

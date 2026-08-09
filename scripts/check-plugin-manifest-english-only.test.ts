@@ -21,10 +21,12 @@ const officialPluginsRoot = path.join(repoRoot, "plugins", "_official");
 
 // Minimum manifest count we expect to find. Guards against the walk silently
 // finding zero files (e.g. a bad path or an accidentally-skipped directory)
-// and the test passing vacuously. The corpus is ~455 manifests at time of
-// writing; 100 is a generous floor that won't flake on legitimate additions
-// or removals.
-const MIN_EXPECTED_MANIFEST_COUNT = 100;
+// and the test passing vacuously. The corpus was ~455 manifests when this was
+// written; the 2026-07-30 gallery curation and the 2026-08-08 catalog prune
+// took it to ~99, so the original 100 floor had become a catalog-size pin
+// rather than a vacuous-pass guard. 50 restores the intended purpose with
+// headroom for further curation.
+const MIN_EXPECTED_MANIFEST_COUNT = 50;
 
 // A "bare locale map" is an object whose keys are all BCP-47-ish locale tags
 // (en, zh-CN, zh-TW, ja, ko, fr, ...) and which includes an "en" key -- the

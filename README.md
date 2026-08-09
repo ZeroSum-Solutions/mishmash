@@ -178,10 +178,8 @@ templates cover `image`, `video`, `audio`, and utility surfaces. The
 |---|---|---|---|
 | [`web-prototype`](design-templates/web-prototype/) | prototype | design | Default landing page / hero |
 | [`saas-landing`](design-templates/saas-landing/) | prototype | marketing | Hero / features / pricing / CTA |
-| [`dashboard`](design-templates/dashboard/) | prototype | operation | Admin / analytics (with sidebar) |
 | [`mobile-app`](design-templates/mobile-app/) | prototype | design | iPhone 15 Pro / Pixel framed app |
 | [`mobile-onboarding`](design-templates/mobile-onboarding/) | prototype | design | Splash · value-prop · sign-in flow |
-| [`social-carousel`](design-templates/social-carousel/) | prototype | marketing | 3-card 1080×1080 carousel |
 | [`email-marketing`](design-templates/email-marketing/) | prototype | marketing | Table-fallback-safe brand email |
 | [`magazine-poster`](design-templates/magazine-poster/) | prototype | marketing | Single-page magazine layout |
 | [`motion-frames`](design-templates/motion-frames/) | prototype | marketing | Looping CSS motion hero |
@@ -189,7 +187,6 @@ templates cover `image`, `video`, `audio`, and utility surfaces. The
 | [`pm-spec`](design-templates/pm-spec/) | prototype | product | PM spec doc (with TOC + decision log) |
 | [`team-okrs`](design-templates/team-okrs/) | prototype | product | OKR scorecard |
 | [`eng-runbook`](design-templates/eng-runbook/) | prototype | engineering | Incident runbook |
-| [`finance-report`](design-templates/finance-report/) | prototype | finance | Exec finance summary |
 | [`hr-onboarding`](design-templates/hr-onboarding/) | prototype | hr | Role onboarding plan |
 | [`guizang-ppt`](design-templates/guizang-ppt/) | deck | marketing | Magazine-style web PPT (deck default) |
 | [`html-ppt-*`](design-templates/) | deck | marketing | Deck template family, multiple themes (master template in [`design-templates/html-ppt/`](design-templates/html-ppt/)) |

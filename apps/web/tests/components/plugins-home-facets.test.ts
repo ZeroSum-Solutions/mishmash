@@ -68,15 +68,6 @@ describe('extractCategories', () => {
         }),
       ),
     ).toEqual(['live-artifact']);
-    expect(
-      extractCategories(
-        fixture({
-          id: 'example-social-media-matrix-tracker-template',
-          tags: ['live-artifacts'],
-          od: { mode: 'template' },
-        }),
-      ),
-    ).toEqual(['live-artifact']);
   });
 
   it('splits HyperFrames from the broader video mode', () => {
