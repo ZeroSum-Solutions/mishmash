@@ -601,7 +601,16 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       if (req.headers.origin === 'null') {
         res.header('Access-Control-Allow-Origin', '*');
       }
-      await res.type(mimeFor(target)).sendFile(target);
+      // The user design-template root lives under the daemon data directory,
+      // whose name is dot-prefixed. Express's `send` defaults to
+      // `dotfiles: 'ignore'`, which 404s any path with a dot-segment
+      // ancestor — so every asset belonging to a user-root entry was
+      // unreachable while the same entry's `/example` (plain `res.send`)
+      // returned 200. The containment check above already constrains
+      // `target` to sit inside `assetsRoot`, so allowing dotfiles here does
+      // not reopen path traversal. Same rationale as the design-library
+      // thumb route.
+      await res.type(mimeFor(target)).sendFile(target, { dotfiles: 'allow' });
     } catch (err: any) {
       res.status(500).type('text/plain').send(String(err));
     }
