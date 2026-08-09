@@ -1007,7 +1007,24 @@ export interface Dict {
   'entry.navLibrary': string;
   'entry.navDesignLibrary': string;
   'entry.navStoryboard': string;
+  'entry.navTemplates': string;
   'entry.navIntegrations': string;
+  // Templates gallery
+  'templates.title': string;
+  'templates.subtitle': string;
+  'templates.search': string;
+  'templates.count': string;
+  'templates.empty': string;
+  'templates.sourceAll': string;
+  'templates.sourceUser': string;
+  'templates.sourceBuiltIn': string;
+  'templates.openLive': string;
+  'templates.use': string;
+  'templates.starting': string;
+  'templates.startFailed': string;
+  'templates.close': string;
+  'templates.previewAria': string;
+  'templates.noPreview': string;
   // Client message center
   'messageCenter.openAria': string;
   'messageCenter.unreadCount': string;

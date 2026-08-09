@@ -213,7 +213,7 @@ const DAEMON_BOOLEAN_FLAGS = new Set([
   'help', 'h', 'json', 'headless', 'serve-web', 'no-open',
 ]);
 const LIBRARY_STRING_FLAGS = new Set(['daemon-url', 'query', 'tag']);
-const LIBRARY_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
+const LIBRARY_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'url']);
 // `od storyboard …` mirrors the Storyboard section against /api/storyboards.
 // Hoisted so the top-of-file SUBCOMMAND_MAP dispatch (which runs during
 // module evaluation) doesn't hit a temporal-dead-zone on these sets.
@@ -892,6 +892,7 @@ const SUBCOMMAND_MAP = {
   daemon: runDaemon,
   atoms: runAtoms,
   skills: runSkills,
+  'design-templates': runDesignTemplates,
   'design-systems': runDesignSystems,
   craft: runCraft,
   diagnostics: runDiagnostics,
@@ -8789,21 +8790,35 @@ async function runLibraryList(name, args) {
   if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
     console.log(`Usage:
   od ${name} list           List ${name}.
-  od ${name} show <id>      Print one entry.`);
+  od ${name} show <id>      Print one entry.${
+    name === 'design-templates'
+      ? `
+  od ${name} preview <id>   Print the entry's rendered example HTML.
+  od ${name} preview <id> --url
+                            Print the example URL instead of its HTML.`
+      : ''
+  }`);
     process.exit(args.length === 0 ? 2 : 0);
   }
   const sub = args[0];
   const rest = args.slice(1);
   const flags = parseFlags(rest, { string: LIBRARY_STRING_FLAGS, boolean: LIBRARY_BOOLEAN_FLAGS });
   const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
-  const apiPath = name === 'design-systems' ? '/api/design-systems' : `/api/${name}`;
+  const apiPath = `/api/${name}`;
+  // Response envelopes are camelCase; the command name is the kebab path.
+  const listKey =
+    name === 'design-systems'
+      ? 'designSystems'
+      : name === 'design-templates'
+        ? 'designTemplates'
+        : name;
   switch (sub) {
     case 'list': {
       const resp = await fetch(`${base}${apiPath}`);
       if (!resp.ok) return structuredHttpFailure(resp);
       const data = await resp.json();
       if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
-      const rows = data?.[name === 'design-systems' ? 'designSystems' : name] ?? [];
+      const rows = data?.[listKey] ?? [];
       for (const row of rows) {
         const label = row.title ?? row.name ?? row.id ?? row.label;
         console.log(`${row.id}\t${label}`);
@@ -8829,6 +8844,42 @@ async function runLibraryList(name, args) {
 }
 
 async function runSkills(args)        { return runLibraryList('skills', args); }
+
+// The Templates gallery's two capabilities — enumerate the renderable
+// catalogue, and view an entry's rendered example — reachable from the CLI so
+// external agents can compose them (AGENTS.md, "Capability exposure").
+// `list`/`show` come from the shared library helper; `preview` is specific to
+// design templates because only they carry a baked example.html.
+async function runDesignTemplates(args) {
+  if (args[0] === 'preview') {
+    const rest = args.slice(1);
+    const flags = parseFlags(rest, { string: LIBRARY_STRING_FLAGS, boolean: LIBRARY_BOOLEAN_FLAGS });
+    const id = rest.find((a) => !a.startsWith('-'));
+    if (!id) {
+      console.error('Usage: od design-templates preview <id> [--url]');
+      process.exit(2);
+    }
+    const base = (await libraryDaemonUrl(flags)).replace(/\/$/, '');
+    const url = `${base}/api/skills/${encodeURIComponent(id)}/example`;
+    // `--url` prints the address to hand to a browser; the default streams the
+    // rendered HTML so a headless caller does not need a second request.
+    if (flags.url) {
+      console.log(url);
+      return;
+    }
+    let resp;
+    try {
+      resp = await fetch(url);
+    } catch (err) {
+      surfaceFetchError(err, base);
+      process.exit(3);
+    }
+    if (!resp.ok) return structuredHttpFailure(resp);
+    process.stdout.write(await resp.text());
+    return;
+  }
+  return runLibraryList('design-templates', args);
+}
 async function runCraft(args)         { return runLibraryList('craft', args); }
 
 async function runDesignSystems(args) {

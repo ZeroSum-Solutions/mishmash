@@ -96,6 +96,8 @@ import { EntryNavRail, type EntryView as EntryViewKind } from './EntryNavRail';
 import { LibrarySection } from './LibrarySection';
 import { DesignLibrarySection } from './DesignLibrarySection';
 import { StoryboardSection } from './storyboard/StoryboardSection';
+import { TemplatesSection } from './TemplatesSection';
+import { metadataForSkill } from './skill-project-metadata';
 import { UpdaterPopup } from './UpdaterPopup';
 import { WhatsNewPopup } from './WhatsNewPopup';
 import { AmrBalanceDialog } from './AmrBalanceDialog';
@@ -750,6 +752,22 @@ export function EntryShell({
     setNewProjectOpen(true);
   }
 
+  // Templates gallery → "Start a project". Mirrors the blank-project rail:
+  // create directly rather than reopening the new-project form, since the
+  // user has already chosen the one thing that form would ask for.
+  // Returns the outcome rather than swallowing it, so the gallery overlay can
+  // stay open and show an error instead of closing on a failed create.
+  function startProjectFromTemplate(template: SkillSummary) {
+    return Promise.resolve(
+      onCreateProject({
+        name: template.name,
+        skillId: template.id,
+        designSystemId: null,
+        metadata: metadataForSkill(template),
+      }),
+    );
+  }
+
   function startBlankProjectFromRail() {
     void Promise.resolve(
       onCreateProject({
@@ -1288,6 +1306,13 @@ export function EntryShell({
                     fileName: entryFile ?? null,
                   })
                 }
+              />
+            </div>
+            <div data-testid="entry-view-templates" data-active={view === 'templates' ? 'true' : 'false'} {...inactiveViewProps(view === 'templates')}>
+              <TemplatesSection
+                templates={designTemplates}
+                active={view === 'templates'}
+                onUseTemplate={startProjectFromTemplate}
               />
             </div>
             <div data-testid="entry-view-storyboard" data-active={view === 'storyboard' ? 'true' : 'false'} {...inactiveViewProps(view === 'storyboard')}>

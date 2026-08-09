@@ -2,6 +2,7 @@ import type { Express } from 'express';
 import type Database from 'better-sqlite3';
 import path from 'node:path';
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import type { DesignSystemTokenContractRebuildJobResponse } from '@open-design/contracts';
 import { detectAgents, detectAgentsStream } from '../agents.js';
 import {
@@ -595,13 +596,49 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       if (!fs.existsSync(target)) {
         return res.status(404).type('text/plain').send('asset not found');
       }
+      // The lexical check above compares path STRINGS; `sendFile` follows
+      // symlinks. A skill folder is user-supplied content (local installs do
+      // not reject nested symlinks), so `assets/leak.txt -> /etc/passwd`
+      // passes the string check and then serves the target. Resolve both
+      // sides and re-check. Comparing against the root's own realpath is
+      // deliberate: the root itself can legitimately sit behind an OS-level
+      // symlink (macOS `/var` -> `/private/var`, which every tmpdir-backed
+      // fixture resolves through).
+      let assetsRootReal: string;
+      let targetReal: string;
+      try {
+        assetsRootReal = await fsp.realpath(assetsRoot);
+        targetReal = await fsp.realpath(target);
+      } catch {
+        return res.status(404).type('text/plain').send('asset not found');
+      }
+      if (
+        targetReal !== assetsRootReal
+        && !targetReal.startsWith(assetsRootReal + path.sep)
+      ) {
+        return res.status(400).type('text/plain').send('invalid asset path');
+      }
       // The example HTML is rendered inside a sandboxed iframe (Origin: null).
       // Mirror the project /raw route's allowance so the iframe can fetch the
       // image bytes; same-origin web callers do not need this header.
       if (req.headers.origin === 'null') {
         res.header('Access-Control-Allow-Origin', '*');
       }
-      await res.type(mimeFor(target)).sendFile(target);
+      // The user design-template root lives under the daemon data directory,
+      // whose name is dot-prefixed. Express's `send` defaults to
+      // `dotfiles: 'ignore'`, which 404s any path with a dot-segment
+      // ancestor — so every asset belonging to a user-root entry was
+      // unreachable while the same entry's `/example` (plain `res.send`)
+      // returned 200.
+      //
+      // `dotfiles: 'allow'` only tolerates the dot-prefixed ANCESTOR; a
+      // dot-prefixed leaf inside the entry (`assets/.env`) would become
+      // downloadable, so those are refused explicitly above the send. Serve
+      // the resolved path so the bytes match what was just validated.
+      if (path.basename(targetReal).startsWith('.')) {
+        return res.status(404).type('text/plain').send('asset not found');
+      }
+      await res.type(mimeFor(targetReal)).sendFile(targetReal, { dotfiles: 'allow' });
     } catch (err: any) {
       res.status(500).type('text/plain').send(String(err));
     }

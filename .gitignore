@@ -109,3 +109,6 @@ deploy/agent-bins/
 # Local macOS visual baselines. Ubuntu is the authoritative renderer; darwin
 # snapshots are for local feedback only and must never be committed.
 e2e/ui/visual-catalog.test.ts-snapshots/*-darwin.png
+
+# Conductor machine-local settings (shared .conductor/settings.toml stays tracked)
+.conductor/settings.local.toml

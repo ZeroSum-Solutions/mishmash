@@ -33,8 +33,17 @@ References:
 | Repo dir | `skills/` (mixed) | `skills/` (functional) + `design-templates/` (rendering templates) |
 | Daemon root | `SKILLS_DIR`, `USER_SKILLS_DIR` | `SKILLS_DIR`, `USER_SKILLS_DIR` (functional) + `DESIGN_TEMPLATES_DIR`, `USER_DESIGN_TEMPLATES_DIR` |
 | Daemon API | `/api/skills*` (mixed) | `/api/skills*` (functional only) + `/api/design-templates*` |
-| Template discovery | Top-level `Examples` tab | New-project "Start from" rails backed by `/api/design-templates`; no top-level Templates tab |
+| Template discovery | Top-level `Examples` tab | New-project "Start from" rails backed by `/api/design-templates`, plus a top-level Templates gallery (`/templates`) — see note below |
 | Management nav | Settings → `Skills & Design Systems` | Integrations → Skills, plus the separate Settings → Design Systems surface |
+
+**Superseded: "no top-level Templates tab".** That line held while the "Start
+from" rails were the whole catalogue. They filter to `od.mode` `prototype` and
+`deck`, so once entries started arriving with `od.mode: template` — including
+via `USER_DESIGN_TEMPLATES_DIR`, which is populated from outside the repo —
+those entries were listed by `/api/design-templates`, served by
+`/api/skills/:id/example`, and reachable from nowhere in the product. The
+Templates gallery at `/templates` is the discovery surface for the full
+registry; the rails keep their narrower job of starting a new project.
 
 Functional vs. design-template classification rule:
 
