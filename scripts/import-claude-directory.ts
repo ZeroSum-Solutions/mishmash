@@ -77,8 +77,14 @@ const VIDEO_CRF = 32;
  * Ceiling for assets no re-encode could shrink below it. A reference over the
  * ceiling is dropped rather than left dangling, so nothing 404s at preview
  * time.
+ *
+ * Pinned to CI's changed-file blob guard (`MAX_CHANGED_FILE_BYTES`, 1 MiB) in
+ * `.github/workflows/ci.yml`. It used to sit at 2_500_000, which let the bake
+ * emit files the Static gate would always reject — the import looked clean and
+ * only failed once the branch reached CI. Keep the two numbers equal: raising
+ * this without raising the guard just moves the failure later.
  */
-const OPAQUE_ASSET_BYTE_CEILING = 2_500_000;
+const OPAQUE_ASSET_BYTE_CEILING = 1_048_576;
 /** Webfonts above this size are dropped in favour of the Google Fonts CDN. */
 const FONT_BYTES_BEFORE_CDN_SWAP = 60_000;
 
