@@ -8826,7 +8826,7 @@ async function runLibraryList(name, args) {
       return;
     }
     case 'show': {
-      const id = rest.find((a) => !a.startsWith('-'));
+      const id = positionalArgs(rest, LIBRARY_STRING_FLAGS)[0];
       if (!id) {
         console.error(`Usage: od ${name} show <id>`);
         process.exit(2);
@@ -8854,7 +8854,7 @@ async function runDesignTemplates(args) {
   if (args[0] === 'preview') {
     const rest = args.slice(1);
     const flags = parseFlags(rest, { string: LIBRARY_STRING_FLAGS, boolean: LIBRARY_BOOLEAN_FLAGS });
-    const id = rest.find((a) => !a.startsWith('-'));
+    const id = positionalArgs(rest, LIBRARY_STRING_FLAGS)[0];
     if (!id) {
       console.error('Usage: od design-templates preview <id> [--url]');
       process.exit(2);
