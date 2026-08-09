@@ -28,6 +28,7 @@
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import os from 'node:os';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,8 +36,17 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..');
 const SKILLS_DIR = path.join(REPO_ROOT, 'skills');
+const DESIGN_TEMPLATES_DIR = path.join(REPO_ROOT, 'design-templates');
 const BUNDLED_PLUGIN_EXAMPLES_DIR = path.join(REPO_ROOT, 'plugins', '_official', 'examples');
-const COMMUNITY_PLUGIN_EXAMPLES_DIR = path.join(REPO_ROOT, 'plugins', 'community', 'examples');
+// The spec examples, NOT plugins/community/ — that holds installed community
+// plugins under generated ids, and never these fixture ids.
+const COMMUNITY_PLUGIN_EXAMPLES_DIR = path.join(REPO_ROOT, 'plugins', 'spec', 'examples');
+// A skill-like id lives under EITHER root, so resolution has to span both.
+// Mirrors the daemon's ALL_SKILL_LIKE_ROOTS (apps/daemon/src/server.ts, read
+// through listAllSkillLikeEntries); its other two roots are runtime-data dirs
+// that never hold repo fixtures. Not imported — scripts/check-cross-app-imports.ts
+// forbids reaching into apps/daemon/src/**.
+const SKILL_LIKE_ROOTS = [SKILLS_DIR, DESIGN_TEMPLATES_DIR] as const;
 const SEED_PREFIX = 'seed-';
 
 type SeedKind = 'deck' | 'prototype';
@@ -222,6 +232,14 @@ const COMMUNITY_PLUGINS: SeedFixture[] = [
     pendingPrompt:
       'Run the community live artifact plugin for a refreshable customer success command center.',
   },
+];
+
+/** Every fixture this script can seed, for the guard in seed-test-projects.test.ts. */
+export const ALL_SEED_FIXTURES: readonly SeedFixture[] = [
+  ...DECKS,
+  ...WEBS,
+  ...DEFAULT_PLUGINS,
+  ...COMMUNITY_PLUGINS,
 ];
 
 interface Args {
@@ -479,20 +497,27 @@ function makeSeedId(fix: SeedFixture): string {
   return `${SEED_PREFIX}${slug}-${ts}-${rand}`.slice(0, 128);
 }
 
-function fixtureRoot(fix: SeedFixture): string {
+export function fixtureRoot(fix: SeedFixture): string {
   if (fix.sourceKind === 'default-plugin') {
     return path.join(BUNDLED_PLUGIN_EXAMPLES_DIR, fix.skillId);
   }
   if (fix.sourceKind === 'community-plugin') {
     return path.join(COMMUNITY_PLUGIN_EXAMPLES_DIR, fix.skillId);
   }
-  return path.join(SKILLS_DIR, fix.skillId);
+  // First root that actually holds the id. Falling back to the first candidate
+  // keeps the return type total, and seed-test-projects.test.ts fails on any
+  // fixture whose resolved root does not exist rather than letting the bad path
+  // surface later as an opaque per-fixture copy failure.
+  for (const root of SKILL_LIKE_ROOTS) {
+    const candidate = path.join(root, fix.skillId);
+    if (existsSync(candidate)) return candidate;
+  }
+  return path.join(SKILL_LIKE_ROOTS[0], fix.skillId);
 }
 
-function sourceLabel(fix: SeedFixture): string {
-  if (fix.sourceKind === 'default-plugin') return `plugins/_official/examples/${fix.skillId}`;
-  if (fix.sourceKind === 'community-plugin') return `plugins/community/examples/${fix.skillId}`;
-  return `skills/${fix.skillId}`;
+/** Repo-relative form of fixtureRoot(), so the label can never name a different folder. */
+export function sourceLabel(fix: SeedFixture): string {
+  return path.relative(REPO_ROOT, fixtureRoot(fix));
 }
 
 function seedMetadata(fix: SeedFixture) {
@@ -932,7 +957,15 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : String(err));
-  process.exit(1);
-});
+// Only seed when run as a CLI. The test imports this module for its fixture
+// table and path helpers, and must not kick off a seeding run to do so.
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });
+}
