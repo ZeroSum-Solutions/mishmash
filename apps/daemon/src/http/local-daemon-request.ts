@@ -1,6 +1,7 @@
 import net from 'node:net';
 import type { NextFunction, Request, Response } from 'express';
 import { sendApiError } from './api-errors.js';
+import { isLexicalLoopbackHost } from '../security/loopback.js';
 
 interface LocalAuthority {
   hostname: string;
@@ -33,12 +34,12 @@ export function normalizeLocalAuthority(value: unknown): LocalAuthority | null {
   }
 }
 
+// Thin re-export kept for the existing import surface (server.ts and the
+// validators below). The shared lexical predicate lives in
+// security/loopback.ts (issue #46); `isLoopbackPeerAddress` below stays
+// hand-rolled on purpose — it classifies socket peer ADDRESSES, not hostnames.
 export function isLoopbackHostname(hostname: unknown): boolean {
-  const normalized = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
-  if (normalized === 'localhost') return true;
-  if (normalized === '::1' || normalized === '0:0:0:0:0:0:0:1') return true;
-  if (net.isIP(normalized) === 4) return normalized === '127.0.0.1' || normalized.startsWith('127.');
-  return false;
+  return isLexicalLoopbackHost(hostname);
 }
 
 export function isLoopbackPeerAddress(address: unknown): boolean {
