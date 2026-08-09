@@ -343,6 +343,11 @@
   content: '·';
   margin: 0 6px;
 }
+.templates-viewer__error {
+  flex: 1 1 auto;
+  font-size: 12px;
+  color: var(--danger, var(--text-strong));
+}
 .templates-viewer__buttons {
   display: inline-flex;
   align-items: center;
@@ -374,6 +379,10 @@
   border: 0;
   background: var(--accent, var(--text-strong));
   color: var(--accent-contrast, var(--bg));
+}
+.templates-viewer__use[disabled] {
+  opacity: 0.6;
+  cursor: default;
 }
 
 @media (prefers-reduced-motion: reduce) {

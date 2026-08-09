@@ -755,17 +755,17 @@ export function EntryShell({
   // Templates gallery → "Start a project". Mirrors the blank-project rail:
   // create directly rather than reopening the new-project form, since the
   // user has already chosen the one thing that form would ask for.
+  // Returns the outcome rather than swallowing it, so the gallery overlay can
+  // stay open and show an error instead of closing on a failed create.
   function startProjectFromTemplate(template: SkillSummary) {
-    void Promise.resolve(
+    return Promise.resolve(
       onCreateProject({
         name: template.name,
         skillId: template.id,
         designSystemId: null,
         metadata: metadataForSkill(template),
       }),
-    ).catch((err) => {
-      console.warn('Failed to create project from template', err);
-    });
+    );
   }
 
   function startBlankProjectFromRail() {

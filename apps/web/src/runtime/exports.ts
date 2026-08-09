@@ -1218,6 +1218,39 @@ export function buildSandboxedPreviewDocument(
 </html>`;
 }
 
+// Open a URL we serve ourselves in a new tab WITHOUT handing that document
+// our origin.
+//
+// `<a target="_blank" rel="noopener">` is not enough: `noopener` only clears
+// `window.opener`, and the opened page is still a same-origin top-level
+// document that can call `/api/*` with the user's session. That is fine for
+// our own pages and wrong for third-party content we merely host — a design
+// template's HTML is written by whoever authored the template.
+//
+// So the new tab gets an opaque-origin blob document whose only content is a
+// sandboxed iframe pointing at the URL. The template still renders, and its
+// own relative subresources still resolve, but it inherits no origin from us.
+export function openSandboxedUrlInNewTab(url: string, title: string): void {
+  const absolute = new URL(url, window.location.origin).href;
+  const safeTitle = escapeHtmlAttribute(title || 'Preview');
+  const doc = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${safeTitle}</title>
+  <style>html,body,iframe{margin:0;width:100%;height:100%;border:0}body{overflow:hidden;background:#fff}</style>
+</head>
+<body>
+  <iframe title="${safeTitle}" sandbox="allow-scripts" src="${escapeHtmlAttribute(absolute)}"></iframe>
+</body>
+</html>`;
+  const blob = new Blob([doc], { type: 'text/html;charset=utf-8' });
+  const blobUrl = URL.createObjectURL(blob);
+  window.open(blobUrl, '_blank', 'noopener,noreferrer');
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+}
+
 function currentOriginBaseHref(): string | undefined {
   if (typeof window !== 'undefined' && typeof window.location?.origin === 'string') {
     return `${window.location.origin.replace(/\/+$/, '')}/`;

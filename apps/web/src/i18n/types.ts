@@ -1020,6 +1020,8 @@ export interface Dict {
   'templates.sourceBuiltIn': string;
   'templates.openLive': string;
   'templates.use': string;
+  'templates.starting': string;
+  'templates.startFailed': string;
   'templates.close': string;
   'templates.previewAria': string;
   'templates.noPreview': string;

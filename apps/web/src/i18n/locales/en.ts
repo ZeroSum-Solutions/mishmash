@@ -682,6 +682,8 @@ export const en: Dict = {
   'templates.sourceBuiltIn': 'Built-in',
   'templates.openLive': 'Open live preview',
   'templates.use': 'Start a project',
+  'templates.starting': 'Starting…',
+  'templates.startFailed': 'Could not start a project from this template. Try again.',
   'templates.close': 'Close preview',
   'templates.previewAria': 'Live preview of {name}',
   'templates.noPreview': 'This template ships no rendered example.',

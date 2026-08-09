@@ -22,6 +22,7 @@ import type { SkillSummary } from '@open-design/contracts';
 import { Icon } from './Icon';
 import { useI18n, useT } from '../i18n';
 import { localizeSkillDescription, localizeSkillName } from '../i18n/content';
+import { openSandboxedUrlInNewTab } from '../runtime/exports';
 
 type SourceFilter = 'all' | 'user' | 'built-in';
 
@@ -29,7 +30,8 @@ interface Props {
   templates: SkillSummary[];
   /** Rendered only when the view is on screen — keeps offscreen iframes unmounted. */
   active: boolean;
-  onUseTemplate: (template: SkillSummary) => void;
+  /** Resolves false (or rejects) when creation failed, so the overlay can say so. */
+  onUseTemplate: (template: SkillSummary) => Promise<boolean | void> | boolean | void;
 }
 
 function exampleUrl(id: string): string {
@@ -67,21 +69,21 @@ function TemplateThumb({ id, title }: { id: string; title: string }) {
   const [visible, setVisible] = useState(false);
   const [posterFailed, setPosterFailed] = useState(false);
 
+  // Keep observing rather than disconnecting on first sight. A scripted frame
+  // that stays mounted after scrolling away is a live document holding timers,
+  // animations, and memory — over a long scroll through 300 cards that
+  // accumulates without bound. Posters are cheap to keep, but the frame path
+  // has to be able to let go.
   useEffect(() => {
     const node = ref.current;
-    if (!node || visible) return;
+    if (!node) return;
     const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setVisible(true);
-          observer.disconnect();
-        }
-      },
+      (entries) => setVisible(entries.some((entry) => entry.isIntersecting)),
       { rootMargin: '400px' },
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [visible]);
+  }, []);
 
   return (
     <span
@@ -112,6 +114,8 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
   const [query, setQuery] = useState('');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [openId, setOpenId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createFailed, setCreateFailed] = useState(false);
 
   const sorted = useMemo(
     () =>
@@ -148,20 +152,69 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
     [openId, templates],
   );
 
-  // Close the overlay on Escape. Bound only while something is open so the
-  // gallery does not swallow Escape for the rest of the shell.
+  // The view stays mounted while another destination is on screen, so an
+  // overlay left open would still be open on return. Drop it on deactivate.
+  useEffect(() => {
+    if (!active) setOpenId(null);
+  }, [active]);
+
+  // A retry state belongs to one entry, not to the overlay in general.
+  useEffect(() => {
+    setCreateFailed(false);
+    setCreating(false);
+  }, [openId]);
+
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  // The card that opened the overlay, so focus can go back where it started.
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+
+  // Escape closes; Tab is trapped inside the panel. `aria-modal` promises the
+  // rest of the page is inert, and nothing else here delivers that.
+  //
+  // Escape pressed while focus sits inside the preview iframe never reaches
+  // us — the frame is sandboxed and cross-origin, so its key events are not
+  // ours to see. The visible close button and the backdrop click are the
+  // reachable exits from there.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpenId(null);
+      if (e.key === 'Escape') {
+        setOpenId(null);
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusable = panel.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  const closeRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
-    if (open) closeRef.current?.focus();
+    if (!open) return;
+    closeRef.current?.focus();
+    const previous = returnFocusRef.current;
+    return () => {
+      // Only pull focus back if it is still inside the closing overlay —
+      // otherwise we would yank it away from wherever the user moved on to.
+      if (previous?.isConnected && panelRef.current?.contains(document.activeElement)) {
+        previous.focus();
+      }
+    };
   }, [open]);
 
   if (!active) return null;
@@ -224,7 +277,10 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
                 // The card wraps an aria-hidden preview frame, which leaves
                 // the computed name unreliable; state it outright.
                 aria-label={name}
-                onClick={() => setOpenId(tpl.id)}
+                onClick={(e) => {
+                  returnFocusRef.current = e.currentTarget;
+                  setOpenId(tpl.id);
+                }}
                 data-testid="templates-card"
                 data-template-id={tpl.id}
               >
@@ -259,7 +315,7 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
             if (e.target === e.currentTarget) setOpenId(null);
           }}
         >
-          <div className="templates-viewer__panel">
+          <div className="templates-viewer__panel" ref={panelRef}>
             <header className="templates-viewer__head">
               <div className="templates-viewer__ident">
                 <h2>{localizeSkillName(locale, open)}</h2>
@@ -298,31 +354,55 @@ export function TemplatesSection({ templates, active, onUseTemplate }: Props) {
                 {vendorOf(open) ? <span>{vendorOf(open)}</span> : null}
                 <span>{open.source === 'user' ? t('templates.sourceUser') : t('templates.sourceBuiltIn')}</span>
               </span>
+              {createFailed ? (
+                <span className="templates-viewer__error" role="alert">
+                  {t('templates.startFailed')}
+                </span>
+              ) : null}
               <span className="templates-viewer__buttons">
                 {/* Plain anchor, not window.open: the browser owns the tab, and
                     noopener keeps the sandboxed document off `window.opener`. */}
                 {hasHtmlPreview(open) ? (
-                  <a
+                  <button
+                    type="button"
                     className="templates-viewer__link"
-                    href={exampleUrl(open.id)}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    onClick={() =>
+                      openSandboxedUrlInNewTab(
+                        exampleUrl(open.id),
+                        localizeSkillName(locale, open),
+                      )
+                    }
                     data-testid="templates-open-live"
                   >
                     <Icon name="external-link" size={15} />
                     {t('templates.openLive')}
-                  </a>
+                  </button>
                 ) : null}
                 <button
                   type="button"
                   className="templates-viewer__use"
+                  disabled={creating}
                   onClick={() => {
-                    onUseTemplate(open);
-                    setOpenId(null);
+                    // Keep the overlay open until the project actually
+                    // exists. Closing on click looked like success even when
+                    // creation failed, leaving the user with no error and
+                    // nothing to retry.
+                    setCreating(true);
+                    setCreateFailed(false);
+                    void Promise.resolve(onUseTemplate(open))
+                      .then((ok) => {
+                        if (ok === false) {
+                          setCreateFailed(true);
+                          return;
+                        }
+                        setOpenId(null);
+                      })
+                      .catch(() => setCreateFailed(true))
+                      .finally(() => setCreating(false));
                   }}
                   data-testid="templates-use"
                 >
-                  {t('templates.use')}
+                  {creating ? t('templates.starting') : t('templates.use')}
                 </button>
               </span>
             </footer>
