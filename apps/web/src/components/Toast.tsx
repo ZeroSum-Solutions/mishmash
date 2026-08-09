@@ -1,6 +1,5 @@
-// Lightweight transient toast for the new project-actions toolbar
-// (Continue in CLI / Finalize design package — #451). Mirrors the
-// canonical state-based pattern from PromptTemplatePreviewModal:
+// Lightweight transient toast (originally built for the project-actions
+// toolbar, #451; now shared across the app). State-based pattern:
 // transient state cleared on a setTimeout, no portal, no DOM
 // imperative work. Single-toast queue; multi-toast support is
 // deliberately deferred to a follow-up.
