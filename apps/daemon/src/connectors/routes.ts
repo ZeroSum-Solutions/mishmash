@@ -1,4 +1,6 @@
-import net from 'node:net';
+// Lexical loopback check for the OAuth callback host (issue #46): the shared
+// helper replaces this file's former hand-rolled isLoopbackHostname.
+import { isLexicalLoopbackHost as isLoopbackHostname } from '../security/loopback.js';
 
 import type { Express, Request, RequestHandler, Response } from 'express';
 
@@ -70,14 +72,6 @@ function sendConnectorRouteError(res: Response, err: unknown, sendApiError: Conn
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function isLoopbackHostname(hostname: string): boolean {
-  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
-  if (normalized === 'localhost') return true;
-  if (normalized === '::1' || normalized === '0:0:0:0:0:0:0:1') return true;
-  if (normalized.startsWith('::ffff:')) return isLoopbackHostname(normalized.slice('::ffff:'.length));
-  return net.isIP(normalized) === 4 && (normalized === '127.0.0.1' || normalized.startsWith('127.'));
 }
 
 function parseConnectorToolUseCase(value: unknown): ConnectorToolUseCase | undefined {
